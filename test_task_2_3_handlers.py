@@ -110,7 +110,8 @@ async def test_handle_urgency_selection_transitions_and_saves():
     await handlers.handle_urgency_selection(callback, state)
     data = await state.get_data()
     assert data.get("urgency") == REQUEST_URGENCIES[0]
-    assert await state.get_state() == handlers.RequestStates.apartment
+    # После упрощения сценария шаг квартиры исключён — сразу переходим к медиа
+    assert await state.get_state() == handlers.RequestStates.media
     assert callback.message.last_edit is not None
     assert "Выбрана срочность" in callback.message.last_edit["text"]
 
