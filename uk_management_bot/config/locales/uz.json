@@ -1,0 +1,199 @@
+{
+  "welcome": "Ariza boshqaruvi tizimiga xush kelibsiz! 🏠",
+  "help": "🤖 Bot foydalanish bo'yicha ma'lumot",
+  "cancel": "Harakat bekor qilindi.",
+  "back": "Asosiy menyu:",
+  
+  "roles": {
+    "applicant": "Aholi",
+    "executor": "Xodim",
+    "manager": "Menejer"
+  },
+  
+  "role": {
+    "switch_title": "Joriy rejim: {role}",
+    "switched": "Rejim almashtirildi",
+    "not_allowed": "Bu rol siz uchun mavjud emas",
+    "suggest_executor_title": "Faol smena aniqlandi. Arizalar bilan ishlash uchun \"Xodim\" rejimiga o'tasizmi?",
+    "suggest_executor_yes": "Xodim rejimiga o'tish",
+    "suggest_executor_no": "Joriy rejimda qolish",
+    "suggest_executor_skipped": "Joriy rejimda qolamiz. Profil orqali rejimni har doim almashtirishingiz mumkin.",
+    "switched_notify": "Rejim almashtirildi: {role}"
+  },
+  
+  "auth": {
+    "pending": "⏳ Sizning ro'yxatdan o'tish arizangiz ko'rib chiqilmoqda. Administrator tasdiqlashini kuting.",
+    "pending_hint": "⏳ Administrator tasdiqlashini kutish",
+    "blocked": "🚫 Sizning hisobingiz bloklangan. Administrator bilan bog'laning.",
+    "approved": "✅ Siz tizimda muvaffaqiyatli avtorizatsiya qildingiz."
+  },
+  
+  "requests": {
+    "create": "📝 Ariza yaratish",
+    "create_always_available": "Ariza yaratish har qanday rejimda mavjud va smenaga bog'liq emas.",
+    "my_requests": "📋 Mening arizalarim",
+    "all_requests": "📋 Barcha arizalar",
+    "category": "Ariza toifasini tanlang:",
+    "address": "Manzilni kiriting:",
+    "description": "Muammoni tasvirlab bering:",
+    "apartment": "Xona raqamini kiriting (ixtiyoriy):",
+    "urgency": "Shoshilish darajasini tanlang:",
+    "media": "Rasm yoki video qo'shing (ixtiyoriy):",
+    "confirm": "Arizani tasdiqlang:",
+    "created": "✅ Ariza muvaffaqiyatli yaratildi!",
+    "list_empty": "Sizda hali arizalar yo'q.",
+    "details": "Ariza tafsilotlari:",
+    "status": "Holat:",
+    "executor": "Ijrochi:",
+    "created_at": "Yaratilgan:",
+    "all_statuses": "Barchasi",
+    "all_categories": "Barcha toifalar",
+    "reset_filters": "Filtrlarni tiklash",
+    "period_all": "Butun davr",
+    "period_7d": "7 kun ichida",
+    "period_30d": "30 kun ichida",
+    "period_90d": "90 kun ichida",
+    "executor_all": "Barcha ijrochilar",
+    "executor_me": "Men ijrochiman"
+  },
+  
+  "categories": {
+    "electricity": "Elektrik",
+    "plumbing": "Santexnika",
+    "heating": "Isitish",
+    "ventilation": "Ventilyatsiya",
+    "elevator": "Lift",
+    "cleaning": "Tozalash",
+    "landscaping": "Obodlashtirish",
+    "security": "Xavfsizlik",
+    "internet": "Internet/TV",
+    "other": "Boshqa"
+  },
+  
+  "urgency": {
+    "low": "Oddiy",
+    "medium": "O'rta",
+    "high": "Shoshilinch",
+    "critical": "Kritik"
+  },
+  
+  "status": {
+    "new": "Yangi",
+    "accepted": "Qabul qilindi",
+    "in_progress": "Ish jarayonida",
+    "purchase": "Sotib olish",
+    "clarification": "Tushuntirish",
+    "completed": "Bajarildi",
+    "approved": "Tasdiqlandi",
+    "cancelled": "Bekor qilindi"
+  },
+  
+  "user_status": {
+    "pending": "⏳ Tasdiqlashni kutmoqda",
+    "approved": "✅ Tasdiqlangan",
+    "blocked": "🚫 Bloklangan"
+  },
+  
+  "specializations": {
+    "electricity": "Elektrik",
+    "plumbing": "Santexnik",
+    "heating": "Isitish",
+    "ventilation": "Ventilyatsiya",
+    "elevator": "Lift",
+    "cleaning": "Tozalash",
+    "landscaping": "Obodlashtirish",
+    "security": "Xavfsizlik",
+    "other": "Boshqa"
+  },
+  
+  "shifts": {
+    "start": "Smenani qabul qilish",
+    "end": "Smenani topshirish",
+    "active": "Smena faol",
+    "inactive": "Smena faol emas",
+    "started": "✅ Smena qabul qilindi",
+    "ended": "✅ Smena topshirildi"
+  },
+  
+  "admin": {
+    "panel": "🔧 Admin panel",
+    "users": "👥 Foydalanuvchilar",
+    "assign": "📋 Ariza tayinlash",
+    "statistics": "📊 Statistika",
+    "broadcast": "📢 Yuborish",
+    "user_approved": "✅ Foydalanuvchi tasdiqlandi",
+    "user_blocked": "🚫 Foydalanuvchi bloklandi"
+  },
+  
+  "onboarding": {
+    "welcome_new_user": "👋 Xush kelibsiz! Qulay ish uchun profilingizni sozlaymiz.",
+    "phone_request": "📱 Iltimos, telefon raqamingizni ulashing yoki qo'lda kiriting:",
+    "share_contact": "📱 Kontakt ulashish",
+    "phone_saved": "✅ Telefon {phone} saqlandi!",
+    "phone_invalid": "❌ Telefon formati noto'g'ri. Iltimos, raqamni +998901234567 formatida kiriting",
+    "address_request": "🏠 Endi uy manzilingizni ko'rsating (ko'cha, uy):",
+    "address_invalid": "❌ Manzil juda qisqa. Iltimos, to'liq manzilni ko'rsating (ko'cha, uy)",
+    "completed": "🎉 Ro'yxatdan o'tish tugallandi! Sizning ma'lumotlaringiz:",
+    "pending_approval": "⏳ Arizangiz moderatsiyaga yuborildi. Administrator tasdiqlashidan keyin arizalar yaratishingiz mumkin.",
+    "cancelled": "❌ Ro'yxatdan o'tish bekor qilindi. Keyinroq davom ettirishingiz mumkin.",
+    "profile_incomplete": "📝 To'liq ish uchun telefon va manzil ko'rsatish kerak",
+    "setup_required": "Yangi foydalanuvchilar uchun profil sozlash majburiy"
+  },
+  
+  "profile": {
+    "title": "👤 Profil",
+    "role": "Rol:",
+    "active_role": "Faol rejim:",
+    "all_roles": "Mavjud rollar:",
+    "status": "Holat:",
+    "phone": "Telefon:",
+    "phone_not_set": "ko'rsatilmagan",
+    "addresses": "Manzillar:",
+    "home_address": "Uy manzili:",
+    "apartment_address": "Xona manzili:",
+    "yard_address": "Hovlilar:",
+    "address_not_set": "ko'rsatilmagan",
+    "multiple_yards": "Bir nechta hovli",
+    "language": "Til:",
+    "edit": "Profilni tahrirlash",
+    "specialization": "Ixtisoslashuv:",
+    "no_specialization": "ko'rsatilmagan"
+  },
+  
+  "ratings": {
+    "title": "⭐ Ish sifatini baholash",
+    "rate": "Bajarilgan ish sifatini baholang:",
+    "review": "Fikr qoldiring (ixtiyoriy):",
+    "submitted": "✅ Baho yuborildi!",
+    "thank_you": "Bahoyingiz uchun rahmat!"
+  },
+  
+  "errors": {
+    "permission_denied": "❌ Sizda bu harakatni bajarish huquqi yo'q",
+    "not_in_shift": "❌ Siz smenada emassiz. Bu harakatni bajarish uchun smena kerak",
+    "invalid_data": "❌ Noto'g'ri ma'lumotlar",
+    "file_too_large": "❌ Fayl juda katta",
+    "unknown_error": "❌ Xatolik yuz berdi. Keyinroq urinib ko'ring"
+  },
+
+  "notify": {
+    "denied_title": "Harakat rad etildi",
+    "reason": {
+      "not_in_shift": "Siz smenada emassiz. Harakatni bajarish uchun smenani qabul qiling.",
+      "permission_denied": "Harakatni bajarish uchun huquqlar yetarli emas.",
+      "invalid_transition": "Holatni o'zgartirishga ruxsat etilmagan.",
+      "rate_limited": "Rejim tez-tez almashtirilmoqda. Iltimos, biroz kutib qayta urinib ko'ring."
+    }
+  },
+  
+  "buttons": {
+    "cancel": "❌ Bekor qilish",
+    "back": "🔙 Orqaga",
+    "yes": "✅ Ha",
+    "no": "❌ Yo'q",
+    "skip": "⏭ O'tkazib yuborish",
+    "confirm": "✅ Tasdiqlash",
+    "edit": "✏️ Tahrirlash",
+    "delete": "🗑 O'chirish"
+  }
+} 
