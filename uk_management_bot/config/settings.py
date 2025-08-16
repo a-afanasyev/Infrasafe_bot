@@ -31,6 +31,14 @@ class Settings:
     ADMIN_USER_IDS = [int(x.strip()) for x in os.getenv("ADMIN_USER_IDS", "").split(",") if x.strip()]
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "12345")  # Пароль для назначения администратора
     
+    # Invites
+    INVITE_SECRET = os.getenv("INVITE_SECRET")
+    # INVITE_SECRET обязателен только в продакшене, в тестах может быть None
+    
+    # Rate limiting для /join команды
+    JOIN_RATE_LIMIT_WINDOW = int(os.getenv("JOIN_RATE_LIMIT_WINDOW", "600"))  # 10 минут
+    JOIN_RATE_LIMIT_MAX = int(os.getenv("JOIN_RATE_LIMIT_MAX", "3"))  # 3 попытки
+    
     # Notifications
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
     NOTIFICATION_RETRY_COUNT = int(os.getenv("NOTIFICATION_RETRY_COUNT", "3"))

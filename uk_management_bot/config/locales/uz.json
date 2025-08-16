@@ -140,6 +140,25 @@
     "setup_required": "Yangi foydalanuvchilar uchun profil sozlash majburiy"
   },
   
+  "invites": {
+    "usage_help": "📋 Ishlatish: `/join <taklif_tokeni>`\n\nMisol: `/join invite_v1:abc123...xyz789`",
+    "invalid_token": "❌ Noto'g'ri yoki buzilgan taklif tokeni",
+    "expired_token": "⏰ Taklif tokeni muddati tugagan",
+    "used_token": "🔒 Taklif tokeni allaqachon ishlatilgan",
+    "success_joined": "✅ Taklif qabul qilindi!\n\nRol: {role}\nHolat: Moderatsiyada\n\nAdministrator tasdig'ini kuting.",
+    "rate_limited": "🚫 Takliflardan foydalanish urinishlari juda ko'p. {minutes} daqiqadan so'ng qayta urining.",
+    "menu_title": "👥 Takliflarni boshqarish",
+    "create_new": "➕ Taklif yaratish",
+    "select_role": "Taklif uchun rolni tanlang:",
+    "select_specialization": "Ijrochi uchun mutaxassisliklarni tanlang:",
+    "select_expiry": "Taklif amal qilish muddatini tanlang:",
+    "expiry_1h": "1 soat",
+    "expiry_24h": "24 soat",
+    "expiry_7d": "7 kun",
+    "token_generated": "✅ Taklif yaratildi!\n\nToken: `{token}`\n\nBu tokenni nomzodga yuboring.\nAmal qilish muddati: {expires}",
+    "manager_only": "❌ Faqat menejerlar takliflar yarata oladi"
+  },
+  
   "profile": {
     "title": "👤 Profil",
     "role": "Rol:",
@@ -195,5 +214,11 @@
     "confirm": "✅ Tasdiqlash",
     "edit": "✏️ Tahrirlash",
     "delete": "🗑 O'chirish"
+  },
+  
+  "roles": {
+    "applicant": "Ariza beruvchi",
+    "executor": "Ijrochi",
+    "manager": "Menejer"
   }
 } 

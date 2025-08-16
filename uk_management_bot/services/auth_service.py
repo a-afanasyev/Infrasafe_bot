@@ -7,6 +7,7 @@ from utils.address_helpers import validate_address, format_address
 import logging
 import re
 import time
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -328,6 +329,70 @@ class AuthService:
     async def get_user_by_telegram_id(self, telegram_id: int) -> User:
         """Получить пользователя по Telegram ID"""
         return self.db.query(User).filter(User.telegram_id == telegram_id).first()
+    
+    async def process_invite_join(self, telegram_id: int, invite_data: dict, 
+                                  username: str = None, first_name: str = None, 
+                                  last_name: str = None) -> User:
+        """
+        Обрабатывает присоединение по инвайту
+        
+        Args:
+            telegram_id: Telegram ID пользователя
+            invite_data: Данные из токена приглашения
+            username: Username пользователя
+            first_name: Имя пользователя
+            last_name: Фамилия пользователя
+            
+        Returns:
+            Обновлённый объект User
+        """
+        try:
+            # Получаем или создаём пользователя
+            user = await self.get_or_create_user(
+                telegram_id=telegram_id,
+                username=username,
+                first_name=first_name,
+                last_name=last_name
+            )
+            
+            # Добавляем роль если её нет
+            role = invite_data["role"]
+            current_roles = []
+            
+            if user.roles:
+                try:
+                    current_roles = json.loads(user.roles)
+                    if not isinstance(current_roles, list):
+                        current_roles = []
+                except json.JSONDecodeError:
+                    current_roles = []
+            
+            # Добавляем новую роль если её нет
+            if role not in current_roles:
+                current_roles.append(role)
+                user.roles = json.dumps(current_roles)
+            
+            # Устанавливаем специализацию для исполнителей
+            if role == "executor" and invite_data.get("specialization"):
+                user.specialization = invite_data["specialization"]
+            
+            # Устанавливаем активную роль если это первая роль
+            if not user.active_role or user.active_role not in current_roles:
+                user.active_role = role
+            
+            # Устанавливаем статус pending до одобрения
+            user.status = "pending"
+            
+            self.db.commit()
+            self.db.refresh(user)
+            
+            logger.info(f"Пользователь {telegram_id} присоединился по инвайту с ролью {role}")
+            return user
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки инвайта для {telegram_id}: {e}")
+            self.db.rollback()
+            raise
     
     async def is_user_approved(self, telegram_id: int) -> bool:
         """Проверить, одобрен ли пользователь"""
