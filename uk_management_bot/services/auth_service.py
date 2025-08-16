@@ -4,6 +4,7 @@ from database.models.audit import AuditLog
 from config.settings import settings
 from utils.constants import ADDRESS_TYPES, MAX_ADDRESS_LENGTH
 from utils.address_helpers import validate_address, format_address
+from typing import List
 import logging
 import re
 import time
@@ -393,6 +394,322 @@ class AuthService:
             logger.error(f"Ошибка обработки инвайта для {telegram_id}: {e}")
             self.db.rollback()
             raise
+    
+    # ═══ МЕТОДЫ МОДЕРАЦИИ ПОЛЬЗОВАТЕЛЕЙ ═══
+    
+    def approve_user(self, user_id: int, approved_by: int, comment: str = "") -> bool:
+        """
+        Одобрить пользователя (pending -> approved)
+        
+        Args:
+            user_id: ID пользователя для одобрения
+            approved_by: ID менеджера, который одобряет
+            comment: Комментарий к одобрению
+            
+        Returns:
+            True если операция успешна
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь {user_id} не найден для одобрения")
+                return False
+            
+            # Проверяем текущий статус
+            if user.status == 'approved':
+                logger.info(f"Пользователь {user_id} уже одобрен")
+                return True
+            
+            old_status = user.status
+            user.status = 'approved'
+            
+            # Создаем запись в аудит логе
+            audit = AuditLog(
+                action="user_approved",
+                user_id=approved_by,
+                details=json.dumps({
+                    "target_user_id": user_id,
+                    "old_status": old_status,
+                    "new_status": "approved",
+                    "comment": comment,
+                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                })
+            )
+            self.db.add(audit)
+            self.db.commit()
+            
+            logger.info(f"Пользователь {user_id} одобрен менеджером {approved_by}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка одобрения пользователя {user_id}: {e}")
+            self.db.rollback()
+            return False
+    
+    def block_user(self, user_id: int, blocked_by: int, reason: str = "") -> bool:
+        """
+        Заблокировать пользователя (любой статус -> blocked)
+        
+        Args:
+            user_id: ID пользователя для блокировки
+            blocked_by: ID менеджера, который блокирует
+            reason: Причина блокировки
+            
+        Returns:
+            True если операция успешна
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь {user_id} не найден для блокировки")
+                return False
+            
+            # Проверяем текущий статус
+            if user.status == 'blocked':
+                logger.info(f"Пользователь {user_id} уже заблокирован")
+                return True
+            
+            old_status = user.status
+            user.status = 'blocked'
+            
+            # Создаем запись в аудит логе
+            audit = AuditLog(
+                action="user_blocked",
+                user_id=blocked_by,
+                details=json.dumps({
+                    "target_user_id": user_id,
+                    "old_status": old_status,
+                    "new_status": "blocked",
+                    "reason": reason,
+                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                })
+            )
+            self.db.add(audit)
+            self.db.commit()
+            
+            logger.info(f"Пользователь {user_id} заблокирован менеджером {blocked_by}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка блокировки пользователя {user_id}: {e}")
+            self.db.rollback()
+            return False
+    
+    def unblock_user(self, user_id: int, unblocked_by: int, comment: str = "") -> bool:
+        """
+        Разблокировать пользователя (blocked -> approved)
+        
+        Args:
+            user_id: ID пользователя для разблокировки
+            unblocked_by: ID менеджера, который разблокирует
+            comment: Комментарий к разблокировке
+            
+        Returns:
+            True если операция успешна
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь {user_id} не найден для разблокировки")
+                return False
+            
+            # Проверяем текущий статус
+            if user.status != 'blocked':
+                logger.warning(f"Пользователь {user_id} не заблокирован (статус: {user.status})")
+                return False
+            
+            old_status = user.status
+            user.status = 'approved'  # Разблокированные пользователи автоматически одобряются
+            
+            # Создаем запись в аудит логе
+            audit = AuditLog(
+                action="user_unblocked",
+                user_id=unblocked_by,
+                details=json.dumps({
+                    "target_user_id": user_id,
+                    "old_status": old_status,
+                    "new_status": "approved",
+                    "comment": comment,
+                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                })
+            )
+            self.db.add(audit)
+            self.db.commit()
+            
+            logger.info(f"Пользователь {user_id} разблокирован менеджером {unblocked_by}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка разблокировки пользователя {user_id}: {e}")
+            self.db.rollback()
+            return False
+    
+    def assign_role(self, user_id: int, role: str, assigned_by: int, comment: str = "") -> bool:
+        """
+        Назначить роль пользователю
+        
+        Args:
+            user_id: ID пользователя
+            role: Роль для назначения (applicant, executor, manager)
+            assigned_by: ID менеджера, который назначает роль
+            comment: Комментарий к назначению
+            
+        Returns:
+            True если операция успешна
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь {user_id} не найден для назначения роли")
+                return False
+            
+            # Валидируем роль
+            valid_roles = ['applicant', 'executor', 'manager']
+            if role not in valid_roles:
+                logger.warning(f"Недопустимая роль: {role}")
+                return False
+            
+            # Получаем текущие роли
+            current_roles = []
+            if user.roles:
+                try:
+                    current_roles = json.loads(user.roles)
+                    if not isinstance(current_roles, list):
+                        current_roles = []
+                except json.JSONDecodeError:
+                    current_roles = []
+            
+            # Проверяем, есть ли уже такая роль
+            if role in current_roles:
+                logger.info(f"Пользователь {user_id} уже имеет роль {role}")
+                return True
+            
+            # Добавляем новую роль
+            old_roles = current_roles.copy()
+            current_roles.append(role)
+            user.roles = json.dumps(current_roles)
+            
+            # Если это первая роль или активная роль не установлена
+            if not user.active_role or user.active_role not in current_roles:
+                user.active_role = role
+            
+            # Создаем запись в аудит логе
+            audit = AuditLog(
+                action="role_assigned",
+                user_id=assigned_by,
+                details=json.dumps({
+                    "target_user_id": user_id,
+                    "old_roles": old_roles,
+                    "new_roles": current_roles,
+                    "assigned_role": role,
+                    "comment": comment,
+                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                })
+            )
+            self.db.add(audit)
+            self.db.commit()
+            
+            logger.info(f"Роль {role} назначена пользователю {user_id} менеджером {assigned_by}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка назначения роли {role} пользователю {user_id}: {e}")
+            self.db.rollback()
+            return False
+    
+    def remove_role(self, user_id: int, role: str, removed_by: int, comment: str = "") -> bool:
+        """
+        Удалить роль у пользователя
+        
+        Args:
+            user_id: ID пользователя
+            role: Роль для удаления
+            removed_by: ID менеджера, который удаляет роль
+            comment: Комментарий к удалению
+            
+        Returns:
+            True если операция успешна
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь {user_id} не найден для удаления роли")
+                return False
+            
+            # Получаем текущие роли
+            current_roles = []
+            if user.roles:
+                try:
+                    current_roles = json.loads(user.roles)
+                    if not isinstance(current_roles, list):
+                        current_roles = []
+                except json.JSONDecodeError:
+                    current_roles = []
+            
+            # Проверяем, есть ли такая роль
+            if role not in current_roles:
+                logger.info(f"У пользователя {user_id} нет роли {role}")
+                return True
+            
+            # Проверяем, что не удаляем последнюю роль
+            if len(current_roles) == 1 and role in current_roles:
+                logger.warning(f"Нельзя удалить последнюю роль {role} у пользователя {user_id}")
+                return False
+            
+            # Удаляем роль
+            old_roles = current_roles.copy()
+            current_roles.remove(role)
+            user.roles = json.dumps(current_roles)
+            
+            # Если удаляем активную роль, назначаем другую
+            if user.active_role == role:
+                user.active_role = current_roles[0] if current_roles else 'applicant'
+            
+            # Создаем запись в аудит логе
+            audit = AuditLog(
+                action="role_removed",
+                user_id=removed_by,
+                details=json.dumps({
+                    "target_user_id": user_id,
+                    "old_roles": old_roles,
+                    "new_roles": current_roles,
+                    "removed_role": role,
+                    "comment": comment,
+                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                })
+            )
+            self.db.add(audit)
+            self.db.commit()
+            
+            logger.info(f"Роль {role} удалена у пользователя {user_id} менеджером {removed_by}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления роли {role} у пользователя {user_id}: {e}")
+            self.db.rollback()
+            return False
+    
+    def get_user_roles(self, user_id: int) -> List[str]:
+        """
+        Получить список ролей пользователя
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Список ролей
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user or not user.roles:
+                return []
+            
+            roles = json.loads(user.roles)
+            return roles if isinstance(roles, list) else []
+            
+        except (json.JSONDecodeError, Exception) as e:
+            logger.error(f"Ошибка получения ролей пользователя {user_id}: {e}")
+            return []
     
     async def is_user_approved(self, telegram_id: int) -> bool:
         """Проверить, одобрен ли пользователь"""

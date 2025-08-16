@@ -10,6 +10,7 @@ def get_manager_main_keyboard() -> ReplyKeyboardMarkup:
     builder.add(KeyboardButton(text="📦 Архив"))
     builder.add(KeyboardButton(text="👥 Смены"))
     builder.add(KeyboardButton(text="👤 Сотрудники"))
+    builder.add(KeyboardButton(text="👥 Управление пользователями"))  # Новая кнопка
     builder.add(KeyboardButton(text="🔙 Назад"))
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)

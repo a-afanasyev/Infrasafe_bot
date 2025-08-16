@@ -49,6 +49,42 @@ async def open_admin_panel(message: Message, user_status: str | None = None):
     await message.answer("Панель менеджера", reply_markup=get_manager_main_keyboard())
 
 
+@router.message(F.text == "👥 Управление пользователями")  
+async def open_user_management_panel(message: Message, db: Session, roles: list = None, active_role: str = None):
+    """Открыть панель управления пользователями"""
+    lang = message.from_user.language_code or 'ru'
+    
+    # Проверяем права доступа
+    if not roles or 'manager' not in roles:
+        await message.answer(
+            get_text('errors.permission_denied', language=lang),
+            reply_markup=get_main_keyboard()
+        )
+        return
+    
+    try:
+        # Импортируем сервис и клавиатуры
+        from services.user_management_service import UserManagementService
+        from keyboards.user_management import get_user_management_main_keyboard
+        
+        # Получаем статистику пользователей
+        user_mgmt_service = UserManagementService(db)
+        stats = user_mgmt_service.get_user_stats()
+        
+        # Показываем панель управления пользователями
+        await message.answer(
+            get_text('user_management.main_title', language=lang),
+            reply_markup=get_user_management_main_keyboard(stats, lang)
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка открытия панели управления пользователями: {e}")
+        await message.answer(
+            get_text('errors.unknown_error', language=lang),
+            reply_markup=get_manager_main_keyboard()
+        )
+
+
 @router.message(F.text == "🆕 Новые заявки")
 async def list_new_requests(message: Message, user_status: str | None = None):
     if user_status == "pending":

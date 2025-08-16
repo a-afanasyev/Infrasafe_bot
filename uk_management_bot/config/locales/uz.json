@@ -213,12 +213,89 @@
     "skip": "⏭ O'tkazib yuborish",
     "confirm": "✅ Tasdiqlash",
     "edit": "✏️ Tahrirlash",
-    "delete": "🗑 O'chirish"
+    "delete": "🗑 O'chirish",
+    "save": "💾 Saqlash",
+    "refresh": "🔄 Yangilash",
+    "reset_filters": "Filtrlarni tozalash",
+    "operation_cancelled": "Operatsiya bekor qilindi"
   },
   
   "roles": {
     "applicant": "Ariza beruvchi",
     "executor": "Ijrochi",
-    "manager": "Menejer"
+    "manager": "Menejer",
+    "none": "Rollar tayinlanmagan"
+  },
+
+  "user_management": {
+    "main_title": "👥 Foydalanuvchilarni boshqarish paneli",
+    "stats": "Statistika",
+    "new_users": "Yangi foydalanuvchilar",
+    "approved_users": "Tasdiqlangan",
+    "blocked_users": "Bloklangan",
+    "staff_users": "Xodimlar",
+    "search": "Qidirish",
+    "specializations": "Mutaxassisliklar",
+    "no_users_found": "Foydalanuvchilar topilmadi",
+    "stats_text": "📊 Foydalanuvchilar statistikasi:\n\n📝 Yangi (pending): {pending}\n✅ Tasdiqlangan (approved): {approved}\n🚫 Bloklangan (blocked): {blocked}\n👷 Xodimlar: {staff}\n📈 Jami foydalanuvchilar: {total}"
+  },
+
+  "moderation": {
+    "approve_user": "Tasdiqlash",
+    "block_user": "Bloklash",
+    "unblock_user": "Blokni yechish",
+    "manage_roles": "Rollarni boshqarish",
+    "manage_specializations": "Mutaxassisliklar",
+    "enter_approval_comment": "Foydalanuvchini tasdiqlash uchun izoh kiriting:",
+    "enter_block_reason": "Foydalanuvchini bloklash sababini kiriting:",
+    "enter_unblock_comment": "Blokni yechish uchun izoh kiriting:",
+    "enter_role_change_comment": "Rol o'zgarishi haqida izoh kiriting:",
+    "enter_specialization_change_comment": "Mutaxassislik o'zgarishi haqida izoh kiriting:",
+    "user_approved_successfully": "✅ Foydalanuvchi {user_name} muvaffaqiyatli tasdiqlandi",
+    "user_blocked_successfully": "🚫 Foydalanuvchi {user_name} bloklandi",
+    "user_unblocked_successfully": "🔓 Foydalanuvchi {user_name} bloki yechildi",
+    "roles_updated_successfully": "👥 Foydalanuvchi {user_name} rollari yangilandi",
+    "operation_failed": "❌ Operatsiya bajarilmadi. Keyinroq urinib ko'ring",
+    "select_roles": "Foydalanuvchi {user_name} uchun rollarni tanlang:",
+    "current_roles": "Joriy rollar",
+    "cannot_remove_last_role": "Oxirgi rolni o'chirish mumkin emas",
+    "no_changes_made": "O'zgarishlar kiritilmadi"
+  },
+
+  "specializations": {
+    "plumber": "Santexnik",
+    "electrician": "Elektrik", 
+    "hvac": "Isitish/ventilyatsiya",
+    "general": "Umumiy ishlar",
+    "cleaning": "Tozalash",
+    "security": "Xavfsizlik",
+    "maintenance": "Xizmat ko'rsatish",
+    "landscaping": "Obodonlashtirish",
+    "repair": "Ta'mirlash",
+    "installation": "O'rnatish",
+    "no_specializations": "Mutaxassisliklar ko'rsatilmagan",
+    "stats_title": "📊 Mutaxassisliklar statistikasi:",
+    "no_executors": "Ijrochilar yo'q",
+    "stats_error": "Statistika olishda xatolik",
+    "select_specializations": "{user_name} uchun mutaxassisliklarni tanlang:",
+    "current_specializations": "Joriy mutaxassisliklar",
+    "specializations_updated": "🛠️ Foydalanuvchi {user_name} mutaxassisliklari yangilandi",
+    "search_by_spec": "Mutaxassislik bo'yicha qidirish",
+    "view_stats": "Statistikani ko'rish"
+  },
+
+  "filters": {
+    "by_status": "Status bo'yicha",
+    "by_role": "Rol bo'yicha",
+    "by_specialization": "Mutaxassislik bo'yicha"
+  },
+
+  "search": {
+    "by_name": "Ism bo'yicha qidirish"
+  },
+
+  "pagination": {
+    "no_items": "Elementlar topilmadi",
+    "info": "Sahifa {page} dan {total_pages} (jami: {total_items})"
   }
 } 

@@ -15,6 +15,7 @@ from handlers.shifts import router as shifts_router
 from handlers.admin import router as admin_router
 from handlers.auth import router as auth_router
 from handlers.onboarding import router as onboarding_router
+from handlers.user_management import router as user_management_router
 from middlewares.shift import shift_context_middleware
 from middlewares.auth import auth_middleware, role_mode_middleware
 import sys
@@ -91,6 +92,7 @@ async def main():
     dp.include_router(requests_router)
     dp.include_router(shifts_router)
     dp.include_router(admin_router)
+    dp.include_router(user_management_router)
     
     # Middleware для внедрения сессии БД
     @dp.update.middleware()
