@@ -19,9 +19,13 @@ class Settings:
         f"sqlite:///{_default_db_path}",  # будет вида sqlite:////absolute/path
     )
     
-    # Google Sheets
+    # Google Sheets Real-time Sync
     GOOGLE_SHEETS_CREDENTIALS_FILE = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
     GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID")
+    GOOGLE_SHEETS_SYNC_ENABLED = os.getenv("GOOGLE_SHEETS_SYNC_ENABLED", "False").lower() == "true"
+    GOOGLE_SHEETS_SYNC_INTERVAL = int(os.getenv("GOOGLE_SHEETS_SYNC_INTERVAL", "30"))  # секунды
+    GOOGLE_SHEETS_MAX_RETRIES = int(os.getenv("GOOGLE_SHEETS_MAX_RETRIES", "3"))
+    GOOGLE_SHEETS_RETRY_DELAY = int(os.getenv("GOOGLE_SHEETS_RETRY_DELAY", "60"))  # секунды
     
     # Application
     DEBUG = os.getenv("DEBUG", "True").lower() == "true"

@@ -19,6 +19,7 @@ from utils.constants import (
 )
 from services.shift_service import ShiftService
 from services.notification_service import notify_status_changed, async_notify_request_status_changed
+from integrations.google_sheets import sheets_service, SyncTask
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,9 @@ class RequestService:
             self.db.add(request)
             self.db.commit()
             self.db.refresh(request)
+            
+            # Синхронизация с Google Sheets
+            await self._sync_request_to_sheets(request, "create")
             
             logger.info(f"Создана заявка ID {request.id} пользователем {user_id}")
             return request
@@ -198,6 +202,14 @@ class RequestService:
             
             self.db.commit()
             self.db.refresh(request)
+            
+            # Синхронизация с Google Sheets
+            changes = {"status": new_status}
+            if executor_id:
+                changes["executor_id"] = executor_id
+            if notes:
+                changes["comments"] = notes
+            await self._sync_request_to_sheets(request, "update", changes)
             
             logger.info(f"Статус заявки {request_id} изменен с '{old_status}' на '{new_status}'")
             return request
@@ -547,3 +559,63 @@ class RequestService:
             self.db.rollback()
             logger.error(f"Ошибка добавления медиафайлов к заявке {request_id}: {e}")
             return None
+    
+    async def _sync_request_to_sheets(self, request: Request, operation: str, changes: Dict[str, Any] = None):
+        """
+        Синхронизация заявки с Google Sheets
+        
+        Args:
+            request: Заявка для синхронизации
+            operation: Тип операции ("create", "update")
+            changes: Изменения для операции "update"
+        """
+        try:
+            if not sheets_service.sync_enabled:
+                return
+            
+            # Подготавливаем данные заявки
+            request_data = {
+                'id': request.id,
+                'created_at': request.created_at.strftime("%Y-%m-%d %H:%M:%S") if request.created_at else '',
+                'status': request.status,
+                'category': request.category,
+                'address': request.address,
+                'description': request.description,
+                'urgency': request.urgency,
+                'applicant_id': request.user_id,
+                'applicant_name': self._get_user_name(request.user_id),
+                'executor_id': request.executor_id,
+                'executor_name': self._get_user_name(request.executor_id) if request.executor_id else '',
+                'assigned_at': request.assigned_at.strftime("%Y-%m-%d %H:%M:%S") if request.assigned_at else '',
+                'completed_at': request.completed_at.strftime("%Y-%m-%d %H:%M:%S") if request.completed_at else '',
+                'comments': request.notes or '',
+                'photo_urls': ','.join(request.media_files) if request.media_files else ''
+            }
+            
+            # Создаем задачу синхронизации
+            task = SyncTask(
+                task_type=operation,
+                request_id=request.id,
+                data=request_data if operation == "create" else changes,
+                priority="high" if operation == "create" else "medium"
+            )
+            
+            # Добавляем задачу в очередь (если очередь доступна)
+            # TODO: Добавить интеграцию с очередью синхронизации
+            
+            logger.info(f"Request sync task created", 
+                       request_id=request.id,
+                       operation=operation,
+                       priority=task.priority)
+            
+        except Exception as e:
+            logger.error(f"Error creating sync task for request {request.id}",
+                        error=str(e))
+    
+    def _get_user_name(self, user_id: int) -> str:
+        """Получение имени пользователя по ID"""
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            return user.name if user else f"User_{user_id}"
+        except Exception:
+            return f"User_{user_id}"
