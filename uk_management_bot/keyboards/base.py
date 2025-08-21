@@ -6,7 +6,43 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
 
     Используется старым кодом. Не учитывает роли.
     """
-    return get_main_keyboard_for_role(active_role="applicant", roles=["applicant"]) 
+    return get_main_keyboard_for_role(active_role="applicant", roles=["applicant"])
+
+
+def get_contextual_keyboard(roles: list = None, active_role: str = None) -> ReplyKeyboardMarkup:
+    """Получить клавиатуру с учетом текущих ролей пользователя.
+    
+    Если роли не переданы, возвращает базовую клавиатуру.
+    """
+    if not roles or not active_role:
+        return get_main_keyboard()
+    return get_main_keyboard_for_role(active_role=active_role, roles=roles)
+
+
+def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    """Получить клавиатуру пользователя, загрузив его роли из БД.
+    
+    Если роли не найдены, возвращает базовую клавиатуру.
+    """
+    try:
+        from database.session import SessionLocal
+        from database.models.user import User
+        import json
+        
+        db = SessionLocal()
+        user = db.query(User).filter(User.telegram_id == user_id).first()
+        
+        if user and user.roles:
+            roles = json.loads(user.roles)
+            active_role = user.active_role or (roles[0] if roles else "applicant")
+            db.close()
+            return get_main_keyboard_for_role(active_role=active_role, roles=roles)
+        
+        db.close()
+        return get_main_keyboard()
+        
+    except Exception:
+        return get_main_keyboard() 
 
 def get_cancel_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура с кнопкой отмены"""
@@ -72,8 +108,8 @@ def get_main_keyboard_for_role(active_role: str, roles: list[str]) -> ReplyKeybo
     if len(unique_roles) > 1:
         builder.add(KeyboardButton(text="🔀 Выбрать роль"))
 
-    # Кнопки менеджера
-    if roles and ("manager" in roles or active_role == "manager"):
+    # Кнопки менеджера (только для активных ролей admin/manager)
+    if active_role in ["admin", "manager"]:
         builder.add(KeyboardButton(text="🔧 Админ панель"))
         builder.add(KeyboardButton(text="📊 Статистика"))
 
@@ -92,6 +128,7 @@ def get_role_switch_inline(roles: list[str], active_role: str) -> InlineKeyboard
         "applicant": "Житель",
         "executor": "Сотрудник",
         "manager": "Менеджер",
+        "admin": "Администратор",
     }
 
     for role in roles or []:

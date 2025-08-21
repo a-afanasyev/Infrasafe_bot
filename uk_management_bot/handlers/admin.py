@@ -9,7 +9,7 @@ from keyboards.admin import (
     get_manager_requests_inline,
     get_manager_request_list_kb,
 )
-from keyboards.base import get_main_keyboard
+from keyboards.base import get_main_keyboard, get_user_contextual_keyboard
 from services.auth_service import AuthService
 from services.request_service import RequestService
 from database.session import get_db
@@ -39,12 +39,12 @@ class ManagerStates(StatesGroup):
 async def open_admin_panel(message: Message, user_status: str | None = None):
     # Pending — ранний отказ
     if user_status == "pending":
-        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     db_session: Session = next(get_db())
     auth = AuthService(db_session)
     if not await auth.is_user_manager(message.from_user.id):
-        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     await message.answer("Панель менеджера", reply_markup=get_manager_main_keyboard())
 
@@ -55,10 +55,10 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
     lang = message.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await message.answer(
             get_text('errors.permission_denied', language=lang),
-            reply_markup=get_main_keyboard()
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -88,12 +88,12 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
 @router.message(F.text == "🆕 Новые заявки")
 async def list_new_requests(message: Message, user_status: str | None = None):
     if user_status == "pending":
-        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     db_session: Session = next(get_db())
     auth = AuthService(db_session)
     if not await auth.is_user_manager(message.from_user.id):
-        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
 
     # Простая выборка: все со статусом "Новая"
@@ -110,12 +110,12 @@ async def list_new_requests(message: Message, user_status: str | None = None):
 @router.message(F.text == "💰 Закуп")
 async def list_purchase_requests(message: Message, user_status: str | None = None):
     if user_status == "pending":
-        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     db_session: Session = next(get_db())
     auth = AuthService(db_session)
     if not await auth.is_user_manager(message.from_user.id):
-        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     q = (
         db_session.query(Request)
@@ -251,7 +251,7 @@ async def manager_clarify_ask(callback: CallbackQuery, state: FSMContext, user_s
 @router.message(ManagerStates.clarify_reason)
 async def manager_clarify_save(message: Message, state: FSMContext, user_status: str | None = None):
     if user_status == "pending":
-        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     db_session: Session = next(get_db())
     service = RequestService(db_session)
@@ -301,7 +301,7 @@ async def manager_cancel_ask(callback: CallbackQuery, state: FSMContext, user_st
 @router.message(ManagerStates.cancel_reason)
 async def manager_cancel_save(message: Message, state: FSMContext, user_status: str | None = None):
     if user_status == "pending":
-        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     db_session: Session = next(get_db())
     service = RequestService(db_session)
@@ -391,13 +391,13 @@ async def list_archive_requests(message: Message, user_status: str | None = None
 @router.message(F.text == "👤 Сотрудники")
 async def list_employees(message: Message, user_status: str | None = None):
     if user_status == "pending":
-        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("auth.pending", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     """Список сотрудников по специализациям: Электрика, Сантехника, Охрана, Уборка, Разное."""
     db_session: Session = next(get_db())
     auth = AuthService(db_session)
     if not await auth.is_user_manager(message.from_user.id):
-        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_main_keyboard())
+        await message.answer(get_text("errors.permission_denied", language=message.from_user.language_code or "ru"), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     # Загружаем сотрудников по специализациям
     groups = {

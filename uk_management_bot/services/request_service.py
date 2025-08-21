@@ -237,20 +237,41 @@ class RequestService:
         request: Request,
         target_status: str
     ) -> bool:
+        # Определяем активную роль пользователя (новая система ролей)
+        active_role = actor.active_role if actor.active_role else actor.role
+        
+        # Получаем список всех ролей пользователя
+        user_roles = []
+        try:
+            if actor.roles:
+                import json
+                parsed_roles = json.loads(actor.roles)
+                if isinstance(parsed_roles, list):
+                    user_roles = parsed_roles
+        except Exception:
+            pass
+        
+        # Fallback к старому полю role если новая система не настроена
+        if not user_roles and actor.role:
+            user_roles = [actor.role]
+        
         # Заявитель: только отмена своей "Новой" и подтверждение выполненной
-        if actor.role == ROLE_APPLICANT:
+        if active_role == ROLE_APPLICANT:
             is_owner = request.user_id == actor.id
             if is_owner and request.status == "Новая" and target_status == "Отменена":
                 return True
             if is_owner and request.status == "Выполнена" and target_status == "Подтверждена":
                 return True
             return False
-        if actor.role == ROLE_EXECUTOR:
-            # Исполнитель: может брать в работу и менять рабочие статусы
+        
+        # Исполнитель: может брать в работу и менять рабочие статусы
+        if active_role == ROLE_EXECUTOR:
             return target_status in ["В работе", "Уточнение", "Закуп", "Выполнена"]
-        if actor.role == ROLE_MANAGER:
-            # Менеджер: широкие права
+        
+        # Менеджер и Админ: широкие права
+        if active_role in [ROLE_MANAGER, "admin"]:
             return True
+            
         return False
 
     def update_status_by_actor(
@@ -302,7 +323,8 @@ class RequestService:
                 return {"success": False, "message": "Недостаточно прав для изменения статуса", "request": None}
 
             # Проверяем активную смену для исполнителя
-            if actor.role == ROLE_EXECUTOR:
+            active_role = actor.active_role if actor.active_role else actor.role
+            if active_role == ROLE_EXECUTOR:
                 shift_service = ShiftService(self.db)
                 if not shift_service.is_user_in_active_shift(actor.telegram_id):
                     return {"success": False, "message": "Вы не в смене. Смена необходима для выполнения этого действия", "request": None}

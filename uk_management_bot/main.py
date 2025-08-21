@@ -16,6 +16,7 @@ from handlers.admin import router as admin_router
 from handlers.auth import router as auth_router
 from handlers.onboarding import router as onboarding_router
 from handlers.user_management import router as user_management_router
+from handlers.health import router as health_router
 from middlewares.shift import shift_context_middleware
 from middlewares.auth import auth_middleware, role_mode_middleware
 import sys
@@ -25,12 +26,12 @@ from datetime import datetime
 # Добавляем путь к проекту в sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Настройка логирования
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Настройка структурированного логирования
+from utils.structured_logger import setup_structured_logging, get_logger
+
+# Инициализация логирования
+setup_structured_logging()
+logger = get_logger(__name__, component="main")
 
 async def send_startup_notification(bot: Bot):
     """Отправляет уведомление о запуске бота"""
@@ -86,13 +87,14 @@ async def main():
     dp = Dispatcher(storage=storage)
     
     # Регистрируем роутеры
-    dp.include_router(base_router)
+    dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
     dp.include_router(auth_router)
     dp.include_router(onboarding_router)
-    dp.include_router(requests_router)
+    dp.include_router(requests_router)  # requests раньше base для перехвата "❌ Отмена" в состояниях
     dp.include_router(shifts_router)
     dp.include_router(admin_router)
     dp.include_router(user_management_router)
+    dp.include_router(base_router)  # base в конце как fallback для общих команд
     
     # Middleware для внедрения сессии БД
     @dp.update.middleware()

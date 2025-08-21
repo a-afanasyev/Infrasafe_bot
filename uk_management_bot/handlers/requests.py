@@ -20,7 +20,7 @@ from keyboards.requests import (
     get_urgency_inline_keyboard,
     get_inline_confirmation_keyboard,
 )
-from keyboards.base import get_main_keyboard
+from keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
 from keyboards.requests import (
     get_status_filter_inline_keyboard,
     get_category_filter_inline_keyboard,
@@ -492,7 +492,7 @@ async def show_confirmation(message: Message, state: FSMContext):
 
 # Обработка подтверждения
 @router.message(RequestStates.confirm)
-async def process_confirmation(message: Message, state: FSMContext, db: Session):
+async def process_confirmation(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None):
     """Обработка подтверждения заявки"""
     if message.text == "❌ Отмена":
         await cancel_request(message, state)
@@ -516,7 +516,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session)
             await state.clear()
             await message.answer(
                 "✅ Заявка успешно создана! Мы рассмотрим её в ближайшее время.",
-                reply_markup=get_main_keyboard()
+                reply_markup=get_contextual_keyboard(roles, active_role) if roles and active_role else get_user_contextual_keyboard(message.from_user.id)
             )
             logger.info(f"Пользователь {message.from_user.id} создал заявку")
         else:
@@ -524,7 +524,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session)
             await state.clear()
             await message.answer(
                 "❌ Ошибка при создании заявки. Попробуйте еще раз.",
-                reply_markup=get_main_keyboard()
+                reply_markup=get_user_contextual_keyboard(message.from_user.id)
             )
             logger.error(f"Ошибка создания заявки пользователем {message.from_user.id}")
         return
@@ -535,12 +535,12 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session)
     )
 
 # Отмена создания заявки
-async def cancel_request(message: Message, state: FSMContext):
+async def cancel_request(message: Message, state: FSMContext, roles: list = None, active_role: str = None):
     """Отмена создания заявки"""
     await state.clear()
     await message.answer(
         "Создание заявки отменено.",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_user_contextual_keyboard(message.from_user.id)
     )
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
 
@@ -620,7 +620,7 @@ async def handle_cancel_create(callback: CallbackQuery, state: FSMContext):
     try:
         await state.clear()
         await callback.message.edit_text("Создание заявки отменено.")
-        await callback.message.answer("Возврат в главное меню.", reply_markup=get_main_keyboard())
+        await callback.message.answer("Возврат в главное меню.", reply_markup=get_user_contextual_keyboard(callback.from_user.id))
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка отмены создания заявки: {e}")
@@ -690,7 +690,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 # Отправляем отдельное сообщение с главной клавиатурой
                 await callback.message.answer(
                     "Возврат в главное меню.",
-                    reply_markup=get_main_keyboard()
+                    reply_markup=get_user_contextual_keyboard(callback.from_user.id)
                 )
                 await state.clear()
                 logger.info(f"Заявка создана пользователем {callback.from_user.id}")
@@ -699,7 +699,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 await state.clear()
                 await callback.message.answer(
                     "❌ Ошибка при создании заявки. Попробуйте ещё раз.",
-                    reply_markup=get_main_keyboard()
+                    reply_markup=get_user_contextual_keyboard(callback.from_user.id)
                 )
                 await callback.answer("Ошибка сохранения заявки", show_alert=True)
                 
@@ -709,7 +709,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
             )
             await callback.message.answer(
                 "Возврат в главное меню.",
-                reply_markup=get_main_keyboard()
+                reply_markup=get_user_contextual_keyboard(callback.from_user.id)
             )
             await state.clear()
             logger.info(f"Создание заявки отменено пользователем {callback.from_user.id}")
@@ -931,8 +931,11 @@ async def handle_delete_request(callback: CallbackQuery, state: FSMContext):
         db_session.commit()
         
         await callback.message.edit_text(
-            "🗑️ Заявка удалена",
-            reply_markup=get_main_keyboard()
+            "🗑️ Заявка удалена"
+        )
+        await callback.message.answer(
+            "Возврат в главное меню.",
+            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
         
         logger.info(f"Заявка {request_id} удалена пользователем {callback.from_user.id}")
@@ -965,8 +968,11 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
             return
 
         await callback.message.edit_text(
-            f"✅ Заявка #{request_id} принята в работу",
-            reply_markup=get_main_keyboard()
+            f"✅ Заявка #{request_id} принята в работу"
+        )
+        await callback.message.answer(
+            "Возврат в главное меню.",
+            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
         logger.info(f"Заявка {request_id} принята пользователем {callback.from_user.id}")
         
@@ -1018,8 +1024,11 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
             return
 
         await callback.message.edit_text(
-            f"✅ Заявка #{request_id} отмечена как выполненная",
-            reply_markup=get_main_keyboard()
+            f"✅ Заявка #{request_id} отмечена как выполненная"
+        )
+        await callback.message.answer(
+            "Возврат в главное меню.",
+            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
         logger.info(f"Заявка {request_id} завершена пользователем {callback.from_user.id}")
         
@@ -1292,7 +1301,7 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
         if not req or req.user_id != message.from_user.id:
             await message.answer("Заявка не найдена или недоступна.")
             await state.clear()
-            await message.answer("Возврат в меню", reply_markup=get_main_keyboard())
+            await message.answer("Возврат в меню", reply_markup=get_user_contextual_keyboard(message.from_user.id))
             return
         existing = (req.notes or "").strip()
         to_add = message.text.strip()

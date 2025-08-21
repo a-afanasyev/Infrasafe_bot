@@ -29,15 +29,31 @@ class Settings:
     
     # Admin
     ADMIN_USER_IDS = [int(x.strip()) for x in os.getenv("ADMIN_USER_IDS", "").split(",") if x.strip()]
-    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "12345")  # Пароль для назначения администратора
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+    
+    # Проверка безопасности: дефолтный пароль запрещен в production
+    if not ADMIN_PASSWORD:
+        if not DEBUG:
+            raise ValueError("ADMIN_PASSWORD must be set in production environment")
+        else:
+            ADMIN_PASSWORD = "dev_password_change_me"  # Только для разработки
+    elif ADMIN_PASSWORD == "12345":
+        raise ValueError("Default ADMIN_PASSWORD '12345' is not allowed. Please set a strong password.")
     
     # Invites
     INVITE_SECRET = os.getenv("INVITE_SECRET")
-    # INVITE_SECRET обязателен только в продакшене, в тестах может быть None
+    
+    # Проверка безопасности: INVITE_SECRET обязателен в production
+    if not INVITE_SECRET and not DEBUG:
+        raise ValueError("INVITE_SECRET must be set in production environment for secure invite tokens")
     
     # Rate limiting для /join команды
     JOIN_RATE_LIMIT_WINDOW = int(os.getenv("JOIN_RATE_LIMIT_WINDOW", "600"))  # 10 минут
     JOIN_RATE_LIMIT_MAX = int(os.getenv("JOIN_RATE_LIMIT_MAX", "3"))  # 3 попытки
+    
+    # Redis для rate limiting в production
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    USE_REDIS_RATE_LIMIT = os.getenv("USE_REDIS_RATE_LIMIT", "False").lower() == "true"
     
     # Notifications
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"

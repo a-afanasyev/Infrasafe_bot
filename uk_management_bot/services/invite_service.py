@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from database.models.audit import AuditLog
 from config.settings import settings
 import logging
+from utils.redis_rate_limiter import is_rate_limited, get_rate_limit_remaining_time
 
 logger = logging.getLogger(__name__)
 
@@ -243,13 +244,13 @@ class InviteService:
 
 
 class InviteRateLimiter:
-    """Контроллер ограничения частоты использования приглашений"""
+    """Контроллер ограничения частоты использования приглашений с поддержкой Redis"""
     
-    # In-memory хранилище для rate limiting
+    # In-memory хранилище для fallback
     _storage = {}
     
     @classmethod
-    def is_allowed(cls, telegram_id: int) -> bool:
+    async def is_allowed(cls, telegram_id: int) -> bool:
         """
         Проверяет разрешено ли использование инвайта для пользователя
         
@@ -259,29 +260,21 @@ class InviteRateLimiter:
         Returns:
             True если разрешено, False если превышен лимит
         """
-        now = time.time()
         window = getattr(settings, 'JOIN_RATE_LIMIT_WINDOW', 600)  # 10 минут по умолчанию
         max_attempts = getattr(settings, 'JOIN_RATE_LIMIT_MAX', 3)  # 3 попытки по умолчанию
         
-        key = f"join_{telegram_id}"
-        attempts = cls._storage.get(key, [])
+        rate_limit_key = f"join_{telegram_id}"
         
-        # Очищаем старые попытки за пределами окна
-        attempts = [timestamp for timestamp in attempts if now - timestamp < window]
+        # Используем новый unified rate limiter
+        is_limited = await is_rate_limited(rate_limit_key, max_attempts, window)
         
-        # Проверяем превышение лимита
-        if len(attempts) >= max_attempts:
-            logger.warning(f"Rate limit exceeded for user {telegram_id}: {len(attempts)} attempts")
-            return False
+        if is_limited:
+            logger.warning(f"Rate limit exceeded for user {telegram_id}")
         
-        # Добавляем текущую попытку
-        attempts.append(now)
-        cls._storage[key] = attempts
-        
-        return True
+        return not is_limited
     
     @classmethod
-    def get_remaining_time(cls, telegram_id: int) -> int:
+    async def get_remaining_time(cls, telegram_id: int) -> int:
         """
         Возвращает время в секундах до снятия ограничения
         
@@ -291,17 +284,8 @@ class InviteRateLimiter:
         Returns:
             Количество секунд до снятия ограничения
         """
-        now = time.time()
         window = getattr(settings, 'JOIN_RATE_LIMIT_WINDOW', 600)
+        rate_limit_key = f"join_{telegram_id}"
         
-        key = f"join_{telegram_id}"
-        attempts = cls._storage.get(key, [])
-        
-        if not attempts:
-            return 0
-            
-        # Находим самую старую попытку в текущем окне
-        oldest_attempt = min(attempts)
-        time_until_reset = window - (now - oldest_attempt)
-        
-        return max(0, int(time_until_reset))
+        # Используем новый unified rate limiter
+        return await get_rate_limit_remaining_time(rate_limit_key, window)

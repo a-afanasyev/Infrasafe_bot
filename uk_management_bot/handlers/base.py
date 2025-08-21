@@ -10,6 +10,7 @@ from keyboards.base import (
     get_cancel_keyboard,
     get_main_keyboard_for_role,
     get_role_switch_inline,
+    get_user_contextual_keyboard,
 )
 from keyboards.shifts import get_shifts_main_keyboard
 from services.notification_service import async_notify_role_switched
@@ -134,7 +135,7 @@ async def cmd_help(message: Message):
 Если у вас возникли вопросы, обратитесь к администратору.
     """
     
-    await message.answer(help_text, reply_markup=get_main_keyboard())
+    await message.answer(help_text, reply_markup=get_user_contextual_keyboard(message.from_user.id))
 
 @router.message(F.text == "❌ Отмена")
 async def cancel_action(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None):
@@ -145,14 +146,14 @@ async def cancel_action(message: Message, state: FSMContext, roles: list[str] = 
         lang = message.from_user.language_code or "ru"
         await message.answer(
             get_text("cancel", language=lang),
-            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"]) 
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         logger.info(f"Пользователь {message.from_user.id} отменил действие в состоянии {current_state}")
     else:
         lang = message.from_user.language_code or "ru"
         await message.answer(
             get_text("cancel", language=lang),
-            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"]) 
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
 
 @router.message(F.text == "🔙 Назад")
@@ -160,7 +161,7 @@ async def go_back(message: Message, state: FSMContext, roles: list[str] = None, 
     """Возврат в главное меню"""
     await state.clear()
     lang = message.from_user.language_code or "ru"
-    await message.answer(get_text("back", language=lang), reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"]))
+    await message.answer(get_text("back", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
 
 
 # Обработчики меню исполнителя
@@ -337,7 +338,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
     
     if message.text == "❌ Отмена":
         await state.clear()
-        await message.answer("Отменено.", reply_markup=get_main_keyboard())
+        await message.answer("Отменено.", reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     
     # Проверяем пароль и назначаем администратора
@@ -386,6 +387,6 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
             "❌ **Ошибка!**\n\n"
             "Неверный пароль администратора.\n"
             "Попробуйте еще раз или обратитесь к разработчику.",
-            reply_markup=get_main_keyboard()
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         logger.warning(f"Неверная попытка назначения администратора от {message.from_user.id}")

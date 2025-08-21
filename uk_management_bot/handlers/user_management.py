@@ -44,7 +44,7 @@ async def show_user_management_panel(callback: CallbackQuery, db: Session, roles
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -84,7 +84,7 @@ async def show_user_stats(callback: CallbackQuery, db: Session, roles: list = No
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -120,7 +120,7 @@ async def show_user_list(callback: CallbackQuery, db: Session, roles: list = Non
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -182,7 +182,7 @@ async def show_user_details(callback: CallbackQuery, db: Session, roles: list = 
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -230,7 +230,7 @@ async def handle_approve_user(callback: CallbackQuery, state: FSMContext, db: Se
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -272,7 +272,7 @@ async def handle_block_user(callback: CallbackQuery, state: FSMContext, db: Sess
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -312,7 +312,7 @@ async def handle_unblock_user(callback: CallbackQuery, state: FSMContext, db: Se
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -570,7 +570,7 @@ async def show_user_roles_management(callback: CallbackQuery, state: FSMContext,
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -828,7 +828,7 @@ async def show_user_specializations_management(callback: CallbackQuery, state: F
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
-    if not roles or 'manager' not in roles:
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True

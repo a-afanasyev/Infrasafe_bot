@@ -9,6 +9,7 @@ import logging
 import re
 import time
 import json
+from utils.redis_rate_limiter import is_rate_limited
 
 logger = logging.getLogger(__name__)
 
@@ -717,22 +718,79 @@ class AuthService:
         return user and user.status == "approved"
     
     async def is_user_manager(self, telegram_id: int) -> bool:
-        """Проверить, является ли пользователь менеджером"""
+        """Проверить, является ли пользователь менеджером или админом"""
         user = await self.get_user_by_telegram_id(telegram_id)
-        return user and user.role == "manager" and user.status == "approved"
+        if not user or user.status != "approved":
+            return False
+            
+        # Проверяем роли в новом формате
+        try:
+            if user.roles:
+                import json
+                parsed_roles = json.loads(user.roles)
+                if isinstance(parsed_roles, list):
+                    # Админ и менеджер имеют права менеджера
+                    return any(role in ["admin", "manager"] for role in parsed_roles)
+        except Exception:
+            pass
+            
+        # Fallback к старому формату
+        return user.role in ["admin", "manager"]
     
     async def is_user_executor(self, telegram_id: int) -> bool:
         """Проверить, является ли пользователь исполнителем"""
         user = await self.get_user_by_telegram_id(telegram_id)
-        return user and user.role == "executor" and user.status == "approved"
+        if not user or user.status != "approved":
+            return False
+            
+        # Проверяем активную роль (новая система)
+        if user.active_role == "executor":
+            return True
+            
+        # Проверяем наличие роли в списке ролей
+        try:
+            if user.roles:
+                import json
+                parsed_roles = json.loads(user.roles)
+                if isinstance(parsed_roles, list) and "executor" in parsed_roles:
+                    return True
+        except Exception:
+            pass
+            
+        # Fallback к старому полю
+        return user.role == "executor"
     
     async def get_all_users(self) -> list[User]:
         """Получить всех пользователей"""
         return self.db.query(User).all()
     
     async def get_users_by_role(self, role: str) -> list[User]:
-        """Получить пользователей по роли"""
-        return self.db.query(User).filter(User.role == role, User.status == "approved").all()
+        """Получить пользователей по роли (поддерживает новую систему ролей)"""
+        all_users = self.db.query(User).filter(User.status == "approved").all()
+        matching_users = []
+        
+        for user in all_users:
+            # Проверяем активную роль
+            if user.active_role == role:
+                matching_users.append(user)
+                continue
+                
+            # Проверяем наличие роли в списке ролей
+            try:
+                if user.roles:
+                    import json
+                    parsed_roles = json.loads(user.roles)
+                    if isinstance(parsed_roles, list) and role in parsed_roles:
+                        matching_users.append(user)
+                        continue
+            except Exception:
+                pass
+                
+            # Fallback к старому полю
+            if user.role == role:
+                matching_users.append(user)
+                
+        return matching_users
     
     async def make_admin_by_password(self, telegram_id: int, password: str) -> bool:
         """Назначить пользователя администратором по паролю"""
@@ -788,10 +846,9 @@ class AuthService:
 
         Возвращает (ok, reason). reason ∈ {"rate_limited", "not_allowed", None}.
         """
-        # Проверка rate‑limit
-        now = time.time()
-        last_ts = _ROLE_SWITCH_RATE_LIMIT_TS.get(telegram_id)
-        if last_ts is not None and now - last_ts < window_seconds:
+        # Проверка rate‑limit с поддержкой Redis
+        rate_limit_key = f"role_switch_{telegram_id}"
+        if await is_rate_limited(rate_limit_key, 1, window_seconds):
             return False, "rate_limited"
 
         # Получаем пользователя и старую роль
@@ -804,9 +861,6 @@ class AuthService:
         ok = await self.set_active_role(telegram_id, role)
         if not ok:
             return False, "not_allowed"
-
-        # Фиксируем метку времени для rate‑limit
-        _ROLE_SWITCH_RATE_LIMIT_TS[telegram_id] = now
 
         # Пишем аудит (best-effort)
         try:
