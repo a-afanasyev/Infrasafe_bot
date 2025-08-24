@@ -87,13 +87,13 @@ async def process_contact(message: Message, state: FSMContext, db: Session):
         await state.clear()
 
 @router.message(OnboardingStates.waiting_for_phone, F.text)
-async def process_manual_phone(message: Message, state: FSMContext, db: Session):
+async def process_manual_phone(message: Message, state: FSMContext, db: Session, user_status: str = None):
     """Обрабатывает ручной ввод телефона"""
     lang = message.from_user.language_code or "ru"
     
     # Проверяем на отмену
     if message.text == get_text("buttons.cancel", language=lang):
-        await cancel_onboarding(message, state, db)
+        await cancel_onboarding(message, state, db, user_status)
         return
     
     # Валидируем телефон
@@ -135,13 +135,13 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session)
         await state.clear()
 
 @router.message(OnboardingStates.waiting_for_home_address, F.text)
-async def process_home_address(message: Message, state: FSMContext, db: Session):
+async def process_home_address(message: Message, state: FSMContext, db: Session, user_status: str = None):
     """Обрабатывает ввод домашнего адреса"""
     lang = message.from_user.language_code or "ru"
     
     # Проверяем на отмену
     if message.text == get_text("buttons.cancel", language=lang):
-        await cancel_onboarding(message, state, db)
+        await cancel_onboarding(message, state, db, user_status)
         return
     
     address = message.text.strip()
@@ -171,14 +171,14 @@ async def process_home_address(message: Message, state: FSMContext, db: Session)
             logger.info(f"Сохранен адрес для пользователя {message.from_user.id}: {address}")
             
             # Завершаем онбординг
-            await complete_onboarding(message, state, db, user)
+            await complete_onboarding(message, state, db, user, user_status)
             
     except Exception as e:
         logger.error(f"Ошибка сохранения адреса для {message.from_user.id}: {e}")
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-async def complete_onboarding(message: Message, state: FSMContext, db: Session, user):
+async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None):
     """Завершает процесс онбординга"""
     lang = message.from_user.language_code or "ru"
     
@@ -199,19 +199,19 @@ async def complete_onboarding(message: Message, state: FSMContext, db: Session, 
     
     await message.answer(
         completion_text,
-        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"])
+        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status)
     )
     
     await state.clear()
     logger.info(f"Онбординг завершен для пользователя {message.from_user.id}")
 
-async def cancel_onboarding(message: Message, state: FSMContext, db: Session):
+async def cancel_onboarding(message: Message, state: FSMContext, db: Session, user_status: str = None):
     """Отменяет процесс онбординга"""
     lang = message.from_user.language_code or "ru"
     
     await message.answer(
         get_text("onboarding.cancelled", language=lang),
-        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"])
+        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status)
     )
     
     await state.clear()

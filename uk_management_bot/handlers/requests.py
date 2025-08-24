@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
 from database.models import Request
 from database.session import get_db
+from database.models.user import User
 from keyboards.requests import (
     get_categories_keyboard, 
     get_urgency_keyboard,
@@ -47,6 +48,13 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+# Добавляем middleware в роутер
+from middlewares.auth import auth_middleware, role_mode_middleware
+router.message.middleware(auth_middleware)
+router.message.middleware(role_mode_middleware)
+router.callback_query.middleware(auth_middleware)
+router.callback_query.middleware(role_mode_middleware)
 
 # Вспомогательные функции для улучшенной обработки ошибок и UX
 
@@ -195,12 +203,6 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     await state.set_state(RequestStates.category)
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
     await message.answer("Начинаем создание заявки…", reply_markup=ReplyKeyboardRemove())
-    # Хинт: создание доступно в любом режиме и не зависит от смен
-    try:
-        from utils.helpers import get_text
-        await message.answer(get_text("requests.create_always_available", language=message.from_user.language_code or "ru"))
-    except Exception:
-        pass
     # Показываем inline-клавиатуру категорий
     await message.answer("Выберите категорию заявки:", reply_markup=get_categories_inline_keyboard_with_cancel())
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
@@ -209,18 +211,14 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
 @router.message(F.text == "📝 Создать заявку")
 async def start_request_creation_emoji(message: Message, state: FSMContext, user_status: Optional[str] = None):
     """Начало создания заявки (с эмодзи)"""
+
+    
     if await _deny_if_pending_message(message, user_status):
         return
     logger.info(f"Пользователь {message.from_user.id} нажал '📝 Создать заявку'")
     await state.set_state(RequestStates.category)
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
     await message.answer("Начинаем создание заявки…", reply_markup=ReplyKeyboardRemove())
-    # Хинт: создание доступно в любом режиме и не зависит от смен
-    try:
-        from utils.helpers import get_text
-        await message.answer(get_text("requests.create_always_available", language=message.from_user.language_code or "ru"))
-    except Exception:
-        pass
     # Показываем inline-клавиатуру категорий
     await message.answer("Выберите категорию заявки:", reply_markup=get_categories_inline_keyboard_with_cancel())
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
@@ -376,8 +374,11 @@ async def process_description(message: Message, state: FSMContext):
         await cancel_request(message, state)
         return
     
-    if not validate_description(message.text):
-        await message.answer("Описание должно содержать минимум 20 символов")
+    # Валидируем описание с помощью валидатора
+    from utils.validators import Validator
+    is_valid, error_message = Validator.validate_description(message.text)
+    if not is_valid:
+        await message.answer(error_message)
         return
     
     # Сохраняем описание и переходим к выбору срочности
@@ -548,6 +549,14 @@ async def cancel_request(message: Message, state: FSMContext, roles: list = None
 async def save_request(data: dict, user_id: int, db: Session) -> bool:
     """Сохранение заявки в базу данных"""
     try:
+        # Получаем пользователя из базы данных по telegram_id
+        from database.models.user import User
+        user = db.query(User).filter(User.telegram_id == user_id).first()
+        
+        if not user:
+            logger.error(f"Пользователь с telegram_id {user_id} не найден в базе данных")
+            return False
+        
         request = Request(
             category=data['category'],
             address=data['address'],
@@ -556,7 +565,7 @@ async def save_request(data: dict, user_id: int, db: Session) -> bool:
             apartment=data.get('apartment'),
             # В модели media_files ожидается JSON (список), поэтому сохраняем список
             media_files=list(data.get('media_files', [])),
-            user_id=user_id,
+            user_id=user.id,  # Используем id пользователя из базы данных
             status='Новая'
         )
         
@@ -733,7 +742,16 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
 
         # Получаем список заявок пользователя с учетом фильтра
         db_session = next(get_db())
-        query = db_session.query(Request).filter(Request.user_id == callback.from_user.id)
+        
+        # Получаем пользователя из базы данных по telegram_id
+        from database.models.user import User
+        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        
+        if not user:
+            await callback.answer("Пользователь не найден в базе данных.", show_alert=True)
+            return
+        
+        query = db_session.query(Request).filter(Request.user_id == user.id)
         if active_status == "active":
             query = query.filter(~Request.status.in_(["Выполнена", "Подтверждена", "Отменена"]))
         elif active_status == "archive":
@@ -818,7 +836,10 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
             return
         
         # Проверяем права доступа
-        if request.user_id != callback.from_user.id:
+        from database.models.user import User
+        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        
+        if not user or request.user_id != user.id:
             await callback.answer("Нет прав для просмотра этой заявки", show_alert=True)
             return
         
@@ -1180,14 +1201,23 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
 async def show_my_requests(message: Message, state: FSMContext):
     """Показать список заявок пользователя (страница 1)"""
     try:
-        user_id = message.from_user.id
+        telegram_id = message.from_user.id
         # Читаем активный фильтр и страницу из FSM
         data = await state.get_data()
         active_status = data.get("my_requests_status")
         current_page = int(data.get("my_requests_page", 1))
         db_session = next(get_db())
+        
+        # Получаем пользователя из базы данных по telegram_id
+        from database.models.user import User
+        user = db_session.query(User).filter(User.telegram_id == telegram_id).first()
+        
+        if not user:
+            await message.answer("Пользователь не найден в базе данных.")
+            return
+        
         # Получаем заявки пользователя с учетом фильтров
-        query = db_session.query(Request).filter(Request.user_id == user_id)
+        query = db_session.query(Request).filter(Request.user_id == user.id)
         # Фильтр статуса: только "active" или "archive"
         if active_status == "active":
             # Активные: все, кроме финальных
@@ -1273,7 +1303,11 @@ async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext)
         req = db_session.query(Request).filter(Request.id == request_id).first()
         await state.update_data(reply_request_id=request_id)
         await state.set_state(RequestStates.waiting_clarify_reply)
-        if req and req.user_id == callback.from_user.id:
+        # Получаем пользователя из базы данных по telegram_id
+        from database.models.user import User
+        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        
+        if req and user and req.user_id == user.id:
             notes_text = (req.notes or "").strip()
             if notes_text:
                 await callback.message.answer(f"Текущий диалог:\n{notes_text}")
@@ -1298,7 +1332,11 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
         db_session = next(get_db())
         service = RequestService(db_session)
         req = service.get_request_by_id(request_id)
-        if not req or req.user_id != message.from_user.id:
+        # Получаем пользователя из базы данных по telegram_id
+        from database.models.user import User
+        user = db_session.query(User).filter(User.telegram_id == message.from_user.id).first()
+        
+        if not req or not user or req.user_id != user.id:
             await message.answer("Заявка не найдена или недоступна.")
             await state.clear()
             await message.answer("Возврат в меню", reply_markup=get_user_contextual_keyboard(message.from_user.id))
@@ -1335,7 +1373,16 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         # Собираем список заявок и клавиатуру, затем редактируем сообщение
         data = await state.get_data()
         db_session = next(get_db())
-        query = db_session.query(Request).filter(Request.user_id == callback.from_user.id)
+        
+        # Получаем пользователя из базы данных по telegram_id
+        from database.models.user import User
+        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        
+        if not user:
+            await callback.answer("Пользователь не найден в базе данных.", show_alert=True)
+            return
+        
+        query = db_session.query(Request).filter(Request.user_id == user.id)
         if choice in ("active", "В работе"):
             # Активные: все, кроме финальных
             query = query.filter(~Request.status.in_(["Выполнена", "Подтверждена", "Отменена"]))

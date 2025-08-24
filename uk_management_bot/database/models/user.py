@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database.session import Base
@@ -7,7 +7,7 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, unique=True, index=True, nullable=False)
+    telegram_id = Column(BigInteger, unique=True, index=True, nullable=False)
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)

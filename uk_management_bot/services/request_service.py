@@ -88,7 +88,7 @@ class RequestService:
             self.db.refresh(request)
             
             # Синхронизация с Google Sheets
-            await self._sync_request_to_sheets(request, "create")
+            # await self._sync_request_to_sheets(request, "create")  # Временно отключено
             
             logger.info(f"Создана заявка ID {request.id} пользователем {user_id}")
             return request
@@ -209,7 +209,7 @@ class RequestService:
                 changes["executor_id"] = executor_id
             if notes:
                 changes["comments"] = notes
-            await self._sync_request_to_sheets(request, "update", changes)
+            # await self._sync_request_to_sheets(request, "update", changes)  # Временно отключено
             
             logger.info(f"Статус заявки {request_id} изменен с '{old_status}' на '{new_status}'")
             return request
@@ -311,8 +311,12 @@ class RequestService:
             if not actor:
                 return {"success": False, "message": "Пользователь не найден", "request": None}
 
-            # Запрет для владельца брать свою заявку в работу и завершать
-            if request.user_id == actor.id and new_status in ["В работе", "Выполнена", "Принята"]:
+            # Запрет для обычных пользователей управлять своими заявками
+            # Но разрешаем менеджерам и администраторам управлять своими заявками
+            active_role = actor.active_role if actor.active_role else actor.role
+            if (request.user_id == actor.id and 
+                new_status in ["В работе", "Выполнена", "Принята"] and
+                active_role not in ["manager", "admin"]):
                 return {"success": False, "message": "Нельзя управлять собственной заявкой", "request": None}
 
             # Если статус не меняется, но есть примечание — просто дополняем notes без проверки матрицы

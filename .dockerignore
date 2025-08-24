@@ -1,0 +1,91 @@
+# .dockerignore файл для оптимизации сборки Docker образа
+# Этот файл указывает Docker, какие файлы и папки НЕ копировать в образ
+
+# Git файлы
+.git
+.gitignore
+.gitattributes
+
+# Документация и README
+README.md
+*.md
+docs/
+
+# Python кэш и временные файлы
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Виртуальные окружения
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+uk_management_bot/venv/
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Логи и временные файлы
+*.log
+logs/
+temp/
+tmp/
+
+# База данных
+*.db
+*.sqlite
+*.sqlite3
+uk_management.db
+
+# Тесты
+test_*.py
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker файлы (кроме Dockerfile)
+docker-compose*.yml
+.dockerignore
+
+# Memory Bank (не нужен в production)
+MemoryBank/
+
+# Скрипты разработки
+scripts/
+*.sh
+
+# Конфигурационные файлы разработки
+.env.local
+.env.development
+.env.test
+
+# Другие файлы
+.DS_Store
+Thumbs.db

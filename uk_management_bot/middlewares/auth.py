@@ -50,6 +50,8 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
         user: Optional[User] = db.query(User).filter(User.telegram_id == telegram_id).one_or_none()
         data["user"] = user
         data["user_status"] = getattr(user, "status", None) if user else None
+        
+
 
         if user and user.status == "blocked":
             # Мягкая блокировка: локализованное сообщение и ранний выход

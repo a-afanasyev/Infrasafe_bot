@@ -3,12 +3,8 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy.orm import sessionmaker
-try:
-    from config.settings import settings
-    from database.session import engine, Base, SessionLocal
-except ModuleNotFoundError:  # запуск как python3 -m uk_management_bot.main из корня
-    from uk_management_bot.config.settings import settings
-    from uk_management_bot.database.session import engine, Base, SessionLocal
+from config.settings import settings
+from database.session import engine, Base, SessionLocal
 from handlers.base import router as base_router
 from handlers.requests import router as requests_router
 from handlers.shifts import router as shifts_router
@@ -86,16 +82,6 @@ async def main():
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
     
-    # Регистрируем роутеры
-    dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
-    dp.include_router(auth_router)
-    dp.include_router(onboarding_router)
-    dp.include_router(requests_router)  # requests раньше base для перехвата "❌ Отмена" в состояниях
-    dp.include_router(shifts_router)
-    dp.include_router(admin_router)
-    dp.include_router(user_management_router)
-    dp.include_router(base_router)  # base в конце как fallback для общих команд
-    
     # Middleware для внедрения сессии БД
     @dp.update.middleware()
     async def db_middleware(handler, event, data):
@@ -106,20 +92,20 @@ async def main():
         finally:
             db.close()
 
-    # Auth middleware: загрузка пользователя и проверка статуса
-    @dp.update.middleware()
-    async def _auth_middleware(handler, event, data):
-        return await auth_middleware(handler, event, data)
-
-    # Role mode middleware: roles/active_role
-    @dp.update.middleware()
-    async def _role_mode_middleware(handler, event, data):
-        return await role_mode_middleware(handler, event, data)
-
     # Подключаем shift-middleware глобально через декоратор (как DB-middleware)
     @dp.update.middleware()
     async def _shift_middleware(handler, event, data):
         return await shift_context_middleware(handler, event, data)
+    
+    # Регистрируем роутеры
+    dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
+    dp.include_router(auth_router)
+    dp.include_router(onboarding_router)
+    dp.include_router(requests_router)  # requests раньше base для перехвата "❌ Отмена" в состояниях
+    dp.include_router(shifts_router)
+    dp.include_router(admin_router)
+    dp.include_router(user_management_router)
+    dp.include_router(base_router)  # base в конце как fallback для общих команд
     
     logger.info("Бот запускается...")
     

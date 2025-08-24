@@ -21,12 +21,19 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+# Добавляем middleware в роутер
+from middlewares.auth import auth_middleware, role_mode_middleware
+router.message.middleware(auth_middleware)
+router.message.middleware(role_mode_middleware)
+router.callback_query.middleware(auth_middleware)
+router.callback_query.middleware(role_mode_middleware)
+
 class AdminPasswordStates(StatesGroup):
     """Состояния для ввода пароля администратора"""
     waiting_for_password = State()
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None):
+async def cmd_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
     """Обработчик команды /start"""
     auth_service = AuthService(db)
     
@@ -101,7 +108,9 @@ async def cmd_start(message: Message, db: Session, roles: list[str] = None, acti
             active_role = user.active_role if user.active_role in roles else roles[0]
     except Exception:
         pass
-    await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles))
+
+    
+    await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user_status))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
 
 @router.message(Command("help"))
@@ -188,8 +197,10 @@ async def executor_shift_menu(message: Message):
 
 
 @router.message(F.text == "👤 Профиль")
-async def show_profile(message: Message, db: Session, roles: list[str] = None, active_role: str = None):
+async def show_profile(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
     """Показывает расширенный профиль пользователя"""
+
+    
     try:
         from services.profile_service import ProfileService
         profile_service = ProfileService(db)
@@ -202,7 +213,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
             lang = message.from_user.language_code or "ru"
             await message.answer(
                 get_text("errors.unknown_error", language=lang),
-                reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"])
+                reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], user_status)
             )
             return
         
@@ -213,6 +224,18 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         # Отправляем профиль с клавиатурой переключения ролей
         user_roles = profile_data.get('roles', ['applicant'])
         user_active_role = profile_data.get('active_role', 'applicant')
+        
+        # Парсим роли из JSON строки, если это строка
+        if isinstance(user_roles, str):
+            try:
+                import json
+                user_roles = json.loads(user_roles)
+            except Exception:
+                user_roles = ['applicant']
+        
+        # Убеждаемся, что user_roles - это список
+        if not isinstance(user_roles, list):
+            user_roles = ['applicant']
         
         await message.answer(
             profile_text, 
@@ -226,7 +249,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         lang = message.from_user.language_code or "ru"
         await message.answer(
             get_text("errors.unknown_error", language=lang),
-            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"])
+            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], user_status)
         )
 
 
@@ -259,7 +282,7 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
 
 
 @router.callback_query(F.data.startswith("switch_role:"))
-async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None):
+async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
     roles = roles or ["applicant"]
     target = cb.data.split(":", 1)[1]
     if target not in roles:
@@ -308,7 +331,7 @@ async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, a
         pass
     new_roles = roles
     new_active = target
-    await cb.message.answer("Главное меню:", reply_markup=get_main_keyboard_for_role(new_active, new_roles))
+    await cb.message.answer("Главное меню:", reply_markup=get_main_keyboard_for_role(new_active, new_roles, user_status))
 
     # async уведомление о смене режима (best-effort)
     try:
@@ -332,7 +355,7 @@ async def cmd_admin(message: Message, state: FSMContext):
     )
 
 @router.message(AdminPasswordStates.waiting_for_password)
-async def process_admin_password(message: Message, state: FSMContext, db: Session):
+async def process_admin_password(message: Message, state: FSMContext, db: Session, user_status: str = None):
     """Обработка введенного пароля администратора"""
     auth_service = AuthService(db)
     
@@ -379,7 +402,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
             "✅ **Успешно!**\n\n"
             "Вы назначены администратором системы.\n"
             "Теперь у вас есть права менеджера для управления заявками и пользователями.",
-            reply_markup=get_main_keyboard_for_role(active_role, roles_list)
+            reply_markup=get_main_keyboard_for_role(active_role, roles_list, user_status)
         )
         logger.info(f"Пользователь {message.from_user.id} назначен администратором")
     else:

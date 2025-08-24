@@ -15,7 +15,7 @@ router = Router()
 
 
 @router.message(F.text == "🔑 Войти")
-async def login_via_button(message: Message, db: Session):
+async def login_via_button(message: Message, db: Session, user_status: str = None):
     auth = AuthService(db)
     user = await auth.get_or_create_user(
         telegram_id=message.from_user.id,
@@ -24,13 +24,13 @@ async def login_via_button(message: Message, db: Session):
         last_name=message.from_user.last_name,
     )
     if user.status == "approved":
-        await message.answer("Вы уже авторизованы.", reply_markup=get_main_keyboard())
+        await message.answer("Вы уже авторизованы.", reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status))
         return
     ok = await auth.approve_user(message.from_user.id, role="applicant")
     if ok:
         await message.answer(
             "✅ Авторизация выполнена. Вы вошли как заявитель.",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status),
         )
     else:
         await message.answer(

@@ -1,0 +1,154 @@
+# docker-compose.yml для UK Management Bot
+# Этот файл описывает все сервисы, необходимые для работы приложения
+# version: '3.8'  # Устарело в новых версиях Docker Compose
+
+# Определяем сервисы (контейнеры)
+services:
+  # Основное приложение - Telegram бот
+  app:
+    # Используем локальный Dockerfile для сборки образа
+    build: .
+    
+    # Имя контейнера для удобства
+    container_name: uk-management-bot
+    
+    # Перезапуск контейнера при сбоях
+    restart: unless-stopped
+    
+    # Переменные окружения
+    # Используем файл .env для конфиденциальных данных
+    env_file:
+      - .env
+    
+    # Переменные окружения для подключения к сервисам
+    environment:
+      # Подключение к PostgreSQL
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      
+      # Подключение к Redis
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Настройки логирования
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    
+    # Зависимости от других сервисов
+    # Приложение запустится только после готовности БД и Redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # Сетевые настройки
+    networks:
+      - uk-network
+    
+    # Health check для проверки состояния приложения
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # База данных PostgreSQL
+  postgres:
+    # Используем официальный образ PostgreSQL
+    image: postgres:15-alpine
+    
+    # Имя контейнера
+    container_name: uk-postgres
+    
+    # Перезапуск при сбоях
+    restart: unless-stopped
+    
+    # Переменные окружения для настройки БД
+    environment:
+      # Имя базы данных
+      - POSTGRES_DB=uk_management
+      
+      # Имя пользователя
+      - POSTGRES_USER=uk_bot
+      
+      # Пароль пользователя
+      - POSTGRES_PASSWORD=uk_bot_password
+      
+      # Настройки производительности
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    
+    # Тома для хранения данных БД
+    # Данные сохраняются между перезапусками контейнеров
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+      # Инициализация БД - SQL скрипт
+      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
+      
+      # Инициализация БД - Bash скрипт
+      - ./scripts/init_postgres.sh:/docker-entrypoint-initdb.d/02-init_postgres.sh:ro
+    
+    # Сетевые настройки
+    networks:
+      - uk-network
+    
+    # Health check для проверки готовности БД
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uk_bot -d uk_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    # Открываем порт для подключения (только для разработки)
+    ports:
+      - "5432:5432"
+
+  # Redis для кэширования и rate limiting
+  redis:
+    # Используем официальный образ Redis
+    image: redis:7-alpine
+    
+    # Имя контейнера
+    container_name: uk-redis
+    
+    # Перезапуск при сбоях
+    restart: unless-stopped
+    
+    # Конфигурация Redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    
+    # Тома для хранения данных Redis
+    volumes:
+      - redis_data:/data
+    
+    # Сетевые настройки
+    networks:
+      - uk-network
+    
+    # Health check для проверки готовности Redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    
+    # Открываем порт для подключения (только для разработки)
+    ports:
+      - "6379:6379"
+
+# Определяем тома для хранения данных
+volumes:
+  # Том для данных PostgreSQL
+  postgres_data:
+    driver: local
+  
+  # Том для данных Redis
+  redis_data:
+    driver: local
+
+# Определяем сеть для связи между сервисами
+networks:
+  uk-network:
+    driver: bridge

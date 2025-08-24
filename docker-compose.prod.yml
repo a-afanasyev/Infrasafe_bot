@@ -1,0 +1,128 @@
+# docker-compose.prod.yml - Production конфигурация
+# Используется вместе с основным docker-compose.yml
+# Запуск: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  # Основное приложение с production настройками
+  app:
+    # Production настройки
+    restart: always
+    
+    # Ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Production переменные окружения
+    environment:
+      - DEBUG=false
+      - LOG_LEVEL=WARNING
+      - PYTHONUNBUFFERED=1
+    
+    # Health check с более строгими настройками
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    # Логирование в production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL с production настройками
+  postgres:
+    # Production настройки
+    restart: always
+    
+    # Ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    # Production переменные окружения
+    environment:
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+    
+    # Логирование в production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis с production настройками
+  redis:
+    # Production настройки
+    restart: always
+    
+    # Ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    # Production конфигурация Redis
+    command: >
+      redis-server 
+      --appendonly yes 
+      --maxmemory 256mb 
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --tcp-keepalive 300
+    
+    # Логирование в production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Production настройки томов
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/uk-postgres-data
+  
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/uk-redis-data
+
+# Production настройки сети
+networks:
+  uk-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: uk-bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

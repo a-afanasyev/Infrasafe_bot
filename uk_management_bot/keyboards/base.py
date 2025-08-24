@@ -73,13 +73,14 @@ def get_rating_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_main_keyboard_for_role(active_role: str, roles: list[str]) -> ReplyKeyboardMarkup:
+def get_main_keyboard_for_role(active_role: str, roles: list[str], user_status: str = None) -> ReplyKeyboardMarkup:
     """Главная клавиатура с учётом активной роли и доступных ролей.
 
     Сценарии:
     - applicant: стандартные кнопки (создать/мои заявки, профиль, помощь)
     - executor: кнопки смены и заявок исполнителя
     - manager: добавляются админ‑кнопки
+    - pending: только базовые кнопки без создания заявок
     """
     builder = ReplyKeyboardBuilder()
 
@@ -99,7 +100,9 @@ def get_main_keyboard_for_role(active_role: str, roles: list[str]) -> ReplyKeybo
         builder.add(KeyboardButton(text="🔄 Смена"))
     else:
         # Базовые кнопки для заявителя/других ролей
-        builder.add(KeyboardButton(text="📝 Создать заявку"))
+        # Не показываем кнопку "Создать заявку" для пользователей на модерации
+        if user_status != "pending":
+            builder.add(KeyboardButton(text="📝 Создать заявку"))
         builder.add(KeyboardButton(text="📋 Мои заявки"))
         builder.add(KeyboardButton(text="👤 Профиль"))
         builder.add(KeyboardButton(text="ℹ️ Помощь"))

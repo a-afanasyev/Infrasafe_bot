@@ -1,0 +1,94 @@
+# UK Management Bot - Development Docker Compose
+# Для разработки с hot-reload (изменения кода без пересборки)
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: uk-management-bot-dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Монтируем код для hot-reload
+      - ./uk_management_bot:/app/uk_management_bot
+      - ./requirements.txt:/app/requirements.txt
+      # Монтируем .env файл
+      - ./.env:/app/.env
+      # Монтируем скрипты
+      - ./scripts:/app/scripts
+      # Монтируем SQLite файл для миграции
+      - ./uk_management.db:/app/uk_management.db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: uk-postgres-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=uk_management
+      - POSTGRES_USER=uk_bot
+      - POSTGRES_PASSWORD=uk_bot_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
+      - ./scripts/init_postgres.sh:/docker-entrypoint-initdb.d/02-init_postgres.sh:ro
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uk_bot -d uk_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: uk-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+
+networks:
+  uk-network:
+    driver: bridge
