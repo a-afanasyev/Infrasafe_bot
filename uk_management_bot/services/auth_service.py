@@ -1,15 +1,16 @@
 from sqlalchemy.orm import Session
-from database.models import User
-from database.models.audit import AuditLog
-from config.settings import settings
-from utils.constants import ADDRESS_TYPES, MAX_ADDRESS_LENGTH
-from utils.address_helpers import validate_address, format_address
+from sqlalchemy import func
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.constants import ADDRESS_TYPES, MAX_ADDRESS_LENGTH
+from uk_management_bot.utils.address_helpers import validate_address, format_address
 from typing import List
 import logging
 import re
 import time
 import json
-from utils.redis_rate_limiter import is_rate_limited
+from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
 
 logger = logging.getLogger(__name__)
 
@@ -433,7 +434,7 @@ class AuthService:
                     "old_status": old_status,
                     "new_status": "approved",
                     "comment": comment,
-                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                    "timestamp": str(self.db.execute(func.now()).scalar())
                 })
             )
             self.db.add(audit)
@@ -482,7 +483,7 @@ class AuthService:
                     "old_status": old_status,
                     "new_status": "blocked",
                     "reason": reason,
-                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                    "timestamp": str(self.db.execute(func.now()).scalar())
                 })
             )
             self.db.add(audit)
@@ -531,7 +532,7 @@ class AuthService:
                     "old_status": old_status,
                     "new_status": "approved",
                     "comment": comment,
-                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                    "timestamp": str(self.db.execute(func.now()).scalar())
                 })
             )
             self.db.add(audit)
@@ -604,7 +605,7 @@ class AuthService:
                     "new_roles": current_roles,
                     "assigned_role": role,
                     "comment": comment,
-                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                    "timestamp": str(self.db.execute(func.now()).scalar())
                 })
             )
             self.db.add(audit)
@@ -676,7 +677,7 @@ class AuthService:
                     "new_roles": current_roles,
                     "removed_role": role,
                     "comment": comment,
-                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                    "timestamp": str(self.db.execute(func.now()).scalar())
                 })
             )
             self.db.add(audit)
@@ -794,7 +795,7 @@ class AuthService:
     
     async def make_admin_by_password(self, telegram_id: int, password: str) -> bool:
         """Назначить пользователя администратором по паролю"""
-        from config.settings import settings
+        from uk_management_bot.config.settings import settings
         
         if password != settings.ADMIN_PASSWORD:
             logger.warning(f"Неверный пароль администратора от пользователя {telegram_id}")
@@ -876,3 +877,100 @@ class AuthService:
             logger.warning(f"Не удалось записать аудит смены роли: {audit_err}")
 
         return True, None
+
+    def delete_user(self, user_id: int, deleted_by: int, reason: str = "") -> bool:
+        """
+        Удалить пользователя из базы данных
+        
+        Args:
+            user_id: ID пользователя для удаления
+            deleted_by: ID менеджера, который удаляет
+            reason: Причина удаления
+            
+        Returns:
+            True если операция успешна
+        """
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь {user_id} не найден для удаления")
+                return False
+            
+            # Сохраняем информацию о пользователе для аудита
+            user_info = {
+                "telegram_id": user.telegram_id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role,
+                "roles": user.roles,
+                "status": user.status,
+                "created_at": str(user.created_at) if user.created_at else None
+            }
+            
+            # Создаем запись в аудит логе перед удалением
+            audit = AuditLog(
+                action="user_deleted",
+                user_id=deleted_by,
+                details=json.dumps({
+                    "deleted_user_id": user_id,
+                    "deleted_user_info": user_info,
+                    "reason": reason,
+                    "timestamp": str(self.db.execute(func.now()).scalar())
+                })
+            )
+            self.db.add(audit)
+            
+            # Удаляем связанные записи в правильном порядке
+            from uk_management_bot.database.models.user_verification import UserDocument, UserVerification, AccessRights
+            
+            # 1. Удаляем документы пользователя
+            documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
+            for doc in documents:
+                self.db.delete(doc)
+            logger.info(f"Удалено {len(documents)} документов пользователя {user_id}")
+            
+            # 2. Удаляем записи верификации
+            verifications = self.db.query(UserVerification).filter(UserVerification.user_id == user_id).all()
+            for verification in verifications:
+                self.db.delete(verification)
+            logger.info(f"Удалено {len(verifications)} записей верификации пользователя {user_id}")
+            
+            # 3. Удаляем права доступа
+            access_rights = self.db.query(AccessRights).filter(AccessRights.user_id == user_id).all()
+            for right in access_rights:
+                self.db.delete(right)
+            logger.info(f"Удалено {len(access_rights)} прав доступа пользователя {user_id}")
+            
+            # 4. Удаляем уведомления пользователя
+            from uk_management_bot.database.models.notification import Notification
+            notifications = self.db.query(Notification).filter(Notification.user_id == user_id).all()
+            for notification in notifications:
+                self.db.delete(notification)
+            logger.info(f"Удалено {len(notifications)} уведомлений пользователя {user_id}")
+            
+            # 5. Удаляем заявки пользователя (если он создатель)
+            from uk_management_bot.database.models.request import Request
+            requests = self.db.query(Request).filter(Request.user_id == user_id).all()
+            for request in requests:
+                self.db.delete(request)
+            logger.info(f"Удалено {len(requests)} заявок пользователя {user_id}")
+            
+            # 6. Удаляем смены пользователя
+            from uk_management_bot.database.models.shift import Shift
+            shifts = self.db.query(Shift).filter(Shift.user_id == user_id).all()
+            for shift in shifts:
+                self.db.delete(shift)
+            logger.info(f"Удалено {len(shifts)} смен пользователя {user_id}")
+            
+            # 7. Наконец удаляем самого пользователя
+            self.db.delete(user)
+            self.db.commit()
+            
+            logger.info(f"Пользователь {user_id} (telegram_id: {user_info['telegram_id']}) удален менеджером {deleted_by}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления пользователя {user_id}: {e}")
+            self.db.rollback()
+            return False

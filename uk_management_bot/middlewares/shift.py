@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 
 from aiogram.types import Message, CallbackQuery
 
-from services.shift_service import ShiftService
+from uk_management_bot.services.shift_service import ShiftService
 
 
 async def shift_context_middleware(handler, event: Any, data: Dict[str, Any]):

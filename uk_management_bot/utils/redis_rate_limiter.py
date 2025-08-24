@@ -6,7 +6,7 @@ import asyncio
 import time
 import logging
 from typing import Optional
-from config.settings import settings
+from uk_management_bot.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

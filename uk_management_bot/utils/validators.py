@@ -1,6 +1,6 @@
 import re
 from typing import Optional, Tuple, List
-from utils.constants import (
+from uk_management_bot.utils.constants import (
     MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_APARTMENT_LENGTH,
     MAX_PHOTO_SIZE, MAX_VIDEO_SIZE, MAX_DOCUMENT_SIZE,
     REQUEST_CATEGORIES, REQUEST_STATUSES, USER_ROLES
@@ -151,7 +151,7 @@ class Validator:
     @staticmethod
     def validate_media_files_count(count: int) -> Tuple[bool, str]:
         """Валидация количества медиафайлов"""
-        from utils.constants import MAX_MEDIA_FILES_PER_REQUEST
+        from uk_management_bot.utils.constants import MAX_MEDIA_FILES_PER_REQUEST
         
         if count > MAX_MEDIA_FILES_PER_REQUEST:
             return False, f"Слишком много файлов. Максимум: {MAX_MEDIA_FILES_PER_REQUEST}"

@@ -86,6 +86,8 @@ services:
 volumes:
   postgres_data_dev:
     driver: local
+  pgadmin_data_dev:
+    driver: local
   redis_data_dev:
     driver: local
 

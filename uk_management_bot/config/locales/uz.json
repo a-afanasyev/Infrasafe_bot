@@ -229,6 +229,7 @@
 
   "user_management": {
     "main_title": "👥 Foydalanuvchilarni boshqarish paneli",
+    "user_list_title": "👥 Foydalanuvchilar ro'yxati",
     "stats": "Statistika",
     "new_users": "Yangi foydalanuvchilar",
     "approved_users": "Tasdiqlangan",

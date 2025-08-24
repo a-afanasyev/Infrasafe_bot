@@ -1,14 +1,14 @@
 from sqlalchemy.orm import Session
-from database.models.request import Request
-from database.models.user import User
-from database.models.shift import Shift
+from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.shift import Shift
 import logging
-from utils.constants import (
+from uk_management_bot.utils.constants import (
     NOTIFICATION_TYPE_STATUS_CHANGED,
     NOTIFICATION_TYPE_PURCHASE,
     NOTIFICATION_TYPE_CLARIFICATION,
 )
-from config.settings import settings
+from uk_management_bot.config.settings import settings
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -103,6 +103,429 @@ async def async_notify_shift_ended(bot, db: Session, user: User, shift: Shift) -
         logger.warning(f"Ошибка async уведомления о завершении смены: {e}")
 
 
+def build_document_request_message(user: User, request_text: str, document_type: str = None, for_channel: bool = False) -> str:
+    """Формирует сообщение о запросе документов"""
+    if for_channel:
+        return f"📋 Запрос документов: user_id={user.telegram_id}, тип: {document_type}, запрос: {request_text}"
+    
+    # Получаем название типа документа
+    document_names = {
+        'passport': 'паспорт',
+        'property_deed': 'свидетельство о собственности',
+        'rental_agreement': 'договор аренды',
+        'utility_bill': 'квитанцию ЖКХ',
+        'other': 'дополнительные документы'
+    }
+    
+    doc_name = document_names.get(document_type, document_type) if document_type else "дополнительные документы"
+    
+    message = f"📋 **Администратор запросил документы**\n\n"
+    message += f"🔍 **Требуемый документ:** {doc_name}\n\n"
+    message += f"💬 **Комментарий:**\n{request_text}\n\n"
+    message += f"📤 Пожалуйста, загрузите запрошенный документ в ближайшее время."
+    
+    return message
+
+
+async def async_notify_document_request(bot, db: Session, user: User, request_text: str, document_type: str = None) -> None:
+    """Отправляет уведомление о запросе документов"""
+    try:
+        await send_to_user(bot, user.telegram_id, build_document_request_message(user, request_text, document_type, for_channel=False))
+        await send_to_channel(bot, build_document_request_message(user, request_text, document_type, for_channel=True))
+    except Exception as e:
+        logger.warning(f"Ошибка async уведомления о запросе документов: {e}")
+
+
+def build_multiple_documents_request_message(user: User, request_text: str, document_types: list, for_channel: bool = False) -> str:
+    """Формирует сообщение о запросе множественных документов"""
+    if for_channel:
+        return f"📋 Запрос документов: user_id={user.telegram_id}, типы: {document_types}, запрос: {request_text}"
+    
+    # Получаем названия типов документов
+    document_names = {
+        'passport': 'паспорт',
+        'property_deed': 'свидетельство о собственности',
+        'rental_agreement': 'договор аренды',
+        'utility_bill': 'квитанцию ЖКХ',
+        'other': 'дополнительные документы'
+    }
+    
+    doc_names = []
+    for doc_type in document_types:
+        doc_name = document_names.get(doc_type, doc_type)
+        doc_names.append(doc_name)
+    
+    doc_list = ", ".join(doc_names)
+    
+    message = f"📋 **Администратор запросил документы**\n\n"
+    message += f"🔍 **Требуемые документы:**\n{doc_list}\n\n"
+    message += f"💬 **Комментарий:**\n{request_text}\n\n"
+    message += f"📤 Пожалуйста, загрузите все запрошенные документы в ближайшее время."
+    
+    return message
+
+
+async def async_notify_multiple_documents_request(bot, db: Session, user: User, request_text: str, document_types: list) -> None:
+    """Отправляет уведомление о запросе множественных документов"""
+    try:
+        await send_to_user(bot, user.telegram_id, build_multiple_documents_request_message(user, request_text, document_types, for_channel=False))
+        await send_to_channel(bot, build_multiple_documents_request_message(user, request_text, document_types, for_channel=True))
+    except Exception as e:
+        logger.warning(f"Ошибка async уведомления о запросе множественных документов: {e}")
+
+
+# ====== Уведомления для системы верификации ======
+
+class NotificationService:
+    """Сервис уведомлений для системы верификации"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    async def send_verification_request_notification(self, user_id: int, info_type: str, comment: str) -> None:
+        """
+        Отправить уведомление о запросе дополнительной информации
+        
+        Args:
+            user_id: ID пользователя
+            info_type: Тип запрашиваемой информации
+            comment: Комментарий администратора
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            # Формируем сообщение
+            info_type_names = {
+                'address': 'точный адрес',
+                'passport': 'паспорт',
+                'property_deed': 'свидетельство о собственности',
+                'rental_agreement': 'договор аренды',
+                'utility_bill': 'квитанцию ЖКХ',
+                'other': 'дополнительную информацию'
+            }
+            
+            info_name = info_type_names.get(info_type, info_type)
+            
+            message = f"""
+📝 **Запрос дополнительной информации**
+
+Администратор запрашивает у вас {info_name}.
+
+💬 **Комментарий:**
+{comment}
+
+Пожалуйста, предоставьте запрашиваемую информацию в ближайшее время.
+            """
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление о запросе информации отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о запросе информации: {e}")
+    
+    async def send_verification_approved_notification(self, user_id: int) -> None:
+        """
+        Отправить уведомление об одобрении верификации
+        
+        Args:
+            user_id: ID пользователя
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            message = f"""
+✅ **Верификация одобрена!**
+
+Ваша учетная запись успешно верифицирована администратором.
+
+Теперь вы можете полноценно использовать все функции системы.
+            """
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление об одобрении верификации отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об одобрении верификации: {e}")
+    
+    async def send_verification_rejected_notification(self, user_id: int) -> None:
+        """
+        Отправить уведомление об отклонении верификации
+        
+        Args:
+            user_id: ID пользователя
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            message = f"""
+❌ **Верификация отклонена**
+
+К сожалению, ваша учетная запись не прошла верификацию.
+
+Пожалуйста, свяжитесь с администратором для уточнения деталей.
+            """
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление об отклонении верификации отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об отклонении верификации: {e}")
+    
+    async def send_document_approved_notification(self, user_id: int, document_type: str) -> None:
+        """
+        Отправить уведомление об одобрении документа
+        
+        Args:
+            user_id: ID пользователя
+            document_type: Тип документа
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            document_names = {
+                'passport': 'паспорт',
+                'property_deed': 'свидетельство о собственности',
+                'rental_agreement': 'договор аренды',
+                'utility_bill': 'квитанция ЖКХ',
+                'other': 'документ'
+            }
+            
+            doc_name = document_names.get(document_type, document_type)
+            
+            message = f"""
+✅ **Документ одобрен**
+
+Ваш {doc_name} успешно проверен и одобрен администратором.
+            """
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление об одобрении документа отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об одобрении документа: {e}")
+    
+    async def send_document_rejected_notification(self, user_id: int, document_type: str, reason: str = None) -> None:
+        """
+        Отправить уведомление об отклонении документа
+        
+        Args:
+            user_id: ID пользователя
+            document_type: Тип документа
+            reason: Причина отклонения
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            document_names = {
+                'passport': 'паспорт',
+                'property_deed': 'свидетельство о собственности',
+                'rental_agreement': 'договор аренды',
+                'utility_bill': 'квитанция ЖКХ',
+                'other': 'документ'
+            }
+            
+            doc_name = document_names.get(document_type, document_type)
+            
+            message = f"""
+❌ **Документ отклонен**
+
+Ваш {doc_name} не прошел проверку.
+            """
+            
+            if reason:
+                message += f"\n\n💬 **Причина:**\n{reason}"
+            
+            message += "\n\nПожалуйста, загрузите корректный документ."
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление об отклонении документа отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об отклонении документа: {e}")
+    
+    async def send_access_rights_granted_notification(self, user_id: int, access_level: str, details: str = None) -> None:
+        """
+        Отправить уведомление о предоставлении прав доступа
+        
+        Args:
+            user_id: ID пользователя
+            access_level: Уровень доступа
+            details: Детали доступа
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            level_names = {
+                'apartment': 'квартиры',
+                'house': 'дома',
+                'yard': 'двора'
+            }
+            
+            level_name = level_names.get(access_level, access_level)
+            
+            message = f"""
+🔑 **Права доступа предоставлены**
+
+Вам предоставлены права на подачу заявок для {level_name}.
+            """
+            
+            if details:
+                message += f"\n\n📍 **Детали:**\n{details}"
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление о предоставлении прав доступа отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о предоставлении прав доступа: {e}")
+    
+    async def send_access_rights_revoked_notification(self, user_id: int, access_level: str, reason: str = None) -> None:
+        """
+        Отправить уведомление об отзыве прав доступа
+        
+        Args:
+            user_id: ID пользователя
+            access_level: Уровень доступа
+            reason: Причина отзыва
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+            
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+                return
+            
+            level_names = {
+                'apartment': 'квартиры',
+                'house': 'дома',
+                'yard': 'двора'
+            }
+            
+            level_name = level_names.get(access_level, access_level)
+            
+            message = f"""
+🚫 **Права доступа отозваны**
+
+Ваши права на подачу заявок для {level_name} были отозваны.
+            """
+            
+            if reason:
+                message += f"\n\n💬 **Причина:**\n{reason}"
+            
+            # Отправляем уведомление пользователю
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+            
+            try:
+                await bot.send_message(
+                    user.telegram_id,
+                    message,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Уведомление об отзыве прав доступа отправлено пользователю {user_id}")
+            finally:
+                await bot.session.close()
+                
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об отзыве прав доступа: {e}")
+
+
 # ====== Request status notifications (3.4) ======
 def _build_request_status_message_user(request: Request, old_status: str, new_status: str) -> str:
     return (
@@ -136,7 +559,7 @@ async def async_notify_request_status_changed(
     try:
         # Пользователь-заявитель
         try:
-            from database.models.user import User as UserModel
+            from uk_management_bot.database.models.user import User as UserModel
             applicant = db.query(UserModel).filter(UserModel.id == request.user_id).first()
             if applicant and applicant.telegram_id:
                 await send_to_user(
@@ -150,7 +573,7 @@ async def async_notify_request_status_changed(
         # Исполнитель (если назначен)
         try:
             if request.executor_id:
-                from database.models.user import User as UserModel
+                from uk_management_bot.database.models.user import User as UserModel
                 executor = db.query(UserModel).filter(UserModel.id == request.executor_id).first()
                 if executor and executor.telegram_id:
                     await send_to_user(
@@ -171,7 +594,7 @@ async def async_notify_request_status_changed(
 def build_role_switched_message(user: User, old_role: str, new_role: str) -> str:
     """Строит локализованное сообщение о смене активной роли."""
     try:
-        from utils.helpers import get_text
+        from uk_management_bot.utils.helpers import get_text
         language = getattr(user, "language", "ru") or "ru"
         role_key = f"roles.{new_role}"
         role_display = get_text(role_key, language=language)
@@ -195,7 +618,7 @@ def build_action_denied_message(reason_key: str, language: str = "ru") -> str:
     reason_key ожидает короткое значение: 'not_in_shift' | 'permission_denied' | 'invalid_transition'
     """
     try:
-        from utils.helpers import get_text
+        from uk_management_bot.utils.helpers import get_text
         title = get_text("notify.denied_title", language=language)
         reason_text = get_text(f"notify.reason.{reason_key}", language=language)
         return f"{title}:\n{reason_text}"

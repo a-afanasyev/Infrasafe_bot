@@ -12,8 +12,9 @@ from aiogram.filters import Command
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from config.settings import settings
-from utils.helpers import get_text
+from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import has_admin_access
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -66,7 +67,7 @@ async def check_redis_health() -> Dict[str, Any]:
         }
     
     try:
-        from utils.redis_rate_limiter import get_redis_client
+        from uk_management_bot.utils.redis_rate_limiter import get_redis_client
         
         start_time = time.time()
         redis = await get_redis_client()

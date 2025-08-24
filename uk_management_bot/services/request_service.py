@@ -4,11 +4,11 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
 
-from database.models.request import Request
-from database.models.user import User
-from database.models.audit import AuditLog
-from utils.validators import validate_address, validate_description
-from utils.constants import (
+from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.utils.validators import validate_address, validate_description
+from uk_management_bot.utils.constants import (
     REQUEST_CATEGORIES,
     REQUEST_URGENCIES,
     REQUEST_STATUSES,
@@ -17,9 +17,9 @@ from utils.constants import (
     ROLE_MANAGER,
     AUDIT_ACTION_REQUEST_STATUS_CHANGED,
 )
-from services.shift_service import ShiftService
-from services.notification_service import notify_status_changed, async_notify_request_status_changed
-from integrations.google_sheets import sheets_service, SyncTask
+from uk_management_bot.services.shift_service import ShiftService
+from uk_management_bot.services.notification_service import notify_status_changed, async_notify_request_status_changed
+from uk_management_bot.integrations.google_sheets import sheets_service, SyncTask
 
 logger = logging.getLogger(__name__)
 

@@ -4,17 +4,17 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
-from services.auth_service import AuthService
-from keyboards.base import (
+from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.keyboards.base import (
     get_main_keyboard,
     get_cancel_keyboard,
     get_main_keyboard_for_role,
     get_role_switch_inline,
     get_user_contextual_keyboard,
 )
-from keyboards.shifts import get_shifts_main_keyboard
-from services.notification_service import async_notify_role_switched
-from utils.helpers import get_text
+from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
+from uk_management_bot.services.notification_service import async_notify_role_switched
+from uk_management_bot.utils.helpers import get_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Добавляем middleware в роутер
-from middlewares.auth import auth_middleware, role_mode_middleware
+from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 router.message.middleware(auth_middleware)
 router.message.middleware(role_mode_middleware)
 router.callback_query.middleware(auth_middleware)
@@ -109,9 +109,61 @@ async def cmd_start(message: Message, db: Session, roles: list[str] = None, acti
     except Exception:
         pass
 
-    
-    await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user_status))
+    await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user.status))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
+
+@router.callback_query(F.data == "restart_bot")
+async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+    """Обработчик кнопки перезапуска бота"""
+    try:
+        # Получаем пользователя
+        auth_service = AuthService(db)
+        user = await auth_service.get_user_by_telegram_id(callback.from_user.id)
+        
+        if not user:
+            await callback.answer("Ошибка: пользователь не найден", show_alert=True)
+            return
+        
+        # Обновляем язык пользователя
+        if callback.from_user.language_code:
+            await auth_service.update_user_language(
+                callback.from_user.id, 
+                callback.from_user.language_code
+            )
+        
+        # Формируем простое сообщение об успешном перезапуске
+        lang = callback.from_user.language_code or "ru"
+        welcome_text = "✅ Бот успешно перезапущен!\n\nТеперь вы можете использовать все функции."
+        
+        # Формируем клавиатуру в зависимости от роли
+        roles = roles or ["applicant"]
+        active_role = active_role or roles[0]
+        try:
+            import json
+            db_roles = []
+            if getattr(user, "roles", None):
+                parsed = json.loads(user.roles)
+                if isinstance(parsed, list) and parsed:
+                    db_roles = [str(r) for r in parsed if isinstance(r, str)]
+            if db_roles:
+                roles = db_roles
+            if getattr(user, "active_role", None):
+                active_role = user.active_role if user.active_role in roles else roles[0]
+        except Exception:
+            pass
+        
+        # Отправляем новое сообщение с обновленным меню
+        await callback.message.answer(
+            welcome_text,
+            reply_markup=get_main_keyboard_for_role(active_role, roles, user.status)
+        )
+        
+        await callback.answer("Бот перезапущен!")
+        logger.info(f"Пользователь {callback.from_user.id} перезапустил бота через кнопку")
+        
+    except Exception as e:
+        logger.error(f"Ошибка перезапуска бота: {e}")
+        await callback.answer("Ошибка перезапуска", show_alert=True)
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
@@ -178,7 +230,7 @@ async def go_back(message: Message, state: FSMContext, roles: list[str] = None, 
 async def executor_active_requests(message: Message, state: FSMContext):
     """Открывает список заявок пользователя с фильтром Активные."""
     await state.update_data(my_requests_status="active", my_requests_page=1)
-    from handlers.requests import show_my_requests
+    from uk_management_bot.handlers.requests import show_my_requests
     await show_my_requests(message, state)
 
 
@@ -186,7 +238,7 @@ async def executor_active_requests(message: Message, state: FSMContext):
 async def executor_archive_requests(message: Message, state: FSMContext):
     """Открывает список заявок пользователя с фильтром Архив."""
     await state.update_data(my_requests_status="archive", my_requests_page=1)
-    from handlers.requests import show_my_requests
+    from uk_management_bot.handlers.requests import show_my_requests
     await show_my_requests(message, state)
 
 
@@ -202,7 +254,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
 
     
     try:
-        from services.profile_service import ProfileService
+        from uk_management_bot.services.profile_service import ProfileService
         profile_service = ProfileService(db)
         
         # Получаем полные данные профиля
@@ -249,7 +301,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         lang = message.from_user.language_code or "ru"
         await message.answer(
             get_text("errors.unknown_error", language=lang),
-            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], user_status)
+            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], "approved")
         )
 
 
@@ -263,7 +315,7 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
     active_role = active_role or roles[0]
     # Фолбэк из БД, если roles пришли усечёнными
     try:
-        from services.auth_service import AuthService
+        from uk_management_bot.services.auth_service import AuthService
         auth = AuthService(db)
         user = await auth.get_user_by_telegram_id(message.from_user.id)
         if user:
@@ -283,65 +335,50 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
 
 @router.callback_query(F.data.startswith("switch_role:"))
 async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+    """Переключение роли пользователя"""
     roles = roles or ["applicant"]
     target = cb.data.split(":", 1)[1]
+    
+    # Проверяем, что целевая роль доступна пользователю
     if target not in roles:
-        # Фолбэк: перечитываем роли из БД, если middleware передал усечённый список
-        try:
-            auth_check = AuthService(db)
-            db_user = await auth_check.get_user_by_telegram_id(cb.from_user.id)
-            if db_user and getattr(db_user, "roles", None):
-                import json
-                parsed = json.loads(db_user.roles)
-                if isinstance(parsed, list) and target in [str(r) for r in parsed if isinstance(r, str)]:
-                    roles = [str(r) for r in parsed if isinstance(r, str)]
-                else:
-                    lang = cb.from_user.language_code or "ru"
-                    await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
-                    return
-            else:
-                lang = cb.from_user.language_code or "ru"
-                await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
-                return
-        except Exception:
-            lang = cb.from_user.language_code or "ru"
-            await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
-            return
-    auth = AuthService(db)
-    old_active = active_role
-    ok, reason = await auth.try_set_active_role_with_rate_limit(cb.from_user.id, target)
-    if not ok:
         lang = cb.from_user.language_code or "ru"
-        if reason == "rate_limited":
-            # Локализованный отказ по лимиту
-            await cb.answer(get_text("notify.reason.rate_limited", language=lang), show_alert=True)
-        else:
-            await cb.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
+        await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
         return
-    await cb.answer(get_text("role.switched", language=cb.from_user.language_code or "ru"))
-    # Пересобираем меню (актуальные роли из БД, если доступны)
+    
     try:
-        db_user2 = await auth.get_user_by_telegram_id(cb.from_user.id)
-        if db_user2 and getattr(db_user2, "roles", None):
-            import json
-            parsed2 = json.loads(db_user2.roles)
-            if isinstance(parsed2, list) and parsed2:
-                roles = [str(r) for r in parsed2 if isinstance(r, str)]
-    except Exception:
-        pass
-    new_roles = roles
-    new_active = target
-    await cb.message.answer("Главное меню:", reply_markup=get_main_keyboard_for_role(new_active, new_roles, user_status))
-
-    # async уведомление о смене режима (best-effort)
-    try:
-        from aiogram import Bot
-        bot: Bot = cb.message.bot
-        user = await auth.get_user_by_telegram_id(cb.from_user.id)
-        if user:
-            await async_notify_role_switched(bot, db, user, old_active or "", new_active)
-    except Exception:
-        pass
+        # Обновляем активную роль в базе данных
+        from uk_management_bot.database.models.user import User
+        user = db.query(User).filter(User.telegram_id == cb.from_user.id).first()
+        if not user:
+            lang = cb.from_user.language_code or "ru"
+            await cb.answer(get_text("errors.user_not_found", language=lang), show_alert=True)
+            return
+        
+        old_active = user.active_role
+        user.active_role = target
+        db.commit()
+        
+        # Уведомляем пользователя
+        await cb.answer(get_text("role.switched", language=cb.from_user.language_code or "ru"))
+        
+        # Пересобираем меню с новой активной ролью
+        await cb.message.answer(
+            "Главное меню:", 
+            reply_markup=get_main_keyboard_for_role(target, roles, "approved")
+        )
+        
+        # Отправляем уведомление о смене режима
+        try:
+            from aiogram import Bot
+            bot: Bot = cb.message.bot
+            await async_notify_role_switched(bot, db, user, old_active or "", target)
+        except Exception:
+            pass
+            
+    except Exception as e:
+        logger.error(f"Ошибка при переключении роли: {e}")
+        lang = cb.from_user.language_code or "ru"
+        await cb.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, state: FSMContext):
@@ -402,7 +439,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
             "✅ **Успешно!**\n\n"
             "Вы назначены администратором системы.\n"
             "Теперь у вас есть права менеджера для управления заявками и пользователями.",
-            reply_markup=get_main_keyboard_for_role(active_role, roles_list, user_status)
+            reply_markup=get_main_keyboard_for_role(active_role, roles_list, "approved")
         )
         logger.info(f"Пользователь {message.from_user.id} назначен администратором")
     else:

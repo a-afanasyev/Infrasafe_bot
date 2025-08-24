@@ -1,6 +1,6 @@
 import re
 from typing import Optional
-from utils.constants import MAX_ADDRESS_LENGTH, ADDRESS_TYPES, ADDRESS_TYPE_DISPLAYS
+from uk_management_bot.utils.constants import MAX_ADDRESS_LENGTH, ADDRESS_TYPES, ADDRESS_TYPE_DISPLAYS
 
 def validate_address(address: str) -> bool:
     """Валидация адреса"""

@@ -13,9 +13,9 @@ import logging
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 
-from database.models.user import User
-from database.models.audit import AuditLog
-from utils.helpers import get_text
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 

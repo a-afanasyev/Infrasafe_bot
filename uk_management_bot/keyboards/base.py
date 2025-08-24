@@ -25,8 +25,8 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     Если роли не найдены, возвращает базовую клавиатуру.
     """
     try:
-        from database.session import SessionLocal
-        from database.models.user import User
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.database.models.user import User
         import json
         
         db = SessionLocal()

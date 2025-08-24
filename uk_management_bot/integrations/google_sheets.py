@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config.settings import settings
+from uk_management_bot.config.settings import settings
 
 logger = structlog.get_logger(__name__)
 

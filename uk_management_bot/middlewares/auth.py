@@ -1,11 +1,12 @@
 from typing import Any, Dict, Optional
 import json
 import logging
-from utils.helpers import get_text
+from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import get_user_roles, get_active_role
 
 from aiogram.types import Message, CallbackQuery
 
-from database.models.user import User
+from uk_management_bot.database.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,18 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
     telegram_id: Optional[int] = None
 
     try:
-        if isinstance(event, Message):
+        # В aiogram 3.x middleware работает с Update объектами
+        from aiogram.types import Update
+        
+        if isinstance(event, Update):
+            # Извлекаем telegram_id из message или callback_query
+            if event.message:
+                telegram_id = event.message.from_user.id if event.message.from_user else None
+            elif event.callback_query:
+                telegram_id = event.callback_query.from_user.id if event.callback_query.from_user else None
+            else:
+                telegram_id = None
+        elif isinstance(event, Message):
             telegram_id = event.from_user.id if event.from_user else None
         elif isinstance(event, CallbackQuery):
             telegram_id = event.from_user.id if event.from_user else None
@@ -47,7 +59,8 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
         return await handler(event, data)
 
     try:
-        user: Optional[User] = db.query(User).filter(User.telegram_id == telegram_id).one_or_none()
+        user: Optional[User] = db.query(User).filter(User.telegram_id == telegram_id).first()
+        
         data["user"] = user
         data["user_status"] = getattr(user, "status", None) if user else None
         
@@ -70,10 +83,10 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
                 elif isinstance(event, CallbackQuery):
                     await event.answer(text, show_alert=True)
                 # Не зовем handler — ранний выход
-                return
+                return None
             except Exception as send_err:
                 logger.warning(f"Не удалось отправить сообщение о блокировке: {send_err}")
-                return
+                return None
 
     except Exception as exc:
         logger.warning(f"auth_middleware: ошибка загрузки пользователя: {exc}")
@@ -99,35 +112,21 @@ async def role_mode_middleware(handler, event: Any, data: Dict[str, Any]):
     """
     user: Optional[User] = data.get("user")
 
-    # Дефолты
-    roles_list = ["applicant"]
-    active_role = "applicant"
-
-    try:
-        if user:
-            # Разбираем список ролей
-            if getattr(user, "roles", None):
-                try:
-                    parsed = json.loads(user.roles)
-                    if isinstance(parsed, list) and parsed:
-                        roles_list = [str(r) for r in parsed if isinstance(r, str)] or roles_list
-                except Exception as parse_exc:
-                    logger.warning(f"role_mode_middleware: ошибка парсинга roles: {parse_exc}")
-            elif getattr(user, "role", None):
-                # Обратная совместимость
-                roles_list = [user.role]
-
-            # Активная роль
-            if getattr(user, "active_role", None):
-                active_role = user.active_role
-            else:
-                active_role = roles_list[0] if roles_list else "applicant"
-
-            # Нормализация: активная роль должна входить в список ролей
-            if active_role not in roles_list:
-                active_role = roles_list[0] if roles_list else "applicant"
-    except Exception as exc:
-        logger.warning(f"role_mode_middleware: ошибка обработки ролей: {exc}")
+    # Используем утилитарные функции для получения ролей
+    if user:
+        roles_list = get_user_roles(user)
+        active_role = get_active_role(user)
+        # ОТЛАДКА для пользователя с Telegram ID 48617336
+        if user.telegram_id == 48617336:
+            print(f"🔍 MIDDLEWARE DEBUG: user.telegram_id={user.telegram_id}")
+            print(f"🔍 MIDDLEWARE DEBUG: user.role={user.role}")
+            print(f"🔍 MIDDLEWARE DEBUG: user.roles={user.roles}")
+            print(f"🔍 MIDDLEWARE DEBUG: user.active_role={user.active_role}")
+            print(f"🔍 MIDDLEWARE DEBUG: roles_list={roles_list}")
+            print(f"🔍 MIDDLEWARE DEBUG: active_role={active_role}")
+    else:
+        roles_list = ["applicant"]
+        active_role = "applicant"
 
     data["roles"] = roles_list
     data["active_role"] = active_role

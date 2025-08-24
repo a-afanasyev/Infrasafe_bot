@@ -14,8 +14,8 @@ from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
-from database.models.user import User
-from utils.helpers import get_text
+from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 

@@ -3,10 +3,10 @@ from sqlalchemy import and_, desc
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 
-from database.models.shift import Shift
-from database.models.user import User
-from database.models.audit import AuditLog
-from utils.constants import (
+from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.utils.constants import (
     SHIFT_STATUS_ACTIVE,
     SHIFT_STATUS_COMPLETED,
     SHIFT_STATUS_CANCELLED,
@@ -15,7 +15,7 @@ from utils.constants import (
     AUDIT_ACTION_SHIFT_STARTED,
     AUDIT_ACTION_SHIFT_ENDED,
 )
-from services.notification_service import notify_shift_started, notify_shift_ended
+from uk_management_bot.services.notification_service import notify_shift_started, notify_shift_ended
 import logging
 
 

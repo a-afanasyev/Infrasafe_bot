@@ -24,6 +24,12 @@ class UserManagementStates(StatesGroup):
     waiting_for_unblock_comment = State()
     """Ожидание комментария для разблокировки пользователя"""
     
+    waiting_for_delete_reason = State()
+    """Ожидание причины удаления пользователя"""
+    
+    waiting_for_document_request = State()
+    """Ожидание запроса дополнительных документов"""
+    
     waiting_for_role_comment = State()
     """Ожидание комментария для изменения ролей"""
     

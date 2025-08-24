@@ -11,10 +11,10 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from database.models.audit import AuditLog
-from config.settings import settings
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.config.settings import settings
 import logging
-from utils.redis_rate_limiter import is_rate_limited, get_rate_limit_remaining_time
+from uk_management_bot.utils.redis_rate_limiter import is_rate_limited, get_rate_limit_remaining_time
 
 logger = logging.getLogger(__name__)
 

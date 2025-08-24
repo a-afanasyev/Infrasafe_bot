@@ -1,19 +1,19 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List, Dict, Optional
 import re
-from services.auth_service import AuthService
-from database.session import get_db
-from utils.constants import ADDRESS_TYPE_DISPLAYS
-from utils.address_helpers import get_address_type_from_display
+from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.database.session import get_db
+from uk_management_bot.utils.constants import ADDRESS_TYPE_DISPLAYS
+from uk_management_bot.utils.address_helpers import get_address_type_from_display
 import logging
-from utils.constants import (
+from uk_management_bot.utils.constants import (
     REQUEST_CATEGORIES,
     CALLBACK_PREFIX_CATEGORY,
     CALLBACK_PREFIX_URGENCY,
     REQUEST_URGENCIES,
 )
-from utils.constants import REQUEST_STATUSES
-from utils.helpers import get_text
+from uk_management_bot.utils.constants import REQUEST_STATUSES
+from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 

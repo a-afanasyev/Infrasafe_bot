@@ -3,10 +3,10 @@ from aiogram.types import Message
 from aiogram.filters import Command
 from sqlalchemy.orm import Session
 
-from services.auth_service import AuthService
-from services.invite_service import InviteService, InviteRateLimiter
-from utils.helpers import get_text
-from keyboards.base import get_main_keyboard, get_cancel_keyboard, get_main_keyboard_for_role
+from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
+from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.keyboards.base import get_main_keyboard, get_cancel_keyboard, get_main_keyboard_for_role
 import logging
 import json
 
@@ -24,13 +24,13 @@ async def login_via_button(message: Message, db: Session, user_status: str = Non
         last_name=message.from_user.last_name,
     )
     if user.status == "approved":
-        await message.answer("Вы уже авторизованы.", reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status))
+        await message.answer("Вы уже авторизованы.", reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status))
         return
     ok = await auth.approve_user(message.from_user.id, role="applicant")
     if ok:
         await message.answer(
             "✅ Авторизация выполнена. Вы вошли как заявитель.",
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status),
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status),
         )
     else:
         await message.answer(

@@ -11,8 +11,8 @@
 from typing import Dict, List
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from utils.helpers import get_text
-from database.models.user import User
+from uk_management_bot.utils.helpers import get_text
+# from uk_management_bot.database.models.user import User  # временно отключен
 
 
 def get_user_management_main_keyboard(stats: Dict[str, int], language: str = 'ru') -> InlineKeyboardMarkup:
@@ -143,7 +143,7 @@ def get_user_list_keyboard(users_data: Dict, list_type: str, language: str = 'ru
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_user_actions_keyboard(user: User, language: str = 'ru') -> InlineKeyboardMarkup:
+def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура действий с пользователем
     
@@ -191,6 +191,48 @@ def get_user_actions_keyboard(user: User, language: str = 'ru') -> InlineKeyboar
             text=f"🛠️ {get_text('moderation.manage_specializations', language)}",
             callback_data=f"user_specializations_{user.id}"
         )])
+    
+    # Запрос дополнительных документов (всегда доступно)
+    buttons.append([InlineKeyboardButton(
+        text=f"📋 {get_text('moderation.request_documents', language)}",
+        callback_data=f"user_action_request_docs_{user.id}"
+    )])
+    
+    # Просмотр документов (если есть документы)
+    from uk_management_bot.services.user_verification_service import UserVerificationService
+    from sqlalchemy.orm import Session
+    from uk_management_bot.database.session import get_db
+    
+    try:
+        # Получаем сессию базы данных
+        db = next(get_db())
+        verification_service = UserVerificationService(db)
+        documents_summary = verification_service.get_user_documents_summary(user.id)
+        
+        if documents_summary['total_documents'] > 0:
+            # Показываем количество документов
+            buttons.append([InlineKeyboardButton(
+                text=f"📄 Документы ({documents_summary['total_documents']})",
+                callback_data=f"user_action_view_documents_{user.id}"
+            )])
+        else:
+            # Показываем кнопку без счетчика
+            buttons.append([InlineKeyboardButton(
+                text=f"📄 Документы",
+                callback_data=f"user_action_view_documents_{user.id}"
+            )])
+    except Exception as e:
+        # В случае ошибки все равно показываем кнопку
+        buttons.append([InlineKeyboardButton(
+            text=f"📄 Документы",
+            callback_data=f"user_action_view_documents_{user.id}"
+        )])
+    
+    # Удаление пользователя (всегда доступно, но с предупреждением)
+    buttons.append([InlineKeyboardButton(
+        text=f"🗑️ {get_text('moderation.delete_user', language)}",
+        callback_data=f"user_action_delete_{user.id}"
+    )])
     
     # Назад к списку
     buttons.append([InlineKeyboardButton(
@@ -267,7 +309,7 @@ def get_specializations_selection_keyboard(user_specializations: List[str], lang
     buttons = []
     
     # Импортируем список доступных специализаций
-    from services.specialization_service import SpecializationService
+    from uk_management_bot.services.specialization_service import SpecializationService
     available = SpecializationService.AVAILABLE_SPECIALIZATIONS
     
     # Группируем по 2 в ряд для компактности
@@ -426,7 +468,7 @@ def get_specialization_stats_keyboard(language: str = 'ru') -> InlineKeyboardMar
 
 # ═══ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ═══
 
-def _format_user_name(user: User) -> str:
+def _format_user_name(user) -> str:
     """Форматировать имя пользователя для отображения"""
     name = f"{user.first_name or ''} {user.last_name or ''}".strip()
     if not name:

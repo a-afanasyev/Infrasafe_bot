@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Dict, Any
-from config.settings import settings
+from uk_management_bot.config.settings import settings
 
 def _resolve_locales_dir() -> str:
     """Возвращает абсолютный путь к директории локалей.

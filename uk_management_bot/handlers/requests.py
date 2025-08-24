@@ -5,10 +5,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
-from database.models import Request
-from database.session import get_db
-from database.models.user import User
-from keyboards.requests import (
+from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.session import get_db
+from uk_management_bot.database.models.user import User
+from uk_management_bot.keyboards.requests import (
     get_categories_keyboard, 
     get_urgency_keyboard,
     get_cancel_keyboard,
@@ -21,28 +21,28 @@ from keyboards.requests import (
     get_urgency_inline_keyboard,
     get_inline_confirmation_keyboard,
 )
-from keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
-from keyboards.requests import (
+from uk_management_bot.keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
+from uk_management_bot.keyboards.requests import (
     get_status_filter_inline_keyboard,
     get_category_filter_inline_keyboard,
     get_reset_filters_inline_keyboard,
     get_period_filter_inline_keyboard,
     get_executor_filter_inline_keyboard,
 )
-from utils.validators import (
+from uk_management_bot.utils.validators import (
     validate_address, 
     validate_description, 
     validate_media_file
 )
-from config.settings import settings
-from utils.constants import REQUEST_CATEGORIES, REQUEST_URGENCIES
-from utils.constants import REQUEST_CATEGORIES
+from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.constants import REQUEST_CATEGORIES, REQUEST_URGENCIES
+from uk_management_bot.utils.constants import REQUEST_CATEGORIES
 import logging
 from datetime import datetime
-from services.request_service import RequestService
-from services.auth_service import AuthService
-from services.notification_service import async_notify_action_denied
-from utils.constants import ERROR_MESSAGES
+from uk_management_bot.services.request_service import RequestService
+from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.services.notification_service import async_notify_action_denied
+from uk_management_bot.utils.constants import ERROR_MESSAGES
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Добавляем middleware в роутер
-from middlewares.auth import auth_middleware, role_mode_middleware
+from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 router.message.middleware(auth_middleware)
 router.message.middleware(role_mode_middleware)
 router.callback_query.middleware(auth_middleware)
@@ -65,7 +65,7 @@ async def _deny_if_pending_message(message: Message, user_status: Optional[str])
     """
     if user_status == "pending":
         try:
-            from utils.helpers import get_text
+            from uk_management_bot.utils.helpers import get_text
             lang = getattr(message.from_user, "language_code", None) or "ru"
             await message.answer(get_text("auth.pending", language=lang))
         except Exception:
@@ -80,7 +80,7 @@ async def _deny_if_pending_callback(callback: CallbackQuery, user_status: Option
     """
     if user_status == "pending":
         try:
-            from utils.helpers import get_text
+            from uk_management_bot.utils.helpers import get_text
             lang = getattr(callback.from_user, "language_code", None) or "ru"
             await callback.answer(get_text("auth.pending", language=lang), show_alert=True)
         except Exception:
@@ -375,7 +375,7 @@ async def process_description(message: Message, state: FSMContext):
         return
     
     # Валидируем описание с помощью валидатора
-    from utils.validators import Validator
+    from uk_management_bot.utils.validators import Validator
     is_valid, error_message = Validator.validate_description(message.text)
     if not is_valid:
         await message.answer(error_message)
@@ -550,7 +550,7 @@ async def save_request(data: dict, user_id: int, db: Session) -> bool:
     """Сохранение заявки в базу данных"""
     try:
         # Получаем пользователя из базы данных по telegram_id
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db.query(User).filter(User.telegram_id == user_id).first()
         
         if not user:
@@ -744,7 +744,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         db_session = next(get_db())
         
         # Получаем пользователя из базы данных по telegram_id
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
         
         if not user:
@@ -794,8 +794,8 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             message_text += "\n"
         
         # Создаем комбинированную клавиатуру: фильтр + кнопки ответа (по каждой) + пагинация
-        from keyboards.requests import get_pagination_keyboard
-        from keyboards.requests import get_status_filter_inline_keyboard
+        from uk_management_bot.keyboards.requests import get_pagination_keyboard
+        from uk_management_bot.keyboards.requests import get_status_filter_inline_keyboard
         filter_kb = get_status_filter_inline_keyboard(active_status if active_status != "all" else None)
         rows = list(filter_kb.inline_keyboard)
         for r in page_requests:
@@ -836,7 +836,7 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
             return
         
         # Проверяем права доступа
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
         
         if not user or request.user_id != user.id:
@@ -857,7 +857,7 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
             message_text += f"Обновлена: {request.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
         
         # Создаем клавиатуру действий + кнопка Назад к списку
-        from keyboards.requests import get_request_actions_keyboard
+        from uk_management_bot.keyboards.requests import get_request_actions_keyboard
         actions_kb = get_request_actions_keyboard(request.id)
         rows = list(actions_kb.inline_keyboard)
         # Сохраняем в callback_data информацию: back_list_{page}
@@ -1020,7 +1020,7 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
         # Предпочтительно берем из data контекста aiogram (если middleware установил)
         # Aiogram 3 передает data в handler, но в нашей сигнатуре его нет. Поэтому используем сервисную проверку ниже как основной барьер.
         # Для ранней UX-подсказки перед сервисной проверкой повторно проверим смену быстрим способом:
-        from services.shift_service import ShiftService
+        from uk_management_bot.services.shift_service import ShiftService
         quick_service = ShiftService(db_session)
         if not quick_service.is_user_in_active_shift(callback.from_user.id):
             await callback.answer(ERROR_MESSAGES.get("not_in_shift", "Вы не в смене"), show_alert=True)
@@ -1116,7 +1116,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Произошла ошибка", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("cancel_"))
+@router.callback_query(F.data.startswith("cancel_") & ~F.data.startswith("cancel_document_selection_"))
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
     """Обработка отмены заявки"""
     try:
@@ -1209,7 +1209,7 @@ async def show_my_requests(message: Message, state: FSMContext):
         db_session = next(get_db())
         
         # Получаем пользователя из базы данных по telegram_id
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == telegram_id).first()
         
         if not user:
@@ -1263,7 +1263,7 @@ async def show_my_requests(message: Message, state: FSMContext):
                 message_text += f"   Адрес: {address}\n"
                 message_text += f"   Создана: {request.created_at.strftime('%d.%m.%Y')}\n\n"
 
-        from keyboards.requests import get_pagination_keyboard
+        from uk_management_bot.keyboards.requests import get_pagination_keyboard
         # Только фильтр статуса (Активные/Архив) и пагинация + кнопки ответа по заявкам в уточнении
         filter_status_kb = get_status_filter_inline_keyboard(active_status)
         pagination_kb = get_pagination_keyboard(current_page, total_pages)
@@ -1304,7 +1304,7 @@ async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext)
         await state.update_data(reply_request_id=request_id)
         await state.set_state(RequestStates.waiting_clarify_reply)
         # Получаем пользователя из базы данных по telegram_id
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
         
         if req and user and req.user_id == user.id:
@@ -1333,7 +1333,7 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
         service = RequestService(db_session)
         req = service.get_request_by_id(request_id)
         # Получаем пользователя из базы данных по telegram_id
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == message.from_user.id).first()
         
         if not req or not user or req.user_id != user.id:
@@ -1375,7 +1375,7 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         db_session = next(get_db())
         
         # Получаем пользователя из базы данных по telegram_id
-        from database.models.user import User
+        from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
         
         if not user:
@@ -1421,7 +1421,7 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                     message_text += f"   Причина отказа: {request.notes}\n"
                 message_text += "\n"
 
-        from keyboards.requests import get_pagination_keyboard
+        from uk_management_bot.keyboards.requests import get_pagination_keyboard
         filter_status_kb = get_status_filter_inline_keyboard(choice)
         show_reply = any(r.status == "Уточнение" for r in page_requests)
         pagination_kb = get_pagination_keyboard(current_page, total_pages, show_reply_clarify=show_reply)

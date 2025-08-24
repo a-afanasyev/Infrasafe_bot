@@ -3,18 +3,18 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from services.shift_service import ShiftService
-from services.notification_service import async_notify_shift_started, async_notify_shift_ended
-from keyboards.shifts import (
+from uk_management_bot.services.shift_service import ShiftService
+from uk_management_bot.services.notification_service import async_notify_shift_started, async_notify_shift_ended
+from uk_management_bot.keyboards.shifts import (
     get_shifts_main_keyboard,
     get_end_shift_confirm_inline,
     get_shifts_filters_inline,
     get_pagination_inline,
     get_manager_active_shifts_row,
 )
-from keyboards.base import get_executor_suggestion_inline
-from database.session import get_db
-from utils.helpers import get_text
+from uk_management_bot.keyboards.base import get_executor_suggestion_inline
+from uk_management_bot.database.session import get_db
+from uk_management_bot.utils.helpers import get_text
 
 
 router = Router()

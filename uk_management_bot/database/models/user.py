@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from database.session import Base
+from uk_management_bot.database.session import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -43,6 +43,17 @@ class User(Base):
     # electric | plumbing | security | cleaning | other
     specialization = Column(String(50), nullable=True)
     
+    # Новые поля для верификации
+    verification_status = Column(String(50), default="pending", nullable=False)  # pending, verified, rejected
+    verification_notes = Column(Text, nullable=True)  # Комментарии администратора
+    verification_date = Column(DateTime(timezone=True), nullable=True)  # Дата верификации
+    verified_by = Column(Integer, nullable=True)  # ID администратора, который верифицировал
+    
+    # Дополнительные поля для проверки
+    passport_series = Column(String(10), nullable=True)  # Серия паспорта
+    passport_number = Column(String(10), nullable=True)  # Номер паспорта
+    birth_date = Column(DateTime(timezone=True), nullable=True)  # Дата рождения
+    
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -51,6 +62,12 @@ class User(Base):
     requests = relationship("Request", back_populates="user", foreign_keys="Request.user_id")
     shifts = relationship("Shift", back_populates="user")
     executed_requests = relationship("Request", foreign_keys="Request.executor_id")
+    notifications = relationship("Notification", back_populates="user")
+    
+    # Новые связи для верификации с указанием foreign_keys
+    documents = relationship("UserDocument", back_populates="user", foreign_keys="UserDocument.user_id")
+    verifications = relationship("UserVerification", back_populates="user", foreign_keys="UserVerification.user_id")
+    access_rights = relationship("AccessRights", back_populates="user", foreign_keys="AccessRights.user_id")
     
     def __repr__(self):
         return (
