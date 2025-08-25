@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация по приглашению - UK Management</title>
+    <link rel="stylesheet" href="https://uk-management.local/static/style.css">
+    <script src="/static/telegram-web-app.js"></script>
+    <script>
+        // Простая инициализация Telegram Web App
+        console.log('Загрузка страницы...');
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM загружен');
+            
+            if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+                console.log('Telegram Web App найден');
+                try {
+                    Telegram.WebApp.ready();
+                    console.log('Telegram Web App готов');
+                } catch (error) {
+                    console.error('Ошибка Telegram Web App:', error);
+                }
+            } else {
+                console.log('Telegram Web App не найден');
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Регистрация по приглашению</h1>
+            <p>Добро пожаловать в систему управления UK!</p>
+        </div>
+
+        <div class="invite-info" id="inviteInfo" style="display: none;">
+            <div class="info-card">
+                <h3>📋 Информация о приглашении</h3>
+                <div class="info-item">
+                    <span class="label">Роль:</span>
+                    <span class="value" id="roleValue">-</span>
+                </div>
+                <div class="info-item" id="specializationInfo" style="display: none;">
+                    <span class="label">Специализация:</span>
+                    <span class="value" id="specializationValue">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Срок действия:</span>
+                    <span class="value" id="expiresValue">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage" style="display: none;">
+            <div class="error-card">
+                <h3>❌ Ошибка</h3>
+                <p id="errorText"></p>
+            </div>
+        </div>
+
+        <form class="registration-form" id="registrationForm" style="display: none;">
+            <div class="form-group">
+                <label for="fullName">ФИО *</label>
+                <input type="text" id="fullName" name="fullName" required 
+                       placeholder="Введите ваше полное имя" 
+                       pattern="[А-Яа-яЁё\s]{2,50}" 
+                       title="Используйте только русские буквы, минимум 2 символа">
+                <small>Обязательное поле. Используйте только русские буквы.</small>
+            </div>
+
+            <div class="form-group" id="specializationGroup" style="display: none;">
+                <label for="specialization">Специализация *</label>
+                <select id="specialization" name="specialization" required>
+                    <option value="">Выберите специализацию</option>
+                </select>
+                <small>Обязательное поле для исполнителей.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Подтверждение через Telegram</label>
+                <div class="telegram-auth">
+                    <button type="button" id="telegramAuthBtn" class="btn btn-telegram">
+                        🔐 Войти через Telegram
+                    </button>
+                    <div id="telegramStatus" class="telegram-status"></div>
+                </div>
+                <small>Для завершения регистрации необходимо авторизоваться через Telegram.</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                    ✅ Завершить регистрацию
+                </button>
+            </div>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Загрузка...</p>
+        </div>
+    </div>
+
+    <script>
+        // Глобальные переменные
+        let inviteToken = '{{ token }}';
+        let inviteData = null;
+        let telegramUser = null;
+
+        // Инициализация Telegram Web App
+        let tg = null;
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
+            console.log('Telegram Web App инициализирован');
+        } else {
+            console.log('Telegram Web App не найден');
+        }
+
+        // Загрузка данных приглашения
+        async function loadInviteData() {
+            try {
+                const response = await fetch(`/api/validate/${inviteToken}`);
+                const data = await response.json();
+                
+                if (data.valid) {
+                    inviteData = data;
+                    showInviteInfo(data);
+                    showRegistrationForm(data);
+                } else {
+                    showError(data.message || 'Неверное приглашение');
+                }
+            } catch (error) {
+                showError('Ошибка загрузки данных приглашения');
+            }
+        }
+
+        // Показать информацию о приглашении
+        function showInviteInfo(data) {
+            document.getElementById('roleValue').textContent = getRoleName(data.role);
+            document.getElementById('expiresValue').textContent = formatDate(data.expires_at);
+            
+            if (data.specialization) {
+                document.getElementById('specializationValue').textContent = data.specialization;
+                document.getElementById('specializationInfo').style.display = 'block';
+            }
+            
+            document.getElementById('inviteInfo').style.display = 'block';
+        }
+
+        // Показать форму регистрации
+        function showRegistrationForm(data) {
+            if (data.role === 'executor') {
+                loadSpecializations();
+                document.getElementById('specializationGroup').style.display = 'block';
+            }
+            
+            document.getElementById('registrationForm').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Загрузить список специализаций
+        async function loadSpecializations() {
+            try {
+                const response = await fetch('/api/specializations');
+                const data = await response.json();
+                
+                const select = document.getElementById('specialization');
+                data.specializations.forEach(spec => {
+                    const option = document.createElement('option');
+                    option.value = spec.id;
+                    option.textContent = spec.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки специализаций:', error);
+            }
+        }
+
+        // Показать ошибку
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Получить название роли
+        function getRoleName(role) {
+            const roles = {
+                'applicant': 'Заявитель',
+                'executor': 'Исполнитель',
+                'manager': 'Менеджер'
+            };
+            return roles[role] || role;
+        }
+
+        // Форматировать дату
+        function formatDate(dateString) {
+            if (!dateString) return 'Не указано';
+            const date = new Date(dateString);
+            return date.toLocaleString('ru-RU');
+        }
+
+        // Авторизация через Telegram
+        document.getElementById('telegramAuthBtn').addEventListener('click', function() {
+            if (!tg) {
+                document.getElementById('telegramStatus').innerHTML = 
+                    `<div class="error">❌ Telegram Web App недоступен. Откройте эту страницу в Telegram.</div>`;
+                return;
+            }
+            
+            try {
+                tg.showPopup({
+                    title: 'Авторизация',
+                    message: 'Для завершения регистрации необходимо авторизоваться через Telegram',
+                    buttons: [{
+                        id: 'auth',
+                        type: 'default',
+                        text: 'Авторизоваться'
+                    }]
+                }, function(buttonId) {
+                    if (buttonId === 'auth') {
+                        // Получаем данные пользователя из Telegram Web App
+                        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                            telegramUser = tg.initDataUnsafe.user;
+                            document.getElementById('telegramStatus').innerHTML = 
+                                `<div class="success">✅ Авторизован как ${telegramUser.first_name}</div>`;
+                            document.getElementById('telegramAuthBtn').disabled = true;
+                            document.getElementById('submitBtn').disabled = false;
+                        } else {
+                            // Если данные пользователя недоступны, показываем инструкцию
+                            document.getElementById('telegramStatus').innerHTML = 
+                                `<div class="info">ℹ️ Откройте эту страницу в Telegram для авторизации</div>`;
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка показа popup:', error);
+                document.getElementById('telegramStatus').innerHTML = 
+                    `<div class="error">❌ Ошибка авторизации: ${error.message}</div>`;
+            }
+        });
+
+        // Обработка отправки формы
+        document.getElementById('registrationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!telegramUser) {
+                showError('Необходимо авторизоваться через Telegram');
+                return;
+            }
+
+            const formData = {
+                token: inviteToken,
+                full_name: document.getElementById('fullName').value.trim(),
+                specialization: document.getElementById('specialization').value,
+                telegram_id: telegramUser.id
+            };
+
+            // Валидация
+            if (!formData.full_name) {
+                showError('Введите ФИО');
+                return;
+            }
+
+            if (inviteData.role === 'executor' && !formData.specialization) {
+                showError('Выберите специализацию');
+                return;
+            }
+
+            // Отправка данных
+            try {
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('submitBtn').textContent = 'Регистрация...';
+
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Успешная регистрация
+                    document.querySelector('.container').innerHTML = `
+                        <div class="success-page">
+                            <div class="success-card">
+                                <h2>✅ Регистрация завершена!</h2>
+                                <p>Добро пожаловать в систему UK Management!</p>
+                                <p>Ваша заявка отправлена на рассмотрение администратору.</p>
+                                <p>Ожидайте уведомления о статусе вашей заявки.</p>
+                                <button class="btn btn-primary" onclick="if(tg) tg.close(); else window.close();">
+                                    Закрыть
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    showError(result.detail || 'Ошибка регистрации');
+                    document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('submitBtn').textContent = '✅ Завершить регистрацию';
+                }
+            } catch (error) {
+                showError('Ошибка отправки данных');
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('submitBtn').textContent = '✅ Завершить регистрацию';
+            }
+        });
+
+        // Запуск при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            loadInviteData();
+        });
+    </script>
+</body>
+</html>

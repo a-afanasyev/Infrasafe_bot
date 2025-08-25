@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Минимальный тест</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        button:hover { background: #0056b3; transform: scale(1.05); }
+        .info-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: left;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Минимальный тест</h1>
+        
+        <div id="status" class="status info">
+            Загрузка...
+        </div>
+        
+        <div id="info" class="info-box" style="display: none;">
+            <h3>📊 Информация о странице:</h3>
+            <div id="pageInfo"></div>
+        </div>
+        
+        <div id="actions">
+            <button onclick="testBasic()">🔧 Базовый тест</button>
+            <button onclick="testAlert()">📢 Тест alert</button>
+            <button onclick="testConsole()">📝 Тест console</button>
+        </div>
+        
+        <div id="result" class="info-box" style="display: none;">
+            <h3>📝 Результат:</h3>
+            <div id="resultText"></div>
+        </div>
+    </div>
+
+    <script>
+        let statusDiv = document.getElementById('status');
+        let pageInfoDiv = document.getElementById('pageInfo');
+        let resultDiv = document.getElementById('result');
+        let resultText = document.getElementById('resultText');
+        
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function showResult(message) {
+            resultText.textContent = message;
+            resultDiv.style.display = 'block';
+        }
+        
+        function showInfo() {
+            document.getElementById('info').style.display = 'block';
+        }
+        
+        // Проверка при загрузке страницы
+        window.addEventListener('load', function() {
+            console.log('Страница загружена');
+            updateStatus('Страница загружена успешно!', 'success');
+            
+            // Показываем информацию о странице
+            let info = `
+                <p><strong>URL:</strong> ${window.location.href}</p>
+                <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+                <p><strong>Платформа:</strong> ${navigator.platform}</p>
+                <p><strong>Язык:</strong> ${navigator.language}</p>
+                <p><strong>Время загрузки:</strong> ${new Date().toLocaleString()}</p>
+            `;
+            pageInfoDiv.innerHTML = info;
+            showInfo();
+            
+            showResult('Страница работает корректно!');
+        });
+        
+        function testBasic() {
+            showResult('✅ Базовый JavaScript работает!');
+        }
+        
+        function testAlert() {
+            try {
+                alert('Тест alert - работает!');
+                showResult('✅ Alert работает!');
+            } catch (error) {
+                showResult(`❌ Ошибка alert: ${error.message}`);
+            }
+        }
+        
+        function testConsole() {
+            try {
+                console.log('Тест console.log - работает!');
+                console.warn('Тест console.warn - работает!');
+                console.error('Тест console.error - работает!');
+                showResult('✅ Console работает! Проверьте консоль браузера.');
+            } catch (error) {
+                showResult(`❌ Ошибка console: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

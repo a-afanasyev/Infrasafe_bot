@@ -1536,19 +1536,19 @@ async def process_delete_reason(message: Message, state: FSMContext, db: Session
             )
             
             try:
-                # Возвращаемся к списку пользователей
+                # Возвращаемся к панели управления пользователями
                 user_mgmt_service = UserManagementService(db)
-                users_data = user_mgmt_service.get_users_by_status('pending', page=1, limit=10)
+                stats = user_mgmt_service.get_user_stats()
                 
                 await message.answer(
-                    get_text('user_management.user_list_title', language=lang),
-                    reply_markup=get_user_list_keyboard(users_data, 'pending', lang)
+                    get_text('user_management.main_title', language=lang),
+                    reply_markup=get_user_management_main_keyboard(stats, lang)
                 )
             except Exception as e:
-                logger.error(f"Ошибка при возврате к списку пользователей после удаления: {e}")
+                logger.error(f"Ошибка при возврате к панели управления пользователями после удаления: {e}")
                 await message.answer(
                     get_text('moderation.user_deleted_successfully', language=lang) + 
-                    "\n\nОшибка при обновлении списка пользователей."
+                    "\n\nОшибка при возврате к панели управления."
                 )
         else:
             await message.answer(
@@ -2230,6 +2230,28 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
 
 
 # ═══ ИНТЕГРАЦИЯ С АДМИН ПАНЕЛЬЮ ═══
+
+async def open_user_management(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Открыть панель управления пользователями (для интеграции с админ панелью)"""
+    lang = message.from_user.language_code or 'ru'
+    
+    try:
+        # Получаем статистику пользователей
+        user_mgmt_service = UserManagementService(db)
+        stats = user_mgmt_service.get_user_stats()
+        
+        # Показываем главное меню
+        await message.answer(
+            get_text('user_management.main_title', language=lang),
+            reply_markup=get_user_management_main_keyboard(stats, lang)
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка отображения панели управления пользователями: {e}")
+        await message.answer(
+            get_text('errors.unknown_error', language=lang)
+        )
+
 
 @router.callback_query(F.data == "admin_panel")
 async def back_to_admin_panel(callback: CallbackQuery):

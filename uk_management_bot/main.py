@@ -12,6 +12,7 @@ from uk_management_bot.handlers.admin import router as admin_router
 from uk_management_bot.handlers.auth import router as auth_router
 from uk_management_bot.handlers.onboarding import router as onboarding_router
 from uk_management_bot.handlers.user_management import router as user_management_router
+from uk_management_bot.handlers.employee_management import router as employee_management_router
 from uk_management_bot.handlers.user_verification import router as user_verification_router
 from uk_management_bot.handlers.health import router as health_router
 from uk_management_bot.middlewares.shift import shift_context_middleware
@@ -118,6 +119,7 @@ async def main():
     dp.include_router(shifts_router)  # включаем обратно
     dp.include_router(admin_router)
     dp.include_router(user_management_router)  # включаем обратно
+    dp.include_router(employee_management_router)  # Роутер управления сотрудниками
     dp.include_router(user_verification_router)  # Новый роутер верификации
     dp.include_router(base_router)  # base в конце как fallback для общих команд
     

@@ -15,6 +15,9 @@ services:
     # Перезапуск контейнера при сбоях
     restart: unless-stopped
     
+    # Команда запуска бота
+    command: python -m uk_management_bot.main
+    
     # Переменные окружения
     # Используем файл .env для конфиденциальных данных
     env_file:
@@ -137,6 +140,60 @@ services:
     # Открываем порт для подключения (только для разработки)
     ports:
       - "6379:6379"
+
+  # Веб-сервис для регистрации по приглашениям
+  web:
+    # Используем локальный Dockerfile для сборки образа
+    build: .
+    
+    # Имя контейнера
+    container_name: uk-web-registration
+    
+    # Перезапуск контейнера при сбоях
+    restart: unless-stopped
+    
+    # Команда запуска веб-сервиса
+    command: python -m uk_management_bot.web.main
+    
+    # Переменные окружения
+    env_file:
+      - .env
+    
+    # Переменные окружения для подключения к сервисам
+    environment:
+      # Подключение к PostgreSQL
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      
+      # Подключение к Redis
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Настройки веб-сервиса
+      - WEB_BASE_URL=http://localhost:8000
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    
+    # Зависимости от других сервисов
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # Сетевые настройки
+    networks:
+      - uk-network
+    
+    # Открываем порт для веб-интерфейса
+    ports:
+      - "8000:8000"
+    
+    # Health check для проверки состояния веб-сервиса
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 # Определяем тома для хранения данных
 volumes:

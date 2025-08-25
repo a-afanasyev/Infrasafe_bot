@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
 from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
 from uk_management_bot.keyboards.base import (
     get_main_keyboard,
     get_cancel_keyboard,
@@ -35,6 +36,94 @@ class AdminPasswordStates(StatesGroup):
 @router.message(Command("start"))
 async def cmd_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
     """Обработчик команды /start"""
+    logger.info(f"Получена команда /start от пользователя {message.from_user.id}. Текст: '{message.text}'")
+    auth_service = AuthService(db)
+    
+    # Проверяем, есть ли параметр с токеном приглашения
+    if message.text and len(message.text.split()) > 1:
+        param = message.text.split()[1].strip()
+        
+        # Если это команда join с токеном
+        if param.startswith("join_"):
+            token = param.replace("join_", "")
+            
+            # Если это токен приглашения, обрабатываем его
+            if token.startswith("invite_v1:"):
+                lang = message.from_user.language_code or "ru"
+            
+            try:
+                # Проверяем rate limiting
+                if not InviteRateLimiter.is_allowed(message.from_user.id):
+                    remaining_minutes = InviteRateLimiter.get_remaining_time(message.from_user.id) // 60
+                    await message.answer(
+                        get_text("invites.rate_limited", language=lang, minutes=remaining_minutes)
+                    )
+                    logger.warning(f"Превышен rate limit для /start с токеном от пользователя {message.from_user.id}")
+                    return
+                
+                # Валидируем токен
+                invite_service = InviteService(db)
+                
+                try:
+                    invite_data = invite_service.validate_invite(token)
+                except ValueError as e:
+                    error_msg = str(e).lower()
+                    if "expired" in error_msg:
+                        await message.answer(get_text("invites.expired_token", language=lang))
+                    elif "already used" in error_msg:
+                        await message.answer(get_text("invites.used_token", language=lang))
+                    else:
+                        await message.answer(get_text("invites.invalid_token", language=lang))
+                    
+                    logger.info(f"Невалидный токен в /start от {message.from_user.id}: {e}")
+                    return
+                
+                # Обрабатываем присоединение
+                user = await auth_service.process_invite_join(
+                    telegram_id=message.from_user.id,
+                    invite_data=invite_data,
+                    username=message.from_user.username,
+                    first_name=message.from_user.first_name,
+                    last_name=message.from_user.last_name
+                )
+                
+                # Отмечаем nonce как использованный
+                invite_service.mark_nonce_used(
+                    invite_data["nonce"], 
+                    message.from_user.id, 
+                    invite_data
+                )
+                
+                # Отправляем подтверждение
+                role = invite_data["role"]
+                role_name = get_text(f"roles.{role}", language=lang)
+                
+                success_message = get_text(
+                    "invites.success_joined", 
+                    language=lang, 
+                    role=role_name
+                )
+                
+                # Добавляем информацию о специализации
+                if role == "executor" and invite_data.get("specialization"):
+                    specializations = invite_data["specialization"].split(",")
+                    spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
+                    success_message += f"\nСпециализация: {', '.join(spec_names)}"
+                
+                await message.answer(success_message)
+                logger.info(f"Пользователь {message.from_user.id} присоединился по токену через /start")
+                return
+                
+            except Exception as e:
+                logger.error(f"Ошибка обработки токена в /start от {message.from_user.id}: {e}")
+                await message.answer(get_text("invites.invalid_token", language=lang))
+                return
+    
+    # Если нет токена, продолжаем обычную обработку /start
+    await handle_regular_start(message, db, roles, active_role, user_status)
+
+async def handle_regular_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+    """Обработка обычного /start без токена"""
     auth_service = AuthService(db)
     
     # Получаем или создаем пользователя
@@ -111,6 +200,9 @@ async def cmd_start(message: Message, db: Session, roles: list[str] = None, acti
 
     await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user.status))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
+
+# Удаляем этот обработчик, так как он не нужен
+# Telegram автоматически обрабатывает кнопку "Начать" и отправляет /start
 
 @router.callback_query(F.data == "restart_bot")
 async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):

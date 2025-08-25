@@ -92,6 +92,7 @@ class ShiftService:
                 self.db.add(
                     AuditLog(
                         user_id=user.id,
+                        telegram_user_id=user.telegram_id,  # Telegram ID пользователя, который начал смену
                         action=AUDIT_ACTION_SHIFT_STARTED,
                         details={"shift_id": shift.id, "notes": notes},
                     )
@@ -132,6 +133,7 @@ class ShiftService:
                 self.db.add(
                     AuditLog(
                         user_id=user.id,
+                        telegram_user_id=user.telegram_id,  # Telegram ID пользователя, который завершил смену
                         action=AUDIT_ACTION_SHIFT_ENDED,
                         details={"shift_id": active.id, "notes": notes},
                     )
@@ -173,9 +175,13 @@ class ShiftService:
             self.db.refresh(active)
 
             try:
+                # Получаем пользователя, у которого принудительно завершается смена
+                target_user = self._get_user_by_tg(target_user_telegram_id)
+                
                 self.db.add(
                     AuditLog(
                         user_id=manager.id,
+                        telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID пользователя, у которого принудительно завершается смена
                         action=AUDIT_ACTION_SHIFT_ENDED,
                         details={"shift_id": active.id, "forced": True, "notes": notes},
                     )

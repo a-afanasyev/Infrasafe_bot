@@ -40,8 +40,8 @@ class User(Base):
     address_type = Column(String(20), nullable=True)  # home/apartment/yard
     
     # Специализация сотрудника (для исполнителей/менеджеров):
-    # electric | plumbing | security | cleaning | other
-    specialization = Column(String(50), nullable=True)
+    # JSON строка с массивом специализаций: ["electrician", "plumber", "security"]
+    specialization = Column(Text, nullable=True)
     
     # Новые поля для верификации
     verification_status = Column(String(50), default="pending", nullable=False)  # pending, verified, rejected

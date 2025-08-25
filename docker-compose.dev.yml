@@ -34,12 +34,81 @@ services:
         condition: service_healthy
     networks:
       - uk-network
+    # Добавляем запись в hosts файл контейнера
+    extra_hosts:
+      - "uk-management.local:127.0.0.1"
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Веб-сервис для регистрации по приглашениям
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: uk-web-registration-dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - REDIS_URL=redis://redis:6379/0
+      - WEB_BASE_URL=https://uk-management.local
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Монтируем код для hot-reload
+      - ./uk_management_bot:/app/uk_management_bot
+      - ./requirements.txt:/app/requirements.txt
+      # Монтируем .env файл
+      - ./.env:/app/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+    expose:
+      - "8000"
+    # Добавляем запись в hosts файл контейнера
+    extra_hosts:
+      - "uk-management.local:127.0.0.1"
+    command: python -m uk_management_bot.web.main
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx для HTTPS проксирования
+  nginx:
+    image: nginx:alpine
+    container_name: uk-nginx-dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - web
+    networks:
+      - uk-network
+    # Добавляем запись в hosts файл контейнера
+    extra_hosts:
+      - "uk-management.local:127.0.0.1"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   postgres:
     image: postgres:15-alpine

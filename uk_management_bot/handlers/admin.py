@@ -8,10 +8,15 @@ from uk_management_bot.keyboards.admin import (
     get_manager_main_keyboard,
     get_manager_requests_inline,
     get_manager_request_list_kb,
+    get_invite_role_keyboard,
+    get_invite_specialization_keyboard,
+    get_invite_expiry_keyboard,
+    get_invite_confirmation_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard, get_user_contextual_keyboard
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.request_service import RequestService
+from uk_management_bot.services.invite_service import InviteService
 from uk_management_bot.database.session import get_db
 from uk_management_bot.utils.constants import (
     SPECIALIZATION_ELECTRIC,
@@ -34,6 +39,8 @@ logger = logging.getLogger(__name__)
 class ManagerStates(StatesGroup):
     cancel_reason = State()
     clarify_reason = State()
+
+from uk_management_bot.states.invite_creation import InviteCreationStates
 
 
 @router.message(F.text == "🧪 Тест middleware")
@@ -99,40 +106,61 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
         print(f"🔍 DEBUG: user.status={user.status}")
     
     # Проверяем права доступа
-    has_access = has_admin_access(roles=roles, user=user)
-    print(f"🔍 DEBUG: has_admin_access() вернул: {has_access}")
-    
-    if not has_access:
-        print(f"❌ DEBUG: Доступ запрещен - roles={roles}, user.role={user.role if user else 'None'}")
+    if not has_admin_access(roles=roles, user=user):
         await message.answer(
-            get_text('errors.permission_denied', language=lang),
+            get_text("errors.permission_denied", language=lang),
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
-    print(f"✅ DEBUG: Доступ разрешен")
+    # Импортируем здесь, чтобы избежать циклических импортов
+    try:
+        from uk_management_bot.handlers.user_management import open_user_management
+        await open_user_management(message, db, roles, active_role, user)
+    except ImportError as e:
+        logger.error(f"Ошибка импорта open_user_management: {e}")
+        await message.answer(
+            get_text("errors.unknown_error", language=lang)
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в open_user_management: {e}")
+        await message.answer(
+            get_text("errors.unknown_error", language=lang)
+        )
+
+
+@router.message(F.text == "👷 Управление сотрудниками")
+async def open_employee_management_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Открыть панель управления сотрудниками"""
+    lang = message.from_user.language_code or 'ru'
+    
+    # Проверяем права доступа
+    has_access = has_admin_access(roles=roles, user=user)
+    
+    if not has_access:
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
     
     try:
-        # Импортируем сервис и клавиатуры
+        # Получаем статистику сотрудников
         from uk_management_bot.services.user_management_service import UserManagementService
-        from uk_management_bot.keyboards.user_management import get_user_management_main_keyboard
-        
-        # Получаем статистику пользователей
         user_mgmt_service = UserManagementService(db)
-        stats = user_mgmt_service.get_user_stats()
+        stats = user_mgmt_service.get_employee_stats()
         
-        # Показываем панель управления пользователями
+        # Показываем главное меню управления сотрудниками
+        from uk_management_bot.keyboards.employee_management import get_employee_management_main_keyboard
+        
         await message.answer(
-            get_text('user_management.main_title', language=lang),
-            reply_markup=get_user_management_main_keyboard(stats, lang)
+            "👷 Панель управления сотрудниками",
+            reply_markup=get_employee_management_main_keyboard(stats, lang)
         )
         
     except Exception as e:
-        logger.error(f"Ошибка открытия панели управления пользователями: {e}")
-        await message.answer(
-            get_text('errors.unknown_error', language=lang),
-            reply_markup=get_manager_main_keyboard()
-        )
+        logger.error(f"Ошибка открытия панели управления сотрудниками: {e}")
+        await message.answer("Произошла ошибка при открытии панели управления сотрудниками")
 
 
 @router.message(F.text == "🆕 Новые заявки")
@@ -147,270 +175,21 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         return
-
-    # Простая выборка: все со статусом "Новая"
-    from uk_management_bot.database.models.request import Request
-    q = db.query(Request).filter(Request.status == "Новая").order_by(Request.created_at.desc())
+    
+    # Новые заявки: только "Новая" (🆕)
+    q = (
+        db.query(Request)
+        .filter(Request.status == "Новая")
+        .order_by(Request.created_at.desc())
+    )
     requests = q.limit(10).all()
-
+    
     if not requests:
         await message.answer("Нет новых заявок", reply_markup=get_manager_main_keyboard())
         return
-
-    text = "🆕 Новые заявки (первые 10):"
-    items = [{"id": r.id, "category": r.category, "address": r.address} for r in requests]
-    await message.answer(text, reply_markup=get_manager_request_list_kb(items, 1, 1))
-
-
-@router.message(F.text == "💰 Закуп")
-async def list_purchase_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Показать заявки в закупе"""
-    lang = message.from_user.language_code or 'ru'
     
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await message.answer(
-            get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
-        )
-        return
-    
-    q = (
-        db.query(Request)
-        .filter(Request.status == "Закуп")
-        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-    )
-    requests = q.limit(10).all()
-    if not requests:
-        await message.answer("Заявок в закупе нет", reply_markup=get_manager_main_keyboard())
-        return
     items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
-    await message.answer("💰 Заявки в закупе:", reply_markup=get_manager_request_list_kb(items, 1, 1))
-
-
-@router.callback_query(F.data.startswith("mview_"))
-async def manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Подробности заявки + действия для менеджера"""
-    lang = callback.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await callback.answer(
-            get_text("errors.permission_denied", language=lang),
-            show_alert=True
-        )
-        return
-
-    req_id = int(callback.data.replace("mview_", ""))
-    r = db.query(Request).filter(Request.id == req_id).first()
-    if not r:
-        await callback.answer("Заявка не найдена", show_alert=True)
-        return
-
-    text = (
-        f"📋 Заявка #{r.id}\n"
-        f"Категория: {r.category}\n"
-        f"Статус: {r.status}\n"
-        f"Адрес: {r.address}\n"
-        f"Срочность: {r.urgency}\n"
-        f"Описание: {r.description[:500]}{'…' if len(r.description) > 500 else ''}\n"
-    )
-    if r.notes:
-        text += f"\nДиалог:\n{r.notes}"
-
-    # Кнопки действий: принять в работу / уточнение / закуп / отмена
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ В работу", callback_data=f"maccept_{r.id}")],
-        [InlineKeyboardButton(text="❓ Уточнение", callback_data=f"mclarify_{r.id}")],
-        [InlineKeyboardButton(text="💰 Закуп", callback_data=f"mpurchase_{r.id}")],
-        [InlineKeyboardButton(text="❌ Отменить", callback_data=f"mcancel_{r.id}")],
-    ])
-
-    await callback.message.edit_text(text, reply_markup=kb)
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("maccept_"))
-async def manager_accept(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Принять заявку в работу"""
-    lang = callback.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await callback.answer(
-            get_text("errors.permission_denied", language=lang),
-            show_alert=True
-        )
-        return
-    
-    req_id = int(callback.data.replace("maccept_", ""))
-    service = RequestService(db)
-    result = service.update_status_by_actor(
-        request_id=req_id,
-        new_status="В работе",
-        actor_telegram_id=callback.from_user.id,
-    )
-    if not result.get("success"):
-        await callback.answer(result.get("message", "Ошибка"), show_alert=True)
-        return
-    r = result.get("request")
-    text = (
-        f"📋 Заявка #{r.id}\n"
-        f"Категория: {r.category}\n"
-        f"Статус: {r.status}\n"
-        f"Адрес: {r.address}\n"
-    )
-    if r.notes:
-        text += f"\nДиалог:\n{r.notes}"
-    await callback.message.edit_text(text)
-    await callback.answer("Принята в работу")
-
-
-@router.callback_query(F.data.startswith("mpurchase_"))
-async def manager_purchase(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Перевести заявку в закуп"""
-    lang = callback.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await callback.answer(
-            get_text("errors.permission_denied", language=lang),
-            show_alert=True
-        )
-        return
-    
-    req_id = int(callback.data.replace("mpurchase_", ""))
-    service = RequestService(db)
-    result = service.update_status_by_actor(
-        request_id=req_id,
-        new_status="Закуп",
-        actor_telegram_id=callback.from_user.id,
-    )
-    if not result.get("success"):
-        await callback.answer(result.get("message", "Ошибка"), show_alert=True)
-        return
-    r = result.get("request")
-    text = (
-        f"📋 Заявка #{r.id}\n"
-        f"Категория: {r.category}\n"
-        f"Статус: {r.status}\n"
-        f"Адрес: {r.address}\n"
-    )
-    if r.notes:
-        text += f"\nДиалог:\n{r.notes}"
-    await callback.message.edit_text(text)
-    await callback.answer("Переведена в 'Закуп'")
-
-
-@router.callback_query(F.data.startswith("mclarify_"))
-async def manager_clarify_ask(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Запросить уточнение по заявке"""
-    lang = callback.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await callback.answer(
-            get_text("errors.permission_denied", language=lang),
-            show_alert=True
-        )
-        return
-    
-    await state.update_data(manager_target_request=int(callback.data.replace("mclarify_", "")))
-    await state.set_state(ManagerStates.clarify_reason)
-    await callback.message.answer("Укажите, что уточнить по заявке:")
-    await callback.answer()
-
-
-@router.message(ManagerStates.clarify_reason)
-async def manager_clarify_save(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Сохранить уточнение по заявке"""
-    lang = message.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await message.answer(
-            get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
-        )
-        return
-    
-    service = RequestService(db)
-    data = await state.get_data()
-    req_id = int(data.get("manager_target_request"))
-    reason = message.text.strip()
-    # Если уже в Уточнение — просто дополним диалог; иначе переведем в Уточнение с первым сообщением
-    req = db.query(Request).filter(Request.id == req_id).first()
-    if req and req.status == "Уточнение":
-        # дописываем без смены статуса
-        service.update_status_by_actor(
-            request_id=req_id,
-            new_status=req.status,
-            actor_telegram_id=message.from_user.id,
-            notes=f"[Администратор] Уточнение: {reason}",
-        )
-    else:
-        # переводим в Уточнение
-        service.update_status_by_actor(
-            request_id=req_id,
-            new_status="Уточнение",
-            actor_telegram_id=message.from_user.id,
-            notes=f"[Администратор] Уточнение: {reason}",
-        )
-    await message.answer("Уточнение отправлено", reply_markup=get_manager_main_keyboard())
-    await state.clear()
-
-
-@router.callback_query(F.data.startswith("mcancel_"))
-async def manager_cancel_ask(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Запросить причину отмены заявки"""
-    lang = callback.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await callback.answer(
-            get_text("errors.permission_denied", language=lang),
-            show_alert=True
-        )
-        return
-    
-    await state.update_data(manager_target_request=int(callback.data.replace("mcancel_", "")))
-    await state.set_state(ManagerStates.cancel_reason)
-    await callback.message.answer("Укажите причину отмены заявки:")
-    await callback.answer()
-
-
-@router.message(ManagerStates.cancel_reason)
-async def manager_cancel_save(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Сохранить причину отмены заявки"""
-    lang = message.from_user.language_code or 'ru'
-    
-    # Проверяем права доступа
-    if not has_admin_access(roles=roles, user=user):
-        await message.answer(
-            get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
-        )
-        return
-    
-    service = RequestService(db)
-    data = await state.get_data()
-    req_id = int(data.get("manager_target_request"))
-    reason = message.text.strip()
-    result = service.update_status_by_actor(
-        request_id=req_id,
-        new_status="Отменена",
-        actor_telegram_id=message.from_user.id,
-        notes=f"[Администратор] Отмена: {reason}",
-    )
-    await state.clear()
-    if not result.get("success"):
-        await message.answer(f"Ошибка: {result.get('message')}")
-        return
-    r = result.get("request")
-    text = f"Заявка #{r.id} отменена. Причина: {reason}"
-    if r and r.notes:
-        text += f"\n\nДиалог:\n{r.notes}"
-    await message.answer(text)
+    await message.answer("🆕 Новые заявки:", reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
 @router.message(F.text == "🔄 Активные заявки")
@@ -484,38 +263,232 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
     await message.answer("📦 Конец списка архива", reply_markup=get_manager_main_keyboard())
 
 
-@router.message(F.text == "👤 Сотрудники")
-async def list_employees(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Показать сотрудников по специализациям"""
+
+
+
+# ===== ОБРАБОТЧИКИ СОЗДАНИЯ ПРИГЛАШЕНИЙ =====
+
+@router.message(F.text == "📨 Создать приглашение")
+async def start_invite_creation(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Начать процесс создания приглашения"""
     lang = message.from_user.language_code or 'ru'
     
-    # Проверяем права доступа
+    # Проверяем права доступа (только менеджеры могут создавать приглашения)
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
-            get_text("errors.permission_denied", language=lang),
+            get_text("invites.manager_only", language=lang),
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
-    # Загружаем сотрудников по специализациям
-    groups = {
-        "Электрика": db.query(User).filter(User.role.in_(["executor", "manager"]), User.specialization == SPECIALIZATION_ELECTRIC).all(),
-        "Сантехника": db.query(User).filter(User.role.in_(["executor", "manager"]), User.specialization == SPECIALIZATION_PLUMBING).all(),
-        "Охрана": db.query(User).filter(User.role.in_(["executor", "manager"]), User.specialization == SPECIALIZATION_SECURITY).all(),
-        "Уборка": db.query(User).filter(User.role.in_(["executor", "manager"]), User.specialization == SPECIALIZATION_CLEANING).all(),
-        "Разное": db.query(User).filter(User.role.in_(["executor", "manager"]), (User.specialization.is_(None)) | (User.specialization == SPECIALIZATION_OTHER)).all(),
-    }
+    await message.answer(
+        get_text("invites.select_role", language=lang),
+        reply_markup=get_invite_role_keyboard()
+    )
+    await message.answer("Выберите роль для приглашения:", reply_markup=get_invite_role_keyboard())
 
-    lines = ["👤 Сотрудники по специализациям:"]
-    role_display = {"executor": "Исполнитель", "manager": "Менеджер"}
-    for title, users in groups.items():
-        lines.append(f"\n— {title}:")
-        if not users:
-            lines.append("  (пока пусто)")
-            continue
-        for u in users[:20]:
-            name = (u.first_name or "") + (f" {u.last_name}" if u.last_name else "")
-            name = name.strip() or (u.username or str(u.telegram_id))
-            lines.append(f"  • {role_display.get(u.role, u.role)} • {name} (tg_id={u.telegram_id})")
-    await message.answer("\n".join(lines), reply_markup=get_manager_main_keyboard())
+
+@router.callback_query(F.data.startswith("invite_role_"))
+async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+    """Обработчик выбора роли для приглашения"""
+    lang = callback.from_user.language_code or 'ru'
+    
+    # Извлекаем роль из callback_data
+    role = callback.data.replace("invite_role_", "")
+    
+    if role not in ["applicant", "executor", "manager"]:
+        await callback.answer("Неверная роль")
+        return
+    
+    # Сохраняем роль в состоянии
+    await state.update_data(role=role)
+    
+    # Если выбрана роль executor, нужно выбрать специализацию
+    if role == "executor":
+        await callback.message.edit_text(
+            get_text("invites.select_specialization", language=lang),
+            reply_markup=get_invite_specialization_keyboard()
+        )
+        await state.set_state(InviteCreationStates.waiting_for_specialization)
+    else:
+        # Для других ролей переходим к выбору срока действия
+        await callback.message.edit_text(
+            get_text("invites.select_expiry", language=lang),
+            reply_markup=get_invite_expiry_keyboard()
+        )
+        await state.set_state(InviteCreationStates.waiting_for_expiry)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("invite_spec_"))
+async def handle_invite_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+    """Обработчик выбора специализации для исполнителя"""
+    lang = callback.from_user.language_code or 'ru'
+    
+    # Извлекаем специализацию из callback_data
+    specialization = callback.data.replace("invite_spec_", "")
+    
+    # Сохраняем специализацию в состоянии
+    await state.update_data(specialization=specialization)
+    
+    # Переходим к выбору срока действия
+    await callback.message.edit_text(
+        get_text("invites.select_expiry", language=lang),
+        reply_markup=get_invite_expiry_keyboard()
+    )
+    await state.set_state(InviteCreationStates.waiting_for_expiry)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("invite_expiry_"))
+async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+    """Обработчик выбора срока действия приглашения"""
+    lang = callback.from_user.language_code or 'ru'
+    
+    # Извлекаем срок действия из callback_data
+    expiry = callback.data.replace("invite_expiry_", "")
+    
+    # Преобразуем в часы
+    expiry_hours = {
+        "1h": 1,
+        "24h": 24,
+        "7d": 168  # 7 дней * 24 часа
+    }.get(expiry, 24)
+    
+    # Сохраняем срок действия в состоянии
+    await state.update_data(expiry_hours=expiry_hours)
+    
+    # Получаем данные из состояния для подтверждения
+    data = await state.get_data()
+    role = data.get("role", "unknown")
+    specialization = data.get("specialization", "")
+    expiry_text = {
+        1: "1 час",
+        24: "24 часа",
+        168: "7 дней"
+    }.get(expiry_hours, "24 часа")
+    
+    # Формируем текст подтверждения
+    role_name = get_text(f"roles.{role}", language=lang)
+    confirmation_text = f"📋 Подтвердите создание приглашения:\n\n"
+    confirmation_text += f"👤 Роль: {role_name}\n"
+    
+    if role == "executor" and specialization:
+        spec_name = get_text(f"specializations.{specialization}", language=lang)
+        confirmation_text += f"🛠️ Специализация: {spec_name}\n"
+    
+    confirmation_text += f"⏰ Срок действия: {expiry_text}\n\n"
+    confirmation_text += "Нажмите 'Создать приглашение' для генерации токена."
+    
+    await callback.message.edit_text(
+        confirmation_text,
+        reply_markup=get_invite_confirmation_keyboard()
+    )
+    await state.set_state(InviteCreationStates.waiting_for_confirmation)
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "invite_confirm")
+async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext, db: Session):
+    """Обработчик подтверждения создания приглашения"""
+    lang = callback.from_user.language_code or 'ru'
+    
+    try:
+        # Получаем данные из состояния
+        data = await state.get_data()
+        role = data.get("role")
+        specialization = data.get("specialization", "")
+        expiry_hours = data.get("expiry_hours", 24)
+        
+        if not role:
+            await callback.answer("Ошибка: роль не выбрана")
+            return
+        
+        # Создаем приглашение в виде ссылки
+        invite_service = InviteService(db)
+        invite_link = invite_service.generate_invite_link(
+            role=role,
+            created_by=callback.from_user.id,
+            specialization=specialization if role == "executor" else None,
+            hours=expiry_hours
+        )
+        
+        # Генерируем токен отдельно для отображения
+        token = invite_service.generate_invite(
+            role=role,
+            created_by=callback.from_user.id,
+            specialization=specialization if role == "executor" else None,
+            hours=expiry_hours
+        )
+        
+        # Формируем текст с токеном
+        role_name = get_text(f"roles.{role}", language=lang)
+        expiry_text = {
+            1: "1 час",
+            24: "24 часа", 
+            168: "7 дней"
+        }.get(expiry_hours, "24 часа")
+        
+        success_text = f"✅ Приглашение создано!\n\n"
+        success_text += f"👤 Роль: {role_name}\n"
+        
+        if role == "executor" and specialization:
+            spec_name = get_text(f"specializations.{specialization}", language=lang)
+            success_text += f"🛠️ Специализация: {spec_name}\n"
+        
+        success_text += f"⏰ Срок действия: {expiry_text}\n\n"
+        success_text += f"🔗 Ссылка для регистрации:\n\n"
+        success_text += f"`{invite_link}`\n\n"
+        success_text += f"📋 Инструкция для кандидата:\n"
+        success_text += f"1. Перейдите по ссылке\n"
+        success_text += f"2. Нажмите кнопку «Начать»\n"
+        success_text += f"3. Отправьте команду: `/join {token}`"
+        
+        await callback.message.edit_text(
+            success_text
+        )
+        await callback.message.answer(
+            "Вернуться в админ-панель:",
+            reply_markup=get_manager_main_keyboard()
+        )
+        
+        # Очищаем состояние
+        await state.clear()
+        
+        logger.info(f"Пользователь {callback.from_user.id} создал приглашение для роли {role}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка создания приглашения: {e}")
+        await callback.message.edit_text(
+            get_text("errors.unknown_error", language=lang)
+        )
+        await callback.message.answer(
+            "Вернуться в админ-панель:",
+            reply_markup=get_manager_main_keyboard()
+        )
+        await state.clear()
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "invite_cancel")
+async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: Session):
+    """Обработчик отмены создания приглашения"""
+    lang = callback.from_user.language_code or 'ru'
+    
+    await callback.message.edit_text(
+        get_text("buttons.operation_cancelled", language=lang)
+    )
+    await callback.message.answer(
+        "Вернуться в админ-панель:",
+        reply_markup=get_manager_main_keyboard()
+    )
+    
+    # Очищаем состояние
+    await state.clear()
+    
+    await callback.answer()
 

@@ -425,10 +425,15 @@ class AuthService:
             old_status = user.status
             user.status = 'approved'
             
+            # Получаем telegram_id пользователей для аудита
+            approver = self.db.query(User).filter(User.id == approved_by).first()
+            target_user = self.db.query(User).filter(User.id == user_id).first()
+            
             # Создаем запись в аудит логе
             audit = AuditLog(
                 action="user_approved",
                 user_id=approved_by,
+                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID одобряемого пользователя
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
@@ -474,10 +479,14 @@ class AuthService:
             old_status = user.status
             user.status = 'blocked'
             
+            # Получаем telegram_id пользователя для аудита
+            target_user = self.db.query(User).filter(User.id == user_id).first()
+            
             # Создаем запись в аудит логе
             audit = AuditLog(
                 action="user_blocked",
                 user_id=blocked_by,
+                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID блокируемого пользователя
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
@@ -523,10 +532,14 @@ class AuthService:
             old_status = user.status
             user.status = 'approved'  # Разблокированные пользователи автоматически одобряются
             
+            # Получаем telegram_id пользователя для аудита
+            target_user = self.db.query(User).filter(User.id == user_id).first()
+            
             # Создаем запись в аудит логе
             audit = AuditLog(
                 action="user_unblocked",
                 user_id=unblocked_by,
+                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID разблокируемого пользователя
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
@@ -595,10 +608,14 @@ class AuthService:
             if not user.active_role or user.active_role not in current_roles:
                 user.active_role = role
             
+            # Получаем telegram_id пользователя для аудита
+            target_user = self.db.query(User).filter(User.id == user_id).first()
+            
             # Создаем запись в аудит логе
             audit = AuditLog(
                 action="role_assigned",
                 user_id=assigned_by,
+                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID пользователя, которому назначается роль
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_roles": old_roles,
@@ -667,10 +684,14 @@ class AuthService:
             if user.active_role == role:
                 user.active_role = current_roles[0] if current_roles else 'applicant'
             
+            # Получаем telegram_id пользователя для аудита
+            target_user = self.db.query(User).filter(User.id == user_id).first()
+            
             # Создаем запись в аудит логе
             audit = AuditLog(
                 action="role_removed",
                 user_id=removed_by,
+                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID пользователя, у которого удаляется роль
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_roles": old_roles,
@@ -912,6 +933,7 @@ class AuthService:
             audit = AuditLog(
                 action="user_deleted",
                 user_id=deleted_by,
+                telegram_user_id=user.telegram_id,  # Сохраняем Telegram ID удаляемого пользователя
                 details=json.dumps({
                     "deleted_user_id": user_id,
                     "deleted_user_info": user_info,

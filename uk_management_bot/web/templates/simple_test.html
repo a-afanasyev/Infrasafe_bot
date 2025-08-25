@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Простой тест</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            margin: 20px auto;
+            max-width: 400px;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .success { background: rgba(76, 175, 80, 0.8); }
+        .error { background: rgba(244, 67, 54, 0.8); }
+        .info { background: rgba(33, 150, 243, 0.8); }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        button:hover { background: #45a049; transform: scale(1.05); }
+        .info-box {
+            background: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: left;
+        }
+    </style>
+    <script src="/static/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Простой тест Telegram Web App</h1>
+        
+        <div id="status" class="status info">
+            Проверяем...
+        </div>
+        
+        <div id="info" class="info-box" style="display: none;">
+            <h3>📊 Информация:</h3>
+            <div id="webappInfo"></div>
+        </div>
+        
+        <div id="actions">
+            <button onclick="testReady()">🚀 Тест ready()</button>
+            <button onclick="testExpand()">📱 Тест expand()</button>
+            <button onclick="testClose()">❌ Тест close()</button>
+        </div>
+        
+        <div id="result" class="info-box" style="display: none;">
+            <h3>📝 Результат:</h3>
+            <div id="resultText"></div>
+        </div>
+    </div>
+
+    <script>
+        let tg = null;
+        let statusDiv = document.getElementById('status');
+        let infoDiv = document.getElementById('webappInfo');
+        let resultDiv = document.getElementById('result');
+        let resultText = document.getElementById('resultText');
+        
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function showResult(message) {
+            resultText.textContent = message;
+            resultDiv.style.display = 'block';
+        }
+        
+        function showInfo() {
+            document.getElementById('info').style.display = 'block';
+        }
+        
+        // Проверка при загрузке страницы
+        window.addEventListener('load', function() {
+            console.log('Страница загружена');
+            updateStatus('Страница загружена', 'info');
+            
+            setTimeout(function() {
+                console.log('Проверяем Telegram Web App...');
+                
+                if (typeof Telegram === 'undefined') {
+                    updateStatus('❌ Telegram не найден', 'error');
+                    showResult('Telegram Web App недоступен');
+                    return;
+                }
+                
+                if (!Telegram.WebApp) {
+                    updateStatus('❌ Telegram.WebApp не найден', 'error');
+                    showResult('Telegram.WebApp недоступен');
+                    return;
+                }
+                
+                tg = Telegram.WebApp;
+                updateStatus('✅ Telegram Web App найден!', 'success');
+                
+                // Показываем информацию
+                let info = `
+                    <p><strong>Платформа:</strong> ${tg.platform || 'неизвестно'}</p>
+                    <p><strong>Версия:</strong> ${tg.version || 'неизвестно'}</p>
+                    <p><strong>Цветовая схема:</strong> ${tg.colorScheme || 'неизвестно'}</p>
+                    <p><strong>Init Data:</strong> ${tg.initData ? 'есть' : 'нет'}</p>
+                `;
+                infoDiv.innerHTML = info;
+                showInfo();
+                
+                showResult('Telegram Web App работает корректно!');
+                
+            }, 1000);
+        });
+        
+        function testReady() {
+            if (!tg) {
+                showResult('❌ Telegram Web App не инициализирован');
+                return;
+            }
+            
+            try {
+                tg.ready();
+                showResult('✅ ready() выполнен успешно');
+            } catch (error) {
+                showResult(`❌ Ошибка ready(): ${error.message}`);
+            }
+        }
+        
+        function testExpand() {
+            if (!tg) {
+                showResult('❌ Telegram Web App не инициализирован');
+                return;
+            }
+            
+            try {
+                tg.expand();
+                showResult('✅ expand() выполнен успешно');
+            } catch (error) {
+                showResult(`❌ Ошибка expand(): ${error.message}`);
+            }
+        }
+        
+        function testClose() {
+            if (!tg) {
+                showResult('❌ Telegram Web App не инициализирован');
+                return;
+            }
+            
+            try {
+                tg.close();
+                showResult('✅ close() выполнен успешно');
+            } catch (error) {
+                showResult(`❌ Ошибка close(): ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

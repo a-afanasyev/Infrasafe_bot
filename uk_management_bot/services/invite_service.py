@@ -11,6 +11,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import String
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.config.settings import settings
 import logging
@@ -76,6 +77,65 @@ class InviteService:
         
         logger.info(f"Generated invite token for role {role} by user {created_by}")
         return token
+    
+    def generate_invite_link(self, role: str, created_by: int, specialization: str = None, hours: int = 24) -> str:
+        """
+        Генерирует ссылку для регистрации через бота
+        
+        Args:
+            role: Роль для приглашения (applicant, executor, manager)
+            created_by: Telegram ID создателя приглашения  
+            specialization: Специализация для исполнителя
+            hours: Время жизни ссылки в часах
+            
+        Returns:
+            Ссылка для регистрации через бота
+        """
+        # Генерируем токен
+        token = self.generate_invite(role, created_by, specialization, hours)
+        
+        # Формируем ссылку на бота (без параметров, так как Telegram их не передает)
+        bot_username = settings.BOT_USERNAME if hasattr(settings, 'BOT_USERNAME') else "infrasafebot"
+        invite_link = f"https://t.me/{bot_username}"
+        
+        logger.info(f"Generated bot invite link for role {role} by user {created_by}")
+        return invite_link
+    
+    def validate_invite_token(self, token: str) -> Dict[str, Any]:
+        """
+        Валидирует токен приглашения и возвращает результат в формате для API
+        
+        Args:
+            token: Токен для валидации
+            
+        Returns:
+            Словарь с результатом валидации
+        """
+        try:
+            payload = self.validate_invite(token)
+            
+            return {
+                "valid": True,
+                "invite_data": {
+                    "role": payload.get("role"),
+                    "specialization": payload.get("specialization"),
+                    "expires_at": datetime.fromtimestamp(payload.get("expires_at")).isoformat(),
+                    "created_by": payload.get("created_by")
+                },
+                "message": "Токен действителен"
+            }
+            
+        except ValueError as e:
+            return {
+                "valid": False,
+                "message": str(e)
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error during token validation: {e}")
+            return {
+                "valid": False,
+                "message": "Ошибка валидации токена"
+            }
     
     def validate_invite(self, token: str) -> Dict[str, Any]:
         """
@@ -163,9 +223,10 @@ class InviteService:
         """
         try:
             # Ищем записи об использовании этого nonce в аудит логе
+            # Используем правильный синтаксис для PostgreSQL JSON
             used_record = self.db.query(AuditLog).filter(
                 AuditLog.action == "invite_used",
-                AuditLog.details.contains(f'"nonce":"{nonce}"')
+                AuditLog.details.cast(String).contains(f'"nonce":"{nonce}"')
             ).first()
             
             return used_record is not None
@@ -185,6 +246,10 @@ class InviteService:
             invite_data: Данные из токена приглашения
         """
         try:
+            # Проверяем, существует ли пользователь
+            from uk_management_bot.database.models.user import User
+            user_exists = self.db.query(User).filter(User.telegram_id == user_id).first()
+            
             audit_details = {
                 "nonce": nonce,
                 "role": invite_data.get("role"),
@@ -197,7 +262,8 @@ class InviteService:
             
             audit = AuditLog(
                 action="invite_used",
-                user_id=user_id,
+                user_id=user_exists.id if user_exists else None,
+                telegram_user_id=user_id,  # Сохраняем Telegram ID
                 details=json.dumps(audit_details)
             )
             
@@ -219,6 +285,10 @@ class InviteService:
     def _log_invite_created(self, created_by: int, payload: Dict[str, Any]):
         """Записывает создание приглашения в аудит лог"""
         try:
+            # Проверяем, существует ли пользователь
+            from uk_management_bot.database.models.user import User
+            user_exists = self.db.query(User).filter(User.telegram_id == created_by).first()
+            
             audit_details = {
                 "role": payload["role"],
                 "expires_at": payload["expires_at"],
@@ -230,7 +300,8 @@ class InviteService:
             
             audit = AuditLog(
                 action="invite_created",
-                user_id=created_by,
+                user_id=user_exists.id if user_exists else None,
+                telegram_user_id=created_by,  # Сохраняем Telegram ID создателя
                 details=json.dumps(audit_details)
             )
             
@@ -241,6 +312,72 @@ class InviteService:
             logger.error(f"Error logging invite creation: {e}")
             # Не прерываем основной процесс из-за ошибки логирования
             self.db.rollback()
+    
+    def join_via_invite(self, token: str, telegram_id: int, first_name: str = "", last_name: str = "", specialization: str = None) -> Dict[str, Any]:
+        """
+        Присоединение пользователя по приглашению (для веб-регистрации)
+        
+        Args:
+            token: Токен приглашения
+            telegram_id: Telegram ID пользователя
+            first_name: Имя пользователя
+            last_name: Фамилия пользователя
+            specialization: Специализация (для исполнителей)
+            
+        Returns:
+            Словарь с результатом операции
+        """
+        try:
+            # Валидируем токен
+            invite_data = self.validate_invite(token)
+            
+            # Проверяем, что пользователь не зарегистрирован уже
+            from uk_management_bot.database.models.user import User
+            existing_user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
+            if existing_user:
+                return {
+                    "success": False,
+                    "message": "Пользователь уже зарегистрирован"
+                }
+            
+            # Создаем нового пользователя
+            user = User(
+                telegram_id=telegram_id,
+                first_name=first_name,
+                last_name=last_name,
+                role=invite_data["role"],
+                specialization=specialization if invite_data["role"] == "executor" else None,
+                status="pending"
+            )
+            
+            self.db.add(user)
+            self.db.flush()  # Получаем ID пользователя
+            
+            # Отмечаем токен как использованный
+            self.mark_nonce_used(invite_data["nonce"], user.id, invite_data)
+            
+            self.db.commit()
+            
+            logger.info(f"User {telegram_id} joined via invite with role {invite_data['role']}")
+            
+            return {
+                "success": True,
+                "message": "Регистрация успешно завершена",
+                "user_id": user.id
+            }
+            
+        except ValueError as e:
+            return {
+                "success": False,
+                "message": str(e)
+            }
+        except Exception as e:
+            logger.error(f"Error during join via invite: {e}")
+            self.db.rollback()
+            return {
+                "success": False,
+                "message": "Ошибка регистрации"
+            }
 
 
 class InviteRateLimiter:

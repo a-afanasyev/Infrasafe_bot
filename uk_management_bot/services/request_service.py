@@ -365,6 +365,7 @@ class RequestService:
             try:
                 audit = AuditLog(
                     user_id=actor.id,
+                    telegram_user_id=request.user.telegram_id if request.user else None,  # Telegram ID создателя заявки
                     action=AUDIT_ACTION_REQUEST_STATUS_CHANGED,
                     details={
                         "request_id": request.id,

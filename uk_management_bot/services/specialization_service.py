@@ -249,6 +249,52 @@ class SpecializationService:
             logger.error(f"Ошибка получения статистики специализаций: {e}")
             return {spec: 0 for spec in self.AVAILABLE_SPECIALIZATIONS}
     
+    def get_detailed_specialization_stats(self) -> Dict[str, Dict]:
+        """
+        Получить детальную статистику по специализациям со списком сотрудников
+        
+        Returns:
+            Dict с детальной статистикой: {специализация: {'count': int, 'employees': [User]}}
+        """
+        try:
+            detailed_stats = {}
+            
+            # Получаем всех исполнителей
+            executors = self.db.query(User).filter(User.roles.contains('executor')).all()
+            
+            # Инициализируем структуру для каждой специализации
+            for spec in self.AVAILABLE_SPECIALIZATIONS:
+                detailed_stats[spec] = {
+                    'count': 0,
+                    'employees': []
+                }
+            
+            # Распределяем сотрудников по специализациям
+            for executor in executors:
+                if executor.specialization:
+                    try:
+                        # Парсим JSON или разделяем по запятой
+                        if executor.specialization.startswith('['):
+                            user_specs = json.loads(executor.specialization)
+                        else:
+                            user_specs = [s.strip() for s in executor.specialization.split(',') if s.strip()]
+                        
+                        # Добавляем сотрудника ко всем его специализациям
+                        for spec in user_specs:
+                            if spec in self.AVAILABLE_SPECIALIZATIONS:
+                                detailed_stats[spec]['count'] += 1
+                                detailed_stats[spec]['employees'].append(executor)
+                    except Exception as e:
+                        logger.error(f"Ошибка парсинга специализаций для пользователя {executor.id}: {e}")
+                        continue
+            
+            logger.info(f"Детальная статистика специализаций получена")
+            return detailed_stats
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения детальной статистики специализаций: {e}")
+            return {spec: {'count': 0, 'employees': []} for spec in self.AVAILABLE_SPECIALIZATIONS}
+    
     def search_by_specialization(self, specialization: str, page: int = 1, limit: int = 10) -> Dict:
         """
         Поиск исполнителей по специализации
@@ -387,9 +433,13 @@ class SpecializationService:
                          comment: str = ""):
         """Создать запись в аудит логе"""
         try:
+            # Получаем telegram_id пользователя для аудита
+            target_user = self.db.query(User).filter(User.id == target_user_id).first()
+            
             audit = AuditLog(
                 action=action,
                 user_id=updated_by,
+                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID пользователя, у которого изменяются специализации
                 details=json.dumps({
                     "target_user_id": target_user_id,
                     "old_specializations": old_specializations,

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Telegram Web App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест Telegram Web App</h1>
+        
+        <div id="status" class="status info">
+            Проверка инициализации...
+        </div>
+        
+        <div id="info">
+            <h3>Информация о Web App:</h3>
+            <div id="webappInfo">Загрузка...</div>
+        </div>
+        
+        <div id="actions">
+            <h3>Действия:</h3>
+            <button onclick="testReady()">Тест ready()</button>
+            <button onclick="testExpand()">Тест expand()</button>
+            <button onclick="testClose()">Тест close()</button>
+            <button onclick="testPopup()">Тест popup()</button>
+        </div>
+    </div>
+
+    <script>
+        let tg = null;
+        let statusDiv = document.getElementById('status');
+        let infoDiv = document.getElementById('webappInfo');
+        
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function updateInfo(info) {
+            infoDiv.innerHTML = info;
+        }
+        
+        // Проверка доступности Telegram Web App
+        function checkTelegramWebApp() {
+            console.log('Проверка Telegram Web App...');
+            
+            if (typeof Telegram === 'undefined') {
+                updateStatus('❌ Telegram не найден', 'error');
+                updateInfo('Telegram Web App недоступен');
+                return false;
+            }
+            
+            if (!Telegram.WebApp) {
+                updateStatus('❌ Telegram.WebApp не найден', 'error');
+                updateInfo('Telegram.WebApp недоступен');
+                return false;
+            }
+            
+            tg = Telegram.WebApp;
+            updateStatus('✅ Telegram Web App найден', 'success');
+            
+            // Собираем информацию
+            let info = `
+                <p><strong>Platform:</strong> ${tg.platform || 'неизвестно'}</p>
+                <p><strong>Version:</strong> ${tg.version || 'неизвестно'}</p>
+                <p><strong>Color Scheme:</strong> ${tg.colorScheme || 'неизвестно'}</p>
+                <p><strong>Theme Params:</strong> ${JSON.stringify(tg.themeParams, null, 2)}</p>
+                <p><strong>Init Data:</strong> ${tg.initData || 'нет'}</p>
+                <p><strong>Init Data Unsafe:</strong> ${JSON.stringify(tg.initDataUnsafe, null, 2)}</p>
+            `;
+            updateInfo(info);
+            
+            return true;
+        }
+        
+        // Тест ready()
+        function testReady() {
+            if (!tg) {
+                updateStatus('❌ Telegram Web App не инициализирован', 'error');
+                return;
+            }
+            
+            try {
+                tg.ready();
+                updateStatus('✅ ready() выполнен успешно', 'success');
+            } catch (error) {
+                updateStatus(`❌ Ошибка ready(): ${error.message}`, 'error');
+            }
+        }
+        
+        // Тест expand()
+        function testExpand() {
+            if (!tg) {
+                updateStatus('❌ Telegram Web App не инициализирован', 'error');
+                return;
+            }
+            
+            try {
+                tg.expand();
+                updateStatus('✅ expand() выполнен успешно', 'success');
+            } catch (error) {
+                updateStatus(`❌ Ошибка expand(): ${error.message}`, 'error');
+            }
+        }
+        
+        // Тест close()
+        function testClose() {
+            if (!tg) {
+                updateStatus('❌ Telegram Web App не инициализирован', 'error');
+                return;
+            }
+            
+            try {
+                tg.close();
+                updateStatus('✅ close() выполнен успешно', 'success');
+            } catch (error) {
+                updateStatus(`❌ Ошибка close(): ${error.message}`, 'error');
+            }
+        }
+        
+        // Тест popup()
+        function testPopup() {
+            if (!tg) {
+                updateStatus('❌ Telegram Web App не инициализирован', 'error');
+                return;
+            }
+            
+            try {
+                tg.showPopup({
+                    title: 'Тест',
+                    message: 'Это тестовое сообщение',
+                    buttons: [{
+                        id: 'ok',
+                        type: 'default',
+                        text: 'OK'
+                    }]
+                }, function(buttonId) {
+                    updateStatus(`✅ popup() - нажата кнопка: ${buttonId}`, 'success');
+                });
+            } catch (error) {
+                updateStatus(`❌ Ошибка popup(): ${error.message}`, 'error');
+            }
+        }
+        
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(checkTelegramWebApp, 1000);
+        });
+    </script>
+</body>
+</html>

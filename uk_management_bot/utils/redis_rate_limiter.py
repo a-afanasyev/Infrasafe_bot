@@ -36,7 +36,7 @@ async def get_redis_client():
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")
             _redis_client = None
-            raise
+            # Не поднимаем исключение, чтобы не блокировать работу бота
     
     return _redis_client
 
@@ -97,7 +97,12 @@ class RedisRateLimiter:
         except Exception as e:
             logger.error(f"Redis rate limiting error for key {key}: {e}")
             # Fallback к in-memory при ошибках Redis
-            return InMemoryRateLimiter.is_allowed(key, max_requests, window_seconds)
+            try:
+                return InMemoryRateLimiter.is_allowed(key, max_requests, window_seconds)
+            except Exception as fallback_error:
+                logger.error(f"Fallback rate limiting also failed: {fallback_error}")
+                # В крайнем случае разрешаем запрос
+                return True
     
     @staticmethod
     async def get_remaining_time(key: str, window_seconds: int) -> int:

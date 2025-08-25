@@ -51,14 +51,10 @@ def get_user_management_main_keyboard(stats: Dict[str, int], language: str = 'ru
             callback_data="user_mgmt_list_staff_1"
         )],
         
-        # Поиск и специализации
+        # Поиск
         [InlineKeyboardButton(
             text=f"🔍 {get_text('user_management.search', language)}",
             callback_data="user_mgmt_search"
-        )],
-        [InlineKeyboardButton(
-            text=f"🛠️ {get_text('user_management.specializations', language)}",
-            callback_data="user_mgmt_specializations"
         )],
         
         # Назад

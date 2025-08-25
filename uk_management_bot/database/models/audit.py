@@ -12,6 +12,9 @@ class AuditLog(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     user = relationship("User")
     
+    # Telegram ID пользователя (для сохранения логов после удаления пользователя)
+    telegram_user_id = Column(Integer, nullable=True, index=True)
+    
     # Тип действия
     action = Column(String(100), nullable=False)
     

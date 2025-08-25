@@ -890,7 +890,7 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка возврата к списку: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
 
-@router.callback_query(F.data.startswith("edit_"))
+@router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_employee_"))
 async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
     """Обработка редактирования заявки"""
     try:
@@ -1169,7 +1169,7 @@ async def handle_executor_propose_deny(callback: CallbackQuery, state: FSMContex
         await callback.answer("Ошибка", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("approve_"))
+@router.callback_query(F.data.startswith("approve_") & ~F.data.startswith("approve_employee_"))
 async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
     """Подтверждение выполненной заявки заявителем -> 'Подтверждена'"""
     try:
