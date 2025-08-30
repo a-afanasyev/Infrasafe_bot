@@ -79,6 +79,13 @@ class ProfileService:
                 'updated_at': user.updated_at
             }
             
+            # Логируем данные адресов для отладки
+            logger.info(f"Данные адресов для пользователя {telegram_id}:")
+            logger.info(f"  home_address: '{user.home_address}'")
+            logger.info(f"  apartment_address: '{user.apartment_address}'")
+            logger.info(f"  yard_address: '{user.yard_address}'")
+            logger.info(f"  yards array: {yards}")
+            
             logger.info(f"Получены данные профиля для пользователя {telegram_id}")
             return profile_data
             
@@ -152,25 +159,45 @@ class ProfileService:
         text_parts.append("")  # пустая строка
         text_parts.append(f"🏠 {get_text('profile.addresses', language=language)}")
         
-        # Домашний адрес
+        # Адрес дома
         home_addr = profile_data.get('home_address')
         home_text = home_addr if home_addr else get_text("profile.address_not_set", language=language)
-        text_parts.append(f"  {get_text('profile.home_address', language=language)} {home_text}")
+        home_label = get_text('profile.home_address', language=language)
+        if home_label == 'profile.home_address':  # если ключ не найден
+            home_label = "Адрес дома:" if language == "ru" else "Uy manzili:"
+        text_parts.append(f"  {home_label} {home_text}")
+        
+        # Логируем для отладки
+        logger.info(f"Форматирование адреса дома: addr='{home_addr}', text='{home_text}', label='{home_label}'")
         
         # Адрес квартиры
         apt_addr = profile_data.get('apartment_address')
         if apt_addr:
-            text_parts.append(f"  {get_text('profile.apartment_address', language=language)} {apt_addr}")
+            apt_label = get_text('profile.apartment_address', language=language)
+            if apt_label == 'profile.apartment_address':  # если ключ не найден
+                apt_label = "Адрес квартиры:" if language == "ru" else "Xona manzili:"
+            text_parts.append(f"  {apt_label} {apt_addr}")
+            logger.info(f"Форматирование адреса квартиры: addr='{apt_addr}', label='{apt_label}'")
+        else:
+            logger.info(f"Адрес квартиры не заполнен")
         
-        # Дворы (множественные)
+        # Адрес двора
+        yard_addr = profile_data.get('yard_address')
+        if yard_addr:
+            yard_label = get_text('profile.yard_address', language=language)
+            if yard_label == 'profile.yard_address':  # если ключ не найден
+                yard_label = "Двор:" if language == "ru" else "Hovli:"
+            text_parts.append(f"  {yard_label} {yard_addr}")
+        
+        # Дворы (множественные) - если есть массив дворов
         yards = profile_data.get('yards', [])
-        if yards:
-            if len(yards) == 1:
-                text_parts.append(f"  {get_text('profile.yard_address', language=language)} {yards[0]}")
-            else:
-                text_parts.append(f"  {get_text('profile.yard_address', language=language)} {get_text('profile.multiple_yards', language=language)}")
-                for i, yard in enumerate(yards, 1):
-                    text_parts.append(f"    {i}. {yard}")
+        if yards and len(yards) > 1:
+            yard_label = get_text('profile.yard_address', language=language)
+            if yard_label == 'profile.yard_address':  # если ключ не найден
+                yard_label = "Двор:" if language == "ru" else "Hovli:"
+            text_parts.append(f"  {yard_label} {get_text('profile.multiple_yards', language=language)}")
+            for i, yard in enumerate(yards, 1):
+                text_parts.append(f"    {i}. {yard}")
         
         # Язык
         text_parts.append("")  # пустая строка

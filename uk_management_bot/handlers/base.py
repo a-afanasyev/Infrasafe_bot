@@ -381,9 +381,17 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         if not isinstance(user_roles, list):
             user_roles = ['applicant']
         
+        # Добавляем кнопку редактирования к профилю
+        keyboard = get_role_switch_inline(user_roles, user_active_role)
+        rows = list(keyboard.inline_keyboard)
+        rows.append([{"text": "✏️ Редактировать профиль", "callback_data": "edit_profile"}])
+        
+        from aiogram.types import InlineKeyboardMarkup
+        new_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        
         await message.answer(
             profile_text, 
-            reply_markup=get_role_switch_inline(user_roles, user_active_role)
+            reply_markup=new_keyboard
         )
         
         logger.info(f"Показан профиль пользователя {message.from_user.id}")

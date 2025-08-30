@@ -35,31 +35,37 @@ def load_locale(language: str = "ru") -> Dict[str, Any]:
 
 def get_text(key: str, language: str = "ru", **kwargs) -> str:
     """Получение переведенного текста по ключу"""
-    locale = load_locale(language)
-    
-    # Поддержка вложенных ключей (например: "auth.pending")
-    keys = key.split(".")
-    value = locale
-    
-    for k in keys:
-        if isinstance(value, dict) and k in value:
-            value = value[k]
-        else:
-            # Fallback на русский язык
-            ru_locale = load_locale("ru")
-            for ru_k in keys:
-                if isinstance(ru_locale, dict) and ru_k in ru_locale:
-                    ru_locale = ru_locale[ru_k]
-                else:
-                    return key  # Возвращаем ключ если перевод не найден
-            return ru_locale
-    
-    # Замена параметров в тексте
-    if isinstance(value, str) and kwargs:
-        for param, replacement in kwargs.items():
-            value = value.replace(f"{{{param}}}", str(replacement))
-    
-    return value if isinstance(value, str) else key
+    try:
+        locale = load_locale(language)
+        
+        # Поддержка вложенных ключей (например: "auth.pending")
+        keys = key.split(".")
+        value = locale
+        
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                # Fallback на русский язык
+                ru_locale = load_locale("ru")
+                for ru_k in keys:
+                    if isinstance(ru_locale, dict) and ru_k in ru_locale:
+                        ru_locale = ru_locale[ru_k]
+                    else:
+                        return key  # Возвращаем ключ если перевод не найден
+                return ru_locale
+        
+        # Замена параметров в тексте
+        if isinstance(value, str) and kwargs:
+            for param, replacement in kwargs.items():
+                value = value.replace(f"{{{param}}}", str(replacement))
+        
+        result = value if isinstance(value, str) else key
+        return result
+        
+    except Exception as e:
+        print(f"Ошибка в get_text для ключа {key}, язык {language}: {e}")
+        return key
 
 def format_request_details(request, locale: Dict[str, Any]) -> str:
     """Форматирование деталей заявки"""

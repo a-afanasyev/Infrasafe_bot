@@ -125,3 +125,21 @@ def get_user_approval_keyboard(user_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_manager_request_actions_keyboard(request_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура действий с заявкой для менеджеров"""
+    builder = InlineKeyboardBuilder()
+    
+    # Основные действия с заявкой - сокращенный текст для лучшей читаемости
+    builder.add(InlineKeyboardButton(text="✅ Принять", callback_data=f"accept_{request_id}"))
+    builder.add(InlineKeyboardButton(text="❌ Отклонить", callback_data=f"deny_{request_id}"))
+    builder.add(InlineKeyboardButton(text="❓ Уточнить", callback_data=f"clarify_{request_id}"))
+    builder.add(InlineKeyboardButton(text="💰 В закуп", callback_data=f"purchase_{request_id}"))
+    builder.add(InlineKeyboardButton(text="✅ Завершить", callback_data=f"complete_{request_id}"))
+    builder.add(InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_{request_id}"))
+    
+    # Настройка расположения кнопок (2 кнопки в ряд)
+    builder.adjust(2)
+    
+    return builder.as_markup()
+
+

@@ -798,9 +798,9 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         from uk_management_bot.keyboards.requests import get_status_filter_inline_keyboard
         filter_kb = get_status_filter_inline_keyboard(active_status if active_status != "all" else None)
         rows = list(filter_kb.inline_keyboard)
-        for r in page_requests:
+        for i, r in enumerate(page_requests, 1):
             if r.status == "Уточнение":
-                rows.append([InlineKeyboardButton(text=f"💬 Ответить по #{r.id}", callback_data=f"replyclarify_{r.id}")])
+                rows.append([InlineKeyboardButton(text=f"💬 Ответить по #{i}", callback_data=f"replyclarify_{r.id}")])
         pagination_kb = get_pagination_keyboard(current_page, total_pages, request_id=None, show_reply_clarify=False)
         rows += pagination_kb.inline_keyboard
         combined = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -890,7 +890,7 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка возврата к списку: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
 
-@router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_employee_"))
+@router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_employee_") & ~F.data.startswith("edit_profile") & ~F.data.startswith("edit_first_name") & ~F.data.startswith("edit_last_name"))
 async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
     """Обработка редактирования заявки"""
     try:
@@ -1268,9 +1268,9 @@ async def show_my_requests(message: Message, state: FSMContext):
         filter_status_kb = get_status_filter_inline_keyboard(active_status)
         pagination_kb = get_pagination_keyboard(current_page, total_pages)
         rows = list(filter_status_kb.inline_keyboard)
-        for r in page_requests:
+        for i, r in enumerate(page_requests, 1):
             if r.status == "Уточнение":
-                rows.append([InlineKeyboardButton(text=f"💬 Ответить по #{r.id}", callback_data=f"replyclarify_{r.id}")])
+                rows.append([InlineKeyboardButton(text=f"💬 Ответить по #{i}", callback_data=f"replyclarify_{r.id}")])
         rows += pagination_kb.inline_keyboard
         combined = InlineKeyboardMarkup(inline_keyboard=rows)
         # Сохраняем актуальную страницу в FSM

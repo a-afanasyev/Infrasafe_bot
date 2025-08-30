@@ -673,7 +673,6 @@ class UserManagementService:
             # Поиск по имени, фамилии, username или телефону
             search_query = base_query.filter(
                 or_(
-                    User.full_name.ilike(f'%{query}%'),
                     User.first_name.ilike(f'%{query}%'),
                     User.last_name.ilike(f'%{query}%'),
                     User.username.ilike(f'%{query}%'),

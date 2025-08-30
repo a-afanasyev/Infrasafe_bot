@@ -324,7 +324,10 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         )
         
         # Обновляем данные пользователя
-        user.full_name = full_name
+        # Разбиваем full_name на first_name и last_name
+        name_parts = full_name.split()
+        user.first_name = name_parts[0] if name_parts else ""
+        user.last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
         user.phone = phone
         user.role = role
         user.status = "pending"
