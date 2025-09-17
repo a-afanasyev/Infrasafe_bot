@@ -17,6 +17,16 @@ from uk_management_bot.handlers.user_verification import router as user_verifica
 from uk_management_bot.handlers.clarification_replies import router as clarification_replies_router
 from uk_management_bot.handlers.profile_editing import router as profile_editing_router
 from uk_management_bot.handlers.health import router as health_router
+
+# Новые обработчики системы смен
+from uk_management_bot.handlers.shift_management import router as shift_management_router_new
+from uk_management_bot.handlers.my_shifts import router as my_shifts_router
+
+# Обработчики назначения заявок
+from uk_management_bot.handlers.request_assignment import router as request_assignment_router
+from uk_management_bot.handlers.request_status_management import router as request_status_management_router
+from uk_management_bot.handlers.request_comments import router as request_comments_router
+from uk_management_bot.handlers.request_reports import router as request_reports_router
 from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 import sys
@@ -28,6 +38,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Настройка структурированного логирования
 from uk_management_bot.utils.structured_logger import setup_structured_logging, get_logger
+from uk_management_bot.utils.health_server import start_health_server, stop_health_server
 
 # Инициализация логирования
 setup_structured_logging()
@@ -88,30 +99,49 @@ async def main():
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
     
-    # Middleware для внедрения сессии БД
+    # Middleware для внедрения сессии БД (ДОЛЖЕН БЫТЬ ПЕРВЫМ!)
     @dp.update.middleware()
     async def db_middleware(handler, event, data):
         db = SessionLocal()
         data["db"] = db
         try:
-            return await handler(event, data)
+            result = await handler(event, data)
+            # Коммитим только если не было исключений
+            if db.in_transaction():
+                db.commit()
+            return result
+        except Exception as e:
+            # Откатываем транзакцию при ошибке
+            try:
+                if db.in_transaction():
+                    db.rollback()
+            except Exception:
+                pass
+            logger.error(f"Ошибка в middleware: {e}")
+            raise
         finally:
-            db.close()
+            # Закрываем сессию в любом случае
+            try:
+                db.close()
+            except Exception as close_err:
+                logger.warning(f"Ошибка закрытия сессии БД: {close_err}")
 
-    # Подключаем shift-middleware глобально через декоратор (как DB-middleware)
+    # Подключаем auth-middleware глобально (должен быть вторым)
     @dp.update.middleware()
-    async def _shift_middleware(handler, event, data):
-        return await shift_context_middleware(handler, event, data)
+    async def _auth_middleware(handler, event, data):
+        result = await auth_middleware(handler, event, data)
+        return result
     
     # Подключаем role-mode-middleware глобально (должен быть после auth)
     @dp.update.middleware()
     async def _role_mode_middleware(handler, event, data):
-        return await role_mode_middleware(handler, event, data)
-    
-    # Подключаем auth-middleware глобально (должен быть первым)
+        result = await role_mode_middleware(handler, event, data)
+        return result
+
+    # Подключаем shift-middleware глобально через декоратор (последний)
     @dp.update.middleware()
-    async def _auth_middleware(handler, event, data):
-        return await auth_middleware(handler, event, data)
+    async def _shift_middleware(handler, event, data):
+        return await shift_context_middleware(handler, event, data)
     
     # Регистрируем роутеры
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
@@ -120,7 +150,18 @@ async def main():
     dp.include_router(admin_router)  # admin раньше requests для перехвата действий менеджеров
     dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше requests)
     dp.include_router(requests_router)  # requests после profile_editing
-    dp.include_router(shifts_router)  # включаем обратно
+    
+    # Система управления сменами
+    dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
+    dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
+    dp.include_router(shifts_router)  # старый роутер смен
+    
+    # Система назначения заявок
+    dp.include_router(request_assignment_router)
+    dp.include_router(request_status_management_router)
+    dp.include_router(request_comments_router)
+    dp.include_router(request_reports_router)
+    
     dp.include_router(user_management_router)  # включаем обратно
     dp.include_router(employee_management_router)  # Роутер управления сотрудниками
     dp.include_router(user_verification_router)  # Новый роутер верификации
@@ -128,6 +169,14 @@ async def main():
     dp.include_router(base_router)  # base в конце как fallback для общих команд
     
     logger.info("Бот запускается...")
+    
+    # Запускаем HTTP health check сервер
+    try:
+        start_health_server(host='0.0.0.0', port=8000)
+        logger.info("HTTP health check сервер запущен на порту 8000")
+    except Exception as e:
+        logger.error(f"Не удалось запустить health check сервер: {e}")
+        # Продолжаем работу бота даже если health сервер не запустился
     
     try:
         # Отправляем уведомление о запуске
@@ -141,6 +190,8 @@ async def main():
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}")
     finally:
+        # Останавливаем health сервер
+        stop_health_server()
         await bot.session.close()
 
 if __name__ == "__main__":
