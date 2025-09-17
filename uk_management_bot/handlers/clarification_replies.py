@@ -135,7 +135,7 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session):
                 User.roles.contains('manager') | User.roles.contains('admin')
             ).all()
             
-            notification_text = f"💬 Получен ответ на уточнение по заявке #{request.id}:\n\n"
+            notification_text = f"💬 Получен ответ на уточнение по заявке #{request.request_number}:\n\n"
             notification_text += f"📋 Заявка: {request.category}\n"
             notification_text += f"📍 Адрес: {request.address}\n\n"
             notification_text += f"👤 Ответ от заявителя:\n{reply_text}"

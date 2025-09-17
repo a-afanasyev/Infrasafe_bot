@@ -41,8 +41,116 @@ class ManagerStates(StatesGroup):
     cancel_reason = State()
     clarify_reason = State()
     waiting_for_clarification_text = State()
+    waiting_for_materials_edit = State()
 
 from uk_management_bot.states.invite_creation import InviteCreationStates
+
+
+# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+
+async def auto_assign_request_by_category(request: Request, db: Session, manager: User):
+    """
+    Автоматически назначает заявку исполнителям по категории/специализации
+    
+    Args:
+        request: Заявка для назначения
+        db: Сессия базы данных
+        manager: Менеджер, который назначает заявку
+    """
+    try:
+        from uk_management_bot.database.models.request_assignment import RequestAssignment
+        import json
+        
+        # Маппинг категорий заявок на специализации
+        category_to_specialization = {
+            "Сантехника": "plumber",
+            "Электрика": "electrician", 
+            "Благоустройство": "landscaping",
+            "Уборка": "cleaning",
+            "Безопасность": "security",
+            "Ремонт": "repair",
+            "Установка": "installation",
+            "Обслуживание": "maintenance",
+            "HVAC": "hvac"
+        }
+        
+        # Определяем специализацию по категории заявки
+        specialization = category_to_specialization.get(request.category)
+        if not specialization:
+            logger.warning(f"Неизвестная категория заявки: {request.category}")
+            return
+        
+        # Находим исполнителей с нужной специализацией
+        executors = db.query(User).filter(
+            User.active_role == "executor",
+            User.status == "approved"
+        ).all()
+        
+        matching_executors = []
+        for executor in executors:
+            if executor.specialization:
+                try:
+                    # Парсим специализации исполнителя
+                    if isinstance(executor.specialization, str):
+                        executor_specializations = json.loads(executor.specialization)
+                    else:
+                        executor_specializations = executor.specialization
+                    
+                    # Проверяем, есть ли нужная специализация
+                    if specialization in executor_specializations:
+                        matching_executors.append(executor)
+                except (json.JSONDecodeError, TypeError):
+                    # Если специализация - просто строка
+                    if executor.specialization == specialization:
+                        matching_executors.append(executor)
+        
+        if not matching_executors:
+            logger.warning(f"Не найдено исполнителей для специализации {specialization}")
+            return
+        
+        # Проверяем, есть ли уже назначение для этой заявки
+        existing_assignment = db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == request.request_number,
+            RequestAssignment.status == "active"
+        ).first()
+        
+        if existing_assignment:
+            logger.info(f"Заявка {request.request_number} уже назначена, пропускаем")
+            return
+        
+        # Дополнительная проверка на групповые назначения для той же специализации
+        existing_group_assignment = db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == request.request_number,
+            RequestAssignment.assignment_type == "group",
+            RequestAssignment.group_specialization == specialization,
+            RequestAssignment.status == "active"
+        ).first()
+        
+        if existing_group_assignment:
+            logger.info(f"Заявка {request.request_number} уже назначена группе {specialization}, пропускаем")
+            return
+        
+        # Создаем групповое назначение
+        assignment = RequestAssignment(
+            request_number=request.request_number,
+            assignment_type="group",
+            group_specialization=specialization,
+            status="active",
+            created_by=manager.id
+        )
+        
+        db.add(assignment)
+        
+        # Обновляем поля заявки
+        request.assignment_type = "group"
+        request.assigned_group = specialization
+        request.assigned_at = datetime.now()
+        request.assigned_by = manager.id
+        
+        logger.info(f"Заявка {request.request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
+        
+    except Exception as e:
+        logger.error(f"Ошибка автоматического назначения заявки {request.request_number}: {e}")
 
 
 # ===== ОБРАБОТЧИКИ ПРОСМОТРА ЗАЯВОК ДЛЯ МЕНЕДЖЕРОВ =====
@@ -58,10 +166,10 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             await callback.answer("Нет прав для просмотра заявок", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("mview_", ""))
+        request_number = callback.data.replace("mview_", "")
         
         # Получаем заявку из базы данных
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
@@ -81,7 +189,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             user_info = "Неизвестный пользователь"
         
         # Формируем детальную информацию о заявке
-        message_text = f"📋 Заявка #{request.id}\n\n"
+        message_text = f"📋 Заявка #{request.request_number}\n\n"
         message_text += f"👤 Заявитель: {user_info}\n"
         message_text += f"📱 Telegram ID: {request_user.telegram_id if request_user else 'N/A'}\n"
         message_text += f"📂 Категория: {request.category}\n"
@@ -99,7 +207,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         
         # Создаем клавиатуру действий для менеджера
         from uk_management_bot.keyboards.admin import get_manager_request_actions_keyboard
-        actions_kb = get_manager_request_actions_keyboard(request.id)
+        actions_kb = get_manager_request_actions_keyboard(request.request_number)
         
         # Добавляем кнопку "Назад к списку"
         rows = list(actions_kb.inline_keyboard)
@@ -108,7 +216,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
         await callback.message.edit_text(message_text, reply_markup=keyboard)
         
-        logger.info(f"Показаны детали заявки {request.id} менеджеру {callback.from_user.id}")
+        logger.info(f"Показаны детали заявки {request.request_number} менеджеру {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки просмотра заявки менеджером: {e}")
@@ -160,7 +268,7 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
             await callback.answer("Нет заявок на этой странице", show_alert=True)
             return
         
-        items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
         
         # Обновляем сообщение с новой страницей
         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
@@ -190,12 +298,12 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
         # Получаем текущую заявку из сообщения
         message_text = callback.message.text
         if "Заявка #" in message_text:
-            # Извлекаем ID заявки из текста сообщения
+            # Извлекаем номер заявки из текста сообщения
             import re
-            match = re.search(r'Заявка #(\d+)', message_text)
+            match = re.search(r'Заявка #(\d{6}-\d{3})', message_text)
             if match:
-                request_id = int(match.group(1))
-                request = db.query(Request).filter(Request.id == request_id).first()
+                request_number = match.group(1)
+                request = db.query(Request).filter(Request.request_number == request_number).first()
                 if request:
                     # Определяем тип списка по статусу заявки
                     if request.status == "Новая":
@@ -211,7 +319,7 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
                             await callback.message.edit_text("Нет новых заявок")
                             return
                         
-                        items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+                        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
                         
                         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
                         keyboard = get_manager_request_list_kb(items, 1, 1)
@@ -232,7 +340,7 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
                             await callback.message.edit_text("Нет активных заявок")
                             return
                         
-                        items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+                        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
                         
                         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
                         keyboard = get_manager_request_list_kb(items, 1, 1)
@@ -253,7 +361,7 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
             await callback.message.edit_text("Нет активных заявок")
             return
         
-        items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
         
         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
         keyboard = get_manager_request_list_kb(items, 1, 1)
@@ -271,13 +379,8 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
 async def test_middleware(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None):
     """Тестовый обработчик для проверки middleware"""
     
-    # ОТЛАДКА: Проверяем все параметры
-    print(f"🧪 TEST MIDDLEWARE:")
-    print(f"🔍 roles={roles}")
-    print(f"🔍 active_role={active_role}")
-    print(f"🔍 user={user}")
-    print(f"🔍 user_status={user_status}")
-    print(f"🔍 message.from_user.id={message.from_user.id}")
+    # Логирование параметров middleware для отладки
+    logger.debug(f"Admin panel access check: roles={roles}, active_role={active_role}, user_id={message.from_user.id}")
     
     # Проверяем доступ к админ панели
     has_access = False
@@ -319,15 +422,7 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
     lang = message.from_user.language_code or 'ru'
     
     # ОТЛАДКА
-    print(f"🔍 DEBUG: open_user_management_panel вызвана")
-    print(f"🔍 DEBUG: roles={roles}, user={user}")
-    print(f"🔍 DEBUG: message.from_user.id={message.from_user.id}")
-    
-    if user:
-        print(f"🔍 DEBUG: user.role={user.role}")
-        print(f"🔍 DEBUG: user.roles={user.roles}")
-        print(f"🔍 DEBUG: user.active_role={user.active_role}")
-        print(f"🔍 DEBUG: user.status={user.status}")
+    logger.debug(f"User management panel opened: user_id={message.from_user.id}, roles={roles}, user_status={user.status if user else None}")
     
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -412,7 +507,7 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
         await message.answer("Нет новых заявок", reply_markup=get_manager_main_keyboard())
         return
     
-    items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+    items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
     await message.answer("🆕 Новые заявки:", reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
@@ -441,7 +536,7 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
         await message.answer("Нет активных заявок", reply_markup=get_manager_main_keyboard())
         return
     
-    items = [{"id": r.id, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+    items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
     await message.answer("🔄 Активные заявки:", reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
@@ -458,8 +553,8 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         )
         return
     
-    # Архив: только Подтверждена (⭐) и Отменена (❌)
-    archive_statuses = ["Подтверждена", "Отменена"]
+    # Архив: только Выполнена (⭐) и Отменена (❌)
+    archive_statuses = ["Выполнена", "Подтверждена", "Отменена"]
     q = (
         db.query(Request)
         .filter(Request.status.in_(archive_statuses))
@@ -470,21 +565,76 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         await message.answer("Архив пуст", reply_markup=get_manager_main_keyboard())
         return
     def _icon(s: str) -> str:
-        return {"Подтверждена": "⭐", "Отменена": "❌"}.get(s, "")
+        return {"Выполнена": "✅", "Подтверждена": "⭐", "Отменена": "❌", "Принято": "✅"}.get(s, "")
     # Каждую заявку отправляем отдельным сообщением
     for r in requests:
         addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
         text = (
-            f"{_icon(r.status)} #{r.id} • {r.category} • {r.status}\n"
+            f"{_icon(r.status)} #{r.request_number} • {r.category} • {r.status}\n"
             f"Адрес: {addr}\n"
             f"Создана: {r.created_at.strftime('%d.%m.%Y %H:%M')}"
         )
-        if r.status == "Отменена" and r.notes:
-            text += f"\nПричина отказа: {r.notes}"
-        if r.notes:
-            text += f"\n\nДиалог:\n{r.notes}"
+        if r.notes and r.notes.strip():
+            if r.status == "Отменена":
+                text += f"\n💬 Причина отказа: {r.notes.strip()}"
+            else:
+                text += f"\n💬 Заметки: {r.notes.strip()}"
         await message.answer(text)
     await message.answer("📦 Конец списка архива", reply_markup=get_manager_main_keyboard())
+
+@router.message(F.text == "💰 Закуп")
+async def list_procurement_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Показать заявки в статусе закупа"""
+    lang = message.from_user.language_code or 'ru'
+    
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+    
+    # Получаем заявки в статусе "Закуп"
+    q = (
+        db.query(Request)
+        .filter(Request.status == "Закуп")
+        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
+    )
+    requests = q.limit(10).all()
+    
+    if not requests:
+        await message.answer("💰 Заявок в статусе 'Закуп' не найдено", reply_markup=get_manager_main_keyboard())
+        return
+    
+    # Каждую заявку отправляем отдельным сообщением
+    for r in requests:
+        addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
+        text = (
+            f"💰 #{r.request_number} • {r.category} • {r.status}\n"
+            f"Адрес: {addr}\n"
+            f"Создана: {r.created_at.strftime('%d.%m.%Y %H:%M')}"
+        )
+        # Показываем запрошенные материалы и комментарии менеджера
+        if r.requested_materials:
+            text += f"\n📋 Запрошено: {r.requested_materials}"
+        if r.manager_materials_comment:
+            text += f"\n💬 Менеджер: {r.manager_materials_comment}"
+        # Для совместимости со старыми записями
+        if not r.requested_materials and r.purchase_materials:
+            text += f"\n💡 Материалы: {r.purchase_materials}"
+        
+        # Создаем инлайн клавиатуру для действий с заявкой
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Вернуть в работу", callback_data=f"return_to_work_{r.request_number}")],
+            [InlineKeyboardButton(text="✏️ Комментарий менеджера", callback_data=f"edit_materials_{r.request_number}")]
+        ])
+        
+        await message.answer(text, reply_markup=keyboard)
+    
+    await message.answer("💰 Конец списка заявок в статусе 'Закуп'", reply_markup=get_manager_main_keyboard())
+    logger.info(f"Показаны заявки в статусе закуп менеджеру {message.from_user.id}")
+
 
 
 
@@ -730,10 +880,10 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("accept_", ""))
+        request_number = callback.data.replace("accept_", "")
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -741,14 +891,18 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
         # Обновляем статус
         request.status = "В работе"
         request.updated_at = datetime.now()
+        
+        # Автоматически назначаем заявку исполнителям по специализации
+        await auto_assign_request_by_category(request, db, user)
+        
         db.commit()
         
-        await callback.answer("✅ Заявка принята в работу")
+        await callback.answer("✅ Заявка принята в работу и назначена исполнителям")
         
         # Возвращаемся к списку заявок
         await handle_manager_back_to_list(callback, db, roles, active_role, user)
         
-        logger.info(f"Заявка {request_id} принята менеджером {callback.from_user.id}")
+        logger.info(f"Заявка {request_number} принята менеджером {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки менеджером: {e}")
@@ -756,7 +910,7 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
 
 
 @router.callback_query(F.data.startswith("deny_"))
-async def handle_deny_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Обработка отклонения заявки менеджером"""
     try:
         logger.info(f"Обработка отклонения заявки менеджером {callback.from_user.id}")
@@ -766,26 +920,32 @@ async def handle_deny_request(callback: CallbackQuery, db: Session, roles: list 
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("deny_", ""))
+        request_number = callback.data.replace("deny_", "")
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
         
-        # Обновляем статус и добавляем примечание
-        request.status = "Отменена"
-        request.notes = f"{request.notes or ''}\n\nОтклонена менеджером {user.first_name or user.telegram_id} {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-        request.updated_at = datetime.now()
-        db.commit()
+        # Запрашиваем причину отклонения
+        await callback.message.edit_text(
+            f"❌ Отклонение заявки #{request_number}\n\n"
+            f"📋 Заявка: {request.category}\n"
+            f"📍 Адрес: {request.address}\n\n"
+            f"💬 Введите причину отклонения:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_{request_number}")]
+            ])
+        )
         
-        await callback.answer("❌ Заявка отклонена")
+        # Сохраняем номер заявки в состоянии для отклонения
+        await state.update_data(deny_request_number=request_number)
         
-        # Возвращаемся к списку заявок
-        await handle_manager_back_to_list(callback, db, roles, active_role, user)
+        # Устанавливаем состояние ожидания причины отклонения
+        await state.set_state(ManagerStates.cancel_reason)
         
-        logger.info(f"Заявка {request_id} отклонена менеджером {callback.from_user.id}")
+        logger.info(f"Запрошена причина отклонения заявки {request_number} менеджером {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки отклонения заявки менеджером: {e}")
@@ -803,10 +963,10 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("clarify_", ""))
+        request_number = callback.data.replace("clarify_", "")
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -816,12 +976,12 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
             await callback.answer("Нельзя задать уточнение по отмененной заявке", show_alert=True)
             return
         
-        # Сохраняем ID заявки в состоянии
-        await state.update_data(request_id=request_id)
+        # Сохраняем номер заявки в состоянии
+        await state.update_data(request_number=request_number)
         
         # Запрашиваем текст уточнения
         await callback.message.edit_text(
-            f"❓ Введите текст уточнения для заявки #{request_id}:\n\n"
+            f"❓ Введите текст уточнения для заявки #{request_number}:\n\n"
             f"📋 Заявка: {request.category}\n"
             f"📍 Адрес: {request.address}\n\n"
             f"💬 Введите ваш вопрос или уточнение:",
@@ -833,7 +993,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
         # Устанавливаем состояние ожидания текста уточнения
         await state.set_state(ManagerStates.waiting_for_clarification_text)
         
-        logger.info(f"Запрошен текст уточнения для заявки {request_id} менеджером {callback.from_user.id}")
+        logger.info(f"Запрошен текст уточнения для заявки {request_number} менеджером {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки запроса уточнения: {e}")
@@ -857,8 +1017,8 @@ async def handle_cancel_clarification(callback: CallbackQuery, state: FSMContext
         await callback.answer("Произошла ошибка", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("purchase_"))
-async def handle_purchase_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))
+async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Обработка перевода заявки в статус 'Закуп' менеджером"""
     try:
         logger.info(f"Обработка перевода заявки в закуп менеджером {callback.from_user.id}")
@@ -868,25 +1028,72 @@ async def handle_purchase_request(callback: CallbackQuery, db: Session, roles: l
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("purchase_", ""))
+        request_number = callback.data.replace("purchase_", "")
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
         
-        # Обновляем статус
-        request.status = "Закуп"
-        request.updated_at = datetime.now()
-        db.commit()
+        # Формируем текст с учетом истории закупок
+        prompt_text = "💰 Переводим заявку в статус 'Закуп'\n\n"
         
-        await callback.answer("💰 Заявка переведена в закуп")
+        # Проверяем, есть ли история предыдущих закупок
+        if request.purchase_history:
+            prompt_text += "📚 Найдена история предыдущих закупок:\n"
+            
+            # Показываем последние данные из истории
+            history_lines = request.purchase_history.split('\n')
+            last_requested = None
+            last_comment = None
+            
+            for i in range(len(history_lines) - 1, -1, -1):
+                line = history_lines[i].strip()
+                if line.startswith("Запрошенные материалы:") and not last_requested:
+                    last_requested = line.replace("Запрошенные материалы:", "").strip()
+                elif line.startswith("Комментарий менеджера:") and not last_comment:
+                    last_comment = line.replace("Комментарий менеджера:", "").strip()
+                
+                if last_requested and last_comment:
+                    break
+            
+            if last_requested and last_requested != "Не указано":
+                prompt_text += f"📋 Последние запрошенные материалы: {last_requested}\n"
+            if last_comment and last_comment != "Без комментариев":
+                prompt_text += f"💬 Последний комментарий менеджера: {last_comment}\n"
+            
+            prompt_text += "\n"
         
-        # Возвращаемся к списку заявок
-        await handle_manager_back_to_list(callback, db, roles, active_role, user)
+        prompt_text += "📝 Введите список необходимых материалов для закупки:"
         
-        logger.info(f"Заявка {request_id} переведена в закуп менеджером {callback.from_user.id}")
+        # Запрашиваем список материалов
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        await callback.message.edit_text(
+            prompt_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_{request_number}")]
+            ])
+        )
+        
+        # Сохраняем состояние
+        from uk_management_bot.states.request_status import RequestStatusStates
+        from aiogram.fsm.context import FSMContext
+        
+        # Получаем контекст состояния
+        try:
+            await state.update_data(
+                request_number=request_number,
+                action="purchase_materials_admin"
+            )
+            await state.set_state(RequestStatusStates.waiting_for_materials)
+        except Exception as e:
+            logger.error(f"Ошибка установки состояния: {e}")
+            await callback.answer("Ошибка обработки запроса", show_alert=True)
+        
+        await callback.answer()
+        
+        logger.info(f"Заявка {request_number} переведена в закуп менеджером {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки перевода в закуп менеджером: {e}")
@@ -904,10 +1111,10 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("complete_", ""))
+        request_number = callback.data.replace("complete_", "")
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -923,7 +1130,7 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
         # Возвращаемся к списку заявок
         await handle_manager_back_to_list(callback, db, roles, active_role, user)
         
-        logger.info(f"Заявка {request_id} отмечена как выполненная менеджером {callback.from_user.id}")
+        logger.info(f"Заявка {request_number} отмечена как выполненная менеджером {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки завершения заявки менеджером: {e}")
@@ -941,10 +1148,10 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
         
-        request_id = int(callback.data.replace("delete_", ""))
+        request_number = callback.data.replace("delete_", "")
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -958,7 +1165,7 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
         # Возвращаемся к списку заявок
         await handle_manager_back_to_list(callback, db, roles, active_role, user)
         
-        logger.info(f"Заявка {request_id} удалена менеджером {callback.from_user.id}")
+        logger.info(f"Заявка {request_number} удалена менеджером {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки удаления заявки менеджером: {e}")
@@ -979,15 +1186,15 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         
         # Получаем данные из состояния
         data = await state.get_data()
-        request_id = data.get("request_id")
+        request_number = data.get("request_number")
         
-        if not request_id:
+        if not request_number:
             await message.answer("Ошибка: не найдена заявка")
             await state.clear()
             return
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await message.answer("Заявка не найдена")
             await state.clear()
@@ -1007,13 +1214,13 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         
         # Добавляем уточнение в примечания заявки
         timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
-        new_note = f"\n\n--- УТОЧНЕНИЕ {timestamp} ---\n"
+        new_note = f"--- УТОЧНЕНИЕ {timestamp} ---\n"
         new_note += f"👨‍💼 {manager_name}:\n"
-        new_note += f"{clarification_text}\n"
+        new_note += f"{clarification_text}"
         
         # Обновляем примечания
-        if request.notes:
-            request.notes += new_note
+        if request.notes and request.notes.strip():
+            request.notes = request.notes.strip() + "\n\n" + new_note
         else:
             request.notes = new_note
         
@@ -1026,19 +1233,21 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         
         # Отправляем уведомление заявителю
         try:
-            from uk_management_bot.services.notification_service import NotificationService
-            notification_service = NotificationService(db)
+            from uk_management_bot.services.notification_service import send_to_user
+            from uk_management_bot.database.models.user import User as UserModel
             
-            notification_text = f"❓ По вашей заявке #{request.id} появилось уточнение:\n\n"
-            notification_text += f"📋 Заявка: {request.category}\n"
-            notification_text += f"📍 Адрес: {request.address}\n\n"
-            notification_text += f"💬 Вопрос от менеджера:\n{clarification_text}\n\n"
-            notification_text += f"💬 Для ответа используйте команду /reply_{request.id}"
-            
-            notification_service.send_notification_to_user(
-                user_id=request.user_id,
-                message=notification_text
-            )
+            # Получаем telegram_id пользователя
+            user_obj = db.query(UserModel).filter(UserModel.id == request.user_id).first()
+            if user_obj and user_obj.telegram_id:
+                notification_text = f"❓ По вашей заявке #{request.request_number} появилось уточнение:\n\n"
+                notification_text += f"📋 Заявка: {request.category}\n"
+                notification_text += f"📍 Адрес: {request.address}\n\n"
+                notification_text += f"💬 Вопрос от менеджера:\n{clarification_text}\n\n"
+                notification_text += f"💬 Для ответа используйте команду /reply_{request.request_number}"
+                
+                # Получаем bot из состояния
+                bot = message.bot
+                await send_to_user(bot, user_obj.telegram_id, notification_text)
             
             logger.info(f"Уведомление об уточнении отправлено пользователю {request.user_id}")
             
@@ -1048,7 +1257,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         # Подтверждаем менеджеру
         await message.answer(
             f"✅ Уточнение отправлено!\n\n"
-            f"📋 Заявка #{request_id}\n"
+            f"📋 Заявка #{request.request_number}\n"
             f"💬 Текст: {clarification_text[:100]}{'...' if len(clarification_text) > 100 else ''}\n\n"
             f"📱 Заявитель получил уведомление и сможет ответить."
         )
@@ -1056,10 +1265,325 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         # Очищаем состояние
         await state.clear()
         
-        logger.info(f"Уточнение по заявке {request_id} добавлено менеджером {message.from_user.id}")
+        logger.info(f"Уточнение по заявке {request_number} добавлено менеджером {message.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки текста уточнения: {e}")
         await message.answer("Произошла ошибка при отправке уточнения")
+        await state.clear()
+
+
+@router.message(ManagerStates.cancel_reason)
+async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Обработка причины отклонения заявки"""
+    try:
+        logger.info(f"Получена причина отклонения от менеджера {message.from_user.id}")
+        
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await message.answer("Нет прав для выполнения действий")
+            await state.clear()
+            return
+        
+        # Получаем данные из состояния
+        data = await state.get_data()
+        request_number = data.get("deny_request_number")
+        
+        if not request_number:
+            await message.answer("Ошибка: не найдена заявка")
+            await state.clear()
+            return
+        
+        # Получаем заявку
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if not request:
+            await message.answer("Заявка не найдена")
+            await state.clear()
+            return
+        
+        # Получаем причину отклонения
+        cancel_reason = message.text.strip()
+        
+        if not cancel_reason:
+            await message.answer("Причина отклонения не может быть пустой. Попробуйте еще раз.")
+            return
+        
+        # Формируем имя менеджера
+        manager_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        if not manager_name:
+            manager_name = f"Менеджер {user.telegram_id}"
+        
+        # Обновляем статус и добавляем примечание
+        request.status = "Отменена"
+        cancel_note = f"Отклонена менеджером {manager_name} {datetime.now().strftime('%d.%m.%Y %H:%M')}\nПричина: {cancel_reason}"
+        
+        if request.notes and request.notes.strip():
+            request.notes = request.notes.strip() + "\n\n" + cancel_note
+        else:
+            request.notes = cancel_note
+        request.updated_at = datetime.now()
+        db.commit()
+        
+        await message.answer(
+            f"❌ Заявка #{request_number} отклонена\n\n"
+            f"💬 Причина: {cancel_reason}",
+            reply_markup=get_manager_main_keyboard()
+        )
+        
+        # Очищаем состояние
+        await state.clear()
+        
+        logger.info(f"Заявка {request_number} отклонена менеджером {message.from_user.id} с причиной: {cancel_reason}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки причины отклонения: {e}")
+        await message.answer("Произошла ошибка при отклонении заявки")
+        await state.clear()
+
+
+@router.message(F.text == "👥 Смены")
+async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Обработчик кнопки 'Смены' в админ панели"""
+    lang = message.from_user.language_code or 'ru'
+    
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("auth.no_access", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+    
+    # Прямой вызов интерфейса управления сменами без декоратора
+    try:
+        from uk_management_bot.keyboards.shift_management import get_main_shift_menu
+        from uk_management_bot.states.shift_management import ShiftManagementStates
+        from uk_management_bot.utils.helpers import get_user_language
+        
+        language = get_user_language(message.from_user.id, db)
+        
+        await message.answer(
+            "🔧 <b>Управление сменами</b>\n\n"
+            "Выберите действие:",
+            reply_markup=get_main_shift_menu(language),
+            parse_mode="HTML"
+        )
+        
+        await state.set_state(ShiftManagementStates.main_menu)
+        
+    except Exception as e:
+        logger.error(f"Ошибка при открытии управления сменами: {e}")
+        await message.answer(
+            "🔧 <b>Управление сменами</b>\n\n"
+            "Временно недоступно. Попробуйте команду /shifts",
+            parse_mode="HTML",
+            reply_markup=get_manager_main_keyboard()
+        )
+
+
+@router.callback_query(F.data.startswith("return_to_work_"))
+async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Обработка возврата заявки из закупа в работу"""
+    try:
+        logger.info(f"Возврат заявки из закупа в работу менеджером {callback.from_user.id}")
+        
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer("Нет прав для выполнения действий", show_alert=True)
+            return
+        
+        request_number = callback.data.replace("return_to_work_", "")
+        
+        # Получаем заявку
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+        
+        # Проверяем, что заявка в статусе "Закуп"
+        if request.status != "Закуп":
+            await callback.answer("Заявка не в статусе закуп", show_alert=True)
+            return
+        
+        # Добавляем разделитель закупки к списку материалов
+        if request.requested_materials:
+            current_date = datetime.now().strftime('%d.%m.%Y %H:%M')
+            procurement_separator = f"--закуплено {current_date}--"
+            
+            # Добавляем разделитель к существующим материалам
+            request.requested_materials += f"\n{procurement_separator}\n"
+            
+            # Сохраняем информацию в историю для отчетности
+            if request.manager_materials_comment:
+                manager_comment = request.manager_materials_comment
+            else:
+                manager_comment = "Без комментариев"
+            
+            history_entry = (
+                f"ЗАКУП ЗАВЕРШЕН:\n"
+                f"Материалы: {request.requested_materials.split(f'{procurement_separator}')[0].strip()}\n"
+                f"Комментарий менеджера: {manager_comment}\n"
+                f"Дата завершения: {current_date}"
+            )
+            
+            if request.purchase_history:
+                request.purchase_history += f"\n\n===\n\n{history_entry}"
+            else:
+                request.purchase_history = history_entry
+        
+        # Обновляем статус на "В работе"
+        request.status = "В работе"
+        request.updated_at = datetime.now()
+        db.commit()
+        
+        await callback.answer("✅ Заявка возвращена в работу")
+        
+        # Загружаем обновленный список заявок в закупе
+        q = (
+            db.query(Request)
+            .filter(Request.status == "Закуп")
+            .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
+        )
+        requests = q.limit(10).all()
+        
+        if not requests:
+            await callback.message.edit_text("💰 Заявок в статусе 'Закуп' не найдено", reply_markup=get_manager_main_keyboard())
+            return
+        
+        # Показываем обновленный список заявок в закупе
+        text = "💰 Заявки в статусе 'Закуп' (обновлено):\n\n"
+        for i, r in enumerate(requests, 1):
+            addr = r.address[:40] + ("…" if len(r.address) > 40 else "")
+            text += f"{i}. #{r.request_number} - {r.category}\n"
+            text += f"   📍 {addr}\n\n"
+        
+        await callback.message.edit_text(text, reply_markup=get_manager_main_keyboard())
+        
+        logger.info(f"Заявка {request_number} возвращена в работу менеджером {callback.from_user.id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка возврата заявки из закупа в работу: {e}")
+        await callback.answer("Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("edit_materials_"))
+async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Обработка редактирования списка материалов для закупа"""
+    try:
+        logger.info(f"Редактирование списка материалов менеджером {callback.from_user.id}")
+        
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer("Нет прав для выполнения действий", show_alert=True)
+            return
+        
+        request_number = callback.data.replace("edit_materials_", "")
+        
+        # Получаем заявку
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+        
+        # Проверяем, что заявка в статусе "Закуп"
+        if request.status != "Закуп":
+            await callback.answer("Заявка не в статусе закуп", show_alert=True)
+            return
+        
+        # Сохраняем номер заявки в состоянии
+        await state.update_data(edit_materials_request_number=request_number)
+        await state.set_state(ManagerStates.waiting_for_materials_edit)
+        
+        # Показываем запрошенные материалы от исполнителя и текущий комментарий менеджера
+        requested = request.requested_materials or "Не указано"
+        manager_comment = request.manager_materials_comment or ""
+        
+        text = (
+            f"📝 Редактирование комментариев к материалам для заявки #{request_number}\n\n"
+            f"📋 Запрошенные материалы (от исполнителя):\n{requested}\n\n"
+        )
+        
+        if manager_comment:
+            text += f"💬 Текущий комментарий менеджера:\n{manager_comment}\n\n"
+        
+        text += "Введите комментарии менеджера к списку материалов:"
+        
+        await callback.message.answer(text)
+        
+        await callback.answer()
+        
+        logger.info(f"Начато редактирование материалов для заявки {request_number} менеджером {callback.from_user.id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка редактирования списка материалов: {e}")
+        await callback.answer("Произошла ошибка", show_alert=True)
+
+
+@router.message(ManagerStates.waiting_for_materials_edit)
+async def handle_materials_edit_text(message: Message, state: FSMContext, db: Session, user: User = None):
+    """Обработка нового текста списка материалов"""
+    try:
+        data = await state.get_data()
+        request_number = data.get("edit_materials_request_number")
+        
+        if not request_number:
+            await message.answer("Ошибка: не найден номер заявки")
+            await state.clear()
+            return
+        
+        # Получаем заявку
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if not request:
+            await message.answer("Заявка не найдена")
+            await state.clear()
+            return
+        
+        # Обновляем комментарий менеджера к материалам (запрошенные материалы НЕ изменяем)
+        old_comment = request.manager_materials_comment
+        new_comment = message.text.strip()
+        request.manager_materials_comment = new_comment
+        request.updated_at = datetime.now()
+        
+        # Обновляем историю закупов для сохранения данных
+        requested_materials = request.requested_materials or "Не указано"
+        purchase_history_entry = (
+            f"Запрошенные материалы: {requested_materials}\n"
+            f"Комментарий менеджера: {new_comment}\n"
+            f"Обновлено: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        )
+        
+        if request.purchase_history:
+            request.purchase_history += f"\n\n---\n\n{purchase_history_entry}"
+        else:
+            request.purchase_history = purchase_history_entry
+            
+        db.commit()
+        
+        await message.answer(f"✅ Комментарии к материалам для заявки #{request_number} обновлены", reply_markup=get_manager_main_keyboard())
+        
+        # Добавляем комментарий об изменении
+        if user:
+            try:
+                from uk_management_bot.services.comment_service import CommentService
+                comment_service = CommentService(db)
+                comment_text = f"Комментарии к материалам изменены менеджером:\n\nБыло: {old_comment or 'Комментарий отсутствовал'}\n\nСтало: {new_comment}"
+                comment_service.add_status_change_comment(
+                    request_id=request_number,
+                    user_id=user.id,
+                    old_status="Закуп",
+                    new_status="Закуп", 
+                    comment=comment_text
+                )
+            except Exception as e:
+                logger.error(f"Ошибка добавления комментария: {e}")
+                # Не критично, продолжаем
+        
+        await state.clear()
+        
+        logger.info(f"Список материалов для заявки {request_number} обновлен менеджером {message.from_user.id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления списка материалов: {e}")
+        await message.answer("Произошла ошибка при обновлении списка")
         await state.clear()
 

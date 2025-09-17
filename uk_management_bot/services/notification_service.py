@@ -21,12 +21,12 @@ def notify_status_changed(db: Session, request: Request, old_status: str, new_st
     """
     try:
         logger.info(
-            f"Notification: type={NOTIFICATION_TYPE_STATUS_CHANGED}, request_id={request.id}, old={old_status}, new={new_status}"
+            f"Notification: type={NOTIFICATION_TYPE_STATUS_CHANGED}, request_number={request.request_number}, old={old_status}, new={new_status}"
         )
         if new_status == "Закуп":
-            logger.info(f"Notification: type={NOTIFICATION_TYPE_PURCHASE}, request_id={request.id}")
+            logger.info(f"Notification: type={NOTIFICATION_TYPE_PURCHASE}, request_number={request.request_number}")
         if new_status == "Уточнение":
-            logger.info(f"Notification: type={NOTIFICATION_TYPE_CLARIFICATION}, request_id={request.id}")
+            logger.info(f"Notification: type={NOTIFICATION_TYPE_CLARIFICATION}, request_number={request.request_number}")
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о смене статуса: {e}")
 
@@ -529,7 +529,7 @@ class NotificationService:
 # ====== Request status notifications (3.4) ======
 def _build_request_status_message_user(request: Request, old_status: str, new_status: str) -> str:
     return (
-        f"📌 Статус вашей заявки #{request.id} изменён: {old_status} → {new_status}\n"
+        f"📌 Статус вашей заявки #{request.request_number} изменён: {old_status} → {new_status}\n"
         f"Категория: {request.category}\n"
         f"Адрес: {request.address[:60]}{'…' if len(request.address) > 60 else ''}"
     )
@@ -537,14 +537,14 @@ def _build_request_status_message_user(request: Request, old_status: str, new_st
 
 def _build_request_status_message_executor(request: Request, old_status: str, new_status: str) -> str:
     return (
-        f"📌 Статус заявки #{request.id} изменён: {old_status} → {new_status}\n"
+        f"📌 Статус заявки #{request.request_number} изменён: {old_status} → {new_status}\n"
         f"Категория: {request.category} — назначена вам"
     )
 
 
 def _build_request_status_message_channel(request: Request, old_status: str, new_status: str) -> str:
     return (
-        f"🔔 Заявка #{request.id}: {old_status} → {new_status}\n"
+        f"🔔 Заявка #{request.request_number}: {old_status} → {new_status}\n"
         f"Категория: {request.category}"
     )
 
@@ -568,7 +568,7 @@ async def async_notify_request_status_changed(
                     _build_request_status_message_user(request, old_status, new_status),
                 )
         except Exception as e:
-            logger.warning(f"Не удалось уведомить заявителя по заявке #{request.id}: {e}")
+            logger.warning(f"Не удалось уведомить заявителя по заявке #{request.request_number}: {e}")
 
         # Исполнитель (если назначен)
         try:
@@ -582,12 +582,12 @@ async def async_notify_request_status_changed(
                         _build_request_status_message_executor(request, old_status, new_status),
                     )
         except Exception as e:
-            logger.warning(f"Не удалось уведомить исполнителя по заявке #{request.id}: {e}")
+            logger.warning(f"Не удалось уведомить исполнителя по заявке #{request.request_number}: {e}")
 
         # Канал (если настроен)
         await send_to_channel(bot, _build_request_status_message_channel(request, old_status, new_status))
     except Exception as e:
-        logger.warning(f"Ошибка async уведомления о смене статуса заявки #{request.id}: {e}")
+        logger.warning(f"Ошибка async уведомления о смене статуса заявки #{request.request_number}: {e}")
 
 
 # ====== 6.8 Role switch and action denied notifications ======
