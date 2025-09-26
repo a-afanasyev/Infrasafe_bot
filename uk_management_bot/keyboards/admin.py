@@ -1,5 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
+from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 
 
 def get_manager_main_keyboard() -> ReplyKeyboardMarkup:
@@ -42,17 +43,18 @@ def _status_icon(status: str) -> str:
 
 
 def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: int) -> InlineKeyboardMarkup:
-    """Список заявок: кнопки "#id • Категория" и пагинация."""
+    """Список заявок: кнопки "#номер • Категория" и пагинация."""
     builder = InlineKeyboardBuilder()
     for item in requests:
         short_addr = item.get('address', '')[:40]
         if len(item.get('address', '')) > 40:
             short_addr += '…'
         icon = _status_icon(item.get('status', ''))
+        request_number = item.get('request_number', item.get('id', 'N/A'))
         builder.row(
             InlineKeyboardButton(
-                text=f"{icon} #{item['id']} • {item['category']} • {short_addr}",
-                callback_data=f"mview_{item['id']}"
+                text=f"{icon} #{request_number} • {item['category']} • {short_addr}",
+                callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mview_", str(request_number))
             )
         )
     # Пагинация
@@ -125,17 +127,17 @@ def get_user_approval_keyboard(user_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_manager_request_actions_keyboard(request_id: int) -> InlineKeyboardMarkup:
+def get_manager_request_actions_keyboard(request_number: str) -> InlineKeyboardMarkup:
     """Клавиатура действий с заявкой для менеджеров"""
     builder = InlineKeyboardBuilder()
     
     # Основные действия с заявкой - сокращенный текст для лучшей читаемости
-    builder.add(InlineKeyboardButton(text="✅ Принять", callback_data=f"accept_{request_id}"))
-    builder.add(InlineKeyboardButton(text="❌ Отклонить", callback_data=f"deny_{request_id}"))
-    builder.add(InlineKeyboardButton(text="❓ Уточнить", callback_data=f"clarify_{request_id}"))
-    builder.add(InlineKeyboardButton(text="💰 В закуп", callback_data=f"purchase_{request_id}"))
-    builder.add(InlineKeyboardButton(text="✅ Завершить", callback_data=f"complete_{request_id}"))
-    builder.add(InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_{request_id}"))
+    builder.add(InlineKeyboardButton(text="🔧 В работу", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("accept_", request_number)))
+    builder.add(InlineKeyboardButton(text="❌ Отклонить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("deny_", request_number)))
+    builder.add(InlineKeyboardButton(text="❓ Уточнить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("clarify_", request_number)))
+    builder.add(InlineKeyboardButton(text="💰 В закуп", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number)))
+    builder.add(InlineKeyboardButton(text="✅ Завершить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_", request_number)))
+    builder.add(InlineKeyboardButton(text="🗑️ Удалить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("delete_", request_number)))
     
     # Настройка расположения кнопок (2 кнопки в ряд)
     builder.adjust(2)

@@ -202,29 +202,29 @@ async def auto_assign_request_by_category(request_number: str, db_session: Sessi
         
         # Проверяем, есть ли уже назначение для этой заявки
         existing_assignment = db_session.query(RequestAssignment).filter(
-            RequestAssignment.request_id == request_id,
+            RequestAssignment.request_number == request_number,
             RequestAssignment.status == "active"
         ).first()
         
         if existing_assignment:
-            logger.info(f"Заявка {request_id} уже назначена, пропускаем")
+            logger.info(f"Заявка {request_number} уже назначена, пропускаем")
             return
         
         # Дополнительная проверка на групповые назначения для той же специализации
         existing_group_assignment = db_session.query(RequestAssignment).filter(
-            RequestAssignment.request_id == request_id,
+            RequestAssignment.request_number == request_number,
             RequestAssignment.assignment_type == "group",
             RequestAssignment.group_specialization == specialization,
             RequestAssignment.status == "active"
         ).first()
         
         if existing_group_assignment:
-            logger.info(f"Заявка {request_id} уже назначена группе {specialization}, пропускаем")
+            logger.info(f"Заявка {request_number} уже назначена группе {specialization}, пропускаем")
             return
         
         # Создаем групповое назначение
         assignment = RequestAssignment(
-            request_id=request_id,
+            request_number=request_number,
             assignment_type="group",
             group_specialization=specialization,
             status="active",
@@ -239,10 +239,10 @@ async def auto_assign_request_by_category(request_number: str, db_session: Sessi
         request.assigned_at = datetime.now()
         request.assigned_by = manager.id
         
-        logger.info(f"Заявка {request_id} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
+        logger.info(f"Заявка {request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
         
     except Exception as e:
-        logger.error(f"Ошибка автоматического назначения заявки {request_id}: {e}")
+        logger.error(f"Ошибка автоматического назначения заявки {request_number}: {e}")
 
 
 def smart_address_validation(address_text: str) -> dict:
@@ -968,7 +968,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         for i, r in enumerate(page_requests, 1):
             if r.status == "Уточнение":
                 rows.append([InlineKeyboardButton(text=f"💬 Ответить по #{r.request_number}", callback_data=f"replyclarify_{r.request_number}")])
-        pagination_kb = get_pagination_keyboard(current_page, total_pages, request_id=None, show_reply_clarify=False)
+        pagination_kb = get_pagination_keyboard(current_page, total_pages, request_number=None, show_reply_clarify=False)
         rows += pagination_kb.inline_keyboard
         combined = InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -986,7 +986,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки пагинации: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
 
-@router.callback_query(lambda c: c.data.startswith("view_") and not c.data.startswith("view_comments") and not c.data.startswith("view_report") and not c.data.startswith("view_assignments"))
+@router.callback_query(lambda c: c.data.startswith("view_") and not c.data.startswith("view_comments") and not c.data.startswith("view_report") and not c.data.startswith("view_assignments") and not c.data.startswith("view_schedule") and not c.data.startswith("view_week"))
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
     """Обработка просмотра деталей заявки"""
     try:
@@ -1085,7 +1085,7 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
         await state.set_state(RequestStates.category)
         
         await callback.message.edit_text(
-            f"Редактирование заявки #{request_id}\n\nВыберите новую категорию:",
+            f"Редактирование заявки #{request_number}\n\nВыберите новую категорию:",
             reply_markup=get_categories_keyboard()
         )
         
@@ -1147,10 +1147,10 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
         if not await auth.is_user_manager(callback.from_user.id):
             await callback.answer("Доступно только менеджеру", show_alert=True)
             return
-        request_id = int(callback.data.replace("accept_", ""))
+        request_number = callback.data.replace("accept_", "")
         service = RequestService(db_session)
         result = service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status="В работе",
             actor_telegram_id=callback.from_user.id,
         )
@@ -1160,16 +1160,16 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
             return
 
         # Автоматически назначаем заявку исполнителям по специализации
-        await auto_assign_request_by_category(request_id, db_session, callback.from_user.id)
+        await auto_assign_request_by_category(request_number, db_session, callback.from_user.id)
 
         await callback.message.edit_text(
-            f"✅ Заявка #{request_id} принята в работу и назначена исполнителям"
+            f"✅ Заявка #{request_number} принята в работу и назначена исполнителям"
         )
         await callback.message.answer(
             "Возврат в главное меню.",
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
-        logger.info(f"Заявка {request_id} принята пользователем {callback.from_user.id}")
+        logger.info(f"Заявка {request_number} принята пользователем {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки: {e}")
@@ -1206,10 +1206,10 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
             except Exception:
                 pass
             return
-        request_id = int(callback.data.replace("complete_", ""))
+        request_number = callback.data.replace("complete_", "")
         service = RequestService(db_session)
         result = service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status="Выполнена",
             actor_telegram_id=callback.from_user.id,
         )
@@ -1219,13 +1219,13 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
             return
 
         await callback.message.edit_text(
-            f"✅ Заявка #{request_id} отмечена как выполненная"
+            f"✅ Заявка #{request_number} отмечена как выполненная"
         )
         await callback.message.answer(
             "Возврат в главное меню.",
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
-        logger.info(f"Заявка {request_id} завершена пользователем {callback.from_user.id}")
+        logger.info(f"Заявка {request_number} завершена пользователем {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки завершения заявки: {e}")
@@ -1237,7 +1237,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
     """Обработка перевода заявки в статус 'Уточнение'"""
     try:
         # Только менеджер
-        request_id = int(callback.data.replace("clarify_", ""))
+        request_number = callback.data.replace("clarify_", "")
         db_session = next(get_db())
         auth = AuthService(db_session)
         if not await auth.is_user_manager(callback.from_user.id):
@@ -1245,7 +1245,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
             return
         service = RequestService(db_session)
         result = service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status="Уточнение",
             actor_telegram_id=callback.from_user.id,
         )
@@ -1253,7 +1253,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
             await callback.answer(result.get("message", "Ошибка"), show_alert=True)
             return
         await callback.message.edit_text(
-            f"❓ Заявка #{request_id} переведена в статус 'Уточнение'",
+            f"❓ Заявка #{request_number} переведена в статус 'Уточнение'",
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
@@ -1266,7 +1266,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
     """Обработка перевода заявки в статус 'Закуп'"""
     try:
         # Только менеджер
-        request_id = int(callback.data.replace("purchase_", ""))
+        request_number = callback.data.replace("purchase_", "")
         db_session = next(get_db())
         auth = AuthService(db_session)
         if not await auth.is_user_manager(callback.from_user.id):
@@ -1274,7 +1274,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
             return
         service = RequestService(db_session)
         result = service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status="Закуп",
             actor_telegram_id=callback.from_user.id,
         )
@@ -1282,7 +1282,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
             await callback.answer(result.get("message", "Ошибка"), show_alert=True)
             return
         await callback.message.edit_text(
-            f"💰 Заявка #{request_id} переведена в статус 'Закуп'",
+            f"💰 Заявка #{request_number} переведена в статус 'Закуп'",
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
@@ -1295,13 +1295,13 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
     """Обработка отмены заявки"""
     try:
         # Менеджер или владелец (в RequestService также есть проверка)
-        request_id = int(callback.data.replace("cancel_", ""))
+        request_number = callback.data.replace("cancel_", "")
         db_session = next(get_db())
         auth = AuthService(db_session)
         is_manager = await auth.is_user_manager(callback.from_user.id)
         service = RequestService(db_session)
         result = service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status="Отменена",
             actor_telegram_id=callback.from_user.id,
         )
@@ -1309,7 +1309,7 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
             await callback.answer(result.get("message", "Ошибка"), show_alert=True)
             return
         await callback.message.edit_text(
-            f"❌ Заявка #{request_id} отменена",
+            f"❌ Заявка #{request_number} отменена",
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
@@ -1321,7 +1321,7 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
 async def handle_executor_propose_deny(callback: CallbackQuery, state: FSMContext):
     """Исполнитель предлагает отказ (эскалируется менеджеру). Добавляем запись в notes без смены статуса."""
     try:
-        request_id = int(callback.data.replace("deny_", ""))
+        request_number = callback.data.replace("deny_", "")
         db_session = next(get_db())
         auth = AuthService(db_session)
         # Только исполнитель
@@ -1329,7 +1329,7 @@ async def handle_executor_propose_deny(callback: CallbackQuery, state: FSMContex
             await callback.answer("Доступно только исполнителю", show_alert=True)
             return
         service = RequestService(db_session)
-        req = service.get_request_by_id(request_id)
+        req = service.get_request_by_number(request_number)
         if not req:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -1347,11 +1347,11 @@ async def handle_executor_propose_deny(callback: CallbackQuery, state: FSMContex
 async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
     """Подтверждение выполненной заявки заявителем -> 'Подтверждена'"""
     try:
-        request_id = int(callback.data.replace("approve_", ""))
+        request_number = callback.data.replace("approve_", "")
         db_session = next(get_db())
         service = RequestService(db_session)
         result = service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status="Подтверждена",
             actor_telegram_id=callback.from_user.id,
         )
@@ -1359,7 +1359,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
             await callback.answer(result.get("message", "Ошибка"), show_alert=True)
             return
         await callback.message.edit_text(
-            f"✅ Заявка #{request_id} подтверждена",
+            f"✅ Заявка #{request_number} подтверждена",
             reply_markup=get_main_keyboard()
         )
     except Exception as e:

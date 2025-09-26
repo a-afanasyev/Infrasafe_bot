@@ -7,6 +7,7 @@ import time
 import logging
 from typing import Optional
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.redis_wrapper import is_aioredis_available, create_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -17,22 +18,25 @@ async def get_redis_client():
     """Получить Redis клиент (ленивая инициализация)"""
     global _redis_client
     
+    # Проверяем, включен ли Redis
+    if not settings.USE_REDIS_RATE_LIMIT:
+        return None
+    
     if _redis_client is None:
+        # Проверяем доступность aioredis через нашу безопасную обертку
+        if not is_aioredis_available():
+            logger.warning("aioredis not available, Redis rate limiting disabled")
+            return None
+        
         try:
-            import aioredis
-            _redis_client = aioredis.from_url(
-                settings.REDIS_URL,
-                encoding="utf-8",
-                decode_responses=True,
-                retry_on_timeout=True,
-                socket_keepalive=True,
-                socket_keepalive_options={},
-                health_check_interval=30
-            )
-            # Проверяем соединение
-            await _redis_client.ping()
-            logger.info("Redis client initialized successfully")
+            # Создаем Redis клиент через безопасную обертку
+            _redis_client = await create_redis_client(settings.REDIS_URL)
             
+            if _redis_client is not None:
+                logger.info("Redis client initialized successfully")
+            else:
+                logger.warning("Failed to create Redis client, using fallback")
+                
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")
             _redis_client = None

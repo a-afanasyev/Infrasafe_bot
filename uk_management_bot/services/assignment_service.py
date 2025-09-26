@@ -24,6 +24,8 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.services.notification_service import NotificationService
 
+logger = logging.getLogger(__name__)
+
 # Интеграция с новыми сервисами ЭТАПА 3
 try:
     from uk_management_bot.services.smart_dispatcher import SmartDispatcher
@@ -34,8 +36,6 @@ except ImportError as e:
     logger.warning(f"Расширенные сервисы назначения недоступны: {e}")
     ADVANCED_ASSIGNMENT_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
-
 class AssignmentService:
     """Сервис для управления назначениями заявок"""
     
@@ -43,12 +43,12 @@ class AssignmentService:
         self.db = db
         self.notification_service = NotificationService(db)
     
-    def assign_to_group(self, request_id: int, specialization: str, assigned_by: int) -> RequestAssignment:
+    def assign_to_group(self, request_number: str, specialization: str, assigned_by: int) -> RequestAssignment:
         """
         Назначение заявки группе исполнителей по специализации
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             specialization: Специализация группы
             assigned_by: ID пользователя, который назначает
             
@@ -60,16 +60,16 @@ class AssignmentService:
         """
         try:
             # Проверяем существование заявки
-            request = self.db.query(Request).filter(Request.id == request_id).first()
+            request = self._get_request_by_number(request_number)
             if not request:
-                raise ValueError(f"Заявка с ID {request_id} не найдена")
+                raise ValueError(f"Заявка с номером {request_number} не найдена")
             
             # Отменяем предыдущие активные назначения
-            self._cancel_active_assignments(request_id)
+            self._cancel_active_assignments(request_number)
             
             # Создаем новое групповое назначение
             assignment = RequestAssignment(
-                request_id=request_id,
+                request_number=request_number,
                 assignment_type=ASSIGNMENT_TYPE_GROUP,
                 group_specialization=specialization,
                 status=ASSIGNMENT_STATUS_ACTIVE,
@@ -88,12 +88,12 @@ class AssignmentService:
             self.db.refresh(assignment)
             
             # Создаем запись в аудите
-            self._create_audit_log(request_id, assigned_by, f"Назначена группе: {specialization}")
+            self._create_audit_log(request_number, assigned_by, f"Назначена группе: {specialization}")
             
             # Отправляем уведомления
             self._notify_group_assignment(request, assignment)
             
-            logger.info(f"Заявка {request_id} назначена группе {specialization} пользователем {assigned_by}")
+            logger.info(f"Заявка {request_number} назначена группе {specialization} пользователем {assigned_by}")
             return assignment
             
         except Exception as e:
@@ -101,12 +101,12 @@ class AssignmentService:
             logger.error(f"Ошибка назначения заявки группе: {e}")
             raise
     
-    def assign_to_executor(self, request_id: int, executor_id: int, assigned_by: int) -> RequestAssignment:
+    def assign_to_executor(self, request_number: str, executor_id: int, assigned_by: int) -> RequestAssignment:
         """
         Назначение заявки конкретному исполнителю
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             executor_id: ID исполнителя
             assigned_by: ID пользователя, который назначает
             
@@ -118,9 +118,9 @@ class AssignmentService:
         """
         try:
             # Проверяем существование заявки
-            request = self.db.query(Request).filter(Request.id == request_id).first()
+            request = self._get_request_by_number(request_number)
             if not request:
-                raise ValueError(f"Заявка с ID {request_id} не найдена")
+                raise ValueError(f"Заявка с номером {request_number} не найдена")
             
             # Проверяем существование исполнителя
             executor = self.db.query(User).filter(User.id == executor_id).first()
@@ -128,11 +128,11 @@ class AssignmentService:
                 raise ValueError(f"Исполнитель с ID {executor_id} не найден")
             
             # Отменяем предыдущие активные назначения
-            self._cancel_active_assignments(request_id)
+            self._cancel_active_assignments(request_number)
             
             # Создаем новое индивидуальное назначение
             assignment = RequestAssignment(
-                request_id=request_id,
+                request_number=request_number,
                 assignment_type=ASSIGNMENT_TYPE_INDIVIDUAL,
                 executor_id=executor_id,
                 status=ASSIGNMENT_STATUS_ACTIVE,
@@ -152,12 +152,12 @@ class AssignmentService:
             
             # Создаем запись в аудите
             executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
-            self._create_audit_log(request_id, assigned_by, f"Назначена исполнителю: {executor_name}")
+            self._create_audit_log(request_number, assigned_by, f"Назначена исполнителю: {executor_name}")
             
             # Отправляем уведомления
             self._notify_executor_assignment(request, assignment)
             
-            logger.info(f"Заявка {request_id} назначена исполнителю {executor_id} пользователем {assigned_by}")
+            logger.info(f"Заявка {request_number} назначена исполнителю {executor_id} пользователем {assigned_by}")
             return assignment
             
         except Exception as e:
@@ -185,18 +185,18 @@ class AssignmentService:
         
         return query.all()
     
-    def get_request_assignments(self, request_id: int) -> List[RequestAssignment]:
+    def get_request_assignments(self, request_number: str) -> List[RequestAssignment]:
         """
         Получение всех назначений заявки
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             
         Returns:
             List[RequestAssignment]: Список назначений
         """
         return self.db.query(RequestAssignment).filter(
-            RequestAssignment.request_id == request_id
+            RequestAssignment.request_number == request_number
         ).order_by(desc(RequestAssignment.created_at)).all()
     
     def cancel_assignment(self, assignment_id: int, cancelled_by: int) -> bool:
@@ -221,7 +221,7 @@ class AssignmentService:
             assignment.status = ASSIGNMENT_STATUS_CANCELLED
             
             # Обновляем заявку
-            request = self.db.query(Request).filter(Request.id == assignment.request_id).first()
+            request = self._get_request_by_number(assignment.request_number)
             if request:
                 request.assignment_type = None
                 request.assigned_group = None
@@ -232,7 +232,7 @@ class AssignmentService:
             self.db.commit()
             
             # Создаем запись в аудите
-            self._create_audit_log(assignment.request_id, cancelled_by, "Назначение отменено")
+            self._create_audit_log(assignment.request_number, cancelled_by, "Назначение отменено")
             
             logger.info(f"Назначение {assignment_id} отменено пользователем {cancelled_by}")
             return True
@@ -263,28 +263,28 @@ class AssignmentService:
         
         return users
     
-    def get_active_assignment(self, request_id: int) -> Optional[RequestAssignment]:
+    def get_active_assignment(self, request_number: str) -> Optional[RequestAssignment]:
         """
         Получение активного назначения заявки
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             
         Returns:
             Optional[RequestAssignment]: Активное назначение или None
         """
         return self.db.query(RequestAssignment).filter(
             and_(
-                RequestAssignment.request_id == request_id,
+                RequestAssignment.request_number == request_number,
                 RequestAssignment.status == ASSIGNMENT_STATUS_ACTIVE
             )
         ).first()
     
-    def _cancel_active_assignments(self, request_id: int):
+    def _cancel_active_assignments(self, request_number: str):
         """Отмена всех активных назначений заявки"""
         active_assignments = self.db.query(RequestAssignment).filter(
             and_(
-                RequestAssignment.request_id == request_id,
+                RequestAssignment.request_number == request_number,
                 RequestAssignment.status == ASSIGNMENT_STATUS_ACTIVE
             )
         ).all()
@@ -292,13 +292,13 @@ class AssignmentService:
         for assignment in active_assignments:
             assignment.status = ASSIGNMENT_STATUS_CANCELLED
     
-    def _create_audit_log(self, request_id: int, user_id: int, action_description: str):
+    def _create_audit_log(self, request_number: str, user_id: int, action_description: str):
         """Создание записи в аудите"""
         try:
             audit_log = AuditLog(
                 user_id=user_id,
                 action=AUDIT_ACTION_REQUEST_ASSIGNED,
-                details=f"Заявка {request_id}: {action_description}",
+                details=f"Заявка {request_number}: {action_description}",
                 timestamp=datetime.now()
             )
             self.db.add(audit_log)
@@ -337,12 +337,12 @@ class AssignmentService:
     
     # Методы интеграции с ЭТАПОМ 3
     
-    def smart_assign_request(self, request_id: int, assigned_by: int) -> Optional[RequestAssignment]:
+    def smart_assign_request(self, request_number: str, assigned_by: int) -> Optional[RequestAssignment]:
         """
         Умное назначение заявки с использованием ИИ
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             assigned_by: ID пользователя, который назначает
             
         Returns:
@@ -353,23 +353,23 @@ class AssignmentService:
             return None
         
         try:
-            request = self.db.query(Request).filter(Request.id == request_id).first()
+            request = self._get_request_by_number(request_number)
             if not request:
-                raise ValueError(f"Заявка с ID {request_id} не найдена")
+                raise ValueError(f"Заявка с номером {request_number} не найдена")
             
             # Используем SmartDispatcher для поиска лучшего исполнителя
             dispatcher = SmartDispatcher(self.db)
-            assignment_result = dispatcher.auto_assign_request(request_id)
+            assignment_result = dispatcher.auto_assign_request(request_number)
             
             if assignment_result and assignment_result.success:
-                logger.info(f"Заявка {request_id} успешно назначена через SmartDispatcher")
-                return self.get_active_assignment(request_id)
+                logger.info(f"Заявка {request_number} успешно назначена через SmartDispatcher")
+                return self.get_active_assignment(request_number)
             else:
-                logger.warning(f"SmartDispatcher не смог назначить заявку {request_id}")
+                logger.warning(f"SmartDispatcher не смог назначить заявку {request_number}")
                 return None
                 
         except Exception as e:
-            logger.error(f"Ошибка умного назначения заявки {request_id}: {e}")
+            logger.error(f"Ошибка умного назначения заявки {request_number}: {e}")
             return None
     
     def optimize_assignments(self, algorithm: str = "hybrid") -> Dict[str, Any]:
@@ -473,12 +473,12 @@ class AssignmentService:
             logger.error(f"Ошибка автоназначения срочных заявок: {e}")
             return {"error": str(e)}
     
-    def get_assignment_recommendations(self, request_id: int) -> List[Dict[str, Any]]:
+    def get_assignment_recommendations(self, request_number: str) -> List[Dict[str, Any]]:
         """
         Получение рекомендаций по назначению заявки
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             
         Returns:
             List[Dict[str, Any]]: Список рекомендаций
@@ -488,7 +488,7 @@ class AssignmentService:
             return []
         
         try:
-            request = self.db.query(Request).filter(Request.id == request_id).first()
+            request = self._get_request_by_number(request_number)
             if not request:
                 return []
             
@@ -521,5 +521,11 @@ class AssignmentService:
             return recommendations
             
         except Exception as e:
-            logger.error(f"Ошибка получения рекомендаций для заявки {request_id}: {e}")
+            logger.error(f"Ошибка получения рекомендаций для заявки {request_number}: {e}")
             return []
+
+    def _get_request_by_number(self, request_number: str) -> Optional[Request]:
+        """Возвращает заявку по её номеру."""
+        if not request_number:
+            return None
+        return self.db.query(Request).filter(Request.request_number == request_number).first()

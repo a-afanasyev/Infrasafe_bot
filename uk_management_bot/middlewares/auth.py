@@ -1,6 +1,7 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import json
 import logging
+from functools import wraps
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import get_user_roles, get_active_role
 
@@ -116,20 +117,91 @@ async def role_mode_middleware(handler, event: Any, data: Dict[str, Any]):
     if user:
         roles_list = get_user_roles(user)
         active_role = get_active_role(user)
-        # ОТЛАДКА для пользователя с Telegram ID 48617336
-        if user.telegram_id == 48617336:
-            print(f"🔍 MIDDLEWARE DEBUG: user.telegram_id={user.telegram_id}")
-            print(f"🔍 MIDDLEWARE DEBUG: user.role={user.role}")
-            print(f"🔍 MIDDLEWARE DEBUG: user.roles={user.roles}")
-            print(f"🔍 MIDDLEWARE DEBUG: user.active_role={user.active_role}")
-            print(f"🔍 MIDDLEWARE DEBUG: roles_list={roles_list}")
-            print(f"🔍 MIDDLEWARE DEBUG: active_role={active_role}")
+        # Логирование для отладки (только в debug режиме)
+        logger.debug(f"User roles processed: telegram_id={user.telegram_id}, roles={roles_list}, active_role={active_role}")
     else:
         roles_list = ["applicant"]
         active_role = "applicant"
 
     data["roles"] = roles_list
     data["active_role"] = active_role
+    
+    # Debug: посмотрим что передаём дальше
+    logger.debug(f"role_mode_middleware: передаём данные data.keys()={list(data.keys())}, roles={roles_list}, active_role={active_role}")
 
     return await handler(event, data)
+
+
+def require_role(required_roles: List[str]):
+    """Декоратор для проверки ролей пользователя перед выполнением хэндлера.
+    
+    Args:
+        required_roles: Список ролей, одна из которых должна быть у пользователя
+    
+    Returns:
+        Decorator function
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Debug: посмотрим что приходит
+            logger.debug(f"require_role debug: args={len(args)}, kwargs_keys={list(kwargs.keys())}")
+            
+            # Попробуем получить из kwargs (aiogram 3 DI)
+            user_roles = kwargs.get("roles", [])
+            user = kwargs.get("user")
+            event = args[0] if args else kwargs.get("event")
+            db = kwargs.get("db")
+            
+            # Если данные не пришли через DI, получаем их вручную
+            if not user_roles and event and db:
+                telegram_id = None
+                if hasattr(event, 'from_user') and event.from_user:
+                    telegram_id = event.from_user.id
+                
+                if telegram_id:
+                    try:
+                        from uk_management_bot.database.models.user import User
+                        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+                        if user:
+                            from uk_management_bot.utils.auth_helpers import get_user_roles
+                            user_roles = get_user_roles(user)
+                            logger.debug(f"require_role: получили роли из БД: {user_roles}")
+                    except Exception as e:
+                        logger.warning(f"Ошибка получения ролей из БД: {e}")
+            
+            logger.debug(f"require_role check: user_roles={user_roles}, required_roles={required_roles}, user={user}")
+            
+            # Проверяем права доступа
+            has_access = False
+            if user_roles:
+                has_access = any(role in user_roles for role in required_roles)
+            
+            if not has_access:
+                logger.warning(f"Access denied for user {user.telegram_id if user else 'unknown'}: has roles {user_roles}, needs {required_roles}")
+                
+                # Формируем сообщение об отсутствии прав
+                language = None
+                if hasattr(event, 'from_user') and event.from_user:
+                    language = getattr(event.from_user, "language_code", "ru")
+                
+                text = get_text("auth.no_access", language=language or "ru")
+                
+                try:
+                    if isinstance(event, Message):
+                        await event.answer(text)
+                    elif isinstance(event, CallbackQuery):
+                        await event.answer(text, show_alert=True)
+                except Exception as e:
+                    logger.warning(f"Не удалось отправить сообщение об отсутствии прав: {e}")
+                
+                return None
+            
+            logger.debug(f"Access granted for user {user.telegram_id if user else 'unknown'}")
+            
+            # Если права есть, выполняем хэндлер
+            return await func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
 

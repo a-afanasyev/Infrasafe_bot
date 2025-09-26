@@ -36,9 +36,9 @@ logger = logging.getLogger(__name__)
 async def handle_status_change_start(callback: CallbackQuery, state: FSMContext, db: Session):
     """Начало процесса изменения статуса заявки"""
     try:
-        # Получаем ID заявки
-        request_id = int(callback.data.split("_")[-1])
-        
+        # Получаем номер заявки
+        request_number = callback.data.split("_")[-1]
+
         # Проверяем существование заявки
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
@@ -62,7 +62,7 @@ async def handle_status_change_start(callback: CallbackQuery, state: FSMContext,
         
         # Сохраняем данные в состоянии
         await state.update_data(
-            request_id=request_id,
+            request_number=request_number,
             current_status=request.status,
             user_roles=user.roles
         )
@@ -165,7 +165,7 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
         new_status = data.get("new_status")
         comment = data.get("comment")
         
-        if not request_id or not new_status:
+        if not request_number or not new_status:
             await callback.answer("Ошибка: данные не найдены", show_alert=True)
             return
         
@@ -175,7 +175,7 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
         
         # Изменяем статус заявки
         updated_request = request_service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status=new_status,
             actor_telegram_id=callback.from_user.id
         )
@@ -184,7 +184,7 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
         if user:
             if comment:
                 comment_service.add_status_change_comment(
-                    request_id=request_id,
+                    request_number=request_number,
                     user_id=user.id,
                     previous_status=current_status,
                     new_status=new_status,
@@ -192,7 +192,7 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
                 )
             else:
                 comment_service.add_status_change_comment(
-                    request_id=request_id,
+                    request_number=request_number,
                     user_id=user.id,
                     previous_status=current_status,
                     new_status=new_status
@@ -201,7 +201,7 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
         # Показываем сообщение об успехе
         lang = get_language_from_event(callback, db)
         success_text = get_text("status_management.success", language=lang).format(
-            request_id=request_id,
+            request_number=request_number,
             old_status=current_status,
             new_status=new_status
         )
@@ -242,8 +242,8 @@ async def handle_take_to_work(callback: CallbackQuery, state: FSMContext, db: Se
             await callback.answer("У вас нет прав для выполнения этого действия", show_alert=True)
             return
         
-        request_id = int(callback.data.split("_")[-1])
-        
+        request_number = callback.data.split("_")[-1]
+
         # Проверяем, что заявка назначена этому исполнителю
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request or request.executor_id != callback.from_user.id:
@@ -255,14 +255,14 @@ async def handle_take_to_work(callback: CallbackQuery, state: FSMContext, db: Se
         comment_service = CommentService(db)
         
         updated_request = request_service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status=REQUEST_STATUS_IN_PROGRESS,
             actor_telegram_id=callback.from_user.id
         )
         
         # Добавляем комментарий
         comment_service.add_status_change_comment(
-            request_id=request_id,
+            request_number=request_number,
             actor_telegram_id=callback.from_user.id,
             previous_status=request.status,
             new_status=REQUEST_STATUS_IN_PROGRESS,
@@ -284,11 +284,11 @@ async def handle_purchase_materials(callback: CallbackQuery, state: FSMContext, 
             await callback.answer("У вас нет прав для выполнения этого действия", show_alert=True)
             return
         
-        request_id = int(callback.data.split("_")[-1])
-        
+        request_number = callback.data.split("_")[-1]
+
         # Сохраняем данные в состоянии
         await state.update_data(
-            request_id=request_id,
+            request_number=request_number,
             action="purchase_materials"
         )
         
@@ -332,11 +332,8 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
             await message.answer("Заявка не найдена")
             return
         
-        # Получаем ID заявки для совместимости со старыми методами
-        request_id = getattr(request, 'id', None)
-        if not request_id:
-            # Если нет поля id, используем номер заявки
-            request_id = request_number
+        # Используем номер заявки
+        request_id = request_number
         
         # Изменяем статус на "Закуп"
         updated_request = request_service.update_status_by_actor(
@@ -444,11 +441,11 @@ async def handle_complete_work(callback: CallbackQuery, state: FSMContext, db: S
             await callback.answer("У вас нет прав для выполнения этого действия", show_alert=True)
             return
         
-        request_id = int(callback.data.split("_")[-1])
-        
+        request_number = callback.data.split("_")[-1]
+
         # Сохраняем данные в состоянии
         await state.update_data(
-            request_id=request_id,
+            request_number=request_number,
             action="complete_work"
         )
         
@@ -494,7 +491,7 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
         
         # Изменяем статус на "Исполнено"
         updated_request = request_service.update_status_by_actor(
-            request_id=request_id,
+            request_number=request_number,
             new_status=REQUEST_STATUS_COMPLETED,
             actor_telegram_id=message.from_user.id
         )
@@ -505,7 +502,7 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
         # Добавляем комментарий с отчетом
         if user:
             comment_service.add_completion_report_comment(
-                request_id=request_id,
+                request_number=request_number,
                 user_id=user.id,
                 report=report
             )
@@ -602,7 +599,7 @@ async def show_status_confirmation(callback_or_message, state: FSMContext, db: S
         # Формируем текст подтверждения
         lang = get_language_from_event(callback, db)
         confirmation_text = get_text("status_management.confirmation", language=lang).format(
-            request_id=request_id,
+            request_number=request_number,
             current_status=current_status,
             new_status=new_status,
             category=request.category,

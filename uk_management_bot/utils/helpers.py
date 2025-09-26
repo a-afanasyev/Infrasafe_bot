@@ -69,8 +69,11 @@ def get_text(key: str, language: str = "ru", **kwargs) -> str:
 
 def format_request_details(request, locale: Dict[str, Any]) -> str:
     """Форматирование деталей заявки"""
+    # Используем новый формат номера заявки
+    request_display = request.format_number_for_display()
+    
     details = f"""
-📋 {locale.get('requests', {}).get('details', 'Детали заявки')} #{request.id}
+📋 {locale.get('requests', {}).get('details', 'Детали заявки')} {request_display}
 
 🏷️ {locale.get('requests', {}).get('category', 'Категория')}: {request.category}
 📍 {locale.get('requests', {}).get('address', 'Адрес')}: {request.address}
@@ -139,3 +142,69 @@ def truncate_text(text: str, max_length: int = 100) -> str:
     if len(text) <= max_length:
         return text
     return text[:max_length-3] + "..."
+
+def get_user_language(user_id: int, db) -> str:
+    """
+    Получить язык пользователя по его telegram ID
+    
+    Args:
+        user_id: Telegram ID пользователя
+        db: Сессия базы данных
+        
+    Returns:
+        str: Код языка пользователя или "ru" как fallback
+    """
+    try:
+        from uk_management_bot.database.models.user import User
+        user = db.query(User).filter(User.telegram_id == user_id).first()
+        if user and user.language:
+            return user.language
+    except Exception:
+        pass
+    return "ru"  # fallback
+
+def get_language_from_event(event, db=None):
+    """
+    Получить язык из Message или CallbackQuery объекта
+    
+    Args:
+        event: Message или CallbackQuery объект
+        db: Сессия базы данных (опционально для fallback на БД)
+        
+    Returns:
+        str: Код языка
+    """
+    # Сначала пробуем language_code из Telegram
+    if hasattr(event, 'from_user') and event.from_user:
+        telegram_lang = getattr(event.from_user, 'language_code', None)
+        if telegram_lang:
+            return telegram_lang
+        
+        # Если нет language_code и есть БД, проверяем пользователя в БД
+        if db:
+            return get_user_language(event.from_user.id, db)
+    
+    return "ru"  # fallback
+
+
+def format_datetime(dt, language: str = "ru") -> str:
+    """
+    Форматирование datetime объекта в читаемую строку
+    
+    Args:
+        dt: datetime объект
+        language: Язык форматирования
+        
+    Returns:
+        str: Отформатированная дата и время
+    """
+    if not dt:
+        return "-"
+    
+    try:
+        if language == "uz":
+            return dt.strftime("%d.%m.%Y %H:%M")
+        else:  # default to ru
+            return dt.strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return str(dt)

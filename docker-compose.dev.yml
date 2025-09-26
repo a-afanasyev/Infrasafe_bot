@@ -14,6 +14,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
       - REDIS_URL=redis://redis:6379/0
+      - USE_REDIS_RATE_LIMIT=true
       - LOG_LEVEL=DEBUG
       - DEBUG=true
       - PYTHONUNBUFFERED=1
@@ -25,6 +26,8 @@ services:
       - ./.env:/app/.env
       # Монтируем скрипты
       - ./scripts:/app/scripts
+      # Монтируем тесты
+      - ./tests:/app/tests
       # Монтируем SQLite файл для миграции
       - ./uk_management.db:/app/uk_management.db
     depends_on:
@@ -37,6 +40,7 @@ services:
     # Добавляем запись в hosts файл контейнера
     extra_hosts:
       - "uk-management.local:127.0.0.1"
+    command: python uk_management_bot/main.py
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
       interval: 30s

@@ -14,6 +14,7 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.utils.constants import REQUEST_STATUSES
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ def get_edit_request_keyboard() -> ReplyKeyboardMarkup:
 def get_request_status_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура для изменения статуса заявки"""
     keyboard = [
-        ["✅ Принять"],
+        ["🔧 В работу"],
         ["🔄 В работе"],
         ["💰 Закуп"],
         ["❓ Уточнение"],
@@ -136,7 +137,7 @@ def get_requests_filter_keyboard() -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_pagination_keyboard(current_page: int, total_pages: int, request_id: int = None, show_reply_clarify: bool = False) -> InlineKeyboardMarkup:
+def get_pagination_keyboard(current_page: int, total_pages: int, request_number: str = None, show_reply_clarify: bool = False) -> InlineKeyboardMarkup:
     """Клавиатура для пагинации заявок"""
     keyboard = []
     
@@ -153,42 +154,42 @@ def get_pagination_keyboard(current_page: int, total_pages: int, request_id: int
     keyboard.append(nav_buttons)
     
     # Кнопки действий
-    if request_id:
+    if request_number:
         action_buttons = [
-            InlineKeyboardButton(text="👁️ Просмотр", callback_data=f"view_{request_id}"),
-            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_{request_id}"),
-            InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_{request_id}")
+            InlineKeyboardButton(text="👁️ Просмотр", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number)),
+            InlineKeyboardButton(text="🗑️ Удалить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("delete_", request_number))
         ]
         keyboard.append(action_buttons)
         if show_reply_clarify:
-            keyboard.append([InlineKeyboardButton(text="💬 Ответить на уточнение", callback_data=f"replyclarify_{request_id}")])
+            keyboard.append([InlineKeyboardButton(text="💬 Ответить на уточнение", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("replyclarify_", request_number))])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_request_actions_keyboard(request_id: int) -> InlineKeyboardMarkup:
+def get_request_actions_keyboard(request_number: str) -> InlineKeyboardMarkup:
     """Клавиатура действий с заявкой"""
     keyboard = [
         [
-            InlineKeyboardButton(text="👁️ Просмотр", callback_data=f"view_{request_id}"),
-            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_{request_id}")
+            InlineKeyboardButton(text="👁️ Просмотр", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number))
         ],
         [
-            InlineKeyboardButton(text="✅ Принять", callback_data=f"accept_{request_id}"),
-            InlineKeyboardButton(text="❓ Уточнение", callback_data=f"clarify_{request_id}")
+            InlineKeyboardButton(text="🔧 В работу", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("accept_", request_number)),
+            InlineKeyboardButton(text="❓ Уточнение", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("clarify_", request_number))
         ],
         [
-            InlineKeyboardButton(text="🔄 В работу", callback_data=f"work_{request_id}"),
-            InlineKeyboardButton(text="💰 Закуп", callback_data=f"purchase_{request_id}")
+            InlineKeyboardButton(text="🔄 В работу", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("work_", request_number)),
+            InlineKeyboardButton(text="💰 Закуп", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number))
         ],
         [
-            InlineKeyboardButton(text="✅ Выполнена", callback_data=f"complete_{request_id}"),
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"approve_{request_id}")
+            InlineKeyboardButton(text="✅ Выполнена", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_", request_number)),
+            InlineKeyboardButton(text="✅ Подтвердить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("approve_", request_number))
         ],
         [
-            InlineKeyboardButton(text="❌ Отменить", callback_data=f"cancel_{request_id}")
+            InlineKeyboardButton(text="❌ Отменить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("cancel_", request_number))
         ],
         [
-            InlineKeyboardButton(text="🚫 Предложить отказ", callback_data=f"deny_{request_id}")
+            InlineKeyboardButton(text="🚫 Предложить отказ", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("deny_", request_number))
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

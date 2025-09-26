@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Session):
     """Просмотр отчета о выполнении заявки"""
     try:
-        # Получаем ID заявки
-        request_id = int(callback.data.split("_")[-1])
+        # Получаем номер заявки
+        request_number = callback.data.split("_")[-1]
         
         # Проверяем существование заявки
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -69,14 +69,14 @@ async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Ses
         
         # Получаем комментарии с отчетами
         comment_service = CommentService(db)
-        report_comments = comment_service.get_comments_by_type(request_id, "report")
+        report_comments = comment_service.get_comments_by_type(request.request_number, "report")
         
         # Формируем текст отчета
         lang = get_language_from_event(callback, db)
         report_text = format_report_for_display(request, report_comments, lang)
         
         # Показываем отчет
-        keyboard = get_report_actions_keyboard(request_id, request.status, lang)
+        keyboard = get_report_actions_keyboard(request.request_number, request.status, lang)
         
         await callback.message.edit_text(
             report_text,
@@ -98,10 +98,10 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
             await callback.answer("У вас нет прав для принятия заявки", show_alert=True)
             return
         
-        request_id = int(callback.data.split("_")[-1])
+        request_number = callback.data.split("_")[-1]
         
         # Проверяем существование заявки
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -118,7 +118,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
         
         # Сохраняем данные в состоянии
         await state.update_data(
-            request_id=request_id,
+            request_number=request_number,
             current_status=request.status
         )
         
@@ -127,7 +127,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
         keyboard = get_report_confirmation_keyboard(lang)
         
         confirmation_text = get_text("reports.approval_confirmation", language=lang).format(
-            request_id=request_id,
+            request_id=request_number,
             category=request.category,
             address=request.address
         )
@@ -152,10 +152,10 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
     try:
         # Получаем данные из состояния
         data = await state.get_data()
-        request_id = data.get("request_id")
+        request_number = data.get("request_number")
         current_status = data.get("current_status")
         
-        if not request_id:
+        if not request_number:
             await callback.answer("Ошибка: данные заявки не найдены", show_alert=True)
             return
         
@@ -165,14 +165,14 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         
         # Изменяем статус на "Принято"
         updated_request = request_service.change_status(
-            request_id=request_id,
+            request_id=request_number,
             new_status=REQUEST_STATUS_APPROVED,
             user_id=callback.from_user.id
         )
         
         # Добавляем комментарий о принятии
         comment_service.add_status_change_comment(
-            request_id=request_id,
+            request_id=request_number,
             user_id=callback.from_user.id,
             previous_status=current_status,
             new_status=REQUEST_STATUS_APPROVED,
@@ -182,7 +182,7 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         # Показываем сообщение об успехе
         lang = get_language_from_event(callback, db)
         success_text = get_text("reports.approval_success", language=lang).format(
-            request_id=request_id
+            request_id=request_number
         )
         
         await callback.message.edit_text(success_text)
@@ -219,10 +219,10 @@ async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db
             await callback.answer("У вас нет прав для запроса доработки", show_alert=True)
             return
         
-        request_id = int(callback.data.split("_")[-1])
+        request_number = callback.data.split("_")[-1]
         
         # Проверяем существование заявки
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
@@ -239,7 +239,7 @@ async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db
         
         # Сохраняем данные в состоянии
         await state.update_data(
-            request_id=request_id,
+            request_id=request_number,
             action="revision"
         )
         
@@ -275,28 +275,28 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         
         # Получаем данные из состояния
         data = await state.get_data()
-        request_id = data.get("request_id")
+        request_number = data.get("request_number")
         
         # Создаем сервисы
         request_service = RequestService(db)
         comment_service = CommentService(db)
         
         # Получаем текущую заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await message.answer("Заявка не найдена")
             return
         
         # Изменяем статус на "В работе" (возвращаем к доработке)
         updated_request = request_service.change_status(
-            request_id=request_id,
+            request_id=request_number,
             new_status="В работе",
             user_id=message.from_user.id
         )
         
         # Добавляем комментарий о доработке
         comment_service.add_clarification_comment(
-            request_id=request_id,
+            request_id=request_number,
             user_id=message.from_user.id,
             clarification=f"Запрошена доработка. Причина: {revision_reason}"
         )
@@ -304,7 +304,7 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         # Показываем подтверждение
         lang = get_language_from_event(callback, db)
         success_text = get_text("reports.revision_requested", language=lang).format(
-            request_id=request_id,
+            request_id=request_number,
             reason=revision_reason
         )
         
@@ -322,24 +322,24 @@ async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: 
     """Возврат к отчету"""
     try:
         # Получаем ID заявки
-        request_id = int(callback.data.split("_")[-1])
+        request_number = callback.data.split("_")[-1]
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
         
         # Получаем комментарии с отчетами
         comment_service = CommentService(db)
-        report_comments = comment_service.get_comments_by_type(request_id, "report")
+        report_comments = comment_service.get_comments_by_type(request.request_number, "report")
         
         # Формируем текст отчета
         lang = get_language_from_event(callback, db)
         report_text = format_report_for_display(request, report_comments, lang)
         
         # Показываем отчет
-        keyboard = get_report_actions_keyboard(request_id, request.status, lang)
+        keyboard = get_report_actions_keyboard(request.request_number, request.status, lang)
         
         await callback.message.edit_text(
             report_text,

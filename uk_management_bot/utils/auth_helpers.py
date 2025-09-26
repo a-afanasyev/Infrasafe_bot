@@ -132,3 +132,27 @@ def get_active_role(user: User) -> str:
         logger.warning(f"Ошибка получения активной роли пользователя {user.telegram_id}: {exc}")
     
     return "applicant"
+
+async def check_user_role(user_id: int, required_role: str, db) -> bool:
+    """
+    Проверяет, имеет ли пользователь указанную роль
+    
+    Args:
+        user_id: ID пользователя
+        required_role: Требуемая роль
+        db: Сессия базы данных
+        
+    Returns:
+        bool: True если пользователь имеет требуемую роль, False иначе
+    """
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return False
+        
+        user_roles = get_user_roles(user)
+        return required_role in user_roles
+        
+    except Exception as e:
+        logger.error(f"Ошибка проверки роли пользователя {user_id}: {e}")
+        return False

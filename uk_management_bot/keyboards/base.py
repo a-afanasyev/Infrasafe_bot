@@ -98,6 +98,7 @@ def get_main_keyboard_for_role(active_role: str, roles: list[str], user_status: 
         builder.add(KeyboardButton(text="ℹ️ Помощь"))
         # Быстрый доступ к сменам отдельной кнопкой
         builder.add(KeyboardButton(text="🔄 Смена"))
+        builder.add(KeyboardButton(text="📋 Мои смены"))
     else:
         # Базовые кнопки для заявителя/других ролей
         # Не показываем кнопку "Создать заявку" для пользователей на модерации
@@ -114,7 +115,6 @@ def get_main_keyboard_for_role(active_role: str, roles: list[str], user_status: 
     # Кнопки менеджера (только для активных ролей admin/manager)
     if active_role in ["admin", "manager"]:
         builder.add(KeyboardButton(text="🔧 Админ панель"))
-        builder.add(KeyboardButton(text="📊 Статистика"))
 
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)

@@ -71,8 +71,12 @@ class RequestService:
             if not validate_description(description):
                 raise ValueError("Описание слишком короткое или длинное")
             
+            # Генерируем уникальный номер заявки
+            request_number = Request.generate_request_number(self.db)
+            
             # Создание заявки
             request = Request(
+                request_number=request_number,
                 user_id=user_id,
                 category=category,
                 address=address,
@@ -90,7 +94,7 @@ class RequestService:
             # Синхронизация с Google Sheets
             # await self._sync_request_to_sheets(request, "create")  # Временно отключено
             
-            logger.info(f"Создана заявка ID {request.id} пользователем {user_id}")
+            logger.info(f"Создана заявка {request.request_number} пользователем {user_id}")
             return request
             
         except Exception as e:
@@ -132,27 +136,35 @@ class RequestService:
             logger.error(f"Ошибка получения заявок пользователя {user_id}: {e}")
             return []
     
-    def get_request_by_id(self, request_id: int) -> Optional[Request]:
+    def get_request_by_number(self, request_number: str) -> Optional[Request]:
         """
-        Получение заявки по ID
+        Получение заявки по номеру
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки в формате YYMMDD-NNN
             
         Returns:
             Optional[Request]: Заявка или None
         """
         try:
-            request = self.db.query(Request).filter(Request.id == request_id).first()
+            request = self.db.query(Request).filter(Request.request_number == request_number).first()
             return request
             
         except Exception as e:
-            logger.error(f"Ошибка получения заявки {request_id}: {e}")
+            logger.error(f"Ошибка получения заявки {request_number}: {e}")
             return None
+    
+    # Устаревший метод для совместимости - будет удален
+    def get_request_by_id(self, request_id: int) -> Optional[Request]:
+        """
+        УСТАРЕВШИЙ МЕТОД - использовать get_request_by_number
+        """
+        logger.warning(f"Using deprecated get_request_by_id({request_id})")
+        return None
     
     def update_request_status(
         self,
-        request_id: int,
+        request_number: str,
         new_status: str,
         executor_id: Optional[int] = None,
         notes: Optional[str] = None
@@ -161,7 +173,7 @@ class RequestService:
         Обновление статуса заявки
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             new_status: Новый статус
             executor_id: ID исполнителя (опционально)
             notes: Примечания (опционально)
@@ -173,7 +185,7 @@ class RequestService:
             if new_status not in REQUEST_STATUSES:
                 raise ValueError(f"Неверный статус: {new_status}")
             
-            request = self.get_request_by_id(request_id)
+            request = self.get_request_by_number(request_number)
             if not request:
                 return None
             
@@ -185,7 +197,7 @@ class RequestService:
                     request.notes = (request.notes + "\n" if request.notes else "") + notes
                 self.db.commit()
                 self.db.refresh(request)
-                logger.info(f"Обновлены примечания заявки {request_id} при неизменном статусе '{old_status}'")
+                logger.info(f"Обновлены примечания заявки {request_number} при неизменном статусе '{old_status}'")
                 return request
             request.status = new_status
             
@@ -197,7 +209,7 @@ class RequestService:
                 request.notes = (existing_notes + "\n" if existing_notes else "") + notes
             
             # Если заявка завершена, устанавливаем время завершения
-            if new_status == "Завершена":
+            if new_status == "Выполнена":
                 request.completed_at = datetime.now()
             
             self.db.commit()
@@ -211,12 +223,12 @@ class RequestService:
                 changes["comments"] = notes
             # await self._sync_request_to_sheets(request, "update", changes)  # Временно отключено
             
-            logger.info(f"Статус заявки {request_id} изменен с '{old_status}' на '{new_status}'")
+            logger.info(f"Статус заявки {request_number} изменен с '{old_status}' на '{new_status}'")
             return request
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка обновления статуса заявки {request_id}: {e}")
+            logger.error(f"Ошибка обновления статуса заявки {request_number}: {e}")
             return None
 
     # === Новая логика: обновление статуса с учетом ролей и допустимых переходов ===
@@ -288,7 +300,7 @@ class RequestService:
 
     def update_status_by_actor(
         self,
-        request_id: int,
+        request_number: str,
         new_status: str,
         actor_telegram_id: int,
         notes: Optional[str] = None
@@ -303,7 +315,7 @@ class RequestService:
                 return {"success": False, "message": f"Неверный статус: {new_status}", "request": None}
 
             # Получаем заявку и актера
-            request: Optional[Request] = self.db.query(Request).filter(Request.id == request_id).first()
+            request: Optional[Request] = self.get_request_by_number(request_number)
             if not request:
                 return {"success": False, "message": "Заявка не найдена", "request": None}
 
@@ -368,7 +380,7 @@ class RequestService:
                     telegram_user_id=request.user.telegram_id if request.user else None,  # Telegram ID создателя заявки
                     action=AUDIT_ACTION_REQUEST_STATUS_CHANGED,
                     details={
-                        "request_id": request.id,
+                        "request_number": request.request_number,
                         "old_status": old_status,
                         "new_status": new_status,
                         "notes": notes,
@@ -379,7 +391,7 @@ class RequestService:
                 self.db.commit()
             except Exception as e:
                 self.db.rollback()
-                logger.error(f"Ошибка записи аудита смены статуса для заявки {request_id}: {e}")
+                logger.error(f"Ошибка записи аудита смены статуса для заявки {request_number}: {e}")
 
             # Уведомления (best-effort)
             try:
@@ -387,15 +399,15 @@ class RequestService:
                 notify_status_changed(self.db, request, old_status, new_status)
                 # попытка async (если в контексте есть bot, вызывать из хэндлеров можно напрямую)
             except Exception as e:
-                logger.error(f"Ошибка отправки уведомления о смене статуса для заявки {request_id}: {e}")
+                logger.error(f"Ошибка отправки уведомления о смене статуса для заявки {request_number}: {e}")
             logger.info(
-                f"Пользователь {actor.id} ({actor.role}) изменил статус заявки {request_id} "
+                f"Пользователь {actor.id} ({actor.role}) изменил статус заявки {request_number} "
                 f"с '{old_status}' на '{new_status}'"
             )
             return {"success": True, "message": "Статус обновлен", "request": request}
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка update_status_by_actor для заявки {request_id}: {e}")
+            logger.error(f"Ошибка update_status_by_actor для заявки {request_number}: {e}")
             return {"success": False, "message": "Ошибка при обновлении статуса", "request": None}
     
     def search_requests(
@@ -498,19 +510,19 @@ class RequestService:
                 "urgency_statistics": {}
             }
     
-    def delete_request(self, request_id: int, user_id: int) -> bool:
+    def delete_request(self, request_number: str, user_id: int) -> bool:
         """
         Удаление заявки (только создателем или администратором)
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             user_id: ID пользователя, выполняющего удаление
             
         Returns:
             bool: True если удаление успешно
         """
         try:
-            request = self.get_request_by_id(request_id)
+            request = self.get_request_by_number(request_number)
             if not request:
                 return False
             
@@ -519,33 +531,33 @@ class RequestService:
                 # Проверяем, является ли пользователь администратором
                 user = self.db.query(User).filter(User.id == user_id).first()
                 if not user or user.role != "admin":
-                    logger.warning(f"Попытка удаления заявки {request_id} без прав пользователем {user_id}")
+                    logger.warning(f"Попытка удаления заявки {request_number} без прав пользователем {user_id}")
                     return False
             
             self.db.delete(request)
             self.db.commit()
             
-            logger.info(f"Заявка {request_id} удалена пользователем {user_id}")
+            logger.info(f"Заявка {request_number} удалена пользователем {user_id}")
             return True
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка удаления заявки {request_id}: {e}")
+            logger.error(f"Ошибка удаления заявки {request_number}: {e}")
             return False
     
-    def add_media_to_request(self, request_id: int, file_ids: List[str]) -> Optional[Request]:
+    def add_media_to_request(self, request_number: str, file_ids: List[str]) -> Optional[Request]:
         """
         Добавление медиафайлов к заявке
         
         Args:
-            request_id: ID заявки
+            request_number: Номер заявки
             file_ids: Список file_ids медиафайлов
             
         Returns:
             Optional[Request]: Обновленная заявка или None
         """
         try:
-            request = self.get_request_by_id(request_id)
+            request = self.get_request_by_number(request_number)
             if not request:
                 return None
             
@@ -557,12 +569,12 @@ class RequestService:
             self.db.commit()
             self.db.refresh(request)
             
-            logger.info(f"Добавлено {len(file_ids)} медиафайлов к заявке {request_id}")
+            logger.info(f"Добавлено {len(file_ids)} медиафайлов к заявке {request_number}")
             return request
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка добавления медиафайлов к заявке {request_id}: {e}")
+            logger.error(f"Ошибка добавления медиафайлов к заявке {request_number}: {e}")
             return None
     
     async def _sync_request_to_sheets(self, request: Request, operation: str, changes: Dict[str, Any] = None):
@@ -580,7 +592,7 @@ class RequestService:
             
             # Подготавливаем данные заявки
             request_data = {
-                'id': request.id,
+                'request_number': request.request_number,
                 'created_at': request.created_at.strftime("%Y-%m-%d %H:%M:%S") if request.created_at else '',
                 'status': request.status,
                 'category': request.category,
@@ -600,21 +612,28 @@ class RequestService:
             # Создаем задачу синхронизации
             task = SyncTask(
                 task_type=operation,
-                request_id=request.id,
+                request_id=request.request_number,
                 data=request_data if operation == "create" else changes,
                 priority="high" if operation == "create" else "medium"
             )
             
             # Добавляем задачу в очередь (если очередь доступна)
-            # TODO: Добавить интеграцию с очередью синхронизации
+            # FUTURE: Issue #1 - Добавить интеграцию с Redis Queue или Celery
+            # Временно выполняем синхронизацию синхронно
+            try:
+                from uk_management_bot.integrations.google_sheets import sheets_service
+                if sheets_service:
+                    sheets_service.process_sync_task(task)
+            except Exception as sync_error:
+                logger.warning(f"Sync failed, will retry later: {sync_error}")
             
             logger.info(f"Request sync task created", 
-                       request_id=request.id,
+                       request_number=request.request_number,
                        operation=operation,
                        priority=task.priority)
             
         except Exception as e:
-            logger.error(f"Error creating sync task for request {request.id}",
+            logger.error(f"Error creating sync task for request {request.request_number}",
                         error=str(e))
     
     def _get_user_name(self, user_id: int) -> str:

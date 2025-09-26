@@ -36,6 +36,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Копируем папку uk_management_bot в контейнер
 COPY uk_management_bot/ ./uk_management_bot/
 
+# Копируем тесты
+COPY tests/ ./tests/
+
 # Создаем пользователя для безопасности
 # Запуск приложения от имени непривилегированного пользователя
 RUN useradd --create-home --shell /bin/bash app && \

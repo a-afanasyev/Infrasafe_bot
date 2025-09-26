@@ -72,6 +72,12 @@ async def check_redis_health() -> Dict[str, Any]:
         start_time = time.time()
         redis = await get_redis_client()
         
+        if redis is None:
+            return {
+                "status": "disabled",
+                "message": "Redis client not initialized"
+            }
+        
         # Проверяем ping
         await redis.ping()
         
@@ -127,7 +133,7 @@ async def health_check_command(message: Message, db: Session):
         overall_status = "healthy"
         if db_health["status"] == "unhealthy":
             overall_status = "unhealthy"
-        elif redis_health["status"] == "unhealthy":
+        elif redis_health["status"] == "unhealthy" and settings.USE_REDIS_RATE_LIMIT:
             overall_status = "degraded"
         
         # Формируем ответ
@@ -257,20 +263,22 @@ async def get_health_status(db: Session) -> Dict[str, Any]:
         # Определяем общий статус
         overall_status = "healthy"
         components_healthy = 0
-        total_components = 2  # DB + Redis (если включен)
+        total_components = 1  # DB обязательный
         
+        # Проверяем базу данных (критично)
         if db_health["status"] == "healthy":
             components_healthy += 1
-        
-        if redis_health["status"] in ["healthy", "disabled"]:
-            components_healthy += 1
-        elif redis_health["status"] == "unhealthy":
-            overall_status = "degraded"
-        
-        if components_healthy == 0:
+        else:
             overall_status = "unhealthy"
-        elif components_healthy < total_components:
-            overall_status = "degraded"
+        
+        # Redis опциональный, учитываем только если включен
+        if settings.USE_REDIS_RATE_LIMIT:
+            total_components += 1
+            if redis_health["status"] == "healthy":
+                components_healthy += 1
+            elif redis_health["status"] == "unhealthy":
+                overall_status = "degraded" if overall_status == "healthy" else overall_status
+        # Если Redis отключен, не влияет на общий статус
         
         return {
             "status": overall_status,

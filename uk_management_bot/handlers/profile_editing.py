@@ -74,8 +74,9 @@ async def handle_cancel_profile_edit(callback: CallbackQuery, state: FSMContext,
                 parsed_roles = json.loads(user.roles)
                 if isinstance(parsed_roles, list):
                     roles = [str(r) for r in parsed_roles if isinstance(r, str)]
-        except:
-            pass
+        except (json.JSONDecodeError, TypeError, AttributeError) as e:
+            logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
+            roles = ["applicant"]
         
         active_role = user.active_role or roles[0] if roles else "applicant"
         

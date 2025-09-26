@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class AssignmentScore:
     """Структура для оценки качества назначения"""
     shift_id: int
-    request_id: int
+    request_number: str
     total_score: float
     specialization_match: float
     workload_balance: float
@@ -70,14 +70,14 @@ class SmartDispatcher:
     
     def auto_assign_requests(
         self, 
-        request_ids: Optional[List[int]] = None,
+        request_numbers: Optional[List[str]] = None,
         max_assignments: Optional[int] = None
     ) -> DispatchResult:
         """
         Автоматически назначает заявки на оптимальные смены
         
         Args:
-            request_ids: Список ID заявок (если None, берутся все неназначенные)
+            request_numbers: Список номеров заявок (если None, берутся все неназначенные)
             max_assignments: Максимальное количество назначений за один раз
         
         Returns:
@@ -87,7 +87,7 @@ class SmartDispatcher:
         
         try:
             # Получаем заявки для назначения
-            requests = self._get_requests_for_assignment(request_ids)
+            requests = self._get_requests_for_assignment(request_numbers)
             if not requests:
                 return DispatchResult(0, 0, [], ["Нет заявок для назначения"], 0.0, {})
             
@@ -305,7 +305,7 @@ class SmartDispatcher:
             
             return AssignmentScore(
                 shift_id=shift.id,
-                request_id=request.request_number,
+                request_number=request.request_number,
                 total_score=total_score,
                 specialization_match=spec_score,
                 workload_balance=workload_score,
@@ -320,7 +320,7 @@ class SmartDispatcher:
             logger.error(f"Ошибка вычисления оценки назначения: {e}")
             return AssignmentScore(
                 shift_id=shift.id,
-                request_id=request.request_number,
+                request_number=request.request_number,
                 total_score=0.0,
                 specialization_match=0.0,
                 workload_balance=0.0,
@@ -333,7 +333,7 @@ class SmartDispatcher:
     
     # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
     
-    def _get_requests_for_assignment(self, request_ids: Optional[List[int]] = None) -> List[Request]:
+    def _get_requests_for_assignment(self, request_numbers: Optional[List[str]] = None) -> List[Request]:
         """Получает заявки для назначения"""
         try:
             query = self.db.query(Request).filter(
@@ -343,8 +343,8 @@ class SmartDispatcher:
                 )
             )
             
-            if request_ids:
-                query = query.filter(Request.id.in_(request_ids))
+            if request_numbers:
+                query = query.filter(Request.request_number.in_(request_numbers))
             
             return query.order_by(Request.created_at.asc()).all()
             
@@ -419,7 +419,7 @@ class SmartDispatcher:
             # Создаем запись назначения
             shift_assignment = ShiftAssignment(
                 shift_id=assignment.shift_id,
-                request_id=assignment.request_id,
+                request_number=assignment.request_number,
                 assignment_priority=1,
                 estimated_duration=60,  # По умолчанию 60 минут
                 ai_score=assignment.total_score,
@@ -430,7 +430,7 @@ class SmartDispatcher:
             self.db.add(shift_assignment)
             
             # Обновляем заявку
-            request = self.db.query(Request).filter(Request.id == assignment.request_id).first()
+            request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
             if request:
                 shift = self.db.query(Shift).filter(Shift.id == assignment.shift_id).first()
                 if shift:
@@ -440,7 +440,7 @@ class SmartDispatcher:
             
             self.db.commit()
             
-            logger.info(f"Назначена заявка {assignment.request_id} на смену {assignment.shift_id} "
+            logger.info(f"Назначена заявка {assignment.request_number} на смену {assignment.shift_id} "
                        f"с оценкой {assignment.total_score:.2f}")
             
             return True
@@ -683,7 +683,7 @@ class SmartDispatcher:
             assignment.assignment_reason += f" (перераспределено с смены {old_shift_id})"
             
             # Обновляем заявку
-            request = self.db.query(Request).filter(Request.id == assignment.request_id).first()
+            request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
             if request:
                 new_shift = self.db.query(Shift).filter(Shift.id == new_shift_id).first()
                 if new_shift:
@@ -695,7 +695,7 @@ class SmartDispatcher:
             
             self.db.commit()
             
-            logger.info(f"Перераспределена заявка {assignment.request_id} "
+            logger.info(f"Перераспределена заявка {assignment.request_number} "
                        f"со смены {old_shift_id} на {new_shift_id}")
             
             return True

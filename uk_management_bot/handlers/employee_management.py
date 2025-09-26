@@ -113,15 +113,15 @@ router = Router()
 @router.callback_query(F.data == "employee_management_panel")
 async def show_employee_management_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Показать панель управления сотрудниками"""
-    logger.info(f"🔍 DEBUG: show_employee_management_panel вызвана с callback_data: {callback.data}")
+    logger.debug(f"Employee management panel called: callback_data={callback.data}")
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
-    logger.info(f"🔍 DEBUG: has_access = {has_access}, roles = {roles}, user = {user}")
+    logger.debug(f" has_access = {has_access}, roles = {roles}, user = {user}")
     
     if not has_access:
-        logger.warning(f"❌ DEBUG: Доступ запрещен для пользователя {callback.from_user.id}")
+        logger.debug(f"Access denied for user {callback.from_user.id}")
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -129,18 +129,18 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
         return
     
     try:
-        logger.info(f"✅ DEBUG: Начинаем получение статистики сотрудников")
+        logger.debug(f" Начинаем получение статистики сотрудников")
         # Получаем статистику сотрудников
         user_mgmt_service = UserManagementService(db)
         stats = user_mgmt_service.get_employee_stats()
-        logger.info(f"✅ DEBUG: Статистика получена: {stats}")
+        logger.debug(f" Статистика получена: {stats}")
         
         # Показываем главное меню
         try:
             title = get_text('employee_management.main_title', language=lang)
             keyboard = get_employee_management_main_keyboard(stats, lang)
-            logger.info(f"✅ DEBUG: Заголовок: {title}")
-            logger.info(f"✅ DEBUG: Клавиатура создана успешно")
+            logger.debug(f" Заголовок: {title}")
+            logger.debug(f" Клавиатура создана успешно")
             
             await callback.message.edit_text(
                 title,
@@ -151,7 +151,7 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
             raise
         
         await callback.answer()
-        logger.info(f"✅ DEBUG: Панель управления сотрудниками успешно отображена")
+        logger.debug(f" Панель управления сотрудниками успешно отображена")
         
     except Exception as e:
         logger.error(f"❌ Ошибка отображения панели управления сотрудниками: {e}")
@@ -214,15 +214,15 @@ async def show_employee_stats(callback: CallbackQuery, db: Session, roles: list 
 @router.callback_query(F.data.startswith("employee_mgmt_list_"))
 async def show_employee_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Показать список сотрудников"""
-    logger.info(f"🔍 DEBUG: show_employee_list вызвана с callback_data: {callback.data}")
+    logger.debug(f" show_employee_list вызвана с callback_data: {callback.data}")
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
-    logger.info(f"🔍 DEBUG: has_access = {has_access}, roles = {roles}, user = {user}")
+    logger.debug(f" has_access = {has_access}, roles = {roles}, user = {user}")
     
     if not has_access:
-        logger.warning(f"❌ DEBUG: Доступ запрещен для пользователя {callback.from_user.id}")
+        logger.debug(f"Access denied for user {callback.from_user.id}")
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -235,12 +235,12 @@ async def show_employee_list(callback: CallbackQuery, db: Session, roles: list =
         list_type = parts[3]  # pending, active, blocked, executors, managers
         page = int(parts[4]) if len(parts) > 4 else 1
         
-        logger.info(f"✅ DEBUG: Запрос списка сотрудников: тип={list_type}, страница={page}")
+        logger.debug(f" Запрос списка сотрудников: тип={list_type}, страница={page}")
         
         user_mgmt_service = UserManagementService(db)
         employees_data = user_mgmt_service.get_employees_list(list_type, page)
         
-        logger.info(f"✅ DEBUG: Получены данные сотрудников: {len(employees_data.get('employees', []))} сотрудников")
+        logger.debug(f" Получены данные сотрудников: {len(employees_data.get('employees', []))} сотрудников")
         
         # Формируем заголовок
         title_map = {
@@ -259,7 +259,7 @@ async def show_employee_list(callback: CallbackQuery, db: Session, roles: list =
         )
         
         await callback.answer()
-        logger.info(f"✅ DEBUG: Список сотрудников успешно отображен")
+        logger.debug(f" Список сотрудников успешно отображен")
         
     except Exception as e:
         logger.error(f"❌ Ошибка отображения списка сотрудников: {e}")
@@ -274,15 +274,15 @@ async def show_employee_list(callback: CallbackQuery, db: Session, roles: list =
 @router.callback_query(F.data.startswith("employee_mgmt_employee_"))
 async def show_employee_actions(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Показать действия с сотрудником"""
-    logger.info(f"🔍 DEBUG: show_employee_actions вызвана с callback_data: {callback.data}")
+    logger.debug(f" show_employee_actions вызвана с callback_data: {callback.data}")
     lang = callback.from_user.language_code or 'ru'
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
-    logger.info(f"🔍 DEBUG: has_access = {has_access}, roles = {roles}, user = {user}")
+    logger.debug(f" has_access = {has_access}, roles = {roles}, user = {user}")
     
     if not has_access:
-        logger.warning(f"❌ DEBUG: Доступ запрещен для пользователя {callback.from_user.id}")
+        logger.debug(f"Access denied for user {callback.from_user.id}")
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -292,11 +292,11 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
     try:
         # Получаем ID сотрудника
         employee_id = int(callback.data.split('_')[3])
-        logger.info(f"✅ DEBUG: Запрошен сотрудник с ID: {employee_id}")
+        logger.debug(f" Запрошен сотрудник с ID: {employee_id}")
         
         user_mgmt_service = UserManagementService(db)
         employee = user_mgmt_service.get_user_by_id(employee_id)
-        logger.info(f"✅ DEBUG: Сотрудник найден: {employee}")
+        logger.debug(f" Сотрудник найден: {employee}")
         
         if not employee:
             await callback.answer(
@@ -330,7 +330,8 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
                     employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {roles_text}\n"
                 else:
                     employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: Не указано\n"
-            except:
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Ошибка парсинга ролей сотрудника {employee.id}: {e}")
                 employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or 'Не указано'}\n"
         else:
             employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or 'Не указано'}\n"
@@ -781,7 +782,8 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: S
         if employee.roles:
             try:
                 user_roles = json.loads(employee.roles)
-            except:
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Ошибка парсинга ролей пользователя {employee.id}: {e}")
                 user_roles = []
         
         # Сохраняем данные в FSM
@@ -1153,12 +1155,12 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
         target_employee_id = data.get('target_employee_id')
         current_roles = data.get('current_roles', [])
         
-        logger.info(f"🔍 DEBUG: Обработка комментария ролей. target_employee_id={target_employee_id}, current_roles={current_roles}")
+        logger.debug(f" Обработка комментария ролей. target_employee_id={target_employee_id}, current_roles={current_roles}")
         
         # Получаем ID пользователя, который вносит изменения
         current_user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if not current_user:
-            logger.error(f"❌ DEBUG: Не найден пользователь с telegram_id={message.from_user.id}")
+            logger.error(f"User not found: telegram_id={message.from_user.id}")
             await message.answer("❌ Ошибка: пользователь не найден")
             await state.clear()
             return
@@ -1166,7 +1168,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
         # Обновляем роли пользователя
         user = db.query(User).filter(User.id == target_employee_id).first()
         if user:
-            logger.info(f"✅ DEBUG: Найден пользователь для обновления ролей: {user.id}")
+            logger.debug(f" Найден пользователь для обновления ролей: {user.id}")
             
             old_roles = []
             if user.roles:
@@ -1175,7 +1177,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
                 except:
                     old_roles = []
             
-            logger.info(f"🔍 DEBUG: Старые роли: {old_roles}, новые роли: {current_roles}")
+            logger.debug(f" Старые роли: {old_roles}, новые роли: {current_roles}")
             
             user.roles = json.dumps(current_roles)
             if current_roles:
@@ -1197,15 +1199,15 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
                     })
                 )
                 db.add(audit)
-                logger.info(f"✅ DEBUG: AuditLog создан успешно")
+                logger.debug(f" AuditLog создан успешно")
             except Exception as audit_error:
-                logger.error(f"❌ DEBUG: Ошибка создания AuditLog: {audit_error}")
+                logger.error(f"Failed to create AuditLog: {audit_error}")
                 # Продолжаем выполнение даже если аудит не удался
             
             db.commit()
-            logger.info(f"✅ DEBUG: Роли успешно обновлены и сохранены")
+            logger.debug(f" Роли успешно обновлены и сохранены")
         else:
-            logger.error(f"❌ DEBUG: Пользователь с ID {target_employee_id} не найден")
+            logger.error(f"Employee not found: ID {target_employee_id}")
             await message.answer("❌ Ошибка: сотрудник не найден")
             await state.clear()
             return
@@ -1218,7 +1220,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
         )
         
     except Exception as e:
-        logger.error(f"❌ DEBUG: Ошибка обработки комментария ролей: {e}")
+        logger.error(f"Error processing role change comment: {e}")
         await message.answer("❌ Произошла ошибка при обновлении ролей")
         await state.clear()
 

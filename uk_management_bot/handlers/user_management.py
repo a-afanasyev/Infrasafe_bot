@@ -45,25 +45,18 @@ async def show_user_management_panel(callback: CallbackQuery, db: Session, roles
     """Показать панель управления пользователями"""
     lang = callback.from_user.language_code or 'ru'
     
-    # ОТЛАДКА
-    print(f"🔍 DEBUG: show_user_management_panel вызвана")
-    print(f"🔍 DEBUG: roles={roles}, user={user}")
-    
     # Проверяем права доступа через утилитарную функцию
     from uk_management_bot.utils.auth_helpers import has_admin_access
     
     has_access = has_admin_access(roles=roles, user=user)
-    print(f"🔍 DEBUG: has_admin_access() вернул: {has_access}")
+    logger.debug(f"User management panel access: user_id={callback.from_user.id}, access_granted={has_access}")
     
     if not has_access:
-        print(f"❌ DEBUG: Доступ запрещен - roles={roles}, user.role={user.role if user else 'None'}")
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
         )
         return
-    
-    print(f"✅ DEBUG: Доступ разрешен")
     
     try:
         # Получаем статистику пользователей

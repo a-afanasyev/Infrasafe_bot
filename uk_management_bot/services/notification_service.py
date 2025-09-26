@@ -525,6 +525,28 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об отзыве прав доступа: {e}")
 
+    async def send_system_notification(self, title: str, message: str) -> None:
+        """
+        Отправить системное уведомление в канал
+
+        Args:
+            title: Заголовок уведомления
+            message: Текст сообщения
+        """
+        try:
+            from aiogram import Bot
+            bot = Bot(token=settings.BOT_TOKEN)
+
+            try:
+                system_message = f"{title}\n{message}"
+                await send_to_channel(bot, system_message)
+                logger.info(f"Системное уведомление отправлено: {title}")
+            finally:
+                await bot.session.close()
+
+        except Exception as e:
+            logger.warning(f"Ошибка отправки системного уведомления: {e}")
+
 
 # ====== Request status notifications (3.4) ======
 def _build_request_status_message_user(request: Request, old_status: str, new_status: str) -> str:

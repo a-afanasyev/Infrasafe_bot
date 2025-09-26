@@ -41,7 +41,7 @@ class ConstraintViolation:
     severity: str  # 'critical', 'high', 'medium', 'low'
     description: str
     shift_id: Optional[int]
-    request_id: Optional[int]
+    request_number: Optional[str]
     suggested_fix: str
 
 
@@ -610,7 +610,7 @@ class AssignmentOptimizer:
                     severity="high",
                     description=f"Смена {shift.id} перегружена: {shift.current_request_count} заявок",
                     shift_id=shift.id,
-                    request_id=None,
+                    request_number=None,
                     suggested_fix="Перераспределить часть заявок на другие смены"
                 ))
         except Exception as e:
@@ -635,7 +635,7 @@ class AssignmentOptimizer:
                     severity="medium",
                     description=f"Низкое соответствие специализации (оценка: {assignment.ai_score})",
                     shift_id=assignment.shift_id,
-                    request_id=assignment.request_id,
+                    request_number=assignment.request_number,
                     suggested_fix="Найти исполнителя с подходящей специализацией"
                 ))
         except Exception as e:
@@ -671,7 +671,7 @@ class AssignmentOptimizer:
                     severity="critical",
                     description=f"Срочная заявка #{request.request_number} не назначена более {self.constraints['urgent_response_time_minutes']} мин",
                     shift_id=None,
-                    request_id=request.request_number,
+                    request_number=request.request_number,
                     suggested_fix="Немедленно назначить на доступную смену"
                 ))
         except Exception as e:
@@ -881,7 +881,7 @@ class AssignmentOptimizer:
                 new_shift.current_request_count += 1
                 
                 # Обновляем исполнителя заявки
-                request = self.db.query(Request).filter(Request.id == assignment.request_id).first()
+                request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
                 if request:
                     request.executor_id = new_shift.user_id
             
@@ -896,7 +896,7 @@ class AssignmentOptimizer:
     def _find_better_shift_for_assignment(self, assignment: ShiftAssignment) -> Optional[int]:
         """Находит лучшую смену для назначения"""
         try:
-            request = self.db.query(Request).filter(Request.id == assignment.request_id).first()
+            request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
             if not request:
                 return None
             
@@ -939,7 +939,7 @@ class AssignmentOptimizer:
             
             if assignment:
                 success = self._move_assignment_to_shift(assignment, to_shift_id)
-                return assignment.request_id if success else None
+                return assignment.request_number if success else None
             
             return None
             
@@ -972,9 +972,9 @@ class AssignmentOptimizer:
                     if success:
                         moved_requests += 1
                     else:
-                        errors.append(f"Ошибка перемещения заявки {assignment.request_id}")
+                        errors.append(f"Ошибка перемещения заявки {assignment.request_number}")
                 else:
-                    errors.append(f"Нет доступных смен для заявки {assignment.request_id}")
+                    errors.append(f"Нет доступных смен для заявки {assignment.request_number}")
             
             return {
                 "shift_id": shift_id,

@@ -9,7 +9,7 @@ class Rating(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Связь с заявкой
-    request_id = Column(Integer, ForeignKey("requests.id"), nullable=False)
+    request_number = Column(String(10), ForeignKey("requests.request_number"), nullable=False)
     request = relationship("Request", back_populates="ratings")
     
     # Пользователь, оставивший оценку
@@ -26,4 +26,4 @@ class Rating(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     def __repr__(self):
-        return f"<Rating(id={self.id}, request_id={self.request_id}, rating={self.rating})>"
+        return f"<Rating(id={self.id}, request_number={self.request_number}, rating={self.rating})>"

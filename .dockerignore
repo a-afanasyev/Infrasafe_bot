@@ -63,9 +63,7 @@ tmp/
 *.sqlite3
 uk_management.db
 
-# Тесты
-test_*.py
-tests/
+# Тесты (исключаем кэш и покрытие, но оставляем сами тесты для dev-сборки)
 .pytest_cache/
 .coverage
 htmlcov/

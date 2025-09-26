@@ -128,9 +128,9 @@ class TestRequestService(unittest.TestCase):
             description="Тестовая заявка для проверки"
         )
         
-        found_request = self.request_service.get_request_by_id(created_request.id)
+        found_request = self.request_service.get_request_by_number(created_request.request_number)
         self.assertIsNotNone(found_request)
-        self.assertEqual(found_request.id, created_request.id)
+        self.assertEqual(found_request.request_number, created_request.request_number)
     
     def test_update_request_status(self):
         """Тест обновления статуса заявки"""
@@ -142,7 +142,7 @@ class TestRequestService(unittest.TestCase):
         )
         
         updated_request = self.request_service.update_request_status(
-            request_id=request.id,
+            request_number=request.request_number,
             new_status="В работе",
             notes="Начата работа"
         )
@@ -161,7 +161,7 @@ class TestRequestService(unittest.TestCase):
         )
         
         updated_request = self.request_service.update_request_status(
-            request_id=request.id,
+            request_number=request.request_number,
             new_status="Неверный статус"
         )
         
@@ -228,7 +228,7 @@ class TestRequestService(unittest.TestCase):
         
         file_ids = ["file1", "file2", "file3"]
         updated_request = self.request_service.add_media_to_request(
-            request_id=request.id,
+            request_number=request.request_number,
             file_ids=file_ids
         )
         
@@ -246,14 +246,14 @@ class TestRequestService(unittest.TestCase):
         )
         
         success = self.request_service.delete_request(
-            request_id=request.id,
+            request_number=request.request_number,
             user_id=self.test_user.id
         )
         
         self.assertTrue(success)
         
         # Проверяем, что заявка удалена
-        found_request = self.request_service.get_request_by_id(request.id)
+        found_request = self.request_service.get_request_by_number(request.request_number)
         self.assertIsNone(found_request)
     
     def test_delete_request_unauthorized(self):
@@ -267,14 +267,14 @@ class TestRequestService(unittest.TestCase):
         
         # Пытаемся удалить заявку другим пользователем
         success = self.request_service.delete_request(
-            request_id=request.id,
+            request_number=request.request_number,
             user_id=99999  # Другой пользователь
         )
         
         self.assertFalse(success)
         
         # Проверяем, что заявка не удалена
-        found_request = self.request_service.get_request_by_id(request.id)
+        found_request = self.request_service.get_request_by_number(request.request_number)
         self.assertIsNotNone(found_request)
 
 def run_tests():

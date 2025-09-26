@@ -37,12 +37,17 @@ class UserManagementService:
         """
         try:
             # Статистика жителей (заявителей) по статусам
+            # Поддерживаем как новую систему ролей (JSON), так и старую (role поле)
             residents_pending = self.db.query(User).filter(
                 and_(
                     User.status == 'pending',
                     or_(
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident')
+                        User.roles.contains('resident'),
+                        and_(
+                            or_(User.roles.is_(None), User.roles == ''),
+                            User.role == 'applicant'
+                        )
                     )
                 )
             ).count()
@@ -52,7 +57,11 @@ class UserManagementService:
                     User.status == 'approved',
                     or_(
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident')
+                        User.roles.contains('resident'),
+                        and_(
+                            or_(User.roles.is_(None), User.roles == ''),
+                            User.role == 'applicant'
+                        )
                     )
                 )
             ).count()
@@ -62,7 +71,11 @@ class UserManagementService:
                     User.status == 'blocked',
                     or_(
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident')
+                        User.roles.contains('resident'),
+                        and_(
+                            or_(User.roles.is_(None), User.roles == ''),
+                            User.role == 'applicant'
+                        )
                     )
                 )
             ).count()
@@ -192,12 +205,19 @@ class UserManagementService:
             
             # Базовый запрос: только жители (applicant или resident)
             # Исключаем пользователей, которые являются только сотрудниками
+            # Поддерживаем как новую систему ролей (JSON), так и старую (role поле)
             query = self.db.query(User).filter(
                 and_(
                     User.status == status,
                     or_(
+                        # Новая система ролей (JSON поле roles)
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident')
+                        User.roles.contains('resident'),
+                        # Старая система ролей (поле role) - для обратной совместимости
+                        and_(
+                            or_(User.roles.is_(None), User.roles == ''),
+                            User.role == 'applicant'
+                        )
                     )
                 )
             )

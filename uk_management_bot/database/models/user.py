@@ -68,6 +68,10 @@ class User(Base):
     documents = relationship("UserDocument", back_populates="user", foreign_keys="UserDocument.user_id")
     verifications = relationship("UserVerification", back_populates="user", foreign_keys="UserVerification.user_id")
     access_rights = relationship("AccessRights", back_populates="user", foreign_keys="AccessRights.user_id")
+
+    # Связи для передачи смен
+    outgoing_transfers = relationship("ShiftTransfer", foreign_keys="ShiftTransfer.from_executor_id", back_populates="from_executor")
+    incoming_transfers = relationship("ShiftTransfer", foreign_keys="ShiftTransfer.to_executor_id", back_populates="to_executor")
     
     def __repr__(self):
         return (

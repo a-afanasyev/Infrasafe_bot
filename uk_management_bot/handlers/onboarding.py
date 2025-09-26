@@ -156,6 +156,18 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
         await cancel_onboarding(message, state, db, user_status)
         return
     
+    # Проверяем системные команды/кнопки - не обрабатываем их как телефон
+    system_commands = [
+        "👤 Профиль", "📝 Создать заявку", "📋 Мои заявки", "❓ Помощь",
+        "🔄 Смена", "🔀 Выбрать роль", "/start", "/help",
+        "🏠 Указать адрес", "📱 Указать телефон"
+    ]
+    
+    if message.text in system_commands:
+        # Очищаем состояние и пропускаем обработку
+        await state.clear()
+        return
+    
     # Валидируем телефон
     phone_number = message.text.strip()
     is_valid, error_message = Validator.validate_phone(phone_number)
@@ -202,6 +214,18 @@ async def process_home_address(message: Message, state: FSMContext, db: Session,
     # Проверяем на отмену
     if message.text == get_text("buttons.cancel", language=lang):
         await cancel_onboarding(message, state, db, user_status)
+        return
+    
+    # Проверяем системные команды/кнопки - не обрабатываем их как адрес
+    system_commands = [
+        "👤 Профиль", "📝 Создать заявку", "📋 Мои заявки", "❓ Помощь",
+        "🔄 Смена", "🔀 Выбрать роль", "/start", "/help",
+        "🏠 Указать адрес", "📱 Указать телефон"
+    ]
+    
+    if message.text in system_commands:
+        # Очищаем состояние и пропускаем обработку
+        await state.clear()
         return
     
     address = message.text.strip()

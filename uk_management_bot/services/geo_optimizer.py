@@ -116,12 +116,12 @@ class GeoOptimizer:
             logger.error(f"Ошибка оптимизации маршрутов: {e}")
             return []
     
-    def optimize_executor_route(self, executor_id: int, request_ids: List[int]) -> Optional[RouteOptimizationResult]:
+    def optimize_executor_route(self, executor_id: int, request_numbers: List[str]) -> Optional[RouteOptimizationResult]:
         """Оптимизирует маршрут для конкретного исполнителя"""
         try:
             # Получаем заявки
             requests = self.db.query(Request).filter(
-                Request.id.in_(request_ids)
+                Request.request_number.in_(request_numbers)
             ).all()
             
             if not requests:
@@ -232,17 +232,17 @@ class GeoOptimizer:
             logger.error(f"Ошибка анализа маршрута: {e}")
             return []
     
-    def find_nearby_requests(self, center_point: GeoPoint, radius_km: float, 
-                           exclude_request_ids: Optional[Set[int]] = None) -> List[Request]:
+    def find_nearby_requests(self, center_point: GeoPoint, radius_km: float,
+                           exclude_request_numbers: Optional[Set[str]] = None) -> List[Request]:
         """Находит заявки в радиусе от заданной точки"""
         try:
-            exclude_ids = exclude_request_ids or set()
+            exclude_numbers = exclude_request_numbers or set()
             
             # Получаем все активные заявки
             requests = self.db.query(Request).filter(
                 and_(
                     Request.status.in_(['new', 'in_progress']),
-                    ~Request.id.in_(exclude_ids)
+                    ~Request.request_number.in_(exclude_numbers)
                 )
             ).all()
             
@@ -525,7 +525,7 @@ class GeoOptimizer:
             route_points = []
             
             for assignment in assignments:
-                request = self.db.query(Request).filter(Request.id == assignment.request_id).first()
+                request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
                 if not request:
                     continue
                 

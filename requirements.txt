@@ -8,7 +8,6 @@ psycopg2-binary>=2.9.0
 
 # Redis for rate limiting and caching
 redis>=5.0.0
-aioredis>=2.0.1
 
 # Google Sheets Integration
 google-api-python-client>=2.100.0
@@ -24,12 +23,18 @@ aiofiles>=23.0.0
 # Async support
 asyncio-mqtt>=0.16.0
 
+# Task Scheduling
+apscheduler>=3.10.0
+
 # Development tools
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 
 # Logging
 structlog>=23.1.0
+
+# HTTP requests (for healthcheck)
+requests>=2.31.0
 
 # Web Framework for invite registration
 fastapi>=0.104.0

@@ -69,7 +69,7 @@ async def create_import_csv():
         
         # Формируем данные заявки
         request_data = {
-            'id': request.id,
+            'request_number': request.request_number,
             'created_at': request.created_at.strftime("%Y-%m-%d %H:%M:%S") if request.created_at else '',
             'status': request.status,
             'category': request.category,

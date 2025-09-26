@@ -28,14 +28,10 @@ async def handle_reply_command(message: Message, state: FSMContext, db: Session)
             await message.answer("❌ Неверный формат команды. Используйте: /reply_<номер_заявки>")
             return
         
-        try:
-            request_id = int(command_parts[1])
-        except ValueError:
-            await message.answer("❌ Неверный номер заявки")
-            return
+        request_number = command_parts[1]
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await message.answer("❌ Заявка не найдена")
             return
@@ -52,11 +48,11 @@ async def handle_reply_command(message: Message, state: FSMContext, db: Session)
             return
         
         # Сохраняем ID заявки в состоянии
-        await state.update_data(request_id=request_id)
+        await state.update_data(request_number=request_number)
         
         # Запрашиваем текст ответа
         await message.answer(
-            f"💬 Введите ваш ответ на уточнение по заявке #{request_id}:\n\n"
+            f"💬 Введите ваш ответ на уточнение по заявке #{request_number}:\n\n"
             f"📋 Заявка: {request.category}\n"
             f"📍 Адрес: {request.address}\n\n"
             f"💬 Введите ваш ответ:",
@@ -66,7 +62,7 @@ async def handle_reply_command(message: Message, state: FSMContext, db: Session)
         # Устанавливаем состояние ожидания ответа
         await state.set_state(ReplyStates.waiting_for_reply_text)
         
-        logger.info(f"Запрошен ответ на уточнение для заявки {request_id} от пользователя {message.from_user.id}")
+        logger.info(f"Запрошен ответ на уточнение для заявки {request_number} от пользователя {message.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки команды ответа: {e}")
@@ -78,15 +74,15 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session):
     try:
         # Получаем данные из состояния
         data = await state.get_data()
-        request_id = data.get("request_id")
+        request_number = data.get("request_number")
         
-        if not request_id:
+        if not request_number:
             await message.answer("❌ Ошибка: не найдена заявка")
             await state.clear()
             return
         
         # Получаем заявку
-        request = db.query(Request).filter(Request.id == request_id).first()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await message.answer("❌ Заявка не найдена")
             await state.clear()
@@ -157,7 +153,7 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session):
         # Подтверждаем заявителю
         await message.answer(
             f"✅ Ответ отправлен!\n\n"
-            f"📋 Заявка #{request_id}\n"
+            f"📋 Заявка #{request_number}\n"
             f"💬 Ваш ответ: {reply_text[:100]}{'...' if len(reply_text) > 100 else ''}\n\n"
             f"📱 Менеджеры получили уведомление."
         )
@@ -165,7 +161,7 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session):
         # Очищаем состояние
         await state.clear()
         
-        logger.info(f"Ответ на уточнение по заявке {request_id} добавлен пользователем {message.from_user.id}")
+        logger.info(f"Ответ на уточнение по заявке {request_number} добавлен пользователем {message.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки ответа на уточнение: {e}")

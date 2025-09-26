@@ -6,6 +6,7 @@ from .shift import Shift
 from .shift_template import ShiftTemplate
 from .shift_schedule import ShiftSchedule
 from .shift_assignment import ShiftAssignment
+from .shift_transfer import ShiftTransfer
 from .rating import Rating
 from .audit import AuditLog
 from .notification import Notification
@@ -22,16 +23,17 @@ except ImportError:
 
 __all__ = [
     'User',
-    'Request', 
+    'Request',
     'Shift',
     'ShiftTemplate',
-    'ShiftSchedule', 
+    'ShiftSchedule',
     'ShiftAssignment',
+    'ShiftTransfer',
     'Rating',
     'AuditLog',
     'Notification',
     'UserDocument',
-    'UserVerification', 
+    'UserVerification',
     'AccessRights',
     'DocumentType',
     'VerificationStatus',

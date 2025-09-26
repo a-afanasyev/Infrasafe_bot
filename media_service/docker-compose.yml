@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # Media Service API
+  media-api:
+    build: .
+    container_name: uk_media_service
+    restart: unless-stopped
+    ports:
+      - "8001:8000"  # Используем порт 8001 чтобы не конфликтовать с основным ботом
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://media_user:media_password@media-db:5432/uk_media
+      - DATABASE_ECHO=false
+
+      # Telegram
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - CHANNEL_REQUESTS=${CHANNEL_REQUESTS:-@uk_media_requests_private}
+      - CHANNEL_REPORTS=${CHANNEL_REPORTS:-@uk_media_reports_private}
+      - CHANNEL_ARCHIVE=${CHANNEL_ARCHIVE:-@uk_media_archive_private}
+      - CHANNEL_BACKUP=${CHANNEL_BACKUP:-@uk_media_backup_private}
+
+      # Application
+      - DEBUG=false
+      - MAX_FILE_SIZE=52428800  # 50MB
+      - ALLOWED_ORIGINS=http://localhost,http://localhost:3000,http://media-service:8000
+
+      # Logging
+      - LOG_LEVEL=INFO
+
+    volumes:
+      - ./logs:/app/logs
+
+    depends_on:
+      - media-db
+      - media-redis
+
+    networks:
+      - media-network
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # PostgreSQL Database
+  media-db:
+    image: postgres:15-alpine
+    container_name: uk_media_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=uk_media
+      - POSTGRES_USER=media_user
+      - POSTGRES_PASSWORD=media_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+
+    volumes:
+      - media_db_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+
+    ports:
+      - "5433:5432"  # Используем порт 5433 для внешнего доступа
+
+    networks:
+      - media-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U media_user -d uk_media"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  media-redis:
+    image: redis:7-alpine
+    container_name: uk_media_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+    volumes:
+      - media_redis_data:/data
+
+    ports:
+      - "6380:6379"  # Используем порт 6380 для внешнего доступа
+
+    networks:
+      - media-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Nginx Proxy (опционально)
+  media-proxy:
+    image: nginx:alpine
+    container_name: uk_media_proxy
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+    depends_on:
+      - media-api
+
+    networks:
+      - media-network
+
+volumes:
+  media_db_data:
+    driver: local
+  media_redis_data:
+    driver: local
+
+networks:
+  media-network:
+    driver: bridge
+    name: uk_media_network

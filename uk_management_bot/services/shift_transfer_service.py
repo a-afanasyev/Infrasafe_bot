@@ -32,7 +32,7 @@ class TransferStatus(Enum):
 @dataclass
 class TransferItem:
     """Элемент передачи - одна заявка"""
-    request_id: int
+    request_number: str
     request_category: str
     request_status: str
     request_address: str
@@ -173,7 +173,7 @@ class ShiftTransferService:
                 priority = "high" if request.urgency == "Критическая" else "medium" if request.urgency == "Высокая" else "normal"
                 
                 item = TransferItem(
-                    request_id=request.request_number,
+                    request_number=request.request_number,
                     request_category=request.category,
                     request_status=request.status,
                     request_address=request.address[:50] + "..." if len(request.address) > 50 else request.address,
@@ -254,9 +254,9 @@ class ShiftTransferService:
             return False
     
     def transfer_single_request(
-        self, 
-        transfer: ShiftTransfer, 
-        request_id: int, 
+        self,
+        transfer: ShiftTransfer,
+        request_number: str,
         transfer_notes: Optional[str] = None,
         executor_id: int = None
     ) -> bool:
@@ -265,7 +265,7 @@ class ShiftTransferService:
         
         Args:
             transfer: Объект передачи
-            request_id: ID заявки для передачи
+            request_number: Номер заявки для передачи
             transfer_notes: Комментарий к передаче
             executor_id: ID исполнителя, выполняющего передачу
         
@@ -276,18 +276,18 @@ class ShiftTransferService:
             # Находим заявку в списке передачи
             transfer_item = None
             for item in transfer.transfer_items:
-                if item.request_id == request_id:
+                if item.request_number == request_number:
                     transfer_item = item
                     break
             
             if not transfer_item:
-                logger.error(f"Заявка {request_id} не найдена в списке передачи")
+                logger.error(f"Заявка {request_number} не найдена в списке передачи")
                 return False
             
             # Получаем заявку из БД
-            request = self.db.query(Request).filter(Request.id == request_id).first()
+            request = self.db.query(Request).filter(Request.request_number == request_number).first()
             if not request:
-                logger.error(f"Заявка {request_id} не найдена в базе данных")
+                logger.error(f"Заявка {request_number} не найдена в базе данных")
                 return False
             
             # Переназначаем заявку на входящего исполнителя
@@ -312,7 +312,7 @@ class ShiftTransferService:
                 telegram_user_id=None,
                 action="REQUEST_TRANSFERRED",
                 details={
-                    "request_id": request_id,
+                    "request_number": request_number,
                     "from_executor": old_executor_id,
                     "to_executor": transfer.incoming_executor_id,
                     "transfer_notes": transfer_notes,
@@ -323,12 +323,12 @@ class ShiftTransferService:
             self.db.add(audit)
             
             self.db.commit()
-            logger.info(f"Заявка {request_id} передана исполнителю {transfer.incoming_executor_id}")
+            logger.info(f"Заявка {request_number} передана исполнителю {transfer.incoming_executor_id}")
             
             return True
             
         except Exception as e:
-            logger.error(f"Ошибка передачи заявки {request_id}: {e}")
+            logger.error(f"Ошибка передачи заявки {request_number}: {e}")
             self.db.rollback()
             transfer.failed_requests += 1
             return False

@@ -27,6 +27,9 @@ from uk_management_bot.handlers.request_assignment import router as request_assi
 from uk_management_bot.handlers.request_status_management import router as request_status_management_router
 from uk_management_bot.handlers.request_comments import router as request_comments_router
 from uk_management_bot.handlers.request_reports import router as request_reports_router
+
+# Обработчики передачи смен
+from uk_management_bot.handlers.shift_transfer import router as shift_transfer_router
 from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 import sys
@@ -40,13 +43,42 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from uk_management_bot.utils.structured_logger import setup_structured_logging, get_logger
 from uk_management_bot.utils.health_server import start_health_server, stop_health_server
 
+# Планировщик смен
+from uk_management_bot.utils.shift_scheduler import start_scheduler, stop_scheduler, get_scheduler_status
+from uk_management_bot.services.notification_service import NotificationService
+
 # Инициализация логирования
 setup_structured_logging()
 logger = get_logger(__name__, component="main")
 
+async def initialize_scheduler(bot: Bot):
+    """Инициализация планировщика смен"""
+    try:
+        # Создаем сервис уведомлений
+        db = SessionLocal()
+        notification_service = NotificationService(db)
+
+        # Запускаем планировщик
+        await start_scheduler(notification_service)
+        logger.info("Планировщик смен запущен успешно")
+
+        # Получаем и логируем статус
+        status = await get_scheduler_status()
+        logger.info(f"Планировщик: {status['jobs_count']} задач активно")
+
+        db.close()
+
+    except Exception as e:
+        logger.error(f"Ошибка инициализации планировщика: {e}")
+
+
 async def send_startup_notification(bot: Bot):
     """Отправляет уведомление о запуске бота"""
     try:
+        # Получаем статус планировщика
+        scheduler_status = await get_scheduler_status()
+        scheduler_info = f"🕐 Планировщик: {scheduler_status['jobs_count']} задач" if scheduler_status['is_running'] else "⏸️ Планировщик: Остановлен"
+
         startup_message = f"""
 🤖 **UK Management Bot запущен!**
 
@@ -55,6 +87,7 @@ async def send_startup_notification(bot: Bot):
 🔧 Версия: 1.0.0
 📊 База данных: Подключена
 🔍 Система верификации: Активна
+{scheduler_info}
 
 Бот готов к работе! 🚀
         """
@@ -154,6 +187,7 @@ async def main():
     # Система управления сменами
     dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
     dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
+    dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
     dp.include_router(shifts_router)  # старый роутер смен
     
     # Система назначения заявок
@@ -179,9 +213,12 @@ async def main():
         # Продолжаем работу бота даже если health сервер не запустился
     
     try:
+        # Инициализируем планировщик смен
+        await initialize_scheduler(bot)
+
         # Отправляем уведомление о запуске
         await send_startup_notification(bot)
-        
+
         # Запускаем бота
         await dp.start_polling(bot)
         
@@ -190,6 +227,13 @@ async def main():
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}")
     finally:
+        # Останавливаем планировщик
+        try:
+            await stop_scheduler()
+            logger.info("Планировщик смен остановлен")
+        except Exception as e:
+            logger.error(f"Ошибка остановки планировщика: {e}")
+
         # Останавливаем health сервер
         stop_health_server()
         await bot.session.close()

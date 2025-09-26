@@ -62,7 +62,7 @@ def upgrade():
         """))
         
         # Создаем таблицу user_verifications
-        print("🔍 Создание таблицы user_verifications...")
+        # Создание таблицы user_verifications
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_verifications (
                 id SERIAL PRIMARY KEY,
