@@ -1,0 +1,89 @@
+# Traefik Static Configuration
+# UK Management Bot - API Gateway
+
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+api:
+  dashboard: true
+  debug: true
+  insecure: true  # Enable for development only
+
+serversTransport:
+  insecureSkipVerify: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers@file
+        - rate-limit@file
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: uk_microservices
+    watch: true
+
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@uk-management.local
+      storage: /certs/acme.json
+      httpChallenge:
+        entryPoint: web
+      # Use staging for testing
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+
+log:
+  level: INFO
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        Authorization: drop
+
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    entryPoint: metrics
+
+ping:
+  entryPoint: ping
+
+# Tracing configuration for Jaeger
+tracing:
+  jaeger:
+    samplingType: const
+    samplingParam: 1.0
+    localAgentHostPort: jaeger:6831
+    gen128Bit: true
+    propagation: jaeger
+    traceContextHeaderName: uber-trace-id

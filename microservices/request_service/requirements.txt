@@ -1,0 +1,58 @@
+# Request Service Dependencies
+# UK Management Bot - Request Management System
+
+# FastAPI and ASGI
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+gunicorn==21.2.0
+
+# Database
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+
+# Redis
+redis[hiredis]==5.0.1
+aioredis==2.0.1
+
+# HTTP Client
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Validation and Serialization
+pydantic[email]==2.5.0
+pydantic-settings==2.0.3
+
+# Authentication and Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Date and Time
+python-dateutil==2.8.2
+
+# Utilities
+python-dotenv==1.0.0
+click==8.1.7
+
+# Monitoring and Observability
+prometheus-client==0.19.0
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-sqlalchemy==0.42b0
+opentelemetry-instrumentation-redis==0.42b0
+opentelemetry-exporter-jaeger==1.21.0
+
+# Logging
+structlog==23.2.0
+
+# Development Dependencies (conditionally installed)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-httpx==0.26.0
+httpx==0.25.2
+factory-boy==3.3.0
+
+# Production Dependencies
+sentry-sdk[fastapi]==1.38.0

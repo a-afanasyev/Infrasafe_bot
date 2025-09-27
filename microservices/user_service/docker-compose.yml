@@ -1,0 +1,63 @@
+# User Service Docker Compose
+# UK Management Bot - User Service
+
+version: '3.8'
+
+services:
+  user-service:
+    build: .
+    container_name: user-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://uk_user:uk_user_pass@postgres:5432/uk_user_service
+      - REDIS_URL=redis://redis:6379/2
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - MEDIA_SERVICE_URL=http://media-service:8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - uk-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: user-service-db
+    environment:
+      - POSTGRES_DB=uk_user_service
+      - POSTGRES_USER=uk_user
+      - POSTGRES_PASSWORD=uk_user_pass
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+    networks:
+      - uk-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: user-service-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - user_redis_data:/data
+    ports:
+      - "6380:6379"
+    restart: unless-stopped
+    networks:
+      - uk-network
+
+volumes:
+  user_db_data:
+  user_redis_data:
+
+networks:
+  uk-network:
+    external: true

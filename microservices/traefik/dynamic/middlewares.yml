@@ -1,0 +1,124 @@
+# Traefik Dynamic Configuration - Middlewares
+# UK Management Bot
+
+http:
+  middlewares:
+    # Security headers
+    security-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowOriginList:
+          - "*"  # Change in production
+        accessControlMaxAge: 100
+        addVaryHeader: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        frameDeny: true
+        sslRedirect: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customRequestHeaders:
+          X-Request-ID: "{{.RequestID}}"
+
+    # Rate limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1m
+
+    # Authentication check
+    jwt-auth:
+      forwardAuth:
+        address: "http://auth-service:8000/api/v1/auth/verify"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-User-ID"
+          - "X-User-Role"
+          - "X-User-Permissions"
+
+    # Request size limit
+    request-size:
+      buffering:
+        maxRequestBodyBytes: 10485760  # 10MB
+
+    # Retry configuration
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: 100ms
+
+    # Circuit breaker
+    circuit-breaker:
+      circuitBreaker:
+        expression: NetworkErrorRatio() > 0.5
+
+    # Compression
+    compress:
+      compress:
+        excludedContentTypes:
+          - text/event-stream
+
+    # CORS configuration
+    cors:
+      headers:
+        accessControlAllowCredentials: true
+        accessControlAllowHeaders:
+          - "*"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowOriginList:
+          - "*"
+        accessControlMaxAge: 3600
+        addVaryHeader: true
+
+    # Strip prefix for microservices
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api/v1"
+
+    # Add prefix for services
+    add-service-prefix:
+      addPrefix:
+        prefix: "/api/v1"
+
+  # Service chains for different types of services
+  chains:
+    # Public endpoints (no auth)
+    public-api:
+      middlewares:
+        - security-headers
+        - rate-limit
+        - request-size
+        - compress
+        - cors
+
+    # Protected endpoints (auth required)
+    protected-api:
+      middlewares:
+        - security-headers
+        - rate-limit
+        - jwt-auth
+        - request-size
+        - compress
+        - cors
+
+    # Internal service communication
+    internal-api:
+      middlewares:
+        - security-headers
+        - compress
+        - retry
+        - circuit-breaker

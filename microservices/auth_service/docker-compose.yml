@@ -1,0 +1,61 @@
+# Auth Service Docker Compose
+# UK Management Bot - Auth Service
+
+version: '3.8'
+
+services:
+  auth-service:
+    build: .
+    container_name: auth-service
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://uk_auth:uk_auth_pass@postgres:5432/uk_auth_service
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - uk-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: auth-service-db
+    environment:
+      - POSTGRES_DB=uk_auth_service
+      - POSTGRES_USER=uk_auth
+      - POSTGRES_PASSWORD=uk_auth_pass
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - uk-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: auth-service-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - auth_redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - uk-network
+
+volumes:
+  auth_db_data:
+  auth_redis_data:
+
+networks:
+  uk-network:
+    external: true

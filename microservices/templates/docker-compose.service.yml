@@ -1,0 +1,112 @@
+# Docker Compose Template for Microservice
+# UK Management Bot - Service Template
+
+version: '3.8'
+
+services:
+  # Main service
+  service-name:
+    build:
+      context: ./fastapi-service
+      dockerfile: Dockerfile
+    container_name: uk_service_name
+    environment:
+      # Service configuration
+      - SERVICE_SERVICE_NAME=service-name
+      - SERVICE_DEBUG=true
+      - SERVICE_PORT=8000
+
+      # Database
+      - SERVICE_DATABASE_URL=postgresql+asyncpg://uk_service_user:${DB_PASSWORD}@postgres_service:5432/uk_service_db
+
+      # Redis
+      - SERVICE_REDIS_URL=redis://redis:6379/0
+
+      # JWT
+      - SERVICE_JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SERVICE_JWT_ALGORITHM=HS256
+      - SERVICE_JWT_EXPIRE_MINUTES=30
+
+      # OpenTelemetry
+      - SERVICE_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - SERVICE_OTLP_ENDPOINT=http://otel-collector:4317
+
+      # CORS
+      - SERVICE_ALLOWED_ORIGINS=["http://localhost:3000"]
+      - SERVICE_ALLOWED_HOSTS=["localhost", "127.0.0.1", "service-name"]
+
+      # Logging
+      - SERVICE_LOG_LEVEL=INFO
+      - SERVICE_LOG_FORMAT=json
+
+    ports:
+      - "8001:8000"  # Adjust port as needed
+
+    depends_on:
+      - postgres_service
+      - redis
+
+    networks:
+      - uk_microservices
+
+    volumes:
+      - ./logs:/app/logs
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.service-name.rule=Host(`service-name.localhost`) || PathPrefix(`/api/service-name`)"
+      - "traefik.http.routers.service-name.entrypoints=web"
+      - "traefik.http.services.service-name.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.service-name-stripprefix.stripprefix.prefixes=/api/service-name"
+      - "traefik.http.routers.service-name.middlewares=service-name-stripprefix"
+
+  # Dedicated PostgreSQL for this service
+  postgres_service:
+    image: postgres:15-alpine
+    container_name: uk_postgres_service
+    environment:
+      - POSTGRES_DB=uk_service_db
+      - POSTGRES_USER=uk_service_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - postgres_service_data:/var/lib/postgresql/data
+      - ./init-scripts/service:/docker-entrypoint-initdb.d/
+    networks:
+      - uk_microservices
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uk_service_user -d uk_service_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (shared across services - reference existing)
+  redis:
+    external: true
+    networks:
+      - uk_microservices
+
+volumes:
+  postgres_service_data:
+    name: uk_postgres_service_data
+
+networks:
+  uk_microservices:
+    external: true
+    name: uk_microservices
+
+# Example usage:
+# 1. Copy this template for each new service
+# 2. Replace 'service-name' with actual service name
+# 3. Replace 'service' with actual service identifier
+# 4. Adjust ports (8001, 5433) to avoid conflicts
+# 5. Update environment variables as needed
+# 6. Create service-specific init scripts

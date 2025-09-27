@@ -1,0 +1,119 @@
+# Docker Compose for Notification Service Development
+# UK Management Bot - Microservices
+
+version: '3.8'
+
+services:
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: uk-notification-service
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE_SERVICE_NAME=notification-service
+      - SERVICE_DEBUG=true
+      - SERVICE_DATABASE_URL=postgresql+asyncpg://uk_notifications_user:notifications_password@postgres_notifications:5432/uk_notifications_db
+      - SERVICE_REDIS_URL=redis://redis:6379/0
+      - SERVICE_JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - SERVICE_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - SERVICE_TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID:-}
+    depends_on:
+      - postgres_notifications
+      - redis
+    networks:
+      - notification_network
+    volumes:
+      - .:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database for Notifications
+  postgres_notifications:
+    image: postgres:15-alpine
+    container_name: uk-notification-postgres
+    environment:
+      POSTGRES_DB: uk_notifications_db
+      POSTGRES_USER: uk_notifications_user
+      POSTGRES_PASSWORD: notifications_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_notifications_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - notification_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uk_notifications_user -d uk_notifications_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and events
+  redis:
+    image: redis:7-alpine
+    container_name: uk-notification-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - notification_network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # PgAdmin for database management (development only)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: uk-notification-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@notification.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "8084:80"
+    depends_on:
+      - postgres_notifications
+    networks:
+      - notification_network
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    profiles:
+      - dev-tools
+
+  # Redis Commander for Redis management (development only)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: uk-notification-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8085:8081"
+    depends_on:
+      - redis
+    networks:
+      - notification_network
+    profiles:
+      - dev-tools
+
+volumes:
+  postgres_notifications_data:
+  redis_data:
+  pgadmin_data:
+
+networks:
+  notification_network:
+    driver: bridge

@@ -1,0 +1,151 @@
+# Prometheus Configuration
+# UK Management Bot - Metrics Collection
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'uk-management-bot'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "/etc/prometheus/alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Traefik metrics
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+        labels:
+          service: 'traefik'
+          component: 'gateway'
+
+  # Redis metrics (requires redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          component: 'cache'
+
+  # PostgreSQL metrics (requires postgres_exporter)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets:
+          - 'postgres-exporter-auth:9187'
+          - 'postgres-exporter-users:9187'
+          - 'postgres-exporter-requests:9187'
+          - 'postgres-exporter-assignments:9187'
+          - 'postgres-exporter-shifts:9187'
+          - 'postgres-exporter-notifications:9187'
+          - 'postgres-exporter-analytics:9187'
+          - 'postgres-exporter-integration:9187'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: 'postgres-exporter-(.*):9187'
+        target_label: 'database'
+        replacement: '${1}'
+
+  # Node exporter for Docker host metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'infrastructure'
+
+  # Docker container metrics (requires cAdvisor)
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+          component: 'containers'
+
+  # Elasticsearch metrics
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+        labels:
+          service: 'elasticsearch'
+          component: 'logging'
+    metrics_path: '/_prometheus/metrics'
+
+  # Microservices metrics (FastAPI services)
+  - job_name: 'microservices'
+    dns_sd_configs:
+      - names:
+          - 'auth-service'
+          - 'users-service'
+          - 'requests-service'
+          - 'assignments-service'
+          - 'shifts-service'
+          - 'notifications-service'
+          - 'media-service'
+          - 'integration-hub'
+          - 'analytics-service'
+        type: 'A'
+        port: 8000
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: 'service'
+      - source_labels: [__address__]
+        target_label: 'instance'
+    metrics_path: '/metrics'
+
+  # OpenTelemetry Collector metrics
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8888']
+        labels:
+          service: 'otel-collector'
+          component: 'telemetry'
+
+  # Jaeger metrics
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:16686']
+        labels:
+          service: 'jaeger'
+          component: 'tracing'
+    metrics_path: '/metrics'
+
+  # Grafana metrics
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          service: 'grafana'
+          component: 'visualization'
+    metrics_path: '/metrics'
+
+  # Vault metrics
+  - job_name: 'vault'
+    static_configs:
+      - targets: ['vault:8200']
+        labels:
+          service: 'vault'
+          component: 'secrets'
+    metrics_path: '/v1/sys/metrics'
+    params:
+      format: ['prometheus']
+    bearer_token: '${VAULT_TOKEN}'
+
+# Future: Kubernetes service discovery will be added here
+# Currently using static configs for development
