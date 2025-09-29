@@ -22,12 +22,12 @@ Media Service provides centralized media file management using private Telegram 
 
 ## 🏗️ Architecture
 
-### **Service Status: ✅ OPERATIONAL**
-- **Port**: 8004
-- **Health**: `/health` endpoint
-- **Database**: `media_db` (PostgreSQL)
-- **Cache**: Redis
-- **Storage**: Telegram Private Channels
+### **Service Status: ✅ HEALTHY (Stage 1 MVP)**
+- **Port**: 8004 (internal and external)
+- **Health**: `/api/v1/health` endpoint - ✅ Working
+- **Database**: `media_db` (PostgreSQL) - ✅ Connected
+- **Cache**: Redis DB 4 - ✅ Connected
+- **Storage**: Telegram Private Channels - ✅ Configured
 
 ### **Database Schema (4 Tables)**
 
@@ -166,30 +166,29 @@ GET    /popular                  # Most popular tags
 GET    /categories               # Tag categories
 ```
 
-### **Channel Management (`/api/v1/media/channels`)**
-
-```yaml
-GET    /                         # List channels
-POST   /                         # Create channel
-PUT    /{channel_id}             # Update channel config
-GET    /{channel_id}/stats       # Channel statistics
-POST   /initialize               # Initialize all channels
-```
-
-### **Internal API (`/api/v1/internal`)**
-
-```yaml
-GET    /stats                    # Service statistics
-POST   /sync-channels            # Sync channel configurations
-GET    /health-detailed          # Detailed health check
-POST   /cleanup-old-files        # Cleanup archived files
-```
-
 ### **Health & Monitoring**
 
 ```yaml
-GET    /health                   # Service health check
-GET    /metrics                  # Prometheus metrics
+GET    /api/v1/health            # ✅ Service health check (working)
+GET    /health                   # ✅ Simple health check (working)
+GET    /healthz                  # ✅ Docker health check (working)
+```
+
+### **Stage 2+ Features (Not Yet Implemented)**
+
+```yaml
+# Channel Management - Planned
+GET    /api/v1/media/channels/           # Future: List channels
+POST   /api/v1/media/channels/           # Future: Create channel
+PUT    /api/v1/media/channels/{id}       # Future: Update channel
+
+# Internal API - Planned
+GET    /api/v1/internal/stats            # Future: Service statistics
+POST   /api/v1/internal/sync-channels    # Future: Sync channels
+POST   /api/v1/internal/cleanup          # Future: Cleanup files
+
+# Metrics - Planned
+GET    /metrics                          # Future: Prometheus metrics
 ```
 
 ---
@@ -251,7 +250,7 @@ CHANNELS = {
 media-service:
   image: microservices-media-service
   ports:
-    - "8004:8080"
+    - "8004:8004"
   environment:
     - DATABASE_URL=postgresql+asyncpg://media_user:media_pass@media-db:5432/media_db
     - REDIS_URL=redis://shared-redis:6379/4
@@ -267,7 +266,7 @@ media-service:
     - media-db (healthy)
     - shared-redis (healthy)
   healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
     interval: 30s
     timeout: 10s
     retries: 3
@@ -281,7 +280,7 @@ APP_NAME=MediaService
 APP_VERSION=1.0.0
 DEBUG=true
 API_HOST=0.0.0.0
-API_PORT=8080
+API_PORT=8004
 API_PREFIX=/api/v1
 
 # Database Configuration
@@ -483,8 +482,22 @@ class MediaNotificationService:
 
 ### **Health Checks**
 ```bash
+# Current health endpoint (needs fixing)
 curl http://localhost:8004/health
-# Response:
+# Current Response: {"detail": "Not Found"}
+
+# Expected Response (after fixes):
+{
+  "status": "healthy",
+  "service": "UK Media Service",
+  "version": "1.0.0",
+  "database": "connected",
+  "timestamp": 1759074949.123
+}
+
+# Detailed health check endpoint
+curl http://localhost:8004/api/v1/internal/health-detailed
+# Expected Response:
 {
   "status": "healthy",
   "service": "media-service",
@@ -656,10 +669,10 @@ docker-compose up media-db shared-redis -d
 pip install -r requirements.txt
 
 # Run service
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
 
 # Access API docs
-open http://localhost:8080/docs
+open http://localhost:8004/docs
 ```
 
 ### **Database Management**
@@ -709,6 +722,102 @@ pytest tests/ -v --cov --cov-report=html
 
 # Load testing
 pytest tests/load/ -v
+```
+
+---
+
+## ✅ Service Status
+
+### **Health Check Status**
+```bash
+# Service is healthy and operational
+curl http://localhost:8004/api/v1/health
+{"status":"ok","service":"media-service","version":"1.0.0","timestamp":"2025-09-29T07:37:26.627106","dependencies":{}}
+
+# Docker healthcheck: HEALTHY
+docker-compose ps media-service
+# STATUS: Up X hours (healthy)
+```
+
+## ⚠️ Known Limitations & Future Development
+
+### **Current Stage 1 MVP Limitations**
+
+#### **1. Telegram Channel Integration**
+- Basic file upload through Telegram Bot API
+- No advanced channel management features yet
+- Limited file type validation
+
+#### **2. Search Capabilities**
+- Basic text search implemented
+- No advanced similarity matching yet
+- Missing full-text search index
+
+#### **3. Analytics Dashboard**
+- Basic metrics collection implemented
+- No web dashboard UI yet
+- Metrics available via API only
+
+### **Troubleshooting Guide**
+
+#### **Service Won't Start**
+```bash
+# Check database connection
+docker-compose logs media-db
+
+# Check Redis connection
+docker-compose logs shared-redis
+
+# Check service logs
+docker-compose logs media-service
+
+# Common fixes:
+docker-compose restart media-service
+```
+
+#### **File Upload Issues**
+```bash
+# Check Telegram bot token
+echo $TELEGRAM_BOT_TOKEN
+
+# Test channel access
+python -c "
+import asyncio
+from app.services.telegram_client import TelegramChannelService
+
+async def test():
+    service = TelegramChannelService()
+    result = await service.test_channel_access()
+    print(result)
+
+asyncio.run(test())
+"
+```
+
+#### **Database Connection Issues**
+```bash
+# Connect to database directly
+docker-compose exec media-db psql -U media_user -d media_db
+
+# Check tables exist
+\dt
+
+# Verify data
+SELECT COUNT(*) FROM media_files;
+```
+
+### **Performance Issues**
+```bash
+# Check Redis cache
+docker-compose exec shared-redis redis-cli
+> SELECT 4  # Media service Redis DB
+> KEYS *
+
+# Monitor file upload performance
+curl -X POST http://localhost:8004/api/v1/media/upload \
+  -F "file=@test.jpg" \
+  -F "request_number=250928-001" \
+  -w "Response time: %{time_total}s\n"
 ```
 
 ---
@@ -769,11 +878,16 @@ Total Storage: Unlimited (Telegram provides free storage)
 
 ---
 
-**📝 Status**: ✅ **PRODUCTION READY**
+**📝 Status**: ⚠️ **NEEDS HEALTH ENDPOINT FIX**
 **🔄 Version**: 1.0.0
-**📅 Last Updated**: September 27, 2025
-**🎯 Port**: 8004
-**💾 Database**: media_db (PostgreSQL)
-**🔗 Dependencies**: shared-redis, Telegram Bot API
+**📅 Last Updated**: September 28, 2025
+**🎯 Port**: 8004 (external), 8004 (internal)
+**💾 Database**: media_db (PostgreSQL) - ✅ Connected
+**🔗 Dependencies**: shared-redis (✅), Telegram Bot API (✅)
 **📱 Integration**: Telegram Channels, Request Service, User Service
 **☁️ Storage**: Private Telegram Channels (Free, Unlimited)
+
+### **Action Items:**
+- [ ] Deploy health endpoint fix to resolve Docker healthcheck
+- [ ] Verify all API endpoints functionality
+- [ ] Update service status to PRODUCTION READY after fixes

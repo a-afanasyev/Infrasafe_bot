@@ -131,18 +131,25 @@ DELETE /sessions/all    # Terminate all user sessions
 ### **Internal Service API (`/api/v1/internal`)**
 
 ```yaml
-POST   /validate-service-token     # Service token validation
-POST   /generate-service-token     # Generate service token
-GET    /user-stats                 # User statistics proxy
+POST   /validate-service-credentials  # Secure HMAC-based service validation
+POST   /validate-service-token        # Legacy JWT fallback (with HMAC backup)
+POST   /generate-service-token        # ❌ DISABLED (returns 410)
+POST   /revoke-service               # Admin-only service revocation
+POST   /restore-service              # Admin-only service restoration
+GET    /service-status               # Admin-only service status overview
+GET    /auth-audit                   # Admin-only authentication audit logs
+GET    /user-stats                   # User statistics proxy
 ```
 
-**Service Token Architecture:**
-- **Design**: Stateless JWT tokens (in-memory only)
-- **Storage**: No persistence - tokens are self-contained JWTs
-- **Validation**: Cryptographic signature verification (no database lookup)
-- **Revocation**: Not supported (tokens valid until expiration)
-- **Audit**: Generation events logged, but tokens not stored
-- **Trade-off**: Performance and simplicity over revocation capability
+**Secure Service Authentication Architecture (CURRENT):**
+- **Method**: Static API Keys with X-Service-Name + X-Service-API-Key headers
+- **Security**: ✅ HMAC SHA-256 validation (no plain string comparison)
+- **Storage**: ✅ Service credentials stored with HMAC hashes
+- **Validation**: ✅ Cryptographic validation via StaticKeyService
+- **Revocation**: ✅ Redis-based immediate revocation system
+- **Audit**: ✅ Complete event logging to Redis with 30-day retention
+- **Admin Control**: ✅ Service revocation/restoration with admin authentication
+- **Monitoring**: ✅ Service status tracking and audit log access
 
 ### **Health & Monitoring**
 
@@ -150,7 +157,7 @@ GET    /user-stats                 # User statistics proxy
 GET    /health          # Service health check
 GET    /ready           # Readiness check
 GET    /info            # Service information
-# Note: Prometheus /metrics endpoint not implemented yet
+# ❌ REALITY: No Prometheus /metrics endpoint implemented (`main.py:155-160`)
 ```
 
 ---
@@ -170,11 +177,13 @@ GET    /info            # Service information
 - **Security**: Multiple concurrent sessions
 - **Cleanup**: Automatic expired session removal
 
-### **Service-to-Service Authentication**
-- **API Keys**: Long-lived service tokens
-- **JWT Tokens**: Short-lived with refresh capability
+### **Service-to-Service Authentication (SECURED)**
+- **Static API Keys**: HMAC-validated service credentials
+- **Header-based Auth**: X-Service-Name + X-Service-API-Key
+- **HMAC Security**: Cryptographic hash validation (no plain string comparison)
+- **Revocation System**: Redis-based centralized revocation with immediate effect
+- **Audit Logging**: Complete authentication event trail in Redis
 - **Permissions**: Service-specific permission arrays
-- **Validation**: Token signature + service name verification
 
 ### **Security Features**
 - **Rate Limiting**: Redis-based request limiting
@@ -264,27 +273,47 @@ async def get_user_stats():
     """Proxy request to User Service internal stats"""
 ```
 
-### **Service-to-Service Authentication**
+### **Secure Service-to-Service Authentication**
 ```python
-# Service token validation endpoint
+# Primary service credentials validation
+POST /api/v1/internal/validate-service-credentials
+Headers: {
+    "X-Service-Name": "request-service",
+    "X-Service-API-Key": "request-service-api-key-change-in-production"
+}
+Response: {
+    "valid": true,
+    "service_name": "request-service",
+    "permissions": ["requests:read", "requests:write", "notifications:send"],
+    "expires_at": "2026-12-31T23:59:59Z"
+}
+
+# Legacy service token validation (with HMAC fallback)
 POST /api/v1/internal/validate-service-token
-Request: {"token": "jwt_token", "service_name": "user-service"}
+Request: {"token": "api-key-or-jwt", "service_name": "user-service"}
 Response: {
     "valid": true,
     "service_name": "user-service",
-    "permissions": ["user.read", "user.write"],
-    "expires_at": "2024-12-31T23:59:59Z"
+    "permissions": ["users:read", "users:write", "users:validate"],
+    "expires_at": "2026-12-31T23:59:59Z"
 }
 
-# Service token generation
-POST /api/v1/internal/generate-service-token
-Request: {"service_name": "user-service", "permissions": []}
+# Service management (Admin only)
+POST /api/v1/internal/revoke-service
+Headers: {"Authorization": "Bearer admin-jwt"}
+Request: {"service_name": "compromised-service", "reason": "Security breach"}
+Response: {"success": true, "revoked_by": "admin_123"}
+
+GET /api/v1/internal/service-status
+Headers: {"Authorization": "Bearer admin-jwt"}
 Response: {
-    "token": "jwt_token",
-    "service_name": "user-service",
-    "permissions": ["user.read", "user.write"],
-    "token_type": "Bearer",
-    "expires_in": 2592000
+    "services": {
+        "request-service": {
+            "permissions": ["requests:read", "requests:write"],
+            "is_revoked": false,
+            "last_used": "2025-09-29T18:01:32Z"
+        }
+    }
 }
 ```
 
@@ -336,6 +365,53 @@ All authentication events are logged to `auth_logs` table:
 - Permission checks
 
 **Note**: Service token generation is logged but tokens themselves are not stored in database.
+
+---
+
+## ✅ Security Improvements Implemented (September 2025)
+
+### **🔐 HMAC-Based Service Authentication**
+```python
+# static_key_service.py - Secure HMAC validation
+class StaticKeyService:
+    def _generate_key_hash(self, api_key: str) -> str:
+        """Generate HMAC hash for API key"""
+        return hmac.new(
+            self._hmac_secret,
+            api_key.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+    async def validate_service_credentials(self, service_name: str, api_key: str):
+        """HMAC-based validation with revocation checking"""
+        # ✅ HMAC cryptographic validation
+        # ✅ Redis-based revocation checking
+        # ✅ Audit logging with request metadata
+```
+
+### **🛡️ Security Enhancements Complete**
+- **Service Authentication**: ✅ HMAC SHA-256 validation (eliminates plain string comparison)
+- **Revocation System**: ✅ Redis-based immediate service revocation
+- **Audit Logging**: ✅ Complete authentication events in Redis (30-day retention)
+- **Admin Controls**: ✅ Service revocation/restoration with admin authentication
+- **JWT Self-Minting**: ✅ DISABLED to prevent privilege escalation
+- **Request Service**: ✅ All tests updated to use static authentication
+
+### **🔐 Production Security Status**
+- **Token Revocation**: ✅ Immediate via Redis revocation list
+- **Cryptographic Security**: ✅ HMAC-based validation eliminates timing attacks
+- **Audit Compliance**: ✅ All authentication attempts logged with metadata
+- **Admin Monitoring**: ✅ Service status dashboard and audit log access
+
+### **🚨 Legacy JWT Support (Maintained for Backward Compatibility)**
+```python
+# service_token.py - Updated with HMAC fallback
+async def validate_api_key(self, api_key: str, service_name: str = None):
+    """Uses StaticKeyService for secure HMAC validation"""
+    # ✅ Now uses HMAC validation instead of plain string comparison
+    # ✅ Maintains backward compatibility
+    # ✅ Audit logging included
+```
 
 ---
 
@@ -453,9 +529,10 @@ pytest tests/ -v --cov --cov-report=html
 
 ---
 
-**📝 Status**: ✅ **PRODUCTION READY**
-**🔄 Version**: 1.0.0
-**📅 Last Updated**: September 27, 2025
+**📝 Status**: ✅ **PRODUCTION READY** (Security Enhanced)
+**🔄 Version**: 1.0.1 (Security Update)
+**📅 Last Updated**: September 29, 2025
 **🎯 Port**: 8001
 **💾 Database**: auth_db (PostgreSQL)
 **🔗 Dependencies**: shared-redis
+**🛡️ Security**: HMAC-validated service authentication

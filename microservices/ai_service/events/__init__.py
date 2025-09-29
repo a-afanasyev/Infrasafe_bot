@@ -1,0 +1,1 @@
+# Events package for FastAPI Service Template

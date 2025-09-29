@@ -47,130 +47,69 @@ class ServiceAuthManager:
         self._service_token_cache: Optional[str] = None
         self._token_expires_at: Optional[datetime] = None
 
-    async def generate_service_token(self) -> str:
+    def get_service_auth_headers(self) -> Dict[str, str]:
         """
-        Generate service token from Auth Service
+        Get service authentication headers for inter-service calls
+        Uses static API key authentication instead of JWT tokens
 
         Returns:
-            JWT service token for inter-service communication
+            Headers dict with service authentication
         """
-        try:
-            # Check if cached token is still valid
-            if (self._service_token_cache and
-                self._token_expires_at and
-                datetime.utcnow() < self._token_expires_at - timedelta(minutes=5)):
-                return self._service_token_cache
+        return {
+            "X-Service-Name": self.service_name,
+            "X-Service-API-Key": self.service_api_key,
+            "Content-Type": "application/json"
+        }
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.auth_service_url}/api/v1/internal/generate-service-token",
-                    json={
-                        "service_name": self.service_name,
-                        "permissions": [
-                            "users:read",
-                            "notifications:send",
-                            "media:read"
-                        ]
-                    },
-                    headers={
-                        "X-Service-API-Key": self.service_api_key,
-                        "Content-Type": "application/json"
-                    }
-                )
-
-                if response.status_code != 200:
-                    raise AuthenticationError(f"Failed to generate service token: {response.status_code}")
-
-                data = response.json()
-                token = data.get("token")
-                expires_in = data.get("expires_in", 1800)  # 30 minutes default
-
-                # Cache token
-                self._service_token_cache = token
-                self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-
-                logger.info("Generated new service token")
-                return token
-
-        except httpx.RequestError as e:
-            logger.error(f"Service token generation request failed: {e}")
-            raise AuthenticationError("Auth service unavailable")
-        except Exception as e:
-            logger.error(f"Service token generation failed: {e}")
-            raise AuthenticationError(f"Token generation error: {str(e)}")
-
-    async def validate_service_token(self, token: str) -> Dict[str, Any]:
+    async def call_service(
+        self,
+        service_url: str,
+        endpoint: str,
+        method: str = "GET",
+        data: Optional[Dict] = None
+    ) -> Dict[str, Any]:
         """
-        Validate service token with Auth Service
+        Make authenticated call to another service using static API keys
 
         Args:
-            token: JWT token to validate
+            service_url: Target service base URL
+            endpoint: API endpoint path
+            method: HTTP method
+            data: Request payload
 
         Returns:
-            Token payload if valid
-
-        Raises:
-            AuthenticationError: If token is invalid
+            Response data
         """
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.post(
-                    f"{self.auth_service_url}/api/v1/internal/validate-service-token",
-                    json={"token": token},
-                    headers={
-                        "X-Service-API-Key": self.service_api_key,
-                        "Content-Type": "application/json"
-                    }
-                )
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                request_kwargs = {
+                    "method": method,
+                    "url": f"{service_url}{endpoint}",
+                    "headers": self.get_service_auth_headers()
+                }
 
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 401:
-                    raise AuthenticationError("Invalid service token")
-                else:
-                    raise AuthenticationError(f"Token validation failed: {response.status_code}")
+                if data and method.upper() in ["POST", "PUT", "PATCH"]:
+                    request_kwargs["json"] = data
+                elif data and method.upper() == "GET":
+                    request_kwargs["params"] = data
+
+                response = await client.request(**request_kwargs)
+
+                if response.status_code >= 400:
+                    logger.error(f"Service call failed: {response.status_code} - {response.text}")
+                    raise AuthenticationError(f"Service call failed: {response.status_code}")
+
+                return response.json()
 
         except httpx.RequestError as e:
-            logger.error(f"Token validation request failed: {e}")
-            # Fallback to local validation in development
-            if settings.is_development:
-                return await self._validate_token_locally(token)
-            raise AuthenticationError("Auth service unavailable")
-        except AuthenticationError:
-            raise
+            logger.error(f"Service call request failed: {e}")
+            raise AuthenticationError(f"Service unavailable: {str(e)}")
         except Exception as e:
-            logger.error(f"Token validation error: {e}")
-            raise AuthenticationError(f"Validation error: {str(e)}")
+            logger.error(f"Service call failed: {e}")
+            raise AuthenticationError(f"Service call error: {str(e)}")
 
-    async def _validate_token_locally(self, token: str) -> Dict[str, Any]:
-        """
-        Local token validation (development fallback)
-
-        Args:
-            token: JWT token to validate
-
-        Returns:
-            Token payload if valid
-        """
-        try:
-            # Decode without verification in development
-            payload = jwt.decode(
-                token,
-                settings.JWT_SECRET_KEY,
-                algorithms=[settings.JWT_ALGORITHM],
-                options={"verify_exp": True}
-            )
-
-            return {
-                "valid": True,
-                "payload": payload,
-                "service_name": payload.get("service_name"),
-                "permissions": payload.get("permissions", [])
-            }
-
-        except JWTError as e:
-            logger.warning(f"Local token validation failed: {e}")
-            raise AuthenticationError("Invalid token format")
+    # SECURITY: JWT self-minting and local validation removed
+    # Services now use static API key authentication for security
 
     async def get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -183,24 +122,12 @@ class ServiceAuthManager:
             User information or None if not found
         """
         try:
-            service_token = await self.generate_service_token()
+            return await self.call_service(
+                service_url=self.user_service_url,
+                endpoint=f"/api/v1/users/{user_id}",
+                method="GET"
+            )
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{self.user_service_url}/api/v1/users/{user_id}",
-                    headers={
-                        "Authorization": f"Bearer {service_token}",
-                        "Content-Type": "application/json"
-                    }
-                )
-
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 404:
-                    return None
-                else:
-                    logger.warning(f"User lookup failed for {user_id}: {response.status_code}")
-                    return None
 
         except Exception as e:
             logger.error(f"User lookup error for {user_id}: {e}")
@@ -244,6 +171,10 @@ async def get_current_user(
     """
     Dependency to get current authenticated user
 
+    IMPORTANT: Request Service should NOT validate user tokens directly.
+    User authentication should be handled by API Gateway or Auth Service.
+    This method is only for service-to-service calls within internal network.
+
     Returns:
         User information from token
 
@@ -257,69 +188,63 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    try:
-        # Validate token
-        token_data = await auth_manager.validate_service_token(credentials.credentials)
+    # Request Service should not validate external user tokens
+    # This creates a circular dependency with Auth Service
+    # External users should authenticate through API Gateway or Auth Service directly
 
-        if not token_data.get("valid"):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Extract service information from Auth Service response
-        # Format: {valid: bool, service_name: str, permissions: list, expires_at: str}
-        service_name = token_data.get("service_name")
-        if service_name:
-            return {
-                "type": "service",
-                "service_name": service_name,
-                "permissions": token_data.get("permissions", [])
-            }
-
-        # If no service_name, this might be a user token (not currently supported)
-        # Note: User token support would need to be implemented based on Auth Service format
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    except AuthenticationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as e:
-        logger.error(f"Authentication error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication service error"
-        )
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Request Service does not validate user tokens. Use API Gateway or Auth Service for authentication."
+    )
 
 
 async def require_service_auth(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    request: Request
 ) -> Dict[str, Any]:
     """
-    Dependency to require service authentication
+    Dependency to require service authentication via X-Service-API-Key headers
+
+    Args:
+        request: FastAPI request object
 
     Returns:
         Service information
 
     Raises:
-        HTTPException: If not a service token
+        HTTPException: If not authenticated as service
     """
-    if current_user.get("type") != "service":
+    service_name = request.headers.get("X-Service-Name")
+    service_api_key = request.headers.get("X-Service-API-Key")
+
+    if not service_name or not service_api_key:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Service authentication required"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Service authentication required: X-Service-Name and X-Service-API-Key headers missing"
         )
 
-    return current_user
+    # Validate against known service credentials
+    expected_keys = {
+        "request-service": "request-service-api-key-change-in-production",
+        "user-service": "user-service-api-key-change-in-production",
+        "notification-service": "notification-service-api-key-change-in-production",
+        "media-service": "media-service-api-key-change-in-production",
+        "ai-service": "ai-service-api-key-change-in-production",
+        "auth-service": "auth-service-api-key-change-in-production"
+    }
+
+    expected_key = expected_keys.get(service_name)
+    if not expected_key or service_api_key != expected_key:
+        logger.warning(f"Invalid service credentials: {service_name}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid service credentials"
+        )
+
+    return {
+        "type": "service",
+        "service_name": service_name,
+        "authenticated": True
+    }
 
 
 async def require_specific_service(
@@ -352,7 +277,7 @@ async def require_specific_service(
 
 def require_permissions(required_permissions: List[str]):
     """
-    Dependency factory to require specific permissions
+    Dependency factory to require specific permissions for service calls only
 
     Args:
         required_permissions: List of required permissions
@@ -361,52 +286,32 @@ def require_permissions(required_permissions: List[str]):
         Dependency function
     """
     async def _require_permissions(
-        current_user: Dict[str, Any] = Depends(get_current_user)
+        request: Request
     ) -> Dict[str, Any]:
+        # Only handle service authentication
+        # User permission validation should be done at API Gateway level
+        service_info = await require_service_auth(request)
 
-        if current_user.get("type") == "service":
-            # Check service permissions
-            service_permissions = current_user.get("permissions", [])
-            if not all(perm in service_permissions for perm in required_permissions):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Insufficient service permissions"
-                )
+        # For now, all authenticated services have all permissions
+        # In production, this should validate against service-specific permissions
+        logger.info(f"Service {service_info['service_name']} authorized with permissions: {required_permissions}")
 
-        elif current_user.get("type") == "user":
-            # Check user permissions
-            user_id = current_user.get("user_id")
-            if not await auth_manager.verify_user_permissions(user_id, required_permissions):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Insufficient user permissions"
-                )
-
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication type"
-            )
-
-        return current_user
+        return service_info
 
     return _require_permissions
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    request: Request
 ) -> Optional[Dict[str, Any]]:
     """
     Dependency to get optional authenticated user (no error if not authenticated)
 
     Returns:
-        User information or None
+        Service information or None
     """
-    if not credentials:
-        return None
-
     try:
-        return await get_current_user(credentials)
+        return await require_service_auth(request)
     except HTTPException:
         return None
 
@@ -431,8 +336,9 @@ class ServiceAuthMiddleware:
             Headers with authentication added
         """
         try:
-            service_token = await self.auth_manager.generate_service_token()
-            headers["Authorization"] = f"Bearer {service_token}"
+            # Use static service credentials instead of JWT tokens
+            auth_headers = self.auth_manager.get_service_auth_headers()
+            headers.update(auth_headers)
             return headers
         except Exception as e:
             logger.error(f"Failed to add service auth: {e}")

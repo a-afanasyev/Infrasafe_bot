@@ -342,7 +342,7 @@ class AIService:
             async def make_request():
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     return await client.post(
-                        f"{self.ai_service_url}/api/v1/assignment/optimize",
+                        f"{self.ai_service_url}/api/v1/assignments/basic-assign",
                         json=payload,
                         headers={"X-Service-Token": f"service_{settings.SERVICE_NAME}"}
                     )

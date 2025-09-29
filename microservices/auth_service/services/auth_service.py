@@ -54,10 +54,7 @@ class AuthService:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
                     f"{self.user_service_url}/api/v1/users/by-telegram/{telegram_id}",
-                    headers={
-                        "Authorization": f"Bearer {await self._get_service_token()}",
-                        "Content-Type": "application/json"
-                    }
+                    headers=self._get_service_auth_headers()
                 )
 
                 if response.status_code == 200:
@@ -106,23 +103,19 @@ class AuthService:
             logger.error(f"Error fetching user from User Service: {e}")
             return None
 
-    async def _get_service_token(self) -> str:
+    def _get_service_auth_headers(self) -> Dict[str, str]:
         """
-        Get service-to-service authentication token
-        Generates a JWT token for authenticating with other services
-        """
-        try:
-            # Generate service token for auth-service to call user-service
-            token = service_token_manager.generate_service_token(
-                service_name="auth-service",
-                permissions=["users:read", "users:write", "roles:read"]
-            )
-            return token
+        Get service authentication headers for inter-service calls
+        Uses static API key authentication instead of JWT tokens
 
-        except Exception as e:
-            logger.error(f"Error generating service token: {e}")
-            # Fallback to API key for development
-            return service_token_manager.generate_api_key("auth-service")
+        Returns:
+            Headers dict with service authentication
+        """
+        return {
+            "X-Service-Name": "auth-service",
+            "X-Service-API-Key": "auth-service-api-key-change-in-production",
+            "Content-Type": "application/json"
+        }
 
     async def _get_fallback_user_data(self, telegram_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -341,7 +334,7 @@ class AuthService:
                 return payload
 
             # Fallback to API key validation for development
-            service_name = service_token_manager.validate_api_key(token)
+            service_name = await service_token_manager.validate_api_key(token)
             if service_name:
                 return {
                     "service_name": service_name,

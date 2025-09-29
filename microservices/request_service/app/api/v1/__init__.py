@@ -45,4 +45,8 @@ api_router.include_router(ai_router)
 from .bot import router as bot_router
 api_router.include_router(bot_router, prefix="/bot", tags=["bot"])
 
+# Include Geocoding router
+from .geocoding import router as geocoding_router
+api_router.include_router(geocoding_router)
+
 __all__ = ["api_router"]

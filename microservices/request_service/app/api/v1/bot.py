@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
 from app.integrations.bot_integration import BotIntegrationService
-from app.core.auth import verify_internal_token
+from app.core.auth import require_service_auth
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ router = APIRouter()
 async def create_request_from_bot(
     request_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Create request from Telegram bot
@@ -68,7 +68,7 @@ async def update_request_from_bot(
     request_number: str,
     update_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Update request from Telegram bot
@@ -108,7 +108,7 @@ async def add_comment_from_bot(
     request_number: str,
     comment_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Add comment from Telegram bot
@@ -146,7 +146,7 @@ async def update_status_from_bot(
     request_number: str,
     status_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Update request status from Telegram bot
@@ -184,7 +184,7 @@ async def assign_from_bot(
     request_number: str,
     assignment_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Assign executor from Telegram bot
@@ -222,7 +222,7 @@ async def assign_from_bot(
 async def get_request_for_bot(
     request_number: str,
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Get request data formatted for Telegram bot
@@ -264,7 +264,7 @@ async def search_requests_for_bot(
     limit: int = 10,
     offset: int = 0,
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Search requests for Telegram bot
@@ -305,7 +305,7 @@ async def get_user_requests_for_bot(
     limit: int = 10,
     offset: int = 0,
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Get user's requests for Telegram bot
@@ -342,7 +342,7 @@ async def get_user_requests_for_bot(
 async def sync_request_from_monolith(
     request_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Sync specific request from monolith to microservice
@@ -391,7 +391,7 @@ async def sync_request_from_monolith(
 async def validate_data_consistency(
     request_data: Dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_async_session),
-    _: str = Depends(verify_internal_token)
+    _: dict = Depends(require_service_auth)
 ):
     """
     Validate data consistency between monolith and microservice

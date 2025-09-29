@@ -14,6 +14,7 @@ from sqlalchemy import select, func, and_, or_, desc, asc
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_async_session
+from app.core.auth import require_service_auth
 from app.models import (
     Request, RequestComment, RequestRating, RequestAssignment, RequestMaterial,
     RequestStatus, RequestCategory, RequestPriority
@@ -24,6 +25,7 @@ from app.schemas import (
     RequestStatsResponse, ErrorResponse, MaterialResponse, MaterialCreate
 )
 from app.services import request_number_service
+from app.services.geocoding_service import geocoding_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/requests", tags=["requests"])
@@ -32,7 +34,8 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 @router.post("/", response_model=RequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_request(
     request_data: RequestCreate,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Create a new request with automatic number generation
@@ -44,6 +47,28 @@ async def create_request(
     try:
         # Generate unique request number
         number_result = await request_number_service.generate_next_number(db)
+
+        # Auto-geocode address if coordinates not provided
+        latitude = request_data.latitude
+        longitude = request_data.longitude
+
+        if request_data.address and (not latitude or not longitude):
+            try:
+                geocoding_result = await geocoding_service.geocode_address(
+                    address=request_data.address,
+                    prefer_local=True
+                )
+                if geocoding_result and geocoding_result.confidence > 0.5:
+                    latitude = geocoding_result.latitude
+                    longitude = geocoding_result.longitude
+                    logger.info(f"Auto-geocoded address '{request_data.address}' -> ({latitude}, {longitude})")
+            except Exception as e:
+                logger.warning(f"Auto-geocoding failed for '{request_data.address}': {e}")
+                # Continue without coordinates - not a critical failure
+
+        # Normalize coordinates if provided
+        if latitude and longitude:
+            latitude, longitude = await geocoding_service.normalize_coordinates(latitude, longitude)
 
         # Create new request instance
         new_request = Request(
@@ -57,8 +82,8 @@ async def create_request(
             building_id=request_data.building_id,
             applicant_user_id=request_data.applicant_user_id,
             media_file_ids=request_data.media_file_ids,
-            latitude=request_data.latitude,
-            longitude=request_data.longitude,
+            latitude=latitude,
+            longitude=longitude,
             status=RequestStatus.NEW,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -84,7 +109,8 @@ async def create_request(
 @router.get("/{request_number}", response_model=RequestResponse)
 async def get_request(
     request_number: str,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get request by request number
@@ -130,7 +156,8 @@ async def get_request(
 async def update_request(
     request_number: str,
     update_data: RequestUpdate,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Update request information
@@ -185,7 +212,8 @@ async def update_request(
 async def update_request_status(
     request_number: str,
     status_update: RequestStatusUpdate,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Update request status with optional comment
@@ -269,7 +297,8 @@ async def assign_request_endpoint(
     assigned_to: int = Query(..., description="Executor user ID to assign to"),
     assigned_by: int = Query(..., description="User ID making the assignment"),
     assignment_reason: Optional[str] = Query(None, description="Reason for assignment"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Assign request to a specific executor
@@ -335,7 +364,8 @@ async def update_request_materials_endpoint(
     request_number: str,
     materials: List[MaterialCreate] = ...,
     updated_by: int = Query(..., description="User ID updating materials"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Update all materials for a request (endpoint required by SPRINT_8_9_PLAN.md)
@@ -380,7 +410,8 @@ async def add_media_to_request_endpoint(
     request_number: str,
     media_file_ids: List[str] = Query(..., description="List of media file IDs from Media Service"),
     added_by: int = Query(..., description="User ID adding the media"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Add media files to a request (endpoint required by SPRINT_8_9_PLAN.md)
@@ -435,7 +466,8 @@ async def add_media_to_request_endpoint(
 async def delete_request(
     request_number: str,
     user_id: str = Query(..., description="User ID performing the deletion"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Soft delete a request
@@ -502,7 +534,7 @@ async def delete_request(
 async def list_requests(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    status: Optional[List[RequestStatus]] = Query(None, description="Filter by status"),
+    request_status: Optional[List[RequestStatus]] = Query(None, description="Filter by status", alias="status"),
     category: Optional[List[RequestCategory]] = Query(None, description="Filter by category"),
     priority: Optional[List[RequestPriority]] = Query(None, description="Filter by priority"),
     applicant_user_id: Optional[str] = Query(None, description="Filter by applicant"),
@@ -511,7 +543,8 @@ async def list_requests(
     search: Optional[str] = Query(None, description="Search in title and description"),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order (asc/desc)"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     List requests with filtering, searching, and pagination
@@ -525,8 +558,8 @@ async def list_requests(
         query = select(Request).where(Request.is_deleted == False)
 
         # Apply filters
-        if status:
-            query = query.where(Request.status.in_(status))
+        if request_status:
+            query = query.where(Request.status.in_(request_status))
 
         if category:
             query = query.where(Request.category.in_(category))
@@ -584,13 +617,11 @@ async def list_requests(
         items = [RequestSummaryResponse.from_orm(req) for req in requests]
 
         return RequestListResponse(
-            items=items,
+            requests=items,
             total=total,
-            page=page,
-            size=size,
-            pages=pages,
-            has_next=has_next,
-            has_prev=has_prev
+            limit=size,
+            offset=offset,
+            has_more=has_next
         )
 
     except Exception as e:
@@ -604,7 +635,8 @@ async def list_requests(
 @router.get("/stats/summary", response_model=RequestStatsResponse)
 async def get_request_statistics(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get request statistics for the specified period

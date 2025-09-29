@@ -23,6 +23,7 @@ from app.schemas import (
     ErrorResponse
 )
 from app.services.assignment_service import assignment_service
+from app.core.auth import require_service_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/assignments", tags=["assignments"])
@@ -33,7 +34,8 @@ async def assign_request(
     request_number: str,
     assignment_data: AssignmentCreate,
     assigned_by: int = Query(..., description="User ID making the assignment"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Assign a request to a specific executor
@@ -68,7 +70,8 @@ async def reassign_request(
     new_assigned_to: int = Query(..., description="New executor ID"),
     reassignment_reason: str = Query(..., description="Reason for reassignment"),
     assigned_by: int = Query(..., description="User ID making the reassignment"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Reassign request to a different executor
@@ -101,7 +104,8 @@ async def reassign_request(
 async def auto_assign_request(
     request_number: str,
     assigned_by: int = Query(..., description="User ID initiating auto-assignment"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Auto-assign request using AI algorithms
@@ -134,7 +138,8 @@ async def auto_assign_request(
 async def smart_dispatch_request(
     request_number: str,
     assigned_by: int = Query(..., description="User ID initiating smart dispatch"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Smart dispatch request using AI-powered SmartDispatcher
@@ -172,7 +177,8 @@ async def smart_dispatch_request(
 async def bulk_assign_requests(
     bulk_request: BulkAssignmentRequest,
     assigned_by: int = Query(..., description="User ID making bulk assignment"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Assign multiple requests in bulk operation
@@ -200,7 +206,8 @@ async def bulk_assign_requests(
 async def get_assignment_suggestions(
     request_number: str,
     limit: int = Query(5, ge=1, le=20, description="Maximum number of suggestions"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get AI-powered assignment suggestions for a request
@@ -233,7 +240,8 @@ async def get_assignment_suggestions(
 @router.get("/workload/{executor_id}", response_model=WorkloadAnalysis)
 async def get_executor_workload(
     executor_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Analyze executor's current workload
@@ -259,7 +267,8 @@ async def get_executor_workload(
 @router.get("/history/{request_number}", response_model=List[AssignmentResponse])
 async def get_assignment_history(
     request_number: str,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get assignment history for a request
@@ -285,7 +294,8 @@ async def get_assignment_history(
 async def get_assignment_efficiency(
     executor_id: int,
     days: int = Query(30, ge=1, le=365, description="Analysis period in days"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get assignment efficiency metrics for executor

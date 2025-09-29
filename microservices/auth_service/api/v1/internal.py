@@ -3,7 +3,7 @@
 
 import logging
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 
 from services.auth_service import AuthService
@@ -76,7 +76,7 @@ async def validate_service_token(request: ServiceTokenValidationRequest):
             )
         else:
             # Try API key validation as fallback
-            api_service = service_token_manager.validate_api_key(request.token)
+            api_service = await service_token_manager.validate_api_key(request.token)
             if api_service:
                 logger.info(f"API key validated for {api_service}")
 
@@ -114,18 +114,15 @@ async def get_user_stats_from_user_service():
         async with get_db() as db:
             auth_service = AuthService(db)
 
-            # Get service token for calling User Service
-            service_token = await auth_service._get_service_token()
+            # Get service auth headers for calling User Service
+            auth_headers = auth_service._get_service_auth_headers()
 
             # Call User Service internal stats endpoint
             import httpx
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     f"{auth_service.user_service_url}/api/v1/internal/stats/overview",
-                    headers={
-                        "Authorization": f"Bearer {service_token}",
-                        "Content-Type": "application/json"
-                    }
+                    headers=auth_headers
                 )
 
                 if response.status_code == 200:
@@ -153,37 +150,263 @@ async def get_user_stats_from_user_service():
             detail="Error retrieving user statistics"
         )
 
+from middleware.auth import require_admin
+
 @router.post("/generate-service-token")
-async def generate_service_token(
-    request: ServiceTokenGenerationRequest,
+async def generate_service_token_disabled(
+    token_request: ServiceTokenGenerationRequest,
     admin_user: dict = Depends(require_admin)
 ):
     """
-    Generate a new service-to-service authentication token
+    SECURITY: Service token generation DISABLED
 
-    Used by services to get tokens for calling other services
-    Requires admin authentication and authorization
+    This endpoint has been permanently disabled to prevent JWT token generation.
+    Services now use static API key authentication via X-Service-API-Key headers
+    instead of self-minting JWT tokens.
+
+    This elimination of JWT token generation removes the security vulnerability
+    where services could mint tokens for other services with arbitrary permissions.
     """
-    try:
-        # Generate token using service token manager
-        token = service_token_manager.generate_service_token(request.service_name, request.permissions)
+    logger.warning(
+        f"Admin {admin_user.get('user_id')} attempted to generate service token for {token_request.service_name} "
+        f"- endpoint disabled for security"
+    )
 
-        logger.info(
-            f"Admin {admin_user.get('user_id')} generated service token for {request.service_name} "
-            f"with permissions: {request.permissions}"
+    raise HTTPException(
+        status_code=410,  # Gone - resource no longer available
+        detail="Service token generation disabled. Services use static API key authentication instead."
+    )
+
+@router.post("/validate-service-credentials")
+async def validate_service_credentials(request: Request):
+    """
+    Centralized service credentials validation with HMAC security
+
+    This endpoint provides secure validation of service API keys using:
+    - HMAC-based key verification (not plain string comparison)
+    - Revocation checking via Redis
+    - Audit logging for security events
+    - Centralized permissions management
+    """
+    from services.static_key_service import static_key_service
+
+    try:
+        service_name = request.headers.get("X-Service-Name")
+        service_api_key = request.headers.get("X-Service-API-Key")
+
+        # Extract request info for audit logging
+        request_info = {
+            "client_ip": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent")
+        }
+
+        if not service_name or not service_api_key:
+            return ServiceTokenValidationResponse(
+                valid=False,
+                service_name="unknown",
+                permissions=[],
+                expires_at=None
+            )
+
+        # Validate using secure HMAC-based service
+        service_credentials = await static_key_service.validate_service_credentials(
+            service_name=service_name,
+            api_key=service_api_key,
+            request_info=request_info
         )
 
+        if service_credentials:
+            return ServiceTokenValidationResponse(
+                valid=True,
+                service_name=service_credentials.service_name,
+                permissions=service_credentials.permissions,
+                expires_at="2026-12-31T23:59:59Z"  # Static credentials have long lifetime
+            )
+        else:
+            return ServiceTokenValidationResponse(
+                valid=False,
+                service_name="unknown",
+                permissions=[],
+                expires_at=None
+            )
+
+    except Exception as e:
+        logger.error(f"Error validating service credentials: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error during credentials validation"
+        )
+
+
+@router.post("/revoke-service")
+async def revoke_service_credentials(
+    revocation_request: dict,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    Revoke service credentials with immediate effect
+
+    SECURITY: Only admins can revoke service credentials.
+    Revoked services will fail authentication immediately across all instances.
+    """
+    from services.static_key_service import static_key_service
+
+    try:
+        service_name = revocation_request.get("service_name")
+        reason = revocation_request.get("reason", "Administrative revocation")
+
+        if not service_name:
+            raise HTTPException(
+                status_code=400,
+                detail="service_name is required"
+            )
+
+        admin_user_id = admin_user.get("user_id", "unknown")
+
+        success = await static_key_service.revoke_service(
+            service_name=service_name,
+            reason=reason,
+            admin_user_id=admin_user_id
+        )
+
+        if success:
+            return {
+                "success": True,
+                "service_name": service_name,
+                "message": f"Service {service_name} credentials revoked",
+                "revoked_by": admin_user_id,
+                "reason": reason
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to revoke service credentials"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error revoking service credentials: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error during revocation"
+        )
+
+
+@router.post("/restore-service")
+async def restore_service_credentials(
+    restoration_request: dict,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    Restore previously revoked service credentials
+
+    SECURITY: Only admins can restore service credentials.
+    """
+    from services.static_key_service import static_key_service
+
+    try:
+        service_name = restoration_request.get("service_name")
+
+        if not service_name:
+            raise HTTPException(
+                status_code=400,
+                detail="service_name is required"
+            )
+
+        admin_user_id = admin_user.get("user_id", "unknown")
+
+        success = await static_key_service.restore_service(
+            service_name=service_name,
+            admin_user_id=admin_user_id
+        )
+
+        if success:
+            return {
+                "success": True,
+                "service_name": service_name,
+                "message": f"Service {service_name} credentials restored",
+                "restored_by": admin_user_id
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to restore service credentials"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error restoring service credentials: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error during restoration"
+        )
+
+
+@router.get("/service-status")
+async def get_service_status(admin_user: dict = Depends(require_admin)):
+    """
+    Get status of all registered services
+
+    SECURITY: Only admins can view service status.
+    Shows revocation status, last used timestamps, and permissions.
+    """
+    from services.static_key_service import static_key_service
+
+    try:
+        service_status = await static_key_service.get_service_status()
+
         return {
-            "token": token,
-            "service_name": request.service_name,
-            "permissions": request.permissions or service_token_manager._get_default_permissions(request.service_name),
-            "token_type": "Bearer",
-            "expires_in": 30 * 24 * 60 * 60  # 30 days in seconds
+            "success": True,
+            "services": service_status,
+            "total_services": len(service_status),
+            "requested_by": admin_user.get("user_id", "unknown")
         }
 
     except Exception as e:
-        logger.error(f"Error generating service token: {e}")
+        logger.error(f"Error getting service status: {e}")
         raise HTTPException(
             status_code=500,
-            detail="Error generating service token"
+            detail="Internal error getting service status"
+        )
+
+
+@router.get("/auth-audit")
+async def get_auth_audit_logs(
+    hours: int = 24,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    Get authentication audit logs
+
+    SECURITY: Only admins can view audit logs.
+    Shows recent authentication attempts, successes, failures, and security events.
+    """
+    from services.static_key_service import static_key_service
+
+    try:
+        if hours < 1 or hours > 168:  # Max 1 week
+            raise HTTPException(
+                status_code=400,
+                detail="hours must be between 1 and 168 (1 week)"
+            )
+
+        audit_logs = await static_key_service.get_auth_audit_logs(hours=hours)
+
+        return {
+            "success": True,
+            "audit_logs": audit_logs,
+            "hours": hours,
+            "total_events": len(audit_logs),
+            "requested_by": admin_user.get("user_id", "unknown")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting audit logs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error getting audit logs"
         )

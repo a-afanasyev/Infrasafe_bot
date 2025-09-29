@@ -3,7 +3,7 @@ End-to-End Notification Delivery Tests
 UK Management Bot - Request Service
 
 Tests for complete notification delivery flow including:
-- Real JWT token generation and validation
+- Static API key authentication
 - Assignment notification delivery to Notification Service
 - Error handling and retry scenarios
 - Integration with localization system
@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app'))
 
 from services.assignment_service import AssignmentService
 from models.request import Request, RequestAssignment
-from utils.jwt_test_helper import JWTTestHelper, generate_test_service_token
+from utils.auth_test_helper import StaticAuthTestHelper, generate_test_service_auth_headers
 from utils.localization import get_localized_templates
 
 
@@ -30,9 +30,9 @@ class TestNotificationDeliveryEndToEnd:
     """Test suite for end-to-end notification delivery"""
 
     @pytest.fixture
-    def jwt_helper(self):
-        """JWT test helper instance"""
-        return JWTTestHelper()
+    def auth_helper(self):
+        """Static auth test helper instance"""
+        return StaticAuthTestHelper()
 
     @pytest.fixture
     def mock_db_session(self):
@@ -117,59 +117,52 @@ class TestNotificationDeliveryEndToEnd:
             "templates": localized_templates
         }
 
-    async def test_real_jwt_token_generation(self, jwt_helper):
-        """Test real JWT token generation and validation"""
-        print("\n=== REAL JWT TOKEN GENERATION TEST ===")
+    def test_static_auth_headers_generation(self, auth_helper):
+        """Test static authentication headers generation"""
+        print("\n=== STATIC AUTH HEADERS GENERATION TEST ===")
 
-        # Generate service token
-        service_token = jwt_helper.generate_service_token(
-            service_name="request-service-test",
-            permissions=["notifications:send", "users:read"]
+        # Generate service headers
+        headers = auth_helper.get_service_auth_headers(
+            service_name="request-service"
         )
 
-        print(f"Generated service token: {service_token[:50]}...")
+        print(f"Generated auth headers: {headers}")
 
-        # Validate token
-        token_info = jwt_helper.get_token_info(service_token)
+        # Validate headers
+        assert "X-Service-Name" in headers
+        assert "X-Service-API-Key" in headers
+        assert headers["X-Service-Name"] == "request-service"
+        assert headers["X-Service-API-Key"] == "request-service-api-key-change-in-production"
 
-        assert token_info["valid"] is True
-        assert token_info["type"] == "service"
-        assert token_info["service_name"] == "request-service-test"
-        assert "notifications:send" in token_info["permissions"]
-        assert token_info["expired"] is False
+        print(f"✅ Service name: {headers['X-Service-Name']}")
+        print(f"✅ API key: {headers['X-Service-API-Key'][:20]}...")
+        print(f"✅ Content type: {headers['Content-Type']}")
 
-        print(f"✅ Token valid: {token_info['valid']}")
-        print(f"✅ Service name: {token_info['service_name']}")
-        print(f"✅ Permissions: {token_info['permissions']}")
-        print(f"✅ Expires at: {token_info['expires_at']}")
+        # Test credentials validation
+        is_valid = auth_helper.is_valid_service_credentials(
+            "request-service",
+            "request-service-api-key-change-in-production"
+        )
+        assert is_valid is True
 
-        # Test token decoding
-        decoded = jwt_helper.decode_token(service_token)
-        assert decoded["service_name"] == "request-service-test"
-        assert decoded["type"] == "service"
+        print("✅ Static authentication headers generation successful!")
 
-        print("✅ Real JWT token generation and validation successful!")
-
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     async def test_notification_delivery_success(
         self,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment,
         expected_notification_payload,
-        jwt_helper
+        auth_helper
     ):
-        """Test successful notification delivery with real JWT"""
+        """Test successful notification delivery with static authentication"""
         print("\n=== NOTIFICATION DELIVERY SUCCESS TEST ===")
 
-        # Generate real JWT token
-        real_token = jwt_helper.generate_service_token("request-service")
-        mock_generate_token.return_value = real_token
+        # Static authentication - no token generation needed
 
-        print(f"Using real JWT token: {real_token[:50]}...")
+        print("Using static API key authentication")
 
         # Mock successful HTTP response
         mock_response = MagicMock()
@@ -190,10 +183,11 @@ class TestNotificationDeliveryEndToEnd:
         # Verify URL
         assert "api/v1/notifications/send" in call_args[1]["url"]
 
-        # Verify headers include real JWT
+        # Verify headers include static API key authentication
         headers = call_args[1]["headers"]
-        assert "Authorization" in headers
-        assert f"Bearer {real_token}" in headers["Authorization"]
+        assert "X-Service-Name" in headers
+        assert "X-Service-API-Key" in headers
+        assert headers["X-Service-Name"] == "request-service"
         assert headers["Content-Type"] == "application/json"
 
         # Verify payload structure
@@ -217,27 +211,23 @@ class TestNotificationDeliveryEndToEnd:
         assert "ru" in templates["executor"]
         assert "uz" in templates["executor"]
 
-        print("✅ Notification delivered successfully with real JWT!")
+        print("✅ Notification delivered successfully with static authentication!")
         print(f"✅ Payload contains {len(recipients)} recipients")
         print(f"✅ Templates available in {len(templates)} languages")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     async def test_notification_delivery_with_localization(
         self,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment,
-        jwt_helper
+        auth_helper
     ):
         """Test notification delivery with proper localization"""
         print("\n=== NOTIFICATION LOCALIZATION TEST ===")
 
-        # Generate real JWT token
-        real_token = jwt_helper.generate_service_token("request-service")
-        mock_generate_token.return_value = real_token
+        # Static authentication - no token generation needed
 
         # Mock successful response
         mock_response = MagicMock()
@@ -284,23 +274,19 @@ class TestNotificationDeliveryEndToEnd:
 
         print("✅ Localization working correctly!")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     async def test_notification_delivery_error_handling(
         self,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment,
-        jwt_helper
+        auth_helper
     ):
         """Test notification delivery error handling"""
         print("\n=== NOTIFICATION ERROR HANDLING TEST ===")
 
-        # Generate real JWT token
-        real_token = jwt_helper.generate_service_token("request-service")
-        mock_generate_token.return_value = real_token
+        # Static authentication - no token generation needed
 
         # Mock error response
         mock_response = MagicMock()
@@ -319,23 +305,19 @@ class TestNotificationDeliveryEndToEnd:
 
         print("✅ Error handling works correctly - no exception raised")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     async def test_notification_delivery_network_error(
         self,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment,
-        jwt_helper
+        auth_helper
     ):
         """Test notification delivery with network error"""
         print("\n=== NOTIFICATION NETWORK ERROR TEST ===")
 
-        # Generate real JWT token
-        real_token = jwt_helper.generate_service_token("request-service")
-        mock_generate_token.return_value = real_token
+        # Static authentication - no token generation needed
 
         # Mock network error
         mock_http_post.side_effect = httpx.RequestError("Network unreachable")
@@ -351,19 +333,16 @@ class TestNotificationDeliveryEndToEnd:
 
         print("✅ Network error handling works correctly")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
-    async def test_jwt_token_authentication_failure(
+    async def test_static_authentication_success(
         self,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment
     ):
-        """Test notification delivery when JWT generation fails"""
-        print("\n=== JWT AUTHENTICATION FAILURE TEST ===")
+        """Test notification delivery with static authentication"""
+        print("\n=== STATIC AUTHENTICATION SUCCESS TEST ===")
 
-        # Mock JWT generation failure
-        mock_generate_token.side_effect = Exception("Auth service unavailable")
+        # Static authentication - always available and secure
 
         # Call notification method - should handle gracefully
         await assignment_service._send_assignment_notification(
@@ -371,33 +350,39 @@ class TestNotificationDeliveryEndToEnd:
             sample_assignment
         )
 
-        print("✅ JWT failure handled gracefully")
+        print("✅ Static authentication handled gracefully")
 
-    async def test_token_expiration_and_renewal(self, jwt_helper):
-        """Test token expiration behavior"""
-        print("\n=== TOKEN EXPIRATION TEST ===")
+    def test_service_credentials_validation(self, auth_helper):
+        """Test service credentials validation"""
+        print("\n=== SERVICE CREDENTIALS VALIDATION TEST ===")
 
-        # Generate token with short expiration
-        short_token = jwt_helper.generate_service_token(
-            service_name="test-service",
-            expire_minutes=0  # Expires immediately
+        # Test valid credentials
+        valid = auth_helper.is_valid_service_credentials(
+            "request-service",
+            "request-service-api-key-change-in-production"
         )
+        assert valid is True
 
-        # Wait a moment for expiration
-        await asyncio.sleep(0.1)
-
-        # Check if token is expired
-        assert jwt_helper.is_token_expired(short_token) is True
-
-        # Generate new token with normal expiration
-        normal_token = jwt_helper.generate_service_token(
-            service_name="test-service",
-            expire_minutes=30
+        # Test invalid service name
+        invalid_service = auth_helper.is_valid_service_credentials(
+            "invalid-service",
+            "request-service-api-key-change-in-production"
         )
+        assert invalid_service is False
 
-        assert jwt_helper.is_token_expired(normal_token) is False
+        # Test invalid API key
+        invalid_key = auth_helper.is_valid_service_credentials(
+            "request-service",
+            "invalid-api-key"
+        )
+        assert invalid_key is False
 
-        print("✅ Token expiration detection works correctly")
+        # Test all available services
+        services = auth_helper.get_all_service_names()
+        assert "request-service" in services
+        assert "auth-service" in services
+
+        print("✅ Service credentials validation works correctly")
 
     async def test_notification_payload_completeness(
         self,
@@ -442,64 +427,49 @@ class TestNotificationDeliveryEndToEnd:
         print("✅ Notification payload is complete and well-structured")
 
 
-class TestJWTIntegrationWithNotificationService:
-    """Test JWT integration specifically with Notification Service expectations"""
+class TestStaticAuthIntegrationWithNotificationService:
+    """Test static API key authentication integration with Notification Service"""
 
     @pytest.fixture
-    def jwt_helper(self):
-        return JWTTestHelper()
+    def auth_helper(self):
+        return StaticAuthTestHelper()
 
-    async def test_notification_service_jwt_validation(self, jwt_helper):
-        """Test that our JWT tokens work with Notification Service middleware"""
-        print("\n=== NOTIFICATION SERVICE JWT VALIDATION TEST ===")
+    async def test_notification_service_static_auth_validation(self, auth_helper):
+        """Test that our static API keys work with Notification Service middleware"""
+        print("\n=== NOTIFICATION SERVICE STATIC AUTH VALIDATION TEST ===")
 
-        # Generate service token
-        service_token = jwt_helper.generate_service_token(
-            service_name="request-service",
-            permissions=["notifications:send"]
-        )
+        # Get static auth headers
+        headers = auth_helper.get_service_auth_headers("request-service")
 
-        # Simulate Notification Service validation
-        decoded = jwt_helper.decode_token(service_token)
+        # Verify header structure matches Notification Service expectations
+        assert "X-Service-Name" in headers
+        assert "X-Service-API-Key" in headers
+        assert headers["X-Service-Name"] == "request-service"
+        assert headers["X-Service-API-Key"] == "request-service-api-key-change-in-production"
+        assert headers["Content-Type"] == "application/json"
 
-        # Verify token structure matches Notification Service expectations
-        assert decoded["type"] == "service"
-        assert decoded["service_name"] == "request-service"
-        assert "notifications:send" in decoded["permissions"]
-        assert "iss" in decoded  # Issuer
-        assert "aud" in decoded  # Audience
-        assert "exp" in decoded  # Expiration
-        assert "iat" in decoded  # Issued at
+        print("✅ Static authentication headers compatible with Notification Service")
+        print(f"✅ Service: {headers['X-Service-Name']}")
+        print(f"✅ API Key: {headers['X-Service-API-Key'][:20]}...")
 
-        print("✅ JWT token structure compatible with Notification Service")
-        print(f"✅ Service: {decoded['service_name']}")
-        print(f"✅ Permissions: {decoded['permissions']}")
-
-    async def test_notification_service_middleware_compatibility(self, jwt_helper):
-        """Test compatibility with Notification Service JWTMiddleware"""
+    async def test_notification_service_middleware_compatibility(self, auth_helper):
+        """Test compatibility with Notification Service static authentication"""
         print("\n=== NOTIFICATION SERVICE MIDDLEWARE COMPATIBILITY TEST ===")
 
-        # Generate token
-        token = jwt_helper.generate_service_token("request-service")
+        # Get headers for authentication
+        headers = auth_helper.get_service_auth_headers("request-service")
 
-        # Simulate middleware validation process
-        # This mimics what the Notification Service middleware does
-        from app.core.auth import auth_manager
+        # Validate credentials using helper
+        is_valid = auth_helper.is_valid_service_credentials(
+            headers["X-Service-Name"],
+            headers["X-Service-API-Key"]
+        )
 
-        # Test local validation (development mode)
-        try:
-            validation_result = await auth_manager._validate_token_locally(token)
+        assert is_valid is True
 
-            assert validation_result["valid"] is True
-            assert validation_result["service_name"] == "request-service"
-            assert "notifications:send" in validation_result["permissions"]
-
-            print("✅ Token passes Notification Service middleware validation")
-            print(f"✅ Validation result: {validation_result}")
-
-        except Exception as e:
-            print(f"❌ Middleware validation failed: {e}")
-            raise
+        # Note: Static API key authentication used for security
+        # JWT self-minting disabled to prevent vulnerabilities
+        print("✅ Static API key authentication working correctly for Notification Service")
 
 
 if __name__ == "__main__":

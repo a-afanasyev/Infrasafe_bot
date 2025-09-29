@@ -28,8 +28,8 @@ class AuthServiceSmokeTest:
         logger.info("🔥 Starting Auth Service smoke tests")
 
         await self.test_health_check()
-        await self.test_service_token_generation()
-        await self.test_service_token_validation()
+        await self.test_service_credentials_validation()
+        await self.test_token_generation_security()
         await self.test_permission_validation()
         await self.test_session_lifecycle()
 
@@ -54,67 +54,58 @@ class AuthServiceSmokeTest:
             self.test_results["health_check"] = f"❌ FAIL: {str(e)}"
             logger.error(f"❌ Health check failed: {e}")
 
-    async def test_service_token_generation(self):
-        """Test service token generation"""
+    async def test_service_credentials_validation(self):
+        """Test service credentials validation (API key auth)"""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                # Test the new static API key validation endpoint
+                response = await client.post(
+                    f"{self.base_url}/api/v1/internal/validate-service-credentials",
+                    headers={
+                        "X-Service-API-Key": "auth-service-api-key-change-in-production"
+                    }
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("valid") == True and data.get("service_name") == "auth-service":
+                        self.test_results["credentials_validation"] = "✅ PASS"
+                        logger.info("✅ Service credentials validation: PASS")
+                    else:
+                        self.test_results["credentials_validation"] = "❌ FAIL: Invalid validation response"
+                        logger.error("❌ Service credentials validation failed: Invalid response")
+                else:
+                    self.test_results["credentials_validation"] = f"❌ FAIL: HTTP {response.status_code}"
+                    logger.error(f"❌ Service credentials validation failed: {response.status_code}")
+
+        except Exception as e:
+            self.test_results["credentials_validation"] = f"❌ FAIL: {str(e)}"
+            logger.error(f"❌ Service credentials validation failed: {e}")
+
+    async def test_token_generation_security(self):
+        """Test that JWT token generation is properly secured (admin-only)"""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Try to call JWT generation without admin auth - should fail
                 response = await client.post(
                     f"{self.base_url}/api/v1/internal/generate-service-token",
                     json={
                         "service_name": "test-service",
-                        "permissions": ["users:read", "requests:read"]
+                        "permissions": ["users:read"]
                     }
                 )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    if "token" in data and "service_name" in data:
-                        self.test_results["token_generation"] = "✅ PASS"
-                        logger.info("✅ Service token generation: PASS")
-                        # Store token for validation test
-                        self.test_token = data["token"]
-                    else:
-                        self.test_results["token_generation"] = "❌ FAIL: Invalid response format"
-                        logger.error("❌ Token generation: Invalid response format")
+                if response.status_code in [401, 403]:
+                    self.test_results["token_security"] = "✅ PASS"
+                    logger.info("✅ JWT generation security: PASS (properly protected)")
                 else:
-                    self.test_results["token_generation"] = f"❌ FAIL: HTTP {response.status_code}"
-                    logger.error(f"❌ Token generation failed: {response.status_code}")
+                    self.test_results["token_security"] = f"❌ FAIL: Should require admin auth but got {response.status_code}"
+                    logger.error(f"❌ JWT generation security failed: Expected 401/403, got {response.status_code}")
 
         except Exception as e:
-            self.test_results["token_generation"] = f"❌ FAIL: {str(e)}"
-            logger.error(f"❌ Token generation failed: {e}")
+            self.test_results["token_security"] = f"❌ FAIL: {str(e)}"
+            logger.error(f"❌ JWT generation security test failed: {e}")
 
-    async def test_service_token_validation(self):
-        """Test service token validation"""
-        if not hasattr(self, 'test_token'):
-            self.test_results["token_validation"] = "❌ FAIL: No token to validate"
-            return
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.base_url}/api/v1/internal/validate-service-token",
-                    json={
-                        "token": self.test_token,
-                        "service_name": "test-service"
-                    }
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("valid") and data.get("service_name") == "test-service":
-                        self.test_results["token_validation"] = "✅ PASS"
-                        logger.info("✅ Service token validation: PASS")
-                    else:
-                        self.test_results["token_validation"] = "❌ FAIL: Token not valid"
-                        logger.error("❌ Token validation: Token marked as invalid")
-                else:
-                    self.test_results["token_validation"] = f"❌ FAIL: HTTP {response.status_code}"
-                    logger.error(f"❌ Token validation failed: {response.status_code}")
-
-        except Exception as e:
-            self.test_results["token_validation"] = f"❌ FAIL: {str(e)}"
-            logger.error(f"❌ Token validation failed: {e}")
 
     async def test_permission_validation(self):
         """Test permission system"""

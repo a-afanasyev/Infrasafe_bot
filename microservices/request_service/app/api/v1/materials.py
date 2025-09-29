@@ -22,6 +22,7 @@ from app.schemas import (
     ErrorResponse
 )
 from app.services.material_service import material_service
+from app.core.auth import require_service_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/materials", tags=["materials"])
@@ -32,7 +33,8 @@ async def create_material(
     request_number: str,
     material_data: MaterialCreate,
     created_by: int = Query(..., description="User ID creating the material"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Create a new material for a request
@@ -64,7 +66,8 @@ async def create_material(
 @router.get("/requests/{request_number}", response_model=List[MaterialResponse])
 async def get_materials_for_request(
     request_number: str,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get all materials for a request
@@ -88,7 +91,8 @@ async def get_materials_for_request(
 @router.get("/{material_id}", response_model=MaterialResponse)
 async def get_material(
     material_id: str,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get material by ID
@@ -123,7 +127,8 @@ async def update_material(
     material_id: str,
     material_data: MaterialUpdate,
     updated_by: int = Query(..., description="User ID making the update"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Update material details
@@ -156,7 +161,8 @@ async def update_material(
 async def delete_material(
     material_id: str,
     deleted_by: int = Query(..., description="User ID performing deletion"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Delete a material
@@ -186,7 +192,8 @@ async def bulk_add_materials(
     request_number: str,
     bulk_request: BulkMaterialRequest,
     created_by: int = Query(..., description="User ID creating the materials"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Add multiple materials in bulk operation
@@ -213,7 +220,8 @@ async def bulk_add_materials(
 @router.get("/requests/{request_number}/cost-summary", response_model=MaterialCostSummary)
 async def get_cost_summary(
     request_number: str,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get cost summary for request materials
@@ -238,7 +246,8 @@ async def get_cost_summary(
 @router.get("/stats", response_model=MaterialStats)
 async def get_material_statistics(
     days: int = Query(30, ge=1, le=365, description="Analysis period in days"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get material statistics for specified period
@@ -267,7 +276,8 @@ async def update_request_materials(
     request_number: str,
     materials: List[MaterialCreate],
     updated_by: int = Query(..., description="User ID making the update"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Update all materials for a request (replaces existing)
@@ -306,7 +316,8 @@ async def order_material(
     material_id: str,
     ordered_by: int = Query(..., description="User ID ordering the material"),
     supplier: Optional[str] = Query(None, description="Supplier for this order"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Mark material as ordered
@@ -348,7 +359,8 @@ async def order_material(
 async def deliver_material(
     material_id: str,
     delivered_by: int = Query(..., description="User ID confirming delivery"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Mark material as delivered

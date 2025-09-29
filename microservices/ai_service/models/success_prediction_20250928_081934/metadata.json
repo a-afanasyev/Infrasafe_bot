@@ -1,0 +1,41 @@
+{
+  "id": "success_prediction_20250928_081934",
+  "name": "Assignment Success Predictor",
+  "version": "1.0.0",
+  "model_type": "success_prediction",
+  "algorithm": "RandomForest",
+  "trained_at": "2025-09-28T08:19:34.298322",
+  "training_duration_seconds": 0.078312,
+  "metrics": {
+    "accuracy": 0.88,
+    "precision": 0.8081632653061225,
+    "recall": 0.88,
+    "f1_score": 0.8425531914893617,
+    "training_samples": 400,
+    "test_samples": 100,
+    "positive_rate": 0.905
+  },
+  "feature_names": [
+    "specialization_match",
+    "efficiency_score",
+    "urgency",
+    "district_match",
+    "workload",
+    "hour_of_day",
+    "day_of_week"
+  ],
+  "training_config": {
+    "min_training_samples": 100,
+    "test_size": 0.2,
+    "random_state": 42,
+    "model_params": {
+      "n_estimators": 100,
+      "max_depth": 10,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "random_state": 42
+    }
+  },
+  "data_source": "synthetic",
+  "is_active": false
+}

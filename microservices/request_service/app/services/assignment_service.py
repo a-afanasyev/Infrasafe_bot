@@ -338,94 +338,86 @@ class AssignmentService:
             suggestions = []
 
             # Query User Service for available executors
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Get service token for User Service communication
-                service_token = await auth_manager.generate_service_token()
-
-                response = await client.get(
-                    f"{settings.USER_SERVICE_URL}/api/v1/users/executors",
-                    params={
+            try:
+                executors_data = await auth_manager.call_service(
+                    service_url=settings.USER_SERVICE_URL,
+                    endpoint="/api/v1/users/executors",
+                    method="GET",
+                    data={
                         "status": "approved",
                         "page": 1,
                         "page_size": limit * 2  # Get more to filter
-                    },
-                    headers={
-                        "Authorization": f"Bearer {service_token}",
-                        "Content-Type": "application/json"
                     }
                 )
+                executors = executors_data.get("executors", [])
 
-                if response.status_code == 200:
-                    executors_data = response.json()
-                    executors = executors_data.get("executors", [])
+                for executor in executors[:limit]:
+                    # Get workload for scoring
+                    try:
+                        executor_id = executor["id"]
+                        workload = await self.get_executor_workload(db, executor_id)
 
-                    for executor in executors[:limit]:
-                        # Get workload for scoring
-                        try:
-                            executor_id = executor["id"]
-                            workload = await self.get_executor_workload(db, executor_id)
+                        # Calculate basic score based on workload and specialization
+                        base_score = 0.8
 
-                            # Calculate basic score based on workload and specialization
-                            base_score = 0.8
+                        # Reduce score based on workload
+                        workload_penalty = min(workload.active_requests * 0.1, 0.3)
+                        base_score -= workload_penalty
 
-                            # Reduce score based on workload
-                            workload_penalty = min(workload.active_requests * 0.1, 0.3)
-                            base_score -= workload_penalty
+                        # Check for specialization match via profile.specialization
+                        has_specialization = False
+                        profile = executor.get("profile", {})
+                        executor_specializations = profile.get("specialization", []) if profile else []
 
-                            # Check for specialization match via profile.specialization
-                            has_specialization = False
-                            profile = executor.get("profile", {})
-                            executor_specializations = profile.get("specialization", []) if profile else []
+                        # Check if executor has any relevant specialization for the request category
+                        # This could be enhanced to match specific specializations to request categories
+                        if executor_specializations:
+                            has_specialization = True
 
-                            # Check if executor has any relevant specialization for the request category
-                            # This could be enhanced to match specific specializations to request categories
-                            if executor_specializations:
-                                has_specialization = True
+                        if has_specialization:
+                            base_score += 0.15
 
-                            if has_specialization:
-                                base_score += 0.15
+                        # Geographic scoring (placeholder)
+                        # In real implementation, this would use actual coordinates
+                        base_score += 0.05  # Assume reasonable geographic score
 
-                            # Geographic scoring (placeholder)
-                            # In real implementation, this would use actual coordinates
-                            base_score += 0.05  # Assume reasonable geographic score
+                        # Create executor name from available fields
+                        first_name = executor.get("first_name", "")
+                        last_name = executor.get("last_name", "")
+                        executor_name = f"{first_name} {last_name}".strip()
+                        if not executor_name:
+                            executor_name = f"Executor {executor_id}"
 
-                            # Create executor name from available fields
-                            first_name = executor.get("first_name", "")
-                            last_name = executor.get("last_name", "")
-                            executor_name = f"{first_name} {last_name}".strip()
-                            if not executor_name:
-                                executor_name = f"Executor {executor_id}"
+                        suggestions.append(AssignmentSuggestion(
+                            executor_id=executor_id,
+                            executor_name=executor_name,
+                            score=round(base_score, 3),
+                            reasoning=f"Active executor, Workload: {workload.active_requests}",
+                            estimated_completion_time=240,  # Default completion time
+                            current_workload=workload.active_requests
+                        ))
 
-                            suggestions.append(AssignmentSuggestion(
-                                executor_id=executor_id,
-                                executor_name=executor_name,
-                                score=round(base_score, 3),
-                                reasoning=f"Active executor, Workload: {workload.active_requests}",
-                                estimated_completion_time=240,  # Default completion time
-                                current_workload=workload.active_requests
-                            ))
+                    except Exception as workload_error:
+                        self.logger.warning(f"Could not get workload for executor {executor['id']}: {workload_error}")
+                        # Add with default values
+                        executor_id = executor["id"]
+                        first_name = executor.get("first_name", "")
+                        last_name = executor.get("last_name", "")
+                        executor_name = f"{first_name} {last_name}".strip()
+                        if not executor_name:
+                            executor_name = f"Executor {executor_id}"
 
-                        except Exception as workload_error:
-                            self.logger.warning(f"Could not get workload for executor {executor['id']}: {workload_error}")
-                            # Add with default values
-                            executor_id = executor["id"]
-                            first_name = executor.get("first_name", "")
-                            last_name = executor.get("last_name", "")
-                            executor_name = f"{first_name} {last_name}".strip()
-                            if not executor_name:
-                                executor_name = f"Executor {executor_id}"
+                        suggestions.append(AssignmentSuggestion(
+                            executor_id=executor_id,
+                            executor_name=executor_name,
+                            score=0.5,
+                            reasoning=f"Available executor",
+                            estimated_completion_time=240,
+                            current_workload=0
+                        ))
 
-                            suggestions.append(AssignmentSuggestion(
-                                executor_id=executor_id,
-                                executor_name=executor_name,
-                                score=0.5,
-                                reasoning=f"Available executor",
-                                estimated_completion_time=240,
-                                current_workload=0
-                            ))
-
-                else:
-                    self.logger.warning(f"Failed to get executors from User Service: {response.status_code}")
+            except Exception as e:
+                self.logger.warning(f"Failed to get executors from User Service: {e}")
 
             # Sort by score descending
             suggestions.sort(key=lambda x: x.score, reverse=True)
@@ -727,9 +719,6 @@ class AssignmentService:
             from app.core.auth import auth_manager
             from app.utils.localization import get_localized_templates
 
-            # Generate service token for authentication
-            service_token = await auth_manager.generate_service_token()
-
             # Prepare notification data with service context
             notification_data = {
                 "event_type": "request_assigned",
@@ -782,24 +771,14 @@ class AssignmentService:
             localized_templates = get_localized_templates(request_data, assignment_data)
             notification_data["templates"] = localized_templates
 
-            # Send to Notification Service
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{settings.NOTIFICATION_SERVICE_URL}/api/v1/notifications/send",
-                    json=notification_data,
-                    headers={
-                        "Authorization": f"Bearer {service_token}",
-                        "Content-Type": "application/json"
-                    }
-                )
-
-                if response.status_code == 200:
-                    self.logger.info(f"Assignment notification sent for request {request.request_number}")
-                else:
-                    self.logger.warning(
-                        f"Failed to send assignment notification for {request.request_number}: "
-                        f"{response.status_code}"
-                    )
+            # Send to Notification Service using service credentials
+            await auth_manager.call_service(
+                service_url=settings.NOTIFICATION_SERVICE_URL,
+                endpoint="/api/v1/notifications/send",
+                method="POST",
+                data=notification_data
+            )
+            self.logger.info(f"Assignment notification sent for request {request.request_number}")
 
         except Exception as e:
             self.logger.error(f"Error sending assignment notification: {e}")

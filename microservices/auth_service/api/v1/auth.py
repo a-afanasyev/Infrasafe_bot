@@ -295,3 +295,25 @@ async def get_current_user(
     except Exception as e:
         logger.error(f"Get current user error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# Legacy service token endpoint for backward compatibility
+from schemas.auth import ServiceTokenRequest
+from services.service_token import service_token_manager
+
+@router.post("/service-token")
+async def generate_service_token_legacy(request: ServiceTokenRequest):
+    """
+    SECURITY: Legacy service token endpoint DISABLED
+
+    This endpoint has been disabled for security reasons.
+    Services should use static API key authentication instead of JWT minting.
+
+    For admin token generation, use /api/v1/internal/generate-service-token with admin auth.
+    """
+    logger.warning(f"Attempted access to disabled legacy service token endpoint by {request.service_name}")
+
+    raise HTTPException(
+        status_code=410,  # Gone - endpoint is permanently disabled
+        detail="Legacy service token endpoint disabled. Use static API key authentication instead."
+    )

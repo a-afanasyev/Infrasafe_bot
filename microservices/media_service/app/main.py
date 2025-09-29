@@ -13,7 +13,7 @@ import time
 
 from app.core.config import settings
 from app.db.async_database import init_db_async, check_db_connection_async
-from app.api.v1.router import api_router
+from app.api.v1.router import main_router
 from app.schemas import ErrorResponse, ValidationErrorResponse
 from app.middleware.rate_limiting import RateLimitingMiddleware
 from app.services.observability import get_observability
@@ -212,10 +212,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Подключение роутеров
-app.include_router(api_router)
-
-
 # Корневой эндпоинт
 @app.get("/")
 async def root():
@@ -241,6 +237,31 @@ async def version():
         "version": "1.0.0",
         "build": "production",
         "debug": settings.debug
+    }
+
+
+# Подключение роутеров после основных endpoints
+app.include_router(main_router)
+
+
+# Health check endpoint for Docker healthcheck
+@app.get("/healthz")
+async def simple_health():
+    """Simple health check endpoint for Docker"""
+    return {
+        "status": "ok",
+        "service": "media-service",
+        "version": "1.0.0"
+    }
+
+# Also add the expected /health endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker"""
+    return {
+        "status": "ok",
+        "service": "media-service",
+        "version": "1.0.0"
     }
 
 

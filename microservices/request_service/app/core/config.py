@@ -215,10 +215,11 @@ class Settings(BaseSettings):
         """Get synchronous database URL for migrations"""
         return self.DATABASE_URL.replace("+asyncpg", "")
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore"
+    }
 
 
 @lru_cache()
@@ -255,7 +256,7 @@ def get_log_config() -> dict:
         "disable_existing_loggers": False,
         "formatters": {
             "default": {
-                "format": settings.LOG_FORMAT,
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "json": {
@@ -266,15 +267,15 @@ def get_log_config() -> dict:
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
-                "level": settings.LOG_LEVEL,
-                "formatter": "json" if settings.is_production else "default",
+                "level": "INFO",
+                "formatter": "default",
                 "stream": "ext://sys.stdout",
             },
         },
         "loggers": {
             "": {
                 "handlers": ["console"],
-                "level": settings.LOG_LEVEL,
+                "level": "INFO",
                 "propagate": False,
             },
             "uvicorn": {
@@ -284,7 +285,7 @@ def get_log_config() -> dict:
             },
             "sqlalchemy.engine": {
                 "handlers": ["console"],
-                "level": "WARNING" if not settings.DATABASE_ECHO else "INFO",
+                "level": "WARNING",
                 "propagate": False,
             },
         },

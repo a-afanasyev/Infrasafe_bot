@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["health"])
 
+# Simple health endpoint without prefix for Docker healthcheck
+simple_health_router = APIRouter(tags=["health"])
+
 
 @router.get("", response_model=HealthResponse)
 async def health_check():
@@ -274,3 +277,20 @@ async def get_upload_statistics():
     except Exception as e:
         logger.error(f"Upload statistics failed: {e}")
         raise HTTPException(status_code=500, detail=f"Upload statistics error: {str(e)}")
+
+
+# Simple health check endpoint for Docker without prefix
+@simple_health_router.get("/health")
+async def simple_health_check():
+    """
+    Simple health check for Docker healthcheck
+    """
+    try:
+        return {
+            "status": "ok",
+            "service": "media-service",
+            "version": "1.0.0"
+        }
+    except Exception as e:
+        logger.error(f"Simple health check failed: {e}")
+        raise HTTPException(status_code=503, detail="Service unavailable")

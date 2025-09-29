@@ -77,47 +77,30 @@ class ServiceIntegrationTester:
         logger.info("🔐 Testing service-to-service authentication")
 
         try:
-            # Generate service token from Auth Service
+            # Test static API key authentication
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # Request service token for auth-service to call user-service
+                # Test auth-service API key validation
                 response = await client.post(
-                    f"{self.services['auth']}/api/v1/internal/generate-service-token",
-                    json={
-                        "service_name": "auth-service",
-                        "permissions": ["users:read", "users:write"]
+                    f"{self.services['auth']}/api/v1/internal/validate-service-credentials",
+                    headers={
+                        "X-Service-API-Key": "auth-service-api-key-change-in-production"
                     }
                 )
 
                 if response.status_code == 200:
-                    token_data = response.json()
-                    self.service_tokens["auth_to_user"] = token_data["token"]
-                    self.test_results["service_token_generation"] = "✅ PASS"
-                    logger.info("✅ Service token generation: SUCCESS")
+                    data = response.json()
+                    if data.get("valid") == True and data.get("service_name") == "auth-service":
+                        self.test_results["service_authentication"] = "✅ PASS"
+                        logger.info("✅ Service static authentication: SUCCESS")
+                    else:
+                        self.test_results["service_authentication"] = "❌ FAIL: Invalid auth response"
+                        logger.error("❌ Service authentication failed: Invalid response")
+                        return
                 else:
-                    self.test_results["service_token_generation"] = f"❌ FAIL: HTTP {response.status_code}"
-                    logger.error(f"❌ Service token generation failed: {response.status_code}")
+                    self.test_results["service_authentication"] = f"❌ FAIL: HTTP {response.status_code}"
+                    logger.error(f"❌ Service authentication failed: {response.status_code}")
                     return
 
-                # Validate the generated token
-                validation_response = await client.post(
-                    f"{self.services['auth']}/api/v1/internal/validate-service-token",
-                    json={
-                        "token": self.service_tokens["auth_to_user"],
-                        "service_name": "auth-service"
-                    }
-                )
-
-                if validation_response.status_code == 200:
-                    validation_data = validation_response.json()
-                    if validation_data.get("valid"):
-                        self.test_results["service_token_validation"] = "✅ PASS"
-                        logger.info("✅ Service token validation: SUCCESS")
-                    else:
-                        self.test_results["service_token_validation"] = "❌ FAIL: Token invalid"
-                        logger.error("❌ Service token validation: Token marked as invalid")
-                else:
-                    self.test_results["service_token_validation"] = f"❌ FAIL: HTTP {validation_response.status_code}"
-                    logger.error(f"❌ Service token validation failed: {validation_response.status_code}")
 
         except Exception as e:
             self.test_results["service_authentication"] = f"❌ FAIL: {str(e)}"
@@ -127,9 +110,6 @@ class ServiceIntegrationTester:
         """Test Auth Service calling User Service"""
         logger.info("🔗 Testing Auth ↔ User Service integration")
 
-        if "auth_to_user" not in self.service_tokens:
-            self.test_results["auth_user_integration"] = "❌ FAIL: No service token available"
-            return
 
         try:
             # Test the by-telegram endpoint that Auth Service uses
@@ -139,7 +119,8 @@ class ServiceIntegrationTester:
                 response = await client.get(
                     f"{self.services['user']}/api/v1/users/by-telegram/{test_telegram_id}",
                     headers={
-                        "Authorization": f"Bearer {self.service_tokens['auth_to_user']}",
+                        "X-Service-Name": "auth-service",
+                        "X-Service-API-Key": "auth-service-api-key-change-in-production",
                         "Content-Type": "application/json"
                     }
                 )

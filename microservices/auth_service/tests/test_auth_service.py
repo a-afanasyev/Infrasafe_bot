@@ -142,12 +142,15 @@ class TestAuthService:
             assert result is False
             mock_get_roles.assert_called_once_with(user_id, telegram_id)
 
-    async def test_get_service_token(self, auth_service):
-        """Test service token generation"""
-        token = await auth_service._get_service_token()
+    def test_get_service_auth_headers(self, auth_service):
+        """Test service authentication headers"""
+        headers = auth_service._get_service_auth_headers()
 
-        assert isinstance(token, str)
-        assert len(token) > 0
+        assert isinstance(headers, dict)
+        assert "X-Service-Name" in headers
+        assert "X-Service-API-Key" in headers
+        assert headers["X-Service-Name"] == "auth-service"
+        assert headers["X-Service-API-Key"] == "auth-service-api-key-change-in-production"
 
     async def test_fallback_user_data_admin(self, auth_service):
         """Test fallback data for admin user"""

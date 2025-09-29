@@ -87,7 +87,7 @@ class ServiceTokenManager:
                 return None
 
             # Check if service is allowed
-            if service_name not in settings.allowed_services:
+            if service_name not in settings.service_allowlist:
                 logger.warning(f"Service not in allowed list: {service_name}")
                 return None
 
@@ -176,22 +176,51 @@ class ServiceTokenManager:
             logger.error(f"Error generating API key: {e}")
             raise
 
-    def validate_api_key(self, api_key: str) -> Optional[str]:
+    async def validate_api_key(self, api_key: str, service_name: str = None) -> Optional[str]:
         """
-        Validate simple API key format
+        Validate service API key using secure HMAC validation
         Returns service name if valid
+
+        SECURITY: This method now uses StaticKeyService with HMAC validation
+        instead of plain string comparison for enhanced security.
         """
         try:
-            if "." not in api_key:
-                return None
+            from .static_key_service import static_key_service
 
-            service_name = api_key.split(".")[0]
+            # If service_name is provided, validate specific service
+            if service_name:
+                service_credentials = await static_key_service.validate_service_credentials(
+                    service_name=service_name,
+                    api_key=api_key
+                )
 
-            # Check if service is allowed
-            if service_name not in settings.allowed_services:
-                return None
+                if service_credentials and service_name in settings.service_allowlist:
+                    logger.info(f"API key validated for service: {service_name}")
+                    return service_name
+                else:
+                    logger.warning(f"Invalid API key for service: {service_name}")
+                    return None
 
-            return service_name
+            # If no service_name provided, try all known services
+            # This maintains backward compatibility for legacy code
+            known_services = [
+                "request-service", "user-service", "notification-service",
+                "media-service", "ai-service", "auth-service"
+            ]
+
+            for service in known_services:
+                if service in settings.service_allowlist:
+                    service_credentials = await static_key_service.validate_service_credentials(
+                        service_name=service,
+                        api_key=api_key
+                    )
+
+                    if service_credentials:
+                        logger.info(f"API key validated for service: {service}")
+                        return service
+
+            logger.warning(f"Invalid API key attempted: {api_key[:16]}...")
+            return None
 
         except Exception as e:
             logger.error(f"Error validating API key: {e}")

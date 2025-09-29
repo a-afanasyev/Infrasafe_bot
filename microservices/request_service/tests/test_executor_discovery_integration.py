@@ -179,19 +179,16 @@ class TestExecutorDiscoveryIntegration:
             specialization_required="plumbing"
         )
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.get')
     async def test_get_available_executors_success(
         self,
         mock_http_get,
-        mock_generate_token,
         assignment_service,
         sample_user_service_executors_response,
         mock_db_session
     ):
         """Test successful executor discovery from User Service"""
-        # Setup mocks
-        mock_generate_token.return_value = "mock_jwt_token"
+        # Setup mocks (static auth - no token generation needed)
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -227,18 +224,15 @@ class TestExecutorDiscoveryIntegration:
         assert params["status"] == "approved"
         assert params["page"] == 1
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.get')
     async def test_get_available_executors_user_service_error(
         self,
         mock_http_get,
-        mock_generate_token,
         assignment_service,
         mock_db_session
     ):
         """Test executor discovery when User Service returns error"""
-        # Setup mocks
-        mock_generate_token.return_value = "mock_jwt_token"
+        # Setup mocks (static auth - no token generation needed)
 
         mock_response = MagicMock()
         mock_response.status_code = 500
@@ -255,18 +249,15 @@ class TestExecutorDiscoveryIntegration:
         # Should return empty list when User Service fails
         assert suggestions == []
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.get')
     async def test_get_available_executors_network_error(
         self,
         mock_http_get,
-        mock_generate_token,
         assignment_service,
         mock_db_session
     ):
         """Test executor discovery when network error occurs"""
-        # Setup mocks
-        mock_generate_token.return_value = "mock_jwt_token"
+        # Setup mocks (static auth - no token generation needed)
         mock_http_get.side_effect = httpx.RequestError("Network error")
 
         # Call method
@@ -417,18 +408,15 @@ class TestServiceAuthManagerIntegration:
         """ServiceAuthManager instance"""
         return ServiceAuthManager()
 
-    @patch('app.core.auth.ServiceAuthManager.generate_service_token')
     @patch('httpx.AsyncClient.get')
     async def test_get_user_info_success(
         self,
         mock_http_get,
-        mock_generate_token,
         auth_manager,
         sample_user_service_user_response
     ):
         """Test successful user info retrieval"""
-        # Setup mocks
-        mock_generate_token.return_value = "mock_jwt_token"
+        # Setup mocks (static auth - no token generation needed)
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -450,17 +438,14 @@ class TestServiceAuthManagerIntegration:
         call_args = mock_http_get.call_args
         assert "/api/v1/users/123" in str(call_args[1]["url"])
 
-    @patch('app.core.auth.ServiceAuthManager.generate_service_token')
     @patch('httpx.AsyncClient.get')
     async def test_get_user_info_not_found(
         self,
         mock_http_get,
-        mock_generate_token,
         auth_manager
     ):
         """Test user info retrieval when user not found"""
-        # Setup mocks
-        mock_generate_token.return_value = "mock_jwt_token"
+        # Setup mocks (static auth - no token generation needed)
 
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -472,17 +457,14 @@ class TestServiceAuthManagerIntegration:
         # Should return None for 404
         assert user_info is None
 
-    @patch('app.core.auth.ServiceAuthManager.generate_service_token')
     @patch('httpx.AsyncClient.get')
     async def test_get_user_info_service_error(
         self,
         mock_http_get,
-        mock_generate_token,
         auth_manager
     ):
         """Test user info retrieval when service returns error"""
-        # Setup mocks
-        mock_generate_token.return_value = "mock_jwt_token"
+        # Setup mocks (static auth - no token generation needed)
 
         mock_response = MagicMock()
         mock_response.status_code = 500

@@ -158,6 +158,11 @@ class ServiceTokenResponse(BaseModel):
     expires_at: Optional[datetime]
     description: Optional[str]
 
+class ServiceTokenRequest(BaseModel):
+    """Request schema for legacy service token generation"""
+    service_name: str
+    target_service: Optional[str] = None  # For compatibility with AI service calls
+
 # Login/Authentication Schemas
 class LoginRequest(BaseModel):
     telegram_id: str

@@ -17,6 +17,7 @@ from app.core.database import get_async_session
 from app.services.ai_service import AIService, AssignmentAlgorithm, AssignmentSuggestion
 from app.services.smart_dispatcher import SmartDispatcher, DispatchMode
 from app.schemas import ErrorResponse
+from app.core.auth import require_service_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -106,7 +107,8 @@ smart_dispatcher = SmartDispatcher()
 @router.post("/optimize", response_model=OptimizationResponse)
 async def optimize_assignment(
     request: AssignmentOptimizationRequest,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get AI-powered assignment optimization suggestions
@@ -156,7 +158,8 @@ async def optimize_assignment(
 @router.post("/optimize/batch", response_model=List[OptimizationResponse])
 async def optimize_batch_assignments(
     request: BatchOptimizationRequest,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Optimize assignments for multiple requests in batch
@@ -204,7 +207,8 @@ async def optimize_batch_assignments(
 @router.post("/dispatch", response_model=DispatchResponse)
 async def smart_dispatch(
     request: DispatchRequest,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Smart dispatch a request for assignment
@@ -245,7 +249,8 @@ async def smart_dispatch(
 @router.post("/dispatch/batch", response_model=List[DispatchResponse])
 async def smart_dispatch_batch(
     request: BatchDispatchRequest,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Smart dispatch multiple requests in batch
@@ -291,7 +296,8 @@ async def smart_dispatch_batch(
 @router.get("/pending")
 async def get_pending_assignments(
     max_wait_minutes: Optional[int] = Query(None, ge=1, le=1440, description="Maximum wait time filter"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get requests pending assignment that need attention
@@ -346,7 +352,9 @@ async def get_pending_assignments(
 
 
 @router.get("/algorithms")
-async def get_available_algorithms():
+async def get_available_algorithms(
+    service_info: dict = Depends(require_service_auth)
+):
     """
     Get available AI optimization algorithms
 
@@ -402,7 +410,9 @@ async def get_available_algorithms():
 
 
 @router.get("/dispatch-modes")
-async def get_dispatch_modes():
+async def get_dispatch_modes(
+    service_info: dict = Depends(require_service_auth)
+):
     """
     Get available smart dispatch modes
 
@@ -452,7 +462,8 @@ async def get_dispatch_modes():
 
 @router.get("/metrics")
 async def get_ai_metrics(
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get AI service performance metrics

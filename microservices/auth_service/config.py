@@ -25,11 +25,14 @@ class Settings(BaseSettings):
     redis_url: str = "redis://shared-redis:6379/1"
     redis_db: int = 1  # Use different DB from notification service
 
-    # JWT Authentication
+    # JWT Authentication (Legacy - deprecated)
     jwt_secret_key: str = "auth-service-jwt-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60  # Access token lifetime
     jwt_refresh_expire_days: int = 7  # Refresh token lifetime
+
+    # Static API Key Authentication (Current)
+    static_key_hmac_secret: str = "static-api-key-hmac-secret-change-in-production-very-secure-key"
 
     # Session management
     session_expire_hours: int = 24  # Session lifetime
@@ -46,7 +49,7 @@ class Settings(BaseSettings):
     allowed_origins: List[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://localhost:8080"]
     )
-    allowed_hosts: List[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"])
+    allowed_hosts: List[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1", "auth-service", "*"])
 
     @staticmethod
     def _parse_str_list(value):

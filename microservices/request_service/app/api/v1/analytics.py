@@ -17,6 +17,7 @@ from sqlalchemy.sql import extract
 from app.core.database import get_async_session
 from app.models import Request, RequestComment, RequestRating, RequestAssignment, RequestMaterial
 from app.schemas import RequestStatsResponse, ErrorResponse
+from app.core.auth import require_service_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/requests", tags=["analytics"])
@@ -26,7 +27,8 @@ router = APIRouter(prefix="/requests", tags=["analytics"])
 async def get_analytics_overview(
     period_days: int = Query(30, ge=1, le=365, description="Analysis period in days"),
     include_deleted: bool = Query(False, description="Include deleted requests"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get comprehensive analytics overview
@@ -220,7 +222,8 @@ async def get_time_series_analytics(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
     category: Optional[str] = Query(None, description="Filter by category"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get time series analytics data
@@ -380,7 +383,8 @@ async def get_time_series_analytics(
 async def get_performance_analytics(
     days: int = Query(30, ge=1, le=365, description="Analysis period in days"),
     min_requests: int = Query(5, ge=1, description="Minimum requests for executor inclusion"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get detailed performance analytics

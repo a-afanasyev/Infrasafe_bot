@@ -18,65 +18,12 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_async_session
 from app.models import Request, RequestComment, RequestRating, RequestAssignment
 from app.schemas import RequestResponse, ErrorResponse
+from app.core.auth import require_service_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/internal", tags=["internal"])
 
 
-async def verify_internal_access(
-    x_service_token: str = Header(..., description="Service-to-service authentication token")
-):
-    """
-    Verify internal service access using proper authentication
-
-    - Validates service-to-service authentication via auth.py
-    - Uses real JWT validation and service verification
-    - Restricts access to authorized services only
-    """
-    from app.core.auth import auth_manager
-
-    try:
-        # Use the real authentication manager for service token validation
-        token_data = await auth_manager.validate_service_token(x_service_token)
-
-        if not token_data.get("valid"):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid service token"
-            )
-
-        # Extract service information from Auth Service response
-        # Format: {valid: bool, service_name: str, permissions: list, expires_at: str}
-        service_name = token_data.get("service_name")
-        service_permissions = token_data.get("permissions", [])
-
-        if not service_name:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Service authentication required"
-            )
-
-        # Check if service has required permissions for internal endpoints
-        required_permissions = ["internal:read", "metrics:read", "health:check"]
-
-        if not any(perm in service_permissions for perm in required_permissions):
-            logger.warning(f"Service {service_name} lacks internal permissions")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for internal endpoints"
-            )
-
-        logger.debug(f"Internal access granted to service: {service_name}")
-        return service_name
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Internal authentication error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication service error"
-        )
 
 
 @router.get("/health")
@@ -130,7 +77,7 @@ async def sync_data_for_google_sheets(
     since: Optional[datetime] = Query(None, description="Sync data modified since this timestamp"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records"),
     include_deleted: bool = Query(False, description="Include deleted records"),
-    token: str = Depends(verify_internal_access),
+    _: dict = Depends(require_service_auth),
     db: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -257,7 +204,7 @@ async def sync_data_for_bot_service(
     request_numbers: List[str] = Query(..., description="List of request numbers to sync"),
     include_comments: bool = Query(True, description="Include comments data"),
     include_assignments: bool = Query(True, description="Include assignment data"),
-    token: str = Depends(verify_internal_access),
+    _: dict = Depends(require_service_auth),
     db: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -388,7 +335,7 @@ async def sync_data_for_bot_service(
 @router.post("/webhook/status-change")
 async def handle_status_change_webhook(
     webhook_data: Dict[str, Any],
-    token: str = Depends(verify_internal_access),
+    _: dict = Depends(require_service_auth),
     db: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -484,7 +431,7 @@ async def handle_status_change_webhook(
 
 @router.get("/metrics/realtime")
 async def get_realtime_metrics(
-    token: str = Depends(verify_internal_access),
+    _: dict = Depends(require_service_auth),
     db: AsyncSession = Depends(get_async_session)
 ):
     """

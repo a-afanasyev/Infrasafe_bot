@@ -59,14 +59,12 @@ class TestNotificationServiceContext:
         assignment.created_at = datetime.now()
         return assignment
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     @patch('app.utils.localization.get_localized_templates')
     async def test_service_context_in_notification_payload(
         self,
         mock_get_templates,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment
@@ -113,14 +111,12 @@ class TestNotificationServiceContext:
         print(f"✅ Correlation ID: {sent_payload['correlation_id']}")
         print(f"✅ Service permissions: {sent_payload['service_permissions']}")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     @patch('app.utils.localization.get_localized_templates')
     async def test_correlation_id_generation(
         self,
         mock_get_templates,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment
@@ -163,14 +159,12 @@ class TestNotificationServiceContext:
 
             print(f"✅ Correlation ID for {request_number}: {sent_payload['correlation_id']}")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     @patch('app.utils.localization.get_localized_templates')
     async def test_service_token_path_unit_test(
         self,
         mock_get_templates,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment
@@ -223,14 +217,12 @@ class TestNotificationServiceContext:
         print(f"✅ Authorization header: {headers['Authorization']}")
         print(f"✅ Service origin: {sent_payload['service_origin']}")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     @patch('app.utils.localization.get_localized_templates')
     async def test_notification_payload_completeness_with_context(
         self,
         mock_get_templates,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment
@@ -279,14 +271,12 @@ class TestNotificationServiceContext:
 
         print("✅ Notification payload is complete with service context")
 
-    @patch('app.core.auth.auth_manager.generate_service_token')
     @patch('httpx.AsyncClient.post')
     @patch('app.utils.localization.get_localized_templates')
     async def test_error_handling_preserves_context(
         self,
         mock_get_templates,
         mock_http_post,
-        mock_generate_token,
         assignment_service,
         sample_request,
         sample_assignment

@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_async_session
 from app.models import Request, RequestComment
 from app.schemas import CommentCreate, CommentUpdate, CommentResponse, ErrorResponse
+from app.core.auth import require_service_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/requests/{request_number}/comments", tags=["comments"])
@@ -25,7 +26,8 @@ router = APIRouter(prefix="/requests/{request_number}/comments", tags=["comments
 async def create_comment(
     request_number: str,
     comment_data: CommentCreate,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Create a new comment for a request
@@ -85,7 +87,8 @@ async def list_comments(
     include_internal: bool = Query(False, description="Include internal comments"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of comments"),
     offset: int = Query(0, ge=0, description="Number of comments to skip"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     List comments for a request
@@ -146,7 +149,8 @@ async def list_comments(
 async def get_comment(
     request_number: str,
     comment_id: str,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Get a specific comment by ID
@@ -190,7 +194,8 @@ async def update_comment(
     comment_id: str,
     comment_data: CommentUpdate,
     updated_by: str = Query(..., description="User ID updating the comment"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Update a comment
@@ -282,7 +287,8 @@ async def delete_comment(
     request_number: str,
     comment_id: str,
     user_id: str = Query(..., description="User ID performing the deletion"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     Soft delete a comment
@@ -340,7 +346,8 @@ async def delete_comment(
 async def list_status_change_comments(
     request_number: str,
     limit: int = Query(20, ge=1, le=50, description="Maximum number of status changes"),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    service_info: dict = Depends(require_service_auth)
 ):
     """
     List status change comments for a request
