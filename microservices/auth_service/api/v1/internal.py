@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from services.auth_service import AuthService
 from services.service_token import service_token_manager
 from database import get_db
+from middleware.auth import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -153,18 +154,24 @@ async def get_user_stats_from_user_service():
         )
 
 @router.post("/generate-service-token")
-async def generate_service_token(request: ServiceTokenGenerationRequest):
+async def generate_service_token(
+    request: ServiceTokenGenerationRequest,
+    admin_user: dict = Depends(require_admin)
+):
     """
     Generate a new service-to-service authentication token
 
     Used by services to get tokens for calling other services
-    Requires proper authentication and authorization
+    Requires admin authentication and authorization
     """
     try:
         # Generate token using service token manager
         token = service_token_manager.generate_service_token(request.service_name, request.permissions)
 
-        logger.info(f"Generated service token for {request.service_name}")
+        logger.info(
+            f"Admin {admin_user.get('user_id')} generated service token for {request.service_name} "
+            f"with permissions: {request.permissions}"
+        )
 
         return {
             "token": token,

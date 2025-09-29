@@ -14,7 +14,7 @@ Auth Service provides centralized authentication and authorization for the UK Ma
 - **Authorization**: Role-based permissions, access control
 - **Session Management**: Active session tracking with automatic cleanup
 - **Service-to-Service Auth**: Internal API authentication for microservices
-- **Security**: Rate limiting, audit logging, multi-factor authentication
+- **Security**: Rate limiting, audit logging, Telegram-based authentication
 - **User Management**: User roles, permissions, credentials
 
 ---
@@ -84,15 +84,16 @@ user_credentials:
   - session_timeout_minutes
   - created_at, last_login_at
 
--- Service-to-Service Tokens
-service_tokens:
-  - id (Integer, PK)
-  - service_name (String, unique)
-  - token_hash (String)
-  - is_active (Boolean)
-  - permissions (JSON Array)
-  - last_used_at, created_at, expires_at
-  - created_by, description
+-- Service-to-Service Tokens (UNUSED - preserved for future implementation)
+-- service_tokens:
+--   - id (Integer, PK)
+--   - service_name (String, unique)
+--   - token_hash (String)
+--   - is_active (Boolean)
+--   - permissions (JSON Array)
+--   - last_used_at, created_at, expires_at
+--   - created_by, description
+-- Current implementation: Stateless JWT tokens (no database storage)
 ```
 
 ### **Service Layer**
@@ -110,15 +111,22 @@ service_tokens:
 ### **Authentication (`/api/v1/auth`)**
 
 ```yaml
-POST   /login           # User authentication with Telegram ID
+POST   /login           # User authentication with Telegram ID only
 POST   /logout          # Session termination
 POST   /refresh         # Token refresh
 GET    /me              # Current user info
-POST   /verify-token    # Token validation
 GET    /sessions        # List user sessions
 DELETE /sessions/{id}   # Terminate specific session
 DELETE /sessions/all    # Terminate all user sessions
+# Note: Token validation is handled via middleware, not a dedicated endpoint
 ```
+
+**Current Authentication Model:**
+- **Login Method**: Telegram ID only (no password required)
+- **Security**: Assumes Telegram handles user verification
+- **MFA**: Not implemented (infrastructure exists but unused)
+- **Password Auth**: Not implemented (infrastructure exists but unused)
+- **Future**: Password/MFA reserved for admin users if needed
 
 ### **Internal Service API (`/api/v1/internal`)**
 
@@ -128,11 +136,21 @@ POST   /generate-service-token     # Generate service token
 GET    /user-stats                 # User statistics proxy
 ```
 
+**Service Token Architecture:**
+- **Design**: Stateless JWT tokens (in-memory only)
+- **Storage**: No persistence - tokens are self-contained JWTs
+- **Validation**: Cryptographic signature verification (no database lookup)
+- **Revocation**: Not supported (tokens valid until expiration)
+- **Audit**: Generation events logged, but tokens not stored
+- **Trade-off**: Performance and simplicity over revocation capability
+
 ### **Health & Monitoring**
 
 ```yaml
 GET    /health          # Service health check
-GET    /metrics         # Prometheus metrics
+GET    /ready           # Readiness check
+GET    /info            # Service information
+# Note: Prometheus /metrics endpoint not implemented yet
 ```
 
 ---
@@ -162,8 +180,9 @@ GET    /metrics         # Prometheus metrics
 - **Rate Limiting**: Redis-based request limiting
 - **Audit Logging**: Complete authentication event trail
 - **Account Lockout**: Failed attempt protection
-- **Multi-Factor Auth**: TOTP support with backup codes
-- **Password Security**: bcrypt hashing with salt
+- **Multi-Factor Auth**: Infrastructure available (not currently used)
+- **Password Security**: Infrastructure available (not currently used)
+- **Current Auth**: Telegram ID verification only
 
 ### **Role-Based Access Control (RBAC)**
 - **Roles**: admin, manager, executor, applicant
@@ -313,8 +332,10 @@ All authentication events are logged to `auth_logs` table:
 - Login attempts (success/failure)
 - Token refreshes
 - Session terminations
-- Service token validations
+- Service token validations (logged but tokens not persisted)
 - Permission checks
+
+**Note**: Service token generation is logged but tokens themselves are not stored in database.
 
 ---
 

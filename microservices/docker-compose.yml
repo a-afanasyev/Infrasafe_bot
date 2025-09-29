@@ -129,7 +129,7 @@ services:
       - microservices-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8004/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -165,6 +165,66 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # AI Service - Smart Assignment, ML, Optimization
+  ai-service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: ai-service
+    ports:
+      - "${AI_SERVICE_PORT:-8006}:8006"
+    environment:
+      # Core configuration
+      - AI_SERVICE_NAME=ai-service
+      - AI_SERVICE_PORT=8006
+      - DEBUG=${DEBUG:-false}
+
+      # Database connections
+      - AI_DATABASE_URL=postgresql+asyncpg://${AI_DB_USER:-ai_user}:${AI_DB_PASSWORD:-ai_pass}@ai-db:5432/${AI_DB_NAME:-ai_db}
+      - AI_REDIS_URL=redis://${REDIS_HOST:-shared-redis}:${REDIS_PORT:-6379}/${REDIS_AI_DB:-6}
+
+      # Service integration
+      - AUTH_SERVICE_URL=http://auth-service:${AUTH_SERVICE_PORT:-8001}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-8002}
+      - REQUEST_SERVICE_URL=http://request-service:${REQUEST_SERVICE_PORT:-8003}
+
+      # AI configuration
+      - ML_ENABLED=${AI_ML_ENABLED:-false}
+      - GEO_ENABLED=${AI_GEO_ENABLED:-false}
+      - MODEL_PATH=/app/models
+      - TRAINING_DATA_RETENTION_DAYS=90
+
+      # Performance tuning
+      - MAX_CONCURRENT_ASSIGNMENTS=10
+      - ASSIGNMENT_TIMEOUT_SECONDS=30
+      - CIRCUIT_BREAKER_THRESHOLD=5
+
+      # Monitoring
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - PROMETHEUS_ENABLED=true
+
+    depends_on:
+      ai-db:
+        condition: service_healthy
+      shared-redis:
+        condition: service_healthy
+
+    volumes:
+      - ./ai_service/models:/app/models
+      - ./ai_service/logs:/app/logs
+
+    networks:
+      - microservices-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -279,6 +339,28 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U notification_user -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # AI Service Database
+  ai-db:
+    image: postgres:15-alpine
+    container_name: ai-db
+    environment:
+      POSTGRES_USER: ${AI_DB_USER:-ai_user}
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:-ai_pass}
+      POSTGRES_DB: ${AI_DB_NAME:-ai_db}
+    ports:
+      - "${AI_DB_PORT:-5438}:5432"
+    volumes:
+      - ai_db_data:/var/lib/postgresql/data
+      - ./init-scripts/ai:/docker-entrypoint-initdb.d
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_user -d ai_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -410,6 +492,8 @@ volumes:
   media_db_data:
     driver: local
   notification_db_data:
+    driver: local
+  ai_db_data:
     driver: local
 
   # Cache volumes
