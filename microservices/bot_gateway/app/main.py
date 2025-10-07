@@ -161,10 +161,12 @@ def create_dispatcher() -> Dispatcher:
     # Register routers (order matters for handler priority)
     from app.routers.common import router as common_router
     from app.routers.requests import router as requests_router
+    from app.routers.shifts import router as shifts_router
 
     dispatcher.include_router(common_router)
     dispatcher.include_router(requests_router)
-    # TODO: Add more routers (shift, admin, executor)
+    dispatcher.include_router(shifts_router)
+    # TODO: Add more routers (admin, executor)
 
     # Register startup/shutdown handlers
     dispatcher.startup.register(on_startup)
