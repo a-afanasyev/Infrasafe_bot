@@ -16,9 +16,12 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.core.config import settings
 from app.core.database import init_database, close_database, check_database_health
+from app.core.metrics import init_metrics
+from app.core.tracing import init_tracing
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +51,23 @@ async def on_startup() -> None:
 
     logger.info(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
+
+    # Initialize metrics
+    init_metrics(
+        app_name=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        environment=settings.ENVIRONMENT
+    )
+
+    # Initialize distributed tracing
+    init_tracing(
+        service_name=settings.APP_NAME,
+        service_version=settings.APP_VERSION,
+        jaeger_host=settings.JAEGER_HOST,
+        jaeger_port=settings.JAEGER_PORT,
+        environment=settings.ENVIRONMENT,
+        enabled=settings.TRACING_ENABLED
+    )
 
     # Initialize database
     try:
@@ -141,7 +161,8 @@ def create_dispatcher() -> Dispatcher:
     # Create dispatcher
     dispatcher = Dispatcher(storage=storage)
 
-    # Register middlewares (order matters: rate_limit -> logging -> auth)
+    # Register middlewares (order matters: metrics -> rate_limit -> logging -> auth)
+    from app.middleware.metrics import MetricsMiddleware
     from app.middleware.rate_limit import RateLimitMiddleware
     from app.middleware.logging import LoggingMiddleware
     from app.middleware.auth import AuthMiddleware
@@ -149,11 +170,13 @@ def create_dispatcher() -> Dispatcher:
     rate_limiter = RateLimitMiddleware()
 
     # Apply to messages
+    dispatcher.message.middleware(MetricsMiddleware())
     dispatcher.message.middleware(rate_limiter)
     dispatcher.message.middleware(LoggingMiddleware())
     dispatcher.message.middleware(AuthMiddleware())
 
     # Apply to callback queries
+    dispatcher.callback_query.middleware(MetricsMiddleware())
     dispatcher.callback_query.middleware(rate_limiter)
     dispatcher.callback_query.middleware(LoggingMiddleware())
     dispatcher.callback_query.middleware(AuthMiddleware())
@@ -243,7 +266,16 @@ async def main_webhook() -> None:
             "database": "connected" if db_healthy else "disconnected"
         })
 
+    # Prometheus metrics endpoint
+    async def metrics(request):
+        """Prometheus metrics endpoint"""
+        return web.Response(
+            body=generate_latest(),
+            content_type=CONTENT_TYPE_LATEST
+        )
+
     app.router.add_get("/health", health)
+    app.router.add_get("/metrics", metrics)
 
     # Start web server
     runner = web.AppRunner(app)
@@ -262,6 +294,7 @@ async def main_webhook() -> None:
     )
     logger.info(f"Webhook path: {settings.WEBHOOK_PATH}")
     logger.info(f"Health check: http://{settings.WEBHOOK_HOST}:{settings.WEBHOOK_PORT}/health")
+    logger.info(f"Metrics: http://{settings.WEBHOOK_HOST}:{settings.WEBHOOK_PORT}/metrics")
 
     # Keep running
     try:

@@ -1,0 +1,149 @@
+{
+  "dashboard": {
+    "title": "Bot Gateway - Performance & Resources",
+    "tags": ["bot-gateway", "performance", "resources"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "Memory Usage",
+        "targets": [
+          {
+            "expr": "bot_gateway_memory_usage_bytes",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "bytes", "label": "memory"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "CPU Usage",
+        "targets": [
+          {
+            "expr": "bot_gateway_cpu_usage_percent",
+            "legendFormat": "CPU %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "usage", "max": 100},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Event Loop Lag",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(bot_gateway_event_loop_lag_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(bot_gateway_event_loop_lag_seconds_bucket[5m]))",
+            "legendFormat": "99th percentile",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "lag"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "graph",
+        "title": "Redis Operations",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_redis_operations_total[5m])",
+            "legendFormat": "{{operation_type}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "operations/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "type": "graph",
+        "title": "Redis Operation Duration (95th percentile)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(bot_gateway_redis_operation_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{operation_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "type": "graph",
+        "title": "Redis Connection Pool",
+        "targets": [
+          {
+            "expr": "bot_gateway_redis_connection_pool_size",
+            "legendFormat": "{{pool_state}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "connections"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "type": "graph",
+        "title": "Middleware Duration",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(bot_gateway_middleware_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{middleware_name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "type": "graph",
+        "title": "Session Duration Distribution",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_session_duration_seconds_bucket[5m])",
+            "legendFormat": "{{le}}s",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

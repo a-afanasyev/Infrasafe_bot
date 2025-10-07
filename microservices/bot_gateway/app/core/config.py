@@ -106,6 +106,11 @@ class Settings(BaseSettings):
     PROMETHEUS_ENABLED: bool = True
     METRICS_PORT: int = 9090
 
+    # Distributed Tracing
+    TRACING_ENABLED: bool = True
+    JAEGER_HOST: str = "jaeger"
+    JAEGER_PORT: int = 6831
+
     # Message Defaults
     DEFAULT_LANGUAGE: str = "ru"
     SUPPORTED_LANGUAGES: List[str] = ["ru", "uz"]

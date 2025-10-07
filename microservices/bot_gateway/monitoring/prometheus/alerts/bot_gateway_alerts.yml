@@ -1,0 +1,182 @@
+# Prometheus Alert Rules for Bot Gateway
+# UK Management Bot - Sprint 19-22
+
+groups:
+  - name: bot_gateway_alerts
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(bot_gateway_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High error rate detected in Bot Gateway"
+          description: "Error rate is {{ $value | humanize }} errors/sec (threshold: 1/sec) for {{ $labels.error_type }}"
+
+      # Critical Error Rate
+      - alert: CriticalErrorRate
+        expr: rate(bot_gateway_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: bot-gateway
+        annotations:
+          summary: "CRITICAL: Very high error rate in Bot Gateway"
+          description: "Error rate is {{ $value | humanize }} errors/sec (threshold: 5/sec) for {{ $labels.error_type }}"
+
+      # High Message Processing Latency
+      - alert: HighMessageLatency
+        expr: histogram_quantile(0.95, rate(bot_gateway_message_processing_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High message processing latency"
+          description: "95th percentile latency is {{ $value | humanize }}s (threshold: 2s) for {{ $labels.message_type }}"
+
+      # Service Integration Errors
+      - alert: HighServiceErrorRate
+        expr: rate(bot_gateway_service_errors_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High error rate from backend service"
+          description: "{{ $labels.service_name }} service error rate is {{ $value | humanize }}/sec for {{ $labels.endpoint }}"
+
+      # Circuit Breaker Open
+      - alert: CircuitBreakerOpen
+        expr: bot_gateway_service_circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: bot-gateway
+        annotations:
+          summary: "Circuit breaker opened for service"
+          description: "Circuit breaker is OPEN for {{ $labels.service_name }} - service may be down"
+
+      # Rate Limit Excessive Blocks
+      - alert: ExcessiveRateLimitBlocks
+        expr: rate(bot_gateway_rate_limit_blocks_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "Excessive rate limit blocks"
+          description: "Rate limit blocking {{ $value | humanize }} requests/sec (threshold: 10/sec) for {{ $labels.limit_type }}"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: bot_gateway_memory_usage_bytes{type="rss"} > 1073741824
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}B (threshold: 1GB)"
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: bot_gateway_memory_usage_bytes{type="rss"} > 2147483648
+        for: 2m
+        labels:
+          severity: critical
+          service: bot-gateway
+        annotations:
+          summary: "CRITICAL: Very high memory usage"
+          description: "Memory usage is {{ $value | humanize }}B (threshold: 2GB) - possible memory leak"
+
+      # High Event Loop Lag
+      - alert: HighEventLoopLag
+        expr: histogram_quantile(0.95, rate(bot_gateway_event_loop_lag_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High event loop lag detected"
+          description: "Event loop lag is {{ $value | humanize }}s (threshold: 100ms) - performance degradation"
+
+      # Redis Connection Issues
+      - alert: RedisConnectionPoolExhausted
+        expr: bot_gateway_redis_connection_pool_size{pool_state="available"} < 2
+        for: 2m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "Redis connection pool nearly exhausted"
+          description: "Only {{ $value }} available Redis connections remaining"
+
+      # High Redis Operation Latency
+      - alert: HighRedisLatency
+        expr: histogram_quantile(0.95, rate(bot_gateway_redis_operation_duration_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High Redis operation latency"
+          description: "95th percentile Redis latency is {{ $value | humanize }}s (threshold: 100ms)"
+
+      # No Active Sessions (possible service issue)
+      - alert: NoActiveSessions
+        expr: sum(bot_gateway_active_sessions) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "No active user sessions"
+          description: "No active sessions for 10+ minutes - possible service issue or no traffic"
+
+      # Excessive FSM Sessions (memory leak indicator)
+      - alert: ExcessiveFSMSessions
+        expr: sum(bot_gateway_active_fsm_sessions) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "Excessive FSM sessions"
+          description: "{{ $value }} active FSM sessions (threshold: 1000) - possible memory leak"
+
+      # Service Request Timeout
+      - alert: ServiceRequestTimeout
+        expr: histogram_quantile(0.95, rate(bot_gateway_service_request_duration_seconds_bucket[5m])) > 10
+        for: 3m
+        labels:
+          severity: critical
+          service: bot-gateway
+        annotations:
+          summary: "Service requests timing out"
+          description: "95th percentile service latency is {{ $value | humanize }}s (threshold: 10s) for {{ $labels.service_name }}"
+
+      # Authentication Failures
+      - alert: HighAuthFailureRate
+        expr: rate(bot_gateway_auth_attempts_total{status="failed"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failure rate is {{ $value | humanize }}/sec for {{ $labels.method }}"
+
+      # Webhook Processing Issues
+      - alert: HighWebhookFailureRate
+        expr: rate(bot_gateway_webhook_updates_total{status="failed"}[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          service: bot-gateway
+        annotations:
+          summary: "High webhook failure rate"
+          description: "Webhook failure rate is {{ $value | humanize }}/sec for {{ $labels.update_type }}"

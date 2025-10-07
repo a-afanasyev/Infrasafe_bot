@@ -1,0 +1,158 @@
+{
+  "dashboard": {
+    "title": "Bot Gateway - Overview",
+    "tags": ["bot-gateway", "telegram", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "Message Rate (messages/sec)",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_messages_total[5m])",
+            "legendFormat": "{{message_type}} - {{user_role}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "Message Processing Duration (95th percentile)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(bot_gateway_message_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{message_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+        "type": "stat",
+        "title": "Active Sessions",
+        "targets": [
+          {
+            "expr": "sum(bot_gateway_active_sessions)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 100, "color": "yellow"},
+                {"value": 500, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+        "type": "stat",
+        "title": "Active FSM Sessions",
+        "targets": [
+          {
+            "expr": "sum(bot_gateway_active_fsm_sessions)",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+        "type": "stat",
+        "title": "Error Rate (last 5m)",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_errors_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 0.1, "color": "yellow"},
+                {"value": 1, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "type": "graph",
+        "title": "Command Execution Rate",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_commands_total[5m])",
+            "legendFormat": "/{{command}} - {{user_role}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "type": "graph",
+        "title": "Callback Query Rate",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_callbacks_total[5m])",
+            "legendFormat": "{{callback_type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "type": "graph",
+        "title": "Rate Limit Blocks",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_rate_limit_blocks_total[5m])",
+            "legendFormat": "{{limit_type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "type": "graph",
+        "title": "FSM State Transitions",
+        "targets": [
+          {
+            "expr": "rate(bot_gateway_fsm_state_transitions_total[5m])",
+            "legendFormat": "{{from_state}} → {{to_state}}",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

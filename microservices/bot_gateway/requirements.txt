@@ -32,6 +32,15 @@ structlog==24.4.0                 # Structured logging
 prometheus-client==0.21.0         # Metrics collection
 sentry-sdk==2.18.0               # Error tracking
 
+# Distributed Tracing
+opentelemetry-api==1.27.0        # OpenTelemetry API
+opentelemetry-sdk==1.27.0        # OpenTelemetry SDK
+opentelemetry-exporter-jaeger==1.27.0  # Jaeger exporter
+opentelemetry-instrumentation-aiohttp-client==0.48b0  # aiohttp instrumentation
+opentelemetry-instrumentation-httpx==0.48b0  # httpx instrumentation
+opentelemetry-instrumentation-redis==0.48b0  # Redis instrumentation
+opentelemetry-instrumentation-sqlalchemy==0.48b0  # SQLAlchemy instrumentation
+
 # Testing
 pytest==8.3.4                     # Testing framework
 pytest-asyncio==0.24.0            # Async test support
