@@ -1,0 +1,250 @@
+groups:
+  - name: building_directory
+    interval: 30s
+    rules:
+      # Cache Performance Alerts
+      - alert: BuildingCacheHitRateLow
+        expr: |
+          (
+            rate(building_cache_operations_total{operation="hit"}[5m])
+            /
+            rate(building_cache_operations_total[5m])
+          ) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: performance
+        annotations:
+          summary: "Building Directory cache hit rate below 50%"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} ({{ $labels.instance }}). Expected >70%. Check Redis connectivity and cache TTL settings."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/low-cache-hit-rate"
+          dashboard_url: "http://grafana:3000/d/building-directory-001"
+
+      - alert: BuildingCacheHitRateCritical
+        expr: |
+          (
+            rate(building_cache_operations_total{operation="hit"}[5m])
+            /
+            rate(building_cache_operations_total[5m])
+          ) < 0.3
+        for: 5m
+        labels:
+          severity: critical
+          service: request-service
+          component: building-directory
+          category: performance
+        annotations:
+          summary: "Building Directory cache hit rate critically low (<30%)"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}. This indicates Redis may be down or cache is ineffective."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/cache-critical"
+
+      # Response Time Alerts
+      - alert: BuildingDirectorySlowResponses
+        expr: |
+          histogram_quantile(0.95,
+            rate(building_directory_request_duration_seconds_bucket[5m])
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: performance
+        annotations:
+          summary: "Building Directory p95 response time >1s"
+          description: "95th percentile response time is {{ $value | humanizeDuration }} on {{ $labels.instance }}. Expected <200ms. Check User Service health and network latency."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/slow-responses"
+
+      - alert: BuildingDirectorySlowResponsesCritical
+        expr: |
+          histogram_quantile(0.95,
+            rate(building_directory_request_duration_seconds_bucket[5m])
+          ) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+          service: request-service
+          component: building-directory
+          category: performance
+        annotations:
+          summary: "Building Directory p95 response time >2s (CRITICAL)"
+          description: "95th percentile response time is {{ $value | humanizeDuration }} on {{ $labels.instance }}. User Service may be unresponsive."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/critical-latency"
+
+      # Error Rate Alerts
+      - alert: BuildingDirectoryHighErrorRate
+        expr: |
+          (
+            rate(building_directory_errors_total[5m])
+            /
+            rate(building_directory_requests_total[5m])
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: reliability
+        annotations:
+          summary: "Building Directory error rate >5%"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}. Check User Service availability and network connectivity."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/high-error-rate"
+
+      - alert: BuildingDirectoryHighErrorRateCritical
+        expr: |
+          (
+            rate(building_directory_errors_total[5m])
+            /
+            rate(building_directory_requests_total[5m])
+          ) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+          service: request-service
+          component: building-directory
+          category: reliability
+        annotations:
+          summary: "Building Directory error rate >20% (CRITICAL)"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}. Building Directory integration is failing."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/critical-errors"
+
+      # Timeout Errors
+      - alert: BuildingDirectoryTimeoutErrors
+        expr: |
+          rate(building_directory_errors_total{error_type="timeout"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: reliability
+        annotations:
+          summary: "Building Directory experiencing timeout errors"
+          description: "Timeout error rate is {{ $value | humanize }} errors/sec on {{ $labels.instance }}. User Service may be overloaded or network latency is high."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/timeouts"
+
+      # Validation Failures
+      - alert: BuildingValidationFailuresHigh
+        expr: |
+          (
+            rate(building_validations_total{result!="valid"}[5m])
+            /
+            rate(building_validations_total[5m])
+          ) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: data-quality
+        annotations:
+          summary: "Building validation failure rate >10%"
+          description: "Validation failure rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}. Check building data quality in database."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/validation-failures"
+
+      - alert: BuildingValidationFailuresCritical
+        expr: |
+          (
+            rate(building_validations_total{result!="valid"}[5m])
+            /
+            rate(building_validations_total[5m])
+          ) > 0.30
+        for: 5m
+        labels:
+          severity: critical
+          service: request-service
+          component: building-directory
+          category: data-quality
+        annotations:
+          summary: "Building validation failure rate >30% (CRITICAL)"
+          description: "Validation failure rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}. Significant data quality issues detected."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/critical-validation-failures"
+
+      # Coordinate Extraction Issues
+      - alert: CoordinateExtractionFailuresHigh
+        expr: |
+          (
+            rate(coordinate_extractions_total{result="failure"}[5m])
+            /
+            rate(coordinate_extractions_total[5m])
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: data-quality
+        annotations:
+          summary: "Coordinate extraction failure rate >20%"
+          description: "Coordinate extraction failures at {{ $value | humanizePercentage }} on {{ $labels.instance }}. Many buildings may be missing coordinates."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/coordinate-extraction"
+
+      # Service Availability
+      - alert: BuildingDirectoryServiceDown
+        expr: |
+          up{job="request-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: request-service
+          component: building-directory
+          category: availability
+        annotations:
+          summary: "Request Service is down"
+          description: "Request Service ({{ $labels.instance }}) is not responding. Building Directory integration is unavailable."
+          runbook_url: "https://docs.example.com/runbooks/request-service/service-down"
+
+      # Unusual Traffic Patterns
+      - alert: BuildingDirectoryUnusualTraffic
+        expr: |
+          (
+            rate(building_directory_requests_total[5m])
+            /
+            rate(building_directory_requests_total[1h] offset 1h)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: traffic
+        annotations:
+          summary: "Building Directory traffic increased 5x"
+          description: "Request rate is {{ $value | humanize }}x higher than usual on {{ $labels.instance }}. Possible traffic spike or attack."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/traffic-spike"
+
+      # Redis Connection Issues
+      - alert: BuildingCacheRedisDown
+        expr: |
+          rate(building_cache_operations_total{operation="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: request-service
+          component: building-directory-cache
+          category: infrastructure
+        annotations:
+          summary: "Building Directory cache experiencing Redis errors"
+          description: "Cache error rate is {{ $value | humanize }} errors/sec on {{ $labels.instance }}. Redis may be down or unreachable."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/redis-errors"
+
+      # Denormalization Failures
+      - alert: BuildingDenormalizationFailuresHigh
+        expr: |
+          (
+            rate(building_denormalization_total{status="failure"}[5m])
+            /
+            rate(building_denormalization_total[5m])
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: request-service
+          component: building-directory
+          category: data-processing
+        annotations:
+          summary: "Building denormalization failure rate >5%"
+          description: "Denormalization failures at {{ $value | humanizePercentage }} on {{ $labels.instance }}. Check data format and parsing logic."
+          runbook_url: "https://docs.example.com/runbooks/building-directory/denormalization-failures"
