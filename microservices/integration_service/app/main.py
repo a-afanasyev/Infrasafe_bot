@@ -21,7 +21,7 @@ from app.core.config import settings, get_cors_origins, get_log_config
 from app.core.database import init_database, close_database, check_database_health
 from app.core.events import init_event_publisher, shutdown_event_publisher
 from app.services.cache_service import init_cache_service, shutdown_cache_service, cache_service
-from app.api.v1 import google_sheets, webhooks
+from app.api.v1 import google_sheets, webhooks, geocoding
 
 # Configure logging
 logging.config.dictConfig(get_log_config())
@@ -275,6 +275,7 @@ async def get_cache_stats(tenant_id: Optional[str] = None):
 # Include API routers
 app.include_router(google_sheets.router, prefix=settings.API_V1_PREFIX)
 app.include_router(webhooks.router, prefix=settings.API_V1_PREFIX)
+app.include_router(geocoding.router, prefix=settings.API_V1_PREFIX)
 
 
 # Root endpoint
