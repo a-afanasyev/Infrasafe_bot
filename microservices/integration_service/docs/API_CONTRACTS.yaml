@@ -1,0 +1,734 @@
+openapi: 3.0.3
+info:
+  title: Integration Service API
+  description: |
+    UK Management Bot - Integration Service API
+
+    Manages external integrations including:
+    - Google Sheets
+    - Geocoding (Google Maps, Yandex Maps)
+    - Webhooks
+    - Custom integrations
+
+    Features:
+    - Multi-tenant isolation via X-Management-Company-Id header
+    - Rate limiting and quota management
+    - Response caching
+    - Event-driven architecture
+    - Comprehensive logging and monitoring
+  version: 1.0.0
+  contact:
+    name: UK Management Bot Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8006/api/v1
+    description: Local development
+  - url: https://integration.uk-management.com/api/v1
+    description: Production
+
+security:
+  - BearerAuth: []
+  - ServiceToken: []
+
+tags:
+  - name: external-services
+    description: External service configuration
+  - name: google-sheets
+    description: Google Sheets integration
+  - name: geocoding
+    description: Geocoding operations
+  - name: webhooks
+    description: Webhook management
+  - name: logs
+    description: Integration logs
+  - name: rate-limits
+    description: Rate limit tracking
+  - name: cache
+    description: Cache management
+  - name: health
+    description: Health and monitoring
+
+paths:
+  # ============ EXTERNAL SERVICES ============
+  /services:
+    get:
+      tags: [external-services]
+      summary: List external services
+      description: Get all configured external services for tenant
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+        - name: service_type
+          in: query
+          schema:
+            type: string
+            enum: [geocoding, sheets, maps, webhook, api]
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of external services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExternalService'
+                  total:
+                    type: integer
+
+    post:
+      tags: [external-services]
+      summary: Register external service
+      description: Register a new external service configuration
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalServiceCreate'
+      responses:
+        '201':
+          description: Service registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalService'
+
+  /services/{service_id}:
+    get:
+      tags: [external-services]
+      summary: Get external service
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+        - $ref: '#/components/parameters/ServiceId'
+      responses:
+        '200':
+          description: External service details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalService'
+
+    put:
+      tags: [external-services]
+      summary: Update external service
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+        - $ref: '#/components/parameters/ServiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalServiceUpdate'
+      responses:
+        '200':
+          description: Service updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalService'
+
+    delete:
+      tags: [external-services]
+      summary: Delete external service
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+        - $ref: '#/components/parameters/ServiceId'
+      responses:
+        '204':
+          description: Service deleted successfully
+
+  # ============ GOOGLE SHEETS ============
+  /sheets/read:
+    post:
+      tags: [google-sheets]
+      summary: Read from Google Sheet
+      description: Read data from specified Google Sheet range
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spreadsheet_id, range]
+              properties:
+                spreadsheet_id:
+                  type: string
+                  description: Google Sheet ID
+                range:
+                  type: string
+                  description: A1 notation range (e.g., "Sheet1!A1:D10")
+                value_render_option:
+                  type: string
+                  enum: [FORMATTED_VALUE, UNFORMATTED_VALUE, FORMULA]
+                  default: FORMATTED_VALUE
+      responses:
+        '200':
+          description: Sheet data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  values:
+                    type: array
+                    items:
+                      type: array
+                      items:
+                        type: string
+                  range:
+                    type: string
+                  cached:
+                    type: boolean
+
+  /sheets/write:
+    post:
+      tags: [google-sheets]
+      summary: Write to Google Sheet
+      description: Write data to specified Google Sheet range
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spreadsheet_id, range, values]
+              properties:
+                spreadsheet_id:
+                  type: string
+                range:
+                  type: string
+                values:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      type: string
+                value_input_option:
+                  type: string
+                  enum: [RAW, USER_ENTERED]
+                  default: USER_ENTERED
+      responses:
+        '200':
+          description: Data written successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated_range:
+                    type: string
+                  updated_rows:
+                    type: integer
+                  updated_columns:
+                    type: integer
+
+  /sheets/append:
+    post:
+      tags: [google-sheets]
+      summary: Append to Google Sheet
+      description: Append data to the end of a Google Sheet
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spreadsheet_id, range, values]
+              properties:
+                spreadsheet_id:
+                  type: string
+                range:
+                  type: string
+                values:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      type: string
+      responses:
+        '200':
+          description: Data appended successfully
+
+  # ============ GEOCODING ============
+  /geocoding/geocode:
+    post:
+      tags: [geocoding]
+      summary: Geocode address
+      description: Convert address to coordinates
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  type: string
+                  description: Full address to geocode
+                provider:
+                  type: string
+                  enum: [google_maps, yandex_maps, auto]
+                  default: auto
+                  description: Geocoding provider (auto = automatic fallback)
+                language:
+                  type: string
+                  default: ru
+                country:
+                  type: string
+                  default: UZ
+      responses:
+        '200':
+          description: Geocoding successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeocodeResponse'
+
+  /geocoding/reverse:
+    post:
+      tags: [geocoding]
+      summary: Reverse geocode
+      description: Convert coordinates to address
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude:
+                  type: number
+                  format: double
+                longitude:
+                  type: number
+                  format: double
+                provider:
+                  type: string
+                  enum: [google_maps, yandex_maps, auto]
+                  default: auto
+                language:
+                  type: string
+                  default: ru
+      responses:
+        '200':
+          description: Reverse geocoding successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseGeocodeResponse'
+
+  /geocoding/distance:
+    post:
+      tags: [geocoding]
+      summary: Calculate distance
+      description: Calculate distance between two points
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origin, destination]
+              properties:
+                origin:
+                  $ref: '#/components/schemas/Coordinates'
+                destination:
+                  $ref: '#/components/schemas/Coordinates'
+                unit:
+                  type: string
+                  enum: [km, miles]
+                  default: km
+      responses:
+        '200':
+          description: Distance calculated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  distance_km:
+                    type: number
+                  distance_miles:
+                    type: number
+                  straight_line:
+                    type: boolean
+
+  # ============ WEBHOOKS ============
+  /webhooks:
+    get:
+      tags: [webhooks]
+      summary: List webhooks
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookConfig'
+
+    post:
+      tags: [webhooks]
+      summary: Create webhook
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookConfigCreate'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookConfig'
+
+  /webhooks/{webhook_id}:
+    get:
+      tags: [webhooks]
+      summary: Get webhook
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookConfig'
+
+  # ============ LOGS ============
+  /logs:
+    get:
+      tags: [logs]
+      summary: Query integration logs
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+        - name: service_name
+          in: query
+          schema:
+            type: string
+        - name: operation
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [success, error, timeout, rate_limited, cancelled]
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Integration logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IntegrationLog'
+                  total:
+                    type: integer
+
+  # ============ CACHE ============
+  /cache/invalidate:
+    post:
+      tags: [cache]
+      summary: Invalidate cache
+      description: Invalidate cache entries by key pattern
+      parameters:
+        - $ref: '#/components/parameters/ManagementCompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern:
+                  type: string
+                  description: Cache key pattern (supports wildcards)
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Cache invalidated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invalidated_count:
+                    type: integer
+
+  # ============ HEALTH ============
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string
+                  version:
+                    type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ServiceToken:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+
+  parameters:
+    ManagementCompanyId:
+      name: X-Management-Company-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Management Company ID for multi-tenancy
+
+    ServiceId:
+      name: service_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    ExternalService:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        management_company_id:
+          type: string
+        service_name:
+          type: string
+        service_type:
+          type: string
+          enum: [geocoding, sheets, maps, webhook, api]
+        display_name:
+          type: string
+        base_url:
+          type: string
+        is_active:
+          type: boolean
+        health_status:
+          type: string
+          enum: [healthy, degraded, down, unknown]
+        priority:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ExternalServiceCreate:
+      type: object
+      required: [service_name, service_type, display_name]
+      properties:
+        service_name:
+          type: string
+        service_type:
+          type: string
+        display_name:
+          type: string
+        base_url:
+          type: string
+        api_key:
+          type: string
+        config:
+          type: object
+
+    ExternalServiceUpdate:
+      type: object
+      properties:
+        display_name:
+          type: string
+        base_url:
+          type: string
+        is_active:
+          type: boolean
+        config:
+          type: object
+
+    GeocodeResponse:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        formatted_address:
+          type: string
+        address_components:
+          type: object
+        provider:
+          type: string
+        cached:
+          type: boolean
+        confidence:
+          type: number
+
+    ReverseGeocodeResponse:
+      type: object
+      properties:
+        formatted_address:
+          type: string
+        address_components:
+          type: object
+        provider:
+          type: string
+        cached:
+          type: boolean
+
+    Coordinates:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+
+    WebhookConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        webhook_name:
+          type: string
+        webhook_url:
+          type: string
+        source_service:
+          type: string
+        event_types:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+        total_received:
+          type: integer
+        total_successful:
+          type: integer
+        total_failed:
+          type: integer
+
+    WebhookConfigCreate:
+      type: object
+      required: [webhook_name, source_service, event_types]
+      properties:
+        webhook_name:
+          type: string
+        source_service:
+          type: string
+        event_types:
+          type: array
+          items:
+            type: string
+        secret_key:
+          type: string
+
+    IntegrationLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        operation:
+          type: string
+        status:
+          type: string
+        duration_ms:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
