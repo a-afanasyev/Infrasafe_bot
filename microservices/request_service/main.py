@@ -20,6 +20,7 @@ from app.core.config import settings, get_cors_origins, get_log_config
 from app.core.database import init_database, close_database, check_database_health
 from app.api import api_router
 from app.services import request_number_service
+from app.clients.building_directory_cache import initialize_building_cache, close_building_cache
 
 # Configure logging
 logging.config.dictConfig(get_log_config())
@@ -45,6 +46,10 @@ async def lifespan(app: FastAPI):
         await request_number_service.initialize()
         logger.info(" Request number service initialized")
 
+        # Initialize building directory cache
+        await initialize_building_cache()
+        logger.info(" Building Directory cache initialized")
+
         logger.info("<� Request Service startup completed")
 
     except Exception as e:
@@ -60,6 +65,10 @@ async def lifespan(app: FastAPI):
         # Close request number service
         await request_number_service.close()
         logger.info(" Request number service closed")
+
+        # Close building directory cache
+        await close_building_cache()
+        logger.info(" Building Directory cache closed")
 
         # Close database
         await close_database()
@@ -213,33 +222,43 @@ async def detailed_health_check():
 async def get_metrics():
     """Prometheus-style metrics endpoint"""
     try:
-        # Get request number statistics for today
+        from prometheus_client import generate_latest, REGISTRY
+        from io import BytesIO
+
+        # Generate Prometheus metrics in standard format
+        metrics_output = generate_latest(REGISTRY)
+
+        # Also include request number statistics
         from datetime import date
         from app.core.database import get_async_session
 
         async with get_async_session() as db:
             daily_stats = await request_number_service.get_daily_stats(db)
 
-        metrics = []
-        metrics.append("# HELP request_service_info Service information")
-        metrics.append("# TYPE request_service_info gauge")
-        metrics.append(f'request_service_info{{version="{settings.APP_VERSION}",service="{settings.APP_NAME}"}} 1')
+        # Custom metrics (legacy format, will be migrated to prometheus_client)
+        custom_metrics = []
+        custom_metrics.append("\n# HELP request_service_info Service information")
+        custom_metrics.append("# TYPE request_service_info gauge")
+        custom_metrics.append(f'request_service_info{{version="{settings.APP_VERSION}",service="{settings.APP_NAME}"}} 1')
 
-        metrics.append("# HELP request_numbers_generated_today Total request numbers generated today")
-        metrics.append("# TYPE request_numbers_generated_today counter")
-        metrics.append(f'request_numbers_generated_today {daily_stats.get("database_count", 0)}')
+        custom_metrics.append("# HELP request_numbers_generated_today Total request numbers generated today")
+        custom_metrics.append("# TYPE request_numbers_generated_today counter")
+        custom_metrics.append(f'request_numbers_generated_today {daily_stats.get("database_count", 0)}')
 
-        metrics.append("# HELP request_numbers_available_today Available request numbers for today")
-        metrics.append("# TYPE request_numbers_available_today gauge")
-        metrics.append(f'request_numbers_available_today {daily_stats.get("available_numbers", 999)}')
+        custom_metrics.append("# HELP request_numbers_available_today Available request numbers for today")
+        custom_metrics.append("# TYPE request_numbers_available_today gauge")
+        custom_metrics.append(f'request_numbers_available_today {daily_stats.get("available_numbers", 999)}')
 
-        metrics.append("# HELP redis_connection_status Redis connection status (1=connected, 0=disconnected)")
-        metrics.append("# TYPE redis_connection_status gauge")
-        metrics.append(f'redis_connection_status {1 if daily_stats.get("redis_connected") else 0}')
+        custom_metrics.append("# HELP redis_connection_status Redis connection status (1=connected, 0=disconnected)")
+        custom_metrics.append("# TYPE redis_connection_status gauge")
+        custom_metrics.append(f'redis_connection_status {1 if daily_stats.get("redis_connected") else 0}')
+
+        # Combine Prometheus metrics with custom metrics
+        combined_metrics = metrics_output.decode('utf-8') + "\n".join(custom_metrics)
 
         return JSONResponse(
-            content="\n".join(metrics),
-            media_type="text/plain"
+            content=combined_metrics,
+            media_type="text/plain; version=0.0.4; charset=utf-8"
         )
 
     except Exception as e:
