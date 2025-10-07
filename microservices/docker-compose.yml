@@ -82,6 +82,7 @@ services:
       - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-8002}
       - MEDIA_SERVICE_URL=http://media-service:${MEDIA_SERVICE_PORT:-8004}
       - NOTIFICATION_SERVICE_URL=http://notification-service:${NOTIFICATION_SERVICE_PORT:-8005}
+      - MANAGEMENT_COMPANY_ID=${MANAGEMENT_COMPANY_ID:-00000000-0000-0000-0000-000000000001}
       - DEBUG=${DEBUG:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
@@ -230,6 +231,334 @@ services:
       retries: 3
       start_period: 40s
 
+  # Shift Service - Shift Planning & Management
+  shift-service:
+    build:
+      context: ./shift_service
+      dockerfile: Dockerfile
+    container_name: shift-service
+    ports:
+      - "${SHIFT_SERVICE_PORT:-8007}:8007"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${SHIFT_DB_USER:-shift_user}:${SHIFT_DB_PASSWORD:-shift_pass}@shift-db:5432/${SHIFT_DB_NAME:-shift_db}
+      - REDIS_URL=redis://${REDIS_HOST:-shared-redis}:${REDIS_PORT:-6379}/${REDIS_SHIFT_DB:-7}
+      - AUTH_SERVICE_URL=http://auth-service:${AUTH_SERVICE_PORT:-8001}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-8002}
+      - REQUEST_SERVICE_URL=http://request-service:${REQUEST_SERVICE_PORT:-8003}
+      - NOTIFICATION_SERVICE_URL=http://notification-service:${NOTIFICATION_SERVICE_PORT:-8005}
+      - AI_SERVICE_URL=http://ai-service:${AI_SERVICE_PORT:-8006}
+      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      shift-db:
+        condition: service_healthy
+      shared-redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    volumes:
+      - ./shift_service/logs:/app/logs
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Analytics Service - KPIs, Dashboards, Real-time Metrics
+  analytics-service:
+    build:
+      context: ./analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    ports:
+      - "${ANALYTICS_SERVICE_PORT:-8008}:8006"
+    environment:
+      - POSTGRES_HOST=analytics-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${ANALYTICS_DB_USER:-analytics_user}
+      - POSTGRES_PASSWORD=${ANALYTICS_DB_PASSWORD:-analytics_pass}
+      - POSTGRES_DB=${ANALYTICS_DB_NAME:-analytics_db}
+      - REDIS_HOST=shared-redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_ANALYTICS_DB:-8}
+      - REDIS_STREAM_NAME=analytics:events
+      - REDIS_CONSUMER_GROUP=analytics-consumers
+      - REDIS_CONSUMER_NAME=analytics-consumer-main
+      - AUTH_SERVICE_URL=http://auth-service:${AUTH_SERVICE_PORT:-8001}
+      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+      shared-redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    volumes:
+      - ./analytics_service/logs:/app/logs
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/api/v1/health/live')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Analytics Consumer - Event Processing Worker
+  analytics-consumer:
+    build:
+      context: ./analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics-consumer
+    command: ["python", "start_consumer.py"]
+    environment:
+      - POSTGRES_HOST=analytics-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${ANALYTICS_DB_USER:-analytics_user}
+      - POSTGRES_PASSWORD=${ANALYTICS_DB_PASSWORD:-analytics_pass}
+      - POSTGRES_DB=${ANALYTICS_DB_NAME:-analytics_db}
+      - REDIS_HOST=shared-redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_ANALYTICS_DB:-8}
+      - REDIS_STREAM_NAME=analytics:events
+      - REDIS_CONSUMER_GROUP=analytics-consumers
+      - REDIS_CONSUMER_NAME=analytics-consumer-1
+      - MAX_WORKERS=3
+      - EVENT_BATCH_SIZE=100
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+      shared-redis:
+        condition: service_healthy
+      analytics-service:
+        condition: service_started
+    volumes:
+      - ./analytics_service/logs:/app/logs
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Integration Service - External Integrations Gateway
+  integration-service:
+    build:
+      context: ./integration_service
+      dockerfile: Dockerfile
+    container_name: integration-service
+    ports:
+      - "${INTEGRATION_SERVICE_PORT:-8009}:8009"
+    environment:
+      # Application
+      - APP_NAME=Integration Service
+      - APP_VERSION=1.0.0
+      - DEBUG=${DEBUG:-false}
+      - HOST=0.0.0.0
+      - PORT=8009
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Multi-tenancy
+      - MANAGEMENT_COMPANY_ID=${MANAGEMENT_COMPANY_ID:-uk_company_1}
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${INTEGRATION_DB_USER:-integration_user}:${INTEGRATION_DB_PASSWORD:-integration_pass}@integration-db:5432/${INTEGRATION_DB_NAME:-integration_db}
+      - DATABASE_POOL_SIZE=20
+      - DATABASE_MAX_OVERFLOW=10
+
+      # Redis
+      - REDIS_URL=redis://${REDIS_HOST:-shared-redis}:${REDIS_PORT:-6379}/${REDIS_INTEGRATION_DB:-9}
+      - REDIS_CACHE_TTL=300
+      - REDIS_MAX_CONNECTIONS=50
+
+      # Google Sheets
+      - GOOGLE_SHEETS_CREDENTIALS_PATH=/app/secrets/google_sheets.json
+      - GOOGLE_SHEETS_RATE_LIMIT_PER_MINUTE=100
+      - GOOGLE_SHEETS_CACHE_TTL=300
+
+      # Google Maps
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - GOOGLE_MAPS_RATE_LIMIT_PER_MINUTE=50
+      - GOOGLE_MAPS_CACHE_TTL=3600
+
+      # Yandex Maps
+      - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY:-}
+      - YANDEX_MAPS_RATE_LIMIT_PER_MINUTE=50
+      - YANDEX_MAPS_CACHE_TTL=3600
+
+      # Rate Limiting
+      - RATE_LIMIT_DEFAULT_PER_MINUTE=60
+      - RATE_LIMIT_DEFAULT_PER_HOUR=1000
+      - RATE_LIMIT_DEFAULT_PER_DAY=10000
+
+      # Caching
+      - CACHE_ENABLED=true
+      - CACHE_DEFAULT_TTL=300
+      - CACHE_MAX_SIZE_MB=500
+
+      # Monitoring
+      - PROMETHEUS_ENABLED=true
+      - JAEGER_ENABLED=false
+      - JAEGER_AGENT_HOST=jaeger
+      - JAEGER_AGENT_PORT=6831
+
+      # Security
+      - SECRET_KEY=${INTEGRATION_SECRET_KEY:-change-this-in-production}
+      - CORS_ORIGINS=*
+
+    depends_on:
+      integration-db:
+        condition: service_healthy
+      shared-redis:
+        condition: service_healthy
+
+    volumes:
+      - ./integration_service/logs:/app/logs
+      - ./integration_service/secrets:/app/secrets:ro
+
+    networks:
+      - microservices-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Bot Gateway Service - Telegram Bot Interface
+  bot-gateway:
+    build:
+      context: ./bot_gateway
+      dockerfile: Dockerfile
+    container_name: bot-gateway
+    ports:
+      - "${BOT_GATEWAY_WEBHOOK_PORT:-8000}:8000"
+    environment:
+      # Application
+      - APP_NAME=Bot Gateway Service
+      - APP_VERSION=1.0.0
+      - DEBUG=${DEBUG:-false}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Telegram Bot
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_USE_WEBHOOK=${TELEGRAM_USE_WEBHOOK:-false}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - TELEGRAM_POLLING_TIMEOUT=30
+
+      # Multi-tenancy
+      - MANAGEMENT_COMPANY_ID=${MANAGEMENT_COMPANY_ID:-uk_company_1}
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${BOT_GATEWAY_DB_USER:-bot_gateway_user}:${BOT_GATEWAY_DB_PASSWORD:-bot_gateway_pass}@bot-gateway-db:5432/${BOT_GATEWAY_DB_NAME:-bot_gateway_db}
+      - DATABASE_POOL_SIZE=20
+      - DATABASE_MAX_OVERFLOW=10
+
+      # Redis (FSM Storage + Cache)
+      - REDIS_URL=redis://${REDIS_HOST:-shared-redis}:${REDIS_PORT:-6379}/${REDIS_BOT_GATEWAY_DB:-4}
+      - REDIS_MAX_CONNECTIONS=50
+      - REDIS_FSM_TTL=3600
+      - REDIS_SESSION_TTL=86400
+
+      # Microservices URLs
+      - AUTH_SERVICE_URL=http://auth-service:${AUTH_SERVICE_PORT:-8001}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-8002}
+      - REQUEST_SERVICE_URL=http://request-service:${REQUEST_SERVICE_PORT:-8003}
+      - SHIFT_SERVICE_URL=http://shift-service:${SHIFT_SERVICE_PORT:-8007}
+      - NOTIFICATION_SERVICE_URL=http://notification-service:${NOTIFICATION_SERVICE_PORT:-8005}
+      - ANALYTICS_SERVICE_URL=http://analytics-service:${ANALYTICS_SERVICE_PORT:-8008}
+      - AI_SERVICE_URL=http://ai-service:${AI_SERVICE_PORT:-8006}
+      - MEDIA_SERVICE_URL=http://media-service:${MEDIA_SERVICE_PORT:-8004}
+      - INTEGRATION_SERVICE_URL=http://integration-service:${INTEGRATION_SERVICE_PORT:-8009}
+
+      # JWT Authentication
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-secret-key-in-production-minimum-32-chars}
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+      # Rate Limiting
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_MESSAGES_PER_MINUTE=20
+      - RATE_LIMIT_MESSAGES_PER_HOUR=100
+      - RATE_LIMIT_COMMANDS_PER_MINUTE=5
+
+      # Session Management
+      - SESSION_LIFETIME_HOURS=24
+      - SESSION_CLEANUP_INTERVAL_HOURS=1
+
+      # File Handling
+      - MAX_FILE_SIZE_MB=20
+      - ALLOWED_FILE_TYPES=jpg,jpeg,png,pdf,doc,docx
+
+      # Logging
+      - LOG_FORMAT=json
+      - SENTRY_DSN=${SENTRY_DSN:-}
+
+      # Monitoring
+      - PROMETHEUS_ENABLED=true
+      - METRICS_PORT=9090
+
+      # Message Defaults
+      - DEFAULT_LANGUAGE=ru
+      - SUPPORTED_LANGUAGES=ru,uz
+      - MESSAGE_PARSE_MODE=HTML
+
+      # Timeouts
+      - HTTP_TIMEOUT_SECONDS=30
+      - SERVICE_CALL_TIMEOUT_SECONDS=10
+      - SERVICE_CALL_RETRIES=3
+
+      # Feature Flags
+      - ENABLE_ADMIN_COMMANDS=true
+      - ENABLE_SHIFT_MANAGEMENT=true
+      - ENABLE_REQUEST_CREATION=true
+      - ENABLE_ANALYTICS_ACCESS=false
+
+      # Security
+      - ALLOWED_UPDATES=message,callback_query,inline_query
+      - SKIP_UPDATES=false
+
+    depends_on:
+      bot-gateway-db:
+        condition: service_healthy
+      shared-redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+
+    volumes:
+      - ./bot_gateway/storage:/app/storage
+
+    networks:
+      - microservices-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # =============================================================================
   # DATABASES
   # =============================================================================
@@ -365,6 +694,92 @@ services:
       timeout: 5s
       retries: 5
 
+  # Shift Service Database
+  shift-db:
+    image: postgres:15-alpine
+    container_name: shift-db
+    environment:
+      POSTGRES_USER: ${SHIFT_DB_USER:-shift_user}
+      POSTGRES_PASSWORD: ${SHIFT_DB_PASSWORD:-shift_pass}
+      POSTGRES_DB: ${SHIFT_DB_NAME:-shift_db}
+    ports:
+      - "${SHIFT_DB_PORT:-5439}:5432"
+    volumes:
+      - shift_db_data:/var/lib/postgresql/data
+      - ./init-scripts/shift:/docker-entrypoint-initdb.d
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shift_user -d shift_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Analytics Service Database
+  analytics-db:
+    image: postgres:15-alpine
+    container_name: analytics-db
+    environment:
+      POSTGRES_USER: ${ANALYTICS_DB_USER:-analytics_user}
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:-analytics_pass}
+      POSTGRES_DB: ${ANALYTICS_DB_NAME:-analytics_db}
+    ports:
+      - "${ANALYTICS_DB_PORT:-5440}:5432"
+    volumes:
+      - analytics_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics_user -d analytics_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Integration Service Database
+  integration-db:
+    image: postgres:15-alpine
+    container_name: integration-db
+    environment:
+      POSTGRES_USER: ${INTEGRATION_DB_USER:-integration_user}
+      POSTGRES_PASSWORD: ${INTEGRATION_DB_PASSWORD:-integration_pass}
+      POSTGRES_DB: ${INTEGRATION_DB_NAME:-integration_db}
+    ports:
+      - "${INTEGRATION_DB_PORT:-5441}:5432"
+    volumes:
+      - integration_db_data:/var/lib/postgresql/data
+      - ./init-scripts/integration:/docker-entrypoint-initdb.d
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U integration_user -d integration_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Bot Gateway Service Database
+  bot-gateway-db:
+    image: postgres:15-alpine
+    container_name: bot-gateway-db
+    environment:
+      POSTGRES_USER: ${BOT_GATEWAY_DB_USER:-bot_gateway_user}
+      POSTGRES_PASSWORD: ${BOT_GATEWAY_DB_PASSWORD:-bot_gateway_pass}
+      POSTGRES_DB: ${BOT_GATEWAY_DB_NAME:-bot_gateway_db}
+    ports:
+      - "${BOT_GATEWAY_DB_PORT:-5442}:5432"
+    volumes:
+      - bot_gateway_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bot_gateway_user -d bot_gateway_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # =============================================================================
   # SHARED INFRASTRUCTURE
   # =============================================================================
@@ -494,6 +909,14 @@ volumes:
   notification_db_data:
     driver: local
   ai_db_data:
+    driver: local
+  shift_db_data:
+    driver: local
+  analytics_db_data:
+    driver: local
+  integration_db_data:
+    driver: local
+  bot_gateway_db_data:
     driver: local
 
   # Cache volumes

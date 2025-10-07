@@ -141,22 +141,30 @@ def create_dispatcher() -> Dispatcher:
     # Create dispatcher
     dispatcher = Dispatcher(storage=storage)
 
-    # Register middlewares
-    # TODO: Add middlewares
-    # from app.middleware.auth import AuthMiddleware
-    # from app.middleware.logging import LoggingMiddleware
-    # from app.middleware.rate_limit import RateLimitMiddleware
-    # dispatcher.message.middleware(AuthMiddleware())
-    # dispatcher.message.middleware(LoggingMiddleware())
-    # dispatcher.message.middleware(RateLimitMiddleware())
+    # Register middlewares (order matters: rate_limit -> logging -> auth)
+    from app.middleware.rate_limit import RateLimitMiddleware
+    from app.middleware.logging import LoggingMiddleware
+    from app.middleware.auth import AuthMiddleware
 
-    # Register routers
-    # TODO: Add routers
-    # from app.routers import common_router, request_router, shift_router, admin_router
-    # dispatcher.include_router(common_router)
-    # dispatcher.include_router(request_router)
-    # dispatcher.include_router(shift_router)
-    # dispatcher.include_router(admin_router)
+    rate_limiter = RateLimitMiddleware()
+
+    # Apply to messages
+    dispatcher.message.middleware(rate_limiter)
+    dispatcher.message.middleware(LoggingMiddleware())
+    dispatcher.message.middleware(AuthMiddleware())
+
+    # Apply to callback queries
+    dispatcher.callback_query.middleware(rate_limiter)
+    dispatcher.callback_query.middleware(LoggingMiddleware())
+    dispatcher.callback_query.middleware(AuthMiddleware())
+
+    # Register routers (order matters for handler priority)
+    from app.routers.common import router as common_router
+    from app.routers.requests import router as requests_router
+
+    dispatcher.include_router(common_router)
+    dispatcher.include_router(requests_router)
+    # TODO: Add more routers (shift, admin, executor)
 
     # Register startup/shutdown handlers
     dispatcher.startup.register(on_startup)
