@@ -33,6 +33,7 @@ def get_main_menu_keyboard(role: str, language: str = "ru") -> ReplyKeyboardMark
             "my_requests": "📋 Мои заявки",
             "create_request": "➕ Создать заявку",
             "my_shifts": "📅 Мои смены",
+            "admin_panel": "👨‍💼 Админ-панель",
             "help": "❓ Помощь",
             "settings": "⚙️ Настройки",
             "analytics": "📊 Аналитика",
@@ -42,6 +43,7 @@ def get_main_menu_keyboard(role: str, language: str = "ru") -> ReplyKeyboardMark
             "my_requests": "📋 Mening arizalarim",
             "create_request": "➕ Ariza yaratish",
             "my_shifts": "📅 Mening smenalarim",
+            "admin_panel": "👨‍💼 Admin panel",
             "help": "❓ Yordam",
             "settings": "⚙️ Sozlamalar",
             "analytics": "📊 Analitika",
@@ -64,11 +66,7 @@ def get_main_menu_keyboard(role: str, language: str = "ru") -> ReplyKeyboardMark
 
     # Manager/Admin buttons
     if role in ["manager", "admin"]:
-        builder.add(KeyboardButton(text=lang_texts["analytics"]))
-
-    # Admin buttons
-    if role == "admin":
-        builder.add(KeyboardButton(text=lang_texts["users"]))
+        builder.add(KeyboardButton(text=lang_texts["admin_panel"]))
 
     # Always show help and settings
     builder.add(KeyboardButton(text=lang_texts["help"]))
