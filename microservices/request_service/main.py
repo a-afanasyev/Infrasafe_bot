@@ -232,8 +232,13 @@ async def get_metrics():
         from datetime import date
         from app.core.database import get_async_session
 
-        async with get_async_session() as db:
+        # Get database session using async generator
+        db_generator = get_async_session()
+        db = await anext(db_generator)
+        try:
             daily_stats = await request_number_service.get_daily_stats(db)
+        finally:
+            await db.close()
 
         # Custom metrics (legacy format, will be migrated to prometheus_client)
         custom_metrics = []
