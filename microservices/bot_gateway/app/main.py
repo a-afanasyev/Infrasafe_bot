@@ -240,8 +240,23 @@ async def main_webhook() -> None:
     bot = create_bot()
     dp = create_dispatcher()
 
-    # Create aiohttp application
-    app = web.Application()
+    # Create aiohttp application with security middlewares
+    middlewares = []
+
+    # Add security middlewares if enabled
+    if settings.ENABLE_SECURITY_HEADERS:
+        from app.middleware.security import (
+            security_headers_middleware,
+            cors_middleware,
+            request_id_middleware
+        )
+        middlewares.extend([
+            request_id_middleware,
+            security_headers_middleware,
+            cors_middleware
+        ])
+
+    app = web.Application(middlewares=middlewares)
 
     # Setup webhook handler
     webhook_handler = SimpleRequestHandler(

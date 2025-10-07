@@ -144,12 +144,39 @@ class Settings(BaseSettings):
     ALLOWED_UPDATES: List[str] = ["message", "callback_query", "inline_query"]
     SKIP_UPDATES: bool = False
 
+    # CORS Configuration
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]  # Grafana, etc.
+
+    # Service-to-Service Authentication
+    AUTH_SERVICE_KEY: Optional[str] = None
+    USER_SERVICE_KEY: Optional[str] = None
+    REQUEST_SERVICE_KEY: Optional[str] = None
+    SHIFT_SERVICE_KEY: Optional[str] = None
+    NOTIFICATION_SERVICE_KEY: Optional[str] = None
+    ANALYTICS_SERVICE_KEY: Optional[str] = None
+    AI_SERVICE_KEY: Optional[str] = None
+    MEDIA_SERVICE_KEY: Optional[str] = None
+    INTEGRATION_SERVICE_KEY: Optional[str] = None
+
+    # Security Features
+    ENABLE_REQUEST_SIGNING: bool = False  # Enable in production
+    ENABLE_INPUT_VALIDATION: bool = True
+    ENABLE_SECURITY_HEADERS: bool = True
+
     @field_validator("ALLOWED_UPDATES", mode="before")
     @classmethod
     def parse_allowed_updates(cls, v):
         """Parse comma-separated update types from env var"""
         if isinstance(v, str):
             return [upd.strip() for upd in v.split(",")]
+        return v
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        """Parse comma-separated origins from env var"""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
         return v
 
     @property
