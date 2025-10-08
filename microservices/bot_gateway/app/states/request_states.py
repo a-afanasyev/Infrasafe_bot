@@ -58,3 +58,44 @@ class RequestReassignmentStates(StatesGroup):
 
     waiting_for_executor_selection = State()
     waiting_for_reassignment_confirmation = State()
+
+
+class RequestStatusStates(StatesGroup):
+    """FSM states for request status management."""
+
+    # Status selection
+    waiting_for_status = State()
+
+    # Comment and documentation inputs
+    waiting_for_comment = State()
+    waiting_for_materials = State()
+    waiting_for_completion_report = State()
+
+    # Confirmation
+    waiting_for_confirmation = State()
+
+
+class RequestAssignmentStates(StatesGroup):
+    """FSM states for request assignment to executors."""
+
+    # Assignment type selection
+    waiting_for_assignment_type = State()
+
+    # Group assignment (by specialization)
+    waiting_for_specialization = State()
+
+    # Individual assignment
+    waiting_for_executor = State()
+
+    # Confirmation
+    waiting_for_confirmation = State()
+
+
+class RequestReportStates(StatesGroup):
+    """FSM states for request completion reports."""
+
+    # Accepting completed request
+    waiting_for_approval_confirmation = State()
+
+    # Requesting revisions
+    waiting_for_revision_reason = State()

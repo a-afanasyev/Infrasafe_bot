@@ -25,18 +25,18 @@ router = Router(name="common")
 @router.message(CommandStart())
 async def cmd_start(
     message: Message,
-    user_role: str,
-    language: str,
-    state: FSMContext
+    state: FSMContext,
+    user_role: str = None,
+    language: str = "ru"
 ):
     """
     Handle /start command.
 
     Args:
         message: Telegram message
-        user_role: User role from auth middleware
-        language: User language from auth middleware
         state: FSM context
+        user_role: User role from auth middleware (optional)
+        language: User language from auth middleware (default: ru)
     """
     # Clear any active FSM state
     await state.clear()
@@ -70,13 +70,13 @@ async def cmd_start(
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message, language: str):
+async def cmd_help(message: Message, language: str = "ru"):
     """
     Handle /help command.
 
     Args:
         message: Telegram message
-        language: User language
+        language: User language (default: ru)
     """
     if language == "uz":
         help_text = (
@@ -112,14 +112,14 @@ async def cmd_help(message: Message, language: str):
 
 @router.message(Command("menu"))
 @router.message(F.text.in_(["📋 Меню", "📋 Menyu"]))
-async def cmd_menu(message: Message, user_role: str, language: str):
+async def cmd_menu(message: Message, user_role: str = None, language: str = "ru"):
     """
     Handle /menu command and menu button.
 
     Args:
         message: Telegram message
-        user_role: User role
-        language: User language
+        user_role: User role (optional)
+        language: User language (default: ru)
     """
     text = "Главное меню:" if language == "ru" else "Asosiy menyu:"
 
@@ -131,7 +131,7 @@ async def cmd_menu(message: Message, user_role: str, language: str):
 
 @router.message(Command("language"))
 @router.message(F.text.in_(["⚙️ Настройки", "⚙️ Sozlamalar"]))
-async def cmd_language(message: Message, language: str):
+async def cmd_language(message: Message, language: str = "ru"):
     """
     Handle /language command and settings button.
 

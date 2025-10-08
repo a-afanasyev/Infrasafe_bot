@@ -116,8 +116,8 @@ class InlineKeyboardCache(BaseModel):
         comment="Last callback processing timestamp"
     )
 
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(
+    # Extra metadata (renamed from 'metadata' - reserved by SQLAlchemy)
+    extra_metadata: Mapped[Optional[dict]] = mapped_column(
         JSON,
         nullable=True,
         comment="Additional metadata"

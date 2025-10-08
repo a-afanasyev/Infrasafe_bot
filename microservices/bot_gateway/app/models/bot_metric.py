@@ -134,7 +134,7 @@ class BotMetric(BaseModel):
         comment="Tags for filtering and grouping"
     )
 
-    metadata: Mapped[Optional[dict]] = mapped_column(
+    extra_metadata: Mapped[Optional[dict]] = mapped_column(
         JSON,
         nullable=True,
         comment="Additional metric metadata"

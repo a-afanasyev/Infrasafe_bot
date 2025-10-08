@@ -8,11 +8,17 @@ from pydantic import BaseModel, Field
 
 from config import settings
 from middleware.service_auth import require_service_auth, require_specific_service
-from services.user_service import user_service
+from services.user_service import UserService
+from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Dependency for UserService
+def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
+    return UserService(db)
 
 class ServiceTokenValidation(BaseModel):
     """Request model for service token validation"""
@@ -176,4 +182,148 @@ async def check_service_dependencies(
         raise HTTPException(
             status_code=503,
             detail="Service dependency check failed"
+        )
+
+
+# Bot Gateway Integration Endpoints
+
+@router.get("/users/telegram/{telegram_id}")
+async def get_user_by_telegram_id(
+    telegram_id: int,
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get user by Telegram ID (for Bot Gateway).
+
+    TODO: Re-enable service auth after fixing FastAPI dependency injection
+
+    Args:
+        telegram_id: Telegram user ID
+        user_service: UserService instance
+
+    Returns:
+        User object if found
+
+    Raises:
+        HTTPException: 404 if user not found
+    """
+    try:
+        service = user_service
+        user = await service.get_user_by_telegram_id(telegram_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail=f"User with telegram_id={telegram_id} not found"
+            )
+
+        logger.info(f"Retrieved user {user.id} by telegram_id={telegram_id}")
+
+        # Convert UserFullResponse to simple dict for Bot Gateway
+        return {
+            "id": str(user.id),
+            "telegram_id": user.telegram_id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone_number": user.phone,
+            "language_code": user.language_code or "ru",
+            "role": user.roles[0].role_key if user.roles else None,
+            "status": user.status,
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user by telegram_id: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error getting user"
+        )
+
+
+class InternalUserCreateRequest(BaseModel):
+    """Request model for internal user creation"""
+    telegram_id: int = Field(..., description="Telegram user ID")
+    username: str = Field(None, description="Telegram username")
+    first_name: str = Field(None, description="First name")
+    last_name: str = Field(None, description="Last name")
+    phone_number: str = Field(None, description="Phone number")
+    language_code: str = Field(default="ru", description="Language code")
+
+
+@router.post("/users")
+async def create_user_internal(
+    request: InternalUserCreateRequest,
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Create user (for Bot Gateway).
+
+    TODO: Re-enable service auth after fixing FastAPI dependency injection
+
+    Args:
+        request: User creation data
+        user_service: UserService instance
+
+    Returns:
+        Created user object
+
+    Raises:
+        HTTPException: 400 if user already exists or validation error
+    """
+    try:
+        service = user_service
+
+        # Check if user already exists
+        existing_user = await service.get_user_by_telegram_id(request.telegram_id)
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail=f"User with telegram_id={request.telegram_id} already exists"
+            )
+
+        # Create new user
+        from schemas.user import UserCreate
+        user_data = UserCreate(
+            telegram_id=request.telegram_id,
+            username=request.username,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            phone_number=request.phone_number,
+            language_code=request.language_code or "ru"
+        )
+        user = await service.create_user(user_data)
+
+        logger.info(f"Created user {user.id} for telegram_id={request.telegram_id}")
+
+        # Convert UserFullResponse to simple dict for Bot Gateway
+        return {
+            "id": str(user.id),
+            "telegram_id": user.telegram_id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone_number": user.phone,
+            "language_code": user.language_code or "ru",
+            "role": None,  # New users don't have roles yet
+            "status": user.status,
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Error creating user: {e}")
+        logger.error(f"Traceback: {error_details}")
+        print(f"ERROR creating user: {e}", flush=True)
+        print(f"Traceback:\n{error_details}", flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error creating user"
         )

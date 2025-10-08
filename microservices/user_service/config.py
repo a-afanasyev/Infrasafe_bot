@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Service Authentication
     allowed_services: List[str] = [
         "auth-service",
+        "bot-gateway",
         "request-service",
         "shift-service",
         "notification-service",
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
 
     # CORS
     allowed_origins: List[str] = ["http://localhost:3000", "http://localhost:8080"]
-    allowed_hosts: List[str] = ["localhost", "127.0.0.1"]
+    allowed_hosts: List[str] = ["*"]  # Allow all hosts in microservices environment
 
     # OpenTelemetry
     jaeger_endpoint: str = "http://jaeger:14268/api/traces"

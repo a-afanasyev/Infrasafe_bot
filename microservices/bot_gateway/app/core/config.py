@@ -21,7 +21,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
+        env_parse_none_str="null"  # Don't parse empty strings as None
     )
 
     # Application
@@ -86,16 +87,13 @@ class Settings(BaseSettings):
 
     # File Handling
     MAX_FILE_SIZE_MB: int = 20
-    ALLOWED_FILE_TYPES: List[str] = ["jpg", "jpeg", "png", "pdf", "doc", "docx"]
+    ALLOWED_FILE_TYPES: str = "jpg,jpeg,png,pdf,doc,docx"
     FILE_STORAGE_PATH: str = "/app/storage/files"
 
-    @field_validator("ALLOWED_FILE_TYPES", mode="before")
-    @classmethod
-    def parse_file_types(cls, v):
-        """Parse comma-separated file types from env var"""
-        if isinstance(v, str):
-            return [ft.strip() for ft in v.split(",")]
-        return v
+    @property
+    def allowed_file_types_list(self) -> List[str]:
+        """Get ALLOWED_FILE_TYPES as a list"""
+        return [ft.strip() for ft in self.ALLOWED_FILE_TYPES.split(",")]
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -113,16 +111,13 @@ class Settings(BaseSettings):
 
     # Message Defaults
     DEFAULT_LANGUAGE: str = "ru"
-    SUPPORTED_LANGUAGES: List[str] = ["ru", "uz"]
+    SUPPORTED_LANGUAGES: str = "ru,uz"
     MESSAGE_PARSE_MODE: str = "HTML"
 
-    @field_validator("SUPPORTED_LANGUAGES", mode="before")
-    @classmethod
-    def parse_languages(cls, v):
-        """Parse comma-separated languages from env var"""
-        if isinstance(v, str):
-            return [lang.strip() for lang in v.split(",")]
-        return v
+    @property
+    def supported_languages_list(self) -> List[str]:
+        """Get SUPPORTED_LANGUAGES as a list"""
+        return [lang.strip() for lang in self.SUPPORTED_LANGUAGES.split(",")]
 
     # Timeouts
     HTTP_TIMEOUT_SECONDS: int = 30
@@ -141,11 +136,21 @@ class Settings(BaseSettings):
     WEBHOOK_PATH: str = "/webhook"
 
     # Security
-    ALLOWED_UPDATES: List[str] = ["message", "callback_query", "inline_query"]
+    ALLOWED_UPDATES: str = "message,callback_query,inline_query"
     SKIP_UPDATES: bool = False
 
+    @property
+    def allowed_updates_list(self) -> List[str]:
+        """Get ALLOWED_UPDATES as a list"""
+        return [u.strip() for u in self.ALLOWED_UPDATES.split(",")]
+
     # CORS Configuration
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]  # Grafana, etc.
+    ALLOWED_ORIGINS: str = "http://localhost:3000"  # Grafana, etc.
+
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        """Get ALLOWED_ORIGINS as a list"""
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
 
     # Service-to-Service Authentication
     AUTH_SERVICE_KEY: Optional[str] = None
@@ -163,21 +168,6 @@ class Settings(BaseSettings):
     ENABLE_INPUT_VALIDATION: bool = True
     ENABLE_SECURITY_HEADERS: bool = True
 
-    @field_validator("ALLOWED_UPDATES", mode="before")
-    @classmethod
-    def parse_allowed_updates(cls, v):
-        """Parse comma-separated update types from env var"""
-        if isinstance(v, str):
-            return [upd.strip() for upd in v.split(",")]
-        return v
-
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        """Parse comma-separated origins from env var"""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
 
     @property
     def max_file_size_bytes(self) -> int:

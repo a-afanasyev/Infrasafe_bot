@@ -74,7 +74,7 @@ class AuthServiceClient(BaseServiceClient):
             }
         """
         response = await self.post(
-            endpoint="/api/v1/auth/telegram/login",
+            endpoint="/api/v1/auth/login",
             data={
                 "telegram_id": telegram_id,
                 "username": username,

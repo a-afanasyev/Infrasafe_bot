@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool
+from sqlalchemy import text
 
 from app.core.config import settings
 
@@ -82,7 +83,7 @@ async def init_database() -> None:
     try:
         async with engine.begin() as conn:
             # Test connection
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
 
         logger.info(
             f"✅ Database connected: {settings.DATABASE_URL.split('@')[1]} "

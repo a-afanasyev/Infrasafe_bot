@@ -76,6 +76,7 @@ class ServiceAuthMiddleware:
             # Check if service is in allowed list
             allowed_services = getattr(settings, 'allowed_services', [
                 "auth-service",
+                "bot-gateway",
                 "request-service",
                 "shift-service",
                 "notification-service",
@@ -96,34 +97,44 @@ class ServiceAuthMiddleware:
 service_auth = ServiceAuthMiddleware()
 
 async def require_service_auth(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    request: Request = None
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """
     Dependency that requires service authentication
     Can be used to protect endpoints that should only be called by other services
     """
+    logger.info(f"Service auth check - Path: {request.url.path}")
+    logger.info(f"Headers: Authorization={'present' if credentials else 'missing'}, X-API-Key={request.headers.get('X-API-Key', 'missing')}")
+
     # Check for Authorization header
     if credentials:
         token = credentials.credentials
+        logger.debug(f"Trying Bearer token validation")
 
         # Try service token validation first
         service_info = await service_auth.validate_service_token(token)
         if service_info:
+            logger.info(f"Bearer token validated for service: {service_info.get('service_name')}")
             return service_info
 
     # Check for X-API-Key header as fallback
-    api_key = request.headers.get("X-API-Key") if request else None
+    api_key = request.headers.get("X-API-Key")
     if api_key:
+        logger.debug(f"Trying X-API-Key validation: {api_key[:20]}...")
         service_name = await service_auth.validate_api_key(api_key)
         if service_name:
+            logger.info(f"X-API-Key validated for service: {service_name}")
             return {
                 "service_name": service_name,
                 "token_type": "api_key",
                 "valid": True
             }
+        else:
+            logger.warning(f"X-API-Key validation failed for key: {api_key}")
 
     # If we get here, authentication failed
+    logger.error(f"Service authentication failed - no valid credentials found")
     raise HTTPException(
         status_code=401,
         detail="Service authentication required"

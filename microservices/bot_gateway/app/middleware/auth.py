@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.bot_session import BotSession
 from app.integrations.auth_client import auth_client
+from app.clients.user_service_client import UserServiceClient
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +188,25 @@ class AuthMiddleware(BaseMiddleware):
 
             return session
 
+        # Create new session and get/create user in User Service
+        try:
+            # Get or create user in User Service
+            async with UserServiceClient() as user_client:
+                user = await user_client.get_or_create_user(
+                    telegram_id=telegram_id,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                    language_code=language_code
+                )
+                user_id = user.id
+                logger.info(f"Got user {user_id} from User Service for telegram_id={telegram_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to get/create user in User Service: {e}")
+            # Fallback: create session without user_id
+            user_id = None
+
         # Create new session
         session = BotSession(
             telegram_id=telegram_id,
@@ -194,7 +214,7 @@ class AuthMiddleware(BaseMiddleware):
             first_name=first_name,
             last_name=last_name,
             language_code=language_code,
-            user_id=None,  # Will be set after authentication
+            user_id=user_id,  # Set from User Service
             expires_at=datetime.utcnow() + timedelta(
                 seconds=settings.session_lifetime_seconds
             ),
@@ -204,7 +224,7 @@ class AuthMiddleware(BaseMiddleware):
         await db.commit()
         await db.refresh(session)
 
-        logger.info(f"New session created for telegram_id={telegram_id}")
+        logger.info(f"New session created for telegram_id={telegram_id} with user_id={user_id}")
         return session
 
     async def _get_valid_token(self, bot_session: BotSession) -> str | None:

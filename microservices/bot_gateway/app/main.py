@@ -90,7 +90,7 @@ async def on_startup() -> None:
         await bot.set_webhook(
             url=settings.TELEGRAM_WEBHOOK_URL,
             secret_token=settings.TELEGRAM_WEBHOOK_SECRET,
-            allowed_updates=settings.ALLOWED_UPDATES,
+            allowed_updates=settings.allowed_updates_list,
             drop_pending_updates=settings.SKIP_UPDATES
         )
     else:
@@ -216,7 +216,7 @@ async def main_polling() -> None:
         logger.info("Starting polling...")
         await dp.start_polling(
             bot,
-            allowed_updates=settings.ALLOWED_UPDATES,
+            allowed_updates=settings.allowed_updates_list,
             timeout=settings.TELEGRAM_POLLING_TIMEOUT
         )
     except KeyboardInterrupt:

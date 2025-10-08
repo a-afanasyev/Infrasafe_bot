@@ -24,11 +24,13 @@ class BotSession(BaseModel):
 
     __tablename__ = "bot_sessions"
 
-    # User identification
-    user_id: Mapped[UUID] = mapped_column(
-        nullable=False,
+    # User identification (nullable until User Service integration)
+    # Stored as String to support both integer and UUID formats from different services
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
         index=True,
-        comment="Reference to User Service user_id"
+        comment="Reference to User Service user_id (can be int or UUID)"
     )
 
     telegram_id: Mapped[int] = mapped_column(

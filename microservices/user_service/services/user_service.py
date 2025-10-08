@@ -68,6 +68,10 @@ class UserService:
         self.db.add(access_rights)
         await self.db.commit()
 
+        # Refresh user with all relationships loaded BEFORE calling _build_user_full_response
+        # to avoid lazy-loading issues after commit
+        await self.db.refresh(user, ["profile", "roles", "verifications", "access_rights"])
+
         logger.info(f"Created user {user.id} with telegram_id {user.telegram_id}")
 
         return await self._build_user_full_response(user)
