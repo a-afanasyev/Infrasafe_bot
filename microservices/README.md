@@ -2,11 +2,13 @@
 
 ## 📋 Overview
 
-Microservices architecture for the UK Management Bot system. Successfully migrated from monolithic architecture to 7 operational microservices in Stage 1-2 MVP state. All services are healthy and functional, with core features implemented and ready for production workloads.
+Microservices architecture for the UK Management Bot system. Successfully migrated from monolithic architecture to **10 operational microservices** in Stage 2 MVP state. All services are healthy and functional, with core features implemented and ready for production workloads.
+
+**Latest Achievement (Oct 8, 2025):** Bot Gateway ↔ User Service integration completed with full end-to-end testing. The bot is now operational with session management, FSM states, and user registration flow.
 
 ## 🏗️ Architecture Status: ✅ OPERATIONAL (Stage 2 MVP)
 
-### Core Microservices (9/9 Running)
+### Core Microservices (10/10 Running)
 - **auth-service** ✅ `:8001` - JWT + RBAC + Secure Service Tokens (Stage 2)
 - **user-service** ✅ `:8002` - User Management + Internal API (Stage 2) 🆕
 - **request-service** ✅ `:8003` - Request Lifecycle + Geocoding (Stage 2)
@@ -19,8 +21,8 @@ Microservices architecture for the UK Management Bot system. Successfully migrat
 - **bot-gateway** ✅ `:8000` - Telegram Bot Interface (Stage 2) 🆕
 
 ### Infrastructure Services
-- **PostgreSQL** - 7 dedicated databases (all healthy)
-- **Redis** - Shared cache & pub/sub (healthy)
+- **PostgreSQL** - 10 dedicated databases (all healthy) 🆕
+- **Redis** - Shared cache & pub/sub across 10 databases (healthy)
 - **Traefik** - Reverse proxy & load balancing
 - **Prometheus** - Metrics collection
 - **Grafana** - Monitoring dashboards
@@ -44,7 +46,7 @@ Microservices architecture for the UK Management Bot system. Successfully migrat
 ### Key Implementation Notes:
 
 **What Works:**
-- ✅ All 9 microservices healthy and responding 🆕
+- ✅ All 10 microservices healthy and responding 🆕
 - ✅ All 10 databases connected and operational 🆕
 - ✅ Service-to-service communication working
 - ✅ Docker compose orchestration stable
@@ -81,6 +83,16 @@ microservices/
 ├── docker-compose.yml              # Main services configuration
 ├── README.md                       # This file
 │
+├── bot_gateway/                    # Telegram Bot Gateway (PORT: 8000) 🆕
+│   ├── app/
+│   │   ├── main.py                # Aiogram 3.x application
+│   │   ├── handlers/              # 182 FSM states
+│   │   ├── models/                # SQLAlchemy models (2 tables)
+│   │   ├── clients/               # UserServiceClient
+│   │   ├── middleware/            # Auth, session management
+│   │   └── core/                 # Config and utilities
+│   └── README.md                  # Service documentation
+│
 ├── auth_service/                   # Authentication microservice (PORT: 8001)
 │   ├── main.py                    # FastAPI application
 │   ├── models/                    # SQLAlchemy models (6 tables)
@@ -88,40 +100,54 @@ microservices/
 │   ├── config.py                  # Configuration management
 │   └── README.md                  # Service documentation
 │
-├── user_service/                  # User management microservice (PORT: 8002)
+├── user_service/                   # User management microservice (PORT: 8002)
 │   ├── main.py                    # FastAPI application
 │   ├── models/                    # SQLAlchemy models (10 tables)
 │   ├── services/                  # User, Profile, Verification services
+│   ├── api/v1/internal/           # Internal API for Bot Gateway
 │   ├── config.py                  # Configuration with USER_ prefix
 │   └── README.md                  # Service documentation
 │
-├── request_service/               # Request management microservice (PORT: 8003)
+├── request_service/                # Request management microservice (PORT: 8003)
 │   ├── app/
-│   │   ├── main.py               # FastAPI application
-│   │   ├── models/               # SQLAlchemy models (5 tables)
-│   │   ├── services/             # Request, Assignment, AI services
-│   │   ├── api/v1/              # API endpoints
-│   │   ├── integrations/        # Bot and User service integration
-│   │   └── core/                # Database and config
-│   └── README.md                 # Service documentation
+│   │   ├── main.py                # FastAPI application
+│   │   ├── models/                # SQLAlchemy models (5 tables)
+│   │   ├── services/              # Request, Assignment, AI services
+│   │   ├── api/v1/               # API endpoints
+│   │   ├── integrations/         # Bot and User service integration
+│   │   └── core/                 # Database and config
+│   └── README.md                  # Service documentation
 │
-├── media_service/                 # Media processing microservice (PORT: 8004)
+├── media_service/                  # Media processing microservice (PORT: 8004)
 │   ├── app/
-│   │   ├── main.py               # FastAPI application
-│   │   ├── models/               # SQLAlchemy models (4 tables)
-│   │   ├── services/             # Media, Upload, Tag services
-│   │   ├── integrations/         # Telegram channel integration
-│   │   └── core/                # Database configuration
-│   └── README.md                 # Service documentation
+│   │   ├── main.py                # FastAPI application
+│   │   ├── models/                # SQLAlchemy models (4 tables)
+│   │   ├── services/              # Media, Upload, Tag services
+│   │   ├── integrations/          # Telegram channel integration
+│   │   └── core/                 # Database configuration
+│   └── README.md                  # Service documentation
 │
-├── notification_service/          # Notification microservice (PORT: 8005)
+├── notification_service/           # Notification microservice (PORT: 8005)
 │   ├── main.py                    # FastAPI application
 │   ├── models/                    # SQLAlchemy models (3 tables)
 │   ├── services/                  # Notification, Template, Delivery services
 │   ├── config.py                  # Configuration with SERVICE_ prefix
 │   └── README.md                  # Service documentation
 │
-├── analytics_service/             # Analytics microservice (PORT: 8008) **NEW**
+├── shift_service/                  # Shift management microservice (PORT: 8006)
+│   ├── main.py                    # FastAPI application
+│   ├── models/                    # SQLAlchemy models (8 tables)
+│   ├── services/                  # Shift, Assignment, Transfer services
+│   ├── api/v1/                    # API endpoints
+│   └── README.md                  # Service documentation
+│
+├── ai_service/                     # AI assignment microservice (PORT: 8007)
+│   ├── main.py                    # FastAPI application
+│   ├── models/                    # SQLAlchemy models (4 tables)
+│   ├── services/                  # Basic rule-based assignment
+│   └── README.md                  # Service documentation
+│
+├── analytics_service/              # Analytics microservice (PORT: 8008)
 │   ├── main.py                    # FastAPI application
 │   ├── models/                    # SQLAlchemy models (5 tables)
 │   ├── services/                  # KPI Calculator, Real-time, Aggregation services
@@ -130,14 +156,23 @@ microservices/
 │   ├── scheduler/                 # APScheduler for aggregations
 │   └── README.md                  # Service documentation
 │
-├── shared/                        # Shared utilities
-│   ├── events/                   # Event schemas for Redis Streams
-│   └── middleware/               # Common auth and logging middleware
+├── integration_service/            # Integration microservice (PORT: 8009) 🆕
+│   ├── app/
+│   │   ├── main.py                # FastAPI application
+│   │   ├── models/                # SQLAlchemy models (3 tables)
+│   │   ├── clients/               # BuildingDirectoryClient
+│   │   ├── services/              # Caching, metrics
+│   │   └── core/                 # Config and database
+│   └── README.md                  # Service documentation
 │
-└── monitoring/                   # Monitoring configurations
-    ├── grafana/                  # Dashboards and alerts
-    ├── prometheus/               # Metrics collection
-    └── jaeger/                   # Distributed tracing
+├── shared/                         # Shared utilities
+│   ├── events/                    # Event schemas for Redis Streams
+│   └── middleware/                # Common auth and logging middleware
+│
+└── monitoring/                    # Monitoring configurations
+    ├── grafana/                   # Dashboards and alerts
+    ├── prometheus/                # Metrics collection
+    └── jaeger/                    # Distributed tracing
 ```
 
 ## 🚀 Quick Start
@@ -160,23 +195,29 @@ docker-compose ps
 
 Expected output:
 ```
+bot-gateway          ✅ healthy 🆕
 auth-service         ✅ healthy
 user-service         ✅ healthy
 request-service      ✅ healthy
 media-service        ✅ healthy
 notification-service ✅ healthy
+shift-service        ✅ healthy
 ai-service           ✅ healthy
 analytics-service    ✅ healthy
+integration-service  ✅ healthy 🆕
 ```
 
 ### 3. Access Services
+- **Bot Gateway**: http://localhost:8000/health
 - **Auth Service**: http://localhost:8001/docs
 - **User Service**: http://localhost:8002/docs
 - **Request Service**: http://localhost:8003/docs
 - **Media Service**: http://localhost:8004/docs
 - **Notification Service**: http://localhost:8005/docs
+- **Shift Service**: http://localhost:8006/docs
 - **AI Service**: http://localhost:8007/docs
-- **Analytics Service**: http://localhost:8008/docs **NEW**
+- **Analytics Service**: http://localhost:8008/docs
+- **Integration Service**: http://localhost:8009/docs
 
 ### 4. Access Monitoring
 - **Grafana**: http://localhost:3000 (admin/admin123)
@@ -219,13 +260,16 @@ docker-compose exec auth-db pg_dump -U auth_user auth_db > backup.sql
 ### Health Checks
 ```bash
 # Check all service health
+curl http://localhost:8000/health  # Bot Gateway
 curl http://localhost:8001/health  # Auth Service
 curl http://localhost:8002/health  # User Service
 curl http://localhost:8003/health  # Request Service
 curl http://localhost:8004/health  # Media Service
 curl http://localhost:8005/health  # Notification Service
+curl http://localhost:8006/health  # Shift Service
 curl http://localhost:8007/health  # AI Service
 curl http://localhost:8008/api/v1/health  # Analytics Service
+curl http://localhost:8009/health  # Integration Service
 ```
 
 ## 🔐 Security & Authentication
@@ -294,12 +338,31 @@ curl -H "Authorization: Bearer <token>" \
 - `notification_templates` - Multi-language message templates
 - `notification_subscriptions` - User preference and subscription management
 
-### Analytics Service Database (`analytics_db`) - 5 Tables **NEW**
+### Shift Service Database (`shift_db`) - 8 Tables
+- `shifts` - Shift schedules with executor assignments
+- `shift_templates` - Reusable shift templates (5 predefined)
+- `shift_assignments` - Executor-shift mappings with specializations
+- `shift_transfers` - Shift transfer requests with approval workflow
+- `shift_coverage` - Coverage tracking and gap analysis
+- `shift_rules` - Business rules for shift creation
+- `shift_conflicts` - Conflict detection and resolution
+- `shift_history` - Complete shift lifecycle audit
+
+### Analytics Service Database (`analytics_db`) - 5 Tables
 - `event_logs` - Raw event storage from all services via Redis Streams
 - `kpi_aggregates` - Pre-calculated KPI aggregates (daily/weekly/monthly)
 - `metric_snapshots` - Point-in-time metric snapshots
 - `aggregated_metrics` - Aggregated metrics for historical analysis
 - `dashboards` - Dashboard configurations with widget layouts
+
+### Integration Service Database (`integration_db`) - 3 Tables
+- `integration_cache` - Cached API responses with TTL
+- `integration_log` - API call logging and monitoring
+- `webhook_config` - Webhook configurations for external systems
+
+### Bot Gateway Database (`bot_db`) - 2 Tables
+- `bot_sessions` - Telegram bot sessions with FSM states
+- `bot_metrics` - Bot performance metrics and usage statistics
 
 ## 🔄 Inter-Service Communication
 
@@ -321,11 +384,16 @@ Streams: user-events, request-events, media-events, notification-events
 
 ### Service Discovery & Communication
 Services communicate via Docker internal DNS with health checks:
+- `bot-gateway:8000` - Telegram Bot Interface (Aiogram 3.x) 🆕
 - `auth-service:8001` - JWT Authentication & Authorization
 - `user-service:8002` - User Management & Profiles (USER_ env prefix)
 - `request-service:8003` - Request Lifecycle & AI Assignment
 - `media-service:8004` - Telegram Media Storage & Processing
 - `notification-service:8005` - Multi-channel Notifications (SERVICE_ env prefix)
+- `shift-service:8006` - Shift Management & Planning
+- `ai-service:8007` - Basic Assignment Rules
+- `analytics-service:8008` - Real-time Analytics & KPIs
+- `integration-service:8009` - External API Integrations 🆕
 
 ### Integration Patterns
 - **Request Service** → **User Service**: User validation and profile data
@@ -420,7 +488,13 @@ SERVICE_DATABASE_URL: postgresql+asyncpg://notification_user:notification_pass@n
 SERVICE_REDIS_URL: redis://shared-redis:6379/5
 SERVICE_TELEGRAM_BOT_TOKEN: <configured>
 
-# Analytics Service (no prefix) **NEW**
+# Shift Service (no prefix)
+DATABASE_URL: postgresql+asyncpg://shift_user:shift_pass@shift-db:5432/shift_db
+REDIS_URL: redis://shared-redis:6379/6
+USER_SERVICE_URL: http://user-service:8002
+AUTH_SERVICE_URL: http://auth-service:8001
+
+# Analytics Service (no prefix)
 POSTGRES_HOST: analytics-db
 POSTGRES_PORT: 5432
 POSTGRES_DB: analytics_db
@@ -431,16 +505,32 @@ REDIS_PORT: 6379
 REDIS_DB: 8
 REDIS_STREAM_NAME: analytics:events
 REDIS_CONSUMER_GROUP: analytics-consumers
+
+# Integration Service (no prefix)
+DATABASE_URL: postgresql+asyncpg://integration_user:integration_pass@integration-db:5432/integration_db
+REDIS_URL: redis://shared-redis:6379/9
+USER_SERVICE_URL: http://user-service:8002
+
+# Bot Gateway (no prefix) 🆕
+DATABASE_URL: postgresql+asyncpg://bot_user:bot_pass@bot-db:5432/bot_db
+REDIS_URL: redis://shared-redis:6379/0
+USER_SERVICE_URL: http://user-service:8002
+AUTH_SERVICE_URL: http://auth-service:8001
+TELEGRAM_BOT_TOKEN: <configured>
 ```
 
 ### Service Configuration
 Each service has dedicated config files with specific patterns:
+- `bot_gateway/app/core/config.py` - Telegram bot, FSM, sessions, no env prefix 🆕
 - `auth_service/config.py` - JWT secrets, session management, no env prefix
 - `user_service/config.py` - Profile management, verification, USER_ prefix required
 - `request_service/app/core/config.py` - AI assignment, YYMMDD-NNN numbering
 - `media_service/app/core/config.py` - Telegram integration, channel routing
 - `notification_service/config.py` - Multi-channel delivery, SERVICE_ prefix required
-- `analytics_service/config/settings.py` - KPI calculation, aggregations, no env prefix **NEW**
+- `shift_service/config.py` - Shift planning, templates, no env prefix
+- `ai_service/config.py` - Assignment rules, no ML features, no env prefix
+- `analytics_service/config/settings.py` - KPI calculation, aggregations, no env prefix
+- `integration_service/config.py` - External APIs, caching, no env prefix 🆕
 
 ## 📚 Development
 
@@ -470,13 +560,16 @@ docker-compose exec request-service pytest tests/integration/
 ## 📄 API Documentation
 
 Each service exposes interactive API documentation:
+- **Bot Gateway**: http://localhost:8000/health (Aiogram 3.x, no Swagger)
 - **Auth Service**: http://localhost:8001/docs
 - **User Service**: http://localhost:8002/docs
 - **Request Service**: http://localhost:8003/docs
 - **Media Service**: http://localhost:8004/docs
 - **Notification Service**: http://localhost:8005/docs
+- **Shift Service**: http://localhost:8006/docs
 - **AI Service**: http://localhost:8007/docs
-- **Analytics Service**: http://localhost:8008/docs (45+ endpoints) **NEW**
+- **Analytics Service**: http://localhost:8008/docs (45+ endpoints)
+- **Integration Service**: http://localhost:8009/docs
 
 ## 🚀 Production Deployment
 
@@ -499,13 +592,14 @@ Each service exposes interactive API documentation:
 ## 📊 Production Status
 
 ### Architecture Health: ✅ FULLY OPERATIONAL
-- **Total Services**: 7/7 Running
-- **Database Health**: 7/7 PostgreSQL instances healthy
-- **Redis Health**: ✅ Shared cache operational across 9 databases
+- **Total Services**: 10/10 Running (Bot Gateway + Integration Service operational) 🆕
+- **Database Health**: 10/10 PostgreSQL instances healthy 🆕
+- **Redis Health**: ✅ Shared cache operational across 10 databases
 - **Service-to-Service Auth**: ✅ JWT-based authentication working
 - **Event Processing**: ✅ Redis Streams active
 - **Monitoring**: ✅ Prometheus + Grafana + Jaeger operational
 - **Analytics**: ✅ Real-time KPIs, Event processing, Aggregations
+- **Bot Gateway**: ✅ Telegram bot operational with User Service integration 🆕
 
 ### Performance Metrics
 - **Auth Service**: Token validation < 10ms p95
@@ -517,17 +611,24 @@ Each service exposes interactive API documentation:
 
 ### Service Integration Matrix
 ```
+✅ Bot ↔ User: User creation/retrieval, session management (Oct 2025) 🆕
+✅ Bot ↔ Auth: JWT token validation (planned)
 ✅ Auth ↔ User: Role synchronization
 ✅ Auth ↔ Request: Permission validation
 ✅ Auth ↔ Media: Service token validation
 ✅ Auth ↔ Notification: Service authentication
 ✅ Auth ↔ Analytics: Service authentication
 ✅ User ↔ Request: Profile validation, Building Directory (Oct 2025) 🆕
+✅ User ↔ Integration: Building Directory integration
 ✅ Request ↔ Media: File attachments
 ✅ Request ↔ Notification: Status notifications
 ✅ Request ↔ Analytics: Event publishing (shift.*, request.*)
+✅ Request ↔ Integration: Building validation and geocoding
+✅ Shift ↔ User: Executor assignments
+✅ Shift ↔ Request: Shift-based request routing
 ✅ Media ↔ Telegram: Channel storage
 ✅ Notification ↔ Telegram: Message delivery
+✅ Integration ↔ External APIs: Building Directory, Geocoding
 ✅ Analytics ↔ All Services: Event consumption via Redis Streams
 ```
 
@@ -553,8 +654,8 @@ Each service exposes interactive API documentation:
 ---
 
 **Status**: ✅ Production Ready - All Critical Systems Operational
-**Services**: 10/10 Microservices Running (Bot Gateway + Integration Service added)
-**Database Schema**: 40+ Tables across 10 Databases
+**Services**: 10/10 Microservices Running (Bot Gateway + Integration Service operational)
+**Database Schema**: 50+ Tables across 10 Databases (6+10+5+4+3+8+5+3+2+4)
 **Last Updated**: October 8, 2025
 **Architecture**: Event-Driven Microservices with JWT Authentication, Real-time Analytics & Bot Gateway
 **Progress**: 85% Migration Complete - Bot Gateway operational, WebApp remaining
