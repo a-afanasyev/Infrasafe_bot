@@ -49,6 +49,10 @@ class MediaFile(Base):
     tags = Column(JSON, nullable=True)              # ["urgent", "electrical", "building_A"]
     auto_tags = Column(JSON, nullable=True)         # Автоматически сгенерированные теги
 
+    # === DUPLICATE DETECTION ===
+    file_hash = Column(String(64), nullable=True, index=True)  # SHA-256 хеш содержимого файла
+    duplicate_check_hash = Column(String(128), nullable=True, index=True)  # Ключ для проверки дубликатов
+
     # === STATUS ===
     status = Column(String(20), default="active")   # active, archived, deleted
     is_public = Column(Boolean, default=False)      # Можно ли показывать другим пользователям
@@ -101,6 +105,21 @@ class MediaFile(Base):
     def has_tag(self, tag: str) -> bool:
         """Проверяет наличие тега"""
         return tag in (self.tags or [])
+
+    def get_duplicate_key(self) -> str:
+        """Возвращает ключ для проверки дубликатов"""
+        return self.duplicate_check_hash or ""
+
+    @staticmethod
+    def create_duplicate_key(request_number: str, category: str, file_hash: str) -> str:
+        """Создает ключ для проверки дубликатов"""
+        return f"{request_number}:{category}:{file_hash}"
+
+    @staticmethod
+    def calculate_file_hash(file_data: bytes) -> str:
+        """Вычисляет SHA-256 хеш содержимого файла"""
+        import hashlib
+        return hashlib.sha256(file_data).hexdigest()
 
     # Note: upload_session relationship removed due to schema mismatch
 

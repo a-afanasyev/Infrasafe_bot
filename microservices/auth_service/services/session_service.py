@@ -28,9 +28,9 @@ class SessionService:
             # Generate unique session ID
             session_id = secrets.token_urlsafe(32)
 
-            # Calculate expiration times
-            session_expires = datetime.now(timezone.utc) + timedelta(hours=settings.session_expire_hours)
-            refresh_expires = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_expire_days)
+            # Calculate expiration times (use utcnow() for naive datetime to match model)
+            session_expires = datetime.utcnow() + timedelta(hours=settings.session_expire_hours)
+            refresh_expires = datetime.utcnow() + timedelta(days=settings.jwt_refresh_expire_days)
 
             # Check for existing active sessions and limit them
             await self._cleanup_excess_sessions(session_data["user_id"])
@@ -88,7 +88,7 @@ class SessionService:
                 .values(
                     access_token=access_token,
                     refresh_token=refresh_token,
-                    last_activity=datetime.now(timezone.utc)
+                    last_activity=datetime.utcnow()
                 )
             )
 
@@ -107,7 +107,7 @@ class SessionService:
                 update(Session)
                 .where(Session.session_id == session_id)
                 .where(Session.is_active == True)
-                .values(last_activity=datetime.now(timezone.utc))
+                .values(last_activity=datetime.utcnow())
             )
 
             await self.db.commit()
@@ -198,7 +198,7 @@ class SessionService:
     async def cleanup_expired_sessions(self) -> int:
         """Clean up expired sessions"""
         try:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.utcnow()
 
             # Deactivate sessions that are past their expiration time
             result = await self.db.execute(

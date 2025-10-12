@@ -1,0 +1,54 @@
+# Shift Service Requirements
+# UK Management Bot - Shift Service
+
+# FastAPI and ASGI
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Database
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.13.0
+
+# Redis for caching and task coordination
+redis[hiredis]==5.0.1
+
+# Background task scheduling
+apscheduler==3.10.4
+
+# HTTP Client for service communication
+httpx==0.25.2
+
+# Configuration
+python-dotenv==1.0.0
+
+# Data processing and analysis
+pandas==2.1.4
+numpy==1.24.4
+
+# Time and date handling
+python-dateutil==2.8.2
+
+# Development & Testing
+pytest==7.4.3
+pytest-asyncio==0.23.2
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+factory-boy==3.3.0
+black==23.11.0
+ruff==0.1.6
+
+# Logging
+structlog==23.2.0
+
+# Additional utilities
+click==8.1.7
+aiofiles==23.2.1
+
+# Kafka integration (for analytics)
+aiokafka==0.12.0
+
+# Monitoring and health checks
+prometheus-client==0.19.0

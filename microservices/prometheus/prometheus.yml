@@ -98,7 +98,7 @@ scrape_configs:
           - 'shifts-service'
           - 'notifications-service'
           - 'media-service'
-          - 'integration-hub'
+          - 'integration-service'
           - 'analytics-service'
         type: 'A'
         port: 8000

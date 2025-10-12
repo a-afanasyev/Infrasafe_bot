@@ -10,6 +10,11 @@ from .verification import (
 from .access import (
     AccessRightsCreate, AccessRightsUpdate, AccessRightsResponse
 )
+from .building import (
+    BuildingCreate, BuildingUpdate, BuildingResponse, BuildingListResponse,
+    BuildingFilter, BuildingSearchRequest, BuildingSearchResponse,
+    GeocodeRequest, GeocodeResponse, BuildingStatsResponse
+)
 
 __all__ = [
     # User schemas
@@ -22,5 +27,10 @@ __all__ = [
     "UserDocumentCreate", "UserDocumentUpdate", "UserDocumentResponse",
 
     # Access schemas
-    "AccessRightsCreate", "AccessRightsUpdate", "AccessRightsResponse"
+    "AccessRightsCreate", "AccessRightsUpdate", "AccessRightsResponse",
+
+    # Building schemas
+    "BuildingCreate", "BuildingUpdate", "BuildingResponse", "BuildingListResponse",
+    "BuildingFilter", "BuildingSearchRequest", "BuildingSearchResponse",
+    "GeocodeRequest", "GeocodeResponse", "BuildingStatsResponse"
 ]

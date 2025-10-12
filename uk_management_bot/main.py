@@ -32,6 +32,10 @@ from uk_management_bot.handlers.request_reports import router as request_reports
 from uk_management_bot.handlers.shift_transfer import router as shift_transfer_router
 from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
+
+# Building Directory handlers (Week 2 implementation)
+from uk_management_bot.handlers.building_selection import router as building_selection_router
+from uk_management_bot.handlers.request_with_building import router as request_with_building_router
 import sys
 import os
 from datetime import datetime
@@ -182,7 +186,12 @@ async def main():
     dp.include_router(onboarding_router)
     dp.include_router(admin_router)  # admin раньше requests для перехвата действий менеджеров
     dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше requests)
-    dp.include_router(requests_router)  # requests после profile_editing
+
+    # Building Directory integration (Week 2) - before legacy requests
+    dp.include_router(building_selection_router)  # Building selection handlers
+    dp.include_router(request_with_building_router)  # New request creation with Building Directory
+
+    dp.include_router(requests_router)  # requests после profile_editing (legacy flow)
     
     # Система управления сменами
     dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров

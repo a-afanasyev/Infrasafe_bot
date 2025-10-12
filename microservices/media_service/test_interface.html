@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Service - Тестовый интерфейс</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        .status-badge.online {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-badge.offline {
+            background: #ef4444;
+            color: white;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2::before {
+            content: '📁';
+            font-size: 1.2em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #374151;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f9fafb;
+            border-left: 4px solid #667eea;
+            display: none;
+        }
+
+        .response.show {
+            display: block;
+        }
+
+        .response.success {
+            background: #d1fae5;
+            border-left-color: #10b981;
+        }
+
+        .response.error {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+
+        .response pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .file-preview {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .file-preview.show {
+            display: block;
+        }
+
+        .file-preview img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .health-status {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .health-item {
+            flex: 1;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .health-item h4 {
+            color: #6b7280;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .health-item p {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .loader {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .search-results {
+            margin-top: 20px;
+        }
+
+        .media-item {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .media-item h4 {
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .media-item p {
+            color: #6b7280;
+            font-size: 0.9em;
+            margin: 4px 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card h4 {
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .stat-card p {
+            font-size: 2em;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📁 Media Service</h1>
+            <p>Тестовый интерфейс для проверки функционала</p>
+            <div id="serviceStatus">
+                <span class="status-badge offline">⏳ Проверка подключения...</span>
+            </div>
+        </div>
+
+        <!-- Health Status -->
+        <div class="card">
+            <h2 style="--emoji: '🏥';">Статус сервиса</h2>
+            <button onclick="checkHealth()">Проверить статус</button>
+            <div class="health-status" id="healthStatus"></div>
+            <div id="healthResponse" class="response"></div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid">
+            <!-- Upload File -->
+            <div class="card">
+                <h2>Загрузить файл</h2>
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="fileInput">Выберите файл:</label>
+                        <input type="file" id="fileInput" accept="image/*,video/*,application/pdf" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="requestNumber">Номер заявки:</label>
+                        <input type="text" id="requestNumber" placeholder="REQ-2024-001" value="TEST-001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="category">Категория:</label>
+                        <select id="category">
+                            <option value="request_photo">Фото заявки</option>
+                            <option value="completion_photo">Фото завершения</option>
+                            <option value="damage_photo">Фото повреждения</option>
+                            <option value="materials_photo">Фото материалов</option>
+                            <option value="process_video">Видео процесса</option>
+                            <option value="document">Документ</option>
+                            <option value="archive">Архив</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Описание:</label>
+                        <textarea id="description" placeholder="Описание файла..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="tags">Теги (через запятую):</label>
+                        <input type="text" id="tags" placeholder="фото, ремонт, срочно">
+                    </div>
+                    <button type="submit">📤 Загрузить файл</button>
+                </form>
+                <div class="file-preview" id="filePreview"></div>
+                <div id="uploadResponse" class="response"></div>
+            </div>
+
+            <!-- Search Files -->
+            <div class="card">
+                <h2>Поиск файлов</h2>
+                <form id="searchForm">
+                    <div class="form-group">
+                        <label for="searchRequestNumber">Номер заявки:</label>
+                        <input type="text" id="searchRequestNumber" placeholder="REQ-2024-001">
+                    </div>
+                    <div class="form-group">
+                        <label for="searchCategory">Категория:</label>
+                        <select id="searchCategory">
+                            <option value="">Все категории</option>
+                            <option value="request_photo">Фото заявки</option>
+                            <option value="before_work">До работ</option>
+                            <option value="after_work">После работ</option>
+                            <option value="document">Документ</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="searchTags">Теги:</label>
+                        <input type="text" id="searchTags" placeholder="фото, ремонт">
+                    </div>
+                    <button type="submit">🔍 Найти файлы</button>
+                </form>
+                <div id="searchResponse" class="response"></div>
+                <div id="searchResults" class="search-results"></div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card">
+                <h2>Статистика</h2>
+                <button onclick="getStatistics()">📊 Получить статистику</button>
+                <div id="statsGrid" class="stats-grid"></div>
+                <div id="statsResponse" class="response"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8004';
+
+        // Проверка статуса при загрузке
+        window.addEventListener('load', checkServiceStatus);
+
+        async function checkServiceStatus() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                
+                const statusBadge = document.getElementById('serviceStatus');
+                if (response.ok && data.status === 'ok') {
+                    statusBadge.innerHTML = '<span class="status-badge online">✅ Сервис онлайн</span>';
+                } else {
+                    statusBadge.innerHTML = '<span class="status-badge offline">❌ Сервис недоступен</span>';
+                }
+            } catch (error) {
+                const statusBadge = document.getElementById('serviceStatus');
+                statusBadge.innerHTML = '<span class="status-badge offline">❌ Ошибка подключения</span>';
+            }
+        }
+
+        // Health Check
+        async function checkHealth() {
+            const responseDiv = document.getElementById('healthResponse');
+            const statusDiv = document.getElementById('healthStatus');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/v1/health`);
+                const data = await response.json();
+                
+                responseDiv.className = 'response show success';
+                responseDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                // Показываем статус
+                statusDiv.innerHTML = `
+                    <div class="health-item">
+                        <h4>Статус</h4>
+                        <p style="color: #10b981;">✅ ${data.status}</p>
+                    </div>
+                    <div class="health-item">
+                        <h4>Сервис</h4>
+                        <p>${data.service}</p>
+                    </div>
+                    <div class="health-item">
+                        <h4>Версия</h4>
+                        <p>${data.version}</p>
+                    </div>
+                `;
+            } catch (error) {
+                responseDiv.className = 'response show error';
+                responseDiv.innerHTML = `<pre>Ошибка: ${error.message}</pre>`;
+                statusDiv.innerHTML = '';
+            }
+        }
+
+        // Upload File
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const responseDiv = document.getElementById('uploadResponse');
+            const button = e.target.querySelector('button');
+            const originalText = button.textContent;
+            
+            button.disabled = true;
+            button.innerHTML = '⏳ Загрузка...<span class="loader"></span>';
+            
+            try {
+                const formData = new FormData();
+                const fileInput = document.getElementById('fileInput');
+                const file = fileInput.files[0];
+                
+                formData.append('file', file);
+                formData.append('request_number', document.getElementById('requestNumber').value);
+                formData.append('category', document.getElementById('category').value);
+                formData.append('description', document.getElementById('description').value);
+                formData.append('tags', document.getElementById('tags').value);
+                formData.append('uploaded_by', 1); // Тестовый пользователь
+                
+                const response = await fetch(`${API_URL}/api/v1/media/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.className = 'response show success';
+                    responseDiv.innerHTML = `
+                        <strong>✅ Файл успешно загружен!</strong>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    
+                    // Показываем превью
+                    if (file.type.startsWith('image/')) {
+                        const preview = document.getElementById('filePreview');
+                        preview.className = 'file-preview show';
+                        preview.innerHTML = `
+                            <strong>Превью:</strong>
+                            <img src="${URL.createObjectURL(file)}" alt="Preview">
+                        `;
+                    }
+                } else {
+                    throw new Error(data.detail || 'Ошибка загрузки');
+                }
+            } catch (error) {
+                responseDiv.className = 'response show error';
+                responseDiv.innerHTML = `<pre>❌ Ошибка: ${error.message}</pre>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        });
+
+        // Search Files
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const responseDiv = document.getElementById('searchResponse');
+            const resultsDiv = document.getElementById('searchResults');
+            const button = e.target.querySelector('button');
+            const originalText = button.textContent;
+            
+            button.disabled = true;
+            button.innerHTML = '⏳ Поиск...<span class="loader"></span>';
+            
+            try {
+                const params = new URLSearchParams();
+                const requestNumber = document.getElementById('searchRequestNumber').value;
+                const category = document.getElementById('searchCategory').value;
+                const tags = document.getElementById('searchTags').value;
+                
+                if (requestNumber) params.append('request_number', requestNumber);
+                if (category) params.append('category', category);
+                if (tags) params.append('tags', tags);
+                
+                const response = await fetch(`${API_URL}/api/v1/media/search?${params}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.className = 'response show success';
+                    responseDiv.innerHTML = `<strong>✅ Найдено файлов: ${data.total_count || 0}</strong>`;
+                    
+                    // Показываем результаты
+                    if (data.results && data.results.length > 0) {
+                        resultsDiv.innerHTML = data.results.map(file => `
+                            <div class="media-item">
+                                <h4>${file.original_filename}</h4>
+                                <p><strong>ID:</strong> ${file.id}</p>
+                                <p><strong>Заявка:</strong> ${file.request_number}</p>
+                                <p><strong>Категория:</strong> ${file.category}</p>
+                                <p><strong>Размер:</strong> ${(file.file_size / 1024).toFixed(2)} KB</p>
+                                <p><strong>Дата:</strong> ${new Date(file.uploaded_at).toLocaleString('ru-RU')}</p>
+                            </div>
+                        `).join('');
+                    } else {
+                        resultsDiv.innerHTML = '<p style="text-align: center; color: #6b7280;">Файлы не найдены</p>';
+                    }
+                } else {
+                    throw new Error(data.detail || 'Ошибка поиска');
+                }
+            } catch (error) {
+                responseDiv.className = 'response show error';
+                responseDiv.innerHTML = `<pre>❌ Ошибка: ${error.message}</pre>`;
+                resultsDiv.innerHTML = '';
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        });
+
+        // Get Statistics
+        async function getStatistics() {
+            const responseDiv = document.getElementById('statsResponse');
+            const statsGrid = document.getElementById('statsGrid');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/v1/media/statistics`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.className = 'response show success';
+                    responseDiv.innerHTML = '<strong>✅ Статистика получена</strong>';
+                    
+                    // Показываем статистику
+                    statsGrid.innerHTML = `
+                        <div class="stat-card">
+                            <h4>Всего файлов</h4>
+                            <p>${data.total_files || 0}</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Общий размер</h4>
+                            <p>${((data.total_size || 0) / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Заявок</h4>
+                            <p>${data.unique_requests || 0}</p>
+                        </div>
+                    `;
+                } else {
+                    throw new Error(data.detail || 'Ошибка получения статистики');
+                }
+            } catch (error) {
+                responseDiv.className = 'response show error';
+                responseDiv.innerHTML = `<pre>❌ Ошибка: ${error.message}</pre>`;
+                statsGrid.innerHTML = '';
+            }
+        }
+
+        // Preview file before upload
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const preview = document.getElementById('filePreview');
+                preview.className = 'file-preview show';
+                preview.innerHTML = `
+                    <strong>Выбран файл:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)
+                    <img src="${URL.createObjectURL(file)}" alt="Preview">
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
+

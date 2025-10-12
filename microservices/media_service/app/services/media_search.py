@@ -1,16 +1,18 @@
 """
 Сервис для поиска и фильтрации медиа-файлов
-Реализация на основе спецификации photo.md
+Реализация на основе спецификации photo.md (Async SQLAlchemy)
 """
 
 import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, or_, func, select, text
+import sqlalchemy
 
 from app.models.media import MediaFile, MediaTag
-from app.db.database import get_db_context
+from app.db.database import get_db_context, get_db_context_sync
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +35,17 @@ class MediaSearchService:
         offset: int = 0
     ) -> Dict[str, Any]:
         """
-        Универсальный поиск медиа-файлов с фильтрами
+        Универсальный поиск медиа-файлов с фильтрами (async)
         """
         logger.info(f"Searching media with query: {query}, filters: tags={tags}, categories={categories}")
 
-        with get_db_context() as db:
-            # Базовый запрос
-            query_obj = db.query(MediaFile).filter(MediaFile.status == status)
+        async with get_db_context() as db:
+            # Базовый запрос с async синтаксисом
+            conditions = [MediaFile.status == status]
 
             # Фильтр по текстовому запросу
             if query:
-                query_obj = query_obj.filter(
+                conditions.append(
                     or_(
                         MediaFile.description.ilike(f"%{query}%"),
                         MediaFile.caption.ilike(f"%{query}%"),
@@ -54,37 +56,43 @@ class MediaSearchService:
 
             # Фильтр по номерам заявок
             if request_numbers:
-                query_obj = query_obj.filter(MediaFile.request_number.in_(request_numbers))
+                conditions.append(MediaFile.request_number.in_(request_numbers))
 
             # Фильтр по тегам
             if tags:
                 for tag in tags:
-                    query_obj = query_obj.filter(MediaFile.tags.contains([tag]))
+                    # Используем правильный синтаксис для поиска в JSON массиве PostgreSQL
+                    # Используем text() для приведения к тексту и ilike для поиска
+                    conditions.append(func.cast(MediaFile.tags, sqlalchemy.Text).ilike(f'%"{tag}"%'))
 
             # Фильтр по дате
             if date_from:
-                query_obj = query_obj.filter(MediaFile.uploaded_at >= date_from)
+                conditions.append(MediaFile.uploaded_at >= date_from)
 
             if date_to:
-                query_obj = query_obj.filter(MediaFile.uploaded_at <= date_to)
+                conditions.append(MediaFile.uploaded_at <= date_to)
 
             # Фильтр по типам файлов
             if file_types:
-                query_obj = query_obj.filter(MediaFile.file_type.in_(file_types))
+                conditions.append(MediaFile.file_type.in_(file_types))
 
             # Фильтр по категориям
             if categories:
-                query_obj = query_obj.filter(MediaFile.category.in_(categories))
+                conditions.append(MediaFile.category.in_(categories))
 
             # Фильтр по загрузившему пользователю
             if uploaded_by:
-                query_obj = query_obj.filter(MediaFile.uploaded_by_user_id == uploaded_by)
+                conditions.append(MediaFile.uploaded_by_user_id == uploaded_by)
 
             # Подсчет общего количества
-            total_count = query_obj.count()
+            count_query = select(func.count()).select_from(MediaFile).where(and_(*conditions))
+            result_count = await db.execute(count_query)
+            total_count = result_count.scalar()
 
             # Получение результатов с пагинацией
-            results_orm = query_obj.order_by(MediaFile.uploaded_at.desc()).offset(offset).limit(limit).all()
+            main_query = select(MediaFile).where(and_(*conditions)).order_by(MediaFile.uploaded_at.desc()).offset(offset).limit(limit)
+            result = await db.execute(main_query)
+            results_orm = result.scalars().all()
 
             # Преобразуем в словари, пока сессия активна
             results = []
@@ -134,10 +142,13 @@ class MediaSearchService:
 
     async def get_popular_tags(self, limit: int = 20) -> List[Dict[str, Any]]:
         """
-        Возвращает популярные теги
+        Возвращает популярные теги (async)
         """
-        with get_db_context() as db:
-            popular_tags = db.query(MediaTag).order_by(MediaTag.usage_count.desc()).limit(limit).all()
+        async with get_db_context() as db:
+            result_tags = await db.execute(
+                select(MediaTag).order_by(MediaTag.usage_count.desc()).limit(limit)
+            )
+            popular_tags = result_tags.scalars().all()
 
             result = []
             for tag in popular_tags:
@@ -154,40 +165,70 @@ class MediaSearchService:
 
     async def get_media_statistics(self) -> Dict[str, Any]:
         """
-        Возвращает статистику медиа-файлов
+        Возвращает статистику медиа-файлов (async)
         """
-        with get_db_context() as db:
+        from datetime import timedelta
+        
+        async with get_db_context() as db:
             # Общая статистика
-            total_files = db.query(MediaFile).filter(MediaFile.status == "active").count()
-            total_size = db.query(func.sum(MediaFile.file_size)).filter(MediaFile.status == "active").scalar() or 0
+            result_count = await db.execute(
+                select(func.count()).select_from(MediaFile).where(MediaFile.status == "active")
+            )
+            total_files = result_count.scalar()
+            
+            result_size = await db.execute(
+                select(func.sum(MediaFile.file_size)).where(MediaFile.status == "active")
+            )
+            total_size = result_size.scalar() or 0
 
             # Статистика по типам файлов
-            file_types_stats = db.query(
-                MediaFile.file_type,
-                func.count(MediaFile.id).label('count'),
-                func.sum(MediaFile.file_size).label('total_size')
-            ).filter(MediaFile.status == "active").group_by(MediaFile.file_type).all()
+            result_types = await db.execute(
+                select(
+                    MediaFile.file_type,
+                    func.count(MediaFile.id).label('count'),
+                    func.sum(MediaFile.file_size).label('total_size')
+                ).where(MediaFile.status == "active").group_by(MediaFile.file_type)
+            )
+            file_types_stats = result_types.all()
 
             # Статистика по категориям
-            categories_stats = db.query(
-                MediaFile.category,
-                func.count(MediaFile.id).label('count')
-            ).filter(MediaFile.status == "active").group_by(MediaFile.category).all()
+            result_categories = await db.execute(
+                select(
+                    MediaFile.category,
+                    func.count(MediaFile.id).label('count')
+                ).where(MediaFile.status == "active").group_by(MediaFile.category)
+            )
+            categories_stats = result_categories.all()
 
             # Статистика загрузок по дням (последние 30 дней)
-            from datetime import timedelta
             date_30_days_ago = datetime.now() - timedelta(days=30)
 
-            daily_uploads = db.query(
-                func.date(MediaFile.uploaded_at).label('date'),
-                func.count(MediaFile.id).label('count')
-            ).filter(
-                MediaFile.uploaded_at >= date_30_days_ago,
-                MediaFile.status == "active"
-            ).group_by(func.date(MediaFile.uploaded_at)).order_by(func.date(MediaFile.uploaded_at)).all()
+            result_daily = await db.execute(
+                select(
+                    func.date(MediaFile.uploaded_at).label('date'),
+                    func.count(MediaFile.id).label('count')
+                ).where(
+                    MediaFile.uploaded_at >= date_30_days_ago,
+                    MediaFile.status == "active"
+                ).group_by(func.date(MediaFile.uploaded_at)).order_by(func.date(MediaFile.uploaded_at))
+            )
+            daily_uploads = result_daily.all()
 
             # Топ тегов
-            top_tags = await self.get_popular_tags(limit=10)
+            result_tags = await db.execute(
+                select(MediaTag).order_by(MediaTag.usage_count.desc()).limit(10)
+            )
+            popular_tags = result_tags.scalars().all()
+            top_tags = [
+                {
+                    "tag": tag.tag_name,
+                    "count": tag.usage_count,
+                    "category": tag.tag_category,
+                    "color": tag.color,
+                    "is_system": tag.is_system
+                }
+                for tag in popular_tags
+            ]
 
             result = {
                 "total_files": total_files,

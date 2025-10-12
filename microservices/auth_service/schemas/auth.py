@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 # Session Schemas
 class SessionCreate(BaseModel):
     user_id: int
-    telegram_id: str
+    telegram_id: int
     device_info: Optional[Dict[str, Any]] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
@@ -23,7 +23,7 @@ class SessionResponse(BaseModel):
 
     session_id: str
     user_id: int
-    telegram_id: str
+    telegram_id: int
     is_active: bool
     expires_at: datetime
     refresh_expires_at: datetime
@@ -49,7 +49,7 @@ class TokenValidation(BaseModel):
 # Auth Log Schemas
 class AuthLogCreate(BaseModel):
     user_id: Optional[int] = None
-    telegram_id: Optional[str] = None
+    telegram_id: Optional[int] = None
     event_type: str
     event_status: str
     event_message: Optional[str] = None
@@ -63,7 +63,7 @@ class AuthLogResponse(BaseModel):
 
     id: int
     user_id: Optional[int]
-    telegram_id: Optional[str]
+    telegram_id: Optional[int]
     event_type: str
     event_status: str
     event_message: Optional[str]
@@ -165,7 +165,7 @@ class ServiceTokenRequest(BaseModel):
 
 # Login/Authentication Schemas
 class LoginRequest(BaseModel):
-    telegram_id: str
+    telegram_id: int
     device_info: Optional[Dict[str, Any]] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None

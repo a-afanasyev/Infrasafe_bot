@@ -2,7 +2,7 @@
 # UK Management Bot - Auth Service
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +44,7 @@ class AuditService:
                 user_agent=user_agent,
                 session_id=session_id,
                 auth_metadata=metadata or {},
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.utcnow()
             )
 
             self.db.add(auth_log)
@@ -106,7 +106,7 @@ class AuditService:
         """Get authentication statistics"""
         try:
             # Calculate date range
-            start_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             start_date = start_date - timedelta(days=days)
 
             query = select(

@@ -26,6 +26,7 @@ from app.schemas import (
 )
 from app.services import request_number_service
 from app.services.geocoding_service import geocoding_service
+from app.clients.building_directory_client import get_building_directory_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/requests", tags=["requests"])
@@ -38,63 +39,112 @@ async def create_request(
     service_info: dict = Depends(require_service_auth)
 ):
     """
-    Create a new request with automatic number generation
+    Create a new request with Building Directory integration
+
+    Building Directory Flow:
+    1. Validates building_id exists in Directory (REQUIRED)
+    2. Validates building is active
+    3. Denormalizes building_address from Directory
+    4. Uses building coordinates if available
+    5. address field is for user details (apartment, entrance, floor)
 
     - Generates unique YYMMDD-NNN format request number
-    - Validates all input data
+    - Validates building via Directory API
+    - Denormalizes building data for performance
     - Returns created request with full details
     """
     try:
-        # Generate unique request number
-        number_result = await request_number_service.generate_next_number(db)
+        # Step 1: Validate building_id via Building Directory
+        building_client = get_building_directory_client()
 
-        # Auto-geocode address if coordinates not provided
-        latitude = request_data.latitude
-        longitude = request_data.longitude
+        is_valid, error_msg, building = await building_client.validate_building_for_request(
+            request_data.building_id
+        )
 
-        if request_data.address and (not latitude or not longitude):
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg or f"Invalid building_id: {request_data.building_id}"
+            )
+
+        # Step 2: Get building data for denormalization
+        building_data = await building_client.get_building_data_for_request(
+            request_data.building_id
+        )
+
+        if not building_data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve building data for {request_data.building_id}"
+            )
+
+        # Step 3: Denormalize building address and coordinates
+        building_address = building_data['building_address']
+        latitude = building_data['latitude']  # From Directory (cached)
+        longitude = building_data['longitude']
+
+        # Step 4: Fallback to geocoding if Directory has no coordinates
+        if not latitude or not longitude:
             try:
+                logger.info(f"Building {request_data.building_id} has no coordinates, geocoding...")
                 geocoding_result = await geocoding_service.geocode_address(
-                    address=request_data.address,
+                    address=building_address,
                     prefer_local=True
                 )
                 if geocoding_result and geocoding_result.confidence > 0.5:
                     latitude = geocoding_result.latitude
                     longitude = geocoding_result.longitude
-                    logger.info(f"Auto-geocoded address '{request_data.address}' -> ({latitude}, {longitude})")
+                    logger.info(
+                        f"Geocoded building address '{building_address}' -> "
+                        f"({latitude}, {longitude})"
+                    )
             except Exception as e:
-                logger.warning(f"Auto-geocoding failed for '{request_data.address}': {e}")
+                logger.warning(f"Geocoding failed for '{building_address}': {e}")
                 # Continue without coordinates - not a critical failure
 
-        # Normalize coordinates if provided
+        # Step 5: Normalize coordinates if available
         if latitude and longitude:
-            latitude, longitude = await geocoding_service.normalize_coordinates(latitude, longitude)
+            latitude, longitude = await geocoding_service.normalize_coordinates(
+                latitude, longitude
+            )
 
-        # Create new request instance
+        # Step 6: Generate unique request number
+        number_result = await request_number_service.generate_next_number(db)
+
+        # Step 7: Create new request instance with denormalized building data
         new_request = Request(
             request_number=number_result.request_number,
             title=request_data.title,
             description=request_data.description,
             category=request_data.category,
             priority=request_data.priority,
-            address=request_data.address,
-            apartment_number=request_data.apartment_number,
+            # Building Directory integration
             building_id=request_data.building_id,
-            applicant_user_id=request_data.applicant_user_id,
-            media_file_ids=request_data.media_file_ids,
+            building_address=building_address,  # Denormalized from Directory
+            # User details (apartment, entrance, floor)
+            address=request_data.address or "",  # User-provided details
+            apartment_number=request_data.apartment_number,
+            # Coordinates from Directory or geocoded
             latitude=latitude,
             longitude=longitude,
+            # Standard fields
+            applicant_user_id=request_data.applicant_user_id,
+            media_file_ids=request_data.media_file_ids,
             status=RequestStatus.NEW,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
 
-        # Save to database
+        # Step 8: Save to database
         db.add(new_request)
         await db.commit()
         await db.refresh(new_request)
 
-        logger.info(f"Created request: {new_request.request_number}")
+        logger.info(
+            f"Created request: {new_request.request_number} | "
+            f"Building: {building_address} | "
+            f"User details: {request_data.address or 'N/A'}"
+        )
         return RequestResponse.from_orm(new_request)
 
     except Exception as e:

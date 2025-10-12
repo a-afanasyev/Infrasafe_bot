@@ -10,8 +10,15 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.db.async_database import get_async_db_context
 from app.services import MediaStorageService, MediaSearchService
 from app.services.observability import get_observability
+from app.core.exceptions import (
+    FileUploadFailed, InvalidFileType, FileTooLarge, TelegramUploadFailed,
+    ResourceNotFound, DatabaseError, DuplicateRecordError, ValidationError,
+    InternalServerError
+)
+from app.core.error_codes import MediaErrorCode, MediaError
 from app.schemas import (
     MediaUploadRequest, MediaSearchRequest, MediaUpdateTagsRequest,
     MediaArchiveRequest, MediaDateRangeRequest, MediaFileResponse,
@@ -62,13 +69,27 @@ async def upload_media(
         try:
             # Валидация файла
             if not file.filename:
-                raise HTTPException(status_code=400, detail="Имя файла не указано")
+                raise ValidationError(
+                    details={"field": "filename", "message": "Имя файла не указано"}
+                )
 
             if file.size and file.size > settings.max_file_size:
-                raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
+                raise FileTooLarge(
+                    details={
+                        "file_size": file.size,
+                        "max_size": settings.max_file_size,
+                        "filename": file.filename
+                    }
+                )
 
             if file.content_type not in settings.allowed_file_types:
-                raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
+                raise InvalidFileType(
+                    details={
+                        "file_type": file.content_type,
+                        "allowed_types": list(settings.allowed_file_types),
+                        "filename": file.filename
+                    }
+                )
 
             # Читаем содержимое файла
             file_data = await file.read()
@@ -108,9 +129,19 @@ async def upload_media(
                 message="Файл успешно загружен"
             )
 
+        except (FileUploadFailed, InvalidFileType, FileTooLarge, TelegramUploadFailed, 
+                ValidationError, DatabaseError, DuplicateRecordError):
+            # Пробрасываем наши кастомные исключения с кодами ошибок
+            raise
         except Exception as e:
             logger.error(f"Error uploading media file: {e}")
-            raise HTTPException(status_code=500, detail="Ошибка при загрузке файла")
+            raise FileUploadFailed(
+                details={
+                    "error": str(e),
+                    "filename": file.filename,
+                    "request_number": request_number
+                }
+            )
 
 
 @router.post("/upload-report", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -236,6 +267,8 @@ async def get_media_statistics(
 ):
     """
     Получение статистики медиа-файлов
+    
+    Note: Этот endpoint использует async SQLAlchemy
     """
     try:
         stats = await search_service.get_media_statistics()
@@ -266,8 +299,7 @@ async def get_popular_tags(
 @router.get("/{media_id}/file")
 async def get_media_file_redirect(
     media_id: int,
-    storage_service: MediaStorageService = Depends(get_storage_service),
-    db: Session = Depends(get_db)
+    storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
     Редирект на прямую ссылку медиа-файла
@@ -276,9 +308,12 @@ async def get_media_file_redirect(
         from app.models.media import MediaFile
         from fastapi.responses import RedirectResponse
 
-        media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
-        if not media_file:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+        async with get_async_db_context() as db:
+            from sqlalchemy import select
+            result = await db.execute(select(MediaFile).where(MediaFile.id == media_id))
+            media_file = result.scalar_one_or_none()
+            if not media_file:
+                raise ResourceNotFound(details={"media_id": media_id, "message": "Медиа-файл не найден"})
 
         file_url = await storage_service.get_media_file_url(media_file)
         return RedirectResponse(url=file_url)
@@ -292,8 +327,7 @@ async def get_media_file_redirect(
 
 @router.get("/{media_id}", response_model=MediaFileResponse)
 async def get_media(
-    media_id: int,
-    db: Session = Depends(get_db)
+    media_id: int
 ):
     """
     Получение информации о медиа-файле по ID
@@ -301,9 +335,11 @@ async def get_media(
     try:
         from app.models.media import MediaFile
 
-        media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
+        from sqlalchemy import select
+        result = await db.execute(select(MediaFile).where(MediaFile.id == media_id))
+        media_file = result.scalar_one_or_none()
         if not media_file:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+            raise ResourceNotFound(details={"media_id": media_id, "message": "Медиа-файл не найден"})
 
         return MediaFileResponse.model_validate(media_file)
 
@@ -326,9 +362,11 @@ async def get_media_url(
     try:
         from app.models.media import MediaFile
 
-        media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
+        from sqlalchemy import select
+        result = await db.execute(select(MediaFile).where(MediaFile.id == media_id))
+        media_file = result.scalar_one_or_none()
         if not media_file:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+            raise ResourceNotFound(details={"media_id": media_id, "message": "Медиа-файл не найден"})
 
         file_url = await storage_service.get_media_file_url(media_file)
 

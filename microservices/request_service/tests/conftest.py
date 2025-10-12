@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 from httpx import AsyncClient
 from redis.asyncio import Redis
 
-from app.main import app
+from main import app  # main.py is at root, not in app folder
 from app.core.database import get_async_session, Base
 from app.core.config import get_settings
 from app.models import Request, RequestComment, RequestRating, RequestAssignment, RequestMaterial

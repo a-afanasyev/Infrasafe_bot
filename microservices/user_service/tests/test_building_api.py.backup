@@ -1,0 +1,929 @@
+"""Integration Tests for Building API Endpoints.
+
+Extended test coverage for Building Directory API endpoints.
+Tests all CRUD operations, search functionality, geocoding integration, and error handling.
+"""
+
+import pytest
+from datetime import datetime, timedelta
+from decimal import Decimal
+from uuid import uuid4, UUID
+from typing import Dict, Any
+
+import httpx
+from fastapi import status
+
+
+@pytest.mark.asyncio
+class TestBuildingCreate:
+    """Tests for POST /api/v1/buildings - Create building."""
+
+    async def test_create_building_minimal(self, test_client, test_company_id, test_user_token):
+        """Test creating building with minimal required fields."""
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "street": "Amir Temur",
+            "house_number": "42"
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+
+        assert "id" in data
+        assert UUID(data["id"])  # Valid UUID
+        assert data["city"] == "Tashkent"
+        assert data["street"] == "Amir Temur"
+        assert data["house_number"] == "42"
+        assert data["is_active"] is True
+        assert data["full_address"] == "Tashkent, Amir Temur, 42"
+
+    async def test_create_building_full(self, test_client, test_company_id, test_user_token):
+        """Test creating building with all fields."""
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "district": "Yunusabad",
+            "street": "Amir Temur",
+            "house_number": "42",
+            "building_corpus": "A",
+            "postal_code": "100000",
+            "building_type": "residential",
+            "floors_count": 9,
+            "entrance_count": 3,
+            "apartments_count": 72,
+            "year_built": 2015,
+            "notes": "Test building"
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+
+        assert data["district"] == "Yunusabad"
+        assert data["building_corpus"] == "A"
+        assert data["building_type"] == "residential"
+        assert data["floors_count"] == 9
+        assert data["full_address"] == "Tashkent, Yunusabad, Amir Temur, 42, корп. A"
+
+    async def test_create_building_duplicate_address(
+        self,
+        test_client,
+        test_company_id,
+        test_user_token,
+        test_building
+    ):
+        """Test creating building with duplicate address."""
+        # Try to create building with same address
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": test_building["city"],
+            "street": test_building["street"],
+            "house_number": test_building["house_number"]
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        # Should allow duplicate (different companies can have same address)
+        assert response.status_code == status.HTTP_201_CREATED
+
+    async def test_create_building_invalid_latitude(
+        self,
+        test_client,
+        test_company_id,
+        test_user_token
+    ):
+        """Test creating building with invalid latitude."""
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "street": "Amir Temur",
+            "house_number": "42",
+            "latitude": 91.0  # Invalid (> 90)
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert "latitude" in response.json()["detail"][0]["loc"]
+
+    async def test_create_building_unauthorized(self, test_client, test_company_id):
+        """Test creating building without authentication."""
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "street": "Amir Temur",
+            "house_number": "42"
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+class TestBuildingGet:
+    """Tests for GET /api/v1/buildings/{building_id} - Get building by ID."""
+
+    async def test_get_building_success(self, test_client, test_building, test_user_token):
+        """Test getting building by ID successfully."""
+        response = await test_client.get(
+            f"/api/v1/buildings/{test_building['id']}",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["id"] == test_building["id"]
+        assert data["full_address"] == test_building["full_address"]
+
+    async def test_get_building_not_found(self, test_client, test_user_token):
+        """Test getting non-existent building."""
+        fake_id = str(uuid4())
+
+        response = await test_client.get(
+            f"/api/v1/buildings/{fake_id}",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    async def test_get_building_invalid_uuid(self, test_client, test_user_token):
+        """Test getting building with invalid UUID format."""
+        response = await test_client.get(
+            "/api/v1/buildings/invalid-uuid",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    async def test_get_building_with_coordinates(
+        self,
+        test_client,
+        test_building_with_coords,
+        test_user_token
+    ):
+        """Test getting building with geocoding data."""
+        response = await test_client.get(
+            f"/api/v1/buildings/{test_building_with_coords['id']}",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["latitude"] is not None
+        assert data["longitude"] is not None
+        assert data["has_coordinates"] is True
+        assert "coordinates" in data
+        assert data["coordinates"]["lat"] == pytest.approx(41.311158, rel=1e-6)
+
+
+@pytest.mark.asyncio
+class TestBuildingList:
+    """Tests for GET /api/v1/buildings - List buildings with pagination."""
+
+    async def test_list_buildings_default_pagination(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test listing buildings with default pagination."""
+        response = await test_client.get(
+            "/api/v1/buildings",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "page_size" in data
+        assert data["page"] == 1
+        assert data["page_size"] == 50
+        assert len(data["items"]) <= 50
+
+    async def test_list_buildings_custom_pagination(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test listing buildings with custom pagination."""
+        response = await test_client.get(
+            "/api/v1/buildings",
+            params={"page": 2, "page_size": 10},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["page"] == 2
+        assert data["page_size"] == 10
+        assert len(data["items"]) <= 10
+
+    async def test_list_buildings_filter_by_city(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test filtering buildings by city."""
+        response = await test_client.get(
+            "/api/v1/buildings",
+            params={"city": "Tashkent"},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # All results should be from Tashkent
+        for building in data["items"]:
+            assert building["city"] == "Tashkent"
+
+    async def test_list_buildings_filter_by_active_status(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test filtering buildings by active status."""
+        response = await test_client.get(
+            "/api/v1/buildings",
+            params={"is_active": True},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # All results should be active
+        for building in data["items"]:
+            assert building["is_active"] is True
+
+    async def test_list_buildings_filter_by_building_type(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test filtering buildings by building type."""
+        response = await test_client.get(
+            "/api/v1/buildings",
+            params={"building_type": "residential"},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        for building in data["items"]:
+            assert building["building_type"] == "residential"
+
+    async def test_list_buildings_sort_by_address(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test sorting buildings by address."""
+        response = await test_client.get(
+            "/api/v1/buildings",
+            params={"sort_by": "full_address", "sort_order": "asc"},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # Verify ascending order
+        addresses = [b["full_address"] for b in data["items"]]
+        assert addresses == sorted(addresses)
+
+
+@pytest.mark.asyncio
+class TestBuildingSearch:
+    """Tests for GET /api/v1/buildings/search - Search buildings."""
+
+    async def test_search_buildings_by_address(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test searching buildings by address."""
+        response = await test_client.get(
+            "/api/v1/buildings/search",
+            params={"query": "Amir Temur"},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # All results should contain "Amir Temur" in address
+        for building in data:
+            assert "Amir Temur" in building["full_address"]
+
+    async def test_search_buildings_with_city_filter(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test searching buildings with city filter."""
+        response = await test_client.get(
+            "/api/v1/buildings/search",
+            params={"query": "st.", "city": "Tashkent"},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        for building in data:
+            assert building["city"] == "Tashkent"
+
+    async def test_search_buildings_fuzzy_matching(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test fuzzy search matching."""
+        response = await test_client.get(
+            "/api/v1/buildings/search",
+            params={"query": "Amir Timur"},  # Typo: Timur vs Temur
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        # Should still find results with fuzzy matching
+
+    async def test_search_buildings_limit(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test search results limit."""
+        response = await test_client.get(
+            "/api/v1/buildings/search",
+            params={"query": "st.", "limit": 5},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert len(data) <= 5
+
+    async def test_search_buildings_empty_query(
+        self,
+        test_client,
+        test_user_token
+    ):
+        """Test search with empty query."""
+        response = await test_client.get(
+            "/api/v1/buildings/search",
+            params={"query": ""},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.asyncio
+class TestBuildingUpdate:
+    """Tests for PUT /api/v1/buildings/{building_id} - Update building."""
+
+    async def test_update_building_address_fields(
+        self,
+        test_client,
+        test_building,
+        test_user_token
+    ):
+        """Test updating building address fields."""
+        update_data = {
+            "street": "Independence",
+            "house_number": "1",
+            "district": "Yakkasaray"
+        }
+
+        response = await test_client.put(
+            f"/api/v1/buildings/{test_building['id']}",
+            json=update_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["street"] == "Independence"
+        assert data["house_number"] == "1"
+        assert data["district"] == "Yakkasaray"
+        assert "Independence" in data["full_address"]
+
+    async def test_update_building_metadata_fields(
+        self,
+        test_client,
+        test_building,
+        test_user_token
+    ):
+        """Test updating building metadata fields."""
+        update_data = {
+            "building_type": "commercial",
+            "floors_count": 15,
+            "year_built": 2020,
+            "notes": "Updated notes"
+        }
+
+        response = await test_client.put(
+            f"/api/v1/buildings/{test_building['id']}",
+            json=update_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["building_type"] == "commercial"
+        assert data["floors_count"] == 15
+        assert data["year_built"] == 2020
+        assert data["notes"] == "Updated notes"
+
+    async def test_update_building_not_found(
+        self,
+        test_client,
+        test_user_token
+    ):
+        """Test updating non-existent building."""
+        fake_id = str(uuid4())
+        update_data = {"notes": "Test"}
+
+        response = await test_client.put(
+            f"/api/v1/buildings/{fake_id}",
+            json=update_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    async def test_update_building_invalid_data(
+        self,
+        test_client,
+        test_building,
+        test_user_token
+    ):
+        """Test updating building with invalid data."""
+        update_data = {
+            "building_type": "invalid_type"
+        }
+
+        response = await test_client.put(
+            f"/api/v1/buildings/{test_building['id']}",
+            json=update_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.asyncio
+class TestBuildingGeocode:
+    """Tests for POST /api/v1/buildings/{building_id}/geocode - Update coordinates."""
+
+    async def test_geocode_building_success(
+        self,
+        test_client,
+        test_building,
+        test_user_token
+    ):
+        """Test updating building coordinates."""
+        geocode_data = {
+            "latitude": 41.311158,
+            "longitude": 69.279737,
+            "geocoding_source": "google_maps",
+            "geocoding_accuracy": "ROOFTOP"
+        }
+
+        response = await test_client.post(
+            f"/api/v1/buildings/{test_building['id']}/geocode",
+            json=geocode_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["latitude"] == pytest.approx(41.311158, rel=1e-6)
+        assert data["longitude"] == pytest.approx(69.279737, rel=1e-6)
+        assert data["coordinates_source"] == "google_maps"
+        assert data["geocoding_accuracy"] == "ROOFTOP"
+        assert data["has_coordinates"] is True
+
+    async def test_geocode_building_update_existing(
+        self,
+        test_client,
+        test_building_with_coords,
+        test_user_token
+    ):
+        """Test updating existing coordinates."""
+        new_geocode_data = {
+            "latitude": 41.5,
+            "longitude": 69.5,
+            "geocoding_source": "manual"
+        }
+
+        response = await test_client.post(
+            f"/api/v1/buildings/{test_building_with_coords['id']}/geocode",
+            json=new_geocode_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # Coordinates should be updated
+        assert data["latitude"] == pytest.approx(41.5, rel=1e-6)
+        assert data["coordinates_source"] == "manual"
+
+    async def test_geocode_building_invalid_coordinates(
+        self,
+        test_client,
+        test_building,
+        test_user_token
+    ):
+        """Test geocoding with invalid coordinates."""
+        invalid_data = {
+            "latitude": 91.0,  # Invalid
+            "longitude": 69.279737
+        }
+
+        response = await test_client.post(
+            f"/api/v1/buildings/{test_building['id']}/geocode",
+            json=invalid_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.asyncio
+class TestBuildingNeedingGeocoding:
+    """Tests for GET /api/v1/buildings/needing-geocoding - Get buildings without coordinates."""
+
+    async def test_get_buildings_needing_geocoding(
+        self,
+        test_client,
+        test_user_token,
+        test_building,
+        test_building_with_coords
+    ):
+        """Test getting buildings that need geocoding."""
+        response = await test_client.get(
+            "/api/v1/buildings/needing-geocoding",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # Building without coords should be in results
+        building_ids = [b["id"] for b in data]
+        assert test_building["id"] in building_ids
+
+        # Building with coords should NOT be in results
+        assert test_building_with_coords["id"] not in building_ids
+
+    async def test_get_buildings_needing_geocoding_limit(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_without_coords
+    ):
+        """Test limit parameter for needing geocoding."""
+        response = await test_client.get(
+            "/api/v1/buildings/needing-geocoding",
+            params={"limit": 5},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert len(data) <= 5
+
+
+@pytest.mark.asyncio
+class TestBuildingStatistics:
+    """Tests for GET /api/v1/buildings/stats - Get building statistics."""
+
+    async def test_get_building_stats(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test getting building statistics."""
+        response = await test_client.get(
+            "/api/v1/buildings/stats",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert "total_buildings" in data
+        assert "active_buildings" in data
+        assert "inactive_buildings" in data
+        assert "by_city" in data
+        assert "with_coordinates" in data
+        assert "without_coordinates" in data
+        assert "geocoding_coverage_percent" in data
+
+    async def test_get_building_stats_by_city(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_list
+    ):
+        """Test getting building statistics filtered by city."""
+        response = await test_client.get(
+            "/api/v1/buildings/stats",
+            params={"city": "Tashkent"},
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # Should only include Tashkent stats
+        assert data["total_buildings"] >= 0
+
+    async def test_get_building_stats_coverage_calculation(
+        self,
+        test_client,
+        test_user_token,
+        test_buildings_mixed_geocoding
+    ):
+        """Test geocoding coverage percentage calculation."""
+        response = await test_client.get(
+            "/api/v1/buildings/stats",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # Verify calculation
+        total = data["total_buildings"]
+        with_coords = data["with_coordinates"]
+        coverage = data["geocoding_coverage_percent"]
+
+        if total > 0:
+            expected_coverage = (with_coords / total) * 100
+            assert coverage == pytest.approx(expected_coverage, rel=0.01)
+
+
+@pytest.mark.asyncio
+class TestBuildingDelete:
+    """Tests for DELETE /api/v1/buildings/{building_id} - Soft delete building."""
+
+    async def test_soft_delete_building(
+        self,
+        test_client,
+        test_building,
+        test_user_token
+    ):
+        """Test soft deleting a building."""
+        response = await test_client.delete(
+            f"/api/v1/buildings/{test_building['id']}",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["is_active"] is False
+        assert data["deleted_at"] is not None
+
+    async def test_soft_delete_already_deleted(
+        self,
+        test_client,
+        test_deleted_building,
+        test_user_token
+    ):
+        """Test soft deleting already deleted building."""
+        response = await test_client.delete(
+            f"/api/v1/buildings/{test_deleted_building['id']}",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        # Should succeed (idempotent)
+        assert response.status_code == status.HTTP_200_OK
+
+    async def test_restore_building(
+        self,
+        test_client,
+        test_deleted_building,
+        test_user_token
+    ):
+        """Test restoring a soft-deleted building."""
+        response = await test_client.post(
+            f"/api/v1/buildings/{test_deleted_building['id']}/restore",
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["is_active"] is True
+        assert data["deleted_at"] is None
+
+
+# ==================== FIXTURES ====================
+
+@pytest.fixture
+async def test_building(test_client, test_company_id, test_user_token):
+    """Create a test building."""
+    building_data = {
+        "management_company_id": str(test_company_id),
+        "city": "Tashkent",
+        "street": "Amir Temur",
+        "house_number": "42"
+    }
+
+    response = await test_client.post(
+        "/api/v1/buildings",
+        json=building_data,
+        headers={"Authorization": f"Bearer {test_user_token}"}
+    )
+
+    return response.json()
+
+
+@pytest.fixture
+async def test_building_with_coords(test_client, test_company_id, test_user_token):
+    """Create a test building with coordinates."""
+    building_data = {
+        "management_company_id": str(test_company_id),
+        "city": "Tashkent",
+        "street": "Independence",
+        "house_number": "1",
+        "latitude": 41.311158,
+        "longitude": 69.279737
+    }
+
+    response = await test_client.post(
+        "/api/v1/buildings",
+        json=building_data,
+        headers={"Authorization": f"Bearer {test_user_token}"}
+    )
+
+    return response.json()
+
+
+@pytest.fixture
+async def test_deleted_building(test_client, test_building, test_user_token):
+    """Create a soft-deleted building."""
+    await test_client.delete(
+        f"/api/v1/buildings/{test_building['id']}",
+        headers={"Authorization": f"Bearer {test_user_token}"}
+    )
+
+    # Re-fetch to get updated state
+    response = await test_client.get(
+        f"/api/v1/buildings/{test_building['id']}",
+        headers={"Authorization": f"Bearer {test_user_token}"}
+    )
+
+    return response.json()
+
+
+@pytest.fixture
+async def test_buildings_list(test_client, test_company_id, test_user_token):
+    """Create a list of test buildings."""
+    buildings = []
+
+    cities = ["Tashkent", "Samarkand", "Bukhara"]
+    streets = ["Amir Temur", "Independence", "Navoi"]
+
+    for i in range(15):
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": cities[i % 3],
+            "street": streets[i % 3],
+            "house_number": str(i + 1),
+            "building_type": "residential" if i % 2 == 0 else "commercial"
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        buildings.append(response.json())
+
+    return buildings
+
+
+@pytest.fixture
+async def test_buildings_without_coords(test_client, test_company_id, test_user_token):
+    """Create buildings without coordinates."""
+    buildings = []
+
+    for i in range(10):
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "street": f"Street {i}",
+            "house_number": str(i + 1)
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        buildings.append(response.json())
+
+    return buildings
+
+
+@pytest.fixture
+async def test_buildings_mixed_geocoding(
+    test_client,
+    test_company_id,
+    test_user_token
+):
+    """Create buildings with mixed geocoding status."""
+    buildings = []
+
+    # Create 5 with coordinates
+    for i in range(5):
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "street": f"With Coords {i}",
+            "house_number": str(i + 1),
+            "latitude": 41.0 + i * 0.01,
+            "longitude": 69.0 + i * 0.01
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        buildings.append(response.json())
+
+    # Create 5 without coordinates
+    for i in range(5):
+        building_data = {
+            "management_company_id": str(test_company_id),
+            "city": "Tashkent",
+            "street": f"Without Coords {i}",
+            "house_number": str(i + 1)
+        }
+
+        response = await test_client.post(
+            "/api/v1/buildings",
+            json=building_data,
+            headers={"Authorization": f"Bearer {test_user_token}"}
+        )
+
+        buildings.append(response.json())
+
+    return buildings

@@ -1,0 +1,565 @@
+# Schedule Management and Workload Balancing Service
+# UK Management Bot - Shift Service
+
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Tuple
+from uuid import UUID
+from collections import defaultdict
+
+from sqlalchemy import and_, or_, select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.shifts import Shift, ShiftTemplate, ShiftStatus, ShiftType, SpecializationType, ShiftAssignment
+from schemas.common import PaginationParams
+from utils.datetime_utils import utc_now
+
+logger = logging.getLogger(__name__)
+
+
+class ScheduleService:
+    """Business logic for schedule management and workload balancing"""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    @staticmethod
+    def _format_date(dt) -> str:
+        """Helper to format datetime or date object to string"""
+        if hasattr(dt, 'date'):
+            return str(dt.date())
+        return str(dt)
+
+    # ==================== CONFLICT DETECTION ====================
+
+    async def check_schedule_conflicts(
+        self,
+        executor_id: UUID,
+        start_time: datetime,
+        end_time: datetime,
+        exclude_shift_id: Optional[UUID] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Check for scheduling conflicts for an executor
+
+        Returns list of conflicting shifts
+        """
+        try:
+            query = select(Shift).where(
+                and_(
+                    Shift.executor_id == executor_id,
+                    Shift.status.in_([ShiftStatus.PLANNED, ShiftStatus.ACTIVE]),
+                    or_(
+                        # New shift starts during existing shift
+                        and_(
+                            Shift.start_time <= start_time,
+                            Shift.end_time > start_time
+                        ),
+                        # New shift ends during existing shift
+                        and_(
+                            Shift.start_time < end_time,
+                            Shift.end_time >= end_time
+                        ),
+                        # New shift completely contains existing shift
+                        and_(
+                            Shift.start_time >= start_time,
+                            Shift.end_time <= end_time
+                        )
+                    )
+                )
+            )
+
+            if exclude_shift_id:
+                query = query.where(Shift.id != exclude_shift_id)
+
+            result = await self.db.execute(query)
+            conflicts = result.scalars().all()
+
+            return [
+                {
+                    "shift_id": str(shift.id),
+                    "title": shift.title,
+                    "start_time": shift.start_time.isoformat(),
+                    "end_time": shift.end_time.isoformat(),
+                    "status": shift.status.value
+                }
+                for shift in conflicts
+            ]
+
+        except Exception as e:
+            logger.error(f"Failed to check schedule conflicts for executor {executor_id}: {e}")
+            raise
+
+    async def check_specialization_conflicts(
+        self,
+        specialization: SpecializationType,
+        start_time: datetime,
+        end_time: datetime,
+        location: Optional[str] = None,
+        exclude_shift_id: Optional[UUID] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Check for conflicts in specialization coverage at a location
+
+        Useful for ensuring adequate coverage
+        """
+        try:
+            query = select(Shift).where(
+                and_(
+                    Shift.specialization == specialization,
+                    Shift.status != ShiftStatus.CANCELLED,
+                    or_(
+                        and_(
+                            Shift.start_time <= start_time,
+                            Shift.end_time > start_time
+                        ),
+                        and_(
+                            Shift.start_time < end_time,
+                            Shift.end_time >= end_time
+                        ),
+                        and_(
+                            Shift.start_time >= start_time,
+                            Shift.end_time <= end_time
+                        )
+                    )
+                )
+            )
+
+            if location:
+                query = query.where(Shift.location == location)
+
+            if exclude_shift_id:
+                query = query.where(Shift.id != exclude_shift_id)
+
+            result = await self.db.execute(query)
+            existing_shifts = result.scalars().all()
+
+            return [
+                {
+                    "shift_id": str(shift.id),
+                    "title": shift.title,
+                    "executor_id": str(shift.executor_id) if shift.executor_id else None,
+                    "start_time": shift.start_time.isoformat(),
+                    "end_time": shift.end_time.isoformat(),
+                    "location": shift.location
+                }
+                for shift in existing_shifts
+            ]
+
+        except Exception as e:
+            logger.error(f"Failed to check specialization conflicts: {e}")
+            raise
+
+    # ==================== WORKLOAD ANALYSIS ====================
+
+    async def get_executor_workload(
+        self,
+        executor_id: UUID,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Calculate executor workload for a time period
+
+        Returns:
+            - total_hours: Total hours scheduled
+            - shift_count: Number of shifts
+            - avg_shift_duration: Average shift duration
+            - utilization: Percentage of available time
+        """
+        try:
+            query = select(Shift).where(
+                and_(
+                    Shift.executor_id == executor_id,
+                    Shift.status.in_([ShiftStatus.PLANNED, ShiftStatus.ACTIVE, ShiftStatus.COMPLETED]),
+                    Shift.start_time >= start_date,
+                    Shift.start_time < end_date
+                )
+            )
+
+            result = await self.db.execute(query)
+            shifts = result.scalars().all()
+
+            if not shifts:
+                # Handle both datetime and date objects
+                start_str = start_date.date() if hasattr(start_date, 'date') else start_date
+                end_str = end_date.date() if hasattr(end_date, 'date') else end_date
+                return {
+                    "executor_id": str(executor_id),
+                    "period": f"{start_str} to {end_str}",
+                    "total_hours": 0,
+                    "shift_count": 0,
+                    "avg_shift_duration": 0,
+                    "utilization_percent": 0,
+                    "shifts": []
+                }
+
+            total_hours = sum(shift.duration_hours for shift in shifts)
+            shift_count = len(shifts)
+            avg_duration = total_hours / shift_count
+
+            # Calculate utilization (assuming 8-hour workday, 5 days/week)
+            period_days = (end_date - start_date).days
+            available_hours = (period_days / 7) * 5 * 8  # Business days only
+            utilization = (total_hours / available_hours * 100) if available_hours > 0 else 0
+
+            # Handle both datetime and date objects
+            start_str = start_date.date() if hasattr(start_date, 'date') else start_date
+            end_str = end_date.date() if hasattr(end_date, 'date') else end_date
+
+            return {
+                "executor_id": str(executor_id),
+                "period": f"{start_str} to {end_str}",
+                "total_hours": round(total_hours, 2),
+                "shift_count": shift_count,
+                "avg_shift_duration": round(avg_duration, 2),
+                "utilization_percent": round(utilization, 2),
+                "shifts": [
+                    {
+                        "id": str(shift.id),
+                        "title": shift.title,
+                        "start_time": shift.start_time.isoformat(),
+                        "duration_hours": shift.duration_hours,
+                        "status": shift.status.value
+                    }
+                    for shift in shifts
+                ]
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get executor workload: {e}")
+            raise
+
+    async def get_team_workload_distribution(
+        self,
+        specialization: SpecializationType,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Analyze workload distribution across a team
+
+        Identifies overloaded and underutilized executors
+        """
+        try:
+            # Get all shifts for specialization in period
+            query = select(Shift).where(
+                and_(
+                    Shift.specialization == specialization,
+                    Shift.status.in_([ShiftStatus.PLANNED, ShiftStatus.ACTIVE, ShiftStatus.COMPLETED]),
+                    Shift.start_time >= start_date,
+                    Shift.start_time < end_date,
+                    Shift.executor_id.isnot(None)
+                )
+            )
+
+            result = await self.db.execute(query)
+            shifts = result.scalars().all()
+
+            # Group by executor
+            executor_hours: Dict[UUID, float] = defaultdict(float)
+            executor_shifts: Dict[UUID, int] = defaultdict(int)
+
+            for shift in shifts:
+                executor_hours[shift.executor_id] += shift.duration_hours
+                executor_shifts[shift.executor_id] += 1
+
+            if not executor_hours:
+                return {
+                    "specialization": specialization.value,
+                    "period": f"{self._format_date(start_date)} to {self._format_date(end_date)}",
+                    "executor_count": 0,
+                    "total_hours": 0,
+                    "avg_hours_per_executor": 0,
+                    "workload_distribution": []
+                }
+
+            total_hours = sum(executor_hours.values())
+            executor_count = len(executor_hours)
+            avg_hours = total_hours / executor_count
+
+            # Calculate standard deviation
+            variance = sum((hours - avg_hours) ** 2 for hours in executor_hours.values()) / executor_count
+            std_dev = variance ** 0.5
+
+            # Build distribution
+            distribution = []
+            for executor_id, hours in sorted(executor_hours.items(), key=lambda x: x[1], reverse=True):
+                deviation = hours - avg_hours
+                status = "balanced"
+                if deviation > std_dev:
+                    status = "overloaded"
+                elif deviation < -std_dev:
+                    status = "underutilized"
+
+                distribution.append({
+                    "executor_id": str(executor_id),
+                    "total_hours": round(hours, 2),
+                    "shift_count": executor_shifts[executor_id],
+                    "deviation_from_avg": round(deviation, 2),
+                    "status": status
+                })
+
+            return {
+                "specialization": specialization.value,
+                "period": f"{self._format_date(start_date)} to {self._format_date(end_date)}",
+                "executor_count": executor_count,
+                "total_hours": round(total_hours, 2),
+                "avg_hours_per_executor": round(avg_hours, 2),
+                "std_deviation": round(std_dev, 2),
+                "workload_distribution": distribution
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get team workload distribution: {e}")
+            raise
+
+    # ==================== CAPACITY MONITORING ====================
+
+    async def get_capacity_status(
+        self,
+        specialization: SpecializationType,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Monitor capacity and coverage for a specialization
+
+        Identifies gaps and over-capacity situations
+        """
+        try:
+            # Get all shifts for specialization
+            query = select(Shift).where(
+                and_(
+                    Shift.specialization == specialization,
+                    Shift.status != ShiftStatus.CANCELLED,
+                    Shift.start_time >= start_date,
+                    Shift.start_time < end_date
+                )
+            )
+
+            result = await self.db.execute(query)
+            shifts = result.scalars().all()
+
+            # Analyze by day
+            daily_capacity: Dict[str, Dict[str, Any]] = {}
+
+            # Ensure we have date objects for iteration
+            current_date = start_date.date() if hasattr(start_date, 'date') else start_date
+            end = end_date.date() if hasattr(end_date, 'date') else end_date
+
+            while current_date <= end:
+                day_str = current_date.isoformat()
+                day_shifts = [
+                    s for s in shifts
+                    if s.start_time.date() <= current_date <= s.end_time.date()
+                ]
+
+                assigned_count = sum(1 for s in day_shifts if s.executor_id)
+                unassigned_count = len(day_shifts) - assigned_count
+                total_hours = sum(s.duration_hours for s in day_shifts)
+
+                daily_capacity[day_str] = {
+                    "date": day_str,
+                    "total_shifts": len(day_shifts),
+                    "assigned_shifts": assigned_count,
+                    "unassigned_shifts": unassigned_count,
+                    "total_hours": round(total_hours, 2),
+                    "status": self._determine_capacity_status(assigned_count, unassigned_count)
+                }
+
+                current_date += timedelta(days=1)
+
+            # Overall statistics
+            total_shifts = len(shifts)
+            assigned_shifts = sum(1 for s in shifts if s.executor_id)
+            coverage_percent = (assigned_shifts / total_shifts * 100) if total_shifts > 0 else 0
+
+            return {
+                "specialization": specialization.value,
+                "period": f"{self._format_date(start_date)} to {self._format_date(end_date)}",
+                "total_shifts": total_shifts,
+                "assigned_shifts": assigned_shifts,
+                "unassigned_shifts": total_shifts - assigned_shifts,
+                "coverage_percent": round(coverage_percent, 2),
+                "daily_capacity": daily_capacity
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get capacity status: {e}")
+            raise
+
+    def _determine_capacity_status(self, assigned: int, unassigned: int) -> str:
+        """Determine capacity status based on assignment ratio"""
+        total = assigned + unassigned
+        if total == 0:
+            return "no_shifts"
+
+        coverage = assigned / total
+        if coverage >= 0.9:
+            return "optimal"
+        elif coverage >= 0.7:
+            return "adequate"
+        elif coverage >= 0.5:
+            return "low"
+        else:
+            return "critical"
+
+    # ==================== BALANCING RECOMMENDATIONS ====================
+
+    async def get_balancing_recommendations(
+        self,
+        specialization: SpecializationType,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Generate recommendations for workload balancing
+
+        Suggests shift reassignments to balance workload
+        """
+        try:
+            # Get workload distribution
+            distribution = await self.get_team_workload_distribution(
+                specialization, start_date, end_date
+            )
+
+            if distribution["executor_count"] == 0:
+                return {
+                    "specialization": specialization.value,
+                    "recommendations": [],
+                    "message": "No executors found for this specialization"
+                }
+
+            recommendations = []
+            overloaded = [
+                e for e in distribution["workload_distribution"]
+                if e["status"] == "overloaded"
+            ]
+            underutilized = [
+                e for e in distribution["workload_distribution"]
+                if e["status"] == "underutilized"
+            ]
+
+            # Generate pairing recommendations
+            for over_exec in overloaded:
+                for under_exec in underutilized:
+                    # Calculate potential transfer
+                    transfer_hours = (over_exec["total_hours"] - distribution["avg_hours_per_executor"]) / 2
+
+                    if transfer_hours > 0:
+                        recommendations.append({
+                            "type": "workload_transfer",
+                            "from_executor": over_exec["executor_id"],
+                            "to_executor": under_exec["executor_id"],
+                            "suggested_hours": round(transfer_hours, 2),
+                            "reason": f"Balance workload: from {over_exec['total_hours']}h to {under_exec['total_hours']}h",
+                            "priority": "high" if abs(over_exec["deviation_from_avg"]) > distribution["std_deviation"] * 1.5 else "medium"
+                        })
+
+            return {
+                "specialization": specialization.value,
+                "period": f"{self._format_date(start_date)} to {self._format_date(end_date)}",
+                "current_std_deviation": distribution["std_deviation"],
+                "recommendations": recommendations[:10]  # Top 10 recommendations
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get balancing recommendations: {e}")
+            raise
+
+    # ==================== SCHEDULE VALIDATION ====================
+
+    async def validate_weekly_schedule(
+        self,
+        start_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Validate weekly schedule for issues
+
+        Checks:
+        - Executor conflicts
+        - Coverage gaps
+        - Workload imbalances
+        - Unassigned shifts
+        """
+        try:
+            end_date = start_date + timedelta(days=7)
+
+            # Get all shifts for the week
+            query = select(Shift).where(
+                and_(
+                    Shift.start_time >= start_date,
+                    Shift.start_time < end_date,
+                    Shift.status != ShiftStatus.CANCELLED
+                )
+            )
+
+            result = await self.db.execute(query)
+            shifts = result.scalars().all()
+
+            issues = []
+
+            # Check for executor conflicts
+            executors_with_shifts: Dict[UUID, List[Shift]] = defaultdict(list)
+            for shift in shifts:
+                if shift.executor_id:
+                    executors_with_shifts[shift.executor_id].append(shift)
+
+            for executor_id, executor_shifts in executors_with_shifts.items():
+                # Sort by start time
+                executor_shifts.sort(key=lambda s: s.start_time)
+
+                for i in range(len(executor_shifts) - 1):
+                    current = executor_shifts[i]
+                    next_shift = executor_shifts[i + 1]
+
+                    if current.end_time > next_shift.start_time:
+                        issues.append({
+                            "type": "executor_conflict",
+                            "severity": "high",
+                            "executor_id": str(executor_id),
+                            "shift_1": str(current.id),
+                            "shift_2": str(next_shift.id),
+                            "description": f"Overlapping shifts for executor {executor_id}"
+                        })
+
+            # Check for unassigned shifts
+            unassigned = [s for s in shifts if not s.executor_id]
+            if unassigned:
+                issues.append({
+                    "type": "unassigned_shifts",
+                    "severity": "medium",
+                    "count": len(unassigned),
+                    "shift_ids": [str(s.id) for s in unassigned[:5]],
+                    "description": f"{len(unassigned)} shifts without assigned executors"
+                })
+
+            # Check coverage gaps by specialization
+            by_specialization: Dict[SpecializationType, int] = defaultdict(int)
+            for shift in shifts:
+                if not shift.executor_id:
+                    by_specialization[shift.specialization] += 1
+
+            for spec, count in by_specialization.items():
+                if count > 0:
+                    issues.append({
+                        "type": "coverage_gap",
+                        "severity": "medium",
+                        "specialization": spec.value,
+                        "unassigned_count": count,
+                        "description": f"{count} unassigned {spec.value} shifts"
+                    })
+
+            return {
+                "week_start": self._format_date(start_date),
+                "total_shifts": len(shifts),
+                "assigned_shifts": len(shifts) - len(unassigned),
+                "issues_found": len(issues),
+                "is_valid": len([i for i in issues if i["severity"] == "high"]) == 0,
+                "issues": issues
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to validate weekly schedule: {e}")
+            raise

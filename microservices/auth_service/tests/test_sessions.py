@@ -2,210 +2,240 @@
 # UK Management Bot - Auth Service Tests
 
 import pytest
+import pytest_asyncio
 from datetime import datetime, timedelta
-from unittest.mock import patch, AsyncMock
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
 
 from services.session_service import SessionService
+from models.auth import Session
 
 @pytest.mark.asyncio
 class TestSessionService:
     """Test cases for Session Service"""
 
-    @pytest.fixture
-    def session_service(self, db_session: AsyncSession):
-        """Create Session Service instance"""
-        return SessionService(db_session)
+    @pytest_asyncio.fixture
+    def sample_user_data(self):
+        """Sample user data for testing"""
+        return {
+            "user_id": 123,
+            "telegram_id": "123456789",
+            "user_agent": "TelegramBot/1.0",
+            "ip_address": "192.168.1.100",
+            "device_info": {"device": "test"}
+        }
 
-    async def test_create_session_success(self, session_service, sample_user_data):
+    async def test_create_session_success(self, session_service, db_session, sample_user_data):
         """Test successful session creation"""
-        user_id = sample_user_data["user_id"]
-        telegram_id = sample_user_data["telegram_id"]
+        # Create session
+        session_response = await session_service.create_session(sample_user_data)
 
-        with patch.object(session_service, '_generate_session_tokens') as mock_tokens:
-            mock_tokens.return_value = ("access_token", "refresh_token")
+        assert session_response is not None
+        assert session_response.user_id == sample_user_data["user_id"]
+        assert session_response.telegram_id == sample_user_data["telegram_id"]
+        assert session_response.session_id is not None
+        assert session_response.is_active is True
+        assert session_response.ip_address == sample_user_data["ip_address"]
 
-            session = await session_service.create_session(
-                user_id=user_id,
-                telegram_id=telegram_id,
-                user_agent="Test Agent",
-                ip_address="192.168.1.100"
-            )
+    async def test_get_session_success(self, session_service, db_session, sample_user_data):
+        """Test successful session retrieval"""
+        # Create session first
+        created_session = await session_service.create_session(sample_user_data)
+        session_id = created_session.session_id
 
-            assert session is not None
-            assert session["user_id"] == user_id
-            assert session["telegram_id"] == telegram_id
-            assert "session_id" in session
-            assert "expires_at" in session
+        # Get session
+        session = await session_service.get_session(session_id)
 
-    async def test_validate_session_success(self, session_service):
-        """Test successful session validation"""
-        session_id = "test-session-id"
+        assert session is not None
+        assert session.session_id == session_id
+        assert session.user_id == sample_user_data["user_id"]
+        assert session.is_active is True
 
-        with patch.object(session_service, '_get_session_from_db') as mock_get_session:
-            mock_session = {
-                "session_id": session_id,
-                "user_id": 1,
-                "telegram_id": "123456789",
-                "is_active": True,
-                "expires_at": datetime.utcnow() + timedelta(hours=1)
-            }
-            mock_get_session.return_value = mock_session
+    async def test_get_session_not_found(self, session_service):
+        """Test getting non-existent session"""
+        session = await session_service.get_session("non_existent_session_id")
+        assert session is None
 
-            result = await session_service.validate_session(session_id)
+    async def test_update_session_tokens(self, session_service, db_session, sample_user_data):
+        """Test updating session tokens"""
+        from sqlalchemy import select
 
-            assert result is not None
-            assert result["session_id"] == session_id
-            assert result["user_id"] == 1
+        # Create session
+        created_session = await session_service.create_session(sample_user_data)
+        session_id = created_session.session_id
 
-    async def test_validate_session_expired(self, session_service):
-        """Test session validation with expired session"""
-        session_id = "expired-session-id"
+        # Update tokens
+        result = await session_service.update_session_tokens(
+            session_id,
+            access_token="new_access_token",
+            refresh_token="new_refresh_token"
+        )
 
-        with patch.object(session_service, '_get_session_from_db') as mock_get_session:
-            mock_session = {
-                "session_id": session_id,
-                "user_id": 1,
-                "telegram_id": "123456789",
-                "is_active": True,
-                "expires_at": datetime.utcnow() - timedelta(hours=1)  # Expired
-            }
-            mock_get_session.return_value = mock_session
+        assert result is True
 
-            result = await session_service.validate_session(session_id)
+        # Verify tokens updated directly from DB (SessionResponse doesn't include tokens)
+        db_result = await db_session.execute(
+            select(Session).where(Session.session_id == session_id)
+        )
+        db_session_obj = db_result.scalar_one()
+        assert db_session_obj.access_token == "new_access_token"
+        assert db_session_obj.refresh_token == "new_refresh_token"
 
-            assert result is None
+    async def test_deactivate_session(self, session_service, db_session, sample_user_data):
+        """Test session deactivation"""
+        # Create session
+        created_session = await session_service.create_session(sample_user_data)
+        session_id = created_session.session_id
 
-    async def test_invalidate_session_success(self, session_service):
-        """Test successful session invalidation"""
-        session_id = "test-session-id"
+        # Deactivate session
+        result = await session_service.deactivate_session(session_id)
+        assert result is True
 
-        with patch.object(session_service, '_update_session_status') as mock_update:
-            mock_update.return_value = True
+        # Verify session is inactive
+        session = await session_service.get_session(session_id)
+        assert session.is_active is False
 
-            result = await session_service.invalidate_session(session_id)
+    async def test_deactivate_all_user_sessions(self, session_service, db_session, sample_user_data):
+        """Test deactivating all user sessions"""
+        # Create multiple sessions (note: _cleanup_excess_sessions may deactivate old ones)
+        session1 = await session_service.create_session(sample_user_data)
+        session2 = await session_service.create_session(sample_user_data)
+        session3 = await session_service.create_session(sample_user_data)
 
-            assert result is True
-            mock_update.assert_called_once_with(session_id, is_active=False)
+        # Get active session count before deactivation
+        active_before = await session_service.get_user_sessions(sample_user_data["user_id"])
 
-    async def test_refresh_session_success(self, session_service):
-        """Test successful session refresh"""
-        refresh_token = "valid-refresh-token"
+        # Deactivate all sessions except session3
+        count = await session_service.deactivate_all_user_sessions(
+            sample_user_data["user_id"],
+            except_session_id=session3.session_id
+        )
 
-        with patch.object(session_service, '_validate_refresh_token') as mock_validate:
-            with patch.object(session_service, '_generate_session_tokens') as mock_tokens:
-                mock_validate.return_value = {
-                    "session_id": "test-session-id",
-                    "user_id": 1,
-                    "telegram_id": "123456789"
-                }
-                mock_tokens.return_value = ("new_access_token", "new_refresh_token")
+        # Should deactivate all active sessions except one
+        assert count >= 1  # At least one session deactivated
 
-                result = await session_service.refresh_session(refresh_token)
+        # Verify session3 is active, others are not
+        s3 = await session_service.get_session(session3.session_id)
+        assert s3.is_active is True
 
-                assert result is not None
-                assert "session_id" in result
-                assert "user_id" in result
+        # Verify only session3 is active now
+        active_after = await session_service.get_user_sessions(sample_user_data["user_id"])
+        assert len(active_after) == 1
+        assert active_after[0].session_id == session3.session_id
 
-    async def test_get_user_sessions(self, session_service):
-        """Test getting user sessions"""
-        user_id = 1
+    async def test_get_user_sessions(self, session_service, db_session, sample_user_data):
+        """Test getting all user sessions"""
+        # Create multiple sessions
+        await session_service.create_session(sample_user_data)
+        await session_service.create_session(sample_user_data)
 
-        with patch.object(session_service, '_get_user_sessions_from_db') as mock_get_sessions:
-            mock_sessions = [
-                {
-                    "session_id": "session-1",
-                    "user_id": user_id,
-                    "created_at": datetime.utcnow(),
-                    "is_active": True
-                },
-                {
-                    "session_id": "session-2",
-                    "user_id": user_id,
-                    "created_at": datetime.utcnow() - timedelta(days=1),
-                    "is_active": False
-                }
-            ]
-            mock_get_sessions.return_value = mock_sessions
+        # Get all sessions
+        sessions = await session_service.get_user_sessions(sample_user_data["user_id"])
 
-            result = await session_service.get_user_sessions(user_id, active_only=False)
+        assert len(sessions) >= 2
+        assert all(s.user_id == sample_user_data["user_id"] for s in sessions)
+        assert all(s.is_active is True for s in sessions)  # active_only=True by default
 
-            assert len(result) == 2
-            assert result[0]["session_id"] == "session-1"
+    async def test_get_user_sessions_include_inactive(self, session_service, db_session, sample_user_data):
+        """Test getting all user sessions including inactive"""
+        # Create sessions
+        session1 = await session_service.create_session(sample_user_data)
+        session2 = await session_service.create_session(sample_user_data)
 
-    async def test_cleanup_expired_sessions(self, session_service):
+        # Get count of sessions created
+        all_before = await session_service.get_user_sessions(
+            sample_user_data["user_id"],
+            active_only=False
+        )
+        total_count = len(all_before)
+
+        # Deactivate one specific session
+        await session_service.deactivate_session(session1.session_id)
+
+        # Get all sessions (active only) - should have one less
+        active_sessions = await session_service.get_user_sessions(
+            sample_user_data["user_id"],
+            active_only=True
+        )
+
+        # Get all sessions (including inactive) - should have same total
+        all_sessions = await session_service.get_user_sessions(
+            sample_user_data["user_id"],
+            active_only=False
+        )
+
+        # Verify inactive count increased by 1
+        assert len(all_sessions) == total_count
+        assert len(active_sessions) == total_count - 1
+        assert len(all_sessions) > len(active_sessions)
+
+    async def test_update_last_activity(self, session_service, db_session, sample_user_data):
+        """Test updating last activity timestamp"""
+        # Create session
+        session = await session_service.create_session(sample_user_data)
+        original_activity = session.last_activity
+
+        # Update activity
+        result = await session_service.update_last_activity(session.session_id)
+        assert result is True
+
+        # Verify activity updated
+        updated_session = await session_service.get_session(session.session_id)
+        assert updated_session.last_activity > original_activity
+
+    async def test_cleanup_expired_sessions(self, session_service, db_session, sample_user_data):
         """Test cleanup of expired sessions"""
-        with patch.object(session_service, '_cleanup_expired_sessions_db') as mock_cleanup:
-            mock_cleanup.return_value = 5  # 5 sessions cleaned
+        # Create session and manually set it as expired
+        session = await session_service.create_session(sample_user_data)
 
-            result = await session_service.cleanup_expired_sessions()
+        # Manually update expires_at to past time
+        await db_session.execute(
+            update(Session)
+            .where(Session.session_id == session.session_id)
+            .values(expires_at=datetime.utcnow() - timedelta(hours=1))
+        )
+        await db_session.commit()
 
-            assert result == 5
-            mock_cleanup.assert_called_once()
+        # Run cleanup
+        count = await session_service.cleanup_expired_sessions()
 
-@pytest.mark.asyncio
-class TestSessionAPI:
-    """Test cases for Session API endpoints"""
+        assert count >= 1
 
-    async def test_get_current_session(self, client: AsyncClient, auth_headers):
-        """Test getting current session info"""
-        with patch("services.session_service.SessionService.get_session_info") as mock_get_info:
-            mock_get_info.return_value = {
-                "session_id": "test-session-id",
-                "user_id": 1,
-                "created_at": "2024-01-01T00:00:00Z",
-                "last_activity": "2024-01-01T12:00:00Z",
-                "is_active": True
-            }
+        # Verify session is deactivated
+        updated_session = await session_service.get_session(session.session_id)
+        assert updated_session.is_active is False
 
-            response = await client.get("/api/v1/sessions/current", headers=auth_headers)
+    async def test_update_session(self, session_service, db_session, sample_user_data):
+        """Test updating session with arbitrary data"""
+        # Create session
+        session = await session_service.create_session(sample_user_data)
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["session_id"] == "test-session-id"
+        # Update session data
+        new_ip = "10.0.0.1"
+        updated_session = await session_service.update_session(
+            session.session_id,
+            {"ip_address": new_ip}
+        )
 
-    async def test_get_user_sessions_list(self, client: AsyncClient, auth_headers):
-        """Test getting user sessions list"""
-        with patch("services.session_service.SessionService.get_user_sessions") as mock_get_sessions:
-            mock_get_sessions.return_value = [
-                {
-                    "session_id": "session-1",
-                    "created_at": "2024-01-01T00:00:00Z",
-                    "last_activity": "2024-01-01T12:00:00Z",
-                    "is_active": True,
-                    "user_agent": "Test Browser",
-                    "ip_address": "192.168.1.100"
-                }
-            ]
+        assert updated_session is not None
+        assert updated_session.ip_address == new_ip
 
-            response = await client.get("/api/v1/sessions/", headers=auth_headers)
+    async def test_get_session_stats(self, session_service, db_session, sample_user_data):
+        """Test getting session statistics"""
+        # Create sessions
+        await session_service.create_session(sample_user_data)
+        await session_service.create_session(sample_user_data)
 
-            assert response.status_code == 200
-            data = response.json()
-            assert len(data) == 1
-            assert data[0]["session_id"] == "session-1"
+        # Get stats
+        stats = await session_service.get_session_stats(sample_user_data["user_id"])
 
-    async def test_invalidate_session(self, client: AsyncClient, auth_headers):
-        """Test session invalidation"""
-        session_id = "test-session-id"
+        assert stats["active_sessions"] >= 2
+        assert stats["total_sessions"] >= 2
+        assert stats["user_id"] == sample_user_data["user_id"]
 
-        with patch("services.session_service.SessionService.invalidate_session") as mock_invalidate:
-            mock_invalidate.return_value = True
+    async def test_get_session_not_found(self, session_service, db_session):
+        """Test getting non-existent session"""
+        non_existent_id = "00000000-0000-0000-0000-000000000000"
 
-            response = await client.delete(f"/api/v1/sessions/{session_id}", headers=auth_headers)
+        result = await session_service.get_session(non_existent_id)
 
-            assert response.status_code == 200
-            data = response.json()
-            assert "message" in data
-
-    async def test_invalidate_all_sessions(self, client: AsyncClient, auth_headers):
-        """Test invalidating all user sessions"""
-        with patch("services.session_service.SessionService.invalidate_all_user_sessions") as mock_invalidate_all:
-            mock_invalidate_all.return_value = 3  # 3 sessions invalidated
-
-            response = await client.delete("/api/v1/sessions/", headers=auth_headers)
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["invalidated_count"] == 3
+        assert result is None

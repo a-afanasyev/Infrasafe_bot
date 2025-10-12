@@ -95,10 +95,28 @@ class Request(Base):
         index=True
     )
 
-    # Location information
-    address: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Location information - Building Directory Integration
+    # building_id: UUID reference to Building from Building Directory (user-service)
+    building_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+        comment="UUID reference to Building Directory (user-service)"
+    )
+    # building_address: Denormalized full address from Building Directory for performance
+    building_address: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Denormalized full address from Building Directory"
+    )
+    # address: User-provided details (apartment, entrance, floor, etc.)
+    # ⚠️ ВАЖНО: Это поле для пользовательских уточнений, НЕ для полного адреса!
+    address: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        comment="User-provided details: apartment, entrance, floor, etc."
+    )
     apartment_number: Mapped[Optional[str]] = mapped_column(String(20))
-    building_id: Mapped[Optional[str]] = mapped_column(String(50))
 
     # User relationships (external service references)
     applicant_user_id: Mapped[str] = mapped_column(
@@ -181,6 +199,9 @@ class Request(Base):
         Index('ix_requests_category_priority', 'category', 'priority'),
         Index('ix_requests_address', 'address'),
         Index('ix_requests_created_date', 'created_at'),
+        # Building Directory indexes
+        Index('ix_requests_building_id', 'building_id'),
+        Index('ix_requests_status_building', 'status', 'building_id'),
     )
 
     def __repr__(self) -> str:

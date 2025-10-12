@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import time
 
 from app.core.config import settings
@@ -240,11 +242,7 @@ async def version():
     }
 
 
-# Подключение роутеров после основных endpoints
-app.include_router(main_router)
-
-
-# Health check endpoint for Docker healthcheck
+# Health check endpoint (только healthz, /health будет из роутера)
 @app.get("/healthz")
 async def simple_health():
     """Simple health check endpoint for Docker"""
@@ -254,15 +252,22 @@ async def simple_health():
         "version": "1.0.0"
     }
 
-# Also add the expected /health endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for Docker"""
-    return {
-        "status": "ok",
-        "service": "media-service",
-        "version": "1.0.0"
-    }
+# Подключение роутеров (включает /health endpoint)
+app.include_router(main_router)
+
+# Добавляем статические файлы для веб-интерфейса
+@app.get("/test_interface.html")
+async def get_test_interface():
+    """Возвращает тестовый веб-интерфейс"""
+    import os
+    interface_path = "/app/test_interface.html"
+    if os.path.exists(interface_path):
+        return FileResponse(interface_path, media_type="text/html")
+    else:
+        raise HTTPException(status_code=404, detail="Test interface not found")
+
+# Добавляем поддержку статических файлов
+app.mount("/static", StaticFiles(directory="/app"), name="static")
 
 
 if __name__ == "__main__":

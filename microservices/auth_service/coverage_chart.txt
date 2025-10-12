@@ -1,0 +1,125 @@
+# AUTH SERVICE - VISUAL COVERAGE ANALYSIS
+# Generated: 2025-10-06
+
+┌────────────────────────────────────────────────────────────────────────┐
+│                  OVERALL COVERAGE: 62%                                 │
+│  ████████████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░         │
+│  3371 / 5452 lines covered                                             │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─ CATEGORY BREAKDOWN ────────────────────────────────────────────────────┐
+│                                                                          │
+│  Models & Schemas      100% ████████████████████████████████████████   │
+│  Services               70% ██████████████████████████████░░░░░░░░░░   │
+│  Infrastructure         53% █████████████████████░░░░░░░░░░░░░░░░░░░   │
+│  API Endpoints          34% █████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  Middleware             28% ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  Events                  0% ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ SERVICES DETAIL (Target: 70% ✅ ACHIEVED) ─────────────────────────────┐
+│                                                                          │
+│  credential_service    82% ████████████████████████████████░░░░░░░░   │
+│  session_service       73% █████████████████████████████░░░░░░░░░░░   │
+│  auth_service          72% ████████████████████████████░░░░░░░░░░░░   │
+│  static_key_service    70% ████████████████████████████░░░░░░░░░░░░   │
+│  service_token         69% ███████████████████████████░░░░░░░░░░░░░   │
+│  jwt_service           69% ███████████████████████████░░░░░░░░░░░░░   │
+│  audit_service         67% ██████████████████████████░░░░░░░░░░░░░░   │
+│  permission_service    57% ██████████████████████░░░░░░░░░░░░░░░░░░   │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ API ENDPOINTS (Target: 100% ❌ NOT ACHIEVED) ──────────────────────────┐
+│                                                                          │
+│  auth.py               67% ██████████████████████████░░░░░░░░░░░░░░   │
+│  internal.py           29% ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  sessions.py           28% ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  permissions.py        20% ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│                                                                          │
+│  GAP TO TARGET: -66%                                                     │
+│  CRITICAL ISSUE: Integration tests for HTTP endpoints missing           │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ MIDDLEWARE (Target: 70%) ───────────────────────────────────────────────┐
+│                                                                          │
+│  redis_rate_limiting   68% ███████████████████████████░░░░░░░░░░░░░   │
+│  auth                  20% ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  logging                0% ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  rate_limiting          0% ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  tracing                0% ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│                                                                          │
+│  GAP TO TARGET: -42%                                                     │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ TEST QUALITY ───────────────────────────────────────────────────────────┐
+│                                                                          │
+│  Total Tests:      289                                                   │
+│  ✅ Passing:       125 (43%)  ████████████████░░░░░░░░░░░░░░░░░░░░░░   │
+│  ❌ Failing:       160 (55%)  ██████████████████████░░░░░░░░░░░░░░░░   │
+│  ⏭️  Skipped:        3 (1%)   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│  ⚠️  Errors:         1 (<1%)  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
+│                                                                          │
+│  ISSUE: More than half of tests are failing!                            │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ TOP UNCOVERED MODULES ──────────────────────────────────────────────────┐
+│                                                                          │
+│  1. api/v1/permissions.py      164 lines  (80% uncovered)               │
+│  2. events/subscriber.py       190 lines  (100% uncovered)              │
+│  3. events/publisher.py        116 lines  (100% uncovered)              │
+│  4. api/v1/internal.py         106 lines  (71% uncovered)               │
+│  5. middleware/auth.py          82 lines  (80% uncovered)               │
+│  6. middleware/logging.py       64 lines  (100% uncovered)              │
+│  7. middleware/tracing.py       65 lines  (100% uncovered)              │
+│  8. api/v1/sessions.py          62 lines  (72% uncovered)               │
+│  9. health.py                   61 lines  (100% uncovered)              │
+│ 10. middleware/rate_limiting.py 52 lines  (100% uncovered)              │
+│                                                                          │
+│  TOTAL CRITICAL UNCOVERED: 962 lines                                     │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ ACHIEVEMENT STATUS ─────────────────────────────────────────────────────┐
+│                                                                          │
+│  ✅ Services Coverage:        70%  TARGET MET!                          │
+│  ✅ Models/Schemas Coverage: 100%  PERFECT!                             │
+│  ❌ API Endpoints Coverage:   34%  CRITICAL GAP (-66%)                  │
+│  ❌ Overall Coverage:         62%  BELOW TARGET (-23%)                  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ EFFORT REQUIRED ────────────────────────────────────────────────────────┐
+│                                                                          │
+│  Phase 1: Fix Failing Tests           1-2 days   [P0 - Critical]       │
+│  Phase 2: API Integration Tests      3-4 days   [P0 - Critical]       │
+│  Phase 3: Middleware Tests            2-3 days   [P1 - Important]      │
+│  Phase 4: Events & Infrastructure     1-2 days   [P2 - Optional]       │
+│                                                                          │
+│  MINIMUM (P0 only):    4-6 days  → 75% overall, 92% API                │
+│  OPTIMUM (P0 + P1):    6-9 days  → 80% overall, 95% API                │
+│  MAXIMUM (All phases): 7-11 days → 85% overall, 95% API                │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─ RECOMMENDATION ─────────────────────────────────────────────────────────┐
+│                                                                          │
+│  PRIORITY: Phase 1 + Phase 2 (Fix tests + API integration)             │
+│                                                                          │
+│  WHY:                                                                    │
+│  • Services already at 70% ✅                                           │
+│  • API endpoints are business-critical                                  │
+│  • Pass rate needs improvement for CI/CD                                │
+│                                                                          │
+│  EXPECTED RESULT:                                                        │
+│  • Overall coverage:  62% → 75%                                         │
+│  • API coverage:      34% → 92%                                         │
+│  • Test pass rate:    43% → 80%                                         │
+│  • Time investment:   4-6 days                                          │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+

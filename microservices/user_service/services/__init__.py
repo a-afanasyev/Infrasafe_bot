@@ -5,10 +5,12 @@ from .user_service import UserService
 from .profile_service import ProfileService
 from .verification_service import VerificationService
 from .role_service import RoleService
+from .building_service import BuildingService
 
 __all__ = [
     "UserService",
     "ProfileService",
     "VerificationService",
-    "RoleService"
+    "RoleService",
+    "BuildingService"
 ]

@@ -51,7 +51,7 @@ class PerformanceMetrics:
 class MetricsCollector:
     """Collects and aggregates metrics"""
 
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = "redis://shared-redis:6379/4"):
         self.redis_url = redis_url
         self.redis_client: Optional[redis.Redis] = None
         self.metrics_buffer = deque(maxlen=1000)  # In-memory buffer
@@ -67,10 +67,12 @@ class MetricsCollector:
                 self.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
-                socket_keepalive=True
+                socket_keepalive=True,
+                socket_connect_timeout=5,
+                socket_timeout=5
             )
             await self.redis_client.ping()
-            logger.info("Metrics collector Redis connection established")
+            logger.info(f"Metrics collector Redis connection established to {self.redis_url}")
         except Exception as e:
             logger.warning(f"Failed to connect to Redis for metrics: {e}")
             self.redis_client = None
@@ -221,7 +223,7 @@ class MetricsCollector:
 class ObservabilityService:
     """Main observability service"""
 
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = "redis://shared-redis:6379/4"):
         self.metrics = MetricsCollector(redis_url)
         self.active_operations = {}  # Track ongoing operations
         self.startup_time = time.time()
@@ -433,7 +435,8 @@ async def get_observability() -> ObservabilityService:
     """Get global observability instance"""
     global observability_instance
     if not observability_instance:
-        observability_instance = ObservabilityService()
+        from app.core.config import settings
+        observability_instance = ObservabilityService(redis_url=settings.redis_url)
         await observability_instance.initialize()
     return observability_instance
 

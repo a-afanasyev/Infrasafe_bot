@@ -112,14 +112,13 @@ services:
     container_name: media-service
     ports:
       - "${MEDIA_SERVICE_PORT:-8004}:8004"
+    env_file:
+      - ./media_service/.env
     environment:
+      # Override specific variables if needed (env_file values are loaded first)
       - DATABASE_URL=postgresql+asyncpg://${MEDIA_DB_USER:-media_user}:${MEDIA_DB_PASSWORD:-media_pass}@media-db:5432/${MEDIA_DB_NAME:-media_db}
       - REDIS_URL=redis://${REDIS_HOST:-shared-redis}:${REDIS_PORT:-6379}/${REDIS_MEDIA_DB:-4}
-      - STORAGE_PATH=${MEDIA_STORAGE_PATH:-/app/storage}
-      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-52428800}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DEBUG=${DEBUG:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # TELEGRAM_BOT_TOKEN loaded from media_service/.env
     depends_on:
       media-db:
         condition: service_healthy
@@ -144,16 +143,13 @@ services:
     container_name: notification-service
     ports:
       - "${NOTIFICATION_SERVICE_PORT:-8005}:8005"
+    env_file:
+      - ./notification_service/.env
     environment:
+      # Override specific variables if needed (env_file values are loaded first)
       - DATABASE_URL=postgresql+asyncpg://${NOTIFICATION_DB_USER:-notification_user}:${NOTIFICATION_DB_PASSWORD:-notification_pass}@notification-db:5432/${NOTIFICATION_DB_NAME:-notification_db}
       - REDIS_URL=redis://${REDIS_HOST:-shared-redis}:${REDIS_PORT:-6379}/${REDIS_NOTIFICATION_DB:-5}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER}
-      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT}
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
-      - DEBUG=${DEBUG:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # TELEGRAM_BOT_TOKEN, EMAIL_* loaded from notification_service/.env
     depends_on:
       notification-db:
         condition: service_healthy
@@ -447,6 +443,8 @@ services:
     container_name: bot-gateway
     ports:
       - "${BOT_GATEWAY_WEBHOOK_PORT:-8000}:8000"
+    env_file:
+      - ./bot_gateway/.env
     environment:
       # Application
       - APP_NAME=Bot Gateway Service
@@ -455,8 +453,8 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
-      # Telegram Bot
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      # Telegram Bot (loaded from bot_gateway/.env file)
+      # TELEGRAM_BOT_TOKEN is set in env_file, not here
       - TELEGRAM_USE_WEBHOOK=${TELEGRAM_USE_WEBHOOK:-false}
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
@@ -504,7 +502,7 @@ services:
 
       # File Handling
       - MAX_FILE_SIZE_MB=20
-      - ALLOWED_FILE_TYPES=jpg,jpeg,png,pdf,doc,docx
+      - 'ALLOWED_FILE_TYPES=jpg,jpeg,png,pdf,doc,docx'
 
       # Logging
       - LOG_FORMAT=json
@@ -516,7 +514,7 @@ services:
 
       # Message Defaults
       - DEFAULT_LANGUAGE=ru
-      - SUPPORTED_LANGUAGES=ru,uz
+      - 'SUPPORTED_LANGUAGES=ru,uz'
       - MESSAGE_PARSE_MODE=HTML
 
       # Timeouts
@@ -531,7 +529,7 @@ services:
       - ENABLE_ANALYTICS_ACCESS=false
 
       # Security
-      - ALLOWED_UPDATES=message,callback_query,inline_query
+      - 'ALLOWED_UPDATES=message,callback_query,inline_query'
       - SKIP_UPDATES=false
 
     depends_on:

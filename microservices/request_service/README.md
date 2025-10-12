@@ -241,6 +241,36 @@ async def generate_next_number(db: AsyncSession) -> NumberGenerationResult:
 - **Load Balancing**: Even workload distribution
 - **Historical Analysis**: Performance-based recommendations
 
+### **Building Directory Integration** ✨ NEW
+- **Centralized Building Management**: Integration with User Service Building Directory
+- **Automatic Address Resolution**: Buildings stored centrally, referenced by ID
+- **Coordinate Denormalization**: Coordinates cached in requests for performance
+- **Multi-Tenancy**: Management company isolation via MANAGEMENT_COMPANY_ID
+- **Smart Client**: `BuildingDirectoryClient` with automatic configuration
+
+**Architecture**:
+```python
+# Request Service stores building_id + denormalized data
+Request:
+  - building_id (UUID)           # Reference to Building Directory
+  - building_address (String)    # Denormalized full address
+  - address (String)             # Apartment-specific details (кв. 5, 3 подъезд)
+  - latitude, longitude          # Denormalized coordinates
+
+# Building Directory Client configuration
+BuildingDirectoryClient:
+  - api_url: http://user-service:8002  # From settings.USER_SERVICE_URL
+  - management_company_id: UUID        # From settings.MANAGEMENT_COMPANY_ID
+  - timeout: 30s                       # Configurable
+```
+
+**Key Features**:
+- ✅ Automatic building validation on request creation
+- ✅ Coordinates extracted from nested Building API structure
+- ✅ No hardcoded URLs - all from environment configuration
+- ✅ Backwards compatible with flat coordinate structure
+- ✅ Multi-tenant support via MANAGEMENT_COMPANY_ID header
+
 ### **Advanced Search & Analytics**
 - **Full-Text Search**: PostgreSQL full-text search
 - **Multi-Filter Support**: Status, category, date, executor
@@ -517,6 +547,10 @@ MEDIA_SERVICE_URL=http://media-service:8004
 NOTIFICATION_SERVICE_URL=http://notification-service:8005
 BOT_SERVICE_URL=http://bot-service:8006
 
+# Building Directory Integration (✨ NEW)
+MANAGEMENT_COMPANY_ID=00000000-0000-0000-0000-000000000001
+REQUEST_TIMEOUT_SECONDS=30
+
 # Internal API Configuration
 INTERNAL_API_TOKEN=request-service-internal-token
 ALLOWED_INTERNAL_IPS=["172.0.0.0/8", "127.0.0.1/32"]
@@ -624,6 +658,138 @@ class UserServiceClient:
                 return response.json().get("executors", [])
             return []
 ```
+
+### **Building Directory Integration** ✨ NEW
+```python
+# Building Directory Client for centralized building management
+class BuildingDirectoryClient:
+    """
+    Client for User Service Building Directory API
+
+    Features:
+    - Automatic configuration from environment (USER_SERVICE_URL, MANAGEMENT_COMPANY_ID)
+    - Building validation for requests
+    - Coordinate extraction from nested API structure
+    - Multi-tenancy support via management company isolation
+    - Backwards compatibility with flat coordinate structure
+    """
+
+    def __init__(
+        self,
+        api_url: str,  # From settings.USER_SERVICE_URL
+        management_company_id: str,  # From settings.MANAGEMENT_COMPANY_ID
+        timeout: int = 30
+    ):
+        self.api_url = api_url.rstrip('/')
+        self.management_company_id = management_company_id
+        self.timeout = timeout
+        self.base_url = f"{self.api_url}/api/v1/buildings"
+
+    async def validate_building_for_request(
+        self,
+        building_id: UUID
+    ) -> Tuple[bool, Optional[str], Optional[Dict]]:
+        """Validate building exists and is active"""
+        building = await self.get_building(building_id)
+
+        if not building:
+            return False, f"Building {building_id} not found in Directory", None
+
+        if not building.get('is_active', False):
+            return False, f"Building {building.get('full_address')} is inactive", building
+
+        return True, None, building
+
+    async def get_building_data_for_request(
+        self,
+        building_id: UUID
+    ) -> Optional[Dict]:
+        """
+        Get building data for request denormalization
+
+        Extracts coordinates from nested structure:
+        API returns: {"coordinates": {"lat": 41.31, "lon": 69.28}}
+        """
+        building = await self.get_building(building_id)
+
+        if not building:
+            return None
+
+        # Extract coordinates from nested structure (✨ FIXED)
+        coordinates = building.get('coordinates')
+        latitude = None
+        longitude = None
+
+        if coordinates and isinstance(coordinates, dict):
+            # New format: nested coordinates object
+            latitude = float(coordinates['lat']) if coordinates.get('lat') else None
+            longitude = float(coordinates['lon']) if coordinates.get('lon') else None
+        elif building.get('latitude') and building.get('longitude'):
+            # Fallback: flat structure (backwards compatibility)
+            latitude = float(building['latitude'])
+            longitude = float(building['longitude'])
+
+        return {
+            'building_address': building.get('full_address', ''),
+            'latitude': latitude,
+            'longitude': longitude,
+            'city': building.get('city', ''),
+            'street': building.get('street', ''),
+            'house_number': building.get('house_number', ''),
+            'building_corpus': building.get('building_corpus'),
+            'building_type': building.get('building_type')
+        }
+
+# Singleton factory with automatic configuration (✨ FIXED)
+def get_building_directory_client() -> BuildingDirectoryClient:
+    global _building_directory_client
+
+    if _building_directory_client is None:
+        from app.core.config import settings
+
+        _building_directory_client = BuildingDirectoryClient(
+            api_url=settings.USER_SERVICE_URL,  # ✅ No hardcoded values
+            management_company_id=settings.MANAGEMENT_COMPANY_ID,
+            timeout=settings.REQUEST_TIMEOUT_SECONDS
+        )
+
+    return _building_directory_client
+
+# Usage in request creation
+async def create_request(request_data: RequestCreate) -> Request:
+    # Validate building
+    client = get_building_directory_client()
+    is_valid, error, building = await client.validate_building_for_request(
+        request_data.building_id
+    )
+
+    if not is_valid:
+        raise HTTPException(400, detail=error)
+
+    # Get denormalized building data
+    building_data = await client.get_building_data_for_request(
+        request_data.building_id
+    )
+
+    # Create request with denormalized data
+    request = Request(
+        building_id=request_data.building_id,
+        building_address=building_data['building_address'],
+        address=request_data.address,  # Apartment details
+        latitude=building_data['latitude'],
+        longitude=building_data['longitude'],
+        # ... other fields
+    )
+
+    return request
+```
+
+**Key Improvements (Oct 2025)**:
+- ✅ Removed hardcoded URL (`localhost:8001` → configurable via `USER_SERVICE_URL`)
+- ✅ Fixed coordinates extraction (flat → nested structure with backwards compatibility)
+- ✅ Added multi-tenancy support via `MANAGEMENT_COMPANY_ID`
+- ✅ All configuration from environment variables
+- ✅ E2E test coverage added
 
 ### **Media Service Integration**
 ```python
@@ -993,17 +1159,28 @@ alembic upgrade head
 
 ## 📄 API Documentation
 
-### **Interactive Documentation**
-- **Swagger UI**: http://localhost:8003/docs
-- **ReDoc**: http://localhost:8003/redoc
-- **OpenAPI JSON**: http://localhost:8003/openapi.json
+### **📚 Complete Documentation Suite** ⭐
 
-### **Key Features Documentation**
-- Request lifecycle management flows
-- Assignment algorithm documentation
-- Search and analytics capabilities
-- Bot integration patterns
-- Service integration examples
+**Getting Started**:
+1. **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** - Навигация по всей документации
+2. **[docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md)** - Руководство по интеграциям с примерами кода
+3. **[docs/RUN_TESTS.md](docs/RUN_TESTS.md)** - Инструкции по тестированию
+
+**API Reference** (89 endpoints):
+- **[docs/API_REFERENCE_CORE.md](docs/API_REFERENCE_CORE.md)** - Requests API (создание, обновление, статусы, пагинация)
+- **[docs/API_REFERENCE_ASSIGNMENTS.md](docs/API_REFERENCE_ASSIGNMENTS.md)** - Assignments & AI API (назначение, AI рекомендации, geocoding)
+- **[docs/API_REFERENCE_COMMENTS.md](docs/API_REFERENCE_COMMENTS.md)** - Comments, Ratings & Materials API
+- **[docs/API_REFERENCE_INTEGRATION.md](docs/API_REFERENCE_INTEGRATION.md)** - Bot, Search, Analytics & Export API
+
+**Interactive Documentation**:
+- **[Swagger UI](http://localhost:8003/docs)** - Интерактивное API тестирование
+- **[ReDoc](http://localhost:8003/redoc)** - Читаемая документация
+- **[OpenAPI JSON](http://localhost:8003/openapi.json)** - OpenAPI schema
+
+**Migration Guides**:
+- **[docs/BOT_HANDLER_EXAMPLES.md](docs/BOT_HANDLER_EXAMPLES.md)** - Примеры Telegram bot handlers
+- **[docs/BOT_MIGRATION_GUIDE.md](docs/BOT_MIGRATION_GUIDE.md)** - Миграция бота на микросервисы
+- **[docs/MIGRATION_IMPLEMENTATION_SUMMARY.md](docs/MIGRATION_IMPLEMENTATION_SUMMARY.md)** - Детали миграции данных
 
 ---
 

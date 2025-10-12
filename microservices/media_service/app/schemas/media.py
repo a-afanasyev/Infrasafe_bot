@@ -171,15 +171,19 @@ class MediaBulkOperationResponse(BaseModel):
 
 # Error response schemas
 class ErrorResponse(BaseModel):
-    error: str
-    message: str
-    details: Optional[Dict[str, Any]] = None
+    error_code: str = Field(..., description="Код ошибки Media Service")
+    message: str = Field(..., description="Сообщение об ошибке")
+    description: str = Field(..., description="Подробное описание ошибки")
+    category: str = Field(..., description="Категория ошибки")
+    details: Optional[Dict[str, Any]] = Field(None, description="Дополнительные детали ошибки")
 
 
 class ValidationErrorResponse(BaseModel):
-    error: str = "validation_error"
-    message: str
-    errors: List[Dict[str, Any]]
+    error_code: str = Field(default="MEDIA_002", description="Код ошибки валидации")
+    message: str = Field(..., description="Сообщение об ошибке валидации")
+    description: str = Field(default="Переданные данные не соответствуют требованиям", description="Описание ошибки")
+    category: str = Field(default="Ошибки валидации", description="Категория ошибки")
+    errors: List[Dict[str, Any]] = Field(..., description="Список ошибок валидации")
 
 
 # Health check schema

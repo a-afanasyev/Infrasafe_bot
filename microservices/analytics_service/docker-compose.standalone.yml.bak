@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  analytics-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    ports:
+      - "8008:8006"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+
+  analytics-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: analytics-consumer
+    command: ["python", "start_consumer.py"]
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - REDIS_CONSUMER_NAME=analytics-consumer-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analytics-service:
+        condition: service_started
+    networks:
+      - microservices
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: analytics-postgres
+    environment:
+      POSTGRES_USER: analytics_user
+      POSTGRES_PASSWORD: analytics_pass
+      POSTGRES_DB: analytics_db
+    ports:
+      - "5440:5432"  # Different port to avoid conflicts
+    volumes:
+      - analytics_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics_user -d analytics_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices
+
+  redis:
+    image: redis:7-alpine
+    container_name: analytics-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6381:6379"  # Different port to avoid conflicts
+    volumes:
+      - analytics_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices
+
+networks:
+  microservices:
+    external: true
+
+volumes:
+  analytics_postgres_data:
+  analytics_redis_data:

@@ -68,6 +68,7 @@ class StaticKeyService:
         services = {
             "request-service": "request-service-api-key-change-in-production",
             "user-service": "user-service-api-key-change-in-production",
+            "shift-service": "shift-service-api-key-change-in-production",
             "notification-service": "notification-service-api-key-change-in-production",
             "media-service": "media-service-api-key-change-in-production",
             "ai-service": "ai-service-api-key-change-in-production",
@@ -105,6 +106,7 @@ class StaticKeyService:
         permission_map = {
             "request-service": ["requests:read", "requests:write", "notifications:send"],
             "user-service": ["users:read", "users:write", "users:validate"],
+            "shift-service": ["shifts:read", "shifts:write", "shifts:assign", "users:read"],
             "notification-service": ["notifications:send", "notifications:read"],
             "media-service": ["media:read", "media:write", "media:validate"],
             "ai-service": ["ai:optimize", "ai:suggest", "requests:read"],

@@ -22,6 +22,18 @@ from .media import (
     MediaStatusEnum
 )
 
+from .duplicate_check import (
+    DuplicateCheckRequest,
+    DuplicateCheckResponse,
+    DuplicateStatsResponse,
+    DuplicateCleanupRequest,
+    DuplicateCleanupResponse,
+    DuplicateConfigRequest,
+    DuplicateConfigResponse,
+    MediaUploadWithDuplicateCheckRequest,
+    MediaUploadWithDuplicateCheckResponse
+)
+
 __all__ = [
     "MediaUploadRequest",
     "MediaSearchRequest",
@@ -43,5 +55,15 @@ __all__ = [
     "MediaTimelineItem",
     "FileTypeEnum",
     "MediaCategoryEnum",
-    "MediaStatusEnum"
+    "MediaStatusEnum",
+    # Duplicate check schemas
+    "DuplicateCheckRequest",
+    "DuplicateCheckResponse",
+    "DuplicateStatsResponse",
+    "DuplicateCleanupRequest",
+    "DuplicateCleanupResponse",
+    "DuplicateConfigRequest",
+    "DuplicateConfigResponse",
+    "MediaUploadWithDuplicateCheckRequest",
+    "MediaUploadWithDuplicateCheckResponse"
 ]

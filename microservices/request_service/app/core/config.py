@@ -84,6 +84,13 @@ class Settings(BaseSettings):
         env="INTERNAL_API_TOKEN"
     )
 
+    # Multi-tenancy
+    MANAGEMENT_COMPANY_ID: str = Field(
+        default="00000000-0000-0000-0000-000000000001",
+        env="MANAGEMENT_COMPANY_ID",
+        description="Default management company ID for tenant isolation"
+    )
+
     # Migration Settings
     MIGRATION_MODE: str = Field(
         default="dual",  # "dual", "microservice_only", "monolith_only"

@@ -11,11 +11,12 @@ from models import Base
 
 # Engine and session factory will be initialized after config is processed
 engine = None
+async_engine = None  # Alias for test compatibility
 AsyncSessionLocal = None
 
 def init_database():
     """Initialize database engine and session factory"""
-    global engine, AsyncSessionLocal
+    global engine, async_engine, AsyncSessionLocal
 
     if engine is None:
         # Create async engine
@@ -27,6 +28,9 @@ def init_database():
             max_overflow=20,
             pool_recycle=3600
         )
+
+        # Set alias for test compatibility
+        async_engine = engine
 
         # Create session factory
         AsyncSessionLocal = async_sessionmaker(

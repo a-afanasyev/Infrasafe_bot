@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  analytics-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: analytics-service:staging
+    container_name: analytics-service-staging
+    ports:
+      - "8006:8006"
+    env_file:
+      - .env.staging
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/api/v1/health/live')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.analytics.environment=staging"
+      - "com.analytics.version=1.0.0"
+
+  analytics-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: analytics-service:staging
+    container_name: analytics-consumer-staging
+    command: ["python", "start_consumer.py"]
+    env_file:
+      - .env.staging
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - REDIS_CONSUMER_NAME=analytics-consumer-staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+    networks:
+      - microservices
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    labels:
+      - "com.analytics.environment=staging"
+      - "com.analytics.component=consumer"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: analytics-postgres-staging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-analytics_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analytics_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-analytics_db_staging}
+    ports:
+      - "5437:5432"
+    volumes:
+      - analytics_postgres_staging_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analytics_user} -d ${POSTGRES_DB:-analytics_db_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - microservices
+    labels:
+      - "com.analytics.environment=staging"
+
+  redis:
+    image: redis:7-alpine
+    container_name: analytics-redis-staging
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    volumes:
+      - analytics_redis_staging_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - microservices
+    labels:
+      - "com.analytics.environment=staging"
+
+networks:
+  microservices:
+    external: true
+
+volumes:
+  analytics_postgres_staging_data:
+    labels:
+      - "com.analytics.environment=staging"
+  analytics_redis_staging_data:
+    labels:
+      - "com.analytics.environment=staging"

@@ -13,6 +13,7 @@ from aiogram.types import InputFile, BufferedInputFile, Message
 
 from app.models.media import MediaFile, MediaChannel, MediaTag, MediaUploadSession
 from app.services.telegram_client import TelegramClientService
+from app.services.duplicate_checker import DuplicateCheckerService, DuplicatePolicy
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
 from app.db.async_database import get_async_db_context
 
@@ -25,6 +26,7 @@ class MediaStorageService:
     def __init__(self):
         self.telegram = TelegramClientService()
         self.channels_cache = {}
+        self.duplicate_checker = DuplicateCheckerService()
 
     async def upload_request_media(
         self,
@@ -115,6 +117,115 @@ class MediaStorageService:
 
         logger.info(f"Report media uploaded successfully: {media_file.id}")
         return media_file
+
+    async def upload_request_media_with_duplicate_check(
+        self,
+        request_number: str,
+        file_data: bytes,
+        filename: str,
+        content_type: str,
+        category: str = FileCategories.REQUEST_PHOTO,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        uploaded_by: int = None,
+        duplicate_policy: DuplicatePolicy = DuplicatePolicy.STRICT
+    ) -> Dict[str, Any]:
+        """
+        Загружает медиа-файл с проверкой дубликатов
+        
+        Returns:
+            Dict с результатом загрузки и информацией о дубликатах
+        """
+        logger.info(f"Uploading request media with duplicate check for {request_number}, category: {category}")
+
+        # Валидация
+        await self._validate_file(file_data, content_type)
+
+        # Проверка дубликатов
+        duplicate_result = await self.duplicate_checker.check_duplicate(
+            request_number=request_number,
+            category=category,
+            file_data=file_data,
+            policy=duplicate_policy
+        )
+
+        # Обработка результата проверки дубликатов
+        if duplicate_result.is_duplicate:
+            if duplicate_result.action_taken == "rejected":
+                # Строгая политика - отклоняем загрузку
+                return {
+                    "success": False,
+                    "media_file": None,
+                    "file_url": None,
+                    "message": duplicate_result.message,
+                    "duplicate_check_result": duplicate_result,
+                    "was_duplicate": True
+                }
+            elif duplicate_result.action_taken == "ignore":
+                # Игнорируем дубликат, возвращаем существующий файл
+                existing_file = duplicate_result.existing_file
+                file_url = await self.get_media_file_url(existing_file)
+                return {
+                    "success": True,
+                    "media_file": existing_file,
+                    "file_url": file_url,
+                    "message": duplicate_result.message,
+                    "duplicate_check_result": duplicate_result,
+                    "was_duplicate": True
+                }
+            elif duplicate_result.action_taken == "replace":
+                # Заменяем существующий файл
+                existing_file = duplicate_result.existing_file
+                # Архивируем старый файл в базе данных
+                async with get_async_db_context() as db:
+                    existing_file.status = "archived"
+                    existing_file.archived_at = datetime.now(timezone.utc)
+                    db.add(existing_file)
+                    await db.commit()
+                    logger.info(f"Archived existing file {existing_file.id} for replacement")
+
+        # Продолжаем с обычной загрузкой
+        try:
+            media_file = await self.upload_request_media(
+                request_number=request_number,
+                file_data=file_data,
+                filename=filename,
+                content_type=content_type,
+                category=category,
+                description=description,
+                tags=tags,
+                uploaded_by=uploaded_by
+            )
+
+            # Регистрируем файл для проверки дубликатов
+            await self.duplicate_checker.register_file(media_file, file_data)
+
+            # Получаем URL файла
+            file_url = await self.get_media_file_url(media_file)
+
+            message = "Файл успешно загружен"
+            if duplicate_result.is_duplicate and duplicate_result.action_taken == "warning":
+                message += f" (с предупреждением: {duplicate_result.message})"
+
+            return {
+                "success": True,
+                "media_file": media_file,
+                "file_url": file_url,
+                "message": message,
+                "duplicate_check_result": duplicate_result,
+                "was_duplicate": duplicate_result.is_duplicate
+            }
+
+        except Exception as e:
+            logger.error(f"Error uploading media with duplicate check: {e}")
+            return {
+                "success": False,
+                "media_file": None,
+                "file_url": None,
+                "message": f"Ошибка загрузки: {str(e)}",
+                "duplicate_check_result": duplicate_result,
+                "was_duplicate": False
+            }
 
     async def get_request_media(
         self,
@@ -403,6 +514,7 @@ class MediaStorageService:
     ) -> MediaFile:
         """
         Сохраняет метаданные медиа-файла в БД
+        Обрабатывает случай когда файл с таким telegram_file_id уже существует
         """
         # Определяем тип файла
         if message.photo:
@@ -417,6 +529,11 @@ class MediaStorageService:
         else:
             raise ValueError("Unknown file type")
 
+        # Создаем новую запись для каждой заявки
+        # Уникальное ограничение в БД предотвратит дубликаты в рамках одной заявки
+        logger.info(f"Creating new media record for request {request_number} with telegram_file_id {telegram_file_id}")
+        
+        # Создаем новую запись
         media_file = MediaFile(
             telegram_channel_id=message.chat.id,
             telegram_message_id=message.message_id,

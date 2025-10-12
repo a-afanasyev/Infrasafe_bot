@@ -8,6 +8,7 @@ Request, response, and validation schemas for the Request Service API.
 from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 from pydantic import BaseModel, Field, validator, root_validator
 from enum import Enum
 
@@ -16,14 +17,21 @@ from app.models import RequestStatus, RequestPriority, RequestCategory
 
 # Base schemas
 class RequestBase(BaseModel):
-    """Base request fields"""
+    """Base request fields with Building Directory integration"""
     title: str = Field(..., min_length=1, max_length=200, description="Request title")
     description: str = Field(..., min_length=1, max_length=5000, description="Request description")
     category: RequestCategory = Field(..., description="Request category")
     priority: RequestPriority = Field(default=RequestPriority.NORMAL, description="Request priority")
-    address: str = Field(..., min_length=1, max_length=500, description="Request address")
+
+    # Building Directory fields
+    building_id: Optional[UUID] = Field(None, description="Building UUID from Building Directory (user-service)")
+    building_address: Optional[str] = Field(None, max_length=500, description="Denormalized full address from Building Directory")
+
+    # User address details (apartment, entrance, floor)
+    address: str = Field(..., min_length=1, max_length=500, description="User details: apartment, entrance, floor, etc.")
     apartment_number: Optional[str] = Field(None, max_length=20, description="Apartment number")
-    building_id: Optional[str] = Field(None, max_length=50, description="Building ID")
+
+    # Coordinates (denormalized from Building or manual)
     latitude: Optional[float] = Field(None, ge=-90, le=90, description="Latitude coordinate")
     longitude: Optional[float] = Field(None, ge=-180, le=180, description="Longitude coordinate")
 
@@ -43,10 +51,38 @@ class RequestBase(BaseModel):
         return v
 
 
-class RequestCreate(RequestBase):
-    """Schema for creating a new request"""
+class RequestCreate(BaseModel):
+    """Schema for creating a new request with Building Directory integration"""
+    # Required fields
+    title: str = Field(..., min_length=1, max_length=200, description="Request title")
+    description: str = Field(..., min_length=1, max_length=5000, description="Request description")
+    category: RequestCategory = Field(..., description="Request category")
     applicant_user_id: str = Field(..., min_length=1, description="Applicant user ID from User Service")
+
+    # Building Directory integration - NOW REQUIRED
+    building_id: UUID = Field(..., description="Building UUID from Building Directory (REQUIRED)")
+
+    # Optional fields
+    priority: RequestPriority = Field(default=RequestPriority.NORMAL, description="Request priority")
+    address: Optional[str] = Field(None, max_length=500, description="User details: apartment, entrance, floor (optional)")
+    apartment_number: Optional[str] = Field(None, max_length=20, description="Apartment number")
     media_file_ids: Optional[List[str]] = Field(default=None, description="List of media file IDs")
+
+    # Note: building_address and coordinates will be populated automatically from Building Directory
+
+    @validator('title', 'description')
+    def validate_strings(cls, v):
+        """Validate string fields"""
+        if not v or not v.strip():
+            raise ValueError("Field cannot be empty or whitespace only")
+        return v.strip()
+
+    @validator('address')
+    def validate_address(cls, v):
+        """Validate address details"""
+        if v is not None and v.strip():
+            return v.strip()
+        return None
 
     @validator('media_file_ids')
     def validate_media_files(cls, v):
@@ -66,11 +102,20 @@ class RequestUpdate(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=5000)
     category: Optional[RequestCategory] = None
     priority: Optional[RequestPriority] = None
-    address: Optional[str] = Field(None, min_length=1, max_length=500)
+
+    # Building Directory fields
+    building_id: Optional[UUID] = Field(None, description="Building UUID from Building Directory")
+    building_address: Optional[str] = Field(None, max_length=500, description="Denormalized address (auto-populated)")
+
+    # User address details
+    address: Optional[str] = Field(None, min_length=1, max_length=500, description="User details: apartment, entrance, floor")
     apartment_number: Optional[str] = Field(None, max_length=20)
-    building_id: Optional[str] = Field(None, max_length=50)
+
+    # Coordinates
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
+
+    # Other fields
     executor_user_id: Optional[str] = Field(None, description="Assigned executor user ID")
     media_file_ids: Optional[List[str]] = Field(None, description="List of media file IDs")
     materials_requested: Optional[bool] = None

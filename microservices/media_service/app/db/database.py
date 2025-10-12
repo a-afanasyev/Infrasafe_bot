@@ -1,36 +1,70 @@
 """
-Конфигурация базы данных
+Конфигурация базы данных (Async SQLAlchemy)
 """
 
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from contextlib import contextmanager
-from typing import Generator
+from contextlib import asynccontextmanager, contextmanager
+from typing import AsyncGenerator, Generator
 import logging
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Создание движка базы данных
-engine = create_engine(
+# Async движок базы данных
+async_engine = create_async_engine(
+    settings.database_url.replace('postgresql://', 'postgresql+asyncpg://'),
+    echo=settings.database_echo,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    pool_size=20,
+    max_overflow=0
+)
+
+# Async сессия
+AsyncSessionLocal = async_sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+# Синхронный движок (для миграций и legacy code)
+sync_engine = create_engine(
     settings.database_url,
     echo=settings.database_echo,
     pool_pre_ping=True,
     pool_recycle=300
 )
 
-# Создание сессии
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Синхронная сессия (для legacy code)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 # Базовый класс для моделей
 Base = declarative_base()
 
 
-def get_db() -> Generator[Session, None, None]:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Dependency для получения сессии базы данных
+    Async dependency для получения сессии базы данных
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            await session.rollback()
+            raise
+
+
+def get_db_sync() -> Generator[Session, None, None]:
+    """
+    Sync dependency для получения сессии базы данных (legacy)
     """
     db = SessionLocal()
     try:
@@ -43,10 +77,25 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-@contextmanager
-def get_db_context() -> Generator[Session, None, None]:
+@asynccontextmanager
+async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
     """
-    Context manager для работы с базой данных
+    Async context manager для работы с базой данных
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            await session.rollback()
+            raise
+
+
+@contextmanager
+def get_db_context_sync() -> Generator[Session, None, None]:
+    """
+    Sync context manager для работы с базой данных (legacy)
     """
     db = SessionLocal()
     try:
@@ -60,16 +109,26 @@ def get_db_context() -> Generator[Session, None, None]:
         db.close()
 
 
-def create_tables():
+async def create_tables():
     """
-    Создание всех таблиц
+    Создание всех таблиц (async)
     """
     from app.models.media import Base
-    Base.metadata.create_all(bind=engine)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created successfully")
 
 
-def drop_tables():
+def create_tables_sync():
+    """
+    Создание всех таблиц (sync, для миграций)
+    """
+    from app.models.media import Base
+    Base.metadata.create_all(bind=sync_engine)
+    logger.info("Database tables created successfully")
+
+
+async def drop_tables():
     """
     Удаление всех таблиц (только для разработки)
     """
@@ -77,7 +136,8 @@ def drop_tables():
         raise RuntimeError("Cannot drop tables in production")
 
     from app.models.media import Base
-    Base.metadata.drop_all(bind=engine)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     logger.warning("Database tables dropped")
 
 
@@ -89,10 +149,10 @@ async def init_db():
 
     try:
         # Создаем таблицы если их нет
-        create_tables()
+        await create_tables()
 
         # Инициализируем базовые данные
-        with get_db_context() as db:
+        async with get_db_context() as db:
             await _create_default_channels(db)
             await _create_default_tags(db)
 
@@ -103,15 +163,17 @@ async def init_db():
         raise
 
 
-async def _create_default_channels(db: Session):
+async def _create_default_channels(db: AsyncSession):
     """
     Создание каналов по умолчанию
     """
     from app.models.media import MediaChannel
     from app.core.config import TelegramChannels
+    from sqlalchemy import select, func
 
     # Проверяем, есть ли уже каналы
-    existing_channels = db.query(MediaChannel).count()
+    result = await db.execute(select(func.count()).select_from(MediaChannel))
+    existing_channels = result.scalar()
     if existing_channels > 0:
         return
 
@@ -151,14 +213,16 @@ async def _create_default_channels(db: Session):
     logger.info(f"Created {len(default_channels)} default channels")
 
 
-async def _create_default_tags(db: Session):
+async def _create_default_tags(db: AsyncSession):
     """
     Создание системных тегов по умолчанию
     """
     from app.models.media import MediaTag
+    from sqlalchemy import select, func
 
     # Проверяем, есть ли уже теги
-    existing_tags = db.query(MediaTag).count()
+    result = await db.execute(select(func.count()).select_from(MediaTag))
+    existing_tags = result.scalar()
     if existing_tags > 0:
         return
 
@@ -194,13 +258,27 @@ async def _create_default_tags(db: Session):
     logger.info(f"Created {len(default_tags)} default tags")
 
 
-def check_db_connection() -> bool:
+async def check_db_connection() -> bool:
     """
-    Проверка соединения с базой данных
+    Проверка соединения с базой данных (async)
     """
     try:
         from sqlalchemy import text
-        with get_db_context() as db:
+        async with get_db_context() as db:
+            await db.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+        return False
+
+
+def check_db_connection_sync() -> bool:
+    """
+    Проверка соединения с базой данных (sync)
+    """
+    try:
+        from sqlalchemy import text
+        with get_db_context_sync() as db:
             db.execute(text("SELECT 1"))
         return True
     except Exception as e:

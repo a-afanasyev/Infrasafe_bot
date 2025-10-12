@@ -17,6 +17,7 @@ from api.v1.profiles import router as profiles_router
 from api.v1.verification import router as verification_router
 from api.v1.roles import router as roles_router
 from api.v1.internal import router as internal_router
+from api.v1.buildings import router as buildings_router
 
 # Configure logging
 logging.basicConfig(
@@ -114,11 +115,13 @@ async def service_info():
             "verification_system": True,
             "role_management": True,
             "access_control": True,
-            "document_upload": True
+            "document_upload": True,
+            "building_directory": True
         },
         "supported_operations": [
             "user_crud", "profile_management", "verification_workflow",
-            "role_assignment", "document_handling", "access_rights"
+            "role_assignment", "document_handling", "access_rights",
+            "building_directory", "geocoding_support"
         ],
         "integrations": [
             "auth-service", "media-service", "notification-service"
@@ -133,6 +136,7 @@ app.include_router(profiles_router, prefix="/api/v1/profiles", tags=["Profiles"]
 app.include_router(verification_router, prefix="/api/v1/verification", tags=["Verification"])
 app.include_router(roles_router, prefix="/api/v1/roles", tags=["Roles"])
 app.include_router(internal_router, prefix="/api/v1/internal", tags=["Internal"])
+app.include_router(buildings_router, prefix="/api/v1", tags=["Buildings"])
 
 # Global exception handler
 @app.exception_handler(Exception)

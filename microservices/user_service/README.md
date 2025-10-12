@@ -16,6 +16,7 @@ User Service manages all user-related operations including profiles, roles, veri
 - **Role Management**: User roles with Auth Service synchronization
 - **Access Control**: Permission management and enforcement
 - **Document Management**: KYC/verification document handling
+- **Building Directory** ✨ NEW: Centralized building/address management with geocoding (Oct 2025)
 
 ---
 
@@ -27,7 +28,7 @@ User Service manages all user-related operations including profiles, roles, veri
 - **Database**: `user_db` (PostgreSQL)
 - **Cache**: Redis DB 2
 
-### **Database Schema (10 Tables)**
+### **Database Schema (11 Tables)** ✨ Updated Oct 2025
 
 ```sql
 -- Core User Information
@@ -126,6 +127,23 @@ access_rights:
   - can_manage_shifts, can_export_data (Boolean)
   - can_moderate_content, can_view_reports (Boolean)
   - updated_at
+
+-- Building Directory (✨ NEW - Oct 2025)
+buildings:
+  - id (UUID, PK)
+  - management_company_id (UUID, indexed)
+  - city, district, street, house_number, building_corpus
+  - full_address (String, generated)
+  - coordinates (JSON: {lat, lon})
+  - building_type (String: residential, commercial, industrial)
+  - total_floors, total_apartments (Integer, nullable)
+  - entrance_count, parking_available (Boolean)
+  - construction_year, renovation_year (Integer, nullable)
+  - additional_info (JSON)
+  - is_active (Boolean)
+  - created_at, updated_at, deleted_at
+  - Unique constraint: (management_company_id, city, street, house_number, building_corpus)
+    WHERE is_active = true AND deleted_at IS NULL
 ```
 
 ### **Service Layer**
@@ -135,6 +153,7 @@ access_rights:
 - **VerificationService**: Identity verification workflow
 - **RoleService**: Role assignment and Auth Service integration
 - **PermissionService**: Access control and permission management
+- **BuildingService** ✨ NEW: Building directory with geocoding integration (Oct 2025)
 
 ---
 
@@ -184,6 +203,32 @@ POST   /                   # Assign role
 DELETE /{role_id}          # Remove role
 PUT    /{role_id}/primary  # Set as primary role
 ```
+
+### **Building Directory (`/api/v1/buildings`)** ✨ NEW Oct 2025
+
+```yaml
+GET    /                               # List buildings (paginated, filtered by management company)
+POST   /                               # Create new building
+GET    /{building_id}                  # Get building by ID
+PUT    /{building_id}                  # Update building
+DELETE /{building_id}?soft=true        # Soft/hard delete building
+GET    /search                         # Search buildings by address/coordinates
+POST   /{building_id}/geocode          # Update building coordinates
+GET    /stats                          # Building statistics
+```
+
+**Headers Required**:
+- `X-Management-Company-ID`: UUID for multi-tenancy isolation
+
+**Key Features**:
+- ✅ Multi-tenancy via management_company_id
+- ✅ Automatic geocoding integration
+- ✅ Unique constraint on address (NULLS NOT DISTINCT)
+- ✅ Soft delete support
+- ✅ Coordinates as nested JSON: `{lat: 41.31, lon: 69.28}`
+- ✅ Integration with Request Service via BuildingDirectoryClient
+
+📄 **Detailed Documentation**: [README_BUILDING_DIRECTORY.md](README_BUILDING_DIRECTORY.md)
 
 ### **Internal API (`/api/v1/internal`)**
 
