@@ -253,7 +253,7 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
         
         # Одобряем верификацию
         verification_service = UserVerificationService(db)
-        success = verification_service.approve_verification(
+        success = await verification_service.approve_verification(
             user_id=user_id,
             admin_id=callback.from_user.id
         )
@@ -325,8 +325,21 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
 async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = None):
     """Быстрое отклонение пользователя"""
     lang = callback.from_user.language_code or 'ru'
-    user_id = int(callback.data.split("_")[2])
-    
+
+    logger.debug(f"quick_reject_user: callback.data = {callback.data}")
+
+    # Парсим user_id из callback_data
+    try:
+        user_id = int(callback.data.split("_")[2])
+        logger.debug(f"quick_reject_user: parsed user_id = {user_id}")
+    except (IndexError, ValueError) as e:
+        logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
+        await callback.answer(
+            get_text('errors.unknown_error', language=lang),
+            show_alert=True
+        )
+        return
+
     # Проверяем права доступа
     if not roles or not any(role in ['admin', 'manager'] for role in roles):
         await callback.answer(
@@ -334,12 +347,26 @@ async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = 
             show_alert=True
         )
         return
-    
+
     try:
+        # Проверяем, существует ли пользователь
+        from uk_management_bot.database.models.user import User
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            logger.error(f"Пользователь с ID {user_id} не найден в базе данных")
+            await callback.answer(
+                "Пользователь не найден",
+                show_alert=True
+            )
+            return
+
+        logger.info(f"Найден пользователь: ID={user.id}, telegram_id={user.telegram_id}, username={user.username}")
+
         # Импортируем сервис верификации
         from uk_management_bot.services.user_verification_service import UserVerificationService
         from uk_management_bot.services.notification_service import NotificationService
-        
+
         # Отклоняем верификацию
         verification_service = UserVerificationService(db)
         success = verification_service.reject_verification(
@@ -347,24 +374,25 @@ async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = 
             admin_id=callback.from_user.id,
             notes="Верификация отклонена администратором"
         )
-        
+
         if success:
             # Отправляем уведомление пользователю
             notification_service = NotificationService(db)
             await notification_service.send_verification_rejected_notification(user_id)
-            
+
             await callback.answer(
                 get_text('verification.user_rejected', language=lang),
                 show_alert=True
             )
         else:
+            logger.error(f"reject_verification вернул False для user_id={user_id}")
             await callback.answer(
                 get_text('errors.operation_failed', language=lang),
                 show_alert=True
             )
-        
+
     except Exception as e:
-        logger.error(f"Ошибка быстрого отклонения: {e}")
+        logger.error(f"Ошибка быстрого отклонения пользователя {user_id}: {e}", exc_info=True)
         await callback.answer(
             get_text('errors.unknown_error', language=lang),
             show_alert=True
@@ -911,16 +939,31 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
             
             caption = f"📄 {doc_type_name}\n"
             caption += f"📅 Загружен: {document.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-            
+
             if document.file_size:
                 caption += f"📏 Размер: {document.file_size // 1024} KB"
-            
-            await bot.send_document(
-                chat_id=callback.from_user.id,
-                document=document.file_id,
-                caption=caption
-            )
-            await callback.answer("Документ отправлен в личные сообщения")
+
+            # Определяем тип файла по file_name или пробуем отправить как фото
+            try:
+                # Сначала пробуем отправить как документ
+                await bot.send_document(
+                    chat_id=callback.from_user.id,
+                    document=document.file_id,
+                    caption=caption
+                )
+                await callback.answer("Документ отправлен в личные сообщения")
+            except Exception as doc_error:
+                # Если ошибка "can't use file of type Photo", отправляем как фото
+                if "can't use file of type Photo" in str(doc_error):
+                    logger.info(f"Файл {document.file_id} является фото, отправляем как photo")
+                    await bot.send_photo(
+                        chat_id=callback.from_user.id,
+                        photo=document.file_id,
+                        caption=caption
+                    )
+                    await callback.answer("Документ отправлен в личные сообщения")
+                else:
+                    raise  # Пробрасываем другие ошибки
             
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")

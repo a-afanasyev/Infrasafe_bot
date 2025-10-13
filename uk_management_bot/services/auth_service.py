@@ -79,97 +79,44 @@ class AuthService:
         return False
     
     async def get_user_addresses(self, user_id: int) -> dict:
-        """Получить все адреса пользователя"""
-        try:
-            user = self.db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return {}
-            
-            addresses = {}
-            if user.home_address:
-                addresses['home'] = user.home_address
-            if user.apartment_address:
-                addresses['apartment'] = user.apartment_address
-            if user.yard_address:
-                addresses['yard'] = user.yard_address
-            
-            return addresses
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения адресов пользователя {user_id}: {e}")
-            return {}
-    
+        """
+        DEPRECATED: Этот метод устарел.
+
+        Используйте AddressService.get_user_apartments() для получения адресов
+        из новой системы квартир.
+        """
+        logger.warning(f"DEPRECATED: get_user_addresses() вызван для пользователя {user_id}. Используйте AddressService.get_user_apartments()")
+        return {}
+
     async def update_user_address(self, user_id: int, address_type: str, address: str) -> bool:
-        """Обновить адрес пользователя по типу"""
-        try:
-            if address_type not in ADDRESS_TYPES:
-                logger.warning(f"Неверный тип адреса: {address_type}")
-                return False
-            
-            if not validate_address(address):
-                logger.warning(f"Неверный адрес: {address}")
-                return False
-            
-            user = self.db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                logger.warning(f"Пользователь {user_id} не найден")
-                return False
-            
-            # Обновляем соответствующее поле
-            if address_type == 'home':
-                user.home_address = format_address(address)
-            elif address_type == 'apartment':
-                user.apartment_address = format_address(address)
-            elif address_type == 'yard':
-                user.yard_address = format_address(address)
-            
-            self.db.commit()
-            logger.info(f"Адрес пользователя {user_id} обновлен: {address_type} = {address}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка обновления адреса пользователя {user_id}: {e}")
-            self.db.rollback()
-            return False
-    
+        """
+        DEPRECATED: Этот метод устарел.
+
+        Используйте AddressService.request_apartment() для добавления квартиры
+        через систему модерации.
+        """
+        logger.warning(f"DEPRECATED: update_user_address() вызван для пользователя {user_id}. Используйте AddressService.request_apartment()")
+        return False
+
     async def get_user_address_by_type(self, user_id: int, address_type: str) -> str:
-        """Получить адрес пользователя по типу"""
-        try:
-            if address_type not in ADDRESS_TYPES:
-                return None
-            
-            user = self.db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return None
-            
-            if address_type == 'home':
-                return user.home_address
-            elif address_type == 'apartment':
-                return user.apartment_address
-            elif address_type == 'yard':
-                return user.yard_address
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения адреса пользователя {user_id}: {e}")
-            return None
+        """
+        DEPRECATED: Этот метод устарел.
+
+        Используйте AddressService.get_user_apartments() для получения адресов
+        из новой системы квартир.
+        """
+        logger.warning(f"DEPRECATED: get_user_address_by_type() вызван для пользователя {user_id}. Используйте AddressService.get_user_apartments()")
+        return None
     
     async def get_available_addresses(self, user_id: int) -> dict:
-        """Получить доступные адреса пользователя для FSM"""
-        try:
-            addresses = await self.get_user_addresses(user_id)
-            available = {}
-            
-            for addr_type, address in addresses.items():
-                if address and len(address.strip()) >= 10:  # Минимум 10 символов
-                    available[addr_type] = address
-            
-            return available
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения доступных адресов пользователя {user_id}: {e}")
-            return {}
+        """
+        DEPRECATED: Получить доступные адреса пользователя для FSM.
+
+        Используйте AddressService.get_user_apartments() для получения квартир
+        пользователя из новой системы адресов.
+        """
+        logger.warning(f"DEPRECATED: get_available_addresses() вызван для пользователя {user_id}. Используйте AddressService.get_user_apartments()")
+        return {}
     
     # Новые методы для Task 2.2.4
     
@@ -214,110 +161,59 @@ class AuthService:
     
     async def save_user_address(self, user_id: int, address_type: str, address: str) -> bool:
         """
-        Сохранение адреса пользователя
-        
+        DEPRECATED: Этот метод устарел.
+
+        Используйте AddressService.request_apartment() для добавления квартиры
+        через систему модерации.
+
         Args:
             user_id: ID пользователя
             address_type: Тип адреса (home, apartment, yard)
             address: Адрес для сохранения
-            
+
         Returns:
-            bool: True если адрес сохранен, False иначе
+            bool: False (метод устарел)
         """
-        try:
-            # Валидация адреса
-            if not await self.validate_address(address):
-                logger.warning(f"Адрес не прошел валидацию: {address}")
-                return False
-            
-            # Валидация типа адреса
-            valid_types = ['home', 'apartment', 'yard']
-            if address_type not in valid_types:
-                logger.error(f"Неверный тип адреса: {address_type}")
-                return False
-            
-            user = self.db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                logger.error(f"Пользователь не найден: {user_id}")
-                return False
-            
-            # Очистка адреса
-            address = address.strip()
-            
-            # Обновление соответствующего поля
-            if address_type == 'home':
-                user.home_address = address
-            elif address_type == 'apartment':
-                user.apartment_address = address
-            elif address_type == 'yard':
-                user.yard_address = address
-            
-            self.db.commit()
-            logger.info(f"Адрес {address_type} сохранен для пользователя {user_id}: {address}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения адреса для пользователя {user_id}: {e}")
-            return False
+        logger.warning(
+            f"DEPRECATED: save_user_address() вызван для пользователя {user_id}. "
+            f"Используйте AddressService.request_apartment()"
+        )
+        return False
     
     async def delete_user_address(self, user_id: int, address_type: str) -> bool:
         """
-        Удаление адреса пользователя
-        
+        DEPRECATED: Этот метод устарел.
+
+        Используйте AddressService для управления квартирами пользователя.
+
         Args:
             user_id: ID пользователя
             address_type: Тип адреса для удаления
-            
+
         Returns:
-            bool: True если адрес удален, False иначе
+            bool: False (метод устарел)
         """
-        try:
-            # Валидация типа адреса
-            valid_types = ['home', 'apartment', 'yard']
-            if address_type not in valid_types:
-                logger.error(f"Неверный тип адреса: {address_type}")
-                return False
-            
-            user = self.db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                logger.error(f"Пользователь не найден: {user_id}")
-                return False
-            
-            # Очистка соответствующего поля
-            if address_type == 'home':
-                user.home_address = None
-            elif address_type == 'apartment':
-                user.apartment_address = None
-            elif address_type == 'yard':
-                user.yard_address = None
-            
-            self.db.commit()
-            logger.info(f"Адрес {address_type} удален для пользователя {user_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка удаления адреса для пользователя {user_id}: {e}")
-            return False
+        logger.warning(
+            f"DEPRECATED: delete_user_address() вызван для пользователя {user_id}. "
+            f"Используйте AddressService для управления квартирами"
+        )
+        return False
     
     async def get_user_address_count(self, user_id: int) -> int:
         """
-        Получение количества сохраненных адресов пользователя
-        
+        DEPRECATED: Получение количества сохраненных адресов пользователя.
+
+        Используйте AddressService.get_user_apartments() для получения квартир,
+        затем подсчитайте одобренные квартиры.
+
         Args:
             user_id: ID пользователя
-            
+
         Returns:
-            int: Количество сохраненных адресов
+            int: Количество сохраненных адресов (всегда возвращает 0)
         """
-        try:
-            addresses = await self.get_available_addresses(user_id)
-            count = len(addresses)
-            logger.debug(f"Пользователь {user_id} имеет {count} сохраненных адресов")
-            return count
-            
-        except Exception as e:
-            logger.error(f"Ошибка подсчета адресов для пользователя {user_id}: {e}")
-            return 0
+        logger.warning(f"DEPRECATED: get_user_address_count() вызван для пользователя {user_id}. Используйте AddressService.get_user_apartments()")
+        return 0
     
     async def block_user(self, telegram_id: int) -> bool:
         """Заблокировать пользователя"""
@@ -984,8 +880,15 @@ class AuthService:
             for shift in shifts:
                 self.db.delete(shift)
             logger.info(f"Удалено {len(shifts)} смен пользователя {user_id}")
-            
-            # 7. Наконец удаляем самого пользователя
+
+            # 7. Удаляем связи пользователя с квартирами
+            from uk_management_bot.database.models.user_apartment import UserApartment
+            user_apartments = self.db.query(UserApartment).filter(UserApartment.user_id == user_id).all()
+            for user_apartment in user_apartments:
+                self.db.delete(user_apartment)
+            logger.info(f"Удалено {len(user_apartments)} связей с квартирами пользователя {user_id}")
+
+            # 8. Наконец удаляем самого пользователя
             self.db.delete(user)
             self.db.commit()
             

@@ -21,26 +21,42 @@ def get_contextual_keyboard(roles: list = None, active_role: str = None) -> Repl
 
 def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     """Получить клавиатуру пользователя, загрузив его роли из БД.
-    
+
     Если роли не найдены, возвращает базовую клавиатуру.
     """
     try:
         from uk_management_bot.database.session import SessionLocal
         from uk_management_bot.database.models.user import User
         import json
-        
+
         db = SessionLocal()
         user = db.query(User).filter(User.telegram_id == user_id).first()
-        
-        if user and user.roles:
-            roles = json.loads(user.roles)
+
+        if user:
+            # Получаем роли из нового формата (user.roles) или legacy (user.role)
+            roles = []
+            if user.roles:
+                try:
+                    roles = json.loads(user.roles)
+                except Exception:
+                    pass
+
+            # Fallback к legacy полю role
+            if not roles and user.role:
+                roles = [user.role]
+
+            # Определяем активную роль
             active_role = user.active_role or (roles[0] if roles else "applicant")
+
+            # Получаем статус пользователя
+            user_status = user.status or "approved"
+
             db.close()
-            return get_main_keyboard_for_role(active_role=active_role, roles=roles)
-        
+            return get_main_keyboard_for_role(active_role=active_role, roles=roles, user_status=user_status)
+
         db.close()
         return get_main_keyboard()
-        
+
     except Exception:
         return get_main_keyboard() 
 

@@ -42,13 +42,19 @@ async def handle_edit_profile_start(callback: CallbackQuery, state: FSMContext, 
     """Начало редактирования профиля"""
     try:
         lang = get_user_language(db, callback.from_user.id)
-        
-        # Показываем меню редактирования
+
+        # Получаем данные пользователя
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer("Пользователь не найден", show_alert=True)
+            return
+
+        # Показываем меню редактирования с текущими значениями
         await callback.message.edit_text(
             get_text("profile.edit_title", language=lang),
-            reply_markup=get_profile_edit_keyboard(lang)
+            reply_markup=get_profile_edit_keyboard(lang, user)
         )
-        
+
         await callback.answer()
         
     except Exception as e:
@@ -132,81 +138,57 @@ async def handle_edit_home_address(callback: CallbackQuery, state: FSMContext, d
 @router.message(ProfileEditingStates.waiting_for_home_address)
 async def handle_home_address_input(message: Message, state: FSMContext, db: Session):
     """Обработка ввода домашнего адреса"""
+    # УСТАРЕВШИЙ ОБРАБОТЧИК: Редактирование адреса переведено на систему квартир
     try:
         lang = get_user_language(db, message.from_user.id)
-        address = message.text.strip()
-        
-        if not address:
-            await message.answer(get_text("profile.address_empty", language=lang))
-            return
-        
-        # Обновляем адрес в базе данных
-        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if user:
-            user.home_address = address
-            user.address_type = "home"
-            db.commit()
-            
-            await message.answer(
-                get_text("profile.home_address_updated", language=lang),
-                reply_markup=get_profile_edit_keyboard(lang)
-            )
-        else:
-            await message.answer(get_text("errors.user_not_found", language=lang))
-        
+
         await state.clear()
-        
+        await message.answer(
+            "⚠️ <b>Система адресов обновлена!</b>\n\n"
+            "Теперь адреса управляются через кнопку '🏘️ Мои квартиры' в профиле.\n"
+            "Используйте её для добавления, удаления и редактирования адресов.",
+            reply_markup=get_profile_edit_keyboard(lang)
+        )
+
+        logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик редактирования адреса")
+
     except Exception as e:
-        logger.error(f"Ошибка сохранения домашнего адреса: {e}")
-        await message.answer(get_text("errors.unknown_error", language=lang))
+        logger.error(f"Ошибка в устаревшем обработчике адреса: {e}")
         await state.clear()
 
 
 @router.callback_query(F.data == "edit_apartment_address")
 async def handle_edit_apartment_address(callback: CallbackQuery, state: FSMContext, db: Session):
-    """Редактирование адреса квартиры"""
+    """
+    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+    """
     try:
-        lang = get_user_language(db, callback.from_user.id)
-        
+        await state.clear()
         await callback.message.edit_text(
-            get_text("profile.enter_apartment_address", language=lang),
-            reply_markup=get_cancel_keyboard(lang)
+            "⚠️ <b>Система адресов обновлена!</b>\n\n"
+            "Теперь адреса управляются через справочник квартир.\n"
+            "Используйте кнопку '🏘️ Мои квартиры' для управления адресами."
         )
-        
-        await state.set_state(ProfileEditingStates.waiting_for_apartment_address)
         await callback.answer()
-        
+
     except Exception as e:
-        logger.error(f"Ошибка редактирования адреса квартиры: {e}")
+        logger.error(f"Ошибка в устаревшем обработчике адреса квартиры: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
 
 
 @router.message(ProfileEditingStates.waiting_for_apartment_address)
 async def handle_apartment_address_input(message: Message, state: FSMContext, db: Session):
-    """Обработка ввода адреса квартиры"""
+    """
+    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+    """
     try:
-        lang = get_user_language(db, message.from_user.id)
-        address = message.text.strip()
-        
-        if not address:
-            await message.answer(get_text("profile.address_empty", language=lang))
-            return
-        
-        # Обновляем адрес в базе данных
-        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if user:
-            user.apartment_address = address
-            user.address_type = "apartment"
-            db.commit()
-            
-            await message.answer(
-                get_text("profile.apartment_address_updated", language=lang),
-                reply_markup=get_profile_edit_keyboard(lang)
-            )
-        else:
-            await message.answer(get_text("errors.user_not_found", language=lang))
-        
         await state.clear()
+        await message.answer(
+            "⚠️ <b>Система адресов обновлена!</b>\n\n"
+            "Теперь адреса управляются через справочник квартир.\n"
+            "Используйте кнопку '🏘️ Мои квартиры' для управления адресами."
+        )
+        logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик apartment_address")
         
     except Exception as e:
         logger.error(f"Ошибка сохранения адреса квартиры: {e}")
@@ -216,49 +198,36 @@ async def handle_apartment_address_input(message: Message, state: FSMContext, db
 
 @router.callback_query(F.data == "edit_yard_address")
 async def handle_edit_yard_address(callback: CallbackQuery, state: FSMContext, db: Session):
-    """Редактирование адреса двора"""
+    """
+    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+    """
     try:
-        lang = get_user_language(db, callback.from_user.id)
-        
+        await state.clear()
         await callback.message.edit_text(
-            get_text("profile.enter_yard_address", language=lang),
-            reply_markup=get_cancel_keyboard(lang)
+            "⚠️ <b>Система адресов обновлена!</b>\n\n"
+            "Теперь адреса управляются через справочник квартир.\n"
+            "Используйте кнопку '🏘️ Мои квартиры' для управления адресами."
         )
-        
-        await state.set_state(ProfileEditingStates.waiting_for_yard_address)
         await callback.answer()
-        
+
     except Exception as e:
-        logger.error(f"Ошибка редактирования адреса двора: {e}")
+        logger.error(f"Ошибка в устаревшем обработчике адреса двора: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
 
 
 @router.message(ProfileEditingStates.waiting_for_yard_address)
 async def handle_yard_address_input(message: Message, state: FSMContext, db: Session):
-    """Обработка ввода адреса двора"""
+    """
+    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+    """
     try:
-        lang = get_user_language(db, message.from_user.id)
-        address = message.text.strip()
-        
-        if not address:
-            await message.answer(get_text("profile.address_empty", language=lang))
-            return
-        
-        # Обновляем адрес в базе данных
-        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if user:
-            user.yard_address = address
-            user.address_type = "yard"
-            db.commit()
-            
-            await message.answer(
-                get_text("profile.yard_address_updated", language=lang),
-                reply_markup=get_profile_edit_keyboard(lang)
-            )
-        else:
-            await message.answer(get_text("errors.user_not_found", language=lang))
-        
         await state.clear()
+        await message.answer(
+            "⚠️ <b>Система адресов обновлена!</b>\n\n"
+            "Теперь адреса управляются через справочник квартир.\n"
+            "Используйте кнопку '🏘️ Мои квартиры' для управления адресами."
+        )
+        logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик yard_address")
         
     except Exception as e:
         logger.error(f"Ошибка сохранения адреса двора: {e}")

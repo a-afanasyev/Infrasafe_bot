@@ -196,62 +196,211 @@ def get_request_actions_keyboard(request_number: str) -> InlineKeyboardMarkup:
 
 
 # =====================================
-# КЛАВИАТУРА ВЫБОРА АДРЕСА
+# КЛАВИАТУРА ПОШАГОВОГО ВЫБОРА АДРЕСА
 # =====================================
 
-async def get_address_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+def get_yard_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     """
-    Создать динамическую клавиатуру выбора адреса для пользователя
-    
+    Создать клавиатуру выбора двора для пользователя (шаг 1)
+
     Args:
         user_id: Telegram ID пользователя
-        
+
     Returns:
-        ReplyKeyboardMarkup: Клавиатура с адресами пользователя
-        
+        ReplyKeyboardMarkup: Клавиатура с доступными дворами
+    """
+    try:
+        from uk_management_bot.services.address_service import AddressService
+
+        db_session = next(get_db())
+        try:
+            # Получаем дворы, в которых у пользователя есть одобренные квартиры
+            yards = AddressService.get_user_available_yards(db_session, user_id)
+            logger.info(f"Найдено {len(yards)} доступных дворов для пользователя {user_id}")
+
+            # Создаем кнопки для дворов
+            yard_buttons = []
+            for yard in yards:
+                yard_buttons.append([KeyboardButton(text=f"🏘️ {yard.name}")])
+
+            # Добавляем кнопку отмены
+            yard_buttons.append([KeyboardButton(text="❌ Отмена")])
+
+            return ReplyKeyboardMarkup(keyboard=yard_buttons, resize_keyboard=True)
+
+        finally:
+            db_session.close()
+
+    except Exception as e:
+        logger.error(f"Ошибка создания клавиатуры дворов для пользователя {user_id}: {e}")
+        return ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            resize_keyboard=True
+        )
+
+
+def get_building_selection_keyboard(user_id: int, yard_id: int) -> ReplyKeyboardMarkup:
+    """
+    Создать клавиатуру выбора здания в выбранном дворе (шаг 2)
+
+    Args:
+        user_id: Telegram ID пользователя
+        yard_id: ID выбранного двора
+
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура с доступными зданиями
+    """
+    try:
+        from uk_management_bot.services.address_service import AddressService
+
+        db_session = next(get_db())
+        try:
+            # Получаем здания в дворе, где у пользователя есть одобренные квартиры
+            buildings = AddressService.get_user_available_buildings(db_session, user_id, yard_id)
+            logger.info(f"Найдено {len(buildings)} доступных зданий для пользователя {user_id} в дворе {yard_id}")
+
+            # Создаем кнопки для зданий
+            building_buttons = []
+            for building in buildings:
+                building_buttons.append([KeyboardButton(text=f"🏢 {building.address}")])
+
+            # Добавляем кнопки назад и отмены
+            building_buttons.append([KeyboardButton(text="⬅️ Назад")])
+            building_buttons.append([KeyboardButton(text="❌ Отмена")])
+
+            return ReplyKeyboardMarkup(keyboard=building_buttons, resize_keyboard=True)
+
+        finally:
+            db_session.close()
+
+    except Exception as e:
+        logger.error(f"Ошибка создания клавиатуры зданий для пользователя {user_id}: {e}")
+        return ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            resize_keyboard=True
+        )
+
+
+def get_apartment_selection_keyboard(user_id: int, building_id: int) -> ReplyKeyboardMarkup:
+    """
+    Создать клавиатуру выбора квартиры в выбранном здании (шаг 3)
+
+    Args:
+        user_id: Telegram ID пользователя
+        building_id: ID выбранного здания
+
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура с доступными квартирами
+    """
+    try:
+        from uk_management_bot.services.address_service import AddressService
+
+        db_session = next(get_db())
+        try:
+            # Получаем квартиры пользователя в здании
+            apartments = AddressService.get_user_available_apartments(db_session, user_id, building_id)
+            logger.info(f"Найдено {len(apartments)} доступных квартир для пользователя {user_id} в здании {building_id}")
+
+            # Создаем кнопки для квартир
+            apartment_buttons = []
+            for apartment in apartments:
+                apartment_buttons.append([KeyboardButton(text=f"🏠 Квартира {apartment.apartment_number}")])
+
+            # Добавляем кнопки назад и отмены
+            apartment_buttons.append([KeyboardButton(text="⬅️ Назад")])
+            apartment_buttons.append([KeyboardButton(text="❌ Отмена")])
+
+            return ReplyKeyboardMarkup(keyboard=apartment_buttons, resize_keyboard=True)
+
+        finally:
+            db_session.close()
+
+    except Exception as e:
+        logger.error(f"Ошибка создания клавиатуры квартир для пользователя {user_id}: {e}")
+        return ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            resize_keyboard=True
+        )
+
+
+# =====================================
+# УСТАРЕВШАЯ КЛАВИАТУРА (для обратной совместимости)
+# =====================================
+
+def get_address_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    """
+    Создать динамическую клавиатуру выбора адреса для пользователя
+
+    ОБНОВЛЕНО 13.10.2025: Показывает квартиры, дома и дворы одновременно
+    - 🏠 Квартиры (для проблем в квартире)
+    - 🏢 Дома (для общедомовых проблем)
+    - 🏘️ Дворы (для проблем во дворе)
+
+    Args:
+        user_id: Telegram ID пользователя
+
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура с адресами на трех уровнях
+
     Raises:
         Exception: При ошибках получения данных пользователя
     """
     try:
-        logger.info(f"Создание клавиатуры выбора адреса для пользователя {user_id}")
-        
-        # Создать экземпляр AuthService с сессией БД
+        logger.info(f"Создание клавиатуры выбора адреса (квартиры/дома/дворы) для пользователя {user_id}")
+
+        from uk_management_bot.services.address_service import AddressService
+
         db_session = next(get_db())
-        auth_service = AuthService(db_session)
-        
-        # Получить доступные адреса пользователя
-        logger.info(f"Запрос доступных адресов для пользователя {user_id}")
-        available_addresses = await auth_service.get_available_addresses(user_id)
-        logger.info(f"Получены адреса: {available_addresses}")
-        
-        # Создать кнопки для адресов
-        address_buttons = _create_address_buttons(available_addresses)
-        logger.info(f"Создано кнопок адресов: {len(address_buttons)} строк")
-        
-        # Добавить кнопки ручного ввода и отмены
-        manual_buttons = _get_manual_input_buttons()
-        logger.info(f"Добавлены кнопки ручного ввода: {len(manual_buttons)} строк")
-        
-        # Объединить все кнопки
-        all_buttons = address_buttons + manual_buttons
-        logger.info(f"Итоговое количество строк клавиатуры: {len(all_buttons)}")
-        
-        # Создать клавиатуру
-        keyboard = ReplyKeyboardMarkup(keyboard=all_buttons, resize_keyboard=True)
-        logger.info(f"Клавиатура создана успешно для пользователя {user_id}")
-        
-        return keyboard
-        
+        try:
+            # Получаем все доступные адреса пользователя
+            apartments = AddressService.get_user_approved_apartments_sync(db_session, user_id)
+            yards = AddressService.get_user_available_yards(db_session, user_id)
+
+            # Собираем уникальные дома из квартир
+            buildings_set = set()
+            for apt in apartments:
+                if apt.building:
+                    buildings_set.add((apt.building.id, apt.building.address, apt.building.yard_id))
+
+            logger.info(f"Найдено для пользователя {user_id}: "
+                       f"{len(apartments)} квартир, {len(buildings_set)} домов, {len(yards)} дворов")
+
+            all_buttons = []
+
+            # 1. ДВОРЫ - для проблем во дворе
+            if yards:
+                for yard in yards:
+                    all_buttons.append([KeyboardButton(text=f"🏘️ {yard.name}")])
+
+            # 2. ДОМА - для общедомовых проблем
+            if buildings_set:
+                for building_id, building_address, yard_id in sorted(buildings_set, key=lambda x: x[1]):
+                    all_buttons.append([KeyboardButton(text=f"🏢 {building_address}")])
+
+            # 3. КВАРТИРЫ - для проблем в квартире
+            if apartments:
+                for apartment in apartments:
+                    address_text = AddressService.format_apartment_address(apartment)
+                    if len(address_text) > 50:
+                        address_text = address_text[:47] + "..."
+                    all_buttons.append([KeyboardButton(text=f"🏠 {address_text}")])
+
+            # Кнопка отмены
+            all_buttons.append([KeyboardButton(text="❌ Отмена")])
+
+            logger.info(f"Создано {len(all_buttons)} кнопок адресов для пользователя {user_id}")
+
+            return ReplyKeyboardMarkup(keyboard=all_buttons, resize_keyboard=True)
+
+        finally:
+            db_session.close()
+
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры выбора адреса для пользователя {user_id}: {e}")
-        
-        # Fallback клавиатура с базовыми опциями
-        fallback_keyboard = [
-            [KeyboardButton(text="✏️ Ввести адрес вручную")],
-            [KeyboardButton(text="❌ Отмена")]
-        ]
-        logger.info(f"Возвращена fallback клавиатура для пользователя {user_id}")
-        return ReplyKeyboardMarkup(keyboard=fallback_keyboard, resize_keyboard=True)
+        return ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            resize_keyboard=True
+        )
 
 
 def get_status_filter_inline_keyboard(active_status: Optional[str] = None, language: str = "ru") -> InlineKeyboardMarkup:

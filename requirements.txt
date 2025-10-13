@@ -36,6 +36,9 @@ structlog>=23.1.0
 # HTTP requests (for healthcheck)
 requests>=2.31.0
 
+# Async HTTP client (for Media Service integration)
+httpx>=0.25.0
+
 # Web Framework for invite registration
 fastapi>=0.104.0
 uvicorn>=0.24.0

@@ -19,7 +19,8 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.services.notification_service import notify_status_changed, async_notify_request_status_changed
-from uk_management_bot.integrations.google_sheets import sheets_service, SyncTask
+# TODO: Восстановить Google Sheets интеграцию
+# from uk_management_bot.integrations.google_sheets import sheets_service, SyncTask
 
 logger = logging.getLogger(__name__)
 
@@ -111,27 +112,40 @@ class RequestService:
     ) -> List[Request]:
         """
         Получение заявок пользователя с фильтрацией
-        
+
+        ОБНОВЛЕНО: Eager loading для apartment_obj (связь с справочником адресов)
+
         Args:
             user_id: ID пользователя
             status: Фильтр по статусу (опционально)
             limit: Лимит записей
             offset: Смещение
-            
+
         Returns:
             List[Request]: Список заявок
         """
         try:
-            query = self.db.query(Request).filter(Request.user_id == user_id)
-            
+            from sqlalchemy.orm import joinedload
+            from uk_management_bot.database.models import Apartment, Building, Yard
+
+            query = (
+                self.db.query(Request)
+                .options(
+                    joinedload(Request.apartment_obj)
+                    .joinedload(Apartment.building)
+                    .joinedload(Building.yard)
+                )
+                .filter(Request.user_id == user_id)
+            )
+
             if status:
                 query = query.filter(Request.status == status)
-            
+
             requests = query.order_by(desc(Request.created_at)).offset(offset).limit(limit).all()
-            
+
             logger.info(f"Получено {len(requests)} заявок для пользователя {user_id}")
             return requests
-            
+
         except Exception as e:
             logger.error(f"Ошибка получения заявок пользователя {user_id}: {e}")
             return []
@@ -139,17 +153,31 @@ class RequestService:
     def get_request_by_number(self, request_number: str) -> Optional[Request]:
         """
         Получение заявки по номеру
-        
+
+        ОБНОВЛЕНО: Eager loading для apartment_obj (связь с справочником адресов)
+
         Args:
             request_number: Номер заявки в формате YYMMDD-NNN
-            
+
         Returns:
             Optional[Request]: Заявка или None
         """
         try:
-            request = self.db.query(Request).filter(Request.request_number == request_number).first()
+            from sqlalchemy.orm import joinedload
+            from uk_management_bot.database.models import Apartment, Building, Yard
+
+            request = (
+                self.db.query(Request)
+                .options(
+                    joinedload(Request.apartment_obj)
+                    .joinedload(Apartment.building)
+                    .joinedload(Building.yard)
+                )
+                .filter(Request.request_number == request_number)
+                .first()
+            )
             return request
-            
+
         except Exception as e:
             logger.error(f"Ошибка получения заявки {request_number}: {e}")
             return None
@@ -608,24 +636,26 @@ class RequestService:
                 'comments': request.notes or '',
                 'photo_urls': ','.join(request.media_files) if request.media_files else ''
             }
-            
+
             # Создаем задачу синхронизации
-            task = SyncTask(
-                task_type=operation,
-                request_id=request.request_number,
-                data=request_data if operation == "create" else changes,
-                priority="high" if operation == "create" else "medium"
-            )
-            
+            # TODO: Восстановить Google Sheets интеграцию
+            # task = SyncTask(
+            #     task_type=operation,
+            #     request_id=request.request_number,
+            #     data=request_data if operation == "create" else changes,
+            #     priority="high" if operation == "create" else "medium"
+            # )
+
             # Добавляем задачу в очередь (если очередь доступна)
             # FUTURE: Issue #1 - Добавить интеграцию с Redis Queue или Celery
             # Временно выполняем синхронизацию синхронно
-            try:
-                from uk_management_bot.integrations.google_sheets import sheets_service
-                if sheets_service:
-                    sheets_service.process_sync_task(task)
-            except Exception as sync_error:
-                logger.warning(f"Sync failed, will retry later: {sync_error}")
+            # TODO: Восстановить Google Sheets интеграцию
+            # try:
+            #     from uk_management_bot.integrations.google_sheets import sheets_service
+            #     if sheets_service:
+            #         sheets_service.process_sync_task(task)
+            # except Exception as sync_error:
+            #     logger.warning(f"Sync failed, will retry later: {sync_error}")
             
             logger.info(f"Request sync task created", 
                        request_number=request.request_number,

@@ -31,13 +31,6 @@ class User(Base):
     
     # Дополнительная информация
     phone = Column(String(20), nullable=True)
-    address = Column(Text, nullable=True)  # Существующее поле (оставляем для совместимости)
-    
-    # Новые поля для адресов
-    home_address = Column(Text, nullable=True)
-    apartment_address = Column(Text, nullable=True)
-    yard_address = Column(Text, nullable=True)
-    address_type = Column(String(20), nullable=True)  # home/apartment/yard
     
     # Специализация сотрудника (для исполнителей/менеджеров):
     # JSON строка с массивом специализаций: ["electrician", "plumber", "security"]
@@ -72,9 +65,15 @@ class User(Base):
     # Связи для передачи смен
     outgoing_transfers = relationship("ShiftTransfer", foreign_keys="ShiftTransfer.from_executor_id", back_populates="from_executor")
     incoming_transfers = relationship("ShiftTransfer", foreign_keys="ShiftTransfer.to_executor_id", back_populates="to_executor")
-    
+
+    # Связь с квартирами через UserApartment (новая система адресов)
+    user_apartments = relationship("UserApartment", back_populates="user", foreign_keys="UserApartment.user_id")
+
+    # Связь с дополнительными дворами через UserYard
+    user_yards = relationship("UserYard", back_populates="user", foreign_keys="UserYard.user_id")
+
     def __repr__(self):
         return (
             f"<User(telegram_id={self.telegram_id}, role={self.role}, "
-            f"active_role={self.active_role}, status={self.status}, address_type={self.address_type})>"
+            f"active_role={self.active_role}, status={self.status})>"
         )

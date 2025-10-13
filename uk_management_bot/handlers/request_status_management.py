@@ -464,49 +464,107 @@ async def handle_complete_work(callback: CallbackQuery, state: FSMContext, db: S
         logger.error(f"Ошибка завершения работы: {e}")
         await callback.answer(f"Произошла ошибка: {str(e)}", show_alert=True)
 
+@router.message(RequestStatusStates.waiting_for_completion_report, F.photo | F.video)
+async def handle_completion_report_media(message: Message, state: FSMContext, db: Session, user: User = None):
+    """Обработка фото/видео в отчете о выполнении"""
+    try:
+        # Получаем данные из состояния
+        data = await state.get_data()
+        request_number = data.get("request_number")
+
+        if not request_number:
+            await message.answer("Ошибка: заявка не найдена в состоянии")
+            return
+
+        # Получаем file_id
+        if message.photo:
+            file_id = message.photo[-1].file_id
+            file_type = "photo"
+        else:
+            file_id = message.video.file_id
+            file_type = "video"
+
+        # Сохраняем file_id в FSM
+        report_media = data.get('report_media', [])
+        if len(report_media) >= 5:
+            await message.answer("Максимум 5 файлов в отчете. Отправьте текстовое описание для завершения.")
+            return
+
+        report_media.append(file_id)
+        await state.update_data(report_media=report_media)
+
+        # Загружаем файл в Media Service
+        from uk_management_bot.utils.media_helpers import upload_report_file_to_media_service
+        try:
+            await upload_report_file_to_media_service(
+                bot=message.bot,
+                file_id=file_id,
+                request_number=request_number,
+                report_type=f"completion_{file_type}",
+                description=f"Фото/видео отчета #{len(report_media)}",
+                uploaded_by=user.id if user else None
+            )
+            logger.info(f"Файл отчета загружен в Media Service для заявки {request_number}")
+        except Exception as e:
+            logger.error(f"Ошибка загрузки файла отчета в Media Service: {e}")
+
+        await message.answer(
+            f"Файл добавлен ({len(report_media)}/5).\n"
+            f"Отправьте еще фото/видео или текстовое описание работ для завершения."
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки медиа отчета: {e}")
+        await message.answer(f"Произошла ошибка: {str(e)}")
+
+
 @router.message(RequestStatusStates.waiting_for_completion_report)
 async def handle_completion_report_input(message: Message, state: FSMContext, db: Session, user: User = None):
     """Обработка ввода отчета о выполнении"""
     try:
         # Получаем отчет
-        report = message.text.strip()
-        
+        report = message.text.strip() if message.text else ""
+
         if not report:
             await message.answer("Пожалуйста, введите отчет о выполнении работы")
             return
-        
+
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
-        
+        report_media = data.get("report_media", [])
+
         # Создаем сервисы
         request_service = RequestService(db)
         comment_service = CommentService(db)
-        
+
         # Получаем текущую заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await message.answer("Заявка не найдена")
             return
-        
+
         # Изменяем статус на "Исполнено"
         updated_request = request_service.update_status_by_actor(
             request_number=request_number,
             new_status=REQUEST_STATUS_COMPLETED,
             actor_telegram_id=message.from_user.id
         )
-        
+
         # Сохраняем отчет в заявке
-        request.completion_report = report
-        
+        full_report = report
+        if report_media:
+            full_report += f"\n📎 Прикреплено файлов: {len(report_media)}"
+        request.completion_report = full_report
+
         # Добавляем комментарий с отчетом
         if user:
             comment_service.add_completion_report_comment(
                 request_number=request_number,
                 user_id=user.id,
-                report=report
+                report=full_report
             )
-        
+
         db.commit()
         
         # Отправляем уведомление заявителю

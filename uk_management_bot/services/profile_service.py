@@ -52,13 +52,20 @@ class ProfileService:
             if user.specialization:
                 # Поддерживаем CSV формат для множественных специализаций
                 specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
-            
-            # Парсим дворы (множественные)
-            yards = []
-            if user.yard_address:
-                # Поддерживаем разделитель ';' для множественных дворов
-                yards = [y.strip() for y in user.yard_address.split(';') if y.strip()]
-            
+
+            # ОБНОВЛЕНО: Получаем адреса из новой системы квартир вместо устаревших полей
+            apartments = []
+            if user.user_apartments:
+                for ua in user.user_apartments:
+                    if ua.status == 'approved' and ua.apartment:
+                        apartment_info = {
+                            'id': ua.apartment.id,
+                            'address': ua.apartment.full_address if hasattr(ua.apartment, 'full_address') else f"Квартира {ua.apartment.apartment_number}",
+                            'is_primary': ua.is_primary,
+                            'is_owner': ua.is_owner
+                        }
+                        apartments.append(apartment_info)
+
             profile_data = {
                 'user_id': user.id,
                 'telegram_id': user.telegram_id,
@@ -70,21 +77,17 @@ class ProfileService:
                 'status': user.status or 'pending',
                 'language': user.language or 'ru',
                 'phone': user.phone,
-                'home_address': user.home_address,
-                'apartment_address': user.apartment_address,
-                'yard_address': user.yard_address,
-                'yards': yards,  # массив дворов
+                'apartments': apartments,  # НОВОЕ: список одобренных квартир
                 'specializations': specializations,  # массив специализаций
                 'created_at': user.created_at,
                 'updated_at': user.updated_at
             }
-            
+
             # Логируем данные адресов для отладки
             logger.info(f"Данные адресов для пользователя {telegram_id}:")
-            logger.info(f"  home_address: '{user.home_address}'")
-            logger.info(f"  apartment_address: '{user.apartment_address}'")
-            logger.info(f"  yard_address: '{user.yard_address}'")
-            logger.info(f"  yards array: {yards}")
+            logger.info(f"  apartments count: {len(apartments)}")
+            if apartments:
+                logger.info(f"  primary apartment: {next((a['address'] for a in apartments if a['is_primary']), 'None')}")
             
             logger.info(f"Получены данные профиля для пользователя {telegram_id}")
             return profile_data
@@ -155,49 +158,21 @@ class ProfileService:
             else:
                 text_parts.append(f"{get_text('profile.specialization', language=language)} {get_text('profile.no_specialization', language=language)}")
         
-        # Адреса
+        # ОБНОВЛЕНО: Адреса из новой системы квартир
         text_parts.append("")  # пустая строка
         text_parts.append(f"🏠 {get_text('profile.addresses', language=language)}")
-        
-        # Адрес дома
-        home_addr = profile_data.get('home_address')
-        home_text = home_addr if home_addr else get_text("profile.address_not_set", language=language)
-        home_label = get_text('profile.home_address', language=language)
-        if home_label == 'profile.home_address':  # если ключ не найден
-            home_label = "Адрес дома:" if language == "ru" else "Uy manzili:"
-        text_parts.append(f"  {home_label} {home_text}")
-        
-        # Логируем для отладки
-        logger.info(f"Форматирование адреса дома: addr='{home_addr}', text='{home_text}', label='{home_label}'")
-        
-        # Адрес квартиры
-        apt_addr = profile_data.get('apartment_address')
-        if apt_addr:
-            apt_label = get_text('profile.apartment_address', language=language)
-            if apt_label == 'profile.apartment_address':  # если ключ не найден
-                apt_label = "Адрес квартиры:" if language == "ru" else "Xona manzili:"
-            text_parts.append(f"  {apt_label} {apt_addr}")
-            logger.info(f"Форматирование адреса квартиры: addr='{apt_addr}', label='{apt_label}'")
+
+        apartments = profile_data.get('apartments', [])
+        if apartments:
+            for apt in apartments:
+                primary_marker = " ⭐" if apt.get('is_primary') else ""
+                owner_marker = " (Владелец)" if apt.get('is_owner') else ""
+                text_parts.append(f"  {apt['address']}{primary_marker}{owner_marker}")
+            logger.info(f"Форматирование адресов квартир: {len(apartments)} квартир")
         else:
-            logger.info(f"Адрес квартиры не заполнен")
-        
-        # Адрес двора
-        yard_addr = profile_data.get('yard_address')
-        if yard_addr:
-            yard_label = get_text('profile.yard_address', language=language)
-            if yard_label == 'profile.yard_address':  # если ключ не найден
-                yard_label = "Двор:" if language == "ru" else "Hovli:"
-            text_parts.append(f"  {yard_label} {yard_addr}")
-        
-        # Дворы (множественные) - если есть массив дворов
-        yards = profile_data.get('yards', [])
-        if yards and len(yards) > 1:
-            yard_label = get_text('profile.yard_address', language=language)
-            if yard_label == 'profile.yard_address':  # если ключ не найден
-                yard_label = "Двор:" if language == "ru" else "Hovli:"
-            text_parts.append(f"  {yard_label} {get_text('profile.multiple_yards', language=language)}")
-            for i, yard in enumerate(yards, 1):
-                text_parts.append(f"    {i}. {yard}")
+            no_apartments_text = "Адреса не указаны" if language == "ru" else "Manzillar ko'rsatilmagan"
+            text_parts.append(f"  {no_apartments_text}")
+            logger.info("Адреса квартир не заполнены")
         
         # Язык
         text_parts.append("")  # пустая строка

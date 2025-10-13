@@ -144,21 +144,22 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
     # Проверяем, нужен ли онбординг
     lang = message.from_user.language_code or "ru"
     
-    # Проверяем полноту профиля
-    is_profile_complete = user.phone and user.home_address
-    
+    # ОБНОВЛЕНО: Проверяем полноту профиля с новой системой квартир
+    has_approved_apartment = any(ua.status == 'approved' for ua in user.user_apartments) if user.user_apartments else False
+    is_profile_complete = user.phone and has_approved_apartment
+
     if not is_profile_complete and user.status == "pending":
         # Новый пользователь - показываем онбординг
         welcome_text = get_text("onboarding.welcome_new_user", language=lang)
         welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
-        
+
         # Создаём клавиатуру онбординга
         from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
         missing_items = []
         if not user.phone:
             missing_items.append("📱 Указать телефон" if lang == "ru" else "📱 Telefon ko'rsatish")
-        if not user.home_address:
-            missing_items.append("🏠 Указать адрес" if lang == "ru" else "🏠 Manzil ko'rsatish")
+        if not has_approved_apartment:
+            missing_items.append("🏠 Выбрать квартиру" if lang == "ru" else "🏠 Kvartira tanlash")
         
         if missing_items:
             onboarding_keyboard = ReplyKeyboardMarkup(

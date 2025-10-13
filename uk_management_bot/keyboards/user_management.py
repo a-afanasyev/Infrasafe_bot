@@ -187,7 +187,19 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
             text=f"🛠️ {get_text('moderation.manage_specializations', language)}",
             callback_data=f"user_specializations_{user.id}"
         )])
-    
+
+    # Управление дворами (для всех пользователей)
+    buttons.append([InlineKeyboardButton(
+        text="🏘️ Управление дворами",
+        callback_data=f"manage_user_yards_{user.telegram_id}"
+    )])
+
+    # Управление квартирами (для всех пользователей)
+    buttons.append([InlineKeyboardButton(
+        text="🏠 Управление квартирами",
+        callback_data=f"admin_manage_apartments_{user.telegram_id}"
+    )])
+
     # Запрос дополнительных документов (всегда доступно)
     buttons.append([InlineKeyboardButton(
         text=f"📋 {get_text('moderation.request_documents', language)}",

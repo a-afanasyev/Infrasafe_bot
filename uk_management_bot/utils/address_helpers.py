@@ -38,19 +38,29 @@ def get_address_type_display(address_type: str) -> str:
     return ADDRESS_TYPE_DISPLAYS.get(address_type, address_type)
 
 def get_available_addresses(user) -> dict:
-    """Получить доступные адреса пользователя"""
-    available = {}
-    
-    if user.home_address and validate_address(user.home_address):
-        available['home'] = user.home_address
-    
-    if user.apartment_address and validate_address(user.apartment_address):
-        available['apartment'] = user.apartment_address
-    
-    if user.yard_address and validate_address(user.yard_address):
-        available['yard'] = user.yard_address
-    
-    return available
+    """
+    УСТАРЕВШАЯ ФУНКЦИЯ: Получить доступные адреса пользователя.
+
+    ВНИМАНИЕ: Эта функция использует удалённые поля модели User:
+    - user.home_address (удалено)
+    - user.apartment_address (удалено)
+    - user.yard_address (удалено)
+
+    Теперь адреса хранятся в справочнике через связь user.user_apartments.
+    Используйте AddressService для работы с адресами.
+
+    Эта функция сохранена только для обратной совместимости и будет удалена.
+    """
+    import warnings
+    warnings.warn(
+        "get_available_addresses is deprecated and uses removed User fields. "
+        "Use AddressService instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+
+    # Возвращаем пустой словарь, т.к. поля больше не существуют
+    return {}
 
 def get_address_type_from_display(display_text: str) -> Optional[str]:
     """Получить тип адреса из отображаемого текста"""

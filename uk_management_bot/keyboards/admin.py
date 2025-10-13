@@ -10,6 +10,7 @@ def get_manager_main_keyboard() -> ReplyKeyboardMarkup:
     builder.add(KeyboardButton(text="💰 Закуп"))
     builder.add(KeyboardButton(text="📦 Архив"))
     builder.add(KeyboardButton(text="👥 Смены"))
+    builder.add(KeyboardButton(text="📍 Справочник адресов"))  # Новая кнопка для управления адресами
     builder.add(KeyboardButton(text="👥 Управление пользователями"))
     builder.add(KeyboardButton(text="👷 Управление сотрудниками"))
     builder.add(KeyboardButton(text="📨 Создать приглашение"))  # Кнопка для создания приглашений

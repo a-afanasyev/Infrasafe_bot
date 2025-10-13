@@ -37,24 +37,37 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         try:
             # Создаем сессию БД
             db = SessionLocal()
+            loop = None
             try:
                 # Получаем статус системы
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 health_data = loop.run_until_complete(get_health_status(db))
-                
+
                 # Определяем HTTP статус код
                 status_code = 200
                 if health_data.get('status') == 'unhealthy':
                     status_code = 503  # Service Unavailable
                 elif health_data.get('status') == 'degraded':
                     status_code = 200  # Still OK, but with warnings
-                
+
                 self._send_json_response(health_data, status_code)
-                
+
             finally:
                 db.close()
-                loop.close()
+                # Закрываем event loop только если он был создан
+                if loop is not None and not loop.is_closed():
+                    try:
+                        # Закрываем все pending задачи
+                        pending = asyncio.all_tasks(loop)
+                        for task in pending:
+                            task.cancel()
+                        # Даем время на завершение задач
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception as e:
+                        logger.debug(f"Error cleaning up loop tasks: {e}")
+                    finally:
+                        loop.close()
                 
         except Exception as e:
             logger.error(f"Health check failed: {e}")

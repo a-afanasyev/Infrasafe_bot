@@ -95,5 +95,10 @@ class Settings:
     # Languages
     SUPPORTED_LANGUAGES = ["ru", "uz"]
 
+    # Media Service
+    MEDIA_SERVICE_URL = os.getenv("MEDIA_SERVICE_URL", "http://localhost:8001")
+    MEDIA_SERVICE_TIMEOUT = int(os.getenv("MEDIA_SERVICE_TIMEOUT", "30"))
+    MEDIA_SERVICE_ENABLED = os.getenv("MEDIA_SERVICE_ENABLED", "True").lower() == "true"
+
 # Создаем экземпляр настроек
 settings = Settings()

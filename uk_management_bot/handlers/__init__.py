@@ -20,20 +20,25 @@ from .request_reports import router as request_reports_router
 from .shift_management import router as shift_management_router_new
 from .my_shifts import router as my_shifts_router
 
+# Обработчики управления дворами пользователей
+from .user_yards_management import router as user_yards_router
+
 # Список всех роутеров для регистрации
 __all__ = [
     "auth_router",
-    "admin_router", 
+    "admin_router",
     "employee_router",
     "requests_router",
     "profile_editing_router",
     "shift_management_router",
     # Новые роутеры
     "request_assignment_router",
-    "request_status_management_router", 
+    "request_status_management_router",
     "request_comments_router",
     "request_reports_router",
     # Роутеры системы смен
     "shift_management_router_new",
-    "my_shifts_router"
+    "my_shifts_router",
+    # Роутер управления дворами
+    "user_yards_router"
 ]

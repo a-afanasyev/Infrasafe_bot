@@ -13,6 +13,13 @@ from .notification import Notification
 from .user_verification import UserDocument, UserVerification, AccessRights, DocumentType, VerificationStatus, AccessLevel
 from .quarterly_plan import QuarterlyPlan, QuarterlyShiftSchedule, PlanningConflict
 
+# Модели справочника адресов
+from .yard import Yard
+from .building import Building
+from .apartment import Apartment
+from .user_apartment import UserApartment
+from .user_yard import UserYard
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -40,7 +47,12 @@ __all__ = [
     'AccessLevel',
     'QuarterlyPlan',
     'QuarterlyShiftSchedule',
-    'PlanningConflict'
+    'PlanningConflict',
+    'Yard',
+    'Building',
+    'Apartment',
+    'UserApartment',
+    'UserYard'
 ]
 
 # Добавляем модели заявок, если они доступны

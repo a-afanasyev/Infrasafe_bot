@@ -30,6 +30,18 @@ from uk_management_bot.handlers.request_reports import router as request_reports
 
 # Обработчики передачи смен
 from uk_management_bot.handlers.shift_transfer import router as shift_transfer_router
+
+# Обработчики справочника адресов
+from uk_management_bot.handlers.address_yards import router as address_yards_router
+from uk_management_bot.handlers.address_buildings import router as address_buildings_router
+from uk_management_bot.handlers.address_apartments import router as address_apartments_router
+from uk_management_bot.handlers.address_moderation import router as address_moderation_router
+from uk_management_bot.handlers.user_apartment_selection import router as user_apartment_selection_router
+from uk_management_bot.handlers.user_apartments import router as user_apartments_router  # NEW: User apartment management
+
+# Обработчики управления дворами пользователей
+from uk_management_bot.handlers.user_yards_management import router as user_yards_router
+
 from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 import sys
@@ -46,6 +58,9 @@ from uk_management_bot.utils.health_server import start_health_server, stop_heal
 # Планировщик смен
 from uk_management_bot.utils.shift_scheduler import start_scheduler, stop_scheduler, get_scheduler_status
 from uk_management_bot.services.notification_service import NotificationService
+
+# Интеграции
+from uk_management_bot.integrations import get_media_client, close_media_client
 
 # Инициализация логирования
 setup_structured_logging()
@@ -72,12 +87,33 @@ async def initialize_scheduler(bot: Bot):
         logger.error(f"Ошибка инициализации планировщика: {e}")
 
 
+async def initialize_media_service():
+    """Инициализация медиа-сервиса"""
+    try:
+        media_client = get_media_client()
+        if media_client:
+            # Проверяем доступность сервиса
+            health = await media_client.health_check()
+            logger.info(f"Media Service подключен: {health}")
+            return True
+        else:
+            logger.warning("Media Service отключен в настройках")
+            return False
+    except Exception as e:
+        logger.error(f"Ошибка подключения к Media Service: {e}")
+        logger.warning("Бот будет работать без Media Service")
+        return False
+
+
 async def send_startup_notification(bot: Bot):
     """Отправляет уведомление о запуске бота"""
     try:
         # Получаем статус планировщика
         scheduler_status = await get_scheduler_status()
         scheduler_info = f"🕐 Планировщик: {scheduler_status['jobs_count']} задач" if scheduler_status['is_running'] else "⏸️ Планировщик: Остановлен"
+
+        # Проверяем статус медиа-сервиса
+        media_status = "✅ Активен" if settings.MEDIA_SERVICE_ENABLED else "⏸️ Отключен"
 
         startup_message = f"""
 🤖 **UK Management Bot запущен!**
@@ -88,6 +124,7 @@ async def send_startup_notification(bot: Bot):
 📊 База данных: Подключена
 🔍 Система верификации: Активна
 {scheduler_info}
+📸 Media Service: {media_status}
 
 Бот готов к работе! 🚀
         """
@@ -128,7 +165,14 @@ async def main():
     logger.info("База данных инициализирована")
     
     # Инициализируем бота и диспетчер
-    bot = Bot(token=settings.BOT_TOKEN)
+    # ВАЖНО: parse_mode="HTML" позволяет использовать HTML теги (<b>, <i>, <code> и т.д.)
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+
+    bot = Bot(
+        token=settings.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
     
@@ -195,7 +239,16 @@ async def main():
     dp.include_router(request_status_management_router)
     dp.include_router(request_comments_router)
     dp.include_router(request_reports_router)
-    
+
+    # Справочник адресов (порядок важен: пользовательский выбор → модерация → управление → квартиры → здания → дворы)
+    dp.include_router(user_apartment_selection_router)  # Пользовательский выбор квартиры при регистрации
+    dp.include_router(user_apartments_router)  # NEW: Управление квартирами из профиля
+    dp.include_router(address_moderation_router)
+    dp.include_router(address_apartments_router)
+    dp.include_router(address_buildings_router)
+    dp.include_router(address_yards_router)
+
+    dp.include_router(user_yards_router)  # Управление дворами пользователей (ПЕРЕД user_management!)
     dp.include_router(user_management_router)  # включаем обратно
     dp.include_router(employee_management_router)  # Роутер управления сотрудниками
     dp.include_router(user_verification_router)  # Новый роутер верификации
@@ -216,6 +269,9 @@ async def main():
         # Инициализируем планировщик смен
         await initialize_scheduler(bot)
 
+        # Инициализируем медиа-сервис
+        await initialize_media_service()
+
         # Отправляем уведомление о запуске
         await send_startup_notification(bot)
 
@@ -233,6 +289,12 @@ async def main():
             logger.info("Планировщик смен остановлен")
         except Exception as e:
             logger.error(f"Ошибка остановки планировщика: {e}")
+
+        # Закрываем медиа-клиент
+        try:
+            await close_media_client()
+        except Exception as e:
+            logger.error(f"Ошибка закрытия Media Service клиента: {e}")
 
         # Останавливаем health сервер
         stop_health_server()

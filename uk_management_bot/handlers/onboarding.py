@@ -11,7 +11,7 @@ from uk_management_bot.services.profile_service import ProfileService
 from uk_management_bot.services.user_verification_service import UserVerificationService
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.validators import Validator
-from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+from uk_management_bot.keyboards.base import get_main_keyboard_for_role, get_main_keyboard
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
     get_document_confirmation_keyboard,
@@ -50,7 +50,9 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session):
             return
         
         # Если профиль не заполнен, начинаем онбординг
-        if not user.phone or not user.home_address:
+        # ОБНОВЛЕНО: Проверяем наличие телефона и одобренных квартир (вместо устаревшего home_address)
+        has_approved_apartment = any(ua.status == 'approved' for ua in user.user_apartments) if user.user_apartments else False
+        if not user.phone or not has_approved_apartment:
             await message.answer(
                 get_text("onboarding.welcome_new_user", language=lang) + "\n\n" + 
                 get_text("onboarding.profile_incomplete", language=lang)
@@ -128,9 +130,9 @@ async def process_contact(message: Message, state: FSMContext, db: Session):
                 reply_markup=ReplyKeyboardRemove()
             )
             
-            # Переходим к вводу адреса
-            await message.answer(get_text("onboarding.address_request", language=lang))
-            await state.set_state(OnboardingStates.waiting_for_home_address)
+            # Переходим к выбору квартиры из справочника
+            from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
+            await start_apartment_selection(message, state)
         else:
             await message.answer(
                 get_text("errors.unknown_error", language=lang),
@@ -194,9 +196,9 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
                 reply_markup=ReplyKeyboardRemove()
             )
             
-            # Переходим к вводу адреса
-            await message.answer(get_text("onboarding.address_request", language=lang))
-            await state.set_state(OnboardingStates.waiting_for_home_address)
+            # Переходим к выбору квартиры из справочника
+            from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
+            await start_apartment_selection(message, state)
         else:
             await message.answer(get_text("errors.unknown_error", language=lang))
             await state.clear()
@@ -208,59 +210,24 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
 
 @router.message(OnboardingStates.waiting_for_home_address, F.text)
 async def process_home_address(message: Message, state: FSMContext, db: Session, user_status: str = None):
-    """Обрабатывает ввод домашнего адреса"""
+    """
+    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+
+    Этот обработчик больше не должен вызываться, так как выбор адреса происходит
+    через user_apartment_selection. Если пользователь попал сюда, перенаправляем
+    его на выбор квартиры из справочника.
+    """
     lang = message.from_user.language_code or "ru"
-    
-    # Проверяем на отмену
-    if message.text == get_text("buttons.cancel", language=lang):
-        await cancel_onboarding(message, state, db, user_status)
-        return
-    
-    # Проверяем системные команды/кнопки - не обрабатываем их как адрес
-    system_commands = [
-        "👤 Профиль", "📝 Создать заявку", "📋 Мои заявки", "❓ Помощь",
-        "🔄 Смена", "🔀 Выбрать роль", "/start", "/help",
-        "🏠 Указать адрес", "📱 Указать телефон"
-    ]
-    
-    if message.text in system_commands:
-        # Очищаем состояние и пропускаем обработку
-        await state.clear()
-        return
-    
-    address = message.text.strip()
-    
-    # Валидируем адрес
-    is_valid, error_message = Validator.validate_address(address)
-    if not is_valid:
-        await message.answer(get_text("onboarding.address_invalid", language=lang))
-        return
-    
-    try:
-        # Сохраняем адрес
-        auth_service = AuthService(db)
-        user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-        
-        if user:
-            user.home_address = address
-            # Устанавливаем статус pending если это первый адрес
-            if user.status == "pending" and not user.phone:
-                # Если еще нет телефона, оставляем pending
-                pass
-            elif user.phone and not user.home_address:
-                # Если есть телефон и это первый адрес - полный онбординг завершен
-                user.status = "pending"
-            
-            db.commit()
-            logger.info(f"Сохранен адрес для пользователя {message.from_user.id}: {address}")
-            
-            # Завершаем онбординг
-            await complete_onboarding(message, state, db, user, user_status)
-            
-    except Exception as e:
-        logger.error(f"Ошибка сохранения адреса для {message.from_user.id}: {e}")
-        await message.answer(get_text("errors.unknown_error", language=lang))
-        await state.clear()
+
+    await state.clear()
+    await message.answer(
+        "⚠️ <b>Система адресов обновлена!</b>\n\n"
+        "Теперь адрес выбирается из справочника квартир.\n"
+        "Пожалуйста, используйте кнопку '🏘️ Мои квартиры' в профиле для добавления адреса.",
+        reply_markup=get_main_keyboard()
+    )
+
+    logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик адреса")
 
 async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None):
     """Завершает процесс онбординга"""
@@ -274,8 +241,15 @@ async def complete_onboarding(message: Message, state: FSMContext, db: Session, 
     
     if profile_data:
         phone = profile_data.get('phone', get_text("profile.phone_not_set", language=lang))
-        home_addr = profile_data.get('home_address', get_text("profile.address_not_set", language=lang))
-        
+
+        # ОБНОВЛЕНО: Используем новую систему квартир вместо home_address
+        apartments = profile_data.get('apartments', [])
+        if apartments:
+            primary_apt = next((a for a in apartments if a.get('is_primary')), apartments[0] if apartments else None)
+            home_addr = primary_apt['address'] if primary_apt else get_text("profile.address_not_set", language=lang)
+        else:
+            home_addr = get_text("profile.address_not_set", language=lang)
+
         completion_text += f"\n\n📱 {get_text('profile.phone', language=lang)} {phone}"
         completion_text += f"\n🏠 {get_text('profile.home_address', language=lang)} {home_addr}"
     
@@ -343,12 +317,20 @@ async def cancel_onboarding(message: Message, state: FSMContext, db: Session, us
 
 @router.message(F.text == "🏠 Указать адрес")
 async def start_address_input(message: Message, state: FSMContext, db: Session):
-    """Начинает процесс ввода домашнего адреса"""
+    """
+    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+    """
     lang = message.from_user.language_code or "ru"
-    
-    await message.answer(get_text("onboarding.address_request", language=lang))
-    await state.set_state(OnboardingStates.waiting_for_home_address)
-    logger.info(f"Пользователь {message.from_user.id} начал ввод адреса")
+
+    await state.clear()
+    await message.answer(
+        "⚠️ <b>Система адресов обновлена!</b>\n\n"
+        "Теперь адрес выбирается из справочника квартир.\n"
+        "Пожалуйста, используйте кнопку '🏘️ Мои квартиры' в профиле для добавления адреса.",
+        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved")
+    )
+
+    logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик ввода адреса")
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
@@ -500,7 +482,21 @@ async def save_document(message: Message, state: FSMContext, db: Session):
             await state.clear()
             return
         
-        # Сохраняем документ
+        # Загружаем документ в Media Service (в канал ARCHIVE)
+        from uk_management_bot.utils.media_helpers import upload_document_to_media_service
+        try:
+            await upload_document_to_media_service(
+                bot=message.bot,
+                file_id=file_id,
+                user_telegram_id=message.from_user.id,
+                description=f"Документ пользователя: {document_type_value}"
+            )
+            logger.info(f"Документ пользователя {message.from_user.id} загружен в Media Service")
+        except Exception as e:
+            logger.error(f"Ошибка загрузки документа в Media Service: {e}")
+            # Продолжаем сохранение даже если загрузка не удалась
+
+        # Сохраняем документ в базу данных
         verification_service = UserVerificationService(db)
         document_type = DocumentType(document_type_value)
         document = verification_service.save_user_document(
@@ -510,7 +506,7 @@ async def save_document(message: Message, state: FSMContext, db: Session):
             file_name=file_name,
             file_size=file_size
         )
-        
+
         # Показываем успешное сообщение
         document_type_name = get_document_type_name(document_type, lang)
         await message.answer(

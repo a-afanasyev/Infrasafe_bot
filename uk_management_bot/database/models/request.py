@@ -17,10 +17,13 @@ class Request(Base):
     # Основная информация о заявке
     category = Column(String(100), nullable=False)
     status = Column(String(50), default="Новая", nullable=False)
-    address = Column(Text, nullable=False)
+    address = Column(Text, nullable=True)  # Legacy: сохраняем для старых заявок, но делаем nullable
     description = Column(Text, nullable=False)
-    apartment = Column(String(20), nullable=True)
+    apartment = Column(String(20), nullable=True)  # Legacy: заменено на apartment_id
     urgency = Column(String(20), default="Обычная", nullable=False)
+
+    # Новая система адресов: связь с квартирой из справочника
+    apartment_id = Column(Integer, ForeignKey("apartments.id"), nullable=True, index=True)
     
     # Медиафайлы (JSON массив с file_ids)
     media_files = Column(JSON, default=list)
@@ -55,6 +58,9 @@ class Request(Base):
     ratings = relationship("Rating", back_populates="request")
     comments = relationship("RequestComment", back_populates="request")
     assignments = relationship("RequestAssignment", back_populates="request")
+
+    # Связь с квартирой из справочника адресов
+    apartment_obj = relationship("Apartment", back_populates="requests")
     
     def __repr__(self):
         return f"<Request(request_number={self.request_number}, category={self.category}, status={self.status})>"

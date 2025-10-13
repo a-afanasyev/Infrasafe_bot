@@ -119,8 +119,14 @@ class GeoOptimizer:
     def optimize_executor_route(self, executor_id: int, request_numbers: List[str]) -> Optional[RouteOptimizationResult]:
         """Оптимизирует маршрут для конкретного исполнителя"""
         try:
-            # Получаем заявки
-            requests = self.db.query(Request).filter(
+            # ОБНОВЛЕНО: Загружаем заявки с apartment_obj для доступа к GPS-координатам
+            from sqlalchemy.orm import joinedload
+            from uk_management_bot.database.models.apartment import Apartment
+            from uk_management_bot.database.models.building import Building
+
+            requests = self.db.query(Request).options(
+                joinedload(Request.apartment_obj).joinedload(Apartment.building).joinedload(Building.yard)
+            ).filter(
                 Request.request_number.in_(request_numbers)
             ).all()
             
@@ -236,10 +242,16 @@ class GeoOptimizer:
                            exclude_request_numbers: Optional[Set[str]] = None) -> List[Request]:
         """Находит заявки в радиусе от заданной точки"""
         try:
+            from sqlalchemy.orm import joinedload
+            from uk_management_bot.database.models.apartment import Apartment
+            from uk_management_bot.database.models.building import Building
+
             exclude_numbers = exclude_request_numbers or set()
-            
-            # Получаем все активные заявки
-            requests = self.db.query(Request).filter(
+
+            # ОБНОВЛЕНО: Получаем все активные заявки с eager loading для GPS координат
+            requests = self.db.query(Request).options(
+                joinedload(Request.apartment_obj).joinedload(Apartment.building).joinedload(Building.yard)
+            ).filter(
                 and_(
                     Request.status.in_(['new', 'in_progress']),
                     ~Request.request_number.in_(exclude_numbers)
@@ -522,10 +534,17 @@ class GeoOptimizer:
     def _assignments_to_route_points(self, assignments: List[ShiftAssignment]) -> List[RoutePoint]:
         """Преобразует назначения в точки маршрута"""
         try:
+            # ОБНОВЛЕНО: Загружаем заявки с apartment_obj для доступа к GPS-координатам
+            from sqlalchemy.orm import joinedload
+            from uk_management_bot.database.models.apartment import Apartment
+            from uk_management_bot.database.models.building import Building
+
             route_points = []
-            
+
             for assignment in assignments:
-                request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
+                request = self.db.query(Request).options(
+                    joinedload(Request.apartment_obj).joinedload(Apartment.building).joinedload(Building.yard)
+                ).filter(Request.request_number == assignment.request_number).first()
                 if not request:
                     continue
                 
@@ -545,35 +564,78 @@ class GeoOptimizer:
             return []
     
     def _extract_geo_point_from_request(self, request: Request) -> Optional[GeoPoint]:
-        """Извлекает географическую точку из заявки"""
+        """
+        Извлекает географическую точку из заявки.
+
+        ОБНОВЛЕНО: Приоритет источников координат:
+        1. GPS-координаты из справочника адресов (apartment_obj -> building)
+        2. Координаты из additional_data
+        3. Геокодирование текстового адреса (fallback)
+        """
         try:
-            # Пытаемся извлечь координаты из дополнительных данных
+            # ПРИОРИТЕТ 1: GPS-координаты из справочника адресов
+            if hasattr(request, 'apartment_obj') and request.apartment_obj:
+                apartment = request.apartment_obj
+                if apartment.building:
+                    building = apartment.building
+                    if building.gps_latitude is not None and building.gps_longitude is not None:
+                        # Формируем адрес из данных справочника
+                        address_parts = []
+                        if building.yard:
+                            address_parts.append(building.yard.name)
+                        address_parts.append(building.address)
+                        address_parts.append(f"кв. {apartment.apartment_number}")
+                        full_address = ", ".join(address_parts)
+
+                        logger.info(
+                            f"Использованы GPS-координаты из справочника для заявки {request.request_number}: "
+                            f"({building.gps_latitude}, {building.gps_longitude}) - {full_address}"
+                        )
+
+                        return GeoPoint(
+                            latitude=building.gps_latitude,
+                            longitude=building.gps_longitude,
+                            address=full_address
+                        )
+                    else:
+                        logger.warning(
+                            f"Здание {building.id} не имеет GPS-координат. "
+                            f"Fallback к другим методам для заявки {request.request_number}"
+                        )
+
+            # ПРИОРИТЕТ 2: Координаты из additional_data (legacy)
             if hasattr(request, 'additional_data') and request.additional_data:
                 if isinstance(request.additional_data, str):
                     import json
                     data = json.loads(request.additional_data)
                 else:
                     data = request.additional_data
-                
+
                 if 'latitude' in data and 'longitude' in data:
+                    logger.info(f"Использованы координаты из additional_data для заявки {request.request_number}")
                     return GeoPoint(
                         latitude=float(data['latitude']),
                         longitude=float(data['longitude']),
                         address=data.get('address', request.address or '')
                     )
-            
-            # Если координат нет, пытаемся геокодировать адрес
+
+            # ПРИОРИТЕТ 3: Геокодирование текстового адреса (legacy fallback)
             if request.address:
-                # Упрощенная геокодировка для демонстрации
-                # В реальности здесь должен быть вызов API геокодирования
+                logger.warning(
+                    f"Используется геокодирование текстового адреса для заявки {request.request_number}. "
+                    f"Рекомендуется привязать заявку к справочнику адресов."
+                )
                 geo_point = self._simple_geocode(request.address)
                 if geo_point:
                     return geo_point
-            
-            # Используем координаты по умолчанию (центр города)
-            logger.warning(f"Не удалось определить координаты для заявки {request.request_number}")
+
+            # Координаты не найдены
+            logger.warning(
+                f"Не удалось определить координаты для заявки {request.request_number}. "
+                f"Проверьте: apartment_obj={hasattr(request, 'apartment_obj')}, address={request.address}"
+            )
             return None
-            
+
         except Exception as e:
             logger.error(f"Ошибка извлечения географической точки из заявки {request.request_number}: {e}")
             return None

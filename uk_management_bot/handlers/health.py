@@ -56,7 +56,7 @@ async def check_database_health(db: Session) -> Dict[str, Any]:
 async def check_redis_health() -> Dict[str, Any]:
     """
     Проверка состояния Redis (если используется)
-    
+
     Returns:
         Dict с информацией о состоянии Redis
     """
@@ -65,24 +65,25 @@ async def check_redis_health() -> Dict[str, Any]:
             "status": "disabled",
             "message": "Redis rate limiting is disabled"
         }
-    
+
+    redis = None
     try:
         from uk_management_bot.utils.redis_rate_limiter import get_redis_client
-        
+
         start_time = time.time()
         redis = await get_redis_client()
-        
+
         if redis is None:
             return {
                 "status": "disabled",
                 "message": "Redis client not initialized"
             }
-        
+
         # Проверяем ping
         await redis.ping()
-        
+
         response_time = (time.time() - start_time) * 1000
-        
+
         return {
             "status": "healthy",
             "response_time_ms": round(response_time, 2),
@@ -91,10 +92,17 @@ async def check_redis_health() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
         return {
-            "status": "unhealthy", 
+            "status": "unhealthy",
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
+    finally:
+        # Закрываем соединение Redis если оно было создано
+        if redis is not None:
+            try:
+                await redis.close()
+            except Exception as e:
+                logger.debug(f"Error closing Redis connection in health check: {e}")
 
 
 async def get_system_info() -> Dict[str, Any]:

@@ -1137,7 +1137,10 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
         await callback.answer("Произошла ошибка", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("delete_"))
+@router.callback_query(
+    F.data.startswith("delete_") &
+    ~F.data.startswith("delete_employee_")
+)
 async def handle_delete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Обработка удаления заявки менеджером"""
     try:

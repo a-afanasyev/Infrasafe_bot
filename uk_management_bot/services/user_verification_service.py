@@ -84,15 +84,15 @@ class UserVerificationService:
             self.db.rollback()
             raise
     
-    def approve_verification(self, user_id: int, admin_id: int, notes: str = None) -> bool:
+    async def approve_verification(self, user_id: int, admin_id: int, notes: str = None) -> bool:
         """
         Одобрить верификацию пользователя
-        
+
         Args:
             user_id: ID пользователя
             admin_id: ID администратора
             notes: Комментарии администратора
-            
+
         Returns:
             True если успешно
         """
@@ -101,12 +101,12 @@ class UserVerificationService:
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 return False
-            
+
             user.verification_status = "verified"
             user.verification_notes = notes
             user.verification_date = datetime.now()
             user.verified_by = admin_id
-            
+
             # Обновляем статус верификации
             verification = self.db.query(UserVerification).filter(
                 and_(
@@ -114,17 +114,61 @@ class UserVerificationService:
                     UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED])
                 )
             ).first()
-            
+
             if verification:
                 verification.status = VerificationStatus.APPROVED
                 verification.verified_by = admin_id
                 verification.verified_at = datetime.now()
                 verification.admin_notes = notes
-            
+
             self.db.commit()
             logger.info(f"Верификация пользователя {user_id} одобрена администратором {admin_id}")
+
+            # Автоматически одобряем все pending квартиры пользователя
+            from uk_management_bot.database.models.user_apartment import UserApartment
+            try:
+                pending_apartments = self.db.query(UserApartment).filter(
+                    UserApartment.user_id == user_id,
+                    UserApartment.status == 'pending'
+                ).all()
+
+                approved_count = 0
+                for user_apartment in pending_apartments:
+                    user_apartment.status = 'approved'
+                    user_apartment.reviewed_at = datetime.now()
+                    user_apartment.reviewed_by = admin_id
+                    user_apartment.admin_comment = "Автоматически одобрено при верификации пользователя"
+                    approved_count += 1
+
+                self.db.commit()
+                logger.info(f"Автоматически одобрено {approved_count} квартир для пользователя {user_id}")
+            except Exception as e:
+                logger.error(f"Ошибка автоматического одобрения квартир для пользователя {user_id}: {e}")
+                # Продолжаем выполнение, так как верификация уже одобрена
+
+            # Удаляем документы пользователя из Media Service (канал ARCHIVE)
+            from uk_management_bot.utils.media_helpers import delete_user_documents_from_media_service
+            try:
+                await delete_user_documents_from_media_service(user.telegram_id)
+                logger.info(f"Документы пользователя {user.telegram_id} удалены из Media Service")
+            except Exception as e:
+                logger.error(f"Ошибка удаления документов из Media Service для пользователя {user.telegram_id}: {e}")
+                # Продолжаем выполнение, так как верификация уже одобрена
+
+            # Удаляем записи о документах из базы данных
+            # ВАЖНО: файлы останутся на серверах Telegram, но file_id больше не будет доступен в системе
+            try:
+                documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
+                for doc in documents:
+                    self.db.delete(doc)
+                self.db.commit()
+                logger.info(f"Удалено {len(documents)} записей о документах пользователя {user_id} из базы данных")
+            except Exception as e:
+                logger.error(f"Ошибка удаления записей о документах из БД для пользователя {user_id}: {e}")
+                # Продолжаем выполнение
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Ошибка одобрения верификации: {e}")
             self.db.rollback()

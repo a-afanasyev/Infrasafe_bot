@@ -68,25 +68,56 @@ def get_text(key: str, language: str = "ru", **kwargs) -> str:
         return key
 
 def format_request_details(request, locale: Dict[str, Any]) -> str:
-    """Форматирование деталей заявки"""
+    """
+    Форматирование деталей заявки
+
+    ОБНОВЛЕНО: Поддержка отображения информации о квартире из справочника
+    """
     # Используем новый формат номера заявки
     request_display = request.format_number_for_display()
-    
+
     details = f"""
 📋 {locale.get('requests', {}).get('details', 'Детали заявки')} {request_display}
 
 🏷️ {locale.get('requests', {}).get('category', 'Категория')}: {request.category}
-📍 {locale.get('requests', {}).get('address', 'Адрес')}: {request.address}
-📝 {locale.get('requests', {}).get('description', 'Описание')}: {request.description}
-🏠 {locale.get('requests', {}).get('apartment', 'Квартира')}: {request.apartment or 'Не указана'}
+"""
+
+    # НОВОЕ: Отображение адреса с поддержкой справочника
+    if hasattr(request, 'apartment_obj') and request.apartment_obj:
+        # Заявка привязана к квартире из справочника
+        from uk_management_bot.services.address_service import AddressService
+        formatted_address = AddressService.format_apartment_address(request.apartment_obj)
+        details += f"📍 {locale.get('requests', {}).get('address', 'Адрес')}: {formatted_address} 🏢\n"
+
+        # Дополнительная информация о квартире
+        apartment = request.apartment_obj
+        if apartment.entrance or apartment.floor or apartment.rooms_count or apartment.area:
+            details += f"🏠 {locale.get('requests', {}).get('apartment', 'Квартира')}: "
+            apt_details = []
+            if apartment.entrance:
+                apt_details.append(f"Подъезд {apartment.entrance}")
+            if apartment.floor:
+                apt_details.append(f"Этаж {apartment.floor}")
+            if apartment.rooms_count:
+                apt_details.append(f"{apartment.rooms_count} комн.")
+            if apartment.area:
+                apt_details.append(f"{apartment.area} м²")
+            details += ", ".join(apt_details) + "\n"
+    else:
+        # Legacy: текстовый адрес
+        details += f"📍 {locale.get('requests', {}).get('address', 'Адрес')}: {request.address}\n"
+        if request.apartment:
+            details += f"🏠 {locale.get('requests', {}).get('apartment', 'Квартира')}: {request.apartment}\n"
+
+    details += f"""📝 {locale.get('requests', {}).get('description', 'Описание')}: {request.description}
 ⚡ {locale.get('requests', {}).get('urgency', 'Срочность')}: {request.urgency}
 📊 {locale.get('requests', {}).get('status', 'Статус')}: {request.status}
 🕐 {locale.get('requests', {}).get('created_at', 'Создана')}: {request.created_at.strftime('%d.%m.%Y %H:%M')}
 """
-    
+
     if request.executor:
         details += f"👤 {locale.get('requests', {}).get('executor', 'Исполнитель')}: {request.executor.first_name or request.executor.username or 'Не указан'}\n"
-    
+
     return details
 
 def format_user_info(user, locale: Dict[str, Any]) -> str:

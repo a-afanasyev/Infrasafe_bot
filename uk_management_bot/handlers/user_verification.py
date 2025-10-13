@@ -121,10 +121,25 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
 • Username: @{user.username or 'Не указано'}
 • Телефон: {user.phone or 'Не указано'}
 
-📍 **Адреса:**
-• Квартира: {user.apartment_address or 'Не указано'}
-• Дом: {user.home_address or 'Не указано'}
-• Двор: {user.yard_address or 'Не указано'}
+📍 **Адреса:**"""
+
+        # ОБНОВЛЕНО: Используем новую систему квартир
+        if user.user_apartments:
+            approved_apartments = [ua for ua in user.user_apartments if ua.status == 'approved']
+            if approved_apartments:
+                user_info += "\n"
+                for ua in approved_apartments:
+                    apartment = ua.apartment
+                    primary_marker = " ⭐" if ua.is_primary else ""
+                    owner_marker = " (Владелец)" if ua.is_owner else ""
+                    address = apartment.full_address if hasattr(apartment, 'full_address') else f"Квартира {apartment.apartment_number}"
+                    user_info += f"• {address}{primary_marker}{owner_marker}\n"
+            else:
+                user_info += "\n• Адреса не указаны (заявки на рассмотрении)\n"
+        else:
+            user_info += "\n• Адреса не указаны\n"
+
+        user_info += """
 
 📋 **Статус верификации:** {get_text(f'verification.status.{user.verification_status}', language=lang)}
 """
@@ -314,13 +329,29 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
         bot = Bot(token=settings.BOT_TOKEN)
         
         try:
-            await bot.send_document(
-                chat_id=callback.from_user.id,
-                document=document.file_id,
-                caption=f"📄 {get_text(f'verification.document_types.{document.document_type.value}', language=lang)}\n"
-                        f"📅 Загружен: {document.created_at.strftime('%d.%m.%Y %H:%M')}"
-            )
-            await callback.answer("Документ отправлен в личные сообщения")
+            caption = (f"📄 {get_text(f'verification.document_types.{document.document_type.value}', language=lang)}\n"
+                      f"📅 Загружен: {document.created_at.strftime('%d.%m.%Y %H:%M')}")
+
+            # Пробуем отправить как документ, если не получится - как фото
+            try:
+                await bot.send_document(
+                    chat_id=callback.from_user.id,
+                    document=document.file_id,
+                    caption=caption
+                )
+                await callback.answer("Документ отправлен в личные сообщения")
+            except Exception as doc_error:
+                # Если ошибка "can't use file of type Photo", отправляем как фото
+                if "can't use file of type Photo" in str(doc_error):
+                    logger.info(f"Файл {document.file_id} является фото, отправляем как photo")
+                    await bot.send_photo(
+                        chat_id=callback.from_user.id,
+                        photo=document.file_id,
+                        caption=caption
+                    )
+                    await callback.answer("Документ отправлен в личные сообщения")
+                else:
+                    raise  # Пробрасываем другие ошибки
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")
             await callback.answer("Ошибка отправки документа", show_alert=True)
@@ -654,7 +685,7 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
     
     try:
         verification_service = UserVerificationService(db)
-        success = verification_service.approve_verification(
+        success = await verification_service.approve_verification(
             user_id=user_id,
             admin_id=callback.from_user.id
         )

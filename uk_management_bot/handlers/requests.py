@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
@@ -10,12 +10,15 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.user import User
 from uk_management_bot.keyboards.requests import (
-    get_categories_keyboard, 
+    get_categories_keyboard,
     get_urgency_keyboard,
     get_cancel_keyboard,
     get_media_keyboard,
     get_confirmation_keyboard,
     get_address_selection_keyboard,
+    get_yard_selection_keyboard,
+    get_building_selection_keyboard,
+    get_apartment_selection_keyboard,
     parse_selected_address,
     get_categories_inline_keyboard,
     get_categories_inline_keyboard_with_cancel,
@@ -304,8 +307,11 @@ def smart_address_validation(address_text: str) -> dict:
 class RequestStates(StatesGroup):
     """Состояния FSM для создания заявок"""
     category = State()           # Выбор категории
-    address = State()            # Выбор адреса (обновлено)
-    address_manual = State()     # Ручной ввод адреса (новое)
+    address_yard = State()       # Выбор двора (шаг 1)
+    address_building = State()   # Выбор здания (шаг 2)
+    address_apartment = State()  # Выбор квартиры (шаг 3)
+    address = State()            # Устаревший: прямой выбор адреса
+    address_manual = State()     # Ручной ввод адреса
     description = State()        # Описание проблемы
     urgency = State()           # Выбор срочности
     media = State()             # Медиафайлы
@@ -392,17 +398,18 @@ async def process_category(message: Message, state: FSMContext):
     # Сохраняем категорию и переходим к выбору адреса
     await state.update_data(category=category_text)
     await state.set_state(RequestStates.address)
-    
-    # Показываем клавиатуру выбора адреса с улучшенным UX
+
+    # Показываем единую клавиатуру с квартирами, домами и дворами
     try:
         logger.info(f"[CATEGORY_SELECTION] Создание клавиатуры выбора адреса для пользователя {user_id}")
-        keyboard = await get_address_selection_keyboard(user_id)
-        logger.info(f"[CATEGORY_SELECTION] Клавиатура создана, отправка пользователю {user_id}")
-        
+        keyboard = get_address_selection_keyboard(user_id)
+        logger.info(f"[CATEGORY_SELECTION] Клавиатура адресов создана, отправка пользователю {user_id}")
+
         await message.answer(
-            "💡 Выберите адрес:\n"
-            "• Выберите сохраненный адрес для быстрого создания\n"
-            "• Или введите адрес вручную",
+            "📍 Выберите адрес:\n"
+            "• 🏠 Квартира - для проблем в квартире\n"
+            "• 🏢 Дом - для общедомовых проблем\n"
+            "• 🏘️ Двор - для проблем во дворе",
             reply_markup=keyboard
         )
         logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} выбрал категорию '{category_text}', переходит к выбору адреса")
@@ -422,65 +429,184 @@ async def process_category_other_inputs(message: Message, state: FSMContext):
 # Обработка выбора адреса (обновленная логика)
 @router.message(RequestStates.address)
 async def process_address(message: Message, state: FSMContext):
-    """Обработка выбора адреса с новой клавиатурой"""
+    """
+    Обработка выбора адреса
+
+    ОБНОВЛЕНО: Поддержка выбора квартир из справочника адресов
+    """
     user_id = message.from_user.id
     selected_text = message.text
-    
+
     # Улучшенное логирование с контекстом
     logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id}: '{selected_text}'")
     logger.info(f"[ADDRESS_SELECTION] Время: {datetime.now()}")
     logger.info(f"[ADDRESS_SELECTION] Состояние FSM: {await state.get_state()}")
-    
+
     try:
+        from uk_management_bot.services.address_service import AddressService
+
+        # НОВАЯ ЛОГИКА: Проверка типа выбранного адреса
+
+        # 1. КВАРТИРА (🏠) - для проблем в квартире
+        if selected_text.startswith("🏠 "):
+            address_text = selected_text[2:].strip()
+            db = next(get_db())
+            try:
+                apartments = await AddressService.get_user_approved_apartments(db, user_id)
+
+                selected_apartment = None
+                for apartment in apartments:
+                    formatted_address = AddressService.format_apartment_address(apartment)
+                    if formatted_address == address_text or formatted_address.startswith(address_text.replace("...", "")):
+                        selected_apartment = apartment
+                        break
+
+                if selected_apartment:
+                    full_address = AddressService.format_apartment_address(selected_apartment)
+                    await state.update_data(
+                        address=full_address,
+                        apartment_id=selected_apartment.id,
+                        building_id=selected_apartment.building_id if selected_apartment.building else None,
+                        yard_id=selected_apartment.building.yard_id if selected_apartment.building and selected_apartment.building.yard else None,
+                        address_type='apartment'
+                    )
+                    await state.set_state(RequestStates.description)
+
+                    await message.answer(
+                        f"✅ Адрес сохранен: 🏠 {full_address}\n\n"
+                        f"Опишите проблему в квартире:",
+                        reply_markup=get_cancel_keyboard()
+                    )
+
+                    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал квартиру: {full_address}")
+                    return
+                else:
+                    logger.warning(f"[ADDRESS_SELECTION] Квартира не найдена: '{address_text}'")
+                    await message.answer(
+                        "⚠️ Квартира не найдена. Выберите адрес из предложенных вариантов:",
+                        reply_markup=get_address_selection_keyboard(user_id)
+                    )
+                    return
+            finally:
+                db.close()
+
+        # 2. ДОМ/ЗДАНИЕ (🏢) - для общедомовых проблем
+        elif selected_text.startswith("🏢 "):
+            address_text = selected_text[2:].strip()
+            db = next(get_db())
+            try:
+                from uk_management_bot.database.models import Building
+
+                # Находим здание по адресу
+                building = db.query(Building).filter(Building.address == address_text).first()
+
+                if building:
+                    await state.update_data(
+                        address=f"Дом: {building.address}",
+                        apartment_id=None,
+                        building_id=building.id,
+                        yard_id=building.yard_id if building.yard else None,
+                        address_type='building'
+                    )
+                    await state.set_state(RequestStates.description)
+
+                    await message.answer(
+                        f"✅ Адрес сохранен: 🏢 {building.address}\n\n"
+                        f"Опишите общедомовую проблему:",
+                        reply_markup=get_cancel_keyboard()
+                    )
+
+                    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал дом: {building.address}")
+                    return
+                else:
+                    logger.warning(f"[ADDRESS_SELECTION] Здание не найдено: '{address_text}'")
+                    await message.answer(
+                        "⚠️ Здание не найдено. Выберите адрес из предложенных вариантов:",
+                        reply_markup=get_address_selection_keyboard(user_id)
+                    )
+                    return
+            finally:
+                db.close()
+
+        # 3. ДВОР (🏘️) - для проблем во дворе
+        elif selected_text.startswith("🏘️ "):
+            address_text = selected_text[2:].strip()
+            db = next(get_db())
+            try:
+                from uk_management_bot.database.models import Yard
+
+                # Находим двор по названию
+                yard = db.query(Yard).filter(Yard.name == address_text).first()
+
+                if yard:
+                    await state.update_data(
+                        address=f"Двор: {yard.name}",
+                        apartment_id=None,
+                        building_id=None,
+                        yard_id=yard.id,
+                        address_type='yard'
+                    )
+                    await state.set_state(RequestStates.description)
+
+                    await message.answer(
+                        f"✅ Адрес сохранен: 🏘️ {yard.name}\n\n"
+                        f"Опишите проблему во дворе:",
+                        reply_markup=get_cancel_keyboard()
+                    )
+
+                    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал двор: {yard.name}")
+                    return
+                else:
+                    logger.warning(f"[ADDRESS_SELECTION] Двор не найден: '{address_text}'")
+                    await message.answer(
+                        "⚠️ Двор не найден. Выберите адрес из предложенных вариантов:",
+                        reply_markup=get_address_selection_keyboard(user_id)
+                    )
+                    return
+            finally:
+                db.close()
+
+        # СТАРАЯ ЛОГИКА: Обработка legacy адресов и команд
         # Парсим выбор пользователя
         result = await parse_selected_address(selected_text)
         logger.info(f"[ADDRESS_SELECTION] Результат парсинга: {result}")
-        
+
         if result['type'] == 'predefined':
             # Используем выбранный адрес; квартира считается указанной в адресе
-            await state.update_data(address=result['address'])
+            # NOTE: Legacy path - для старых адресов без apartment_id
+            await state.update_data(address=result['address'], apartment_id=None)
             await state.set_state(RequestStates.description)
-            
+
             # Контекстное сообщение в зависимости от типа адреса
             context_message = get_contextual_help(result['address_type'])
             await message.answer(context_message, reply_markup=get_cancel_keyboard())
-            
+
             logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал готовый адрес: {result['address']}, тип: {result['address_type']}")
-            
-        elif result['type'] == 'manual':
-            # Перейти к ручному вводу
-            await state.set_state(RequestStates.address_manual)
-            await message.answer(
-                "✏️ Введите адрес вручную:\n"
-                "Например: ул. Ленина, 1, кв. 5",
-                reply_markup=get_cancel_keyboard()
-            )
-            logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} перешел к ручному вводу адреса")
-            
+
         elif result['type'] == 'cancel':
             # Отменить создание заявки
             await cancel_request(message, state)
             return
-            
+
         elif result['type'] == 'unknown':
             # Неизвестный выбор - улучшенная обработка
             logger.warning(f"[ADDRESS_SELECTION] Неизвестный выбор адреса: '{selected_text}' от пользователя {user_id}")
             await message.answer(
-                "Пожалуйста, выберите адрес из предложенных вариантов или введите вручную"
+                "⚠️ Пожалуйста, выберите адрес из предложенных вариантов"
             )
             # Показываем клавиатуру снова
             try:
-                keyboard = await get_address_selection_keyboard(user_id)
+                keyboard = get_address_selection_keyboard(user_id)
                 await message.answer("Выберите адрес:", reply_markup=keyboard)
             except Exception as keyboard_error:
                 logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
                 await graceful_fallback(message, "keyboard_error")
-            
+
         else:
             # Обработка других типов ошибок
             logger.error(f"[ADDRESS_SELECTION] Неожиданный тип результата: {result['type']}")
             await graceful_fallback(message, "parsing_error")
-            
+
     except Exception as e:
         logger.error(f"[ADDRESS_SELECTION] Критическая ошибка обработки выбора адреса: {e}")
         await graceful_fallback(message, "critical_error")
@@ -508,16 +634,16 @@ async def process_address_manual(message: Message, state: FSMContext):
         )
         return
     
-    # Сохраняем адрес
-    await state.update_data(address=address_text)
-    
+    # Сохраняем адрес (без apartment_id для ручного ввода)
+    await state.update_data(address=address_text, apartment_id=None)
+
     # В новой логике квартира вводится прямо в адресе при ручном вводе
     await state.set_state(RequestStates.description)
     await message.answer(
         "✅ Адрес сохранен! Опишите проблему:",
         reply_markup=get_cancel_keyboard()
     )
-    logger.info(f"[ADDRESS_MANUAL] Пользователь {user_id} ввел адрес: {address_text}")
+    logger.info(f"[ADDRESS_MANUAL] Пользователь {user_id} ввел адрес вручную: {address_text}")
 
 # Обработка ввода описания
 @router.message(RequestStates.description)
@@ -651,7 +777,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
     if message.text == "❌ Отмена":
         await cancel_request(message, state)
         return
-    
+
     if message.text == "🔙 Назад":
         await state.set_state(RequestStates.media)
         await message.answer(
@@ -659,12 +785,12 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
             reply_markup=get_media_keyboard()
         )
         return
-    
+
     if message.text == "✅ Подтвердить":
         data = await state.get_data()
-        
+
         # Сохраняем заявку в базу данных
-        success = await save_request(data, message.from_user.id, db)
+        success = await save_request(data, message.from_user.id, db, message.bot)
         
         if success:
             await state.clear()
@@ -699,33 +825,51 @@ async def cancel_request(message: Message, state: FSMContext, roles: list = None
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
 
 # Сохранение заявки в базу данных
-async def save_request(data: dict, user_id: int, db: Session) -> bool:
+async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -> bool:
     """Сохранение заявки в базу данных"""
     try:
         # Получаем пользователя из базы данных по telegram_id
         from uk_management_bot.database.models.user import User
         user = db.query(User).filter(User.telegram_id == user_id).first()
-        
+
         if not user:
             logger.error(f"Пользователь с telegram_id {user_id} не найден в базе данных")
             return False
-        
+
         # Генерируем уникальный номер заявки
         request_number = Request.generate_request_number(db)
-        
+
+        # Загружаем медиа-файлы в Media Service (если есть)
+        media_file_ids = data.get('media_files', [])
+        if media_file_ids and bot:
+            from uk_management_bot.utils.media_helpers import upload_multiple_telegram_files
+            try:
+                uploaded_files = await upload_multiple_telegram_files(
+                    bot=bot,
+                    file_ids=media_file_ids,
+                    request_number=request_number,
+                    uploaded_by=user.id
+                )
+                logger.info(f"Загружено {len(uploaded_files)} файлов в Media Service для заявки {request_number}")
+            except Exception as e:
+                logger.error(f"Ошибка загрузки файлов в Media Service: {e}")
+                # Продолжаем создание заявки даже если загрузка не удалась
+
         request = Request(
             request_number=request_number,
             category=data['category'],
             address=data['address'],
             description=data['description'],
             urgency=data['urgency'],
-            apartment=data.get('apartment'),
+            apartment=data.get('apartment'),  # Legacy field
+            apartment_id=data.get('apartment_id'),  # NEW: Link to address directory
             # В модели media_files ожидается JSON (список), поэтому сохраняем список
-            media_files=list(data.get('media_files', [])),
+            # Теперь храним file_ids как backup, основное хранилище - Media Service
+            media_files=list(media_file_ids),
             user_id=user.id,  # Используем id пользователя из базы данных
             status='Новая'
         )
-        
+
         db.add(request)
         db.commit()
         return True
@@ -767,7 +911,7 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext, 
             f"Выбрана категория: {category}\n\nВыберите адрес:"
         )
         # Отправляем новое сообщение с ReplyKeyboardMarkup для выбора адреса
-        keyboard = await get_address_selection_keyboard(callback.from_user.id)
+        keyboard = get_address_selection_keyboard(callback.from_user.id)
         await callback.message.answer(
             "💡 Выберите адрес или введите вручную:",
             reply_markup=keyboard
@@ -840,10 +984,10 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
         if action == "yes":
             # Получаем данные из FSM
             data = await state.get_data()
-            
+
             # Создаем заявку в базе данных
             db_session = next(get_db())
-            success = await save_request(data, callback.from_user.id, db_session)
+            success = await save_request(data, callback.from_user.id, db_session, callback.bot)
             
             if success:
                 # Редактируем исходное сообщение без ReplyKeyboardMarkup
@@ -1095,7 +1239,10 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки редактирования заявки: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
 
-@router.callback_query(F.data.startswith("delete_"))
+@router.callback_query(
+    F.data.startswith("delete_") &
+    ~F.data.startswith("delete_employee_")
+)
 async def handle_delete_request(callback: CallbackQuery, state: FSMContext):
     """Обработка удаления заявки"""
     try:
@@ -1290,7 +1437,11 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Произошла ошибка", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("cancel_") & ~F.data.startswith("cancel_document_selection_"))
+@router.callback_query(
+    F.data.startswith("cancel_") &
+    ~F.data.startswith("cancel_document_selection_") &
+    ~F.data.in_(["cancel_action", "cancel_apartment_selection"])
+)
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
     """Обработка отмены заявки"""
     try:
