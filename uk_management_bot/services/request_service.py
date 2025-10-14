@@ -19,8 +19,7 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.services.notification_service import notify_status_changed, async_notify_request_status_changed
-# TODO: Восстановить Google Sheets интеграцию
-# from uk_management_bot.integrations.google_sheets import sheets_service, SyncTask
+# Google Sheets интеграция убрана из продукта
 
 logger = logging.getLogger(__name__)
 
@@ -663,30 +662,9 @@ class RequestService:
                 'photo_urls': ','.join(request.media_files) if request.media_files else ''
             }
 
-            # Создаем задачу синхронизации
-            # TODO: Восстановить Google Sheets интеграцию
-            # task = SyncTask(
-            #     task_type=operation,
-            #     request_id=request.request_number,
-            #     data=request_data if operation == "create" else changes,
-            #     priority="high" if operation == "create" else "medium"
-            # )
-
-            # Добавляем задачу в очередь (если очередь доступна)
-            # FUTURE: Issue #1 - Добавить интеграцию с Redis Queue или Celery
-            # Временно выполняем синхронизацию синхронно
-            # TODO: Восстановить Google Sheets интеграцию
-            # try:
-            #     from uk_management_bot.integrations.google_sheets import sheets_service
-            #     if sheets_service:
-            #         sheets_service.process_sync_task(task)
-            # except Exception as sync_error:
-            #     logger.warning(f"Sync failed, will retry later: {sync_error}")
-            
-            logger.info(f"Request sync task created", 
-                       request_number=request.request_number,
-                       operation=operation,
-                       priority=task.priority)
+            # Google Sheets интеграция убрана из продукта
+            logger.debug(f"Request operation logged: {operation}",
+                        request_number=request.request_number)
             
         except Exception as e:
             logger.error(f"Error creating sync task for request {request.request_number}",

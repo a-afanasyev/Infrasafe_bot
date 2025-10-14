@@ -2958,8 +2958,31 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
         # Фильтруем по специализации если указана в specialization_focus
         if shift.specialization_focus and isinstance(shift.specialization_focus, list):
-            # TODO: фильтрация по специализациям исполнителей
-            pass
+            import json
+            filtered_executors = []
+            for executor in available_executors:
+                # Парсим специализации исполнителя из JSON
+                try:
+                    if executor.specialization:
+                        if isinstance(executor.specialization, str):
+                            executor_specs = json.loads(executor.specialization)
+                        else:
+                            executor_specs = executor.specialization
+
+                        # Проверяем пересечение специализаций
+                        if isinstance(executor_specs, list):
+                            # Если хотя бы одна специализация совпадает - подходит
+                            if any(spec in executor_specs for spec in shift.specialization_focus):
+                                filtered_executors.append(executor)
+                        else:
+                            # Если не список - пропускаем исполнителя
+                            continue
+                    # Если специализация не указана - не добавляем в фильтрованный список
+                except (json.JSONDecodeError, TypeError):
+                    # Если не удалось распарсить - пропускаем исполнителя
+                    continue
+
+            available_executors = filtered_executors
 
         text = f"👤 <b>Назначение исполнителя на смену</b>\n\n"
         text += f"<b>📅 Смена:</b> {shift.start_time.strftime('%d.%m.%Y')} "
