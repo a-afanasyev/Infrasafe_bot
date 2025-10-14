@@ -1980,24 +1980,20 @@ async def show_my_requests(message: Message, state: FSMContext):
             query = db_session.query(Request).filter(Request.user_id == user.id)
             logger.info(f"Заявитель/другая роль {user.id}: показываем заявки с user_id={user.id}")
         
-        # Фильтр статуса: только для не-исполнителей (заявители и др.)
-        if active_role != "executor":
-            if active_status == "active":
-                # Активные: рабочие статусы (ожидают действий)
-                query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
-                logger.info(f"Применен фильтр active_status='active': статусы=['Новая', 'В работе', 'Закуп', 'Уточнение']")
-            elif active_status == "archive":
-                # Архив: финальные и завершенные статусы (ожидают подтверждения или уже завершены)
-                query = query.filter(Request.status.in_(["Выполнена", "Принято", "Подтверждена", "Отменена"]))
-                logger.info(f"Применен фильтр active_status='archive': статусы=['Выполнена', 'Принято', 'Подтверждена', 'Отменена']")
-            elif active_status == "all":
-                # Все заявки: без фильтра по статусу
-                logger.info(f"Применен фильтр active_status='all': показываем все заявки без фильтра статуса")
-            else:
-                logger.warning(f"Фильтр статуса НЕ применен! active_status={active_status}")
+        # Фильтр статуса: применяем для ВСЕХ ролей (включая исполнителей)
+        if active_status == "active":
+            # Активные: рабочие статусы (ожидают действий)
+            query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
+            logger.info(f"Применен фильтр active_status='active': статусы=['Новая', 'В работе', 'Закуп', 'Уточнение']")
+        elif active_status == "archive":
+            # Архив: финальные и завершенные статусы
+            query = query.filter(Request.status.in_(["Выполнена", "Принято", "Подтверждена", "Отменена"]))
+            logger.info(f"Применен фильтр active_status='archive': статусы=['Выполнена', 'Принято', 'Подтверждена', 'Отменена']")
+        elif active_status == "all":
+            # Все заявки: без фильтра по статусу
+            logger.info(f"Применен фильтр active_status='all': показываем все заявки без фильтра статуса")
         else:
-            # Для исполнителей показываем ВСЕ назначенные заявки (без фильтра статуса)
-            logger.info(f"Исполнитель: показываем ВСЕ назначенные заявки без фильтра статуса")
+            logger.warning(f"Фильтр статуса НЕ применен! active_status={active_status}")
 
         # Сортировка: для фильтра "all" сначала активные, потом архивные, внутри каждой группы по дате
         if active_role != "executor" and active_status == "all":
