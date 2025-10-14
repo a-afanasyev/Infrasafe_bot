@@ -3,7 +3,7 @@ Pydantic схемы для Media API
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
@@ -47,6 +47,7 @@ class MediaSearchRequest(BaseModel):
     date_to: Optional[datetime] = Field(None, description="Дата окончания")
     file_types: Optional[List[FileTypeEnum]] = Field(None, description="Типы файлов")
     categories: Optional[List[MediaCategoryEnum]] = Field(None, description="Категории")
+    telegram_file_id: Optional[str] = Field(None, description="Telegram file_id")
     uploaded_by: Optional[int] = Field(None, description="ID загрузившего пользователя")
     status: MediaStatusEnum = Field(default=MediaStatusEnum.ACTIVE, description="Статус файлов")
     limit: int = Field(default=50, ge=1, le=200, description="Лимит результатов")
@@ -112,6 +113,16 @@ class MediaSearchResponse(BaseModel):
     offset: int
     has_more: bool
     filters_applied: Dict[str, Any]
+
+
+class MediaTelegramLookupResponse(BaseModel):
+    source: Literal["database", "telegram"]
+    telegram_file_id: str
+    telegram_file_unique_id: Optional[str] = None
+    file_size: Optional[int] = None
+    file_path: Optional[str] = None
+    file_url: Optional[str] = None
+    media_file: Optional[MediaFileResponse] = None
 
 
 class MediaStatisticsResponse(BaseModel):

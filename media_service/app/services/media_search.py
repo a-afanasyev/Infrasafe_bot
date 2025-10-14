@@ -27,6 +27,7 @@ class MediaSearchService:
         date_to: Optional[datetime] = None,
         file_types: Optional[List[str]] = None,
         categories: Optional[List[str]] = None,
+        telegram_file_id: Optional[str] = None,
         uploaded_by: Optional[int] = None,
         status: str = "active",
         limit: int = 100,
@@ -75,6 +76,10 @@ class MediaSearchService:
             # Фильтр по категориям
             if categories:
                 query_obj = query_obj.filter(MediaFile.category.in_(categories))
+
+            # Фильтр по Telegram file_id
+            if telegram_file_id:
+                query_obj = query_obj.filter(MediaFile.telegram_file_id == telegram_file_id)
 
             # Фильтр по загрузившему пользователю
             if uploaded_by:
@@ -128,6 +133,7 @@ class MediaSearchService:
                     "date_range": [date_from, date_to] if date_from or date_to else None,
                     "file_types": file_types,
                     "categories": categories,
+                    "telegram_file_id": telegram_file_id,
                     "uploaded_by": uploaded_by
                 }
             }

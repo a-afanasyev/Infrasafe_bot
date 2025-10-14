@@ -15,6 +15,7 @@ from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 from uk_management_bot.services.shift_planning_service import ShiftPlanningService
 from uk_management_bot.services.shift_analytics import ShiftAnalytics
 from uk_management_bot.services.template_manager import TemplateManager
@@ -27,15 +28,57 @@ from uk_management_bot.keyboards.shift_management import (
     get_shift_details_keyboard,
     get_auto_planning_keyboard,
     get_schedule_view_keyboard,
-    get_template_management_keyboard
+    get_template_management_keyboard,
+    get_executor_assignment_keyboard
 )
-from uk_management_bot.states.shift_management import ShiftManagementStates, TemplateManagementStates
+from uk_management_bot.states.shift_management import ShiftManagementStates, TemplateManagementStates, ExecutorAssignmentStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language
 import logging
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+# Словарь локализации специализаций
+SPECIALIZATION_TRANSLATIONS = {
+    "ru": {
+        "electric": "Электрика",
+        "plumbing": "Сантехника",
+        "hvac": "Вентиляция",
+        "security": "Охрана",
+        "cleaning": "Уборка",
+        "universal": "Универсальная",
+        "carpentry": "Плотницкие работы",
+        "painting": "Малярные работы",
+        "landscaping": "Благоустройство",
+        "maintenance": "Обслуживание",
+        "it": "IT поддержка",
+        "reception": "Ресепшн"
+    },
+    "uz": {
+        "electric": "Elektr",
+        "plumbing": "Santexnika",
+        "hvac": "Ventilyatsiya",
+        "security": "Xavfsizlik",
+        "cleaning": "Tozalash",
+        "universal": "Universal",
+        "carpentry": "Duradgorlik",
+        "painting": "Bo'yoqchilik",
+        "landscaping": "Obodonlashtirish",
+        "maintenance": "Texnik xizmat",
+        "it": "IT qo'llab-quvvatlash",
+        "reception": "Qabulxona"
+    }
+}
+
+def translate_specializations(specializations: list, language: str = "ru") -> str:
+    """Переводит список специализаций на указанный язык"""
+    if not specializations:
+        return "Любая" if language == "ru" else "Har qanday"
+
+    translations = SPECIALIZATION_TRANSLATIONS.get(language, SPECIALIZATION_TRANSLATIONS["ru"])
+    translated = [translations.get(spec, spec) for spec in specializations]
+    return ", ".join(translated)
 
 
 @router.message(Command("shifts"))
@@ -1951,9 +1994,9 @@ async def handle_template_management(callback: CallbackQuery, state: FSMContext,
             db.close()
 
 
-@router.callback_query(F.data == "shift_executor_assignment")  
+@router.callback_query(F.data == "shift_executor_assignment")
 @require_role(['admin', 'manager'])
-async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMContext, db=None):
+async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначение исполнителей для смен"""
     try:
         if not db:
@@ -1990,7 +2033,8 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
         for shift in unassigned_shifts:
             start_time = shift.start_time.strftime('%d.%m.%Y %H:%M')
-            specialization_text = shift.specialization if shift.specialization else "Общая"
+            # Переводим специализации на язык пользователя
+            specialization_text = translate_specializations(shift.specialization_focus, lang)
             text += f"🔹 <b>{start_time}</b> - {specialization_text}\n"
 
         text += "\n🎯 Выберите действие:"
@@ -2338,18 +2382,24 @@ async def handle_back_to_analytics(callback: CallbackQuery, state: FSMContext, d
 
 @router.callback_query(F.data == "assign_to_shift")
 @require_role(['admin', 'manager'])
-async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext):
+async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначить исполнителя на конкретную смену"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Получаем неназначенные смены
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        week_ahead = now + timedelta(days=7)
+
         unassigned_shifts = db.query(Shift).filter(
-            Shift.executor_id.is_(None),
-            Shift.date >= date.today()
-        ).order_by(Shift.date, Shift.start_time).limit(10).all()
+            Shift.user_id.is_(None),
+            Shift.status == 'planned',
+            Shift.start_time >= now,
+            Shift.start_time <= week_ahead
+        ).order_by(Shift.start_time).limit(10).all()
 
         if not unassigned_shifts:
             await callback.message.edit_text(
@@ -2366,19 +2416,32 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext):
         text += "📋 <b>Неназначенные смены:</b>\n\n"
 
         for i, shift in enumerate(unassigned_shifts, 1):
-            specialization_name = shift.specialization.name if shift.specialization else "Любая"
-            urgency_emoji = {"high": "🔥", "medium": "⚡", "low": "📝"}.get(shift.urgency, "📝")
+            # Переводим специализации на язык пользователя
+            specialization_text = translate_specializations(shift.specialization_focus, lang)
 
-            text += (f"{i}. <b>{shift.date.strftime('%d.%m.%Y')}</b> "
-                    f"{shift.start_time.strftime('%H:%M')}-{shift.end_time.strftime('%H:%M')}\n"
-                    f"   🔧 {specialization_name} {urgency_emoji}\n"
-                    f"   📍 {shift.location or 'Не указано'}\n\n")
+            # Форматируем время
+            start_date = shift.start_time.strftime('%d.%m.%Y')
+            start_time = shift.start_time.strftime('%H:%M')
+            end_time = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
+
+            text += (f"{i}. <b>{start_date}</b> "
+                    f"{start_time}-{end_time}\n"
+                    f"   🔧 {specialization_text}\n"
+                    f"   📍 {shift.geographic_zone or 'Не указано'}\n\n")
 
         # Создаем клавиатуру для выбора смены
         keyboard = []
         for shift in unassigned_shifts:
+            # Переводим специализации (показываем первые 2)
+            if shift.specialization_focus and isinstance(shift.specialization_focus, list):
+                first_two = shift.specialization_focus[:2]
+                spec_text = translate_specializations(first_two, lang)
+            else:
+                spec_text = "Любая" if lang == "ru" else "Har qanday"
+
+            button_text = f"{shift.start_time.strftime('%d.%m %H:%M')} - {spec_text}"
             keyboard.append([InlineKeyboardButton(
-                text=f"{shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} - {shift.specialization.name if shift.specialization else 'Любая'}",
+                text=button_text,
                 callback_data=f"select_shift_for_assignment:{shift.id}"
             )])
 
@@ -2491,14 +2554,17 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext):
         lang = get_user_language(callback.from_user.id, db)
 
         # Получаем статистику для массового назначения
+        from datetime import datetime
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
         total_unassigned = db.query(Shift).filter(
-            Shift.executor_id.is_(None),
-            Shift.date >= date.today()
+            Shift.user_id.is_(None),
+            Shift.start_time >= today
         ).count()
 
         available_executors = db.query(User).filter(
-            User.role == 'executor',
-            User.is_active == True
+            User.active_role == 'executor',
+            User.status == 'approved'
         ).count()
 
         text = (f"📅 <b>Массовое назначение исполнителей</b>\n\n"
@@ -2554,10 +2620,10 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext):
                 func.extract('epoch', Shift.end_time - Shift.start_time) / 3600
             ).label('total_hours')
         ).join(
-            Shift, Shift.executor_id == User.id
+            Shift, Shift.user_id == User.id
         ).filter(
-            User.role == 'executor',
-            Shift.date.between(date.today(), end_date)
+            User.active_role == 'executor',
+            Shift.start_time.between(datetime.now(), end_date)
         ).group_by(
             User.id, User.first_name, User.last_name
         ).order_by(
@@ -2702,13 +2768,13 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext):
         conflicts = []
 
         shifts = db.query(Shift).filter(
-            Shift.executor_id.is_not(None),
-            Shift.date.between(date.today(), end_date)
-        ).order_by(Shift.executor_id, Shift.date, Shift.start_time).all()
+            Shift.user_id.is_not(None),
+            Shift.start_time.between(datetime.now(), end_date)
+        ).order_by(Shift.user_id, Shift.start_time).all()
 
         # Группируем по исполнителям и ищем пересечения
         from itertools import groupby
-        for executor_id, executor_shifts in groupby(shifts, key=lambda s: s.executor_id):
+        for executor_id, executor_shifts in groupby(shifts, key=lambda s: s.user_id):
             executor_shifts = list(executor_shifts)
             for i in range(len(executor_shifts) - 1):
                 shift1 = executor_shifts[i]
@@ -2857,12 +2923,12 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("select_shift_for_assignment:"))
 @require_role(['admin', 'manager'])
-async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSMContext):
+async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Выбор конкретной смены для назначения исполнителя"""
-    db = None
     try:
         shift_id = int(callback.data.split(":")[1])
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Получаем смену
@@ -2872,26 +2938,40 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
             return
 
         # Получаем доступных исполнителей для этой смены
-        available_executors = db.query(User).filter(
-            User.role == 'executor',
-            User.is_active == True
-        ).all()
+        # Ищем пользователей, у которых есть роль 'executor' в JSON-поле roles
+        all_users = db.query(User).filter(User.status == 'approved').all()
 
-        # Фильтруем по специализации если указана
-        if shift.specialization_id:
-            available_executors = [
-                executor for executor in available_executors
-                if any(spec.id == shift.specialization_id for spec in executor.specializations)
-            ]
+        available_executors = []
+        for user in all_users:
+            try:
+                import json
+                if user.roles:
+                    parsed_roles = json.loads(user.roles)
+                    if isinstance(parsed_roles, list) and 'executor' in parsed_roles:
+                        available_executors.append(user)
+                elif user.active_role == 'executor':
+                    available_executors.append(user)
+            except:
+                # Если не удалось распарсить JSON, проверяем active_role
+                if user.active_role == 'executor':
+                    available_executors.append(user)
+
+        # Фильтруем по специализации если указана в specialization_focus
+        if shift.specialization_focus and isinstance(shift.specialization_focus, list):
+            # TODO: фильтрация по специализациям исполнителей
+            pass
 
         text = f"👤 <b>Назначение исполнителя на смену</b>\n\n"
-        text += f"<b>📅 Смена:</b> {shift.date.strftime('%d.%m.%Y')} "
-        text += f"{shift.start_time.strftime('%H:%M')}-{shift.end_time.strftime('%H:%M')}\n"
+        text += f"<b>📅 Смена:</b> {shift.start_time.strftime('%d.%m.%Y')} "
 
-        if shift.specialization:
-            text += f"<b>🔧 Специализация:</b> {shift.specialization.name}\n"
+        end_time_str = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
+        text += f"{shift.start_time.strftime('%H:%M')}-{end_time_str}\n"
 
-        text += f"<b>📍 Местоположение:</b> {shift.location or 'Не указано'}\n\n"
+        # Переводим специализации
+        spec_text = translate_specializations(shift.specialization_focus, lang)
+        text += f"<b>🔧 Специализация:</b> {spec_text}\n"
+
+        text += f"<b>📍 Зона:</b> {shift.geographic_zone or 'Не указано'}\n\n"
 
         if not available_executors:
             text += "❌ <b>Нет доступных исполнителей</b>\n"
@@ -2904,9 +2984,15 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
             keyboard = []
             for executor in available_executors[:10]:  # Показываем первых 10
                 # Проверяем загруженность исполнителя в этот день
+                from datetime import datetime, timedelta
+                shift_date = shift.start_time.date()
+                day_start = datetime.combine(shift_date, datetime.min.time())
+                day_end = day_start + timedelta(days=1)
+
                 day_shifts = db.query(Shift).filter(
-                    Shift.executor_id == executor.id,
-                    Shift.date == shift.date
+                    Shift.user_id == executor.id,
+                    Shift.start_time >= day_start,
+                    Shift.start_time < day_end
                 ).count()
 
                 load_indicator = "🔴" if day_shifts >= 3 else "🟡" if day_shifts >= 1 else "🟢"
@@ -2924,7 +3010,7 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
             parse_mode="HTML"
         )
 
-        await state.set_state(ExecutorAssignmentStates.selecting_executor)
+        await state.set_state(ExecutorAssignmentStates.viewing_available_executors)
         await callback.answer()
 
     except Exception as e:
@@ -2937,15 +3023,15 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
 @router.callback_query(F.data.startswith("assign_executor_to_shift:"))
 @require_role(['admin', 'manager'])
-async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMContext):
+async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначение исполнителя на смену"""
-    db = None
     try:
         parts = callback.data.split(":")
         shift_id = int(parts[1])
         executor_id = int(parts[2])
 
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Получаем смену и исполнителя
@@ -2956,19 +3042,24 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             await callback.answer("❌ Смена или исполнитель не найдены", show_alert=True)
             return
 
-        # Проверяем конфликты расписания
+        # Проверяем конфликты расписания (проверяем пересечение времени смен у этого исполнителя)
+        from datetime import datetime, timedelta
+
+        # Определяем конец смены (если не указан, считаем 8 часов)
+        shift_end = shift.end_time if shift.end_time else shift.start_time + timedelta(hours=8)
+
         conflicts = db.query(Shift).filter(
-            Shift.executor_id == executor_id,
-            Shift.date == shift.date,
-            Shift.start_time < shift.end_time,
+            Shift.user_id == executor_id,
+            Shift.start_time < shift_end,
             Shift.end_time > shift.start_time
         ).count()
 
         if conflicts > 0:
+            shift_date_str = shift.start_time.strftime('%d.%m.%Y')
             await callback.message.edit_text(
                 f"⚠️ <b>Конфликт расписания!</b>\n\n"
                 f"У исполнителя <b>{executor.first_name} {executor.last_name}</b> "
-                f"уже есть пересекающиеся смены на {shift.date.strftime('%d.%m.%Y')}.\n\n"
+                f"уже есть пересекающиеся смены на {shift_date_str}.\n\n"
                 f"Всё равно назначить?",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Да, назначить", callback_data=f"force_assign:{shift_id}:{executor_id}")],
@@ -2980,7 +3071,8 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             return
 
         # Назначаем исполнителя
-        shift.executor_id = executor_id
+        shift.user_id = executor_id
+        shift.status = 'active'  # Меняем статус на активную
         db.commit()
 
         # Отправляем уведомление исполнителю
@@ -2994,12 +3086,19 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление: {e}")
 
+        # Переводим специализацию
+        spec_text = translate_specializations(shift.specialization_focus, lang)
+
+        shift_date_str = shift.start_time.strftime('%d.%m.%Y')
+        start_time_str = shift.start_time.strftime('%H:%M')
+        end_time_str = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
+
         await callback.message.edit_text(
             f"✅ <b>Исполнитель назначен!</b>\n\n"
-            f"<b>📅 Смена:</b> {shift.date.strftime('%d.%m.%Y')} "
-            f"{shift.start_time.strftime('%H:%M')}-{shift.end_time.strftime('%H:%M')}\n"
+            f"<b>📅 Смена:</b> {shift_date_str} "
+            f"{start_time_str}-{end_time_str}\n"
             f"<b>👤 Исполнитель:</b> {executor.first_name} {executor.last_name}\n"
-            f"<b>🔧 Специализация:</b> {shift.specialization.name if shift.specialization else 'Любая'}\n\n"
+            f"<b>🔧 Специализация:</b> {spec_text}\n\n"
             f"Уведомление отправлено исполнителю.",
             reply_markup=get_executor_assignment_keyboard(lang),
             parse_mode="HTML"
@@ -3019,15 +3118,15 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
 
 @router.callback_query(F.data.startswith("force_assign:"))
 @require_role(['admin', 'manager'])
-async def handle_force_assign(callback: CallbackQuery, state: FSMContext):
+async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Принудительное назначение с конфликтом расписания"""
-    db = None
     try:
         parts = callback.data.split(":")
         shift_id = int(parts[1])
         executor_id = int(parts[2])
 
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Получаем смену и исполнителя
@@ -3039,13 +3138,13 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext):
             return
 
         # Назначаем исполнителя принудительно
-        shift.executor_id = executor_id
+        shift.user_id = executor_id
         shift.notes = (shift.notes or "") + f"\n[КОНФЛИКТ РАСПИСАНИЯ] Назначено принудительно {date.today().strftime('%d.%m.%Y')}"
         db.commit()
 
         await callback.message.edit_text(
             f"⚠️ <b>Исполнитель назначен принудительно</b>\n\n"
-            f"<b>📅 Смена:</b> {shift.date.strftime('%d.%m.%Y')} "
+            f"<b>📅 Смена:</b> {shift.start_time.date().strftime('%d.%m.%Y')} "
             f"{shift.start_time.strftime('%H:%M')}-{shift.end_time.strftime('%H:%M')}\n"
             f"<b>👤 Исполнитель:</b> {executor.first_name} {executor.last_name}\n\n"
             f"❗ <b>Внимание:</b> Есть конфликт с другими сменами!\n"
@@ -3068,11 +3167,11 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "executor_assignment")
 @require_role(['admin', 'manager'])
-async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMContext):
+async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Возврат к меню назначения исполнителей"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         await callback.message.edit_text(

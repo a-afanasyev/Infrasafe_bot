@@ -17,7 +17,7 @@ from app.schemas import (
     MediaSearchResponse, MediaStatisticsResponse, MediaTimelineResponse,
     MediaDateRangeResponse, MediaUploadResponse, MediaFileUrlResponse,
     ErrorResponse, MediaTagResponse, MediaCategoryEnum, FileTypeEnum,
-    MediaStatusEnum
+    MediaStatusEnum, MediaTelegramLookupResponse
 )
 from app.core.config import settings
 
@@ -155,6 +155,7 @@ async def search_media(
     date_to: Optional[datetime] = Query(None, description="Дата окончания"),
     file_types: Optional[str] = Query(None, description="Типы файлов через запятую"),
     categories: Optional[str] = Query(None, description="Категории через запятую"),
+    telegram_file_id: Optional[str] = Query(None, description="Telegram file_id"),
     uploaded_by: Optional[int] = Query(None, description="ID загрузившего пользователя"),
     status: MediaStatusEnum = Query(default=MediaStatusEnum.ACTIVE, description="Статус файлов"),
     limit: int = Query(default=50, ge=1, le=200, description="Лимит результатов"),
@@ -191,6 +192,7 @@ async def search_media(
             date_to=date_to,
             file_types=file_types_list,
             categories=categories_list,
+            telegram_file_id=telegram_file_id,
             uploaded_by=uploaded_by,
             status=status.value,
             limit=limit,
@@ -272,6 +274,56 @@ async def get_media_file_redirect(
     except Exception as e:
         logger.error(f"Failed to redirect to media file {media_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка получения файла: {str(e)}")
+
+
+@router.get("/telegram/{telegram_file_id}", response_model=MediaTelegramLookupResponse)
+async def get_media_by_telegram_file_id(
+    telegram_file_id: str,
+    storage_service: MediaStorageService = Depends(get_storage_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Получение информации о медиа-файле по Telegram file_id
+    """
+    try:
+        from app.models.media import MediaFile
+        media_file = db.query(MediaFile).filter(MediaFile.telegram_file_id == telegram_file_id).first()
+
+        if media_file:
+            file_url = await storage_service.get_media_file_url(media_file)
+            return MediaTelegramLookupResponse(
+                source="database",
+                telegram_file_id=media_file.telegram_file_id,
+                telegram_file_unique_id=media_file.telegram_file_unique_id,
+                file_size=media_file.file_size,
+                file_path=None,
+                file_url=file_url,
+                media_file=MediaFileResponse.model_validate(media_file)
+            )
+
+        # Фallback к Telegram API, если в базе не найдено
+        try:
+            file_info = await storage_service.telegram.get_file(telegram_file_id)
+            file_url = await storage_service.telegram.get_file_url(telegram_file_id)
+        except Exception:
+            logger.warning(f"Telegram file {telegram_file_id} not found via API")
+            raise HTTPException(status_code=404, detail="Файл в Telegram не найден или недоступен")
+
+        return MediaTelegramLookupResponse(
+            source="telegram",
+            telegram_file_id=telegram_file_id,
+            telegram_file_unique_id=getattr(file_info, "file_unique_id", None),
+            file_size=getattr(file_info, "file_size", None),
+            file_path=getattr(file_info, "file_path", None),
+            file_url=file_url,
+            media_file=None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get media by telegram file_id {telegram_file_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения медиа-файла: {str(e)}")
 
 
 @router.get("/{media_id}", response_model=MediaFileResponse)

@@ -228,6 +228,188 @@ async def show_user_stats_with_verification(callback: CallbackQuery, db: Session
         )
 
 
+# ═══ ОБРАБОТЧИКИ ДЛЯ УВЕДОМЛЕНИЙ О РЕГИСТРАЦИИ ═══
+
+@router.callback_query(F.data.startswith("approve_user_"))
+async def handle_approve_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+    """Одобрить пользователя из уведомления о регистрации"""
+    lang = callback.from_user.language_code or 'ru'
+    logger.info(f"🔵 handle_approve_user_from_notification вызван: callback_data={callback.data}, roles={roles}")
+
+    try:
+        user_id = int(callback.data.split("_")[2])
+        logger.info(f"🔵 Parsed user_id: {user_id}")
+    except (IndexError, ValueError) as e:
+        logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
+        await callback.answer("Ошибка обработки запроса", show_alert=True)
+        return
+
+    # Проверяем права доступа
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+        await callback.answer(
+            get_text('errors.permission_denied', language=lang),
+            show_alert=True
+        )
+        return
+
+    try:
+        from uk_management_bot.database.models.user import User as UserModel
+        from uk_management_bot.services.auth_service import AuthService
+
+        # Получаем пользователя
+        target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
+
+        if not target_user:
+            await callback.answer("Пользователь не найден", show_alert=True)
+            return
+
+        # Одобряем пользователя (используем sync метод с user_id)
+        auth_service = AuthService(db)
+        # Получаем ID текущего менеджера (из параметра user или callback)
+        manager_id = user.id if user else callback.from_user.id
+        success = auth_service.approve_user(user_id, manager_id, "Одобрено через уведомление о регистрации")
+
+        if success:
+            await callback.answer(f"✅ Пользователь {target_user.first_name} одобрен", show_alert=True)
+
+            # Обновляем сообщение
+            await callback.message.edit_text(
+                callback.message.text + f"\n\n✅ Одобрено {callback.from_user.first_name}",
+                reply_markup=None
+            )
+
+            logger.info(f"Пользователь {user_id} одобрен менеджером {callback.from_user.id}")
+        else:
+            await callback.answer("Ошибка одобрения пользователя", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка одобрения пользователя {user_id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("reject_user_"))
+async def handle_reject_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None):
+    """Отклонить пользователя из уведомления о регистрации"""
+    lang = callback.from_user.language_code or 'ru'
+
+    try:
+        user_id = int(callback.data.split("_")[2])
+    except (IndexError, ValueError) as e:
+        logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
+        await callback.answer("Ошибка обработки запроса", show_alert=True)
+        return
+
+    # Проверяем права доступа
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+        await callback.answer(
+            get_text('errors.permission_denied', language=lang),
+            show_alert=True
+        )
+        return
+
+    try:
+        from uk_management_bot.database.models.user import User as UserModel
+
+        # Получаем пользователя
+        target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
+
+        if not target_user:
+            await callback.answer("Пользователь не найден", show_alert=True)
+            return
+
+        # Отклоняем пользователя (блокируем) - используем sync метод с user_id
+        from uk_management_bot.services.auth_service import AuthService
+        from uk_management_bot.database.models.user import User as UserModel
+
+        auth_service = AuthService(db)
+        # Получаем ID текущего менеджера
+        manager = db.query(UserModel).filter(UserModel.telegram_id == callback.from_user.id).first()
+        manager_id = manager.id if manager else callback.from_user.id
+
+        success = auth_service.block_user(user_id, manager_id, "Отклонено через уведомление о регистрации")
+
+        if success:
+            await callback.answer(f"❌ Пользователь {target_user.first_name} отклонен", show_alert=True)
+
+            # Обновляем сообщение
+            await callback.message.edit_text(
+                callback.message.text + f"\n\n❌ Отклонено {callback.from_user.first_name}",
+                reply_markup=None
+            )
+
+            logger.info(f"Пользователь {user_id} отклонен менеджером {callback.from_user.id}")
+        else:
+            await callback.answer("Ошибка отклонения пользователя", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка отклонения пользователя {user_id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("view_user_"))
+async def handle_view_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None):
+    """Просмотреть профиль пользователя из уведомления о регистрации"""
+    lang = callback.from_user.language_code or 'ru'
+    logger.info(f"🔵 handle_view_user_from_notification вызван: callback_data={callback.data}, roles={roles}")
+
+    try:
+        user_id = int(callback.data.split("_")[2])
+        logger.info(f"🔵 Parsed user_id: {user_id}")
+    except (IndexError, ValueError) as e:
+        logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
+        await callback.answer("Ошибка обработки запроса", show_alert=True)
+        return
+
+    # Проверяем права доступа
+    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+        await callback.answer(
+            get_text('errors.permission_denied', language=lang),
+            show_alert=True
+        )
+        return
+
+    try:
+        from uk_management_bot.database.models.user import User as UserModel
+
+        # Получаем пользователя
+        target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
+
+        if not target_user:
+            await callback.answer("Пользователь не найден", show_alert=True)
+            return
+
+        # Формируем информацию о пользователе
+        profile_text = f"👤 <b>Профиль пользователя</b>\n\n"
+        profile_text += f"🆔 ID: {target_user.id}\n"
+        profile_text += f"👤 Имя: {target_user.first_name or 'Не указано'}"
+        if target_user.last_name:
+            profile_text += f" {target_user.last_name}"
+        profile_text += f"\n"
+
+        if target_user.username:
+            profile_text += f"📱 Username: @{target_user.username}\n"
+
+        profile_text += f"🆔 Telegram ID: {target_user.telegram_id}\n"
+        profile_text += f"🎯 Роль: {get_text(f'roles.{target_user.role}', language=lang) if target_user.role else 'Не указана'}\n"
+        profile_text += f"📊 Статус: {target_user.status}\n"
+
+        if target_user.specialization:
+            profile_text += f"🛠️ Специализация: {target_user.specialization}\n"
+
+        if target_user.created_at:
+            profile_text += f"📅 Регистрация: {target_user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+
+        # Отправляем новое сообщени�� с профилем
+        await callback.message.answer(profile_text, parse_mode="HTML")
+        await callback.answer()
+
+        logger.info(f"Просмотрен профиль пользователя {user_id} менеджером {callback.from_user.id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка просмотра профиля пользователя {user_id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка", show_alert=True)
+
+
 # ═══ БЫСТРЫЕ ДЕЙСТВИЯ С ВЕРИФИКАЦИЕЙ ═══
 
 @router.callback_query(F.data.startswith("quick_verify_"))

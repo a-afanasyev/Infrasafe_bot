@@ -27,6 +27,7 @@ from uk_management_bot.handlers.request_assignment import router as request_assi
 from uk_management_bot.handlers.request_status_management import router as request_status_management_router
 from uk_management_bot.handlers.request_comments import router as request_comments_router
 from uk_management_bot.handlers.request_reports import router as request_reports_router
+from uk_management_bot.handlers.request_acceptance import router as request_acceptance_router  # Приёмка заявок
 
 # Обработчики передачи смен
 from uk_management_bot.handlers.shift_transfer import router as shift_transfer_router
@@ -226,14 +227,18 @@ async def main():
     dp.include_router(onboarding_router)
     dp.include_router(admin_router)  # admin раньше requests для перехвата действий менеджеров
     dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше requests)
-    dp.include_router(requests_router)  # requests после profile_editing
-    
+
+    # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ requests_router!)
+    dp.include_router(request_acceptance_router)  # Приёмка заявок - перехватывает accept_request_* и rate_*
+
+    dp.include_router(requests_router)  # requests после acceptance для избежания конфликтов
+
     # Система управления сменами
     dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
     dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
     dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
     dp.include_router(shifts_router)  # старый роутер смен
-    
+
     # Система назначения заявок
     dp.include_router(request_assignment_router)
     dp.include_router(request_status_management_router)

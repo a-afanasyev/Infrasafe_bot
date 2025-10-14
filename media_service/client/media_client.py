@@ -230,6 +230,7 @@ class MediaServiceClient:
         date_to: Optional[datetime] = None,
         file_types: Optional[List[str]] = None,
         categories: Optional[List[str]] = None,
+        telegram_file_id: Optional[str] = None,
         uploaded_by: Optional[int] = None,
         status: str = "active",
         limit: int = 50,
@@ -246,6 +247,7 @@ class MediaServiceClient:
             date_to: Дата окончания
             file_types: Типы файлов
             categories: Категории
+            telegram_file_id: Telegram file_id
             uploaded_by: ID пользователя
             status: Статус файлов
             limit: Лимит результатов
@@ -282,6 +284,9 @@ class MediaServiceClient:
             if categories:
                 params["categories"] = ",".join(categories)
 
+            if telegram_file_id:
+                params["telegram_file_id"] = telegram_file_id
+
             if uploaded_by is not None:
                 params["uploaded_by"] = uploaded_by
 
@@ -294,6 +299,29 @@ class MediaServiceClient:
 
         except Exception as e:
             logger.error(f"Failed to search media: {e}")
+            raise
+
+    async def get_media_by_telegram_file_id(self, telegram_file_id: str) -> Dict[str, Any]:
+        """
+        Получение информации о медиа-файле по Telegram file_id
+
+        Args:
+            telegram_file_id: Идентификатор файла в Telegram
+
+        Returns:
+            Информация о файле. В случае наличия записи в БД содержит ключ
+            ``media_file`` с данными Media Service и ``source = "database"``.
+            Если запись отсутствует, возвращает сведения только из Telegram:
+            ``source = "telegram"``, ``file_url`` и метаданные файла.
+        """
+        try:
+            response = await self.client.get(f"/media/telegram/{telegram_file_id}")
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Failed to get media by telegram file_id {telegram_file_id}: {e}")
             raise
 
     async def get_media_file(self, media_id: int) -> Dict[str, Any]:

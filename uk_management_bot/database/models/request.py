@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -48,7 +48,20 @@ class Request(Base):
     requested_materials = Column(Text, nullable=True)  # запрошенные материалы от исполнителя
     manager_materials_comment = Column(Text, nullable=True)  # комментарии менеджера к списку
     purchase_history = Column(Text, nullable=True)  # история закупок (для сохранения при смене статуса)
-    
+
+    # Поля для системы приёмки заявок
+    is_returned = Column(Boolean, default=False, nullable=False)  # Флаг возвращенной заявки
+    return_reason = Column(Text, nullable=True)  # Причина возврата от заявителя
+    return_media = Column(JSON, default=list)  # Медиафайлы при возврате
+    returned_at = Column(DateTime(timezone=True), nullable=True)  # Время возврата
+    returned_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Кто вернул
+
+    # Поля для подтверждения менеджером
+    manager_confirmed = Column(Boolean, default=False, nullable=False)  # Подтверждено менеджером
+    manager_confirmed_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Кто подтвердил
+    manager_confirmed_at = Column(DateTime(timezone=True), nullable=True)  # Когда подтверждено
+    manager_confirmation_notes = Column(Text, nullable=True)  # Комментарии менеджера при подтверждении
+
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

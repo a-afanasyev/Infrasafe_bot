@@ -117,52 +117,65 @@ class UserManagementService:
     def get_employee_stats(self) -> Dict[str, int]:
         """
         Получить статистику сотрудников
-        
+
         Returns:
             Dict с количествами сотрудников по категориям
         """
         try:
             # Сотрудники в ожидании (executor или manager со статусом pending)
+            # Проверяем оба поля: role (старая система) и roles (новая система)
             pending_employees = self.db.query(User).filter(
                 and_(
                     User.status == 'pending',
                     or_(
                         User.roles.like('%"executor"%'),
-                        User.roles.like('%"manager"%')
+                        User.roles.like('%"manager"%'),
+                        User.role == 'executor',
+                        User.role == 'manager'
                     )
                 )
             ).count()
-            
+
             # Активные сотрудники (executor или manager со статусом approved)
             active_employees = self.db.query(User).filter(
                 and_(
                     User.status == 'approved',
                     or_(
                         User.roles.like('%"executor"%'),
-                        User.roles.like('%"manager"%')
+                        User.roles.like('%"manager"%'),
+                        User.role == 'executor',
+                        User.role == 'manager'
                     )
                 )
             ).count()
-            
+
             # Заблокированные сотрудники (executor или manager со статусом blocked)
             blocked_employees = self.db.query(User).filter(
                 and_(
                     User.status == 'blocked',
                     or_(
                         User.roles.like('%"executor"%'),
-                        User.roles.like('%"manager"%')
+                        User.roles.like('%"manager"%'),
+                        User.role == 'executor',
+                        User.role == 'manager'
                     )
                 )
             ).count()
-            
+
             # Исполнители (executor)
             executors = self.db.query(User).filter(
-                User.roles.like('%"executor"%')
+                or_(
+                    User.roles.like('%"executor"%'),
+                    User.role == 'executor'
+                )
             ).count()
-            
+
             # Менеджеры (manager)
             managers = self.db.query(User).filter(
-                User.roles.like('%"manager"%')
+                or_(
+                    User.roles.like('%"manager"%'),
+                    User.role == 'manager'
+                )
             ).count()
             
             stats = {
@@ -608,24 +621,27 @@ class UserManagementService:
     def get_employees_list(self, list_type: str, page: int = 1, per_page: int = 5) -> Dict:
         """
         Получить список сотрудников с пагинацией
-        
+
         Args:
             list_type: Тип списка (pending, active, blocked, executors, managers)
             page: Номер страницы
             per_page: Количество на странице
-            
+
         Returns:
             Dict с данными сотрудников и пагинацией
         """
         try:
             # Базовый запрос для сотрудников (executor или manager)
+            # Проверяем оба поля: role (старая система) и roles (новая система)
             base_query = self.db.query(User).filter(
                 or_(
                     User.roles.like('%"executor"%'),
-                    User.roles.like('%"manager"%')
+                    User.roles.like('%"manager"%'),
+                    User.role == 'executor',
+                    User.role == 'manager'
                 )
             )
-            
+
             # Применяем фильтры в зависимости от типа списка
             if list_type == 'pending':
                 query = base_query.filter(User.status == 'pending')
@@ -634,9 +650,19 @@ class UserManagementService:
             elif list_type == 'blocked':
                 query = base_query.filter(User.status == 'blocked')
             elif list_type == 'executors':
-                query = base_query.filter(User.roles.like('%"executor"%'))
+                query = base_query.filter(
+                    or_(
+                        User.roles.like('%"executor"%'),
+                        User.role == 'executor'
+                    )
+                )
             elif list_type == 'managers':
-                query = base_query.filter(User.roles.like('%"manager"%'))
+                query = base_query.filter(
+                    or_(
+                        User.roles.like('%"manager"%'),
+                        User.role == 'manager'
+                    )
+                )
             else:
                 query = base_query
             
@@ -672,21 +698,24 @@ class UserManagementService:
     def search_employees(self, query: str, page: int = 1, per_page: int = 5) -> Dict:
         """
         Поиск сотрудников
-        
+
         Args:
             query: Поисковый запрос
             page: Номер страницы
             per_page: Количество на странице
-            
+
         Returns:
             Dict с результатами поиска
         """
         try:
             # Базовый запрос для сотрудников
+            # Проверяем оба поля: role (старая система) и roles (новая система)
             base_query = self.db.query(User).filter(
                 or_(
                     User.roles.like('%"executor"%'),
-                    User.roles.like('%"manager"%')
+                    User.roles.like('%"manager"%'),
+                    User.role == 'executor',
+                    User.role == 'manager'
                 )
             )
             

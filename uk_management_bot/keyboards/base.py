@@ -121,6 +121,7 @@ def get_main_keyboard_for_role(active_role: str, roles: list[str], user_status: 
         if user_status != "pending":
             builder.add(KeyboardButton(text="📝 Создать заявку"))
         builder.add(KeyboardButton(text="📋 Мои заявки"))
+        builder.add(KeyboardButton(text="✅ Ожидают приёмки"))  # Кнопка для приёмки выполненных заявок
         builder.add(KeyboardButton(text="👤 Профиль"))
         builder.add(KeyboardButton(text="ℹ️ Помощь"))
 

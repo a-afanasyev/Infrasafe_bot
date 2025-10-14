@@ -52,23 +52,54 @@ class MediaServiceAPI {
         const uploadArea = document.getElementById('upload-area');
         const fileInput = document.getElementById('file-input');
 
-        uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', this.handleDragOver);
-        uploadArea.addEventListener('dragleave', this.handleDragLeave);
-        uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+        if (uploadArea && fileInput) {
+            uploadArea.addEventListener('click', () => fileInput.click());
+            uploadArea.addEventListener('dragover', this.handleDragOver);
+            uploadArea.addEventListener('dragleave', this.handleDragLeave);
+            uploadArea.addEventListener('drop', this.handleDrop.bind(this));
 
-        fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+            fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+        } else {
+            console.warn('Upload area elements not found, drag&drop disabled');
+        }
 
         // Forms
-        document.getElementById('upload-form').addEventListener('submit', this.handleUpload.bind(this));
-        document.getElementById('search-form').addEventListener('submit', this.handleSearch.bind(this));
-        document.getElementById('timeline-form').addEventListener('submit', this.handleTimeline.bind(this));
+        const uploadForm = document.getElementById('upload-form');
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', this.handleUpload.bind(this));
+        }
+
+        const searchForm = document.getElementById('search-form');
+        if (searchForm) {
+            searchForm.addEventListener('submit', this.handleSearch.bind(this));
+        }
+
+        const timelineForm = document.getElementById('timeline-form');
+        if (timelineForm) {
+            timelineForm.addEventListener('submit', this.handleTimeline.bind(this));
+        }
 
         // Clear search
-        document.getElementById('clear-search').addEventListener('click', this.clearSearch.bind(this));
+        const clearSearchBtn = document.getElementById('clear-search');
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', this.clearSearch.bind(this));
+        }
+
+        const searchIdForm = document.getElementById('search-id-form');
+        if (searchIdForm) {
+            searchIdForm.addEventListener('submit', this.handleSearchById.bind(this));
+        }
+
+        const clearSearchIdBtn = document.getElementById('clear-search-id');
+        if (clearSearchIdBtn) {
+            clearSearchIdBtn.addEventListener('click', this.clearSearchById.bind(this));
+        }
 
         // Tab changes
-        document.getElementById('stats-tab').addEventListener('click', this.loadStatistics.bind(this));
+        const statsTab = document.getElementById('stats-tab');
+        if (statsTab) {
+            statsTab.addEventListener('click', this.loadStatistics.bind(this));
+        }
     }
 
     handleDragOver(e) {
@@ -378,6 +409,104 @@ class MediaServiceAPI {
     clearSearch() {
         document.getElementById('search-form').reset();
         document.getElementById('search-results').innerHTML = '<p class="text-muted text-center">Результаты поиска появятся здесь</p>';
+    }
+
+    async handleSearchById(e) {
+        e.preventDefault();
+
+        const mediaIdInput = document.getElementById('search-media-id');
+        const telegramFileIdInput = document.getElementById('search-telegram-file-id');
+        const resultsContainer = document.getElementById('search-id-results');
+        const mediaId = mediaIdInput.value.trim();
+        const telegramFileId = telegramFileIdInput.value.trim();
+
+        if (!mediaId && !telegramFileId) {
+            this.showAlert('Введите ID или Telegram file_id медиа-файла', 'warning');
+            return;
+        }
+
+        if (mediaId && Number(mediaId) <= 0) {
+            this.showAlert('ID медиа-файла должен быть положительным числом', 'warning');
+            return;
+        }
+
+        resultsContainer.innerHTML = '<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Загрузка информации о файле...</p></div>';
+
+        try {
+            const endpoint = telegramFileId
+                ? `${this.baseURL}/media/telegram/${encodeURIComponent(telegramFileId)}`
+                : `${this.baseURL}/media/${mediaId}`;
+
+            const response = await fetch(endpoint);
+            const data = await response.json();
+
+            if (response.ok) {
+                resultsContainer.innerHTML = '';
+
+                if (data.media_file) {
+                    const card = this.createMediaCard(data.media_file);
+                    if (data.file_url) {
+                        card.dataset.fileUrl = data.file_url;
+                    }
+                    resultsContainer.appendChild(card);
+                } else {
+                    const card = this.createTelegramLookupCard(data);
+                    resultsContainer.appendChild(card);
+                }
+            } else {
+                const message = data.detail || data.message || 'Медиа-файл не найден';
+                resultsContainer.innerHTML = `<div class="alert alert-warning"><i class="bi bi-info-circle"></i> ${message}</div>`;
+            }
+        } catch (error) {
+            resultsContainer.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Ошибка поиска: ${error.message}</div>`;
+        }
+    }
+
+    clearSearchById() {
+        document.getElementById('search-id-form').reset();
+        document.getElementById('search-id-results').innerHTML = '<p class="text-muted text-center">Введите ID или Telegram file_id медиа-файла для просмотра деталей</p>';
+    }
+
+    createTelegramLookupCard(lookup) {
+        const card = document.createElement('div');
+        card.className = 'media-card';
+
+        const sizeInfo = lookup.file_size ? `<small><strong>Размер:</strong> ${this.formatFileSize(lookup.file_size)}</small><br>` : '';
+        const pathInfo = lookup.file_path ? `<small><strong>Путь:</strong> ${lookup.file_path}</small><br>` : '';
+        const uniqueInfo = lookup.telegram_file_unique_id
+            ? `<small><strong>file_unique_id:</strong> ${lookup.telegram_file_unique_id}</small><br>`
+            : '';
+
+        const downloadBlock = lookup.file_url
+            ? `<a class="btn btn-sm btn-outline-secondary" href="${lookup.file_url}" target="_blank" rel="noopener">
+                    <i class="bi bi-download"></i> Скачать из Telegram
+               </a>`
+            : '<div class="alert alert-warning py-1 px-2 d-inline-block mb-0"><small>URL недоступен</small></div>';
+
+        card.innerHTML = `
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="media-preview bg-light d-flex align-items-center justify-content-center">
+                        <i class="bi bi-telegram fs-1 text-primary"></i>
+                    </div>
+                </div>
+                <div class="col-md-9">
+                    <h6>Файл доступен только в Telegram</h6>
+                    <p class="text-muted mb-1">Записи в базе Media Service не найдено, но файл доступен по Telegram file_id.</p>
+                    <div class="mb-2">
+                        <small><strong>Telegram file_id:</strong> ${lookup.telegram_file_id}</small><br>
+                        ${uniqueInfo}
+                        ${sizeInfo}
+                        ${pathInfo}
+                    </div>
+                    <div class="mt-2">
+                        ${downloadBlock}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        return card;
     }
 
     async loadStatistics() {

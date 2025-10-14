@@ -404,18 +404,22 @@ def get_address_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 
 
 def get_status_filter_inline_keyboard(active_status: Optional[str] = None, language: str = "ru") -> InlineKeyboardMarkup:
-    """Упрощённый фильтр: только Активные и Архив.
+    """Упрощённый фильтр: Все, Активные и Архив.
 
+    - Все: все заявки без фильтра
     - Активные: все статусы, кроме финальных
     - Архив: финальные статусы
     """
+    all_label = "Все заявки"
     active_label = "Активные"
     archive_label = "Архив"
 
+    all_text = f"• {all_label}" if active_status == "all" or active_status is None else all_label
     active_text = f"• {active_label}" if active_status == "active" else active_label
     archive_text = f"• {archive_label}" if active_status == "archive" else archive_label
 
     buttons = [
+        [InlineKeyboardButton(text=all_text, callback_data="status_all")],
         [InlineKeyboardButton(text=active_text, callback_data="status_active")],
         [InlineKeyboardButton(text=archive_text, callback_data="status_archive")],
     ]

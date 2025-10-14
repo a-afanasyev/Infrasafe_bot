@@ -867,28 +867,62 @@ class AuthService:
                 self.db.delete(notification)
             logger.info(f"Удалено {len(notifications)} уведомлений пользователя {user_id}")
             
-            # 5. Удаляем заявки пользователя (если он создатель)
+            # 5. Удаляем оценки (ratings) связанные с заявками пользователя
             from uk_management_bot.database.models.request import Request
-            requests = self.db.query(Request).filter(Request.user_id == user_id).all()
-            for request in requests:
+            from uk_management_bot.database.models.rating import Rating
+
+            # Сначала получаем все заявки пользователя
+            user_requests = self.db.query(Request).filter(Request.user_id == user_id).all()
+            request_numbers = [req.request_number for req in user_requests]
+
+            # Удаляем все оценки для этих заявок
+            ratings_deleted = 0
+            if request_numbers:
+                ratings = self.db.query(Rating).filter(Rating.request_number.in_(request_numbers)).all()
+                for rating in ratings:
+                    self.db.delete(rating)
+                ratings_deleted = len(ratings)
+            logger.info(f"Удалено {ratings_deleted} оценок для заявок пользователя {user_id}")
+
+            # Также удаляем оценки, которые оставил сам пользователь (как заявитель)
+            user_ratings = self.db.query(Rating).filter(Rating.user_id == user_id).all()
+            for rating in user_ratings:
+                self.db.delete(rating)
+            logger.info(f"Удалено {len(user_ratings)} оценок, оставленных пользователем {user_id}")
+
+            # 6. Теперь удаляем заявки пользователя
+            for request in user_requests:
                 self.db.delete(request)
-            logger.info(f"Удалено {len(requests)} заявок пользователя {user_id}")
-            
-            # 6. Удаляем смены пользователя
+            logger.info(f"Удалено {len(user_requests)} заявок пользователя {user_id}")
+
+            # 7. Удаляем смены пользователя
             from uk_management_bot.database.models.shift import Shift
             shifts = self.db.query(Shift).filter(Shift.user_id == user_id).all()
             for shift in shifts:
                 self.db.delete(shift)
             logger.info(f"Удалено {len(shifts)} смен пользователя {user_id}")
 
-            # 7. Удаляем связи пользователя с квартирами
+            # 8. Удаляем связи пользователя с квартирами
             from uk_management_bot.database.models.user_apartment import UserApartment
             user_apartments = self.db.query(UserApartment).filter(UserApartment.user_id == user_id).all()
             for user_apartment in user_apartments:
                 self.db.delete(user_apartment)
             logger.info(f"Удалено {len(user_apartments)} связей с квартирами пользователя {user_id}")
 
-            # 8. Наконец удаляем самого пользователя
+            # 9. Удаляем связи пользователя с дворами
+            from uk_management_bot.database.models.user_yard import UserYard
+            user_yards = self.db.query(UserYard).filter(UserYard.user_id == user_id).all()
+            for user_yard in user_yards:
+                self.db.delete(user_yard)
+            logger.info(f"Удалено {len(user_yards)} связей с дворами пользователя {user_id}")
+
+            # 10. Обнуляем granted_by в записях дворов, где этот пользователь давал доступ
+            granted_yards = self.db.query(UserYard).filter(UserYard.granted_by == user_id).all()
+            for yard in granted_yards:
+                yard.granted_by = None
+            logger.info(f"Обновлено {len(granted_yards)} записей дворов (обнулено granted_by)")
+
+            # 11. Наконец удаляем самого пользователя
             self.db.delete(user)
             self.db.commit()
             

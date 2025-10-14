@@ -12,11 +12,15 @@ from uk_management_bot.keyboards.admin import (
     get_invite_specialization_keyboard,
     get_invite_expiry_keyboard,
     get_invite_confirmation_keyboard,
+    get_completed_requests_submenu,
+    get_assignment_type_keyboard,
+    get_executors_by_category_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard, get_user_contextual_keyboard
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.invite_service import InviteService
+from uk_management_bot.services.notification_service import async_notify_request_status_changed
 from uk_management_bot.database.session import get_db
 from uk_management_bot.utils.constants import (
     SPECIALIZATION_ELECTRIC,
@@ -204,15 +208,33 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             message_text += f"🔄 Обновлена: {request.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
         if request.notes:
             message_text += f"💬 Примечания: {request.notes}\n"
-        
+
+        # Проверяем наличие медиафайлов
+        media_files = request.media_files if request.media_files else []
+        completion_media = request.completion_media if request.completion_media else []
+        has_media = len(media_files) > 0 or len(completion_media) > 0
+
         # Создаем клавиатуру действий для менеджера
-        from uk_management_bot.keyboards.admin import get_manager_request_actions_keyboard
-        actions_kb = get_manager_request_actions_keyboard(request.request_number)
-        
-        # Добавляем кнопку "Назад к списку"
-        rows = list(actions_kb.inline_keyboard)
-        rows.append([InlineKeyboardButton(text="🔙 Назад к списку", callback_data="mreq_back_to_list")])
-        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        from uk_management_bot.keyboards.admin import get_manager_request_actions_keyboard, get_manager_completed_request_actions_keyboard
+
+        # Для исполненных заявок (ожидающих подтверждения) - специальная клавиатура
+        if request.status == "Выполнена":
+            actions_kb = get_manager_completed_request_actions_keyboard(request.request_number, is_returned=request.is_returned)
+
+            # Добавляем кнопку медиа если есть
+            rows = list(actions_kb.inline_keyboard)
+            if has_media:
+                rows.append([InlineKeyboardButton(text="📎 Медиа", callback_data=f"media_{request.request_number}")])
+            rows.append([InlineKeyboardButton(text="🔙 Назад к списку", callback_data="mreq_back_to_list")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        else:
+            # Для обычных заявок - стандартная клавиатура
+            actions_kb = get_manager_request_actions_keyboard(request.request_number, has_media=has_media)
+
+            # Добавляем кнопку "Назад к списку"
+            rows = list(actions_kb.inline_keyboard)
+            rows.append([InlineKeyboardButton(text="🔙 Назад к списку", callback_data="mreq_back_to_list")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
         await callback.message.edit_text(message_text, reply_markup=keyboard)
         
@@ -221,6 +243,327 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
     except Exception as e:
         logger.error(f"Ошибка обработки просмотра заявки менеджером: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("media_"))
+async def handle_view_request_media(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Обработка просмотра медиафайлов заявки"""
+    try:
+        from aiogram.types import InputMediaPhoto, InputMediaVideo, InputMediaDocument
+
+        logger.info(f"Просмотр медиафайлов заявки менеджером {callback.from_user.id}")
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer("Нет прав для просмотра медиафайлов", show_alert=True)
+            return
+
+        request_number = callback.data.replace("media_", "")
+
+        # Получаем заявку из базы данных
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        # Проверяем наличие медиафайлов и парсим JSON
+        import json
+
+        media_files = []
+        if request.media_files:
+            try:
+                media_files = json.loads(request.media_files) if isinstance(request.media_files, str) else request.media_files
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Ошибка парсинга media_files для заявки {request.request_number}: {e}")
+
+        completion_media = []
+        if request.completion_media:
+            try:
+                completion_media = json.loads(request.completion_media) if isinstance(request.completion_media, str) else request.completion_media
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Ошибка парсинга completion_media для заявки {request.request_number}: {e}")
+
+        if not media_files and not completion_media:
+            await callback.answer("📎 К этой заявке не прикреплены медиафайлы", show_alert=True)
+            return
+
+        # Отправляем медиафайлы при создании заявки
+        if media_files:
+            await callback.message.answer(
+                f"📎 <b>Медиафайлы при создании заявки #{request.request_number}</b>",
+                parse_mode="HTML"
+            )
+
+            # Если файлов больше 1, отправляем группой
+            if len(media_files) > 1:
+                media_group = []
+                for idx, media_item in enumerate(media_files):
+                    # Извлекаем file_id из объекта или используем как строку
+                    file_id = media_item.get("file_id") if isinstance(media_item, dict) else media_item
+
+                    try:
+                        # Пробуем как фото
+                        if idx == 0:
+                            media_group.append(InputMediaPhoto(media=file_id, caption=f"Фото {idx+1}/{len(media_files)}"))
+                        else:
+                            media_group.append(InputMediaPhoto(media=file_id))
+                    except:
+                        # Если не получилось как фото, пробуем как документ
+                        if idx == 0:
+                            media_group.append(InputMediaDocument(media=file_id, caption=f"Файл {idx+1}/{len(media_files)}"))
+                        else:
+                            media_group.append(InputMediaDocument(media=file_id))
+
+                if media_group:
+                    await callback.message.answer_media_group(media=media_group)
+            else:
+                # Один файл - отправляем отдельно
+                file_id = media_files[0].get("file_id") if isinstance(media_files[0], dict) else media_files[0]
+                try:
+                    await callback.message.answer_photo(photo=file_id)
+                except:
+                    try:
+                        await callback.message.answer_document(document=file_id)
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки медиафайла: {e}")
+                        await callback.message.answer("❌ Не удалось отправить медиафайл")
+
+        # Отправляем медиафайлы при завершении заявки
+        if completion_media:
+            await callback.message.answer(
+                f"📎 <b>Медиафайлы при завершении заявки #{request.request_number}</b>",
+                parse_mode="HTML"
+            )
+
+            # Если файлов больше 1, отправляем группой
+            if len(completion_media) > 1:
+                media_group = []
+                for idx, media_item in enumerate(completion_media):
+                    # Извлекаем file_id из объекта или используем как строку
+                    file_id = media_item.get("file_id") if isinstance(media_item, dict) else media_item
+
+                    try:
+                        # Пробуем как фото
+                        if idx == 0:
+                            media_group.append(InputMediaPhoto(media=file_id, caption=f"Фото {idx+1}/{len(completion_media)}"))
+                        else:
+                            media_group.append(InputMediaPhoto(media=file_id))
+                    except:
+                        # Если не получилось как фото, пробуем как документ
+                        if idx == 0:
+                            media_group.append(InputMediaDocument(media=file_id, caption=f"Файл {idx+1}/{len(completion_media)}"))
+                        else:
+                            media_group.append(InputMediaDocument(media=file_id))
+
+                if media_group:
+                    await callback.message.answer_media_group(media=media_group)
+            else:
+                # Один файл - отправляем отдельно
+                file_id = completion_media[0].get("file_id") if isinstance(completion_media[0], dict) else completion_media[0]
+                try:
+                    await callback.message.answer_photo(photo=file_id)
+                except:
+                    try:
+                        await callback.message.answer_document(document=file_id)
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки медиафайла при завершении: {e}")
+                        await callback.message.answer("❌ Не удалось отправить медиафайл")
+
+        await callback.answer("✅ Медиафайлы отправлены")
+        logger.info(f"Отправлены медиафайлы заявки {request.request_number} менеджеру {callback.from_user.id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка просмотра медиафайлов заявки: {e}")
+        await callback.answer("Произошла ошибка при загрузке медиафайлов", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("confirm_completed_"))
+async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+    """Менеджер подтверждает выполнение заявки"""
+    try:
+        from datetime import datetime
+        from uk_management_bot.services.notification_service import NotificationService
+
+        logger.info(f"Подтверждение выполнения заявки менеджером {callback.from_user.id}")
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer("Нет прав для подтверждения заявок", show_alert=True)
+            return
+
+        request_number = callback.data.replace("confirm_completed_", "")
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        # Подтверждаем выполнение
+        old_status = request.status
+        request.status = "Выполнена"  # Статус "Выполнена" - подтверждено менеджером, ждёт приёмки заявителем
+        request.manager_confirmed = True
+        request.manager_confirmed_by = user.id
+        request.manager_confirmed_at = datetime.now()
+        db.commit()
+
+        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
+        try:
+            from aiogram import Bot
+            bot = Bot.get_current()
+            await async_notify_request_status_changed(bot, db, request, old_status, "Выполнена")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+
+        # Дополнительное уведомление заявителю с инструкцией
+        applicant = request.user
+        if applicant and applicant.telegram_id:
+            try:
+                from aiogram import Bot
+                bot = Bot.get_current()
+
+                notification_text = (
+                    f"✅ <b>Ваша заявка #{request.format_number_for_display()} выполнена!</b>\n\n"
+                    f"Пожалуйста, ознакомьтесь с результатами работы и примите заявку.\n"
+                    f"Перейдите в раздел '✅ Ожидают приёмки' в главном меню."
+                )
+
+                await bot.send_message(applicant.telegram_id, notification_text)
+                logger.info(f"✅ Уведомление о подтверждении заявки {request.request_number} отправлено заявителю {applicant.telegram_id}")
+            except Exception as e:
+                logger.error(f"Ошибка при отправке уведомления заявителю: {e}")
+
+        await callback.message.edit_text(
+            f"✅ Заявка #{request.request_number} подтверждена!\n\n"
+            f"Статус изменён на 'Выполнена'.\n"
+            f"Заявитель получил уведомление о необходимости приёмки."
+        )
+
+        logger.info(f"Заявка {request.request_number} подтверждена менеджером {user.id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка подтверждения выполнения заявки: {e}")
+        if db:
+            db.rollback()
+        await callback.answer("Произошла ошибка при подтверждении", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("reconfirm_completed_"))
+async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+    """Менеджер повторно подтверждает выполнение возвратной заявки"""
+    try:
+        from datetime import datetime
+        from uk_management_bot.services.notification_service import NotificationService
+
+        logger.info(f"Повторное подтверждение возвратной заявки менеджером {callback.from_user.id}")
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer("Нет прав для подтверждения заявок", show_alert=True)
+            return
+
+        request_number = callback.data.replace("reconfirm_completed_", "")
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        # Сбрасываем флаг возврата и повторно подтверждаем
+        old_status = "Исполнено (возвращена)"
+        request.status = "Выполнена"
+        request.is_returned = False  # Снимаем флаг возврата
+        request.manager_confirmed = True
+        request.manager_confirmed_by = user.id
+        request.manager_confirmed_at = datetime.now()
+        db.commit()
+
+        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
+        try:
+            from aiogram import Bot
+            bot = Bot.get_current()
+            await async_notify_request_status_changed(bot, db, request, old_status, "Выполнена")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+
+        # Дополнительное уведомление заявителю с инструкцией
+        applicant = request.user
+        if applicant and applicant.telegram_id:
+            try:
+                from aiogram import Bot
+                bot = Bot.get_current()
+
+                notification_text = (
+                    f"✅ <b>Ваша заявка #{request.format_number_for_display()} выполнена повторно!</b>\n\n"
+                    f"Замечания учтены. Пожалуйста, ознакомьтесь с результатами и примите заявку.\n"
+                    f"Перейдите в раздел '✅ Ожидают приёмки' в главном меню."
+                )
+
+                await bot.send_message(applicant.telegram_id, notification_text)
+                logger.info(f"✅ Уведомление о повторном подтверждении заявки {request.request_number} отправлено заявителю {applicant.telegram_id}")
+            except Exception as e:
+                logger.error(f"Ошибка при отправке уведомления заявителю: {e}")
+
+        await callback.message.edit_text(
+            f"✅ Возвратная заявка #{request.request_number} подтверждена повторно!\n\n"
+            f"Статус изменён на 'Выполнена'.\n"
+            f"Заявитель получил уведомление."
+        )
+
+        logger.info(f"Возвратная заявка {request.request_number} подтверждена повторно менеджером {user.id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка повторного подтверждения заявки: {e}")
+        if db:
+            db.rollback()
+        await callback.answer("Произошла ошибка при подтверждении", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("return_to_work_"))
+async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+    """Менеджер возвращает заявку в работу"""
+    try:
+        logger.info(f"Возврат заявки в работу менеджером {callback.from_user.id}")
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer("Нет прав для изменения статуса заявок", show_alert=True)
+            return
+
+        request_number = callback.data.replace("return_to_work_", "")
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        # Возвращаем в работу
+        old_status = request.status
+        request.status = "В работе"
+        request.is_returned = False  # Снимаем флаг возврата если был
+        request.manager_confirmed = False
+        db.commit()
+
+        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
+        try:
+            from aiogram import Bot
+            bot = Bot.get_current()
+            await async_notify_request_status_changed(bot, db, request, old_status, "В работе")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+
+        await callback.message.edit_text(
+            f"🔄 Заявка #{request.request_number} возвращена в работу.\n\n"
+            f"Статус изменён на 'В работе'."
+        )
+
+        logger.info(f"Заявка {request.request_number} возвращена в работу менеджером {user.id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка возврата заявки в работу: {e}")
+        if db:
+            db.rollback()
+        await callback.answer("Произошла ошибка при изменении статуса", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("mreq_page_"))
@@ -326,6 +669,41 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
                         
                         await callback.message.edit_text("🆕 Новые заявки:", reply_markup=keyboard)
                         return
+                    elif request.status == "Выполнена":
+                        # Возвращаемся к исполненным заявкам
+                        q = (
+                            db.query(Request)
+                            .filter(Request.status == "Выполнена")
+                            .order_by(
+                                Request.is_returned.desc(),  # Возвратные заявки показываем первыми
+                                Request.updated_at.desc().nullslast(),
+                                Request.created_at.desc()
+                            )
+                        )
+                        requests = q.limit(10).all()
+
+                        if not requests:
+                            await callback.message.edit_text("Нет исполненных заявок")
+                            return
+
+                        # Добавляем пометку "возвратная" для возвратных заявок
+                        items = []
+                        for r in requests:
+                            item = {
+                                "request_number": r.request_number,
+                                "category": r.category,
+                                "address": r.address,
+                                "status": r.status
+                            }
+                            if r.is_returned:
+                                item["suffix"] = " 🔄"
+                            items.append(item)
+
+                        from uk_management_bot.keyboards.admin import get_manager_request_list_kb
+                        keyboard = get_manager_request_list_kb(items, 1, 1)
+
+                        await callback.message.edit_text("✅ Исполненные заявки:", reply_markup=keyboard)
+                        return
                     elif request.status in ["В работе", "Закуп", "Уточнение"]:
                         # Возвращаемся к активным заявкам
                         active_statuses = ["В работе", "Закуп", "Уточнение"]
@@ -335,16 +713,16 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
                             .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
                         )
                         requests = q.limit(10).all()
-                        
+
                         if not requests:
                             await callback.message.edit_text("Нет активных заявок")
                             return
-                        
+
                         items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
-                        
+
                         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
                         keyboard = get_manager_request_list_kb(items, 1, 1)
-                        
+
                         await callback.message.edit_text("🔄 Активные заявки:", reply_markup=keyboard)
                         return
         
@@ -540,6 +918,153 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
     await message.answer("🔄 Активные заявки:", reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
+@router.message(F.text == "✅ Исполненные заявки")
+async def show_completed_requests_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Показать подменю для исполненных заявок"""
+    lang = message.from_user.language_code or 'ru'
+
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+
+    # Получаем статистику
+    total_completed = db.query(Request).filter(Request.status == "Выполнена").count()
+    returned_count = db.query(Request).filter(
+        Request.status == "Выполнена",
+        Request.is_returned == True
+    ).count()
+
+    stats_text = (
+        f"✅ <b>Исполненные заявки</b>\n\n"
+        f"📊 <b>Статистика:</b>\n"
+        f"📋 Всего исполненных: {total_completed}\n"
+        f"🔄 Возвращённых: {returned_count}\n\n"
+        f"Выберите раздел:"
+    )
+
+    await message.answer(stats_text, reply_markup=get_completed_requests_submenu(), parse_mode="HTML")
+
+
+@router.message(F.text == "📋 Все исполненные")
+async def list_all_completed_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Показать все исполненные заявки"""
+    lang = message.from_user.language_code or 'ru'
+
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+
+    # Все исполненные заявки: статус "Выполнена"
+    q = (
+        db.query(Request)
+        .filter(Request.status == "Выполнена")
+        .order_by(
+            Request.is_returned.desc(),  # Возвратные заявки показываем первыми
+            Request.updated_at.desc().nullslast(),
+            Request.created_at.desc()
+        )
+    )
+    requests = q.limit(10).all()
+
+    if not requests:
+        await message.answer("Нет исполненных заявок", reply_markup=get_completed_requests_submenu())
+        return
+
+    # Добавляем пометку "возвратная" для возвратных заявок
+    items = []
+    for r in requests:
+        item = {
+            "request_number": r.request_number,
+            "category": r.category,
+            "address": r.address,
+            "status": "🔄 Возвратная" if r.is_returned else r.status
+        }
+        items.append(item)
+
+    await message.answer("📋 Все исполненные заявки:", reply_markup=get_manager_request_list_kb(items, 1, 1))
+
+
+@router.message(F.text == "🔄 Возвращённые")
+async def list_returned_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Показать только возвращённые заявки"""
+    lang = message.from_user.language_code or 'ru'
+
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+
+    # Только возвращённые заявки
+    q = (
+        db.query(Request)
+        .filter(
+            Request.status == "Выполнена",
+            Request.is_returned == True
+        )
+        .order_by(
+            Request.returned_at.desc().nullslast(),
+            Request.updated_at.desc().nullslast(),
+            Request.created_at.desc()
+        )
+    )
+    requests = q.limit(10).all()
+
+    if not requests:
+        await message.answer(
+            "✅ Нет возвращённых заявок\n\nВсе заявки обработаны!",
+            reply_markup=get_completed_requests_submenu()
+        )
+        return
+
+    items = []
+    for r in requests:
+        # Форматируем информацию о возврате
+        return_info = ""
+        if r.returned_at:
+            return_info = f" • {r.returned_at.strftime('%d.%m %H:%M')}"
+
+        item = {
+            "request_number": r.request_number,
+            "category": r.category,
+            "address": r.address,
+            "status": f"🔄 Возврат{return_info}"
+        }
+        items.append(item)
+
+    await message.answer(
+        f"🔄 <b>Возвращённые заявки</b> ({len(requests)}):",
+        reply_markup=get_manager_request_list_kb(items, 1, 1),
+        parse_mode="HTML"
+    )
+
+
+@router.message(F.text == "🔙 Назад в меню")
+async def back_to_main_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Вернуться в главное меню менеджера"""
+    lang = message.from_user.language_code or 'ru'
+
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+
+    await message.answer("🔧 Панель менеджера", reply_markup=get_manager_main_keyboard())
+
+
 @router.message(F.text == "📦 Архив")
 async def list_archive_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Показать архивные заявки"""
@@ -659,7 +1184,6 @@ async def start_invite_creation(message: Message, db: Session, roles: list = Non
         get_text("invites.select_role", language=lang),
         reply_markup=get_invite_role_keyboard()
     )
-    await message.answer("Выберите роль для приглашения:", reply_markup=get_invite_role_keyboard())
 
 
 @router.callback_query(F.data.startswith("invite_role_"))
@@ -869,41 +1393,42 @@ async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: S
 
 # ===== ОБРАБОТЧИКИ ДЕЙСТВИЙ С ЗАЯВКАМИ ДЛЯ МЕНЕДЖЕРОВ =====
 
-@router.callback_query(F.data.startswith("accept_"))
+@router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
 async def handle_accept_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Обработка принятия заявки менеджером"""
+    """Обработка принятия заявки менеджером - показ выбора типа назначения"""
     try:
         logger.info(f"Обработка принятия заявки менеджером {callback.from_user.id}")
-        
+
         # Проверяем права доступа
         if not has_admin_access(roles=roles, user=user):
             await callback.answer("Нет прав для выполнения действий", show_alert=True)
             return
-        
+
         request_number = callback.data.replace("accept_", "")
-        
+
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
-        
-        # Обновляем статус
+
+        # Обновляем статус на "В работе"
         request.status = "В работе"
         request.updated_at = datetime.now()
-        
-        # Автоматически назначаем заявку исполнителям по специализации
-        await auto_assign_request_by_category(request, db, user)
-        
         db.commit()
-        
-        await callback.answer("✅ Заявка принята в работу и назначена исполнителям")
-        
-        # Возвращаемся к списку заявок
-        await handle_manager_back_to_list(callback, db, roles, active_role, user)
-        
-        logger.info(f"Заявка {request_number} принята менеджером {callback.from_user.id}")
-        
+
+        # Показываем выбор типа назначения
+        await callback.message.edit_text(
+            f"✅ <b>Заявка #{request_number} принята в работу</b>\n\n"
+            f"📂 Категория: {request.category}\n"
+            f"📍 Адрес: {request.address}\n\n"
+            f"<b>Выберите способ назначения исполнителя:</b>",
+            reply_markup=get_assignment_type_keyboard(request_number),
+            parse_mode="HTML"
+        )
+
+        logger.info(f"Заявка {request_number} принята менеджером {callback.from_user.id}, ожидание выбора типа назначения")
+
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки менеджером: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
@@ -1582,11 +2107,200 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
                 # Не критично, продолжаем
         
         await state.clear()
-        
+
         logger.info(f"Список материалов для заявки {request_number} обновлен менеджером {message.from_user.id}")
-        
+
     except Exception as e:
         logger.error(f"Ошибка обновления списка материалов: {e}")
         await message.answer("Произошла ошибка при обновлении списка")
         await state.clear()
+
+
+# ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
+
+@router.callback_query(F.data.startswith("assign_duty_"))
+async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session, user: User = None):
+    """Назначение дежурного специалиста (автоматическое по сменам)"""
+    try:
+        request_number = callback.data.replace("assign_duty_", "")
+        logger.info(f"Назначение дежурного специалиста для заявки {request_number}")
+
+        # Получаем заявку
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        # Используем существующую логику auto_assign
+        await auto_assign_request_by_category(request, db, user)
+
+        await callback.message.edit_text(
+            f"✅ <b>Заявка #{request_number} назначена дежурному специалисту</b>\n\n"
+            f"Назначение выполнено автоматически на основе:\n"
+            f"• Текущих смен\n"
+            f"• Специализации исполнителей\n"
+            f"• Загруженности\n\n"
+            f"Исполнитель получит уведомление.",
+            parse_mode="HTML"
+        )
+
+        logger.info(f"Заявка {request_number} назначена дежурному специалисту")
+
+    except Exception as e:
+        logger.error(f"Ошибка назначения дежурного специалиста: {e}")
+        await callback.answer("Произошла ошибка при назначении", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("assign_specific_"))
+async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Session):
+    """Показать список исполнителей для ручного выбора"""
+    try:
+        request_number = callback.data.replace("assign_specific_", "")
+        logger.info(f"Выбор конкретного исполнителя для заявки {request_number}")
+
+        # Получаем заявку
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        # Получаем исполнителей с нужной специализацией
+        category_to_spec = {
+            "Электрика": "electrician",
+            "Сантехника": "plumber",
+            "Охрана": "security",
+            "Уборка": "cleaner",
+        }
+
+        spec = category_to_spec.get(request.category, "other")
+
+        # Получаем всех исполнителей с данной специализацией
+        import json
+
+        executors = db.query(User).filter(
+            User.roles.contains('"executor"'),
+            User.status == "approved"
+        ).all()
+
+        # Фильтруем по специализации
+        filtered_executors = []
+        for ex in executors:
+            if ex.specialization:
+                try:
+                    specializations = json.loads(ex.specialization) if isinstance(ex.specialization, str) else ex.specialization
+                    if spec in specializations or "other" in specializations:
+                        filtered_executors.append(ex)
+                except:
+                    pass
+
+        executors_text = f"Найдено исполнителей: {len(filtered_executors)}" if filtered_executors else "Нет доступных исполнителей"
+
+        await callback.message.edit_text(
+            f"👤 <b>Выбор исполнителя</b>\n\n"
+            f"📋 Заявка: #{request_number}\n"
+            f"📂 Категория: {request.category}\n"
+            f"🔧 Специализация: {spec}\n\n"
+            f"{executors_text}\n\n"
+            f"🟢 - На смене\n"
+            f"⚪ - Не на смене",
+            reply_markup=get_executors_by_category_keyboard(request_number, request.category, filtered_executors),
+            parse_mode="HTML"
+        )
+
+        logger.info(f"Показан список из {len(filtered_executors)} исполнителей для заявки {request_number}")
+
+    except Exception as e:
+        logger.error(f"Ошибка показа списка исполнителей: {e}")
+        await callback.answer("Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("assign_executor_"))
+async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session):
+    """Финальное назначение конкретного исполнителя"""
+    try:
+        # Парсим данные: assign_executor_251013-001_123
+        parts = callback.data.replace("assign_executor_", "").split("_")
+        request_number = parts[0]
+        executor_id = int(parts[1])
+
+        logger.info(f"Финальное назначение исполнителя {executor_id} на заявку {request_number}")
+
+        # Получаем заявку и исполнителя
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        executor = db.query(User).filter(User.id == executor_id).first()
+
+        if not request or not executor:
+            await callback.answer("Заявка или исполнитель не найдены", show_alert=True)
+            return
+
+        # Назначаем исполнителя
+        request.executor_id = executor_id
+        request.assignment_type = "manual"
+        db.commit()
+
+        executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
+        if not executor_name:
+            executor_name = f"@{executor.username}" if executor.username else f"ID{executor.id}"
+
+        await callback.message.edit_text(
+            f"✅ <b>Заявка #{request_number} назначена исполнителю</b>\n\n"
+            f"👤 Исполнитель: {executor_name}\n"
+            f"📂 Категория: {request.category}\n"
+            f"📍 Адрес: {request.address}\n\n"
+            f"Исполнитель получит уведомление о назначении.",
+            parse_mode="HTML"
+        )
+
+        # Отправляем уведомление исполнителю
+        try:
+            from aiogram import Bot
+            bot = Bot.get_current()
+
+            notification_text = (
+                f"📋 <b>Вам назначена новая заявка!</b>\n\n"
+                f"№ заявки: #{request.format_number_for_display()}\n"
+                f"📂 Категория: {request.category}\n"
+                f"📍 Адрес: {request.address}\n"
+                f"📝 Описание: {request.description}\n\n"
+                f"Пожалуйста, приступите к выполнению."
+            )
+
+            await bot.send_message(executor.telegram_id, notification_text, parse_mode="HTML")
+            logger.info(f"Уведомление о назначении отправлено исполнителю {executor.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления исполнителю: {e}")
+
+        logger.info(f"Заявка {request_number} назначена исполнителю {executor_id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка финального назначения исполнителя: {e}")
+        await callback.answer("Произошла ошибка при назначении", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("back_to_assignment_type_"))
+async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Session):
+    """Возврат к выбору типа назначения"""
+    try:
+        request_number = callback.data.replace("back_to_assignment_type_", "")
+
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+
+        if not request:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        await callback.message.edit_text(
+            f"✅ <b>Заявка #{request_number} принята в работу</b>\n\n"
+            f"📂 Категория: {request.category}\n"
+            f"📍 Адрес: {request.address}\n\n"
+            f"<b>Выберите способ назначения исполнителя:</b>",
+            reply_markup=get_assignment_type_keyboard(request_number),
+            parse_mode="HTML"
+        )
+
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка возврата к выбору типа назначения: {e}")
+        await callback.answer("Произошла ошибка", show_alert=True)
 

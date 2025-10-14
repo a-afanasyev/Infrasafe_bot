@@ -123,6 +123,11 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="search-id-tab" data-bs-toggle="pill" data-bs-target="#search-id" type="button" role="tab">
+                            <i class="bi bi-hash"></i> Поиск по ID
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link" id="stats-tab" data-bs-toggle="pill" data-bs-target="#stats" type="button" role="tab">
                             <i class="bi bi-bar-chart"></i> Статистика
                         </button>
@@ -248,6 +253,42 @@
 
                                 <div id="search-results">
                                     <p class="text-muted text-center">Результаты поиска появятся здесь</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search by ID Tab -->
+                    <div class="tab-pane fade" id="search-id" role="tabpanel">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="bi bi-hash"></i> Поиск медиа-файла по ID</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="search-id-form" class="row g-3 mb-4">
+                                    <div class="col-md-4">
+                                        <label for="search-media-id" class="form-label">ID медиа-файла</label>
+                                        <input type="number" class="form-control" id="search-media-id" placeholder="Например, 1024" min="1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="search-telegram-file-id" class="form-label">Telegram file_id</label>
+                                        <input type="text" class="form-control" id="search-telegram-file-id" placeholder="Например, AgACAgIA..." autocomplete="off">
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-end justify-content-start gap-2">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="bi bi-search"></i> Найти
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" id="clear-search-id">
+                                            <i class="bi bi-x-circle"></i> Очистить
+                                        </button>
+                                    </div>
+                                    <div class="col-12">
+                                        <small class="text-muted">Укажите внутренний ID или Telegram file_id файла (достаточно одного значения).</small>
+                                    </div>
+                                </form>
+
+                                <div id="search-id-results">
+                                    <p class="text-muted text-center">Введите ID или Telegram file_id медиа-файла для просмотра деталей</p>
                                 </div>
                             </div>
                         </div>
