@@ -25,37 +25,31 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # ==============================================
-# ASYNC DATABASE ENGINE (ВРЕМЕННО ОТКЛЮЧЕН - требуется asyncpg)
+# ASYNC DATABASE ENGINE (новый подход)
 # ==============================================
 
-# TODO: Раскомментировать после установки asyncpg в requirements и пересборки образа
-#
-# # Преобразуем URL для async драйвера (postgresql -> postgresql+asyncpg)
-# async_database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-#
-# # Создаем асинхронный движок
-# async_engine = create_async_engine(
-#     async_database_url,
-#     echo=settings.DEBUG,
-#     pool_size=20,
-#     max_overflow=30,
-#     pool_timeout=60,
-#     pool_recycle=3600,
-#     pool_pre_ping=True,
-# )
-#
-# # Создаем фабрику асинхронных сессий
-# AsyncSessionLocal = async_sessionmaker(
-#     async_engine,
-#     class_=AsyncSession,
-#     autocommit=False,
-#     autoflush=False,
-#     expire_on_commit=False,  # Важно для async - объекты остаются доступны после commit
-# )
+# Преобразуем URL для async драйвера (postgresql -> postgresql+asyncpg)
+async_database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
-# ВРЕМЕННАЯ ЗАГЛУШКА
-async_engine = None
-AsyncSessionLocal = None
+# Создаем асинхронный движок
+async_engine = create_async_engine(
+    async_database_url,
+    echo=settings.DEBUG,
+    pool_size=20,
+    max_overflow=30,
+    pool_timeout=60,
+    pool_recycle=3600,
+    pool_pre_ping=True,
+)
+
+# Создаем фабрику асинхронных сессий
+AsyncSessionLocal = async_sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,  # Важно для async - объекты остаются доступны после commit
+)
 
 # ==============================================
 # BASE CLASS FOR MODELS
