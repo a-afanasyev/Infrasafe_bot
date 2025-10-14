@@ -28,6 +28,7 @@ from uk_management_bot.handlers.request_status_management import router as reque
 from uk_management_bot.handlers.request_comments import router as request_comments_router
 from uk_management_bot.handlers.request_reports import router as request_reports_router
 from uk_management_bot.handlers.request_acceptance import router as request_acceptance_router  # Приёмка заявок
+from uk_management_bot.handlers.unaccepted_requests import router as unaccepted_requests_router  # Непринятые заявки
 
 # Обработчики передачи смен
 from uk_management_bot.handlers.shift_transfer import router as shift_transfer_router
@@ -230,6 +231,7 @@ async def main():
 
     # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ requests_router!)
     dp.include_router(request_acceptance_router)  # Приёмка заявок - перехватывает accept_request_* и rate_*
+    dp.include_router(unaccepted_requests_router)  # Непринятые заявки для менеджеров
 
     dp.include_router(requests_router)  # requests после acceptance для избежания конфликтов
 

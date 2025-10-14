@@ -25,6 +25,7 @@ def get_completed_requests_submenu() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.add(KeyboardButton(text="📋 Все исполненные"))
     builder.add(KeyboardButton(text="🔄 Возвращённые"))
+    builder.add(KeyboardButton(text="⏳ Не принятые"))
     builder.add(KeyboardButton(text="🔙 Назад в меню"))
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
@@ -309,6 +310,39 @@ def get_executors_by_category_keyboard(request_number: str, category: str, execu
     builder.row(InlineKeyboardButton(
         text="🔙 Назад",
         callback_data=f"back_to_assignment_type_{request_number}"
+    ))
+
+    return builder.as_markup()
+
+
+def get_unaccepted_request_actions_keyboard(request_number: str) -> InlineKeyboardMarkup:
+    """
+    Клавиатура действий для непринятой заявки (для менеджера)
+
+    Args:
+        request_number: Номер заявки
+
+    Returns:
+        InlineKeyboardMarkup с кнопками действий
+    """
+    builder = InlineKeyboardBuilder()
+
+    # Кнопка повторного уведомления заявителя
+    builder.row(InlineKeyboardButton(
+        text="🔔 Напомнить заявителю",
+        callback_data=f"unaccepted_remind_{request_number}"
+    ))
+
+    # Кнопка принятия заявки менеджером
+    builder.row(InlineKeyboardButton(
+        text="✅ Принять за заявителя",
+        callback_data=f"unaccepted_accept_{request_number}"
+    ))
+
+    # Кнопка назад к списку
+    builder.row(InlineKeyboardButton(
+        text="🔙 К списку непринятых",
+        callback_data="unaccepted_back_to_list"
     ))
 
     return builder.as_markup()

@@ -17,6 +17,7 @@ from .media import (
     HealthResponse,
     MediaTagResponse,
     MediaTimelineItem,
+    MediaTelegramLookupResponse,
     FileTypeEnum,
     MediaCategoryEnum,
     MediaStatusEnum
@@ -41,6 +42,7 @@ __all__ = [
     "HealthResponse",
     "MediaTagResponse",
     "MediaTimelineItem",
+    "MediaTelegramLookupResponse",
     "FileTypeEnum",
     "MediaCategoryEnum",
     "MediaStatusEnum"

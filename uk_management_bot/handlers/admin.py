@@ -215,10 +215,47 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         has_media = len(media_files) > 0 or len(completion_media) > 0
 
         # Создаем клавиатуру действий для менеджера
-        from uk_management_bot.keyboards.admin import get_manager_request_actions_keyboard, get_manager_completed_request_actions_keyboard
+        from uk_management_bot.keyboards.admin import (
+            get_manager_request_actions_keyboard,
+            get_manager_completed_request_actions_keyboard,
+            get_unaccepted_request_actions_keyboard
+        )
+
+        # Для исполненных, но непринятых заявок - специальная клавиатура
+        if request.status == "Выполнена" and request.manager_confirmed and not request.is_returned:
+            # Добавляем информацию о времени ожидания принятия
+            from datetime import datetime, timezone
+            completed_at = request.completed_at if request.completed_at else request.updated_at
+            if completed_at:
+                if completed_at.tzinfo is None:
+                    from datetime import timezone as dt_tz
+                    completed_at = completed_at.replace(tzinfo=dt_tz.utc)
+                now = datetime.now(timezone.utc)
+                waiting_time = now - completed_at
+                days = waiting_time.days
+                hours = waiting_time.seconds // 3600
+                minutes = (waiting_time.seconds % 3600) // 60
+
+                if days > 0:
+                    time_str = f"{days}д {hours}ч"
+                elif hours > 0:
+                    time_str = f"{hours}ч {minutes}м"
+                else:
+                    time_str = f"{minutes}м"
+
+                message_text += f"\n⏳ <b>Ожидает принятия: {time_str}</b>\n"
+
+            actions_kb = get_unaccepted_request_actions_keyboard(request.request_number)
+
+            # Добавляем кнопку медиа если есть
+            rows = list(actions_kb.inline_keyboard)
+            if has_media:
+                # Вставляем кнопку медиа перед кнопкой "Назад к списку"
+                rows.insert(-1, [InlineKeyboardButton(text="📎 Медиа", callback_data=f"media_{request.request_number}")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
         # Для исполненных заявок (ожидающих подтверждения) - специальная клавиатура
-        if request.status == "Выполнена":
+        elif request.status == "Выполнена":
             actions_kb = get_manager_completed_request_actions_keyboard(request.request_number, is_returned=request.is_returned)
 
             # Добавляем кнопку медиа если есть
@@ -937,12 +974,18 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
         Request.status == "Выполнена",
         Request.is_returned == True
     ).count()
+    unaccepted_count = db.query(Request).filter(
+        Request.status == "Выполнена",
+        Request.manager_confirmed == True,
+        Request.is_returned == False
+    ).count()
 
     stats_text = (
         f"✅ <b>Исполненные заявки</b>\n\n"
         f"📊 <b>Статистика:</b>\n"
         f"📋 Всего исполненных: {total_completed}\n"
-        f"🔄 Возвращённых: {returned_count}\n\n"
+        f"🔄 Возвращённых: {returned_count}\n"
+        f"⏳ Не принятых: {unaccepted_count}\n\n"
         f"Выберите раздел:"
     )
 
@@ -1044,6 +1087,89 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
 
     await message.answer(
         f"🔄 <b>Возвращённые заявки</b> ({len(requests)}):",
+        reply_markup=get_manager_request_list_kb(items, 1, 1),
+        parse_mode="HTML"
+    )
+
+
+@router.message(F.text == "⏳ Не принятые")
+async def list_unaccepted_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+    """Показать непринятые заявки (выполненные, но не принятые заявителем)"""
+    lang = message.from_user.language_code or 'ru'
+
+    # Проверяем права доступа
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(
+            get_text("errors.permission_denied", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+
+    # Непринятые заявки: подтверждены менеджером (manager_confirmed = True), но не приняты заявителем (статус != "Принято")
+    from datetime import datetime, timezone
+    q = (
+        db.query(Request)
+        .filter(
+            Request.status == "Выполнена",
+            Request.manager_confirmed == True,  # Подтверждено менеджером
+            Request.is_returned == False  # Исключаем возвращённые
+        )
+        .order_by(
+            Request.completed_at.desc().nullslast(),
+            Request.updated_at.desc().nullslast(),
+            Request.created_at.desc()
+        )
+    )
+    requests = q.limit(20).all()
+
+    if not requests:
+        await message.answer(
+            "⏳ <b>Непринятых заявок нет</b>\n\n"
+            "Все выполненные заявки приняты заявителями.",
+            reply_markup=get_completed_requests_submenu(),
+            parse_mode="HTML"
+        )
+        return
+
+    # Форматируем список заявок с указанием времени ожидания
+    items = []
+    now = datetime.now(timezone.utc)
+
+    for r in requests:
+        # Вычисляем время ожидания с момента завершения
+        completed_at = r.completed_at if r.completed_at else r.updated_at
+        if completed_at:
+            # Обеспечиваем что completed_at timezone-aware
+            if completed_at.tzinfo is None:
+                from datetime import timezone as dt_tz
+                completed_at = completed_at.replace(tzinfo=dt_tz.utc)
+
+            waiting_time = now - completed_at
+            days = waiting_time.days
+            hours = waiting_time.seconds // 3600
+            minutes = (waiting_time.seconds % 3600) // 60
+
+            if days > 0:
+                time_str = f"{days}д {hours}ч"
+            elif hours > 0:
+                time_str = f"{hours}ч {minutes}м"
+            else:
+                time_str = f"{minutes}м"
+        else:
+            time_str = "неизв."
+
+        item = {
+            "request_number": r.request_number,
+            "category": r.category,
+            "address": r.address or "Адрес не указан",
+            "status": f"⏳ {time_str}"
+        }
+        items.append(item)
+
+    from uk_management_bot.keyboards.admin import get_manager_request_list_kb
+    await message.answer(
+        f"⏳ <b>Непринятые заявки</b> ({len(requests)}):\n\n"
+        f"<i>Время указывает сколько заявка ожидает принятия</i>",
         reply_markup=get_manager_request_list_kb(items, 1, 1),
         parse_mode="HTML"
     )

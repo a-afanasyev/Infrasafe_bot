@@ -17,6 +17,7 @@ class ManagerAcceptanceStates(StatesGroup):
     viewing_completed_request_details = State()  # Просмотр деталей исполненной заявки
     awaiting_confirmation_notes = State()  # Ожидание комментариев при подтверждении
     awaiting_return_to_work_reason = State()  # Ожидание причины возврата в работу
+    awaiting_manager_acceptance_comment = State()  # Ожидание комментария при принятии за заявителя
 
 
 class ApplicantAcceptanceStates(StatesGroup):
