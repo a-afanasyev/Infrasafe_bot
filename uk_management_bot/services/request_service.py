@@ -113,13 +113,15 @@ class RequestService:
         """
         Получение заявок пользователя с фильтрацией
 
-        ОБНОВЛЕНО: Eager loading для apartment_obj (связь с справочником адресов)
+        ОПТИМИЗИРОВАНО (14.10.2025):
+        - Eager loading для user, executor, apartment_obj (N+1 исправлен)
+        - Пагинация 50 записей по умолчанию
 
         Args:
             user_id: ID пользователя
             status: Фильтр по статусу (опционально)
-            limit: Лимит записей
-            offset: Смещение
+            limit: Лимит записей (по умолчанию 50)
+            offset: Смещение для пагинации
 
         Returns:
             List[Request]: Список заявок
@@ -131,6 +133,9 @@ class RequestService:
             query = (
                 self.db.query(Request)
                 .options(
+                    # Загружаем связанные объекты одним запросом (FIX N+1)
+                    joinedload(Request.user),  # Создатель заявки
+                    joinedload(Request.executor),  # Исполнитель
                     joinedload(Request.apartment_obj)
                     .joinedload(Apartment.building)
                     .joinedload(Building.yard)
@@ -143,7 +148,7 @@ class RequestService:
 
             requests = query.order_by(desc(Request.created_at)).offset(offset).limit(limit).all()
 
-            logger.info(f"Получено {len(requests)} заявок для пользователя {user_id}")
+            logger.info(f"Получено {len(requests)} заявок для пользователя {user_id} (limit={limit}, offset={offset})")
             return requests
 
         except Exception as e:
@@ -154,7 +159,8 @@ class RequestService:
         """
         Получение заявки по номеру
 
-        ОБНОВЛЕНО: Eager loading для apartment_obj (связь с справочником адресов)
+        ОПТИМИЗИРОВАНО (14.10.2025):
+        - Eager loading для user, executor, apartment_obj (N+1 исправлен)
 
         Args:
             request_number: Номер заявки в формате YYMMDD-NNN
@@ -169,6 +175,9 @@ class RequestService:
             request = (
                 self.db.query(Request)
                 .options(
+                    # Загружаем связанные объекты одним запросом (FIX N+1)
+                    joinedload(Request.user),
+                    joinedload(Request.executor),
                     joinedload(Request.apartment_obj)
                     .joinedload(Apartment.building)
                     .joinedload(Building.yard)
@@ -449,39 +458,56 @@ class RequestService:
     ) -> List[Request]:
         """
         Поиск заявок по различным критериям
-        
+
+        ОПТИМИЗИРОВАНО (14.10.2025):
+        - Eager loading для user, executor, apartment_obj (N+1 исправлен)
+        - Пагинация 50 записей по умолчанию
+
         Args:
             user_id: ID пользователя (опционально)
             category: Категория (опционально)
             status: Статус (опционально)
             address_search: Поиск по адресу (опционально)
-            limit: Лимит записей
-            offset: Смещение
-            
+            limit: Лимит записей (по умолчанию 50)
+            offset: Смещение для пагинации
+
         Returns:
             List[Request]: Список найденных заявок
         """
         try:
-            query = self.db.query(Request)
-            
+            from sqlalchemy.orm import joinedload
+            from uk_management_bot.database.models import Apartment, Building, Yard
+
+            query = (
+                self.db.query(Request)
+                .options(
+                    # Загружаем связанные объекты одним запросом (FIX N+1)
+                    joinedload(Request.user),
+                    joinedload(Request.executor),
+                    joinedload(Request.apartment_obj)
+                    .joinedload(Apartment.building)
+                    .joinedload(Building.yard)
+                )
+            )
+
             # Применяем фильтры
             if user_id:
                 query = query.filter(Request.user_id == user_id)
-            
+
             if category:
                 query = query.filter(Request.category == category)
-            
+
             if status:
                 query = query.filter(Request.status == status)
-            
+
             if address_search:
                 query = query.filter(Request.address.ilike(f"%{address_search}%"))
-            
+
             requests = query.order_by(desc(Request.created_at)).offset(offset).limit(limit).all()
-            
-            logger.info(f"Найдено {len(requests)} заявок по критериям поиска")
+
+            logger.info(f"Найдено {len(requests)} заявок (limit={limit}, offset={offset})")
             return requests
-            
+
         except Exception as e:
             logger.error(f"Ошибка поиска заявок: {e}")
             return []

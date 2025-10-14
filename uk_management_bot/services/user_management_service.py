@@ -618,14 +618,17 @@ class UserManagementService:
     
     # ═══ МЕТОДЫ ДЛЯ РАБОТЫ С СОТРУДНИКАМИ ═══
     
-    def get_employees_list(self, list_type: str, page: int = 1, per_page: int = 5) -> Dict:
+    def get_employees_list(self, list_type: str, page: int = 1, per_page: int = 20) -> Dict:
         """
         Получить список сотрудников с пагинацией
+
+        ОПТИМИЗИРОВАНО (14.10.2025):
+        - Увеличена пагинация с 5 до 20 записей по умолчанию
 
         Args:
             list_type: Тип списка (pending, active, blocked, executors, managers)
             page: Номер страницы
-            per_page: Количество на странице
+            per_page: Количество на странице (по умолчанию 20)
 
         Returns:
             Dict с данными сотрудников и пагинацией
