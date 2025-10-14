@@ -114,7 +114,7 @@ class ShiftAssignmentService:
             # Фильтруем смены для назначения
             shifts_to_assign = []
             for shift in shifts:
-                if not shift.executor_id or force_reassign:
+                if not shift.user_id or force_reassign:
                     shifts_to_assign.append(shift)
                 else:
                     results['warnings'].append(f"Смена {shift.id} уже имеет назначенного исполнителя")
@@ -204,7 +204,7 @@ class ShiftAssignmentService:
                 }
 
             # Выполняем назначение
-            shift.executor_id = best_executor.executor_id
+            shift.user_id = best_executor.executor_id
             shift.assigned_at = datetime.now()
             shift.assigned_by_user_id = None  # Системное назначение
 
@@ -357,7 +357,7 @@ class ShiftAssignmentService:
 
             executor_shifts = self.db.query(Shift).filter(
                 and_(
-                    Shift.executor_id == executor.id,
+                    Shift.user_id == executor.id,
                     func.date(Shift.planned_start_time) >= week_start,
                     func.date(Shift.planned_start_time) <= week_end,
                     Shift.status.in_(['planned', 'active'])
@@ -399,7 +399,7 @@ class ShiftAssignmentService:
             # Проверяем пересечения с другими сменами
             overlapping_shifts = self.db.query(Shift).filter(
                 and_(
-                    Shift.executor_id == executor.id,
+                    Shift.user_id == executor.id,
                     Shift.id != shift.id,
                     Shift.status.in_(['planned', 'active']),
                     or_(
@@ -421,7 +421,7 @@ class ShiftAssignmentService:
             # Проверяем минимальный отдых между сменами
             adjacent_shifts = self.db.query(Shift).filter(
                 and_(
-                    Shift.executor_id == executor.id,
+                    Shift.user_id == executor.id,
                     Shift.id != shift.id,
                     Shift.status.in_(['planned', 'active', 'completed']),
                     or_(
@@ -466,7 +466,7 @@ class ShiftAssignmentService:
         # Штраф за превышение максимальных смен в неделю
         week_shifts = self.db.query(Shift).filter(
             and_(
-                Shift.executor_id == executor.id,
+                Shift.user_id == executor.id,
                 func.date(Shift.planned_start_time) >= shift.planned_start_time.date() - timedelta(days=3),
                 func.date(Shift.planned_start_time) <= shift.planned_start_time.date() + timedelta(days=3),
                 Shift.status.in_(['planned', 'active'])
@@ -539,8 +539,8 @@ class ShiftAssignmentService:
         unassigned_shifts = 0
 
         for shift in shifts:
-            if shift.executor_id:
-                executor_loads[shift.executor_id] = executor_loads.get(shift.executor_id, 0) + 1
+            if shift.user_id:
+                executor_loads[shift.user_id] = executor_loads.get(shift.user_id, 0) + 1
             else:
                 unassigned_shifts += 1
 
@@ -599,7 +599,7 @@ class ShiftAssignmentService:
 
         for overloaded_executor, overload in overloaded:
             # Находим смены этого исполнителя, которые можно перенести
-            executor_shifts = [s for s in shifts if s.executor_id == overloaded_executor]
+            executor_shifts = [s for s in shifts if s.user_id == overloaded_executor]
 
             for shift in executor_shifts:
                 if len(underloaded) == 0:
@@ -611,8 +611,8 @@ class ShiftAssignmentService:
 
                     if executor and self._can_assign_shift(shift, executor):
                         # Выполняем перенос
-                        old_executor_id = shift.executor_id
-                        shift.executor_id = underloaded_executor
+                        old_executor_id = shift.user_id
+                        shift.user_id = underloaded_executor
                         shift.assigned_at = datetime.now()
 
                         redistributions.append({
@@ -629,7 +629,7 @@ class ShiftAssignmentService:
                         break
 
                 # Прекращаем, если достигли среднего уровня
-                current_load = len([s for s in shifts if s.executor_id == overloaded_executor])
+                current_load = len([s for s in shifts if s.user_id == overloaded_executor])
                 if current_load <= avg_load + 1:
                     break
 
@@ -729,11 +729,11 @@ class ShiftAssignmentService:
             if not shift:
                 return {'error': 'Смена не найдена'}
 
-            if not shift.executor_id:
+            if not shift.user_id:
                 return {'error': 'У смены нет назначенного исполнителя'}
 
             # Проверяем конфликты
-            conflicts = self._check_assignment_conflicts(shift, shift.executor_id)
+            conflicts = self._check_assignment_conflicts(shift, shift.user_id)
 
             if not conflicts:
                 return {'message': 'Конфликтов не найдено'}
@@ -894,7 +894,7 @@ class ShiftAssignmentService:
             # Находим активные и запланированные смены исполнителя
             executor_shifts = self.db.query(Shift).filter(
                 and_(
-                    Shift.executor_id == executor_id,
+                    Shift.user_id == executor_id,
                     Shift.status.in_(['planned', 'active']),
                     Shift.planned_start_time >= datetime.now()
                 )
@@ -913,7 +913,7 @@ class ShiftAssignmentService:
 
             for shift in executor_shifts:
                 # Убираем текущего исполнителя
-                shift.executor_id = None
+                shift.user_id = None
 
                 # Пытаемся найти замену
                 available_executors = self._get_available_executors()

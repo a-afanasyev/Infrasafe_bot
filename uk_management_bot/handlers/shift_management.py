@@ -10,7 +10,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import get_db, SessionLocal
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
@@ -495,16 +495,34 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
             if shifts:
                 for shift in shifts:
                     start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
-                    status_emoji = "🟢" if shift.status == "active" else "🟡" if shift.status == "planned" else "🔴"
-                    
+                    end_time = shift.planned_end_time.strftime('%H:%M') if shift.planned_end_time else "?"
+
+                    # Цвет зависит от наличия исполнителя, а не от статуса
+                    status_emoji = "🟢" if shift.user_id else "🟡"
+
+                    # Получаем название смены
+                    shift_name = ""
+                    if shift.template:
+                        shift_name = shift.template.name
+                    elif shift.shift_type:
+                        shift_type_names = {
+                            "regular": "Обычная",
+                            "emergency": "Экстренная",
+                            "overtime": "Сверхурочная",
+                            "maintenance": "Тех.обслуживание"
+                        }
+                        shift_name = shift_type_names.get(shift.shift_type, shift.shift_type)
+                    else:
+                        shift_name = "Смена"
+
                     # Получаем имя исполнителя
                     executor_name = "Не назначен"
                     if shift.user_id:
                         user = db.query(User).filter(User.id == shift.user_id).first()
                         if user:
                             executor_name = f"{user.first_name}"
-                    
-                    response += f"  {status_emoji} {start_time} - {executor_name}\n"
+
+                    response += f"  {status_emoji} <b>{start_time}-{end_time}</b> {shift_name} | {executor_name}\n"
             else:
                 response += f"  📭 <i>Смен нет</i>\n"
             
@@ -2876,10 +2894,30 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
         from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
         assignment_service = ShiftAssignmentService(db)
 
+        # Получаем все неназначенные смены на месяц вперед
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        month_end = today + timedelta(days=30)
+
+        unassigned_shifts = db.query(Shift).filter(
+            Shift.user_id.is_(None),
+            Shift.start_time >= today,
+            Shift.start_time < month_end
+        ).all()
+
+        if not unassigned_shifts:
+            await callback.message.edit_text(
+                "✅ <b>Все смены уже назначены</b>\n\n"
+                f"Нет неназначенных смен на следующие 30 дней.",
+                reply_markup=get_executor_assignment_keyboard(lang),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
         # Запускаем автоматическое назначение на все неназначенные смены
-        result = await assignment_service.auto_assign_executors_to_shifts(
-            target_date=date.today(),
-            days_ahead=30  # Назначаем на месяц вперед
+        result = assignment_service.auto_assign_executors_to_shifts(
+            shifts=unassigned_shifts,
+            force_reassign=False
         )
 
         if result.get('error'):
@@ -2915,6 +2953,235 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
 
     except Exception as e:
         logger.error(f"Ошибка автоматического назначения: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "bulk_by_specialization")
+@require_role(['admin', 'manager'])
+async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
+    """Массовое назначение по специализациям"""
+    try:
+        if not db:
+            db = SessionLocal()
+        lang = get_user_language(callback.from_user.id, db)
+
+        from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
+        assignment_service = ShiftAssignmentService(db)
+
+        # Получаем все неназначенные смены
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        unassigned_shifts = db.query(Shift).filter(
+            Shift.user_id.is_(None),
+            Shift.start_time >= today
+        ).all()
+
+        if not unassigned_shifts:
+            await callback.message.edit_text(
+                "✅ <b>Все смены уже назначены</b>\n\n"
+                "Нет неназначенных смен для обработки.",
+                reply_markup=get_executor_assignment_keyboard(lang),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
+        # Группируем смены по специализациям
+        specialization_groups = {}
+        for shift in unassigned_shifts:
+            if shift.specialization_focus:
+                if isinstance(shift.specialization_focus, list):
+                    specs = tuple(sorted(shift.specialization_focus))
+                else:
+                    specs = ("universal",)
+            else:
+                specs = ("universal",)
+
+            if specs not in specialization_groups:
+                specialization_groups[specs] = []
+            specialization_groups[specs].append(shift)
+
+        # Назначаем по группам специализаций
+        total_assigned = 0
+        total_failed = 0
+
+        for specs, shifts_group in specialization_groups.items():
+            result = assignment_service.auto_assign_executors_to_shifts(
+                shifts=shifts_group,
+                force_reassign=False
+            )
+            if result.get('assignments'):
+                total_assigned += len(result['assignments'])
+            if result.get('unassigned_shifts'):
+                total_failed += len(result['unassigned_shifts'])
+
+        text = "📋 <b>Результат назначения по специализациям</b>\n\n"
+        text += f"✅ <b>Успешно назначено:</b> {total_assigned} смен\n"
+        text += f"❌ <b>Не удалось назначить:</b> {total_failed} смен\n\n"
+        text += f"<b>🔧 Обработано групп специализаций:</b> {len(specialization_groups)}\n"
+
+        if total_assigned > 0:
+            text += f"📊 <b>Эффективность:</b> {(total_assigned / (total_assigned + total_failed) * 100):.1f}%\n"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_executor_assignment_keyboard(lang),
+            parse_mode="HTML"
+        )
+
+        await callback.answer("✅ Назначение по специализациям завершено")
+
+    except Exception as e:
+        logger.error(f"Ошибка назначения по специализациям: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "bulk_by_period")
+@require_role(['admin', 'manager'])
+async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
+    """Массовое назначение на период"""
+    try:
+        if not db:
+            db = SessionLocal()
+        lang = get_user_language(callback.from_user.id, db)
+
+        from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
+        assignment_service = ShiftAssignmentService(db)
+
+        # Получаем смены на следующие 7 дней
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        week_end = today + timedelta(days=7)
+
+        unassigned_shifts = db.query(Shift).filter(
+            Shift.user_id.is_(None),
+            Shift.start_time >= today,
+            Shift.start_time < week_end
+        ).all()
+
+        if not unassigned_shifts:
+            await callback.message.edit_text(
+                "✅ <b>Все смены на период уже назначены</b>\n\n"
+                f"Нет неназначенных смен на следующие 7 дней.",
+                reply_markup=get_executor_assignment_keyboard(lang),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
+        # Назначаем все смены разом
+        result = assignment_service.auto_assign_executors_to_shifts(
+            shifts=unassigned_shifts,
+            force_reassign=False
+        )
+
+        if result.get('error'):
+            await callback.message.edit_text(
+                f"❌ <b>Ошибка назначения на период</b>\n\n"
+                f"{result['error']}",
+                reply_markup=get_executor_assignment_keyboard(lang),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
+        assignments = result.get('assignments', [])
+        unassigned = result.get('unassigned_shifts', [])
+
+        text = "📅 <b>Результат назначения на период</b>\n\n"
+        text += f"<b>📆 Период:</b> Следующие 7 дней\n"
+        text += f"✅ <b>Успешно назначено:</b> {len(assignments)} смен\n"
+        text += f"❌ <b>Не удалось назначить:</b> {len(unassigned)} смен\n\n"
+
+        if assignments:
+            text += f"📊 <b>Эффективность:</b> {(len(assignments) / (len(assignments) + len(unassigned)) * 100):.1f}%\n\n"
+
+        if unassigned:
+            text += "<b>⚠️ Неназначенные смены требуют ручного назначения</b>"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_executor_assignment_keyboard(lang),
+            parse_mode="HTML"
+        )
+
+        await callback.answer("✅ Назначение на период завершено")
+
+    except Exception as e:
+        logger.error(f"Ошибка назначения на период: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "bulk_by_priority")
+@require_role(['admin', 'manager'])
+async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
+    """Массовое назначение по приоритету"""
+    try:
+        if not db:
+            db = SessionLocal()
+        lang = get_user_language(callback.from_user.id, db)
+
+        from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
+        assignment_service = ShiftAssignmentService(db)
+
+        # Получаем все неназначенные смены
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        unassigned_shifts = db.query(Shift).filter(
+            Shift.user_id.is_(None),
+            Shift.start_time >= today
+        ).order_by(Shift.start_time.asc()).all()  # Сортируем по времени (раньше = важнее)
+
+        if not unassigned_shifts:
+            await callback.message.edit_text(
+                "✅ <b>Все смены уже назначены</b>\n\n"
+                "Нет неназначенных смен для обработки.",
+                reply_markup=get_executor_assignment_keyboard(lang),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
+
+        # Обрабатываем первые 20 смен по приоритету
+        priority_shifts = unassigned_shifts[:20]
+
+        # Назначаем в порядке приоритета
+        result = assignment_service.auto_assign_executors_to_shifts(
+            shifts=priority_shifts,
+            force_reassign=False
+        )
+
+        assignments = result.get('assignments', [])
+        unassigned = result.get('unassigned_shifts', [])
+
+        text = "⚡ <b>Результат назначения по приоритету</b>\n\n"
+        text += f"<b>🎯 Критерий приоритета:</b> Ближайшие по времени\n"
+        text += f"<b>📊 Обработано смен:</b> {len(priority_shifts)}\n\n"
+        text += f"✅ <b>Успешно назначено:</b> {len(assignments)} смен\n"
+        text += f"❌ <b>Не удалось назначить:</b> {len(unassigned)} смен\n\n"
+
+        if assignments:
+            text += f"📊 <b>Эффективность:</b> {(len(assignments) / (len(assignments) + len(unassigned)) * 100):.1f}%\n"
+
+        if len(unassigned_shifts) > 20:
+            text += f"\n<b>ℹ️ Осталось неназначенных:</b> {len(unassigned_shifts) - 20} смен"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_executor_assignment_keyboard(lang),
+            parse_mode="HTML"
+        )
+
+        await callback.answer("✅ Назначение по приоритету завершено")
+
+    except Exception as e:
+        logger.error(f"Ошибка назначения по приоритету: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
     finally:
         if db:
