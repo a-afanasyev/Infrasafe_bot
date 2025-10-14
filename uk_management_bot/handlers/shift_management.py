@@ -2465,11 +2465,11 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
 
 @router.callback_query(F.data == "ai_assignment")
 @require_role(['admin', 'manager'])
-async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext):
+async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """ИИ-назначение исполнителей"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
@@ -2546,11 +2546,11 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "bulk_assignment")
 @require_role(['admin', 'manager'])
-async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext):
+async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение исполнителей"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Получаем статистику для массового назначения
@@ -2599,11 +2599,11 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "workload_analysis")
 @require_role(['admin', 'manager'])
-async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext):
+async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Анализ загруженности исполнителей"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Анализируем загруженность на ближайшие 7 дней
@@ -2684,11 +2684,11 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "redistribute_load")
 @require_role(['admin', 'manager'])
-async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext):
+async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Перераспределение нагрузки между исполнителями"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
@@ -2753,11 +2753,11 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "schedule_conflicts")
 @require_role(['admin', 'manager'])
-async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext):
+async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Анализ конфликтов расписания"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         # Ищем конфликты в расписании на ближайшие 7 дней
@@ -2866,11 +2866,11 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "bulk_auto_assign")
 @require_role(['admin', 'manager'])
-async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext):
+async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Автоматическое назначение всех смен"""
-    db = None
     try:
-        db = SessionLocal()
+        if not db:
+            db = SessionLocal()
         lang = get_user_language(callback.from_user.id, db)
 
         from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
