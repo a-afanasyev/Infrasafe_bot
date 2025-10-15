@@ -59,6 +59,7 @@ DATABASE_URL=${DATABASE_URL}
 5. **.env.unified.example**
    - Добавлены комментарии о URL-encoding для паролей со спецсимволами
    - Обновлена документация DATABASE_URL
+   - Добавлена переменная MEDIA_BOT_TOKEN для отдельного медиа-бота
 
 6. **SERVER_SETUP_GUIDE.md** (новый файл)
    - Полное руководство по развертыванию на сервере
@@ -98,6 +99,7 @@ URL-encoding таблица:
 ```bash
 # Обязательные параметры
 BOT_TOKEN=your_bot_token_from_botfather
+MEDIA_BOT_TOKEN=your_media_bot_token_from_botfather
 POSTGRES_PASSWORD=YourSecurePassword123
 DATABASE_URL=postgresql://uk_bot:YourSecurePassword123@postgres:5432/uk_management
 
