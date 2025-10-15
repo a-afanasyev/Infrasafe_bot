@@ -83,6 +83,14 @@ REDIS_URL=redis://redis:6379/0
 MEDIA_REDIS_URL=redis://redis:6379/1
 USE_REDIS_RATE_LIMIT=true
 
+# ==================== MEDIA CHANNELS (опционально) ====================
+# ID Telegram каналов для хранения медиа
+# Значения по умолчанию уже настроены, изменяйте только если нужны свои каналы
+CHANNEL_REQUESTS=-1003091883002
+CHANNEL_REPORTS=-1002969942316
+CHANNEL_ARCHIVE=-1002725515580
+CHANNEL_BACKUP=-1002951349061
+
 # ==================== ОСТАЛЬНЫЕ ПАРАМЕТРЫ ====================
 LOG_LEVEL=INFO
 DEBUG=false
