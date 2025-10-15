@@ -1,5 +1,5 @@
-# UK Management Bot + Media Service - Unified Docker Compose
-# Запускает бота и медиа-сервис одновременно для разработки
+# UK Management Bot + Media Service - Production Docker Compose
+# Конфигурация для production окружения с повышенной безопасностью
 
 services:
   # ==================== TELEGRAM BOT ====================
@@ -14,8 +14,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - USE_REDIS_RATE_LIMIT=${USE_REDIS_RATE_LIMIT:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
-      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
       - PYTHONUNBUFFERED=1
       - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
     volumes:
@@ -61,7 +61,7 @@ services:
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-52428800}
       - ALLOWED_EXTENSIONS=${ALLOWED_EXTENSIONS:-jpg,jpeg,png,gif,mp4,mov,avi,pdf,doc,docx,xls,xlsx}
       - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       # Монтируем код для hot-reload
       - ./media_service/app:/app/app
@@ -78,7 +78,7 @@ services:
     networks:
       - uk-network
     ports:
-      - "8009:8000"
+      - "8009:8000"  # Media Service API должен быть доступен для внешних запросов
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=5)"]
       interval: 30s
@@ -97,8 +97,8 @@ services:
       - media-service
     networks:
       - uk-network
-    ports:
-      - "8010:80"
+    # ports:
+    #   - "8010:80"  # Frontend можно закомментировать если не нужен в production
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
@@ -128,9 +128,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    # Порты exposed для разработки. Для production закомментируйте эту секцию.
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    # Порты закомментированы для production безопасности.
+    # ports:
+      # - "${POSTGRES_PORT:-5432}:5432"
 
   # ==================== REDIS CACHE ====================
   redis:
@@ -148,9 +148,9 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
-    # Порты exposed для разработки. Для production закомментируйте эту секцию.
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    # Порты закомментированы для production безопасности.
+    # ports:
+      # - "${REDIS_PORT:-6379}:6379"
 
 # ==================== VOLUMES ====================
 volumes:

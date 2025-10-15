@@ -1,8 +1,6 @@
 # UK Management Bot - Development Docker Compose
 # Для разработки с hot-reload (изменения кода без пересборки)
 
-version: '3.8'
-
 services:
   app:
     build:

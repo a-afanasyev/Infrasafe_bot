@@ -2,8 +2,6 @@
 # Используется вместе с основным docker-compose.yml
 # Запуск: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-version: '3.8'
-
 services:
   # Основное приложение с production настройками
   app:
