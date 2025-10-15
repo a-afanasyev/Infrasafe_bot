@@ -1,0 +1,167 @@
+# UK Management Bot + Media Service - Unified Docker Compose
+# Запускает бота и медиа-сервис одновременно для разработки
+
+version: '3.8'
+
+services:
+  # ==================== TELEGRAM BOT ====================
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: uk-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - REDIS_URL=redis://redis:6379/0
+      - USE_REDIS_RATE_LIMIT=true
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+      - PYTHONUNBUFFERED=1
+      - MEDIA_SERVICE_URL=http://media-service:8000
+    volumes:
+      # Монтируем код для hot-reload
+      - ./uk_management_bot:/app/uk_management_bot
+      - ./requirements.txt:/app/requirements.txt
+      - ./.env:/app/.env
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+      - ./uk_management.db:/app/uk_management.db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+    networks:
+      - uk-network
+    extra_hosts:
+      - "uk-management.local:127.0.0.1"
+    command: python uk_management_bot/main.py
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==================== MEDIA SERVICE ====================
+  media-service:
+    build:
+      context: ./media_service
+      dockerfile: Dockerfile
+    container_name: uk-media-service
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - REDIS_URL=redis://redis:6379/1
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CHANNELS_FILE_PATH=/app/data/channels.json
+      - UPLOAD_DIR=/app/data/uploads
+      - MAX_FILE_SIZE=52428800
+      - ALLOWED_EXTENSIONS=jpg,jpeg,png,gif,mp4,mov,avi,pdf,doc,docx,xls,xlsx
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Монтируем код для hot-reload
+      - ./media_service/app:/app/app
+      - ./media_service/client:/app/client
+      - ./media_service/requirements.txt:/app/requirements.txt
+      # Данные и загрузки
+      - media_uploads:/app/data/uploads
+      - ./media_service/channels.json:/app/data/channels.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+    ports:
+      - "8009:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==================== MEDIA FRONTEND ====================
+  media-frontend:
+    build:
+      context: ./media_service/frontend
+      dockerfile: Dockerfile
+    container_name: uk-media-frontend
+    restart: unless-stopped
+    depends_on:
+      - media-service
+    networks:
+      - uk-network
+    ports:
+      - "8010:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==================== POSTGRESQL DATABASE ====================
+  postgres:
+    image: postgres:15-alpine
+    container_name: uk-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=uk_management
+      - POSTGRES_USER=uk_bot
+      - POSTGRES_PASSWORD=uk_bot_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
+      - ./scripts/init_postgres.sh:/docker-entrypoint-initdb.d/02-init_postgres.sh:ro
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uk_bot -d uk_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+      - "5432:5432"
+
+  # ==================== REDIS CACHE ====================
+  redis:
+    image: redis:7-alpine
+    container_name: uk-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "6379:6379"
+
+# ==================== VOLUMES ====================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  media_uploads:
+    driver: local
+
+# ==================== NETWORKS ====================
+networks:
+  uk-network:
+    driver: bridge
