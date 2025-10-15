@@ -1,16 +1,45 @@
 # 📚 UK Management Bot - Database Documentation Index
 
-**Last Updated**: 15 октября 2025
+**Last Updated**: 16 октября 2025
 **Status**: ✅ Verified & Corrected
-**Version**: 2.1
+**Version**: 2.2
 
 ---
 
 ## 🎯 Quick Start
 
-### For Database Setup
+### Automated Startup (Recommended)
 
-**Use these files**:
+**Complete fresh start** with clean database and admin auto-creation:
+
+```bash
+# 1. Initialize environment (creates .env from env.copy.dev)
+make init
+
+# 2. Start all services (creates database, applies schema, creates admin)
+make start
+```
+
+**What happens automatically**:
+- ✅ PostgreSQL database created with 27 tables
+- ✅ 3 ENUM types created (accesslevel, documenttype, verificationstatus)
+- ✅ Admin user auto-created from `ADMIN_USER_IDS` in .env
+- ✅ Admin gets **all three roles**: applicant, executor, manager
+- ✅ Admin has status `approved` (ready to use immediately)
+- ✅ Redis cache initialized
+- ✅ Media service tables created
+
+**Admin User Configuration**:
+- Created from `ADMIN_USER_IDS=48617336` in .env
+- Status: `approved` (not "active" - this is important!)
+- Roles: `"applicant,executor,manager"` (CSV string format)
+- Active Role: `manager`
+- Phone: `+998000000000` (placeholder, no address requirement)
+- Verification: `approved`
+
+### Manual Database Setup
+
+**Use these files** if you need manual setup:
 1. ✅ [DATABASE_SCHEMA_ACTUAL.md](DATABASE_SCHEMA_ACTUAL.md) - **Verified schema documentation**
 2. ✅ [database_schema_actual.sql](database_schema_actual.sql) - **Correct SQL DDL**
 
@@ -167,6 +196,35 @@ See [uk_management_bot/database/migrations/](uk_management_bot/database/migratio
 
 ## 🚀 Common Tasks
 
+### Complete Fresh Start (Verified Procedure)
+
+```bash
+# Stop all containers and remove volumes
+docker-compose -f docker-compose.unified.yml down -v
+
+# Initialize environment
+make init
+
+# Start all services (auto-creates database + admin)
+make start
+
+# Verify everything is running
+docker-compose -f docker-compose.unified.yml ps
+
+# Check logs
+docker-compose -f docker-compose.unified.yml logs bot | grep -E "(Database|Admin|✅)"
+```
+
+**Expected output**:
+```
+✅ Database engine initialized
+✅ ENUM type accesslevel ready
+✅ ENUM type documenttype ready
+✅ ENUM type verificationstatus ready
+✅ All tables created successfully (27 tables)
+✅ Admin user created/updated: 48617336
+```
+
 ### Export Fresh Schema
 
 ```bash
@@ -178,10 +236,10 @@ docker cp uk-bot:/app/DATABASE_SCHEMA_ACTUAL.md ./
 docker cp uk-bot:/app/database_schema_actual.sql ./
 ```
 
-### Create Database from Scratch
+### Create Database from Scratch (Manual)
 
 ```bash
-# Method 1: SQLAlchemy (Recommended)
+# Method 1: SQLAlchemy (Recommended - used by make start)
 docker-compose -f docker-compose.unified.yml exec bot python -c "
 from uk_management_bot.database.session import Base, engine
 import uk_management_bot.database.models
@@ -191,6 +249,23 @@ print('✅ Database created!')
 
 # Method 2: SQL DDL
 docker-compose -f docker-compose.unified.yml exec -T postgres psql -U uk_bot -d uk_management < database_schema_actual.sql
+```
+
+### Verify Admin User After Startup
+
+```bash
+# Connect to database
+docker-compose -f docker-compose.unified.yml exec postgres psql -U uk_bot -d uk_management
+
+# Check admin user
+SELECT id, telegram_id, username, status, roles, active_role, verification_status
+FROM users WHERE telegram_id = 48617336;
+
+# Expected result:
+# status = 'approved'
+# roles = 'applicant,executor,manager'
+# active_role = 'manager'
+# verification_status = 'approved'
 ```
 
 ### Verify Schema
@@ -348,6 +423,120 @@ git commit -m "docs: update database schema"
 
 ---
 
+## 🔧 Troubleshooting
+
+### Admin Can't Access Bot After Startup
+
+**Problem**: Admin user created but can't enter bot after `/start`
+
+**Solution**: Check user status in database:
+```sql
+SELECT id, telegram_id, status, roles, verification_status
+FROM users WHERE telegram_id = 48617336;
+```
+
+**Expected values**:
+- `status` = `"approved"` (not "active"!)
+- `roles` = `"applicant,executor,manager"`
+- `verification_status` = `"approved"`
+
+If status is wrong, update with:
+```sql
+UPDATE users
+SET status = 'approved',
+    verification_status = 'approved',
+    phone = '+998000000000'
+WHERE telegram_id = 48617336;
+```
+
+### Role Selection Button Not Appearing
+
+**Problem**: "🔀 Выбрать роль" button doesn't appear or appears inconsistently
+
+**Root Cause**: User has multiple roles but system can't parse them correctly
+
+**Solution**: Roles must be in **CSV string format**, not JSON:
+```
+✅ CORRECT: "applicant,executor,manager"
+❌ WRONG:   ["applicant","executor","manager"]
+```
+
+Check current format:
+```sql
+SELECT telegram_id, roles, active_role FROM users WHERE telegram_id = 48617336;
+```
+
+If roles are in JSON format, convert to CSV:
+```sql
+UPDATE users
+SET roles = 'applicant,executor,manager'
+WHERE telegram_id = 48617336;
+```
+
+**Code Implementation**: Use `parse_roles_safe()` from `uk_management_bot/utils/auth_helpers.py` which supports both CSV and JSON formats for backward compatibility.
+
+### Missing Admin Menu Button
+
+**Problem**: "🔧 Админ панель" button missing from main menu
+
+**Checklist**:
+1. User must have `manager` role in roles list
+2. User status must be `approved`
+3. User telegram_id must be in `ADMIN_USER_IDS` env variable
+4. Active role should be set (defaults to first role if not set)
+
+**Verify**:
+```sql
+SELECT telegram_id, roles, active_role, status
+FROM users WHERE telegram_id = 48617336;
+```
+
+**Environment check**:
+```bash
+docker-compose -f docker-compose.unified.yml exec bot env | grep ADMIN_USER_IDS
+# Should output: ADMIN_USER_IDS=48617336
+```
+
+### ENUM Type Already Exists Error
+
+**Problem**: `ERROR: type "accesslevel" already exists` when running schema
+
+**Cause**: Trying to create ENUM types that already exist in database
+
+**Solution**:
+```sql
+-- Check existing ENUM types
+SELECT typname FROM pg_type WHERE typcategory = 'E';
+
+-- If you need to recreate, drop old types first (dangerous!)
+DROP TYPE IF EXISTS accesslevel CASCADE;
+DROP TYPE IF EXISTS documenttype CASCADE;
+DROP TYPE IF EXISTS verificationstatus CASCADE;
+```
+
+**Better approach**: Use SQLAlchemy `Base.metadata.create_all()` which handles existing types gracefully.
+
+### Database Connection Refused
+
+**Problem**: `FATAL: password authentication failed for user "uk_bot"`
+
+**Solution**: Check environment variables match between .env and docker-compose:
+```bash
+# In .env
+DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+POSTGRES_USER=uk_bot
+POSTGRES_PASSWORD=uk_bot_password
+POSTGRES_DB=uk_management
+```
+
+**Restart with clean volumes** if passwords were changed:
+```bash
+docker-compose -f docker-compose.unified.yml down -v
+make start
+```
+
+---
+
 ## ✅ Checklist
 
 ### Before Using Documentation
@@ -384,6 +573,14 @@ See [DATABASE_ACTION_PLAN.md](DATABASE_ACTION_PLAN.md) for:
 ---
 
 **Document Created**: 15 октября 2025
-**Last Verified**: 15 октября 2025
+**Last Updated**: 16 октября 2025
+**Last Verified**: 16 октября 2025 (Startup procedure tested with make init && make start)
 **Maintainer**: Development Team
 **Status**: ✅ Current & Accurate
+
+### Recent Updates
+- **16.10.2025**: Added automated startup procedure (`make init` + `make start`)
+- **16.10.2025**: Documented admin auto-creation from ADMIN_USER_IDS
+- **16.10.2025**: Added troubleshooting section for role parsing (CSV vs JSON)
+- **16.10.2025**: Added admin verification commands and expected outputs
+- **15.10.2025**: Initial schema verification and documentation

@@ -39,7 +39,7 @@ services:
       - "uk-management.local:127.0.0.1"
     command: python uk_management_bot/main.py
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -84,7 +84,7 @@ services:
     ports:
       - "8009:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
