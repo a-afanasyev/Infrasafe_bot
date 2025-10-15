@@ -170,15 +170,59 @@ init: ## Первоначальная настройка
 	@echo "$(GREEN)🎯 Инициализация проекта...$(NC)"
 	@if [ ! -f .env ]; then \
 		echo "$(YELLOW)Создание .env файла...$(NC)"; \
-		cp .env.example .env; \
+		cp .env.unified.example .env; \
 		echo "$(RED)⚠️  ВАЖНО: Настройте .env файл перед запуском!$(NC)"; \
+		echo "$(RED)      Обязательные параметры:$(NC)"; \
+		echo "$(RED)      - BOT_TOKEN (основной бот)$(NC)"; \
+		echo "$(RED)      - MEDIA_BOT_TOKEN (медиа бот)$(NC)"; \
+		echo "$(RED)      - POSTGRES_PASSWORD$(NC)"; \
+		echo "$(RED)      - DATABASE_URL$(NC)"; \
 	fi
 	@mkdir -p media_service/data/uploads
+	@mkdir -p backups
 	@if [ ! -f media_service/channels.json ]; then \
-		cp media_service/channels.example.json media_service/channels.json; \
+		cp media_service/channels.example.json media_service/channels.json 2>/dev/null || echo '{"channels": [], "version": "1.0"}' > media_service/channels.json; \
 	fi
 	@echo "$(GREEN)✅ Инициализация завершена$(NC)"
 	@echo "$(YELLOW)Следующий шаг: отредактируйте .env и выполните 'make start'$(NC)"
+
+migrate-from-local: ## Перенести БД с локальной машины (использование: make migrate-from-local SERVER=user@ip)
+	@if [ -z "$(SERVER)" ]; then \
+		echo "$(RED)❌ Укажите сервер: make migrate-from-local SERVER=user@192.168.1.100$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🔄 Запуск миграции базы данных на $(SERVER)...$(NC)"
+	@./scripts/migrate_database.sh $$(echo $(SERVER) | cut -d@ -f1) $$(echo $(SERVER) | cut -d@ -f2)
+
+import-db: ## Импортировать БД из файла (использование: make import-db FILE=backup.sql)
+	@if [ -z "$(FILE)" ]; then \
+		echo "$(RED)❌ Укажите файл: make import-db FILE=backup.sql$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)⚠️  ВНИМАНИЕ: Текущая БД будет пересоздана!$(NC)"
+	@echo "$(YELLOW)Нажмите Ctrl+C для отмены или Enter для продолжения...$(NC)"
+	@read
+	@echo "$(BLUE)💾 Создание backup текущей БД...$(NC)"
+	@mkdir -p backups
+	@$(COMPOSE) exec postgres pg_dump -U uk_bot uk_management > backups/backup_before_import_$$(date +%Y%m%d_%H%M%S).sql || true
+	@echo "$(YELLOW)🗑️  Пересоздание базы данных...$(NC)"
+	@$(COMPOSE) stop bot
+	@$(COMPOSE) exec postgres psql -U uk_bot -d postgres -c "DROP DATABASE IF EXISTS uk_management;" > /dev/null
+	@$(COMPOSE) exec postgres psql -U uk_bot -d postgres -c "CREATE DATABASE uk_management OWNER uk_bot;" > /dev/null
+	@echo "$(BLUE)📥 Импорт данных из $(FILE)...$(NC)"
+	@cat $(FILE) | $(COMPOSE) exec -T postgres psql -U uk_bot uk_management > /dev/null
+	@echo "$(GREEN)✅ База данных импортирована$(NC)"
+	@echo "$(YELLOW)Запуск бота...$(NC)"
+	@$(COMPOSE) start bot
+	@echo "$(GREEN)✅ Готово! Проверьте логи: make logs-bot$(NC)"
+
+export-db: ## Экспортировать БД в файл
+	@echo "$(BLUE)📤 Экспорт базы данных...$(NC)"
+	@mkdir -p backups
+	@$(COMPOSE) exec postgres pg_dump -U uk_bot uk_management \
+		--clean --if-exists --no-owner --no-privileges \
+		> backups/export_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "$(GREEN)✅ БД экспортирована в backups/export_$$(date +%Y%m%d_%H%M%S).sql$(NC)"
 
 dev: ## Режим разработки (с hot-reload)
 	@echo "$(GREEN)🔧 Запуск в режиме разрабо��ки...$(NC)"
