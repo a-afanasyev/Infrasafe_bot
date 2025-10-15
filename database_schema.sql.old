@@ -1,0 +1,1009 @@
+-- =====================================================================
+-- UK Management Bot - PostgreSQL Database Schema
+-- =====================================================================
+-- WARNING: THIS SQL SCRIPT CONTAINS INCORRECT DDL!
+--
+-- DO NOT USE THIS FILE TO CREATE DATABASE!
+-- Use database_schema_actual.sql instead.
+--
+-- This file has incorrect DDL for 5 tables:
+--   - access_rights (lines 580-598)
+--   - quarterly_plans (lines 735-746)
+--   - quarterly_shift_schedules (lines 754-775)
+--   - shift_schedules (lines 776-788)
+--   - planning_conflicts (lines 792-809)
+--
+-- See DATABASE_CORRECTIONS.md for details.
+--
+-- Status: OUTDATED - Use database_schema_actual.sql
+-- =====================================================================
+-- Version: 2.0
+-- Date: 2025-10-15
+-- DBMS: PostgreSQL 15+
+-- Author: Generated from SQLAlchemy models (OUTDATED)
+-- =====================================================================
+
+-- Drop existing tables (if recreating)
+-- Uncomment if needed
+-- DROP TABLE IF EXISTS shift_assignments CASCADE;
+-- DROP TABLE IF EXISTS shift_transfers CASCADE;
+-- DROP TABLE IF EXISTS shift_schedules CASCADE;
+-- DROP TABLE IF EXISTS quarterly_shift_schedules CASCADE;
+-- DROP TABLE IF EXISTS planning_conflicts CASCADE;
+-- DROP TABLE IF EXISTS quarterly_plans CASCADE;
+-- DROP TABLE IF EXISTS request_assignments CASCADE;
+-- DROP TABLE IF EXISTS request_comments CASCADE;
+-- DROP TABLE IF EXISTS ratings CASCADE;
+-- DROP TABLE IF EXISTS notifications CASCADE;
+-- DROP TABLE IF EXISTS audit_logs CASCADE;
+-- DROP TABLE IF EXISTS access_rights CASCADE;
+-- DROP TABLE IF EXISTS user_verifications CASCADE;
+-- DROP TABLE IF EXISTS user_documents CASCADE;
+-- DROP TABLE IF EXISTS user_yards CASCADE;
+-- DROP TABLE IF EXISTS user_apartments CASCADE;
+-- DROP TABLE IF EXISTS requests CASCADE;
+-- DROP TABLE IF EXISTS shifts CASCADE;
+-- DROP TABLE IF EXISTS shift_templates CASCADE;
+-- DROP TABLE IF EXISTS apartments CASCADE;
+-- DROP TABLE IF EXISTS buildings CASCADE;
+-- DROP TABLE IF EXISTS yards CASCADE;
+-- DROP TABLE IF EXISTS users CASCADE;
+
+-- =====================================================================
+-- ENUMS
+-- =====================================================================
+
+CREATE TYPE document_type AS ENUM (
+    'passport',
+    'property_deed',
+    'rental_agreement',
+    'utility_bill',
+    'other'
+);
+
+CREATE TYPE verification_status AS ENUM (
+    'pending',
+    'approved',
+    'rejected',
+    'requested'
+);
+
+CREATE TYPE access_level AS ENUM (
+    'apartment',
+    'house',
+    'yard'
+);
+
+-- =====================================================================
+-- 1. USERS TABLE - Пользователи системы
+-- =====================================================================
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    telegram_id BIGINT UNIQUE NOT NULL,
+    username VARCHAR(255),
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+
+    -- Role system
+    role VARCHAR(50) NOT NULL DEFAULT 'applicant',  -- legacy single role
+    roles TEXT,  -- JSON array: ["applicant", "executor", "manager"]
+    active_role VARCHAR(50),  -- current active role
+
+    -- Status
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',  -- pending, approved, blocked
+    language VARCHAR(10) NOT NULL DEFAULT 'ru',  -- ru, uz
+    phone VARCHAR(20),
+
+    -- Executor specializations
+    specialization TEXT,  -- JSON array: ["electrician", "plumber"]
+
+    -- Verification fields
+    verification_status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    verification_notes TEXT,
+    verification_date TIMESTAMP WITH TIME ZONE,
+    verified_by INTEGER REFERENCES users(id),
+
+    passport_series VARCHAR(10),
+    passport_number VARCHAR(10),
+    birth_date TIMESTAMP WITH TIME ZONE,
+
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_users_telegram_id ON users(telegram_id);
+
+COMMENT ON TABLE users IS 'Все пользователи системы: жители, исполнители, менеджеры';
+COMMENT ON COLUMN users.roles IS 'JSON массив ролей для многоролевой системы';
+COMMENT ON COLUMN users.specialization IS 'JSON массив специализаций для исполнителей';
+
+-- =====================================================================
+-- 2. YARDS TABLE - Дворы (территории УК)
+-- =====================================================================
+
+CREATE TABLE yards (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(200) UNIQUE NOT NULL,
+    description TEXT,
+
+    -- GPS coordinates for GeoOptimizer
+    gps_latitude DOUBLE PRECISION,
+    gps_longitude DOUBLE PRECISION,
+
+    -- Status
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES users(id),
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_yards_name ON yards(name);
+CREATE INDEX idx_yards_is_active ON yards(is_active);
+
+COMMENT ON TABLE yards IS 'Дворы - территориальные зоны управляющей компании';
+
+-- =====================================================================
+-- 3. BUILDINGS TABLE - Здания (дома)
+-- =====================================================================
+
+CREATE TABLE buildings (
+    id SERIAL PRIMARY KEY,
+    address VARCHAR(300) NOT NULL,
+    yard_id INTEGER NOT NULL REFERENCES yards(id) ON DELETE CASCADE,
+
+    -- GPS coordinates for GeoOptimizer
+    gps_latitude DOUBLE PRECISION,
+    gps_longitude DOUBLE PRECISION,
+
+    -- Building characteristics
+    entrance_count INTEGER NOT NULL DEFAULT 1,
+    floor_count INTEGER NOT NULL DEFAULT 1,
+
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES users(id),
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_buildings_yard_id ON buildings(yard_id);
+CREATE INDEX idx_buildings_address ON buildings(address);
+CREATE INDEX idx_buildings_is_active ON buildings(is_active);
+
+COMMENT ON TABLE buildings IS 'Жилые здания на территории двора';
+
+-- =====================================================================
+-- 4. APARTMENTS TABLE - Квартиры
+-- =====================================================================
+
+CREATE TABLE apartments (
+    id SERIAL PRIMARY KEY,
+    building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+    apartment_number VARCHAR(20) NOT NULL,
+
+    -- Apartment characteristics
+    entrance INTEGER,
+    floor INTEGER,
+    rooms_count INTEGER,
+    area DOUBLE PRECISION,  -- square meters
+
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES users(id),
+    updated_at TIMESTAMP WITH TIME ZONE,
+
+    -- Unique constraint: one apartment number per building
+    CONSTRAINT uix_building_apartment UNIQUE (building_id, apartment_number)
+);
+
+CREATE INDEX idx_apartments_building_id ON apartments(building_id);
+CREATE INDEX idx_apartments_apartment_number ON apartments(apartment_number);
+CREATE INDEX idx_apartments_is_active ON apartments(is_active);
+
+COMMENT ON TABLE apartments IS 'Квартиры в зданиях';
+
+-- =====================================================================
+-- 5. USER_APARTMENTS TABLE - Связь пользователя с квартирой
+-- =====================================================================
+
+CREATE TABLE user_apartments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    apartment_id INTEGER NOT NULL REFERENCES apartments(id) ON DELETE CASCADE,
+
+    -- Moderation
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',  -- pending, approved, rejected
+    requested_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    reviewed_by INTEGER REFERENCES users(id),
+    admin_comment TEXT,
+
+    -- Ownership
+    is_owner BOOLEAN NOT NULL DEFAULT FALSE,
+    is_primary BOOLEAN NOT NULL DEFAULT TRUE,  -- primary apartment for multi-apartment users
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE,
+
+    -- Unique constraint: user can't link to same apartment twice
+    CONSTRAINT uix_user_apartment UNIQUE (user_id, apartment_id)
+);
+
+CREATE INDEX idx_user_apartments_user_id ON user_apartments(user_id);
+CREATE INDEX idx_user_apartments_apartment_id ON user_apartments(apartment_id);
+CREATE INDEX idx_user_apartments_status ON user_apartments(status);
+
+COMMENT ON TABLE user_apartments IS 'Many-to-Many связь пользователей с квартирами с модерацией';
+
+-- =====================================================================
+-- 6. USER_YARDS TABLE - Дополнительные дворы пользователя
+-- =====================================================================
+
+CREATE TABLE user_yards (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    yard_id INTEGER NOT NULL REFERENCES yards(id) ON DELETE CASCADE,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_user_yards_user_id ON user_yards(user_id);
+CREATE INDEX idx_user_yards_yard_id ON user_yards(yard_id);
+
+COMMENT ON TABLE user_yards IS 'Дополнительные дворы для исполнителей (помимо основной квартиры)';
+
+-- =====================================================================
+-- 7. REQUESTS TABLE - Заявки
+-- =====================================================================
+
+CREATE TABLE requests (
+    -- PRIMARY KEY is request_number (not id!)
+    request_number VARCHAR(10) PRIMARY KEY,
+
+    -- User relations
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    executor_id INTEGER REFERENCES users(id),
+
+    -- Basic info
+    category VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'Новая',
+    urgency VARCHAR(20) NOT NULL DEFAULT 'Обычная',
+    description TEXT NOT NULL,
+    notes TEXT,
+
+    -- Legacy address fields (for old requests)
+    address TEXT,
+    apartment VARCHAR(20),
+
+    -- New address system
+    apartment_id INTEGER REFERENCES apartments(id),
+
+    -- Media files
+    media_files JSON DEFAULT '[]',
+    completion_media JSON DEFAULT '[]',
+
+    -- Completion
+    completion_report TEXT,
+
+    -- Assignment info
+    assignment_type VARCHAR(20),  -- 'group' or 'individual'
+    assigned_group VARCHAR(100),
+    assigned_at TIMESTAMP WITH TIME ZONE,
+    assigned_by INTEGER REFERENCES users(id),
+
+    -- Materials management
+    purchase_materials TEXT,  -- legacy
+    requested_materials TEXT,
+    manager_materials_comment TEXT,
+    purchase_history TEXT,
+
+    -- Return/Acceptance system
+    is_returned BOOLEAN NOT NULL DEFAULT FALSE,
+    return_reason TEXT,
+    return_media JSON DEFAULT '[]',
+    returned_at TIMESTAMP WITH TIME ZONE,
+    returned_by INTEGER REFERENCES users(id),
+
+    -- Manager confirmation
+    manager_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+    manager_confirmed_by INTEGER REFERENCES users(id),
+    manager_confirmed_at TIMESTAMP WITH TIME ZONE,
+    manager_confirmation_notes TEXT,
+
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_requests_request_number ON requests(request_number);
+CREATE INDEX idx_requests_apartment_id ON requests(apartment_id);
+CREATE INDEX idx_requests_user_id ON requests(user_id);
+CREATE INDEX idx_requests_executor_id ON requests(executor_id);
+CREATE INDEX idx_requests_status ON requests(status);
+CREATE INDEX idx_requests_created_at ON requests(created_at);
+
+COMMENT ON TABLE requests IS 'Заявки от жителей на обслуживание';
+COMMENT ON COLUMN requests.request_number IS 'Формат: YYMMDD-NNN (например, 251015-001)';
+
+-- =====================================================================
+-- 8. SHIFT_TEMPLATES TABLE - Шаблоны смен
+-- =====================================================================
+
+CREATE TABLE shift_templates (
+    id SERIAL PRIMARY KEY,
+
+    -- Basic info
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+
+    -- Timing
+    start_hour INTEGER NOT NULL,  -- 0-23
+    start_minute INTEGER NOT NULL DEFAULT 0,  -- 0-59
+    duration_hours INTEGER NOT NULL DEFAULT 8,
+
+    -- Requirements
+    required_specializations JSON,  -- ["electric", "plumbing"]
+    min_executors INTEGER NOT NULL DEFAULT 1,
+    max_executors INTEGER NOT NULL DEFAULT 3,
+    default_max_requests INTEGER NOT NULL DEFAULT 10,
+
+    -- Coverage
+    coverage_areas JSON,  -- ["building_A", "yard_1"]
+    geographic_zone VARCHAR(100),
+    priority_level INTEGER NOT NULL DEFAULT 1,  -- 1-5
+
+    -- Automation
+    auto_create BOOLEAN NOT NULL DEFAULT FALSE,
+    days_of_week JSON,  -- [1,2,3,4,5] for Mon-Fri
+    advance_days INTEGER NOT NULL DEFAULT 7,
+
+    -- Settings
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    default_shift_type VARCHAR(50) NOT NULL DEFAULT 'regular',
+    settings JSON,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+COMMENT ON TABLE shift_templates IS 'Шаблоны для автоматического создания смен';
+
+-- =====================================================================
+-- 9. SHIFTS TABLE - Смены исполнителей
+-- =====================================================================
+
+CREATE TABLE shifts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    shift_template_id INTEGER REFERENCES shift_templates(id),
+
+    -- Timing
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE,
+    planned_start_time TIMESTAMP WITH TIME ZONE,
+    planned_end_time TIMESTAMP WITH TIME ZONE,
+
+    -- Status and type
+    status VARCHAR(50) NOT NULL DEFAULT 'active',  -- active, completed, cancelled, planned, paused
+    shift_type VARCHAR(50) DEFAULT 'regular',  -- regular, emergency, overtime, maintenance
+    notes TEXT,
+
+    -- Specialization and coverage
+    specialization_focus JSON,  -- ["electric", "plumbing", "hvac"]
+    coverage_areas JSON,  -- ["building_A", "yard_1", "parking"]
+    geographic_zone VARCHAR(100),
+
+    -- Load management
+    max_requests INTEGER NOT NULL DEFAULT 10,
+    current_request_count INTEGER NOT NULL DEFAULT 0,
+    priority_level INTEGER NOT NULL DEFAULT 1,  -- 1-5
+
+    -- Analytics
+    completed_requests INTEGER NOT NULL DEFAULT 0,
+    average_completion_time DOUBLE PRECISION,  -- minutes
+    average_response_time DOUBLE PRECISION,  -- minutes
+    efficiency_score DOUBLE PRECISION,  -- 0-100
+    quality_rating DOUBLE PRECISION,  -- 1.0-5.0
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_shifts_user_id ON shifts(user_id);
+CREATE INDEX idx_shifts_status ON shifts(status);
+CREATE INDEX idx_shifts_start_time ON shifts(start_time);
+
+COMMENT ON TABLE shifts IS 'Рабочие смены исполнителей с аналитикой';
+
+-- =====================================================================
+-- 10. SHIFT_ASSIGNMENTS TABLE - Назначение заявок на смены
+-- =====================================================================
+
+CREATE TABLE shift_assignments (
+    id SERIAL PRIMARY KEY,
+
+    -- Relations
+    shift_id INTEGER NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+    request_number VARCHAR(10) NOT NULL REFERENCES requests(request_number) ON DELETE CASCADE,
+
+    -- Prioritization
+    assignment_priority INTEGER NOT NULL DEFAULT 1,  -- 1-5
+    estimated_duration INTEGER,  -- minutes
+    assignment_order INTEGER,
+
+    -- AI/ML scores
+    ai_score DOUBLE PRECISION,  -- 0-100
+    confidence_level DOUBLE PRECISION,  -- 0-1
+    specialization_match_score DOUBLE PRECISION,  -- 0-100
+    geographic_score DOUBLE PRECISION,  -- 0-100
+    workload_score DOUBLE PRECISION,  -- 0-100
+
+    -- Status
+    status VARCHAR(50) NOT NULL DEFAULT 'assigned',  -- assigned, accepted, rejected, in_progress, completed, cancelled
+    auto_assigned BOOLEAN NOT NULL DEFAULT FALSE,
+    confirmed_by_executor BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Timing
+    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    planned_start_at TIMESTAMP WITH TIME ZONE,
+    planned_completion_at TIMESTAMP WITH TIME ZONE,
+
+    -- Additional info
+    assignment_reason VARCHAR(200),
+    notes TEXT,
+    executor_instructions TEXT,
+
+    -- Execution results
+    actual_duration INTEGER,  -- minutes
+    execution_quality_rating DOUBLE PRECISION,  -- 1.0-5.0
+    had_issues BOOLEAN NOT NULL DEFAULT FALSE,
+    issues_description TEXT,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_shift_assignments_shift_id ON shift_assignments(shift_id);
+CREATE INDEX idx_shift_assignments_request_number ON shift_assignments(request_number);
+CREATE INDEX idx_shift_assignments_assigned_at ON shift_assignments(assigned_at);
+CREATE INDEX idx_shift_assignments_status ON shift_assignments(status);
+
+COMMENT ON TABLE shift_assignments IS 'Назначение заявок на смены с AI-оценками';
+
+-- =====================================================================
+-- 11. SHIFT_TRANSFERS TABLE - Передача смен
+-- =====================================================================
+
+CREATE TABLE shift_transfers (
+    id SERIAL PRIMARY KEY,
+
+    -- Relations
+    shift_id INTEGER NOT NULL REFERENCES shifts(id),
+    from_executor_id INTEGER NOT NULL REFERENCES users(id),
+    to_executor_id INTEGER REFERENCES users(id),
+
+    -- Status
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',  -- pending, assigned, accepted, rejected, cancelled, completed
+    reason VARCHAR(100) NOT NULL,  -- illness, emergency, workload, vacation, other
+    urgency_level VARCHAR(20) NOT NULL DEFAULT 'normal',  -- low, normal, high, critical
+
+    -- Info
+    comment TEXT,
+
+    -- Timing
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    assigned_at TIMESTAMP,
+    responded_at TIMESTAMP,
+    completed_at TIMESTAMP,
+
+    -- Automation
+    auto_assigned BOOLEAN NOT NULL DEFAULT FALSE,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    max_retries INTEGER NOT NULL DEFAULT 3
+);
+
+CREATE INDEX idx_shift_transfers_shift_id ON shift_transfers(shift_id);
+CREATE INDEX idx_shift_transfers_from_executor_id ON shift_transfers(from_executor_id);
+CREATE INDEX idx_shift_transfers_to_executor_id ON shift_transfers(to_executor_id);
+CREATE INDEX idx_shift_transfers_status ON shift_transfers(status);
+CREATE INDEX idx_shift_transfers_reason ON shift_transfers(reason);
+CREATE INDEX idx_shift_transfers_created_at ON shift_transfers(created_at);
+CREATE INDEX idx_shift_transfers_assigned_at ON shift_transfers(assigned_at);
+
+COMMENT ON TABLE shift_transfers IS 'Передача смен между исполнителями с approval workflow';
+
+-- =====================================================================
+-- 12. USER_DOCUMENTS TABLE - Документы пользователей
+-- =====================================================================
+
+CREATE TABLE user_documents (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+
+    -- Document info
+    document_type document_type NOT NULL,
+    file_id VARCHAR(255) NOT NULL,  -- Telegram file_id
+    file_name VARCHAR(255),
+    file_size INTEGER,
+
+    -- Verification
+    verification_status verification_status DEFAULT 'pending',
+    verification_notes TEXT,
+    verified_by INTEGER REFERENCES users(id),
+    verified_at TIMESTAMP WITH TIME ZONE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_user_documents_user_id ON user_documents(user_id);
+
+COMMENT ON TABLE user_documents IS 'Документы пользователей для верификации';
+
+-- =====================================================================
+-- 13. USER_VERIFICATIONS TABLE - Процесс верификации
+-- =====================================================================
+
+CREATE TABLE user_verifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+
+    -- Status
+    status verification_status DEFAULT 'pending',
+
+    -- Requests
+    requested_info JSON DEFAULT '{}',  -- {"address": true, "documents": ["passport"]}
+    requested_at TIMESTAMP WITH TIME ZONE,
+    requested_by INTEGER REFERENCES users(id),
+
+    -- Admin notes
+    admin_notes TEXT,
+
+    -- Verification
+    verified_by INTEGER REFERENCES users(id),
+    verified_at TIMESTAMP WITH TIME ZONE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_user_verifications_user_id ON user_verifications(user_id);
+
+COMMENT ON TABLE user_verifications IS 'Процесс верификации пользователя';
+
+-- =====================================================================
+-- 14. ACCESS_RIGHTS TABLE - Права доступа
+-- =====================================================================
+
+CREATE TABLE access_rights (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+
+    -- Access level
+    access_level access_level NOT NULL,  -- apartment, house, yard
+
+    -- Specific access
+    apartment_id INTEGER REFERENCES apartments(id),
+    building_id INTEGER REFERENCES buildings(id),
+    yard_id INTEGER REFERENCES yards(id),
+
+    -- Grant info
+    granted_by INTEGER REFERENCES users(id),
+    granted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_access_rights_user_id ON access_rights(user_id);
+
+COMMENT ON TABLE access_rights IS 'Уровни доступа для подачи заявок';
+
+-- =====================================================================
+-- 15. REQUEST_COMMENTS TABLE - Комментарии к заявкам
+-- =====================================================================
+
+CREATE TABLE request_comments (
+    id SERIAL PRIMARY KEY,
+    request_number VARCHAR(10) NOT NULL REFERENCES requests(request_number),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+
+    -- Comment
+    comment_text TEXT NOT NULL,
+    comment_type VARCHAR(50) NOT NULL,  -- status_change, clarification, purchase, report
+
+    -- Status change context
+    previous_status VARCHAR(50),
+    new_status VARCHAR(50),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_request_comments_request_number ON request_comments(request_number);
+CREATE INDEX idx_request_comments_user_id ON request_comments(user_id);
+
+COMMENT ON TABLE request_comments IS 'История комментариев и изменений статуса заявок';
+
+-- =====================================================================
+-- 16. REQUEST_ASSIGNMENTS TABLE - Назначения заявок (legacy)
+-- =====================================================================
+
+CREATE TABLE request_assignments (
+    id SERIAL PRIMARY KEY,
+    request_number VARCHAR(10) NOT NULL REFERENCES requests(request_number),
+
+    -- Assignment type
+    assignment_type VARCHAR(20) NOT NULL,  -- 'group' or 'individual'
+    group_specialization VARCHAR(100),
+    executor_id INTEGER REFERENCES users(id),
+
+    -- Status
+    status VARCHAR(20) DEFAULT 'active',  -- active, cancelled, completed
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_request_assignments_request_number ON request_assignments(request_number);
+
+COMMENT ON TABLE request_assignments IS 'Групповые и индивидуальные назначения заявок (legacy)';
+
+-- =====================================================================
+-- 17. RATINGS TABLE - Оценки выполненных заявок
+-- =====================================================================
+
+CREATE TABLE ratings (
+    id SERIAL PRIMARY KEY,
+    request_number VARCHAR(10) NOT NULL REFERENCES requests(request_number),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+
+    -- Rating
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review TEXT,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_ratings_request_number ON ratings(request_number);
+CREATE INDEX idx_ratings_user_id ON ratings(user_id);
+
+COMMENT ON TABLE ratings IS 'Рейтинги и отзывы от заявителей';
+
+-- =====================================================================
+-- 18. NOTIFICATIONS TABLE - Уведомления
+-- =====================================================================
+
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+
+    -- Notification
+    notification_type VARCHAR(50) NOT NULL,
+    title VARCHAR(255),
+    content TEXT NOT NULL,
+
+    -- Status
+    is_read BOOLEAN DEFAULT FALSE,
+    is_sent BOOLEAN DEFAULT FALSE,
+
+    -- Additional data
+    meta_data JSON DEFAULT '{}',
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+
+COMMENT ON TABLE notifications IS 'История уведомлений пользователей';
+
+-- =====================================================================
+-- 19. AUDIT_LOGS TABLE - Аудит действий
+-- =====================================================================
+
+CREATE TABLE audit_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    telegram_user_id INTEGER,  -- для сохранения после удаления пользователя
+
+    -- Action
+    action VARCHAR(100) NOT NULL,
+    details JSON,
+    ip_address VARCHAR(45),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX idx_audit_logs_telegram_user_id ON audit_logs(telegram_user_id);
+CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+
+COMMENT ON TABLE audit_logs IS 'Журнал всех действий пользователей';
+
+-- =====================================================================
+-- 20. QUARTERLY_PLANS TABLE - Квартальное планирование
+-- =====================================================================
+
+CREATE TABLE quarterly_plans (
+    id SERIAL PRIMARY KEY,
+    year INTEGER NOT NULL,
+    quarter INTEGER NOT NULL CHECK (quarter >= 1 AND quarter <= 4),
+    status VARCHAR(50) NOT NULL DEFAULT 'draft',  -- draft, active, completed
+
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE,
+
+    UNIQUE(year, quarter)
+);
+
+COMMENT ON TABLE quarterly_plans IS 'Квартальные планы смен';
+
+-- =====================================================================
+-- 21. QUARTERLY_SHIFT_SCHEDULES TABLE
+-- =====================================================================
+
+CREATE TABLE quarterly_shift_schedules (
+    id SERIAL PRIMARY KEY,
+    quarterly_plan_id INTEGER NOT NULL REFERENCES quarterly_plans(id) ON DELETE CASCADE,
+    shift_template_id INTEGER NOT NULL REFERENCES shift_templates(id),
+    user_id INTEGER REFERENCES users(id),
+
+    shift_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    notes TEXT,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_quarterly_shift_schedules_plan_id ON quarterly_shift_schedules(quarterly_plan_id);
+CREATE INDEX idx_quarterly_shift_schedules_shift_date ON quarterly_shift_schedules(shift_date);
+
+-- =====================================================================
+-- 22. SHIFT_SCHEDULES TABLE - Weekly shift planning
+-- =====================================================================
+
+CREATE TABLE shift_schedules (
+    id SERIAL PRIMARY KEY,
+    shift_id INTEGER NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id),
+
+    scheduled_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    notes TEXT,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_shift_schedules_shift_id ON shift_schedules(shift_id);
+CREATE INDEX idx_shift_schedules_scheduled_date ON shift_schedules(scheduled_date);
+
+-- =====================================================================
+-- 23. PLANNING_CONFLICTS TABLE
+-- =====================================================================
+
+CREATE TABLE planning_conflicts (
+    id SERIAL PRIMARY KEY,
+    quarterly_plan_id INTEGER NOT NULL REFERENCES quarterly_plans(id) ON DELETE CASCADE,
+    conflict_type VARCHAR(50) NOT NULL,
+    description TEXT NOT NULL,
+    severity VARCHAR(20) NOT NULL,  -- low, medium, high, critical
+
+    resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_by INTEGER REFERENCES users(id),
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    resolution_notes TEXT,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_planning_conflicts_plan_id ON planning_conflicts(quarterly_plan_id);
+CREATE INDEX idx_planning_conflicts_resolved ON planning_conflicts(resolved);
+
+-- =====================================================================
+-- VIEWS
+-- =====================================================================
+
+-- View: Active requests with executor info
+CREATE OR REPLACE VIEW v_active_requests AS
+SELECT
+    r.request_number,
+    r.category,
+    r.status,
+    r.urgency,
+    r.description,
+    r.created_at,
+    u1.telegram_id as applicant_telegram_id,
+    u1.first_name as applicant_first_name,
+    u2.telegram_id as executor_telegram_id,
+    u2.first_name as executor_first_name,
+    a.apartment_number,
+    b.address as building_address,
+    y.name as yard_name
+FROM requests r
+JOIN users u1 ON r.user_id = u1.id
+LEFT JOIN users u2 ON r.executor_id = u2.id
+LEFT JOIN apartments a ON r.apartment_id = a.id
+LEFT JOIN buildings b ON a.building_id = b.id
+LEFT JOIN yards y ON b.yard_id = y.id
+WHERE r.status NOT IN ('Выполнена', 'Отменена');
+
+-- View: Executor workload
+CREATE OR REPLACE VIEW v_executor_workload AS
+SELECT
+    u.id as executor_id,
+    u.telegram_id,
+    u.first_name,
+    u.last_name,
+    COUNT(r.request_number) as active_requests,
+    COUNT(s.id) as active_shifts,
+    AVG(r.created_at::date - CURRENT_DATE) as avg_request_age_days
+FROM users u
+LEFT JOIN requests r ON u.id = r.executor_id AND r.status NOT IN ('Выполнена', 'Отменена')
+LEFT JOIN shifts s ON u.id = s.user_id AND s.status = 'active'
+WHERE u.active_role = 'executor' OR u.role = 'executor'
+GROUP BY u.id, u.telegram_id, u.first_name, u.last_name;
+
+-- View: Request statistics by category
+CREATE OR REPLACE VIEW v_request_stats_by_category AS
+SELECT
+    category,
+    COUNT(*) as total_requests,
+    COUNT(CASE WHEN status = 'Выполнена' THEN 1 END) as completed,
+    COUNT(CASE WHEN status IN ('Новая', 'В обработке', 'Назначена') THEN 1 END) as active,
+    AVG(EXTRACT(EPOCH FROM (completed_at - created_at))/3600) as avg_completion_hours
+FROM requests
+GROUP BY category;
+
+-- =====================================================================
+-- FUNCTIONS
+-- =====================================================================
+
+-- Function: Generate next request number
+CREATE OR REPLACE FUNCTION generate_request_number(creation_date DATE DEFAULT CURRENT_DATE)
+RETURNS VARCHAR(10) AS $$
+DECLARE
+    date_prefix VARCHAR(6);
+    next_seq INTEGER;
+    new_number VARCHAR(10);
+BEGIN
+    -- Format: YYMMDD-NNN
+    date_prefix := TO_CHAR(creation_date, 'YYMMDD');
+
+    -- Find the highest sequence number for today
+    SELECT COALESCE(MAX(SUBSTRING(request_number FROM 8)::INTEGER), 0) + 1
+    INTO next_seq
+    FROM requests
+    WHERE request_number LIKE date_prefix || '-%';
+
+    -- Format the new number
+    new_number := date_prefix || '-' || LPAD(next_seq::TEXT, 3, '0');
+
+    RETURN new_number;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: Update shift load counter
+CREATE OR REPLACE FUNCTION update_shift_request_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        UPDATE shifts
+        SET current_request_count = current_request_count + 1
+        WHERE id = NEW.shift_id;
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE shifts
+        SET current_request_count = GREATEST(0, current_request_count - 1)
+        WHERE id = OLD.shift_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger: Auto-update shift request count
+CREATE TRIGGER trg_update_shift_count
+AFTER INSERT OR DELETE ON shift_assignments
+FOR EACH ROW EXECUTE FUNCTION update_shift_request_count();
+
+-- Function: Auto-update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply updated_at trigger to all tables with updated_at
+CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_requests_updated_at BEFORE UPDATE ON requests
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_shifts_updated_at BEFORE UPDATE ON shifts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_yards_updated_at BEFORE UPDATE ON yards
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_buildings_updated_at BEFORE UPDATE ON buildings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_apartments_updated_at BEFORE UPDATE ON apartments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_user_apartments_updated_at BEFORE UPDATE ON user_apartments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =====================================================================
+-- INITIAL DATA
+-- =====================================================================
+
+-- Insert default shift templates
+INSERT INTO shift_templates (name, description, start_hour, start_minute, duration_hours, auto_create, days_of_week, is_active)
+VALUES
+    ('Дневная смена', 'Стандартная дневная смена 8:00-16:00', 8, 0, 8, TRUE, '[1,2,3,4,5]', TRUE),
+    ('Вечерняя смена', 'Вечерняя смена 16:00-00:00', 16, 0, 8, TRUE, '[1,2,3,4,5]', TRUE),
+    ('Ночная смена', 'Ночная смена 00:00-08:00', 0, 0, 8, TRUE, '[1,2,3,4,5]', TRUE),
+    ('Дежурная смена (выходные)', 'Дежурство в выходные дни', 9, 0, 12, TRUE, '[6,7]', TRUE),
+    ('Аварийная смена', 'Экстренная смена для аварий', 0, 0, 24, FALSE, '[1,2,3,4,5,6,7]', TRUE);
+
+-- =====================================================================
+-- GRANTS (adjust as needed for your user)
+-- =====================================================================
+
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO uk_bot;
+-- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO uk_bot;
+-- GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO uk_bot;
+
+-- =====================================================================
+-- VACUUM AND ANALYZE
+-- =====================================================================
+
+VACUUM ANALYZE;
+
+-- =====================================================================
+-- END OF SCHEMA
+-- =====================================================================
+
+-- Schema version info
+CREATE TABLE IF NOT EXISTS schema_version (
+    version VARCHAR(10) PRIMARY KEY,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    description TEXT
+);
+
+INSERT INTO schema_version (version, description)
+VALUES ('2.0', 'Initial schema with request_number as PRIMARY KEY');
+
+COMMENT ON DATABASE uk_management IS 'UK Management Bot - Property Management System';

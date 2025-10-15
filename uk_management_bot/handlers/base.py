@@ -417,16 +417,13 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
     # Фолбэк из БД, если roles пришли усечёнными
     try:
         from uk_management_bot.services.auth_service import AuthService
+        from uk_management_bot.utils.auth_helpers import get_user_roles, get_active_role
         auth = AuthService(db)
         user = await auth.get_user_by_telegram_id(message.from_user.id)
         if user:
-            import json
-            if getattr(user, "roles", None):
-                parsed = json.loads(user.roles)
-                if isinstance(parsed, list) and parsed:
-                    roles = [str(r) for r in parsed if isinstance(r, str)]
-            if getattr(user, "active_role", None) and user.active_role in roles:
-                active_role = user.active_role
+            # Используем универсальную функцию парсинга ролей (поддерживает CSV и JSON)
+            roles = get_user_roles(user)
+            active_role = get_active_role(user)
     except Exception:
         pass
     role_name = get_text(f"roles.{active_role}", language=message.from_user.language_code or "ru")

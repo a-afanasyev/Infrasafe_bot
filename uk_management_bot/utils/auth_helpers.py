@@ -9,6 +9,38 @@ from uk_management_bot.database.models.user import User
 
 logger = logging.getLogger(__name__)
 
+
+def parse_roles_safe(roles_value: Optional[str]) -> List[str]:
+    """
+    Безопасно парсит роли из строки (поддерживает CSV и JSON форматы)
+
+    Args:
+        roles_value: Строка с ролями (CSV или JSON)
+
+    Returns:
+        List[str]: Список ролей
+
+    Examples:
+        parse_roles_safe("applicant,executor,manager") -> ["applicant", "executor", "manager"]
+        parse_roles_safe('["applicant","executor"]') -> ["applicant", "executor"]
+        parse_roles_safe(None) -> []
+    """
+    if not roles_value:
+        return []
+
+    try:
+        # Сначала пробуем как JSON массив
+        parsed = json.loads(roles_value)
+        if isinstance(parsed, list):
+            return [str(r) for r in parsed if isinstance(r, str)]
+    except (json.JSONDecodeError, ValueError, TypeError):
+        # Если не JSON, парсим как CSV строку
+        if isinstance(roles_value, str):
+            return [r.strip() for r in roles_value.split(",") if r.strip()]
+
+    return []
+
+
 def has_admin_access(roles: Optional[List[str]] = None, user: Optional[User] = None) -> bool:
     """
     Проверяет, есть ли у пользователя права доступа к админ панели
@@ -80,33 +112,26 @@ def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] 
 def get_user_roles(user: User) -> List[str]:
     """
     Получает список ролей пользователя с fallback логикой
-    
+
     Args:
         user: Объект пользователя
-        
+
     Returns:
         List[str]: Список ролей пользователя
     """
-    roles_list = []
-    
     try:
-        # Проверяем новое поле roles
-        if user.roles:
-            try:
-                parsed = json.loads(user.roles)
-                if isinstance(parsed, list) and parsed:
-                    roles_list = [str(r) for r in parsed if isinstance(r, str)]
-            except Exception as parse_exc:
-                logger.warning(f"Ошибка парсинга roles для пользователя {user.telegram_id}: {parse_exc}")
-        
+        # Используем безопасную функцию парсинга ролей
+        roles_list = parse_roles_safe(user.roles)
+
         # Fallback к старому полю role
         if not roles_list and user.role:
             roles_list = [user.role]
-            
+
+        return roles_list or ["applicant"]
+
     except Exception as exc:
         logger.warning(f"Ошибка получения ролей пользователя {user.telegram_id}: {exc}")
-    
-    return roles_list or ["applicant"]
+        return ["applicant"]
 
 def get_active_role(user: User) -> str:
     """

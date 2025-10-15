@@ -165,6 +165,15 @@ async def main():
     import uk_management_bot.database.models  # Импортируем все модели
     Base.metadata.create_all(bind=engine)
     logger.info("База данных инициализирована")
+
+    # Инициализируем администраторов из ADMIN_USER_IDS
+    from uk_management_bot.database.init_admin import init_all_admins
+    try:
+        created, updated = init_all_admins()
+        if created > 0 or updated > 0:
+            logger.info(f"Администраторы инициализированы: создано {created}, обновлено {updated}")
+    except Exception as e:
+        logger.warning(f"Не удалось инициализировать администраторов: {e}")
     
     # Инициализируем бота и диспетчер
     # ВАЖНО: parse_mode="HTML" позволяет использовать HTML теги (<b>, <i>, <code> и т.д.)

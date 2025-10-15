@@ -1177,7 +1177,7 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
 
 @router.message(F.text == "🔙 Назад в меню")
 async def back_to_main_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Вернуться в главное меню менеджера"""
+    """Вернуться в главное меню"""
     lang = message.from_user.language_code or 'ru'
 
     # Проверяем права доступа
@@ -1188,7 +1188,14 @@ async def back_to_main_menu(message: Message, db: Session, roles: list = None, a
         )
         return
 
-    await message.answer("🔧 Панель менеджера", reply_markup=get_manager_main_keyboard())
+    # Импортируем правильную функцию для главного меню
+    from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+
+    # Используем универсальную клавиатуру для активной роли пользователя
+    await message.answer(
+        get_text("menu.main", language=lang),
+        reply_markup=get_main_keyboard_for_role(active_role or user.role, roles or [user.role], user.status)
+    )
 
 
 @router.message(F.text == "📦 Архив")
