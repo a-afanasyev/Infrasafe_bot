@@ -2104,12 +2104,8 @@
     }
   },
   "status": {
-    "accepted": {
-      "ru": "Принята",
-      "uz": "Qabul qilindi"
-    },
     "approved": {
-      "ru": "Принята",
+      "ru": "Принято",
       "uz": "Tasdiqlandi"
     },
     "cancelled": {

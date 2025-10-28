@@ -2,7 +2,9 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from uk_management_bot.keyboards.admin import (
     get_manager_main_keyboard,
@@ -55,7 +57,7 @@ from uk_management_bot.states.invite_creation import InviteCreationStates
 async def auto_assign_request_by_category(request: Request, db: Session, manager: User):
     """
     Автоматически назначает заявку исполнителям по категории/специализации
-    
+
     Args:
         request: Заявка для назначения
         db: Сессия базы данных
@@ -64,32 +66,51 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
     try:
         from uk_management_bot.database.models.request_assignment import RequestAssignment
         import json
-        
+
+        logger.info(f"[AUTO_ASSIGN] Начало автоматического назначения для заявки {request.request_number}, категория: {request.category}")
+
         # Маппинг категорий заявок на специализации
         category_to_specialization = {
             "Сантехника": "plumber",
-            "Электрика": "electrician", 
+            "Электрика": "electrician",
             "Благоустройство": "landscaping",
             "Уборка": "cleaning",
             "Безопасность": "security",
             "Ремонт": "repair",
             "Установка": "installation",
             "Обслуживание": "maintenance",
-            "HVAC": "hvac"
+            "HVAC": "hvac",
+            "Отопление": "hvac",
+            "Вентиляция": "hvac"
         }
-        
+
         # Определяем специализацию по категории заявки
         specialization = category_to_specialization.get(request.category)
+        logger.info(f"[AUTO_ASSIGN] Категория '{request.category}' → специализация: {specialization}")
+
         if not specialization:
-            logger.warning(f"Неизвестная категория заявки: {request.category}")
+            logger.warning(f"[AUTO_ASSIGN] Неизвестная категория заявки: {request.category}, доступные: {list(category_to_specialization.keys())}")
             return
         
         # Находим исполнителей с нужной специализацией
-        executors = db.query(User).filter(
+        logger.info(f"[AUTO_ASSIGN] Выполнение запроса к таблице users...")
+
+        # Сначала проверим всех пользователей с ролью executor
+        all_executors = db.query(User).filter(User.active_role == "executor").all()
+        logger.info(f"[AUTO_ASSIGN] Всего пользователей с active_role='executor': {len(all_executors)}")
+
+        approved_executors = db.query(User).filter(
             User.active_role == "executor",
             User.status == "approved"
         ).all()
-        
+        logger.info(f"[AUTO_ASSIGN] Из них со status='approved': {len(approved_executors)}")
+
+        for ex in all_executors:
+            logger.debug(f"[AUTO_ASSIGN]   User {ex.id} ({ex.first_name}): active_role={ex.active_role}, status={ex.status}")
+
+        executors = approved_executors
+        logger.info(f"[AUTO_ASSIGN] Найдено {len(executors)} активных исполнителей")
+
         matching_executors = []
         for executor in executors:
             if executor.specialization:
@@ -99,17 +120,23 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
                         executor_specializations = json.loads(executor.specialization)
                     else:
                         executor_specializations = executor.specialization
-                    
+
                     # Проверяем, есть ли нужная специализация
                     if specialization in executor_specializations:
                         matching_executors.append(executor)
+                        logger.debug(f"[AUTO_ASSIGN] Исполнитель {executor.id} ({executor.first_name}) подходит (специализации: {executor_specializations})")
+                    else:
+                        logger.debug(f"[AUTO_ASSIGN] Исполнитель {executor.id} не подходит (специализации: {executor_specializations}, требуется: {specialization})")
                 except (json.JSONDecodeError, TypeError):
                     # Если специализация - просто строка
                     if executor.specialization == specialization:
                         matching_executors.append(executor)
-        
+                        logger.debug(f"[AUTO_ASSIGN] Исполнитель {executor.id} подходит (специализация строка: {executor.specialization})")
+
+        logger.info(f"[AUTO_ASSIGN] Найдено {len(matching_executors)} подходящих исполнителей для специализации '{specialization}'")
+
         if not matching_executors:
-            logger.warning(f"Не найдено исполнителей для специализации {specialization}")
+            logger.warning(f"[AUTO_ASSIGN] Не найдено исполнителей для специализации {specialization}")
             return
         
         # Проверяем, есть ли уже назначение для этой заявки
@@ -117,11 +144,11 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             RequestAssignment.request_number == request.request_number,
             RequestAssignment.status == "active"
         ).first()
-        
+
         if existing_assignment:
-            logger.info(f"Заявка {request.request_number} уже назначена, пропускаем")
+            logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена (ID: {existing_assignment.id}), пропускаем")
             return
-        
+
         # Дополнительная проверка на групповые назначения для той же специализации
         existing_group_assignment = db.query(RequestAssignment).filter(
             RequestAssignment.request_number == request.request_number,
@@ -129,12 +156,16 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             RequestAssignment.group_specialization == specialization,
             RequestAssignment.status == "active"
         ).first()
-        
+
         if existing_group_assignment:
-            logger.info(f"Заявка {request.request_number} уже назначена группе {specialization}, пропускаем")
+            logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена группе {specialization}, пропускаем")
             return
+
+        logger.info(f"[AUTO_ASSIGN] Назначений для заявки {request.request_number} не найдено, создаем новое групповое назначение")
         
         # Создаем групповое назначение
+        logger.info(f"[AUTO_ASSIGN] Создание группового назначения для заявки {request.request_number}")
+
         assignment = RequestAssignment(
             request_number=request.request_number,
             assignment_type="group",
@@ -142,16 +173,65 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             status="active",
             created_by=manager.id
         )
-        
+
         db.add(assignment)
-        
+        logger.info(f"[AUTO_ASSIGN] Объект RequestAssignment добавлен в сессию (request_number={assignment.request_number}, type={assignment.assignment_type})")
+
         # Обновляем поля заявки
         request.assignment_type = "group"
         request.assigned_group = specialization
         request.assigned_at = datetime.now()
         request.assigned_by = manager.id
-        
-        logger.info(f"Заявка {request.request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
+        logger.info(f"[AUTO_ASSIGN] Поля заявки обновлены (assignment_type={request.assignment_type}, assigned_group={request.assigned_group})")
+
+        # ВАЖНО: Сохраняем изменения в базу данных
+        logger.info(f"[AUTO_ASSIGN] Выполнение db.commit()...")
+        db.commit()
+        logger.info(f"[AUTO_ASSIGN] db.commit() успешно выполнен")
+
+        db.refresh(assignment)
+        db.refresh(request)
+        logger.info(f"[AUTO_ASSIGN] Объекты обновлены из базы (assignment.id={assignment.id})")
+
+        logger.info(f"[AUTO_ASSIGN] ✅ Заявка {request.request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
+
+        # Отправляем уведомления исполнителям в активных сменах
+        from uk_management_bot.database.models.shift import Shift
+        from datetime import datetime as dt
+        from aiogram import Bot
+        from uk_management_bot.config.settings import settings
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        now = dt.now()
+
+        # Находим исполнителей в активных сменах с нужной специализацией
+        for executor in matching_executors:
+            # Проверяем активную смену
+            active_shift = db.query(Shift).filter(
+                Shift.user_id == executor.id,
+                Shift.status == "active",
+                Shift.start_time <= now,
+                or_(Shift.end_time.is_(None), Shift.end_time >= now)
+            ).first()
+
+            if active_shift:
+                try:
+                    notification_text = (
+                        f"📋 <b>Новая заявка для дежурных {specialization}</b>\n\n"
+                        f"№ {request.request_number}\n"
+                        f"Категория: {request.category}\n"
+                        f"Адрес: {request.address}\n"
+                        f"Срочность: {request.urgency}\n\n"
+                        f"Описание: {request.description}"
+                    )
+                    await bot.send_message(
+                        chat_id=executor.telegram_id,
+                        text=notification_text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Уведомление о групповом назначении отправлено исполнителю {executor.id} (смена {active_shift.id})")
+                except Exception as e:
+                    logger.error(f"Ошибка отправки уведомления исполнителю {executor.id}: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка автоматического назначения заявки {request.request_number}: {e}")
@@ -206,6 +286,39 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         message_text += f"📅 Создана: {request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         if request.updated_at:
             message_text += f"🔄 Обновлена: {request.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
+
+        # Добавляем информацию о назначении
+        from uk_management_bot.database.models.request_assignment import RequestAssignment
+        active_assignment = db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == request.request_number,
+            RequestAssignment.status == "active"
+        ).first()
+
+        if active_assignment:
+            if active_assignment.assignment_type == "group":
+                # Групповое назначение (дежурному специалисту)
+                specialization_names = {
+                    "plumber": "Сантехник",
+                    "electrician": "Электрик",
+                    "landscaping": "Благоустройство",
+                    "cleaning": "Уборка",
+                    "security": "Охрана",
+                    "repair": "Ремонт",
+                    "installation": "Установка",
+                    "maintenance": "Обслуживание",
+                    "hvac": "HVAC/Отопление"
+                }
+                spec_name = specialization_names.get(active_assignment.group_specialization, active_assignment.group_specialization)
+                message_text += f"👥 Назначено: Дежурный специалист ({spec_name})\n"
+            elif active_assignment.assignment_type == "individual" and active_assignment.executor_id:
+                # Индивидуальное назначение конкретному исполнителю
+                assigned_executor = db.query(User).filter(User.id == active_assignment.executor_id).first()
+                if assigned_executor:
+                    executor_name = f"{assigned_executor.first_name or ''} {assigned_executor.last_name or ''}".strip()
+                    if not executor_name:
+                        executor_name = f"@{assigned_executor.username}" if assigned_executor.username else f"ID{assigned_executor.id}"
+                    message_text += f"👤 Назначено: {executor_name}\n"
+
         if request.notes:
             message_text += f"💬 Примечания: {request.notes}\n"
 
@@ -969,11 +1082,21 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
         return
 
     # Получаем статистику
-    total_completed = db.query(Request).filter(Request.status == "Выполнена").count()
-    returned_count = db.query(Request).filter(
+    # "Всего исполненных" = заявки ожидающие подтверждения менеджером (manager_confirmed = False)
+    total_completed = db.query(Request).filter(
         Request.status == "Выполнена",
-        Request.is_returned == True
+        Request.manager_confirmed == False
     ).count()
+
+    # Возвращённые = те, что были отправлены обратно исполнителю
+    # Статус "Исполнено" - когда заявка возвращена заявителем на доработку
+    returned_count = db.query(Request).filter(
+        Request.status == "Исполнено",
+        Request.is_returned == True,
+        Request.manager_confirmed == False  # Ещё не подтверждены после возврата
+    ).count()
+
+    # Не принятые = подтверждены менеджером, но не приняты заявителем
     unaccepted_count = db.query(Request).filter(
         Request.status == "Выполнена",
         Request.manager_confirmed == True,
@@ -983,18 +1106,18 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
     stats_text = (
         f"✅ <b>Исполненные заявки</b>\n\n"
         f"📊 <b>Статистика:</b>\n"
-        f"📋 Всего исполненных: {total_completed}\n"
+        f"📋 Ожидают проверки: {total_completed}\n"
         f"🔄 Возвращённых: {returned_count}\n"
-        f"⏳ Не принятых: {unaccepted_count}\n\n"
+        f"⏳ Не принятых заявителем: {unaccepted_count}\n\n"
         f"Выберите раздел:"
     )
 
     await message.answer(stats_text, reply_markup=get_completed_requests_submenu(), parse_mode="HTML")
 
 
-@router.message(F.text == "📋 Все исполненные")
+@router.message(F.text.in_(["📋 Все исполненные", "📋 Ожидают проверки"]))
 async def list_all_completed_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Показать все исполненные заявки"""
+    """Показать заявки, ожидающие проверки менеджером"""
     lang = message.from_user.language_code or 'ru'
 
     # Проверяем права доступа
@@ -1005,10 +1128,14 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
         )
         return
 
-    # Все исполненные заявки: статус "Выполнена"
+    # Все исполненные заявки: статус "Выполнена" и НЕ подтверждены менеджером
+    # (ожидают проверки и подтверждения менеджером)
     q = (
         db.query(Request)
-        .filter(Request.status == "Выполнена")
+        .filter(
+            Request.status == "Выполнена",
+            Request.manager_confirmed == False  # Только НЕподтверждённые менеджером
+        )
         .order_by(
             Request.is_returned.desc(),  # Возвратные заявки показываем первыми
             Request.updated_at.desc().nullslast(),
@@ -1049,10 +1176,11 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
         return
 
     # Только возвращённые заявки
+    # Статус "Исполнено" - когда заявка возвращена заявителем на доработку
     q = (
         db.query(Request)
         .filter(
-            Request.status == "Выполнена",
+            Request.status == "Исполнено",
             Request.is_returned == True
         )
         .order_by(
@@ -1211,8 +1339,8 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         )
         return
     
-    # Архив: только Выполнена (⭐) и Отменена (❌)
-    archive_statuses = ["Выполнена", "Подтверждена", "Отменена"]
+    # Архив: только завершенные статусы (Выполнена, Исполнено, Принято, Отменена)
+    archive_statuses = ["Выполнена", "Исполнено", "Принято", "Отменена"]
     q = (
         db.query(Request)
         .filter(Request.status.in_(archive_statuses))
@@ -1223,7 +1351,7 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         await message.answer("Архив пуст", reply_markup=get_manager_main_keyboard())
         return
     def _icon(s: str) -> str:
-        return {"Выполнена": "✅", "Подтверждена": "⭐", "Отменена": "❌", "Принято": "✅"}.get(s, "")
+        return {"Выполнена": "✅", "Исполнено": "✅", "Принято": "⭐", "Отменена": "❌"}.get(s, "")
     # Каждую заявку отправляем отдельным сообщением
     for r in requests:
         addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
@@ -1800,13 +1928,18 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
     ~F.data.startswith("delete_employee_")
 )
 async def handle_delete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
-    """Обработка удаления заявки менеджером"""
+    """Обработка удаления заявки администратором (только для админов!)"""
     try:
-        logger.info(f"Обработка удаления заявки менеджером {callback.from_user.id}")
-        
-        # Проверяем права доступа
-        if not has_admin_access(roles=roles, user=user):
-            await callback.answer("Нет прав для выполнения действий", show_alert=True)
+        logger.info(f"Попытка удаления заявки пользователем {callback.from_user.id}")
+
+        # Проверяем права доступа - ТОЛЬКО АДМИНИСТРАТОРЫ могут удалять заявки
+        import os
+        admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
+        admin_ids = [int(id.strip()) for id in admin_ids_str.split(",") if id.strip()]
+
+        if callback.from_user.id not in admin_ids:
+            await callback.answer("❌ Удаление заявок доступно только администраторам", show_alert=True)
+            logger.warning(f"Пользователь {callback.from_user.id} попытался удалить заявку без прав администратора")
             return
         
         request_number = callback.data.replace("delete_", "")
@@ -1816,8 +1949,22 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
         if not request:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
-        
-        # Удаляем заявку
+
+        # Сначала удаляем все связанные записи
+        from uk_management_bot.database.models.rating import Rating
+        from uk_management_bot.database.models.request_comment import RequestComment
+        from uk_management_bot.database.models.request_assignment import RequestAssignment
+
+        # Удаляем рейтинги
+        db.query(Rating).filter(Rating.request_number == request_number).delete()
+
+        # Удаляем комментарии
+        db.query(RequestComment).filter(RequestComment.request_number == request_number).delete()
+
+        # Удаляем назначения
+        db.query(RequestAssignment).filter(RequestAssignment.request_number == request_number).delete()
+
+        # Теперь удаляем саму заявку
         db.delete(request)
         db.commit()
         
@@ -2020,16 +2167,23 @@ async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Se
         from uk_management_bot.keyboards.shift_management import get_main_shift_menu
         from uk_management_bot.states.shift_management import ShiftManagementStates
         from uk_management_bot.utils.helpers import get_user_language
-        
+
         language = get_user_language(message.from_user.id, db)
-        
+
+        # Сначала обновляем Reply клавиатуру на главную клавиатуру менеджера
         await message.answer(
-            "🔧 <b>Управление сменами</b>\n\n"
+            "🔧 <b>Управление сменами</b>",
+            reply_markup=get_manager_main_keyboard(),
+            parse_mode="HTML"
+        )
+
+        # Затем отправляем меню смен с inline кнопками
+        await message.answer(
             "Выберите действие:",
             reply_markup=get_main_shift_menu(language),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.main_menu)
         
     except Exception as e:
@@ -2267,20 +2421,39 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
         # Используем существующую логику auto_assign
         await auto_assign_request_by_category(request, db, user)
 
-        await callback.message.edit_text(
+        # Пытаемся отредактировать сообщение
+        success_message = (
             f"✅ <b>Заявка #{request_number} назначена дежурному специалисту</b>\n\n"
             f"Назначение выполнено автоматически на основе:\n"
             f"• Текущих смен\n"
             f"• Специализации исполнителей\n"
             f"• Загруженности\n\n"
-            f"Исполнитель получит уведомление.",
-            parse_mode="HTML"
+            f"Исполнитель получит уведомление."
         )
 
+        try:
+            await callback.message.edit_text(
+                success_message,
+                parse_mode="HTML"
+            )
+        except TelegramBadRequest as telegram_error:
+            # Если сообщение не изменилось, отправляем callback.answer вместо редактирования
+            if "message is not modified" in str(telegram_error):
+                await callback.answer("✅ Назначение выполнено успешно", show_alert=False)
+                logger.info(f"Сообщение не изменилось, использован callback.answer для заявки {request_number}")
+            else:
+                # Если другая ошибка Telegram - отправляем новое сообщение
+                await callback.message.answer(success_message, parse_mode="HTML")
+                await callback.answer()
+
+        await callback.answer()  # Убираем "часики"
         logger.info(f"Заявка {request_number} назначена дежурному специалисту")
 
+    except TelegramBadRequest as e:
+        logger.error(f"Ошибка Telegram при назначении дежурного специалиста: {e}", exc_info=True)
+        await callback.answer("Назначение выполнено, но произошла ошибка отображения", show_alert=True)
     except Exception as e:
-        logger.error(f"Ошибка назначения дежурного специалиста: {e}")
+        logger.error(f"Ошибка назначения дежурного специалиста: {e}", exc_info=True)
         await callback.answer("Произошла ошибка при назначении", show_alert=True)
 
 
@@ -2299,21 +2472,36 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 
         # Получаем исполнителей с нужной специализацией
         category_to_spec = {
-            "Электрика": "electrician",
             "Сантехника": "plumber",
-            "Охрана": "security",
-            "Уборка": "cleaner",
+            "Электрика": "electrician",
+            "Благоустройство": "landscaping",
+            "Уборка": "cleaning",
+            "Безопасность": "security",
+            "Охрана": "security",  # Дубликат для совместимости
+            "Ремонт": "repair",
+            "Установка": "installation",
+            "Обслуживание": "maintenance",
+            "HVAC": "hvac",
+            "Отопление": "hvac",
+            "Вентиляция": "hvac"
         }
 
         spec = category_to_spec.get(request.category, "other")
 
+        logger.info(f"[SPECIFIC_ASSIGN] Категория '{request.category}' → специализация: '{spec}'")
+
         # Получаем всех исполнителей с данной специализацией
         import json
 
+        # ИСПРАВЛЕНО: проверяем наличие роли "executor" в массиве roles
+        # Используем JSONB operator @> для проверки вхождения элемента в массив
+        from sqlalchemy import cast, String
         executors = db.query(User).filter(
-            User.roles.contains('"executor"'),
+            User.roles.cast(String).contains('"executor"'),
             User.status == "approved"
         ).all()
+
+        logger.info(f"[SPECIFIC_ASSIGN] Найдено {len(executors)} исполнителей (с ролью executor) со статусом 'approved'")
 
         # Фильтруем по специализации
         filtered_executors = []
@@ -2321,10 +2509,19 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
             if ex.specialization:
                 try:
                     specializations = json.loads(ex.specialization) if isinstance(ex.specialization, str) else ex.specialization
+                    logger.debug(f"[SPECIFIC_ASSIGN] Исполнитель {ex.id} ({ex.first_name}): специализации = {specializations}")
+
                     if spec in specializations or "other" in specializations:
                         filtered_executors.append(ex)
-                except:
-                    pass
+                        logger.info(f"[SPECIFIC_ASSIGN] ✅ Исполнитель {ex.id} ({ex.first_name}) подходит (есть '{spec}')")
+                    else:
+                        logger.debug(f"[SPECIFIC_ASSIGN] ❌ Исполнитель {ex.id} ({ex.first_name}) НЕ подходит (нет '{spec}')")
+                except Exception as e:
+                    logger.warning(f"[SPECIFIC_ASSIGN] Ошибка парсинга специализаций для исполнителя {ex.id}: {e}")
+            else:
+                logger.debug(f"[SPECIFIC_ASSIGN] Исполнитель {ex.id} ({ex.first_name}) БЕЗ специализаций")
+
+        logger.info(f"[SPECIFIC_ASSIGN] Отфильтровано {len(filtered_executors)} исполнителей с специализацией '{spec}'")
 
         executors_text = f"Найдено исполнителей: {len(filtered_executors)}" if filtered_executors else "Нет доступных исполнителей"
 
@@ -2348,7 +2545,7 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 
 
 @router.callback_query(F.data.startswith("assign_executor_"))
-async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session):
+async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, user: User = None):
     """Финальное назначение конкретного исполнителя"""
     try:
         # Парсим данные: assign_executor_251013-001_123
@@ -2366,42 +2563,91 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
             await callback.answer("Заявка или исполнитель не найдены", show_alert=True)
             return
 
-        # Назначаем исполнителя
-        request.executor_id = executor_id
-        request.assignment_type = "manual"
-        db.commit()
+        # Получаем менеджера (текущий пользователь)
+        if not user:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            if not user:
+                await callback.answer("Ошибка: пользователь не найден", show_alert=True)
+                return
+
+        # Назначаем исполнителя через новую систему AssignmentService
+        from uk_management_bot.services.assignment_service import AssignmentService
+        assignment_service = AssignmentService(db)
+
+        try:
+            # Используем индивидуальное назначение с user.id вместо telegram_id
+            assignment = assignment_service.assign_to_executor(
+                request_number=request_number,
+                executor_id=executor_id,
+                assigned_by=user.id  # ИСПРАВЛЕНО: используем id из таблицы users
+            )
+            logger.info(f"Заявка {request_number} назначена исполнителю {executor_id} через AssignmentService (менеджер: {user.id})")
+        except Exception as e:
+            logger.error(f"Ошибка назначения заявки: {e}", exc_info=True)
+            await callback.answer(f"Ошибка назначения: {str(e)}", show_alert=True)
+            return
 
         executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
         if not executor_name:
             executor_name = f"@{executor.username}" if executor.username else f"ID{executor.id}"
 
-        await callback.message.edit_text(
+        # Ограничиваем длину адреса в сообщении менеджеру
+        MAX_ADDRESS_DISPLAY = 150
+        address_display = request.address[:MAX_ADDRESS_DISPLAY] + "..." if len(request.address) > MAX_ADDRESS_DISPLAY else request.address
+
+        success_message = (
             f"✅ <b>Заявка #{request_number} назначена исполнителю</b>\n\n"
             f"👤 Исполнитель: {executor_name}\n"
             f"📂 Категория: {request.category}\n"
-            f"📍 Адрес: {request.address}\n\n"
-            f"Исполнитель получит уведомление о назначении.",
-            parse_mode="HTML"
+            f"📍 Адрес: {address_display}\n\n"
+            f"Исполнитель получит уведомление о назначении."
         )
+
+        try:
+            await callback.message.edit_text(success_message, parse_mode="HTML")
+        except TelegramBadRequest as e:
+            if "message is not modified" in str(e):
+                await callback.answer("✅ Назначение выполнено успешно", show_alert=False)
+                logger.info(f"Сообщение не изменилось для заявки {request_number}")
+            else:
+                # Отправляем новое сообщение
+                await callback.message.answer(success_message, parse_mode="HTML")
+                await callback.answer()
 
         # Отправляем уведомление исполнителю
         try:
             from aiogram import Bot
             bot = Bot.get_current()
 
+            # Ограничиваем длину текста для предотвращения MESSAGE_TOO_LONG
+            # Telegram лимит: 4096 символов
+            # Уменьшаем лимиты ещё больше для безопасности
+            MAX_ADDRESS_LENGTH = 150
+            MAX_DESCRIPTION_LENGTH = 300
+
+            address = request.address[:MAX_ADDRESS_LENGTH] + "..." if len(request.address) > MAX_ADDRESS_LENGTH else request.address
+            description = request.description[:MAX_DESCRIPTION_LENGTH] + "..." if len(request.description) > MAX_DESCRIPTION_LENGTH else request.description
+
             notification_text = (
                 f"📋 <b>Вам назначена новая заявка!</b>\n\n"
                 f"№ заявки: #{request.format_number_for_display()}\n"
                 f"📂 Категория: {request.category}\n"
-                f"📍 Адрес: {request.address}\n"
-                f"📝 Описание: {request.description}\n\n"
+                f"📍 Адрес: {address}\n"
+                f"📝 Описание: {description}\n\n"
                 f"Пожалуйста, приступите к выполнению."
             )
 
+            # Дополнительная проверка на общую длину (лимит Telegram - 4096 символов)
+            # Обрезаем с запасом до 3500 символов
+            if len(notification_text) > 3500:
+                notification_text = notification_text[:3497] + "..."
+                logger.warning(f"Уведомление для исполнителя было обрезано до 3500 символов (было {len(notification_text)} символов)")
+
+            logger.info(f"Отправка уведомления исполнителю {executor.telegram_id} (длина: {len(notification_text)} символов)")
             await bot.send_message(executor.telegram_id, notification_text, parse_mode="HTML")
             logger.info(f"Уведомление о назначении отправлено исполнителю {executor.telegram_id}")
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления исполнителю: {e}")
+            logger.error(f"Ошибка отправки уведомления исполнителю: {e}", exc_info=True)
 
         logger.info(f"Заявка {request_number} назначена исполнителю {executor_id}")
 

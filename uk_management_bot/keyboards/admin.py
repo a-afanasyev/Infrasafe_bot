@@ -23,7 +23,7 @@ def get_manager_main_keyboard() -> ReplyKeyboardMarkup:
 def get_completed_requests_submenu() -> ReplyKeyboardMarkup:
     """Подменю для раздела 'Исполненные заявки'"""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text="📋 Все исполненные"))
+    builder.add(KeyboardButton(text="📋 Ожидают проверки"))
     builder.add(KeyboardButton(text="🔄 Возвращённые"))
     builder.add(KeyboardButton(text="⏳ Не принятые"))
     builder.add(KeyboardButton(text="🔙 Назад в меню"))

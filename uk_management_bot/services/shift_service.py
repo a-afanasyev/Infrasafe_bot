@@ -74,8 +74,12 @@ class ShiftService:
                 return {"success": False, "message": "Пользователь не найден", "shift": None}
             if user.role not in [ROLE_EXECUTOR, ROLE_MANAGER]:
                 return {"success": False, "message": "Доступ запрещен", "shift": None}
-            if self.is_user_in_active_shift(telegram_id):
-                return {"success": False, "message": "У вас уже есть активная смена", "shift": None}
+
+            # ИЗМЕНЕНО: Разрешаем несколько активных смен для разных специализаций
+            # Один сотрудник может закрывать несколько компетенций одновременно
+            # Проверка убрана - множественные смены теперь разрешены
+            # if self.is_user_in_active_shift(telegram_id):
+            #     return {"success": False, "message": "У вас уже есть активная смена", "shift": None}
 
             shift = Shift(
                 user_id=user.id,

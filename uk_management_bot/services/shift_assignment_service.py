@@ -262,8 +262,24 @@ class ShiftAssignmentService:
     def _calculate_executor_score(self, shift: Shift, executor: User) -> ExecutorScore:
         """Рассчитывает оценку исполнителя для назначения на смену"""
 
-        # 1. Соответствие специализации
+        # 1. Соответствие специализации (КРИТИЧЕСКАЯ ПРОВЕРКА)
         specialization_score = self._calculate_specialization_match(shift, executor)
+
+        # БЛОКИРОВКА: Если специализация не подходит - исполнитель не рассматривается
+        if specialization_score < 0:
+            return ExecutorScore(
+                executor_id=executor.id,
+                executor_name=f"{executor.first_name} {executor.last_name}",
+                total_score=-1.0,  # Блокирующая оценка
+                specialization_match=specialization_score,
+                workload_score=0.0,
+                rating_score=0.0,
+                availability_score=0.0,
+                preference_score=0.0,
+                geographic_score=0.0,
+                conflict_penalties=0.0,
+                reasons=["❌ Нет требуемых специализаций для смены"]
+            )
 
         # 2. Оценка загруженности
         workload_score = self._calculate_workload_score(shift, executor)
@@ -297,15 +313,17 @@ class ShiftAssignmentService:
         # Собираем причины оценки
         reasons = []
         if specialization_score > 0.8:
-            reasons.append("Отличное соответствие специализации")
+            reasons.append("✅ Отличное соответствие специализации")
+        elif specialization_score > 0.5:
+            reasons.append("✓ Подходящая специализация")
         if workload_score > 0.7:
-            reasons.append("Низкая текущая нагрузка")
+            reasons.append("✓ Низкая текущая нагрузка")
         if rating_score > 0.8:
-            reasons.append("Высокий рейтинг исполнителя")
+            reasons.append("⭐ Высокий рейтинг исполнителя")
         if availability_score == 1.0:
-            reasons.append("Полная доступность")
+            reasons.append("✓ Полная доступность")
         if conflict_penalties > 0:
-            reasons.append("Есть незначительные конфликты")
+            reasons.append("⚠️ Есть незначительные конфликты")
 
         return ExecutorScore(
             executor_id=executor.id,
@@ -324,29 +342,66 @@ class ShiftAssignmentService:
     # ========== МЕТОДЫ РАСЧЕТА ОЦЕНОК ==========
 
     def _calculate_specialization_match(self, shift: Shift, executor: User) -> float:
-        """Рассчитывает соответствие специализации исполнителя требованиям смены"""
-        if not shift.specialization_focus or not executor.specialization:
-            return 0.0
+        """Рассчитывает соответствие специализации исполнителя требованиям смены
+
+        КРИТИЧЕСКАЯ ПРОВЕРКА: Исполнитель ДОЛЖЕН иметь ВСЕ требуемые специализации
+        Если хотя бы одна специализация отсутствует - возвращаем -1.0 (блокирующая оценка)
+        """
+        # Если у смены не указаны специализации - принимаем универсальных исполнителей
+        if not shift.specialization_focus:
+            return 0.5  # Нейтральная оценка для универсальных смен
+
+        # Если у исполнителя нет специализаций - не подходит
+        if not executor.specialization:
+            logger.debug(f"Исполнитель {executor.id} не подходит: нет специализаций")
+            return -1.0  # БЛОКИРУЮЩАЯ оценка
 
         # Преобразуем специализации в множества для сравнения
         required_specs = set(shift.specialization_focus)
-        executor_specs = set(executor.specialization)
 
-        # Рассчитываем пересечение
+        # Обрабатываем разные форматы хранения специализаций исполнителя
+        if isinstance(executor.specialization, list):
+            executor_specs = set(executor.specialization)
+        elif isinstance(executor.specialization, str):
+            import json
+            try:
+                executor_specs = set(json.loads(executor.specialization))
+            except (json.JSONDecodeError, TypeError):
+                executor_specs = {executor.specialization}
+        else:
+            executor_specs = set()
+
+        # СТРОГАЯ ПРОВЕРКА: исполнитель ДОЛЖЕН иметь ВСЕ требуемые специализации
+        missing_specs = required_specs - executor_specs
+
+        if missing_specs:
+            logger.debug(
+                f"Исполнитель {executor.id} ({executor.first_name} {executor.last_name}) "
+                f"не подходит для смены {shift.id}: отсутствуют специализации {missing_specs}. "
+                f"Требуется: {required_specs}, Есть: {executor_specs}"
+            )
+            return -1.0  # БЛОКИРУЮЩАЯ оценка - нет нужных специализаций
+
+        # Рассчитываем качество соответствия
+        # Если у исполнителя есть ВСЕ требуемые специализации
         intersection = required_specs.intersection(executor_specs)
-        union = required_specs.union(executor_specs)
 
-        if not union:
-            return 0.0
+        # Базовая оценка - процент покрытия требований
+        base_score = len(intersection) / len(required_specs) if required_specs else 0.0
 
-        # Jaccard coefficient для схожести множеств
-        similarity = len(intersection) / len(union)
-
+        # Бонус за точное соответствие (нет лишних специализаций)
+        if required_specs == executor_specs:
+            base_score = 1.0  # Идеальное соответствие
         # Бонус за полное покрытие требований
-        if required_specs.issubset(executor_specs):
-            similarity += 0.2
+        elif required_specs.issubset(executor_specs):
+            base_score = 0.9  # Есть все нужные + дополнительные
 
-        return min(1.0, similarity)
+        logger.debug(
+            f"Исполнитель {executor.id} подходит для смены {shift.id}: "
+            f"оценка специализации {base_score:.2f}"
+        )
+
+        return base_score
 
     def _calculate_workload_score(self, shift: Shift, executor: User) -> float:
         """Рассчитывает оценку на основе текущей загруженности исполнителя"""
@@ -394,7 +449,11 @@ class ShiftAssignmentService:
         return min(1.0, max(0.0, (executor.rating - 1) / 4))
 
     def _calculate_availability_score(self, shift: Shift, executor: User) -> float:
-        """Рассчитывает доступность исполнителя на время смены"""
+        """Рассчитывает доступность исполнителя на время смены
+
+        ИЗМЕНЕНО: Разрешаем перекрывающиеся смены с разными специализациями
+        Один сотрудник может закрывать несколько компетенций одновременно
+        """
         try:
             # Проверяем пересечения с другими сменами
             overlapping_shifts = self.db.query(Shift).filter(
@@ -413,10 +472,44 @@ class ShiftAssignmentService:
                         )
                     )
                 )
-            ).count()
+            ).all()
 
-            if overlapping_shifts > 0:
-                return 0.0  # Полное пересечение
+            # Проверяем пересечение специализаций - блокируем только если одинаковые
+            if overlapping_shifts:
+                # Получаем специализации текущей смены
+                current_specs = shift.specialization_focus if shift.specialization_focus else []
+                if isinstance(current_specs, str):
+                    import json
+                    try:
+                        current_specs = json.loads(current_specs)
+                    except:
+                        current_specs = [current_specs]
+
+                # Проверяем каждую перекрывающуюся смену
+                for overlapping_shift in overlapping_shifts:
+                    overlap_specs = overlapping_shift.specialization_focus if overlapping_shift.specialization_focus else []
+                    if isinstance(overlap_specs, str):
+                        import json
+                        try:
+                            overlap_specs = json.loads(overlap_specs)
+                        except:
+                            overlap_specs = [overlap_specs]
+
+                    # Если есть пересечение специализаций - блокируем
+                    common_specs = set(current_specs) & set(overlap_specs)
+                    if common_specs:
+                        logger.debug(
+                            f"Блокировка назначения: смены имеют общие специализации {common_specs}"
+                        )
+                        return 0.0  # Блокируем только если одинаковые специализации
+
+                # Если специализации разные - разрешаем, но с пониженной оценкой
+                # (учитываем нагрузку на исполнителя)
+                logger.debug(
+                    f"Разрешено перекрытие смен: разные специализации "
+                    f"(текущая: {current_specs}, перекрывающаяся: {overlap_specs})"
+                )
+                return 0.8  # Снижаем оценку из-за повышенной нагрузки
 
             # Проверяем минимальный отдых между сменами
             adjacent_shifts = self.db.query(Shift).filter(

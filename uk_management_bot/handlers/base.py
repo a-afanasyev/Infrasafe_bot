@@ -34,9 +34,15 @@ class AdminPasswordStates(StatesGroup):
     waiting_for_password = State()
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def cmd_start(message: Message, db: Session, state: FSMContext = None, roles: list[str] = None, active_role: str = None, user_status: str = None):
     """Обработчик команды /start"""
     logger.info(f"Получена команда /start от пользователя {message.from_user.id}. Текст: '{message.text}'")
+    
+    # Очищаем состояние FSM при команде /start (помогает выйти из зависших состояний)
+    if state:
+        await state.clear()
+        logger.info(f"[CMD_START] Очищено состояние FSM для пользователя {message.from_user.id}")
+    
     auth_service = AuthService(db)
     
     # Проверяем, есть ли параметр с токеном приглашения
@@ -201,6 +207,18 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
 
     await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user.status))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
+
+@router.message(Command("menu"))
+async def cmd_menu(message: Message, state: FSMContext, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+    """Обработчик команды /menu - возврат в главное меню с очисткой состояния"""
+    logger.info(f"Получена команда /menu от пользователя {message.from_user.id}")
+    
+    # Очищаем состояние FSM
+    await state.clear()
+    logger.info(f"[CMD_MENU] Очищено состояние FSM для пользователя {message.from_user.id}")
+    
+    # Показываем главное меню
+    await handle_regular_start(message, db, roles, active_role, user_status)
 
 # Удаляем этот обработчик, так как он не нужен
 # Telegram автоматически обрабатывает кнопку "Начать" и отправляет /start

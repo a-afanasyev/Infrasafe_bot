@@ -15,8 +15,7 @@ def get_main_shift_menu(lang: str = "ru") -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📅 Планирование смен", callback_data="shift_planning")],
         [InlineKeyboardButton(text="📊 Аналитика и отчеты", callback_data="shift_analytics")],
         [InlineKeyboardButton(text="🗂️ Управление шаблонами", callback_data="template_management")],
-        [InlineKeyboardButton(text="👥 Назначение исполнителей", callback_data="shift_executor_assignment")],
-        [InlineKeyboardButton(text="🔙 Назад в меню", callback_data="back_to_main_menu")]
+        [InlineKeyboardButton(text="👥 Назначение исполнителей", callback_data="shift_executor_assignment")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -216,11 +215,6 @@ def get_auto_planning_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🤖 Автопланирование на неделю", callback_data="auto_plan_week")],
         [InlineKeyboardButton(text="📅 Автопланирование на месяц", callback_data="auto_plan_month")],
         [InlineKeyboardButton(text="⚡ Создать смены на завтра", callback_data="auto_plan_tomorrow")],
-        [InlineKeyboardButton(text="🔥 Экстренное планирование", callback_data="emergency_planning")],
-        [
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="auto_planning_settings"),
-            InlineKeyboardButton(text="📊 Анализ", callback_data="auto_planning_analysis")
-        ],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_planning")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

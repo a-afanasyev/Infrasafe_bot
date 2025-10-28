@@ -1925,28 +1925,36 @@ async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=
         results = planning_service.plan_weekly_schedule(start_date)
         
         stats = results['statistics']
-        
+
+        # Добавляем временную метку для обеспечения уникальности сообщения
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%H:%M:%S')
+
         week_info = (
-            f"📅 <b>Недельное планирование</b>\n\n"
+            f"📅 <b>Недельное планирование завершено</b>\n"
+            f"⏰ Время: {timestamp}\n\n"
             f"<b>Период:</b> {results['week_start'].strftime('%d.%m.%Y')} - "
             f"{(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y')}\n"
-            f"<b>Создано смен:</b> {stats['total_shifts']}\n\n"
-            f"<b>По дням недели:</b>\n"
+            f"<b>Создано смен:</b> {stats['total_shifts']}\n"
         )
-        
-        for day_name, count in stats['shifts_by_day'].items():
-            week_info += f"• {day_name}: {count} смен\n"
-        
+
+        if stats['total_shifts'] == 0:
+            week_info += "\n✅ Все смены на этот период уже запланированы.\n"
+        elif stats['shifts_by_day']:
+            week_info += f"\n<b>По дням недели:</b>\n"
+            for day_name, count in stats['shifts_by_day'].items():
+                week_info += f"• {day_name}: {count} смен\n"
+
         if stats['shifts_by_template']:
             week_info += f"\n<b>По шаблонам:</b>\n"
             for template_name, count in stats['shifts_by_template'].items():
                 week_info += f"• {template_name}: {count} смен\n"
-        
+
         if results['errors']:
             week_info += f"\n⚠️ <b>Ошибки:</b>\n"
             for error in results['errors'][:3]:  # Показываем только первые 3 ошибки
                 week_info += f"• {error}\n"
-        
+
         await callback.message.edit_text(
             week_info,
             reply_markup=get_planning_menu(lang),
@@ -3332,24 +3340,102 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             await callback.answer("❌ Смена или исполнитель не найдены", show_alert=True)
             return
 
-        # Проверяем конфликты расписания (проверяем пересечение времени смен у этого исполнителя)
         from datetime import datetime, timedelta
+        import json
+
+        # ========== КРИТИЧЕСКАЯ ПРОВЕРКА: СООТВЕТСТВИЕ СПЕЦИАЛИЗАЦИЙ ==========
+        # Проверяем, что у исполнителя есть ВСЕ требуемые для смены специализации
+        shift_specs = shift.specialization_focus if shift.specialization_focus else []
+        if isinstance(shift_specs, str):
+            try:
+                shift_specs = json.loads(shift_specs)
+            except:
+                shift_specs = [shift_specs] if shift_specs else []
+
+        # Получаем специализации исполнителя
+        executor_specs = []
+        if executor.specialization:
+            if isinstance(executor.specialization, list):
+                executor_specs = executor.specialization
+            elif isinstance(executor.specialization, str):
+                try:
+                    executor_specs = json.loads(executor.specialization)
+                except (json.JSONDecodeError, TypeError):
+                    executor_specs = [executor.specialization]
+
+        # Проверяем наличие всех требуемых специализаций
+        if shift_specs:  # Если у смены указаны специализации
+            missing_specs = set(shift_specs) - set(executor_specs)
+            if missing_specs:
+                from uk_management_bot.utils.specializations import translate_specializations
+                missing_text = translate_specializations(list(missing_specs), lang)
+                available_text = translate_specializations(executor_specs, lang) if executor_specs else "нет"
+
+                await callback.message.edit_text(
+                    f"❌ <b>Несоответствие специализаций!</b>\n\n"
+                    f"Исполнитель <b>{executor.first_name} {executor.last_name}</b> "
+                    f"не может быть назначен на эту смену.\n\n"
+                    f"<b>Требуется для смены:</b> {translate_specializations(shift_specs, lang)}\n"
+                    f"<b>У исполнителя есть:</b> {available_text}\n"
+                    f"<b>Отсутствует:</b> {missing_text}\n\n"
+                    f"💡 Назначьте исполнителя с подходящими специализациями.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 Выбрать другого", callback_data=f"select_shift_for_assignment:{shift_id}")],
+                        [InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_planning")]
+                    ]),
+                    parse_mode="HTML"
+                )
+                await callback.answer("❌ Несоответствие специализаций", show_alert=True)
+                return
+
+        # ========== ПРОВЕРКА КОНФЛИКТОВ ВРЕМЕНИ И СПЕЦИАЛИЗАЦИЙ ==========
+        # ИЗМЕНЕНО: Проверяем конфликты специализаций, а не просто времени
+        # Разрешаем перекрывающиеся смены с разными специализациями
 
         # Определяем конец смены (если не указан, считаем 8 часов)
         shift_end = shift.end_time if shift.end_time else shift.start_time + timedelta(hours=8)
 
-        conflicts = db.query(Shift).filter(
+        # Получаем все перекрывающиеся смены
+        overlapping_shifts = db.query(Shift).filter(
             Shift.user_id == executor_id,
+            Shift.id != shift_id,
             Shift.start_time < shift_end,
             Shift.end_time > shift.start_time
-        ).count()
+        ).all()
 
-        if conflicts > 0:
+        # Проверяем пересечение специализаций
+        has_real_conflict = False
+        if overlapping_shifts:
+            # Получаем специализации текущей смены
+            current_specs = shift.specialization_focus if shift.specialization_focus else []
+            if isinstance(current_specs, str):
+                try:
+                    current_specs = json.loads(current_specs)
+                except:
+                    current_specs = [current_specs]
+
+            # Проверяем каждую перекрывающуюся смену
+            for overlapping_shift in overlapping_shifts:
+                overlap_specs = overlapping_shift.specialization_focus if overlapping_shift.specialization_focus else []
+                if isinstance(overlap_specs, str):
+                    try:
+                        overlap_specs = json.loads(overlap_specs)
+                    except:
+                        overlap_specs = [overlap_specs]
+
+                # Если есть пересечение специализаций - это настоящий конфликт
+                common_specs = set(current_specs) & set(overlap_specs)
+                if common_specs:
+                    has_real_conflict = True
+                    break
+
+        if has_real_conflict:
             shift_date_str = shift.start_time.strftime('%d.%m.%Y')
             await callback.message.edit_text(
-                f"⚠️ <b>Конфликт расписания!</b>\n\n"
+                f"⚠️ <b>Конфликт специализаций!</b>\n\n"
                 f"У исполнителя <b>{executor.first_name} {executor.last_name}</b> "
-                f"уже есть пересекающиеся смены на {shift_date_str}.\n\n"
+                f"уже есть смены с такими же специализациями на {shift_date_str}.\n\n"
+                f"Один человек не может работать в одной специализации дважды одновременно.\n\n"
                 f"Всё равно назначить?",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Да, назначить", callback_data=f"force_assign:{shift_id}:{executor_id}")],
@@ -3426,6 +3512,46 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
         if not shift or not executor:
             await callback.answer("❌ Смена или исполнитель не найдены", show_alert=True)
             return
+
+        # КРИТИЧЕСКАЯ ПРОВЕРКА: даже при принудительном назначении проверяем специализации
+        import json
+        shift_specs = shift.specialization_focus if shift.specialization_focus else []
+        if isinstance(shift_specs, str):
+            try:
+                shift_specs = json.loads(shift_specs)
+            except:
+                shift_specs = [shift_specs] if shift_specs else []
+
+        # Получаем специализации исполнителя
+        executor_specs = []
+        if executor.specialization:
+            if isinstance(executor.specialization, list):
+                executor_specs = executor.specialization
+            elif isinstance(executor.specialization, str):
+                try:
+                    executor_specs = json.loads(executor.specialization)
+                except (json.JSONDecodeError, TypeError):
+                    executor_specs = [executor.specialization]
+
+        # Даже при принудительном назначении НЕЛЬЗЯ назначить исполнителя без нужной специализации
+        if shift_specs:
+            missing_specs = set(shift_specs) - set(executor_specs)
+            if missing_specs:
+                from uk_management_bot.utils.specializations import translate_specializations
+                await callback.message.edit_text(
+                    f"❌ <b>Невозможно назначить!</b>\n\n"
+                    f"Исполнитель <b>{executor.first_name} {executor.last_name}</b> "
+                    f"не имеет требуемых специализаций для этой смены.\n\n"
+                    f"Это ограничение нельзя обойти даже принудительным назначением.\n\n"
+                    f"<b>Требуется:</b> {translate_specializations(shift_specs, lang)}\n"
+                    f"<b>Отсутствует:</b> {translate_specializations(list(missing_specs), lang)}",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 Назад", callback_data=f"select_shift_for_assignment:{shift_id}")]
+                    ]),
+                    parse_mode="HTML"
+                )
+                await callback.answer("❌ Нет нужных специализаций", show_alert=True)
+                return
 
         # Назначаем исполнителя принудительно
         shift.user_id = executor_id

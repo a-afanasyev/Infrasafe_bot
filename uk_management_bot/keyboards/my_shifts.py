@@ -20,8 +20,7 @@ def get_my_shifts_menu(lang: str = "ru") -> InlineKeyboardMarkup:
             "history": "📊 История смен",
             "time": "⏰ Учет времени",
             "stats": "📈 Моя статистика",
-            "transfer": "🔄 Передача смен",
-            "back": "🔙 Назад в меню"
+            "transfer": "🔄 Передача смен"
         },
         "uz": {
             "current": "🔥 Joriy smenalar",
@@ -29,8 +28,7 @@ def get_my_shifts_menu(lang: str = "ru") -> InlineKeyboardMarkup:
             "history": "📊 Smenalar tarixi",
             "time": "⏰ Vaqt hisoboti",
             "stats": "📈 Mening statistikam",
-            "transfer": "🔄 Smena o'tkazish",
-            "back": "🔙 Menyuga qaytish"
+            "transfer": "🔄 Smena o'tkazish"
         }
     }
 
@@ -42,8 +40,7 @@ def get_my_shifts_menu(lang: str = "ru") -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=t["history"], callback_data="shift_history")],
         [InlineKeyboardButton(text=t["time"], callback_data="time_tracking")],
         [InlineKeyboardButton(text=t["stats"], callback_data="my_statistics")],
-        [InlineKeyboardButton(text=t["transfer"], callback_data="shift_transfer_menu")],
-        [InlineKeyboardButton(text=t["back"], callback_data="back_to_main_menu")]
+        [InlineKeyboardButton(text=t["transfer"], callback_data="shift_transfer_menu")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

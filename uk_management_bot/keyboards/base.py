@@ -33,13 +33,10 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         user = db.query(User).filter(User.telegram_id == user_id).first()
 
         if user:
-            # Получаем роли из нового формата (user.roles) или legacy (user.role)
-            roles = []
-            if user.roles:
-                try:
-                    roles = json.loads(user.roles)
-                except Exception:
-                    pass
+            # Получаем роли безопасно (поддержка JSON и CSV форматов)
+            from uk_management_bot.utils.auth_helpers import parse_roles_safe
+
+            roles = parse_roles_safe(user.roles)
 
             # Fallback к legacy полю role
             if not roles and user.role:

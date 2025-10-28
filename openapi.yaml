@@ -1,0 +1,688 @@
+openapi: 3.0.3
+info:
+  title: UK Management Bot API
+  description: |
+    Enterprise Property Management System API
+
+    ## Features
+    - 🔐 Multi-role authentication (applicant, executor, manager)
+    - 📝 Request management with YYMMDD-NNN numbering
+    - ⏰ Shift planning and transfer system
+    - 🏘️ Address management with moderation
+    - 🤖 AI-powered assignment optimization
+    - 📊 Analytics and reporting
+
+    ## Architecture
+    - **Services**: 38 total (9 async + 29 sync)
+    - **Database**: PostgreSQL 15
+    - **Cache**: Redis 7
+    - **Framework**: FastAPI + Aiogram 3.x
+
+    ## Request Number System
+    All requests use string-based identifiers in format `YYMMDD-NNN`:
+    - `251027-001` - First request on October 27, 2025
+    - `251027-042` - 42nd request on the same day
+
+  version: 2.1.0
+  contact:
+    name: UK Management Bot Support
+    url: https://github.com/your-org/uk-management-bot
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+  - url: https://api.uk-bot.example.com/v1
+    description: Production server
+
+tags:
+  - name: auth
+    description: Authentication and user management
+  - name: requests
+    description: Request management operations
+  - name: shifts
+    description: Shift management and planning
+  - name: addresses
+    description: Address directory management
+  - name: assignments
+    description: Request assignment operations
+  - name: analytics
+    description: Analytics and reporting
+  - name: health
+    description: Health check endpoints
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Basic health check
+      description: Returns basic health status of the service
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /health/detailed:
+    get:
+      tags: [health]
+      summary: Detailed health check
+      description: Returns detailed health status including database and Redis connections
+      operationId: getHealthDetailed
+      responses:
+        '200':
+          description: Detailed health information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthDetails'
+
+  /auth/users:
+    post:
+      tags: [auth]
+      summary: Get or create user
+      description: Gets existing user or creates new one with pending status
+      operationId: getOrCreateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - telegram_id
+              properties:
+                telegram_id:
+                  type: integer
+                  format: int64
+                  example: 123456789
+                username:
+                  type: string
+                  example: john_doe
+                first_name:
+                  type: string
+                  example: John
+                last_name:
+                  type: string
+                  example: Doe
+      responses:
+        '200':
+          description: User found or created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /auth/users/{telegram_id}/approve:
+    post:
+      tags: [auth]
+      summary: Approve user
+      description: Approves pending user and assigns role
+      operationId: approveUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: telegram_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [applicant, executor, manager]
+                  default: applicant
+      responses:
+        '200':
+          description: User approved successfully
+        '404':
+          description: User not found
+        '403':
+          description: Insufficient permissions
+
+  /requests:
+    get:
+      tags: [requests]
+      summary: List requests
+      description: Get list of requests with optional filters
+      operationId: listRequests
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [новая, в_работе, выполнена, отменена, требует_уточнения]
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Request'
+
+    post:
+      tags: [requests]
+      summary: Create new request
+      description: Creates new request with auto-generated request_number
+      operationId: createRequest
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequestInput'
+      responses:
+        '201':
+          description: Request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+
+  /requests/{request_number}:
+    get:
+      tags: [requests]
+      summary: Get request by number
+      description: Retrieves request details by request_number (format YYMMDD-NNN)
+      operationId: getRequest
+      parameters:
+        - name: request_number
+          in: path
+          required: true
+          description: Request number in format YYMMDD-NNN (e.g., "251027-042")
+          schema:
+            type: string
+            pattern: '^\d{6}-\d{3}$'
+            example: "251027-042"
+      responses:
+        '200':
+          description: Request found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '404':
+          description: Request not found
+
+    patch:
+      tags: [requests]
+      summary: Update request status
+      description: Updates request status and optionally adds notes
+      operationId: updateRequestStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: request_number
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{6}-\d{3}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [новая, в_работе, выполнена, отменена, требует_уточнения]
+                notes:
+                  type: string
+                notify:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Status updated successfully
+        '404':
+          description: Request not found
+
+  /requests/{request_number}/assign:
+    post:
+      tags: [assignments]
+      summary: Assign request to executor
+      description: Assigns request to specific executor or group
+      operationId: assignRequest
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: request_number
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{6}-\d{3}$'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required:
+                    - executor_id
+                  properties:
+                    executor_id:
+                      type: integer
+                      description: Specific executor ID
+                - type: object
+                  required:
+                    - specialization
+                  properties:
+                    specialization:
+                      type: string
+                      description: Group specialization
+      responses:
+        '200':
+          description: Request assigned successfully
+        '404':
+          description: Request not found
+
+  /shifts:
+    get:
+      tags: [shifts]
+      summary: List shifts
+      description: Get list of shifts with filters
+      operationId: listShifts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [planned, active, completed, in_transition]
+        - name: executor_id
+          in: query
+          schema:
+            type: integer
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of shifts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Shift'
+
+  /shifts/transfers:
+    post:
+      tags: [shifts]
+      summary: Initiate shift transfer
+      description: Initiates transfer of requests between shifts
+      operationId: initiateShiftTransfer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - outgoing_shift_id
+                - incoming_shift_id
+              properties:
+                outgoing_shift_id:
+                  type: integer
+                incoming_shift_id:
+                  type: integer
+      responses:
+        '200':
+          description: Transfer initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftTransfer'
+
+  /addresses/yards:
+    get:
+      tags: [addresses]
+      summary: List yards
+      description: Get list of all yards (дворы)
+      operationId: listYards
+      parameters:
+        - name: only_active
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: List of yards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Yard'
+
+    post:
+      tags: [addresses]
+      summary: Create yard
+      description: Creates new yard
+      operationId: createYard
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: "Двор №1"
+                description:
+                  type: string
+                gps_latitude:
+                  type: number
+                  format: double
+                gps_longitude:
+                  type: number
+                  format: double
+      responses:
+        '201':
+          description: Yard created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Yard'
+
+  /analytics/requests:
+    get:
+      tags: [analytics]
+      summary: Request analytics
+      description: Get analytics for requests
+      operationId: getRequestAnalytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, year]
+            default: month
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestAnalytics'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from authentication
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        telegram_id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: string
+          enum: [applicant, executor, manager, admin]
+        roles:
+          type: string
+          description: JSON array of available roles
+          example: '["applicant", "executor"]'
+        active_role:
+          type: string
+          description: Currently active role
+        status:
+          type: string
+          enum: [pending, approved, blocked]
+        language:
+          type: string
+          example: ru
+        created_at:
+          type: string
+          format: date-time
+
+    Request:
+      type: object
+      properties:
+        request_number:
+          type: string
+          pattern: '^\d{6}-\d{3}$'
+          example: "251027-042"
+          description: Primary key in format YYMMDD-NNN
+        category:
+          type: string
+          example: "сантехника"
+        address:
+          type: string
+          example: "ул. Примерная, д.1, кв.10"
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [обычная, срочная, критичная]
+        status:
+          type: string
+          enum: [новая, в_работе, выполнена, отменена, требует_уточнения]
+        user_id:
+          type: integer
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateRequestInput:
+      type: object
+      required:
+        - category
+        - address
+        - description
+      properties:
+        category:
+          type: string
+        address:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [обычная, срочная, критичная]
+          default: обычная
+        media_ids:
+          type: array
+          items:
+            type: integer
+
+    Shift:
+      type: object
+      properties:
+        id:
+          type: integer
+        executor_id:
+          type: integer
+        shift_type:
+          type: string
+          example: "дневная"
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [planned, active, completed, in_transition]
+        specialization:
+          type: string
+
+    ShiftTransfer:
+      type: object
+      properties:
+        id:
+          type: integer
+        outgoing_shift_id:
+          type: integer
+        incoming_shift_id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed, cancelled]
+        total_requests:
+          type: integer
+        transferred_requests:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    Yard:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        gps_latitude:
+          type: number
+          format: double
+        gps_longitude:
+          type: number
+          format: double
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    HealthDetails:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        database:
+          type: object
+          properties:
+            status:
+              type: string
+            response_time_ms:
+              type: number
+        redis:
+          type: object
+          properties:
+            status:
+              type: string
+            response_time_ms:
+              type: number
+        version:
+          type: string
+          example: "2.1.0"
+
+    RequestAnalytics:
+      type: object
+      properties:
+        period:
+          type: string
+        total_requests:
+          type: integer
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        by_category:
+          type: object
+          additionalProperties:
+            type: integer
+        average_completion_time_hours:
+          type: number
+        completion_rate:
+          type: number
+          format: double
+          description: Percentage of completed requests
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object

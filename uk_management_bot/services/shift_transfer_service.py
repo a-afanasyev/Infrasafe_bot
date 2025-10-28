@@ -153,7 +153,7 @@ class ShiftTransferService:
         """Получает заявки, которые нужно передать"""
         try:
             # Ищем все активные заявки, назначенные на эту смену или исполнителю
-            active_statuses = ["В работе", "Закуп", "Уточнение", "Принята"]
+            active_statuses = ["В работе", "Закуп", "Уточнение"]
             
             requests = self.db.query(Request).filter(
                 and_(

@@ -59,7 +59,7 @@ def init_admin_user() -> bool:
                     return True
                 else:
                     # Добавляем ВСЕ роли администратору
-                    existing_user.roles = "applicant,executor,manager"
+                    existing_user.roles = '["applicant", "executor", "manager"]'
                     existing_user.role = "manager"  # Основная роль
                     existing_user.active_role = "manager"
                     existing_user.status = "active"
@@ -76,7 +76,7 @@ def init_admin_user() -> bool:
                 first_name="Администратор",
                 last_name="",
                 role="manager",
-                roles="applicant,executor,manager",  # ВСЕ роли для администратора
+                roles='["applicant", "executor", "manager"]',  # ВСЕ роли для администратора
                 active_role="manager",
                 status="approved",  # ВАЖНО: approved для доступа к боту!
                 language="ru",
@@ -142,7 +142,7 @@ def init_all_admins() -> tuple[int, int]:
 
                     if not required_roles.issubset(current_roles) or existing_user.status != "approved":
                         # Обновляем на ВСЕ роли и правильный статус
-                        existing_user.roles = "applicant,executor,manager"
+                        existing_user.roles = '["applicant", "executor", "manager"]'
                         existing_user.role = "manager"
                         existing_user.active_role = "manager"
                         existing_user.status = "approved"  # ВАЖНО: approved!
@@ -163,7 +163,7 @@ def init_all_admins() -> tuple[int, int]:
                         first_name="Администратор",
                         last_name="",
                         role="manager",
-                        roles="applicant,executor,manager",  # ВСЕ роли
+                        roles='["applicant", "executor", "manager"]',  # ВСЕ роли
                         active_role="manager",
                         status="approved",  # ВАЖНО: approved!
                         language="ru",

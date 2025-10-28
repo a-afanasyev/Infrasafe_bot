@@ -665,12 +665,7 @@ Amalni tanlang:
                     callback_data="view_my_transfers"
                 )])
 
-            # Кнопка назад
-            back_text = "🔙 Назад в меню" if user_lang == "ru" else "🔙 Menyuga qaytish"
-            keyboard.append([InlineKeyboardButton(
-                text=back_text,
-                callback_data="back_to_my_shifts"
-            )])
+            # Кнопка назад (убрана по запросу пользователя)
 
             await callback.message.edit_text(
                 menu_text,

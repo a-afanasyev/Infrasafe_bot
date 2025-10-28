@@ -44,14 +44,13 @@
     "phone_empty": "❌ Номер телефона не может быть пустым"
   },
   "status": {
-    "accepted": "Принята",
     "new": "Новая",
-    "purchase": "Закуп",
-    "approved": "Принята",
     "in_progress": "В работе",
+    "purchase": "Закуп",
+    "clarification": "Уточнение",
     "completed": "Выполнена",
-    "cancelled": "Отменена",
-    "clarification": "Уточнение"
+    "approved": "Принято",
+    "cancelled": "Отменена"
   },
   "my_shifts": {
     "title": "👤 Мои смены",

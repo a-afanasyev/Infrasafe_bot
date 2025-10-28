@@ -45,25 +45,24 @@ ROLE_MANAGER = "manager"
 USER_ROLES = [ROLE_APPLICANT, ROLE_EXECUTOR, ROLE_MANAGER]
 
 # Статусы заявок
-REQUEST_STATUS_NEW = "Новая"
-REQUEST_STATUS_ACCEPTED = "Принята"
-REQUEST_STATUS_IN_PROGRESS = "В работе"
-REQUEST_STATUS_PURCHASE = "Закуп"
-REQUEST_STATUS_CLARIFICATION = "Уточнение"
-REQUEST_STATUS_COMPLETED = "Исполнено"
-REQUEST_STATUS_EXECUTED = "Выполнена"
-REQUEST_STATUS_CONFIRMED = "Подтверждена"
-REQUEST_STATUS_APPROVED = "Принято"
-REQUEST_STATUS_CANCELLED = "Отменена"
+# Обновлено 16.10.2025: синхронизировано с settings.py и request_service.py
+# Обновлено 16.10.2025: удален неиспользуемый статус "Принята" (REQUEST_STATUS_ACCEPTED)
+REQUEST_STATUS_NEW = "Новая"              # Создана заявителем
+REQUEST_STATUS_IN_PROGRESS = "В работе"   # Назначена исполнителю и в процессе выполнения
+REQUEST_STATUS_PURCHASE = "Закуп"         # Требуется закупка материалов
+REQUEST_STATUS_CLARIFICATION = "Уточнение" # Требуется уточнение деталей
+REQUEST_STATUS_EXECUTED = "Выполнена"     # Выполнена исполнителем, ожидает проверки менеджером
+REQUEST_STATUS_COMPLETED = "Исполнено"    # Проверена менеджером, отправлена заявителю
+REQUEST_STATUS_APPROVED = "Принято"       # Принята заявителем (финальный статус)
+REQUEST_STATUS_CANCELLED = "Отменена"     # Отменена
+
 REQUEST_STATUSES = [
     REQUEST_STATUS_NEW,
-    REQUEST_STATUS_ACCEPTED,
     REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_PURCHASE,
-    REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_EXECUTED,
-    REQUEST_STATUS_CONFIRMED,
+    REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CANCELLED,
 ]
@@ -97,13 +96,11 @@ REQUEST_CATEGORIES = [
     "Электрика",
     "Сантехника",
     "Отопление",
-    "Вентиляция",
     "Лифт",
     "Уборка",
     "Благоустройство",
     "Безопасность",
-    "Интернет/ТВ",
-    "Другое"
+    "Интернет/ТВ"
 ]
 
 # Срочность заявок

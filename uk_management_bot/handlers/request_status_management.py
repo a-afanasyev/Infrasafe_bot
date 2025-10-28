@@ -613,9 +613,7 @@ def get_available_statuses(user: User, request: Request) -> list:
     
     # Исполнители могут изменять статусы своих заявок
     elif ROLE_EXECUTOR in user_roles and request.executor_id == user.id:
-        if current_status == "Принята":
-            available_statuses.append(REQUEST_STATUS_IN_PROGRESS)
-        elif current_status == REQUEST_STATUS_IN_PROGRESS:
+        if current_status == REQUEST_STATUS_IN_PROGRESS:
             available_statuses.extend([REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION, REQUEST_STATUS_COMPLETED])
         elif current_status == REQUEST_STATUS_PURCHASE:
             available_statuses.append(REQUEST_STATUS_IN_PROGRESS)

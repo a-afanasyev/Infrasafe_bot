@@ -344,8 +344,9 @@ ALTER TABLE ratings ADD CONSTRAINT check_rating_range
     CHECK (rating >= 1 AND rating <= 5);
 
 -- Ограничение на статус заявки
-ALTER TABLE requests ADD CONSTRAINT check_request_status 
-    CHECK (status IN ('Новая', 'Принята', 'В работе', 'Закуп', 'Уточнение', 'Выполнена', 'Отменена'));
+-- Обновлено 16.10.2025: удален неиспользуемый статус "Принята", добавлены "Исполнено" и "Принято"
+ALTER TABLE requests ADD CONSTRAINT check_request_status
+    CHECK (status IN ('Новая', 'В работе', 'Закуп', 'Уточнение', 'Выполнена', 'Исполнено', 'Принято', 'Отменена'));
 
 -- Ограничение на статус смены
 ALTER TABLE shifts ADD CONSTRAINT check_shift_status 

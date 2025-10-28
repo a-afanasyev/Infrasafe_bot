@@ -66,7 +66,293 @@ async def start_shift(message: Message, roles: list[str] = None, active_role: st
 
 @router.message(F.text == "🔚 Сдать смену")
 async def end_shift_confirm(message: Message):
-    await message.answer("Подтвердите сдачу смены", reply_markup=get_end_shift_confirm_inline())
+    """Показать список активных смен для выбора"""
+    try:
+        db = next(get_db())
+        service = ShiftService(db)
+
+        # Получаем пользователя
+        from uk_management_bot.database.models.user import User
+        from uk_management_bot.database.models.shift import Shift
+        from sqlalchemy import and_
+
+        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
+        if not user:
+            await message.answer("❌ Пользователь не найден")
+            return
+
+        # Получаем ВСЕ активные смены пользователя
+        active_shifts = db.query(Shift).filter(
+            and_(
+                Shift.user_id == user.id,
+                Shift.status == "active"
+            )
+        ).order_by(Shift.start_time).all()
+
+        if not active_shifts:
+            await message.answer("❌ У вас нет активных смен")
+            return
+
+        # Если смена одна - показываем детали сразу
+        if len(active_shifts) == 1:
+            await show_shift_end_details(message, active_shifts[0].id, db)
+            return
+
+        # Если смен несколько - показываем список для выбора
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        from datetime import datetime
+
+        text = "📋 <b>Выберите смену для завершения:</b>\n\n"
+
+        keyboard_rows = []
+        for idx, shift in enumerate(active_shifts, 1):
+            # Рассчитываем длительность
+            duration = datetime.now() - shift.start_time
+            hours = int(duration.total_seconds() // 3600)
+            minutes = int((duration.total_seconds() % 3600) // 60)
+
+            # Получаем специализации смены
+            specializations = shift.specialization_focus or []
+            if isinstance(specializations, str):
+                import json
+                try:
+                    specializations = json.loads(specializations)
+                except:
+                    specializations = [specializations] if specializations else []
+
+            spec_text = ", ".join(specializations) if specializations else "Универсальная"
+
+            text += f"{idx}. 🔵 <b>Смена #{shift.id}</b>\n"
+            text += f"   📅 Начало: {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
+            text += f"   ⏱️ Длительность: {hours}ч {minutes}м\n"
+            text += f"   🔧 Специализация: {spec_text}\n\n"
+
+            keyboard_rows.append([
+                InlineKeyboardButton(
+                    text=f"🔚 Завершить смену #{shift.id}",
+                    callback_data=f"end_shift_select:{shift.id}"
+                )
+            ])
+
+        keyboard_rows.append([
+            InlineKeyboardButton(text="❌ Отмена", callback_data="end_shift_cancel")
+        ])
+
+        await message.answer(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка показа списка смен: {e}")
+        await message.answer("❌ Произошла ошибка при получении списка смен")
+
+
+async def show_shift_end_details(message: Message, shift_id: int, db):
+    """Показать детали смены перед завершением с проверкой активных заявок"""
+    try:
+        from uk_management_bot.database.models.shift import Shift
+        from uk_management_bot.database.models.request import Request
+        from uk_management_bot.database.models.request_assignment import RequestAssignment
+        from sqlalchemy import and_, or_
+        from datetime import datetime
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+        shift = db.query(Shift).filter(Shift.id == shift_id).first()
+        if not shift:
+            await message.answer("❌ Смена не найдена")
+            return
+
+        # Рассчитываем длительность
+        duration = datetime.now() - shift.start_time
+        hours = int(duration.total_seconds() // 3600)
+        minutes = int((duration.total_seconds() % 3600) // 60)
+
+        # Получаем специализации смены
+        specializations = shift.specialization_focus or []
+        if isinstance(specializations, str):
+            import json
+            try:
+                specializations = json.loads(specializations)
+            except:
+                specializations = [specializations] if specializations else []
+
+        spec_text = ", ".join(specializations) if specializations else "Универсальная"
+
+        # Формируем текст
+        text = f"⚠️ <b>Подтверждение завершения смены</b>\n\n"
+        text += f"📅 <b>Смена:</b> {shift.start_time.strftime('%d.%m.%Y %H:%M')} - текущее время\n"
+        text += f"⏱️ <b>Длительность:</b> {hours}ч {minutes}м\n"
+        text += f"🔧 <b>Специализация:</b> {spec_text}\n\n"
+
+        # Получаем активные заявки
+        # 1. Групповые заявки (назначенные через specialization)
+        group_requests = []
+        if specializations:
+            group_requests = db.query(Request).join(RequestAssignment).filter(
+                and_(
+                    RequestAssignment.assignment_type == "group",
+                    RequestAssignment.group_specialization.in_(specializations),
+                    RequestAssignment.status == "active",
+                    Request.status.in_(["В работе", "Закуп", "Уточнение"])
+                )
+            ).all()
+
+        # 2. Индивидуальные заявки (назначенные конкретно исполнителю)
+        from uk_management_bot.database.models.user import User
+        user = db.query(User).filter(User.id == shift.user_id).first()
+
+        individual_requests = []
+        if user:
+            individual_requests = db.query(Request).join(RequestAssignment).filter(
+                and_(
+                    RequestAssignment.assignment_type == "individual",
+                    RequestAssignment.executor_id == user.id,
+                    RequestAssignment.status == "active",
+                    Request.status.in_(["В работе", "Закуп", "Уточнение"])
+                )
+            ).all()
+
+        # Показываем информацию о заявках
+        if group_requests or individual_requests:
+            text += "📋 <b>Активные заявки:</b>\n\n"
+
+            if group_requests:
+                text += f"🔵 <b>Дежурные заявки</b> (будут переданы следующей смене): {len(group_requests)}\n"
+                for req in group_requests[:3]:  # Показываем первые 3
+                    text += f"   • #{req.request_number} - {req.category}\n"
+                if len(group_requests) > 3:
+                    text += f"   • и ещё {len(group_requests) - 3}...\n"
+                text += "\n"
+
+            if individual_requests:
+                text += f"👤 <b>Персональные заявки</b> (остаются за вами): {len(individual_requests)}\n"
+                for req in individual_requests[:3]:  # Показываем первые 3
+                    text += f"   • #{req.request_number} - {req.category}\n"
+                if len(individual_requests) > 3:
+                    text += f"   • и ещё {len(individual_requests) - 3}...\n"
+                text += "\n"
+
+            text += "ℹ️ <i>Дежурные заявки автоматически передадутся следующему исполнителю на смене.\n"
+            text += "Персональные заявки останутся за вами до завершения.</i>\n\n"
+        else:
+            text += "✅ <b>Активных заявок нет</b>\n\n"
+
+        text += "Подтвердить завершение смены?"
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, завершить", callback_data=f"shift_end_confirm_yes:{shift_id}"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="end_shift_cancel")
+            ]
+        ])
+
+        await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Ошибка показа деталей смены: {e}")
+        await message.answer("❌ Произошла ошибка")
+
+
+@router.callback_query(F.data.startswith("end_shift_select:"))
+async def handle_shift_selection(callback: CallbackQuery):
+    """Обработка выбора конкретной смены для завершения"""
+    try:
+        shift_id = int(callback.data.split(":")[1])
+        db = next(get_db())
+
+        await show_shift_end_details(callback.message, shift_id, db)
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка выбора смены: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data == "end_shift_cancel")
+async def handle_end_shift_cancel(callback: CallbackQuery):
+    """Отмена завершения смены"""
+    try:
+        await callback.message.edit_text("❌ Завершение смены отменено")
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка отмены: {e}")
+        await callback.answer()
+
+
+@router.callback_query(F.data.startswith("shift_end_confirm_yes:"))
+async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None = None):
+    """Подтверждение завершения конкретной смены"""
+    if user_status == "pending":
+        try:
+            await callback.answer(get_text("auth.pending", language=callback.from_user.language_code or "ru"), show_alert=True)
+        except Exception:
+            await callback.answer("⏳ Ожидайте одобрения администратора.", show_alert=True)
+        return
+
+    try:
+        shift_id = int(callback.data.split(":")[1])
+        db = next(get_db())
+        service = ShiftService(db)
+
+        # Завершаем конкретную смену
+        from uk_management_bot.database.models.shift import Shift
+        from uk_management_bot.database.models.user import User
+        from datetime import datetime
+
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+
+        shift = db.query(Shift).filter(
+            Shift.id == shift_id,
+            Shift.user_id == user.id,
+            Shift.status == "active"
+        ).first()
+
+        if not shift:
+            await callback.answer("❌ Смена не найдена или уже завершена", show_alert=True)
+            return
+
+        # Завершаем смену
+        shift.end_time = datetime.now()
+        shift.status = "completed"
+
+        # Создаем audit log
+        from uk_management_bot.database.models.audit import AuditLog
+        audit = AuditLog(
+            user_id=user.id,
+            telegram_user_id=user.telegram_id,
+            action="SHIFT_ENDED",
+            details={"shift_id": shift.id, "specializations": shift.specialization_focus}
+        )
+        db.add(audit)
+        db.commit()
+
+        await callback.message.edit_text(
+            f"✅ <b>Смена #{shift.id} завершена</b>\n\n"
+            f"⏱️ Длительность: {((shift.end_time - shift.start_time).total_seconds() // 3600):.0f}ч "
+            f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}м\n"
+            f"📅 Время окончания: {shift.end_time.strftime('%d.%m.%Y %H:%M')}",
+            parse_mode="HTML"
+        )
+
+        # Отправляем уведомления
+        try:
+            from uk_management_bot.services.shift_service import async_notify_shift_ended
+            from aiogram import Bot
+            bot: Bot = callback.message.bot
+            await async_notify_shift_ended(bot, db, user, shift)
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомлений: {e}")
+
+        await callback.answer("✅ Смена завершена")
+
+    except Exception as e:
+        logger.error(f"Ошибка завершения смены: {e}")
+        await callback.answer("❌ Произошла ошибка при завершении смены", show_alert=True)
 
 
 @router.callback_query(F.data == "shift_end_confirm_yes")

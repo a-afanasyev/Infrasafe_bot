@@ -97,14 +97,7 @@ def get_executor_status_actions_keyboard(request_number: str, current_status: st
     keyboard = []
     
     # Действия в зависимости от статуса
-    if current_status == "Принята":
-        keyboard.append([
-            InlineKeyboardButton(
-                text="🔄 Взять в работу",
-                callback_data=RequestCallbackHelper.create_callback_data_with_request_number("take_to_work_", request_number)
-            )
-        ])
-    elif current_status == REQUEST_STATUS_IN_PROGRESS:
+    if current_status == REQUEST_STATUS_IN_PROGRESS:
         keyboard.extend([
             [
                 InlineKeyboardButton(
