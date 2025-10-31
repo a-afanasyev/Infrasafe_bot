@@ -517,8 +517,7 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        f"✅ Адрес сохранен: 🏢 {building.address}\n\n"
-                        f"Опишите общедомовую проблему:",
+                        get_text("requests.address_сохранен_опишите_2", language=lang).replace("{...}", building.address),
                         reply_markup=get_cancel_keyboard()
                     )
 
@@ -527,7 +526,7 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Здание не найдено: '{address_text}'")
                     await message.answer(
-                        "⚠️ Здание не найдено. Выберите адрес из предложенных вариантов:",
+                        get_text("requests.здание_не_найдено", language=lang),
                         reply_markup=get_address_selection_keyboard(user_id)
                     )
                     return
@@ -555,8 +554,7 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        f"✅ Адрес сохранен: 🏘️ {yard.name}\n\n"
-                        f"Опишите проблему во дворе:",
+                        get_text("requests.address_сохранен_опишите_3", language=lang).replace("{...}", yard.name),
                         reply_markup=get_cancel_keyboard()
                     )
 
@@ -565,7 +563,7 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Двор не найден: '{address_text}'")
                     await message.answer(
-                        "⚠️ Двор не найден. Выберите адрес из предложенных вариантов:",
+                        get_text("requests.двор_не_найден", language=lang),
                         reply_markup=get_address_selection_keyboard(user_id)
                     )
                     return

@@ -294,6 +294,47 @@ Created `scripts/refactor_handler.py`:
 
 ---
 
+## 🔧 Day 2 Progress (30 Oct 2025 - Continued)
+
+### Code Refactoring Started ✅
+
+**requests.py Refactoring Progress: 6/1,083 strings (0.6%)**
+
+#### Functions Refactored:
+
+1. ✅ **start_request_creation** (lines 324-358)
+   - Added language detection with `get_language_for_user()`
+   - Replaced 2 hardcoded strings:
+     - `"Начинаем создание заявки…"` → `get_text("requests.начинаем_создание_requests", language=lang)`
+     - `"Выберите категорию заявки:"` → `get_text("requests.select_категорию_requests", language=lang)`
+
+2. ✅ **process_category** (lines 362-399)
+   - Added language detection
+   - Replaced 1 hardcoded string:
+     - Multi-line address selection text → `get_text("requests.select_address_квартира", language=lang)`
+
+3. ✅ **process_category_other_inputs** (lines 402-425)
+   - Added language detection
+   - Replaced 1 hardcoded string:
+     - `"Пожалуйста, используйте кнопки..."` → `get_text("requests.пожалуйста_используйт_кнопки", language=lang)`
+
+4. ✅ **process_address** (lines 428-497, partial)
+   - Added language detection at function start
+   - Replaced 2 hardcoded strings:
+     - Address saved message → `get_text("requests.address_сохранен_опишите", language=lang)`
+     - Apartment not found message → `get_text("requests.квартира_не_найдена", language=lang)`
+
+#### Improvements Made:
+
+- ✅ Added imports: `get_text`, `get_language_for_user` at module level
+- ✅ Consistent language detection pattern: `await get_language_for_user(user_id, db, message/callback)`
+- ✅ Proper error handling with fallback to `language_code` or "ru"
+- ✅ Optimized db usage (single db session per function)
+
+**Next Steps**: Continue refactoring remaining functions in requests.py, then move to admin.py and shift_management.py
+
+---
+
 **Document Version**: 1.2
 **Last Updated**: 30 October 2025, 20:00 UTC
 **Next Update**: After refactoring begins
