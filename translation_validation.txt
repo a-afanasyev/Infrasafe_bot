@@ -1,0 +1,53 @@
+================================================================================
+TRANSLATION VALIDATION REPORT - TASK 17 Phase 1
+================================================================================
+
+SUMMARY
+--------------------------------------------------------------------------------
+Total keys: 582
+Total issues: 6
+  Errors: 0
+  Warnings: 1
+  Info: 5
+
+DETAILED STATISTICS
+--------------------------------------------------------------------------------
+Missing translations: 0
+Format mismatches: 0
+Missing keys (UZ): 0
+Extra keys (UZ): 1
+
+ISSUES BY CATEGORY
+--------------------------------------------------------------------------------
+
+DUPLICATE_VALUE_RU (5 issues):
+  [INFO] profile.status, requests.status, request_assignment.status
+     Duplicate RU value in 3 keys
+     value: Статус:
+     keys: ['profile.status', 'requests.status', 'request_assignment.status']
+
+  [INFO] profile.phone_not_set, profile.address_not_set
+     Duplicate RU value in 2 keys
+     value: Не указан
+     keys: ['profile.phone_not_set', 'profile.address_not_set']
+
+  [INFO] profile.edit_phone, employee_management.phone
+     Duplicate RU value in 2 keys
+     value: Телефон
+     keys: ['profile.edit_phone', 'employee_management.phone']
+
+  [INFO] my_shifts.history, my_shifts.history_title
+     Duplicate RU value in 2 keys
+     value: 📊 История смен
+     keys: ['my_shifts.history', 'my_shifts.history_title']
+
+  [INFO] my_shifts.today, shift_management.today
+     Duplicate RU value in 2 keys
+     value: 🔥 Сегодня
+     keys: ['my_shifts.today', 'shift_management.today']
+
+
+EXTRA_KEY_UZ (1 issues):
+  [WARNING] status.accepted
+     Key exists in uz.json but missing in ru.json
+     uz_value: Qabul qilindi
