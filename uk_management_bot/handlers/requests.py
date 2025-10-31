@@ -370,6 +370,15 @@ async def process_category(message: Message, state: FSMContext):
         await cancel_request(message, state)
         return
     
+    # Получаем язык пользователя
+    db = next(get_db())
+    try:
+        lang = await get_language_for_user(message.from_user.id, db, message)
+    except Exception:
+        lang = getattr(message.from_user, "language_code", None) or "ru"
+    finally:
+        db.close()
+    
     # Сохраняем категорию и переходим к выбору адреса
     await state.update_data(category=category_text)
     await state.set_state(RequestStates.address)
@@ -381,10 +390,7 @@ async def process_category(message: Message, state: FSMContext):
         logger.info(f"[CATEGORY_SELECTION] Клавиатура адресов создана, отправка пользователю {user_id}")
 
         await message.answer(
-            "📍 Выберите адрес:\n"
-            "• 🏠 Квартира - для проблем в квартире\n"
-            "• 🏢 Дом - для общедомовых проблем\n"
-            "• 🏘️ Двор - для проблем во дворе",
+            get_text("requests.select_address_квартира", language=lang),
             reply_markup=keyboard
         )
         logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} выбрал категорию '{category_text}', переходит к выбору адреса")
@@ -403,9 +409,18 @@ async def process_category_other_inputs(message: Message, state: FSMContext):
         await cancel_request(message, state)
         return
     
+    # Получаем язык пользователя
+    db = next(get_db())
+    try:
+        lang = await get_language_for_user(message.from_user.id, db, message)
+    except Exception:
+        lang = getattr(message.from_user, "language_code", None) or "ru"
+    finally:
+        db.close()
+    
     # Отправляем подсказку с повторной отправкой inline-клавиатуры
     await message.answer(
-        "Пожалуйста, используйте кнопки выбора категории выше или нажмите '❌ Отмена'.",
+        get_text("requests.пожалуйста_используйт_кнопки", language=lang),
         reply_markup=get_categories_inline_keyboard_with_cancel()
     )
 
@@ -419,6 +434,15 @@ async def process_address(message: Message, state: FSMContext):
     """
     user_id = message.from_user.id
     selected_text = message.text
+
+    # Получаем язык пользователя
+    db_lang = next(get_db())
+    try:
+        lang = await get_language_for_user(message.from_user.id, db_lang, message)
+    except Exception:
+        lang = getattr(message.from_user, "language_code", None) or "ru"
+    finally:
+        db_lang.close()
 
     # Улучшенное логирование с контекстом
     logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id}: '{selected_text}'")
@@ -456,8 +480,7 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        f"✅ Адрес сохранен: 🏠 {full_address}\n\n"
-                        f"Опишите проблему в квартире:",
+                        get_text("requests.address_сохранен_опишите", language=lang).replace("{...}", full_address),
                         reply_markup=get_cancel_keyboard()
                     )
 
@@ -466,7 +489,7 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Квартира не найдена: '{address_text}'")
                     await message.answer(
-                        "⚠️ Квартира не найдена. Выберите адрес из предложенных вариантов:",
+                        get_text("requests.квартира_не_найдена", language=lang),
                         reply_markup=get_address_selection_keyboard(user_id)
                     )
                     return
