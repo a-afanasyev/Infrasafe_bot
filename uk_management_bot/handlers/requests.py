@@ -47,8 +47,7 @@ from datetime import datetime
 from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.notification_service import async_notify_action_denied
-from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.language_helpers import get_language_for_user
+from uk_management_bot.utils.constants import ERROR_MESSAGES
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -327,34 +326,29 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     if await _deny_if_pending_message(message, user_status):
         return
     
-    # Проверяем наличие телефона у пользователя и получаем язык
+    # Проверяем наличие телефона у пользователя
     from uk_management_bot.database.session import get_db
     from uk_management_bot.database.models.user import User
+    from uk_management_bot.utils.helpers import get_text
     
     db = next(get_db())
-    lang = "ru"  # Default
     try:
         user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if user and not user.phone:
-            lang = await get_language_for_user(message.from_user.id, db, message)
+            lang = getattr(message.from_user, "language_code", None) or "ru"
             await message.answer(get_text("requests.phone_required", language=lang))
-            db.close()
             return
-        # Получаем язык пользователя
-        lang = await get_language_for_user(message.from_user.id, db, message)
     except Exception as e:
         logger.error(f"Ошибка проверки телефона пользователя {message.from_user.id}: {e}")
-        lang = getattr(message.from_user, "language_code", None) or "ru"
     finally:
         db.close()
     
     logger.info(f"Пользователь {message.from_user.id} нажал '📝 Создать заявку'")
-    
     await state.set_state(RequestStates.category)
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
-    await message.answer(get_text("requests.начинаем_создание_requests", language=lang), reply_markup=ReplyKeyboardRemove())
+    await message.answer("Начинаем создание заявки…", reply_markup=ReplyKeyboardRemove())
     # Показываем inline-клавиатуру категорий
-    await message.answer(get_text("requests.select_категорию_requests", language=lang), reply_markup=get_categories_inline_keyboard_with_cancel())
+    await message.answer("Выберите категорию заявки:", reply_markup=get_categories_inline_keyboard_with_cancel())
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
 
 # Обработка выбора категории (только если пользователь ввёл текст ровно из списка категорий)
@@ -370,15 +364,6 @@ async def process_category(message: Message, state: FSMContext):
         await cancel_request(message, state)
         return
     
-    # Получаем язык пользователя
-    db = next(get_db())
-    try:
-        lang = await get_language_for_user(message.from_user.id, db, message)
-    except Exception:
-        lang = getattr(message.from_user, "language_code", None) or "ru"
-    finally:
-        db.close()
-    
     # Сохраняем категорию и переходим к выбору адреса
     await state.update_data(category=category_text)
     await state.set_state(RequestStates.address)
@@ -390,7 +375,10 @@ async def process_category(message: Message, state: FSMContext):
         logger.info(f"[CATEGORY_SELECTION] Клавиатура адресов создана, отправка пользователю {user_id}")
 
         await message.answer(
-            get_text("requests.select_address_квартира", language=lang),
+            "📍 Выберите адрес:\n"
+            "• 🏠 Квартира - для проблем в квартире\n"
+            "• 🏢 Дом - для общедомовых проблем\n"
+            "• 🏘️ Двор - для проблем во дворе",
             reply_markup=keyboard
         )
         logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} выбрал категорию '{category_text}', переходит к выбору адреса")
@@ -409,18 +397,9 @@ async def process_category_other_inputs(message: Message, state: FSMContext):
         await cancel_request(message, state)
         return
     
-    # Получаем язык пользователя
-    db = next(get_db())
-    try:
-        lang = await get_language_for_user(message.from_user.id, db, message)
-    except Exception:
-        lang = getattr(message.from_user, "language_code", None) or "ru"
-    finally:
-        db.close()
-    
     # Отправляем подсказку с повторной отправкой inline-клавиатуры
     await message.answer(
-        get_text("requests.пожалуйста_используйт_кнопки", language=lang),
+        "Пожалуйста, используйте кнопки выбора категории выше или нажмите '❌ Отмена'.",
         reply_markup=get_categories_inline_keyboard_with_cancel()
     )
 
@@ -434,15 +413,6 @@ async def process_address(message: Message, state: FSMContext):
     """
     user_id = message.from_user.id
     selected_text = message.text
-
-    # Получаем язык пользователя
-    db_lang = next(get_db())
-    try:
-        lang = await get_language_for_user(message.from_user.id, db_lang, message)
-    except Exception:
-        lang = getattr(message.from_user, "language_code", None) or "ru"
-    finally:
-        db_lang.close()
 
     # Улучшенное логирование с контекстом
     logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id}: '{selected_text}'")
@@ -480,7 +450,8 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        get_text("requests.address_сохранен_опишите", language=lang).replace("{...}", full_address),
+                        f"✅ Адрес сохранен: 🏠 {full_address}\n\n"
+                        f"Опишите проблему в квартире:",
                         reply_markup=get_cancel_keyboard()
                     )
 
@@ -489,7 +460,7 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Квартира не найдена: '{address_text}'")
                     await message.answer(
-                        get_text("requests.квартира_не_найдена", language=lang),
+                        "⚠️ Квартира не найдена. Выберите адрес из предложенных вариантов:",
                         reply_markup=get_address_selection_keyboard(user_id)
                     )
                     return
@@ -517,7 +488,8 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        get_text("requests.address_сохранен_опишите_2", language=lang).replace("{...}", building.address),
+                        f"✅ Адрес сохранен: 🏢 {building.address}\n\n"
+                        f"Опишите общедомовую проблему:",
                         reply_markup=get_cancel_keyboard()
                     )
 
@@ -526,7 +498,7 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Здание не найдено: '{address_text}'")
                     await message.answer(
-                        get_text("requests.здание_не_найдено", language=lang),
+                        "⚠️ Здание не найдено. Выберите адрес из предложенных вариантов:",
                         reply_markup=get_address_selection_keyboard(user_id)
                     )
                     return
@@ -554,7 +526,8 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        get_text("requests.address_сохранен_опишите_3", language=lang).replace("{...}", yard.name),
+                        f"✅ Адрес сохранен: 🏘️ {yard.name}\n\n"
+                        f"Опишите проблему во дворе:",
                         reply_markup=get_cancel_keyboard()
                     )
 
@@ -563,7 +536,7 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Двор не найден: '{address_text}'")
                     await message.answer(
-                        get_text("requests.двор_не_найден", language=lang),
+                        "⚠️ Двор не найден. Выберите адрес из предложенных вариантов:",
                         reply_markup=get_address_selection_keyboard(user_id)
                     )
                     return
@@ -595,23 +568,13 @@ async def process_address(message: Message, state: FSMContext):
         elif result['type'] == 'unknown':
             # Неизвестный выбор - улучшенная обработка
             logger.warning(f"[ADDRESS_SELECTION] Неизвестный выбор адреса: '{selected_text}' от пользователя {user_id}")
-            
-            # Получаем язык пользователя
-            db_lang = next(get_db())
-            try:
-                lang = await get_language_for_user(message.from_user.id, db_lang, message)
-            except Exception:
-                lang = getattr(message.from_user, "language_code", None) or "ru"
-            finally:
-                db_lang.close()
-            
             await message.answer(
-                get_text("requests.пожалуйста_select_address", language=lang)
+                "⚠️ Пожалуйста, выберите адрес из предложенных вариантов"
             )
             # Показываем клавиатуру снова
             try:
                 keyboard = get_address_selection_keyboard(user_id)
-                await message.answer(get_text("requests.select_address", language=lang), reply_markup=keyboard)
+                await message.answer("Выберите адрес:", reply_markup=keyboard)
             except Exception as keyboard_error:
                 logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
                 await graceful_fallback(message, "keyboard_error")
@@ -641,18 +604,9 @@ async def process_address_manual(message: Message, state: FSMContext):
     # Умная валидация с предложениями
     validation_result = smart_address_validation(address_text)
     if not validation_result['is_valid']:
-        # Получаем язык пользователя
-        db_lang = next(get_db())
-        try:
-            lang = await get_language_for_user(message.from_user.id, db_lang, message)
-        except Exception:
-            lang = getattr(message.from_user, "language_code", None) or "ru"
-        finally:
-            db_lang.close()
-            
         suggestions_text = "\n".join([f"• {suggestion}" for suggestion in validation_result['suggestions']])
         await message.answer(
-            get_text("requests.address_требует_доработки", language=lang).replace("{...}", suggestions_text),
+            f"⚠️ Адрес требует доработки:\n{suggestions_text}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard()
         )
         return
@@ -662,18 +616,8 @@ async def process_address_manual(message: Message, state: FSMContext):
 
     # В новой логике квартира вводится прямо в адресе при ручном вводе
     await state.set_state(RequestStates.description)
-    
-    # Получаем язык пользователя
-    db_lang = next(get_db())
-    try:
-        lang = await get_language_for_user(message.from_user.id, db_lang, message)
-    except Exception:
-        lang = getattr(message.from_user, "language_code", None) or "ru"
-    finally:
-        db_lang.close()
-    
     await message.answer(
-        get_text("requests.address_сохранен_опишите_4", language=lang),
+        "✅ Адрес сохранен! Опишите проблему:",
         reply_markup=get_cancel_keyboard()
     )
     logger.info(f"[ADDRESS_MANUAL] Пользователь {user_id} ввел адрес вручную: {address_text}")
@@ -696,18 +640,8 @@ async def process_description(message: Message, state: FSMContext):
     # Сохраняем описание и переходим к выбору срочности
     await state.update_data(description=message.text)
     await state.set_state(RequestStates.urgency)
-    
-    # Получаем язык пользователя
-    db_lang = next(get_db())
-    try:
-        lang = await get_language_for_user(message.from_user.id, db_lang, message)
-    except Exception:
-        lang = getattr(message.from_user, "language_code", None) or "ru"
-    finally:
-        db_lang.close()
-    
     await message.answer(
-        get_text("requests.select_urgency", language=lang),
+        "Выберите срочность:",
         reply_markup=get_urgency_inline_keyboard()
     )
     logger.info(f"Пользователь {message.from_user.id} ввел описание")
