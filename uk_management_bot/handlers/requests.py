@@ -595,13 +595,23 @@ async def process_address(message: Message, state: FSMContext):
         elif result['type'] == 'unknown':
             # Неизвестный выбор - улучшенная обработка
             logger.warning(f"[ADDRESS_SELECTION] Неизвестный выбор адреса: '{selected_text}' от пользователя {user_id}")
+            
+            # Получаем язык пользователя
+            db_lang = next(get_db())
+            try:
+                lang = await get_language_for_user(message.from_user.id, db_lang, message)
+            except Exception:
+                lang = getattr(message.from_user, "language_code", None) or "ru"
+            finally:
+                db_lang.close()
+            
             await message.answer(
-                "⚠️ Пожалуйста, выберите адрес из предложенных вариантов"
+                get_text("requests.пожалуйста_select_address", language=lang)
             )
             # Показываем клавиатуру снова
             try:
                 keyboard = get_address_selection_keyboard(user_id)
-                await message.answer("Выберите адрес:", reply_markup=keyboard)
+                await message.answer(get_text("requests.select_address", language=lang), reply_markup=keyboard)
             except Exception as keyboard_error:
                 logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
                 await graceful_fallback(message, "keyboard_error")
@@ -631,9 +641,18 @@ async def process_address_manual(message: Message, state: FSMContext):
     # Умная валидация с предложениями
     validation_result = smart_address_validation(address_text)
     if not validation_result['is_valid']:
+        # Получаем язык пользователя
+        db_lang = next(get_db())
+        try:
+            lang = await get_language_for_user(message.from_user.id, db_lang, message)
+        except Exception:
+            lang = getattr(message.from_user, "language_code", None) or "ru"
+        finally:
+            db_lang.close()
+            
         suggestions_text = "\n".join([f"• {suggestion}" for suggestion in validation_result['suggestions']])
         await message.answer(
-            f"⚠️ Адрес требует доработки:\n{suggestions_text}\n\nПопробуйте еще раз:",
+            get_text("requests.address_требует_доработки", language=lang).replace("{...}", suggestions_text),
             reply_markup=get_cancel_keyboard()
         )
         return
@@ -643,8 +662,18 @@ async def process_address_manual(message: Message, state: FSMContext):
 
     # В новой логике квартира вводится прямо в адресе при ручном вводе
     await state.set_state(RequestStates.description)
+    
+    # Получаем язык пользователя
+    db_lang = next(get_db())
+    try:
+        lang = await get_language_for_user(message.from_user.id, db_lang, message)
+    except Exception:
+        lang = getattr(message.from_user, "language_code", None) or "ru"
+    finally:
+        db_lang.close()
+    
     await message.answer(
-        "✅ Адрес сохранен! Опишите проблему:",
+        get_text("requests.address_сохранен_опишите_4", language=lang),
         reply_markup=get_cancel_keyboard()
     )
     logger.info(f"[ADDRESS_MANUAL] Пользователь {user_id} ввел адрес вручную: {address_text}")
@@ -667,8 +696,18 @@ async def process_description(message: Message, state: FSMContext):
     # Сохраняем описание и переходим к выбору срочности
     await state.update_data(description=message.text)
     await state.set_state(RequestStates.urgency)
+    
+    # Получаем язык пользователя
+    db_lang = next(get_db())
+    try:
+        lang = await get_language_for_user(message.from_user.id, db_lang, message)
+    except Exception:
+        lang = getattr(message.from_user, "language_code", None) or "ru"
+    finally:
+        db_lang.close()
+    
     await message.answer(
-        "Выберите срочность:",
+        get_text("requests.select_urgency", language=lang),
         reply_markup=get_urgency_inline_keyboard()
     )
     logger.info(f"Пользователь {message.from_user.id} ввел описание")
