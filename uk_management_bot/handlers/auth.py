@@ -9,6 +9,7 @@ from ..states.registration import RegistrationStates
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.keyboards.base import get_main_keyboard, get_cancel_keyboard, get_main_keyboard_for_role
 import logging
 import json
@@ -19,6 +20,9 @@ router = Router()
 
 @router.message(F.text == "🔑 Войти")
 async def login_via_button(message: Message, db: Session, user_status: str = None):
+    # Get user language
+    language = await get_language_for_user(message.from_user.id, db, message)
+
     auth = AuthService(db)
     user = await auth.get_or_create_user(
         telegram_id=message.from_user.id,
@@ -27,17 +31,20 @@ async def login_via_button(message: Message, db: Session, user_status: str = Non
         last_name=message.from_user.last_name,
     )
     if user.status == "approved":
-        await message.answer("Вы уже авторизованы.", reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status))
+        await message.answer(
+            get_text("auth.already_authorized", language=language),
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status)
+        )
         return
     ok = await auth.approve_user(message.from_user.id, role="applicant")
     if ok:
         await message.answer(
-            "✅ Авторизация выполнена. Вы вошли как заявитель.",
+            get_text("auth.login_success", language=language),
             reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status),
         )
     else:
         await message.answer(
-            "Не удалось выполнить авторизацию. Попробуйте позже или обратитесь к менеджеру.",
+            get_text("auth.login_failed", language=language),
             reply_markup=get_cancel_keyboard(),
         )
 
@@ -113,7 +120,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session):
             elif existing_user.status == "pending":
                 logger.info(f"Пользователь {telegram_id} уже зарегистрирован со статусом pending, регистрация запрещена")
                 await message.answer(
-                    "📋 Ваша регистрация уже на рассмотрении. Пожалуйста, дождитесь решения администратора."
+                    get_text("auth.registration_pending", language=lang)
                 )
                 return
             # Для других статусов (blocked и т.д.) разрешаем повторную регистрацию
@@ -158,7 +165,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session):
         
         # Отправляем сообщение с запросом ФИО
         await message.answer(
-            f"{invite_info}\n\n📝 Пожалуйста, введите ваше полное имя (ФИО):"
+            f"{invite_info}\n\n{get_text('auth.enter_full_name', language=lang)}"
         )
         
         logger.info(f"Пользователь {telegram_id} получил ссылку на веб-регистрацию с токеном {token}")
@@ -188,7 +195,7 @@ async def handle_full_name_input(message: Message, state: FSMContext, db: Sessio
         
         # Простая валидация ФИО (должно быть минимум 2 слова)
         if len(full_name.split()) < 2:
-            await message.answer("❌ Пожалуйста, введите полное имя (Фамилия Имя Отчество):")
+            await message.answer(get_text("auth.full_name_invalid", language=lang))
             return
         
         # Сохраняем ФИО
@@ -209,18 +216,18 @@ async def handle_full_name_input(message: Message, state: FSMContext, db: Sessio
             spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
             confirmation_text += f"🛠️ Специализация: {', '.join(spec_names)}\n"
         
-        confirmation_text += "\n📝 Подтвердите, что вы согласны с указанной ролью и специализацией:"
-        
+        confirmation_text += f"\n{get_text('auth.confirm_position_prompt', language=lang)}"
+
         # Создаем клавиатуру для подтверждения
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
+
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text="✅ Подтвердить",
+                text=get_text("auth.confirm_button", language=lang),
                 callback_data="confirm_position"
             )],
             [InlineKeyboardButton(
-                text="❌ Отменить",
+                text=get_text("auth.cancel_button", language=lang),
                 callback_data="cancel_registration"
             )]
         ])
@@ -232,7 +239,7 @@ async def handle_full_name_input(message: Message, state: FSMContext, db: Sessio
         
     except Exception as e:
         logger.error(f"Ошибка обработки ФИО: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
+        await message.answer(get_text("auth.error_try_again", language=lang))
 
 
 @router.message(RegistrationStates.waiting_for_phone)
@@ -246,12 +253,12 @@ async def handle_phone_input(message: Message, state: FSMContext, db: Session):
         
         # Простая валидация телефона (должен содержать цифры и быть не короче 10 символов)
         if not phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
-            await message.answer("❌ Пожалуйста, введите корректный номер телефона (например: +7 999 123-45-67):")
+            await message.answer(get_text("auth.phone_invalid", language=lang))
             return
-        
+
         phone_clean = phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
         if len(phone_clean) < 10:
-            await message.answer("❌ Номер телефона слишком короткий. Пожалуйста, введите полный номер:")
+            await message.answer(get_text("auth.phone_too_short", language=lang))
             return
         
         # Сохраняем телефон
@@ -274,18 +281,18 @@ async def handle_phone_input(message: Message, state: FSMContext, db: Session):
             spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
             confirmation_text += f"🛠️ Специализация: {', '.join(spec_names)}\n"
         
-        confirmation_text += "\n📝 Подтвердите, что все данные указаны верно:"
-        
+        confirmation_text += f"\n{get_text('auth.confirm_data_prompt', language=lang)}"
+
         # Создаем клавиатуру для подтверждения
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
+
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text="✅ Подтвердить",
+                text=get_text("auth.confirm_button", language=lang),
                 callback_data="confirm_position"
             )],
             [InlineKeyboardButton(
-                text="❌ Отменить",
+                text=get_text("auth.cancel_button", language=lang),
                 callback_data="cancel_registration"
             )]
         ])
@@ -297,7 +304,7 @@ async def handle_phone_input(message: Message, state: FSMContext, db: Session):
         
     except Exception as e:
         logger.error(f"Ошибка обработки телефона: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
+        await message.answer(get_text("auth.error_try_again", language=lang))
 
 
 @router.callback_query(F.data == "confirm_position")
@@ -343,18 +350,18 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         from ..keyboards.admin import get_user_approval_keyboard
         
         # Формируем сообщение для админа
-        admin_message = f"📝 Новая заявка на регистрацию:\n\n"
-        admin_message += f"👤 Пользователь: {full_name}\n"
-        admin_message += f"📱 Телефон: {phone}\n"
-        admin_message += f"🆔 Telegram ID: {callback.from_user.id}\n"
-        admin_message += f"🎯 Роль: {get_text(f'roles.{role}', language='ru')}\n"
+        admin_message = f"{get_text('auth.registration_admin_title', language='ru')}\n\n"
+        admin_message += f"{get_text('auth.user_field', language='ru')} {full_name}\n"
+        admin_message += f"{get_text('auth.phone_field', language='ru')} {phone}\n"
+        admin_message += f"{get_text('auth.telegram_id_field', language='ru')} {callback.from_user.id}\n"
+        admin_message += f"{get_text('auth.role_field', language='ru')} {get_text(f'roles.{role}', language='ru')}\n"
         
         if role == "executor" and specialization:
             specializations = specialization.split(",")
             spec_names = [get_text(f"specializations.{spec.strip()}", language='ru') for spec in specializations]
-            admin_message += f"🛠️ Специализация: {', '.join(spec_names)}\n"
-        
-        admin_message += f"📅 Дата: {user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            admin_message += f"{get_text('auth.specialization_field', language='ru')} {', '.join(spec_names)}\n"
+
+        admin_message += f"{get_text('auth.date_field', language='ru')} {user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         
         # Получаем список админов
         admin_users = await auth_service.get_users_by_role("admin")
@@ -373,12 +380,11 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         
         # Отправляем подтверждение пользователю
         await callback.message.edit_text(
-            f"✅ Регистрация завершена!\n\n"
-            f"👤 ФИО: {full_name}\n"
-            f"📱 Телефон: {phone}\n"
-            f"🎯 Роль: {get_text(f'roles.{role}', language=lang)}\n\n"
-            f"📋 Ваша заявка отправлена администратору на рассмотрение.\n"
-            f"Вы получите уведомление, когда заявка будет рассмотрена."
+            f"{get_text('auth.registration_complete', language=lang)}\n\n"
+            f"{get_text('auth.full_name_field', language=lang)} {full_name}\n"
+            f"{get_text('auth.phone_field', language=lang)} {phone}\n"
+            f"{get_text('auth.role_field', language=lang)} {get_text(f'roles.{role}', language=lang)}\n\n"
+            f"{get_text('auth.registration_submitted', language=lang)}"
         )
         
         # Очищаем состояние
@@ -388,18 +394,20 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         
     except Exception as e:
         logger.error(f"Ошибка подтверждения должности: {e}")
-        await callback.answer("❌ Произошла ошибка. Попробуйте еще раз.", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("auth.error_try_again", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "cancel_registration")
 async def handle_registration_cancel(callback: CallbackQuery, state: FSMContext):
     """Обработчик отмены регистрации"""
+    lang = callback.from_user.language_code or "ru"
     try:
-        await callback.message.edit_text("❌ Регистрация отменена.")
+        await callback.message.edit_text(get_text("auth.registration_cancelled", language=lang))
         await state.clear()
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка отмены регистрации: {e}")
-        await callback.answer("❌ Произошла ошибка.", show_alert=True)
+        await callback.answer(get_text("auth.error_try_again", language=lang), show_alert=True)
 
 

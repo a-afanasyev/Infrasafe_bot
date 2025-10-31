@@ -47,7 +47,8 @@ from datetime import datetime
 from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.notification_service import async_notify_action_denied
-from uk_management_bot.utils.constants import ERROR_MESSAGES
+from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.language_helpers import get_language_for_user
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -326,29 +327,34 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     if await _deny_if_pending_message(message, user_status):
         return
     
-    # Проверяем наличие телефона у пользователя
+    # Проверяем наличие телефона у пользователя и получаем язык
     from uk_management_bot.database.session import get_db
     from uk_management_bot.database.models.user import User
-    from uk_management_bot.utils.helpers import get_text
     
     db = next(get_db())
+    lang = "ru"  # Default
     try:
         user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if user and not user.phone:
-            lang = getattr(message.from_user, "language_code", None) or "ru"
+            lang = await get_language_for_user(message.from_user.id, db, message)
             await message.answer(get_text("requests.phone_required", language=lang))
+            db.close()
             return
+        # Получаем язык пользователя
+        lang = await get_language_for_user(message.from_user.id, db, message)
     except Exception as e:
         logger.error(f"Ошибка проверки телефона пользователя {message.from_user.id}: {e}")
+        lang = getattr(message.from_user, "language_code", None) or "ru"
     finally:
         db.close()
     
     logger.info(f"Пользователь {message.from_user.id} нажал '📝 Создать заявку'")
+    
     await state.set_state(RequestStates.category)
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
-    await message.answer("Начинаем создание заявки…", reply_markup=ReplyKeyboardRemove())
+    await message.answer(get_text("requests.начинаем_создание_requests", language=lang), reply_markup=ReplyKeyboardRemove())
     # Показываем inline-клавиатуру категорий
-    await message.answer("Выберите категорию заявки:", reply_markup=get_categories_inline_keyboard_with_cancel())
+    await message.answer(get_text("requests.select_категорию_requests", language=lang), reply_markup=get_categories_inline_keyboard_with_cancel())
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
 
 # Обработка выбора категории (только если пользователь ввёл текст ровно из списка категорий)

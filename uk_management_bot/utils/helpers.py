@@ -34,38 +34,157 @@ def load_locale(language: str = "ru") -> Dict[str, Any]:
         return {}
 
 def get_text(key: str, language: str = "ru", **kwargs) -> str:
-    """Получение переведенного текста по ключу"""
+    """
+    Получение переведенного текста по ключу с поддержкой множественного числа.
+
+    TASK 17 ENHANCED: Added plural support for Russian and Uzbek languages.
+
+    Args:
+        key: Locale key (supports nested keys like "auth.pending")
+        language: Language code ('ru' or 'uz')
+        **kwargs: Format parameters. Special parameter 'count' triggers plural logic.
+
+    Returns:
+        Localized string with parameters substituted
+
+    Plural Support:
+        If 'count' parameter is provided, automatically selects plural form:
+
+        Russian plural rules:
+            - 1, 21, 31... → key
+            - 2-4, 22-24... → key_plural
+            - 5-20, 25-30... → key_plural_many
+
+        Uzbek plural rules:
+            - 1 → key
+            - 2+ → key_plural
+
+    Example:
+        get_text("requests.count", language="ru", count=5)
+        # Looks for: requests.count_plural_many (if count=5)
+        # Fallback to: requests.count if plural key not found
+    """
     try:
         locale = load_locale(language)
-        
-        # Поддержка вложенных ключей (например: "auth.pending")
-        keys = key.split(".")
+
+        # Handle plural logic if 'count' parameter provided
+        plural_key = key
+        if 'count' in kwargs:
+            count = kwargs['count']
+            plural_key = _get_plural_key(key, count, language)
+
+        # Try to get value for plural_key first
+        keys = plural_key.split(".")
         value = locale
-        
+        found = True
+
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
-                # Fallback на русский язык
-                ru_locale = load_locale("ru")
-                for ru_k in keys:
-                    if isinstance(ru_locale, dict) and ru_k in ru_locale:
-                        ru_locale = ru_locale[ru_k]
-                    else:
-                        return key  # Возвращаем ключ если перевод не найден
-                return ru_locale
-        
+                found = False
+                break
+
+        # If plural key not found, try base key
+        if not found and plural_key != key:
+            keys = key.split(".")
+            value = locale
+            found = True
+
+            for k in keys:
+                if isinstance(value, dict) and k in value:
+                    value = value[k]
+                else:
+                    found = False
+                    break
+
+        # If still not found, fallback to Russian
+        if not found:
+            ru_locale = load_locale("ru")
+            value = ru_locale
+
+            for ru_k in key.split("."):
+                if isinstance(value, dict) and ru_k in value:
+                    value = value[ru_k]
+                else:
+                    return key  # Return key if translation not found
+
         # Замена параметров в тексте
         if isinstance(value, str) and kwargs:
             for param, replacement in kwargs.items():
                 value = value.replace(f"{{{param}}}", str(replacement))
-        
+
         result = value if isinstance(value, str) else key
         return result
-        
+
     except Exception as e:
         print(f"Ошибка в get_text для ключа {key}, язык {language}: {e}")
         return key
+
+
+def _get_plural_key(base_key: str, count: int, language: str) -> str:
+    """
+    Get plural key based on count and language rules.
+
+    TASK 17 Phase 1: Helper for plural support in get_text().
+
+    Args:
+        base_key: Base locale key
+        count: Number for plural selection
+        language: Language code
+
+    Returns:
+        Plural key variant
+    """
+    if language == 'ru':
+        return _get_russian_plural_key(base_key, count)
+    elif language == 'uz':
+        return _get_uzbek_plural_key(base_key, count)
+    else:
+        return base_key
+
+
+def _get_russian_plural_key(base_key: str, count: int) -> str:
+    """
+    Get Russian plural key based on count.
+
+    Russian plural rules:
+        1, 21, 31, 41... → base_key
+        2, 3, 4, 22, 23, 24... → base_key_plural
+        5-20, 25-30, 35-40... → base_key_plural_many
+    """
+    abs_count = abs(count)
+    last_digit = abs_count % 10
+    last_two_digits = abs_count % 100
+
+    # 11-14 are exceptions
+    if 11 <= last_two_digits <= 14:
+        return f"{base_key}_plural_many"
+
+    # 1, 21, 31...
+    if last_digit == 1:
+        return base_key
+
+    # 2-4, 22-24...
+    if 2 <= last_digit <= 4:
+        return f"{base_key}_plural"
+
+    # 5-20, 25-30...
+    return f"{base_key}_plural_many"
+
+
+def _get_uzbek_plural_key(base_key: str, count: int) -> str:
+    """
+    Get Uzbek plural key based on count.
+
+    Uzbek plural rules (simpler than Russian):
+        1 → base_key
+        2+ → base_key_plural
+    """
+    if abs(count) == 1:
+        return base_key
+    else:
+        return f"{base_key}_plural"
 
 def format_request_details(request, locale: Dict[str, Any]) -> str:
     """
