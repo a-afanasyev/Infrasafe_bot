@@ -32,20 +32,6 @@ class Validator:
         return False, "Неверный формат номера телефона"
     
     @staticmethod
-    def validate_address(address: str) -> Tuple[bool, str]:
-        """Валидация адреса"""
-        if not address:
-            return False, "Адрес не может быть пустым"
-        
-        if len(address.strip()) < 10:
-            return False, "Адрес должен содержать минимум 10 символов"
-        
-        if len(address) > MAX_ADDRESS_LENGTH:
-            return False, f"Адрес слишком длинный (максимум {MAX_ADDRESS_LENGTH} символов)"
-        
-        return True, "Адрес корректен"
-    
-    @staticmethod
     def validate_description(description: str) -> Tuple[bool, str]:
         """Валидация описания"""
         if not description:
@@ -218,10 +204,6 @@ class Validator:
         return True, "Все данные корректны"
 
 # Упрощенные функции валидации для FSM
-def validate_address(address: str) -> bool:
-    """Валидация адреса (упрощенная версия для FSM)"""
-    return len(address.strip()) >= 10
-
 def validate_description(description: str) -> bool:
     """Валидация описания (упрощенная версия для FSM)"""
     return len(description.strip()) >= 20

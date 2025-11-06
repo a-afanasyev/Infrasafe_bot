@@ -14,20 +14,6 @@ MAX_DESCRIPTION_LENGTH = 2000
 MAX_APARTMENT_LENGTH = 20
 MAX_NOTES_LENGTH = 1000
 
-# Типы адресов пользователя
-ADDRESS_TYPE_HOME = "home"
-ADDRESS_TYPE_APARTMENT = "apartment"
-ADDRESS_TYPE_YARD = "yard"
-
-ADDRESS_TYPES = [ADDRESS_TYPE_HOME, ADDRESS_TYPE_APARTMENT, ADDRESS_TYPE_YARD]
-
-# Отображаемые названия типов адресов
-ADDRESS_TYPE_DISPLAYS = {
-    ADDRESS_TYPE_HOME: "🏠 Мой дом",
-    ADDRESS_TYPE_APARTMENT: "🏢 Моя квартира",
-    ADDRESS_TYPE_YARD: "🌳 Мой двор"
-}
-
 # Таймауты (в секундах)
 REQUEST_TIMEOUT = 300  # 5 минут на создание заявки
 MEDIA_UPLOAD_TIMEOUT = 60  # 1 минута на загрузку медиа
