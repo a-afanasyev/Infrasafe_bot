@@ -20,7 +20,6 @@ from uk_management_bot.keyboards.requests import (
     get_yard_selection_keyboard,
     get_building_selection_keyboard,
     get_apartment_selection_keyboard,
-    parse_selected_address,
     get_categories_inline_keyboard,
     get_categories_inline_keyboard_with_cancel,
     get_urgency_inline_keyboard,
@@ -554,46 +553,18 @@ async def process_address(message: Message, state: FSMContext):
             finally:
                 db.close()
 
-        # СТАРАЯ ЛОГИКА: Обработка legacy адресов и команд
-        # Парсим выбор пользователя
-        result = await parse_selected_address(selected_text)
-        logger.info(f"[ADDRESS_SELECTION] Результат парсинга: {result}")
-
-        if result['type'] == 'predefined':
-            # Используем выбранный адрес; квартира считается указанной в адресе
-            # NOTE: Legacy path - для старых адресов без apartment_id
-            await state.update_data(address=result['address'], apartment_id=None)
-            await state.set_state(RequestStates.description)
-
-            # Контекстное сообщение в зависимости от типа адреса
-            context_message = get_contextual_help(result['address_type'], language=lang)
-            await message.answer(context_message, reply_markup=get_cancel_keyboard(language=lang))
-
-            logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал готовый адрес: {result['address']}, тип: {result['address_type']}")
-
-        elif result['type'] == 'cancel':
-            # Отменить создание заявки
-            await cancel_request(message, state, lang=lang)
-            return
-
-        elif result['type'] == 'unknown':
-            # Неизвестный выбор - улучшенная обработка
-            logger.warning(f"[ADDRESS_SELECTION] Неизвестный выбор адреса: '{selected_text}' от пользователя {user_id}")
-            await message.answer(
-                get_text("requests.select_from_list", language=lang)
-            )
-            # Показываем клавиатуру снова
-            try:
-                keyboard = get_address_selection_keyboard(user_id, language=lang)
-                await message.answer(get_text("requests.choose_address_prompt", language=lang), reply_markup=keyboard)
-            except Exception as keyboard_error:
-                logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
-                await graceful_fallback(message, "keyboard_error")
-
-        else:
-            # Обработка других типов ошибок
-            logger.error(f"[ADDRESS_SELECTION] Неожиданный тип результата: {result['type']}")
-            await graceful_fallback(message, "parsing_error")
+        # Если дошли сюда - неизвестный формат адреса
+        logger.warning(f"[ADDRESS_SELECTION] Неизвестный формат адреса: '{selected_text}' от пользователя {user_id}")
+        await message.answer(
+            get_text("requests.select_from_list", language=lang)
+        )
+        # Показываем клавиатуру снова
+        try:
+            keyboard = get_address_selection_keyboard(user_id, language=lang)
+            await message.answer(get_text("requests.choose_address_prompt", language=lang), reply_markup=keyboard)
+        except Exception as keyboard_error:
+            logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
+            await graceful_fallback(message, "keyboard_error")
 
     except Exception as e:
         logger.error(f"[ADDRESS_SELECTION] Критическая ошибка обработки выбора адреса: {e}")
