@@ -34,7 +34,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.states.shift_management import ShiftManagementStates, TemplateManagementStates, ExecutorAssignmentStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language
-from uk_management_bot.utils.localization import get_text
+from uk_management_bot.utils.helpers import get_text
 import logging
 
 logger = logging.getLogger(__name__)
