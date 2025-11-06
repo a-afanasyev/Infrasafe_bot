@@ -208,27 +208,6 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-@router.message(OnboardingStates.waiting_for_home_address, F.text)
-async def process_home_address(message: Message, state: FSMContext, db: Session, user_status: str = None):
-    """
-    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
-
-    Этот обработчик больше не должен вызываться, так как выбор адреса происходит
-    через user_apartment_selection. Если пользователь попал сюда, перенаправляем
-    его на выбор квартиры из справочника.
-    """
-    lang = message.from_user.language_code or "ru"
-
-    await state.clear()
-    await message.answer(
-        "⚠️ <b>Система адресов обновлена!</b>\n\n"
-        "Теперь адрес выбирается из справочника квартир.\n"
-        "Пожалуйста, используйте кнопку '🏘️ Мои квартиры' в профиле для добавления адреса.",
-        reply_markup=get_main_keyboard()
-    )
-
-    logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик адреса")
-
 async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None):
     """Завершает процесс онбординга"""
     lang = message.from_user.language_code or "ru"
