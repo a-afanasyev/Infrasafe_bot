@@ -1,22 +1,23 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
+from uk_management_bot.utils.helpers import get_text
 
-def get_main_keyboard() -> ReplyKeyboardMarkup:
+def get_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Главная клавиатура (вариант по умолчанию для обратной совместимости).
 
     Используется старым кодом. Не учитывает роли.
     """
-    return get_main_keyboard_for_role(active_role="applicant", roles=["applicant"])
+    return get_main_keyboard_for_role(active_role="applicant", roles=["applicant"], language=language)
 
 
-def get_contextual_keyboard(roles: list = None, active_role: str = None) -> ReplyKeyboardMarkup:
+def get_contextual_keyboard(roles: list = None, active_role: str = None, language: str = "ru") -> ReplyKeyboardMarkup:
     """Получить клавиатуру с учетом текущих ролей пользователя.
-    
+
     Если роли не переданы, возвращает базовую клавиатуру.
     """
     if not roles or not active_role:
-        return get_main_keyboard()
-    return get_main_keyboard_for_role(active_role=active_role, roles=roles)
+        return get_main_keyboard(language=language)
+    return get_main_keyboard_for_role(active_role=active_role, roles=roles, language=language)
 
 
 def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
@@ -48,45 +49,58 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
             # Получаем статус пользователя
             user_status = user.status or "approved"
 
+            # Получаем язык пользователя
+            language = user.language or "ru"
+
             db.close()
-            return get_main_keyboard_for_role(active_role=active_role, roles=roles, user_status=user_status)
+            return get_main_keyboard_for_role(
+                active_role=active_role,
+                roles=roles,
+                user_status=user_status,
+                language=language
+            )
 
         db.close()
         return get_main_keyboard()
 
     except Exception:
-        return get_main_keyboard() 
+        return get_main_keyboard()
 
-def get_cancel_keyboard() -> ReplyKeyboardMarkup:
+def get_cancel_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Клавиатура с кнопкой отмены"""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text="❌ Отмена"))
+    builder.add(KeyboardButton(text=get_text("buttons.cancel", language=language)))
     return builder.as_markup(resize_keyboard=True)
 
-def get_yes_no_keyboard() -> ReplyKeyboardMarkup:
+def get_yes_no_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Клавиатура Да/Нет"""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text="✅ Да"))
-    builder.add(KeyboardButton(text="❌ Нет"))
-    builder.add(KeyboardButton(text="🔙 Назад"))
+    builder.add(KeyboardButton(text=get_text("buttons.yes", language=language)))
+    builder.add(KeyboardButton(text=get_text("buttons.no", language=language)))
+    builder.add(KeyboardButton(text=get_text("buttons.back", language=language)))
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
 def get_rating_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура для оценки (1-5 звезд)"""
     builder = InlineKeyboardBuilder()
-    
+
     for i in range(1, 6):
         builder.add(InlineKeyboardButton(
             text=f"{'⭐' * i}",
             callback_data=f"rate_{i}"
         ))
-    
+
     builder.adjust(5)
     return builder.as_markup()
 
 
-def get_main_keyboard_for_role(active_role: str, roles: list[str], user_status: str = None) -> ReplyKeyboardMarkup:
+def get_main_keyboard_for_role(
+    active_role: str,
+    roles: list[str],
+    user_status: str = None,
+    language: str = "ru"
+) -> ReplyKeyboardMarkup:
     """Главная клавиатура с учётом активной роли и доступных ролей.
 
     Сценарии:
@@ -105,51 +119,45 @@ def get_main_keyboard_for_role(active_role: str, roles: list[str], user_status: 
 
     if active_role == "executor":
         # Клавиатура исполнителя
-        builder.add(KeyboardButton(text="🛠 Активные заявки"))
-        builder.add(KeyboardButton(text="📦 Архив"))
-        builder.add(KeyboardButton(text="👤 Профиль"))
-        builder.add(KeyboardButton(text="ℹ️ Помощь"))
+        builder.add(KeyboardButton(text=get_text("main_menu.active_requests", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.archive", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
         # Быстрый доступ к сменам отдельной кнопкой
-        builder.add(KeyboardButton(text="🔄 Смена"))
-        builder.add(KeyboardButton(text="📋 Мои смены"))
+        builder.add(KeyboardButton(text=get_text("main_menu.shift", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.my_shifts", language=language)))
     else:
         # Базовые кнопки для заявителя/других ролей
         # Не показываем кнопку "Создать заявку" для пользователей на модерации
         if user_status != "pending":
-            builder.add(KeyboardButton(text="📝 Создать заявку"))
-        builder.add(KeyboardButton(text="📋 Мои заявки"))
-        builder.add(KeyboardButton(text="✅ Ожидают приёмки"))  # Кнопка для приёмки выполненных заявок
-        builder.add(KeyboardButton(text="👤 Профиль"))
-        builder.add(KeyboardButton(text="ℹ️ Помощь"))
+            builder.add(KeyboardButton(text=get_text("main_menu.create_request", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.my_requests", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.acceptance", language=language)))  # Кнопка для приёмки выполненных заявок
+        builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
 
     # Кнопка выбор роли при наличии ≥2 ролей
     if len(unique_roles) > 1:
-        builder.add(KeyboardButton(text="🔀 Выбрать роль"))
+        builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))
 
     # Кнопки менеджера (только для активных ролей admin/manager)
     if active_role in ["admin", "manager"]:
-        builder.add(KeyboardButton(text="🔧 Админ панель"))
+        builder.add(KeyboardButton(text=get_text("main_menu.admin_panel", language=language)))
 
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
 
-def get_role_switch_inline(roles: list[str], active_role: str) -> InlineKeyboardMarkup:
+def get_role_switch_inline(roles: list[str], active_role: str, language: str = "ru") -> InlineKeyboardMarkup:
     """Inline‑клавиатура для переключения роли.
 
     - Показывает только роли, которые есть у пользователя
     - Активная роль помечается галочкой
     """
     builder = InlineKeyboardBuilder()
-    role_names = {
-        "applicant": "Житель",
-        "executor": "Сотрудник",
-        "manager": "Менеджер",
-        "admin": "Администратор",
-    }
 
     for role in roles or []:
-        name = role_names.get(role, role)
+        name = get_text(f"roles.{role}", language=language)
         mark = " ✓" if role == active_role else ""
         builder.add(InlineKeyboardButton(text=f"{name}{mark}", callback_data=f"switch_role:{role}"))
 

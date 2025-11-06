@@ -6218,5 +6218,18 @@
     "yard_removed_success": "✅ Hovli muvaffaqiyatli o'chirildi",
     "yard_remove_failed": "❌ Hovlini o'chirib bo'lmadi"
   },
-  "welcome": "Ariza boshqaruvi tizimiga xush kelibsiz! 🏠"
+  "welcome": "Ariza boshqaruvi tizimiga xush kelibsiz! 🏠",
+  "main_menu": {
+    "create_request": "📝 Ariza yaratish",
+    "my_requests": "📋 Mening arizalarim",
+    "profile": "👤 Profil",
+    "help": "ℹ️ Yordam",
+    "active_requests": "🛠 Faol arizalar",
+    "archive": "📦 Arxiv",
+    "shift": "🔄 Smena",
+    "my_shifts": "📋 Mening smenalarim",
+    "switch_role": "🔀 Rolni tanlash",
+    "admin_panel": "🔧 Admin panel",
+    "acceptance": "✅ Qabul qilish kutilmoqda"
+  }
 }
