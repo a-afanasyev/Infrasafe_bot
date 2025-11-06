@@ -145,6 +145,8 @@ python3 scripts/generate_locale_keys.py \
 
 #### Refactoring Pattern
 
+> ⚠️ 31.10.2025 Update: при рефакторинге удаляем все кириллические литералы из логики. Любые значения для `F.text`, callback data, `ReplyKeyboard`/`InlineKeyboard` и сообщений берём через `get_text()` или ASCII-константы. После каждого файла прогоняем `rg "[\u0400-\u04FF]" uk_management_bot/handlers/<file>` и убеждаемся, что результаты содержат только комментарии/docstring'и.
+
 **Before** (requests.py:349):
 ```python
 await message.answer("Начинаем создание заявки…", reply_markup=ReplyKeyboardRemove())

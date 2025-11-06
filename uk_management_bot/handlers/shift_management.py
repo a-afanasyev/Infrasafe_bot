@@ -34,6 +34,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.states.shift_management import ShiftManagementStates, TemplateManagementStates, ExecutorAssignmentStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language
+from uk_management_bot.utils.localization import get_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -91,17 +92,16 @@ async def cmd_shifts(message: Message, state: FSMContext, db=None):
         lang = get_user_language(message.from_user.id, db)
         
         await message.answer(
-            "🔧 <b>Управление сменами</b>\n\n"
-            "Выберите действие:",
+            get_text("shift_management.main_menu_title", language=lang),
             reply_markup=get_main_shift_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.main_menu)
-        
+
     except Exception as e:
         logger.error(f"Ошибка команды /shifts: {e}")
-        await message.answer("❌ Произошла ошибка при загрузке меню смен")
+        await message.answer(get_text("shift_management.menu_load_error", language=lang))
     finally:
         if db:
             db.close()
@@ -119,18 +119,17 @@ async def handle_shift_planning(callback: CallbackQuery, state: FSMContext, db=N
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "📅 <b>Планирование смен</b>\n\n"
-            "Выберите действие:",
+            get_text("shift_management.planning_menu_title", language=lang),
             reply_markup=get_planning_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.planning_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка планирования смен: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -146,18 +145,17 @@ async def handle_auto_planning(callback: CallbackQuery, state: FSMContext, db=No
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "🤖 <b>Автоматическое планирование</b>\n\n"
-            "Выберите режим автоматического планирования:",
+            get_text("shift_management.auto_planning_title", language=lang),
             reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
         
         await state.set_state(ShiftManagementStates.auto_planning_settings)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка автопланирования: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -171,52 +169,51 @@ async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=N
         if not db:
             db = next(get_db())
         
+        lang = get_user_language(callback.from_user.id, db)
         planning_service = ShiftPlanningService(db)
-        
+
         # Начинаем планирование с понедельника текущей недели
         today = date.today()
         days_until_monday = today.weekday()
         monday = today - timedelta(days=days_until_monday)
-        
-        await callback.answer("⏳ Планирую смены на неделю...")
-        
+
+        await callback.answer(get_text("shift_management.planning_week_progress", language=lang))
+
         results = planning_service.plan_weekly_schedule(monday)
-        
+
         # Формируем отчет
         stats = results['statistics']
-        response = (
-            f"📅 <b>Недельное автопланирование завершено</b>\n\n"
-            f"<b>Период:</b> {results['week_start'].strftime('%d.%m.%Y')} - "
-            f"{(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y')}\n"
-            f"<b>Создано смен:</b> {stats['total_shifts']}\n\n"
-        )
-        
+        period = f"{results['week_start'].strftime('%d.%m.%Y')} - {(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y')}"
+        response = get_text("shift_management.auto_plan_week_complete", language=lang,
+                           period=period, total_shifts=stats['total_shifts'])
+
         if stats['shifts_by_day']:
-            response += "<b>По дням недели:</b>\n"
+            response += get_text("shift_management.shifts_by_day_header", language=lang)
             for day, count in stats['shifts_by_day'].items():
-                response += f"• {day}: {count} смен\n"
-        
+                response += get_text("shift_management.shifts_count", language=lang, name=day, count=count)
+
         if stats['shifts_by_template']:
-            response += "\n<b>По шаблонам:</b>\n"
+            response += get_text("shift_management.shifts_by_template_header", language=lang)
             for template, count in stats['shifts_by_template'].items():
-                response += f"• {template}: {count} смен\n"
-        
+                response += get_text("shift_management.shifts_count", language=lang, name=template, count=count)
+
         if results['errors']:
-            response += f"\n❌ <b>Ошибки:</b>\n"
+            response += get_text("shift_management.errors_header", language=lang)
             for error in results['errors'][:3]:  # Показываем только первые 3 ошибки
                 response += f"• {error}\n"
-        
+
         await callback.message.edit_text(
             response,
-            reply_markup=get_auto_planning_keyboard(),
+            reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
-        
+
     except Exception as e:
         logger.error(f"Ошибка автопланирования недели: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.message.edit_text(
-            f"❌ Ошибка автопланирования недели:\n{str(e)[:200]}",
-            reply_markup=get_auto_planning_keyboard(),
+            get_text("shift_management.auto_plan_week_error", language=lang, error=str(e)[:200]),
+            reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
     finally:
@@ -232,16 +229,17 @@ async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=
         if not db:
             db = next(get_db())
         
+        lang = get_user_language(callback.from_user.id, db)
         planning_service = ShiftPlanningService(db)
-        
-        await callback.answer("⏳ Планирую смены на месяц...")
-        
+
+        await callback.answer(get_text("shift_management.planning_month_progress", language=lang))
+
         # Планируем по неделям на весь месяц
         today = date.today()
         total_shifts = 0
         weeks_planned = 0
         errors = []
-        
+
         # Планируем 4 недели вперед
         for week_offset in range(4):
             week_start = today + timedelta(weeks=week_offset)
@@ -252,32 +250,31 @@ async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=
                 if results['errors']:
                     errors.extend(results['errors'])
             except Exception as e:
-                errors.append(f"Неделя {week_offset + 1}: {str(e)}")
-        
-        response = (
-            f"📅 <b>Месячное автопланирование завершено</b>\n\n"
-            f"<b>Запланировано недель:</b> {weeks_planned}/4\n"
-            f"<b>Создано смен:</b> {total_shifts}\n"
-        )
-        
+                errors.append(get_text("shift_management.week_error", language=lang,
+                                      week=week_offset + 1, error=str(e)))
+
+        response = get_text("shift_management.auto_plan_month_complete", language=lang,
+                          weeks_planned=weeks_planned, total_shifts=total_shifts)
+
         if errors:
-            response += f"\n❌ <b>Ошибки ({len(errors)}):</b>\n"
+            response += get_text("shift_management.errors_count_header", language=lang, count=len(errors))
             for error in errors[:3]:  # Показываем только первые 3 ошибки
                 response += f"• {error}\n"
             if len(errors) > 3:
-                response += f"• ... и еще {len(errors) - 3} ошибок\n"
-        
+                response += get_text("shift_management.more_errors", language=lang, count=len(errors) - 3)
+
         await callback.message.edit_text(
             response,
-            reply_markup=get_auto_planning_keyboard(),
+            reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
-        
+
     except Exception as e:
         logger.error(f"Ошибка автопланирования месяца: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.message.edit_text(
-            f"❌ Ошибка автопланирования месяца:\n{str(e)[:200]}",
-            reply_markup=get_auto_planning_keyboard(),
+            get_text("shift_management.auto_plan_month_error", language=lang, error=str(e)[:200]),
+            reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
     finally:
@@ -293,24 +290,25 @@ async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, 
         if not db:
             db = next(get_db())
         
+        lang = get_user_language(callback.from_user.id, db)
         planning_service = ShiftPlanningService(db)
-        
+
         tomorrow = date.today() + timedelta(days=1)
-        
-        await callback.answer("⏳ Создаю смены на завтра...")
-        
+
+        await callback.answer(get_text("shift_management.planning_tomorrow_progress", language=lang))
+
         # Получаем активные шаблоны для автосоздания
         templates = db.query(ShiftTemplate).filter(
             ShiftTemplate.is_active == True,
             ShiftTemplate.auto_create == True
         ).all()
-        
+
         total_shifts = 0
         created_by_template = {}
         errors = []
-        
+
         weekday = tomorrow.weekday() + 1  # 1=понедельник, 7=воскресенье
-        
+
         for template in templates:
             if template.is_day_included(weekday):
                 try:
@@ -320,40 +318,38 @@ async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, 
                         created_by_template[template.name] = len(shifts)
                 except Exception as e:
                     errors.append(f"{template.name}: {str(e)}")
-        
-        response = (
-            f"📅 <b>Создание смен на завтра завершено</b>\n\n"
-            f"<b>Дата:</b> {tomorrow.strftime('%d.%m.%Y')}\n"
-            f"<b>Создано смен:</b> {total_shifts}\n"
-        )
-        
+
+        response = get_text("shift_management.auto_plan_tomorrow_complete", language=lang,
+                          date=tomorrow.strftime('%d.%m.%Y'), total_shifts=total_shifts)
+
         if created_by_template:
-            response += "\n<b>По шаблонам:</b>\n"
+            response += get_text("shift_management.shifts_by_template_header", language=lang)
             for template, count in created_by_template.items():
-                response += f"• {template}: {count} смен\n"
-        
+                response += get_text("shift_management.shifts_count", language=lang, name=template, count=count)
+
         if total_shifts == 0:
-            response += "\n💡 <i>Возможные причины:</i>\n"
-            response += "• Нет активных шаблонов с auto_create=true\n"
-            response += "• У шаблонов не настроены дни недели\n"
-            response += "• Завтра не входит в рабочие дни шаблонов"
-        
+            response += get_text("shift_management.possible_reasons_header", language=lang)
+            response += get_text("shift_management.reason_no_templates", language=lang)
+            response += get_text("shift_management.reason_no_weekdays", language=lang)
+            response += get_text("shift_management.reason_not_workday", language=lang)
+
         if errors:
-            response += f"\n❌ <b>Ошибки:</b>\n"
+            response += get_text("shift_management.errors_header", language=lang)
             for error in errors[:3]:
                 response += f"• {error}\n"
-        
+
         await callback.message.edit_text(
             response,
-            reply_markup=get_auto_planning_keyboard(),
+            reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
-        
+
     except Exception as e:
         logger.error(f"Ошибка создания смен на завтра: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.message.edit_text(
-            f"❌ Ошибка создания смен на завтра:\n{str(e)[:200]}",
-            reply_markup=get_auto_planning_keyboard(),
+            get_text("shift_management.auto_plan_tomorrow_error", language=lang, error=str(e)[:200]),
+            reply_markup=get_auto_planning_keyboard(lang),
             parse_mode="HTML"
         )
     finally:
@@ -372,21 +368,20 @@ async def handle_view_schedule(callback: CallbackQuery, state: FSMContext, db=No
         
         # Показываем расписание на сегодня
         today = date.today()
-        
+
         await callback.message.edit_text(
-            f"📋 <b>Расписание смен</b>\n\n"
-            f"📅 {today.strftime('%d.%m.%Y')}\n\n"
-            "Выберите дату для просмотра:",
+            get_text("shift_management.schedule_view_title", language=lang,
+                    date=today.strftime('%d.%m.%Y')),
             reply_markup=get_schedule_view_keyboard(today, lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.viewing_schedule)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка просмотра расписания: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        await callback.answer(get_text("shift_management.schedule_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -411,30 +406,31 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
         ).order_by(Shift.planned_start_time).all()
         
         # Формируем сообщение
-        response = f"📋 <b>Расписание смен</b>\n\n📅 {selected_date.strftime('%d.%m.%Y')}\n\n"
-        
+        response = get_text("shift_management.schedule_date_title", language=lang,
+                          date=selected_date.strftime('%d.%m.%Y'))
+
         if shifts:
-            response += f"<b>Найдено смен: {len(shifts)}</b>\n\n"
+            response += get_text("shift_management.shifts_found", language=lang, count=len(shifts))
             for shift in shifts:
                 # Получаем имя исполнителя
-                executor_name = "Не назначен"
+                executor_name = get_text("shift_management.not_assigned", language=lang)
                 if shift.user_id:
                     user = db.query(User).filter(User.id == shift.user_id).first()
                     if user:
                         executor_name = f"{user.first_name} {user.last_name or ''}".strip()
-                
+
                 # Получаем название шаблона
-                template_name = "Без шаблона"
+                template_name = get_text("shift_management.no_template", language=lang)
                 if shift.shift_template_id:
                     template = db.query(ShiftTemplate).filter(ShiftTemplate.id == shift.shift_template_id).first()
                     if template:
                         template_name = template.name
-                
+
                 start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
                 end_time = shift.planned_end_time.strftime('%H:%M') if shift.planned_end_time else "??:??"
-                
+
                 status_emoji = "🟢" if shift.status == "active" else "🟡" if shift.status == "planned" else "🔴"
-                
+
                 response += (
                     f"{status_emoji} <b>{start_time}-{end_time}</b>\n"
                     f"   👤 {executor_name}\n"
@@ -442,21 +438,22 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
                     f"   📊 {shift.status.title()}\n\n"
                 )
         else:
-            response += "📭 <i>На эту дату смен не запланировано</i>\n\n"
-        
-        response += "Выберите другую дату:"
-        
+            response += get_text("shift_management.no_shifts_on_date", language=lang)
+
+        response += get_text("shift_management.select_another_date", language=lang)
+
         await callback.message.edit_text(
             response,
             reply_markup=get_schedule_view_keyboard(selected_date, lang),
             parse_mode="HTML"
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка выбора даты расписания: {e}")
-        await callback.answer("❌ Произошла ошибка при загрузке расписания", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.schedule_load_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -474,16 +471,16 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
         # Определяем начало текущей недели (понедельник)
         today = date.today()
         monday = today - timedelta(days=today.weekday())
-        
-        response = f"📅 <b>Недельное расписание</b>\n\n"
-        response += f"<b>Неделя {monday.strftime('%d.%m')} - {(monday + timedelta(days=6)).strftime('%d.%m.%Y')}</b>\n\n"
-        
+
+        period = f"{monday.strftime('%d.%m')} - {(monday + timedelta(days=6)).strftime('%d.%m.%Y')}"
+        response = get_text("shift_management.week_schedule_title", language=lang, period=period)
+
         # Проходим по каждому дню недели
-        days_names = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
-        
+        days_keys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
         for i in range(7):
             current_day = monday + timedelta(days=i)
-            day_name = days_names[i]
+            day_name = get_text(f"shift_management.{days_keys[i]}", language=lang)
             
             # Получаем смены на этот день
             shifts = db.query(Shift).filter(
@@ -505,18 +502,13 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
                     if shift.template:
                         shift_name = shift.template.name
                     elif shift.shift_type:
-                        shift_type_names = {
-                            "regular": "Обычная",
-                            "emergency": "Экстренная",
-                            "overtime": "Сверхурочная",
-                            "maintenance": "Тех.обслуживание"
-                        }
-                        shift_name = shift_type_names.get(shift.shift_type, shift.shift_type)
+                        shift_type_key = f"shift_type_{shift.shift_type}"
+                        shift_name = get_text(f"shift_management.{shift_type_key}", language=lang) if shift_type_key in ["shift_type_regular", "shift_type_emergency", "shift_type_overtime", "shift_type_maintenance"] else shift.shift_type
                     else:
-                        shift_name = "Смена"
+                        shift_name = get_text("shift_management.shift_generic", language=lang)
 
                     # Получаем имя исполнителя
-                    executor_name = "Не назначен"
+                    executor_name = get_text("shift_management.not_assigned", language=lang)
                     if shift.user_id:
                         user = db.query(User).filter(User.id == shift.user_id).first()
                         if user:
@@ -524,7 +516,7 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
 
                     response += f"  {status_emoji} <b>{start_time}-{end_time}</b> {shift_name} | {executor_name}\n"
             else:
-                response += f"  📭 <i>Смен нет</i>\n"
+                response += get_text("shift_management.no_shifts", language=lang)
             
             response += "\n"
         
@@ -535,10 +527,11 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
         )
         
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка недельного расписания: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -572,30 +565,30 @@ async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext,
                     shifts_by_date[shift_date] = 0
                 shifts_by_date[shift_date] += 1
         
-        response = f"📅 <b>Месячный обзор</b>\n\n"
-        response += f"<b>{today.strftime('%B %Y')}</b>\n\n"
-        response += f"<b>Всего смен в месяце: {len(shifts)}</b>\n\n"
-        
+        response = get_text("shift_management.month_overview_title", language=lang,
+                          month=today.strftime('%B %Y'), total=len(shifts))
+
         # Показываем дни с наибольшим количеством смен
         if shifts_by_date:
             sorted_dates = sorted(shifts_by_date.items(), key=lambda x: x[1], reverse=True)[:10]
-            response += "<b>Самые загруженные дни:</b>\n"
+            response += get_text("shift_management.busiest_days_header", language=lang)
             for shift_date, count in sorted_dates:
                 response += f"• {shift_date.strftime('%d.%m')}: {count} смен\n"
         else:
-            response += "📭 <i>В этом месяце нет запланированных смен</i>\n"
-        
+            response += get_text("shift_management.no_shifts_month", language=lang)
+
         await callback.message.edit_text(
             response,
             reply_markup=get_schedule_view_keyboard(today, lang),
             parse_mode="HTML"
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка месячного обзора: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -610,18 +603,18 @@ async def handle_back_to_shifts(callback: CallbackQuery, state: FSMContext, db=N
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "👥 <b>Управление сменами</b>\n\n"
-            "Выберите действие:",
+            get_text("shift_management.back_menu_title", language=lang),
             reply_markup=get_main_shift_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.clear()
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка возврата к меню смен: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -637,18 +630,18 @@ async def handle_template_management(callback: CallbackQuery, state: FSMContext,
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "🗂️ <b>Управление шаблонами</b>\n\n"
-            "Выберите действие с шаблонами:",
+            get_text("shift_management.template_management_title", language=lang),
             reply_markup=get_template_management_keyboard(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.template_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка управления шаблонами: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -664,20 +657,21 @@ async def handle_create_new_template(callback: CallbackQuery, state: FSMContext,
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "➕ <b>Создание шаблона смены</b>\n\n"
-            "Введите название шаблона:",
+            get_text("shift_management.create_template_title", language=lang),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                    callback_data="template_management")]
             ]),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.template_name_input)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка создания шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -698,17 +692,15 @@ async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, 
         
         if not templates:
             await callback.message.edit_text(
-                "📋 <b>Шаблоны смен</b>\n\n"
-                "❌ Шаблонов не найдено\n\n"
-                "Создайте первый шаблон с помощью кнопки 'Создать новый шаблон'",
+                get_text("shift_management.no_templates_found", language=lang),
                 reply_markup=get_template_management_keyboard(lang),
                 parse_mode="HTML"
             )
-            await callback.answer("Шаблонов не найдено")
+            await callback.answer(get_text("shift_management.no_templates_alert", language=lang))
             return
         
         # Формируем текст со списком шаблонов
-        templates_text = "📋 <b>Все шаблоны смен</b>\n\n"
+        templates_text = get_text("shift_management.templates_list_title", language=lang)
         
         for i, template in enumerate(templates, 1):
             status_emoji = "✅" if template.is_active else "❌"
@@ -723,10 +715,11 @@ async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, 
                 if len(template.required_specializations) > 2:
                     specialization_info += f" (+{len(template.required_specializations)-2})"
             
+            description = template.description or get_text("shift_management.no_description", language=lang)
             templates_text += (
                 f"{i}. {status_emoji} <b>{template.name}</b>\n"
                 f"   🕒 {time_info} ({duration_info}){specialization_info}\n"
-                f"   📝 {template.description or 'Без описания'}\n\n"
+                f"   📝 {description}\n\n"
             )
         
         await callback.message.edit_text(
@@ -739,7 +732,8 @@ async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, 
         
     except Exception as e:
         logger.error(f"Ошибка просмотра шаблонов: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -758,20 +752,20 @@ async def handle_template_name_input(message: Message, state: FSMContext, db=Non
         # Проверяем длину названия
         if len(template_name) < 3:
             await message.answer(
-                "❌ Название шаблона должно содержать минимум 3 символа.\n"
-                "Введите название шаблона еще раз:",
+                get_text("shift_management.name_too_short", language=lang),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                    [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                        callback_data="template_management")]
                 ])
             )
             return
         
         if len(template_name) > 50:
             await message.answer(
-                "❌ Название шаблона не должно превышать 50 символов.\n"
-                "Введите название шаблона еще раз:",
+                get_text("shift_management.name_too_long", language=lang),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                    [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                        callback_data="template_management")]
                 ])
             )
             return
@@ -781,11 +775,10 @@ async def handle_template_name_input(message: Message, state: FSMContext, db=Non
         
         # Переходим к вводу времени начала
         await message.answer(
-            f"✅ Название шаблона: <b>{template_name}</b>\n\n"
-            "🕒 Теперь введите время начала смены в формате ЧЧ:ММ\n"
-            "(например: 09:00, 14:30, 22:15):",
+            get_text("shift_management.name_saved_enter_time", language=lang, name=template_name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                    callback_data="template_management")]
             ]),
             parse_mode="HTML"
         )
@@ -794,7 +787,8 @@ async def handle_template_name_input(message: Message, state: FSMContext, db=Non
         
     except Exception as e:
         logger.error(f"Ошибка ввода названия шаблона: {e}")
-        await message.answer("❌ Произошла ошибка, попробуйте еще раз")
+        lang = get_user_language(message.from_user.id, db) if db else "ru"
+        await message.answer(get_text("shift_management.template_name_error", language=lang))
     finally:
         if db:
             db.close()
@@ -824,10 +818,10 @@ async def handle_template_time_input(message: Message, state: FSMContext, db=Non
                 
         except (ValueError, IndexError):
             await message.answer(
-                "❌ Неверный формат времени!\n\n"
-                "Введите время в формате ЧЧ:ММ (например: 09:00, 14:30):",
+                get_text("shift_management.invalid_time_format", language=lang),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                    [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                        callback_data="template_management")]
                 ])
             )
             return
@@ -837,11 +831,10 @@ async def handle_template_time_input(message: Message, state: FSMContext, db=Non
         
         # Переходим к вводу продолжительности
         await message.answer(
-            f"✅ Время начала: <b>{hour:02d}:{minute:02d}</b>\n\n"
-            "⏱️ Введите продолжительность смены в часах\n"
-            "(например: 8, 12, 4):",
+            get_text("shift_management.time_saved_enter_duration", language=lang, hour=hour, minute=minute),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                    callback_data="template_management")]
             ]),
             parse_mode="HTML"
         )
@@ -850,7 +843,8 @@ async def handle_template_time_input(message: Message, state: FSMContext, db=Non
         
     except Exception as e:
         logger.error(f"Ошибка ввода времени шаблона: {e}")
-        await message.answer("❌ Произошла ошибка, попробуйте еще раз")
+        lang = get_user_language(message.from_user.id, db) if db else "ru"
+        await message.answer(get_text("shift_management.template_time_error", language=lang))
     finally:
         if db:
             db.close()
@@ -874,10 +868,10 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
                 raise ValueError("Неверная продолжительность")
         except ValueError:
             await message.answer(
-                "❌ Неверная продолжительность!\n\n"
-                "Введите продолжительность смены в часах (от 1 до 24):",
+                get_text("shift_management.invalid_duration", language=lang),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                    [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                        callback_data="template_management")]
                 ])
             )
             return
@@ -894,14 +888,13 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
                 callback_data=f"template_create_spec_{spec_key}"
             )])
         
-        keyboard.append([InlineKeyboardButton(text="➡️ Далее (без специализаций)", callback_data="template_create_no_specs")])
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")])
-        
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.next_no_specs", language=lang),
+                                            callback_data="template_create_no_specs")])
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                            callback_data="template_management")])
+
         await message.answer(
-            f"✅ Продолжительность смены: <b>{duration} ч.</b>\n\n"
-            "🎯 <b>Выберите специализации для шаблона:</b>\n\n"
-            "Нажимайте на специализации для их выбора.\n"
-            "Можете выбрать несколько или пропустить этот шаг.",
+            get_text("shift_management.duration_saved_select_specs", language=lang, duration=duration),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode="HTML"
         )
@@ -910,8 +903,9 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
         
     except Exception as e:
         logger.error(f"Ошибка создания шаблона: {e}")
+        lang = get_user_language(message.from_user.id, db) if db else "ru"
         await message.answer(
-            "❌ Произошла ошибка при создании шаблона",
+            get_text("shift_management.template_creation_error", language=lang),
             reply_markup=get_template_management_keyboard(lang)
         )
     finally:
@@ -938,13 +932,11 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
         
         if not templates:
             await callback.message.edit_text(
-                "✏️ <b>Редактирование шаблонов</b>\n\n"
-                "❌ Шаблонов для редактирования не найдено\n\n"
-                "Сначала создайте шаблоны с помощью кнопки 'Создать новый шаблон'",
+                get_text("shift_management.edit_no_templates", language=lang),
                 reply_markup=get_template_management_keyboard(lang),
                 parse_mode="HTML"
             )
-            await callback.answer("Шаблонов не найдено")
+            await callback.answer(get_text("shift_management.no_templates_alert", language=lang))
             return
         
         # Формируем клавиатуру со списком шаблонов для редактирования
@@ -963,14 +955,14 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
         
         # Добавляем кнопки управления
         keyboard.extend([
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+            [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                callback_data="template_management")]
         ])
-        
+
         logger.debug("Отправляем сообщение со списком шаблонов")
-        
+
         await callback.message.edit_text(
-            "✏️ <b>Редактирование шаблонов</b>\n\n"
-            "Выберите шаблон для редактирования:",
+            get_text("shift_management.edit_templates_title", language=lang),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode="HTML"
         )
@@ -983,7 +975,8 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
         
     except Exception as e:
         logger.error(f"Ошибка редактирования шаблонов: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.edit_templates_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1004,46 +997,50 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
         
         # Получаем шаблон из базы данных
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         # Формируем информацию о шаблоне
-        status_text = "Активен" if template.is_active else "Неактивен"
+        status_text = get_text("shift_management.template_status_active", language=lang) if template.is_active else get_text("shift_management.template_status_inactive", language=lang)
         time_info = f"{template.start_hour:02d}:{template.start_minute or 0:02d}"
-        
-        specialization_info = "Не указаны"
+
+        specialization_info = get_text("shift_management.specializations_not_specified", language=lang)
         if template.required_specializations:
             from uk_management_bot.utils.constants import SPECIALIZATIONS
             specialization_info = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in template.required_specializations])
-        
-        template_info = (
-            f"✏️ <b>Редактирование шаблона</b>\n\n"
-            f"📋 <b>Название:</b> {template.name}\n"
-            f"📝 <b>Описание:</b> {template.description or 'Не указано'}\n"
-            f"🕒 <b>Время начала:</b> {time_info}\n"
-            f"⏱️ <b>Продолжительность:</b> {template.duration_hours}ч\n"
-            f"🎯 <b>Специализации:</b> {specialization_info}\n"
-            f"📊 <b>Статус:</b> {status_text}\n\n"
-            f"Выберите что хотите изменить:"
-        )
+
+        description = template.description or get_text("shift_management.description_not_specified", language=lang)
+
+        template_info = get_text("shift_management.edit_template_details", language=lang,
+                                name=template.name,
+                                description=description,
+                                time=time_info,
+                                duration=template.duration_hours,
+                                specializations=specialization_info,
+                                status=status_text)
         
         # Клавиатура редактирования
+        toggle_text = get_text("shift_management.activate_button", language=lang) if not template.is_active else get_text("shift_management.deactivate_button", language=lang)
+
         keyboard = [
-            [InlineKeyboardButton(text="📝 Изменить название", callback_data=f"template_edit_name_{template_id}")],
-            [InlineKeyboardButton(text="📄 Изменить описание", callback_data=f"template_edit_description_{template_id}")],
-            [InlineKeyboardButton(text="🕒 Изменить время", callback_data=f"template_edit_time_{template_id}")],
-            [InlineKeyboardButton(text="⏱️ Изменить продолжительность", callback_data=f"template_edit_duration_{template_id}")],
-            [InlineKeyboardButton(text="🎯 Изменить специализации", callback_data=f"template_edit_specializations_{template_id}")],
-            [
-                InlineKeyboardButton(
-                    text="✅ Активировать" if not template.is_active else "❌ Деактивировать",
-                    callback_data=f"template_toggle_active_{template_id}"
-                )
-            ],
-            [InlineKeyboardButton(text="🗑️ Удалить шаблон", callback_data=f"template_delete_{template_id}")],
-            [InlineKeyboardButton(text="🔙 Назад к списку", callback_data="templates_edit")]
+            [InlineKeyboardButton(text=get_text("shift_management.edit_name_button", language=lang),
+                                callback_data=f"template_edit_name_{template_id}")],
+            [InlineKeyboardButton(text=get_text("shift_management.edit_description_button", language=lang),
+                                callback_data=f"template_edit_description_{template_id}")],
+            [InlineKeyboardButton(text=get_text("shift_management.edit_time_button", language=lang),
+                                callback_data=f"template_edit_time_{template_id}")],
+            [InlineKeyboardButton(text=get_text("shift_management.edit_duration_button", language=lang),
+                                callback_data=f"template_edit_duration_{template_id}")],
+            [InlineKeyboardButton(text=get_text("shift_management.edit_specializations_button", language=lang),
+                                callback_data=f"template_edit_specializations_{template_id}")],
+            [InlineKeyboardButton(text=toggle_text,
+                                callback_data=f"template_toggle_active_{template_id}")],
+            [InlineKeyboardButton(text=get_text("shift_management.delete_template_button", language=lang),
+                                callback_data=f"template_delete_{template_id}")],
+            [InlineKeyboardButton(text=get_text("shift_management.back_to_list_button", language=lang),
+                                callback_data="templates_edit")]
         ]
         
         await callback.message.edit_text(
@@ -1058,7 +1055,8 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
         
     except Exception as e:
         logger.error(f"Ошибка редактирования шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.edit_templates_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1071,22 +1069,23 @@ async def handle_toggle_template_active(callback: CallbackQuery, state: FSMConte
     try:
         if not db:
             db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
         template_manager = TemplateManager(db)
-        
+
         # Извлекаем ID шаблона
         template_id = int(callback.data.replace("template_toggle_active_", ""))
-        
+
         # Получаем шаблон
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         # Переключаем активность
         new_status = not template.is_active
         template.is_active = new_status
-        
+
         try:
             db.commit()
             success = True
@@ -1094,19 +1093,20 @@ async def handle_toggle_template_active(callback: CallbackQuery, state: FSMConte
             db.rollback()
             logger.error(f"Ошибка обновления шаблона: {e}")
             success = False
-        
+
         if success:
-            status_text = "активирован" if new_status else "деактивирован"
-            await callback.answer(f"✅ Шаблон {status_text}")
-            
+            status_key = "shift_management.template_activated" if new_status else "shift_management.template_deactivated"
+            await callback.answer(get_text(status_key, language=lang))
+
             # Обновляем отображение
             await handle_edit_template_details(callback, state, db, roles, user)
         else:
-            await callback.answer("❌ Не удалось изменить статус", show_alert=True)
-        
+            await callback.answer(get_text("shift_management.template_status_change_failed", language=lang), show_alert=True)
+
     except Exception as e:
         logger.error(f"Ошибка переключения активности шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_toggle_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1121,31 +1121,30 @@ async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, 
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        
+
         template_id = int(callback.data.replace("template_edit_name_", ""))
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         await callback.message.edit_text(
-            f"📝 <b>Изменение названия шаблона</b>\n\n"
-            f"Текущее название: <b>{template.name}</b>\n\n"
-            f"Введите новое название:",
+            get_text("shift_management.edit_name_prompt", language=lang, current_name=template.name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"template_edit_{template_id}")]
+                [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data=f"template_edit_{template_id}")]
             ]),
             parse_mode="HTML"
         )
-        
+
         await state.update_data(editing_template_id=template_id, editing_field="name")
         await state.set_state(TemplateManagementStates.editing_field)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка изменения названия шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.edit_name_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1159,31 +1158,31 @@ async def handle_edit_template_description(callback: CallbackQuery, state: FSMCo
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        
+
         template_id = int(callback.data.replace("template_edit_description_", ""))
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
+        current_desc = template.description or get_text("shift_management.description_not_specified", language=lang)
         await callback.message.edit_text(
-            f"📄 <b>Изменение описания шаблона</b>\n\n"
-            f"Текущее описание: <b>{template.description or 'Не указано'}</b>\n\n"
-            f"Введите новое описание:",
+            get_text("shift_management.edit_description_prompt", language=lang, current_description=current_desc),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"template_edit_{template_id}")]
+                [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data=f"template_edit_{template_id}")]
             ]),
             parse_mode="HTML"
         )
-        
+
         await state.update_data(editing_template_id=template_id, editing_field="description")
         await state.set_state(TemplateManagementStates.editing_field)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка изменения описания шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.edit_description_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1197,31 +1196,30 @@ async def handle_edit_template_time(callback: CallbackQuery, state: FSMContext, 
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        
+
         template_id = int(callback.data.replace("template_edit_time_", ""))
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         await callback.message.edit_text(
-            f"🕒 <b>Изменение времени начала шаблона</b>\n\n"
-            f"Текущее время начала: <b>{template.start_hour:02d}:00</b>\n\n"
-            f"Введите новый час начала смены (от 0 до 23):",
+            get_text("shift_management.edit_time_prompt", language=lang, current_time=f"{template.start_hour:02d}:00"),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"template_edit_{template_id}")]
+                [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data=f"template_edit_{template_id}")]
             ]),
             parse_mode="HTML"
         )
-        
+
         await state.update_data(editing_template_id=template_id, editing_field="start_hour")
         await state.set_state(TemplateManagementStates.editing_field)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка изменения времени шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.edit_time_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1235,31 +1233,30 @@ async def handle_edit_template_duration(callback: CallbackQuery, state: FSMConte
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        
+
         template_id = int(callback.data.replace("template_edit_duration_", ""))
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         await callback.message.edit_text(
-            f"⏱️ <b>Изменение продолжительности шаблона</b>\n\n"
-            f"Текущая продолжительность: <b>{template.duration_hours} ч.</b>\n\n"
-            f"Введите новую продолжительность в часах (от 1 до 24):",
+            get_text("shift_management.edit_duration_prompt", language=lang, current_duration=template.duration_hours),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"template_edit_{template_id}")]
+                [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data=f"template_edit_{template_id}")]
             ]),
             parse_mode="HTML"
         )
-        
+
         await state.update_data(editing_template_id=template_id, editing_field="duration_hours")
         await state.set_state(TemplateManagementStates.editing_field)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка изменения продолжительности шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.edit_duration_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1269,25 +1266,29 @@ async def handle_edit_template_duration(callback: CallbackQuery, state: FSMConte
 async def handle_template_create_specialization_toggle(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Переключение специализации при создании шаблона"""
     try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
         specialization = callback.data.replace("template_create_spec_", "")
-        
+
         # Получаем текущие выбранные специализации из состояния
         data = await state.get_data()
         selected_specs = data.get('selected_specializations', [])
-        
+
         # Переключаем специализацию
         if specialization in selected_specs:
             selected_specs.remove(specialization)
         else:
             selected_specs.append(specialization)
-        
+
         # Сохраняем в состоянии
         await state.update_data(selected_specializations=selected_specs)
-        
+
         # Обновляем клавиатуру
         from uk_management_bot.utils.constants import SPECIALIZATIONS
         keyboard = []
-        
+
         for spec_key, spec_name in SPECIALIZATIONS.items():
             is_selected = spec_key in selected_specs
             text = f"{'✅' if is_selected else '⭕'} {spec_name}"
@@ -1295,30 +1296,31 @@ async def handle_template_create_specialization_toggle(callback: CallbackQuery, 
                 text=text,
                 callback_data=f"template_create_spec_{spec_key}"
             )])
-        
-        keyboard.append([InlineKeyboardButton(text="➡️ Далее (создать шаблон)", callback_data="template_create_finish")])
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")])
-        
-        selected_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in selected_specs]) if selected_specs else "Не выбраны"
-        
+
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.create_finish_button", language=lang), callback_data="template_create_finish")])
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data="template_management")])
+
+        selected_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in selected_specs]) if selected_specs else get_text("shift_management.specs_not_selected", language=lang)
+
         try:
             await callback.message.edit_text(
-                f"🎯 <b>Выберите специализации для шаблона:</b>\n\n"
-                f"<b>Выбранные специализации:</b> {selected_text}\n\n"
-                "Нажимайте на специализации для их выбора/отмены.\n"
-                "Когда закончите, нажмите 'Далее'.",
+                get_text("shift_management.select_specs_for_template", language=lang, selected=selected_text),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
             )
         except Exception as edit_error:
             if "message is not modified" not in str(edit_error):
                 raise edit_error
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка переключения специализации при создании: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.spec_toggle_error", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "template_create_finish")
@@ -1357,34 +1359,37 @@ async def handle_template_create_finish(callback: CallbackQuery, state: FSMConte
         
         if template:
             from uk_management_bot.utils.constants import SPECIALIZATIONS
-            selected_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in selected_specs]) if selected_specs else "Не указаны"
+            selected_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in selected_specs]) if selected_specs else get_text("shift_management.specializations_not_specified", language=lang)
+            status_text = get_text("shift_management.template_status_active", language=lang)
+
             await callback.message.edit_text(
-                f"✅ <b>Шаблон создан успешно!</b>\n\n"
-                f"📋 <b>Название:</b> {template.name}\n"
-                f"🕒 <b>Время начала:</b> {template.start_hour:02d}:{(template.start_minute or 0):02d}\n"
-                f"⏱️ <b>Продолжительность:</b> {template.duration_hours}ч\n"
-                f"🎯 <b>Специализации:</b> {selected_text}\n"
-                f"📊 <b>Статус:</b> Активен\n\n"
-                f"Шаблон готов к использованию для создания смен.",
+                get_text("shift_management.template_created_success", language=lang,
+                        name=template.name,
+                        time=f"{template.start_hour:02d}:{(template.start_minute or 0):02d}",
+                        duration=template.duration_hours,
+                        specializations=selected_text,
+                        status=status_text),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 К управлению шаблонами", callback_data="template_management")]
+                    [InlineKeyboardButton(text=get_text("shift_management.back_to_templates_button", language=lang), callback_data="template_management")]
                 ]),
                 parse_mode="HTML"
             )
         else:
             await callback.message.edit_text(
-                "❌ Не удалось создать шаблон. Возможно, шаблон с таким названием уже существует.",
+                get_text("shift_management.template_creation_failed", language=lang),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="template_management")]
+                    [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data="template_management")]
                 ])
             )
-        
+
         await state.clear()
-        await callback.answer("✅ Шаблон создан!" if template else "❌ Ошибка создания")
-        
+        success_msg = get_text("shift_management.template_created_popup", language=lang) if template else get_text("shift_management.template_creation_failed_popup", language=lang)
+        await callback.answer(success_msg)
+
     except Exception as e:
         logger.error(f"Ошибка завершения создания шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_finish_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1409,43 +1414,44 @@ async def handle_edit_template_specializations(callback: CallbackQuery, state: F
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
         
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         current_specializations = template.required_specializations or []
         from uk_management_bot.utils.constants import SPECIALIZATIONS
-        specializations_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in current_specializations]) if current_specializations else "Не указаны"
-        
+        not_specified = get_text("shift_management.not_specified", language=lang)
+        specializations_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in current_specializations]) if current_specializations else not_specified
+
         # Создаем клавиатуру с доступными специализациями
         from uk_management_bot.utils.constants import SPECIALIZATIONS
         keyboard = []
-        
+
         for spec_key, spec_name in SPECIALIZATIONS.items():
             is_selected = spec_key in current_specializations
             text = f"{'✅' if is_selected else '⭕'} {spec_name}"
             keyboard.append([InlineKeyboardButton(
-                text=text, 
+                text=text,
                 callback_data=f"template_spec_toggle_{template_id}_{spec_key}"
             )])
-        
-        keyboard.append([InlineKeyboardButton(text="💾 Сохранить", callback_data=f"template_spec_save_{template_id}")])
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"template_edit_{template_id}")])
-        
+
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.save_button", language=lang), callback_data=f"template_spec_save_{template_id}")])
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"template_edit_{template_id}")])
+
         await callback.message.edit_text(
-            f"🎯 <b>Изменение специализаций шаблона</b>\n\n"
-            f"Шаблон: <b>{template.name}</b>\n"
-            f"Текущие специализации: <b>{specializations_text}</b>\n\n"
-            f"Выберите нужные специализации:",
+            get_text("shift_management.edit_specializations_title", language=lang,
+                    template_name=template.name,
+                    current_specs=specializations_text),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode="HTML"
         )
-        
+
         await state.update_data(editing_template_id=template_id)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка редактирования специализаций шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1458,56 +1464,57 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
     try:
         if not db:
             db = next(get_db())
-        
+        lang = get_user_language(callback.from_user.id, db)
+
         # Парсим callback data: template_spec_toggle_{template_id}_{specialization}
         parts = callback.data.replace("template_spec_toggle_", "").split("_", 1)
         template_id = int(parts[0])
         specialization = parts[1]
-        
+
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         current_specs = template.required_specializations or []
-        
+
         # Переключаем специализацию
         if specialization in current_specs:
             current_specs.remove(specialization)
         else:
             current_specs.append(specialization)
-        
+
         # Принудительно устанавливаем новое значение и помечаем поле как измененное
         template.required_specializations = current_specs
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(template, 'required_specializations')
-        
+
         db.commit()
-        
+
         # Обновляем клавиатуру
         from uk_management_bot.utils.constants import SPECIALIZATIONS
         keyboard = []
-        
+
         for spec_key, spec_name in SPECIALIZATIONS.items():
             is_selected = spec_key in current_specs
             text = f"{'✅' if is_selected else '⭕'} {spec_name}"
             keyboard.append([InlineKeyboardButton(
-                text=text, 
+                text=text,
                 callback_data=f"template_spec_toggle_{template_id}_{spec_key}"
             )])
-        
-        keyboard.append([InlineKeyboardButton(text="💾 Сохранить", callback_data=f"template_spec_save_{template_id}")])
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"template_edit_{template_id}")])
-        
-        specializations_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in current_specs]) if current_specs else "Не указаны"
-        
+
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.save_button", language=lang), callback_data=f"template_spec_save_{template_id}")])
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"template_edit_{template_id}")])
+
+        not_specified = get_text("shift_management.not_specified", language=lang)
+        specializations_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in current_specs]) if current_specs else not_specified
+
         try:
             await callback.message.edit_text(
-                f"🎯 <b>Изменение специализаций шаблона</b>\n\n"
-                f"Шаблон: <b>{template.name}</b>\n"
-                f"Текущие специализации: <b>{specializations_text}</b>\n\n"
-                f"Выберите нужные специализации:",
+                get_text("shift_management.edit_specializations_title", language=lang,
+                        template_name=template.name,
+                        current_specs=specializations_text),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
             )
@@ -1515,12 +1522,13 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
             # Если сообщение не изменилось, просто игнорируем ошибку
             if "message is not modified" not in str(edit_error):
                 raise edit_error
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка переключения специализации: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1533,11 +1541,12 @@ async def handle_save_template_specializations(callback: CallbackQuery, state: F
     try:
         if not db:
             db = next(get_db())
-        
+        lang = get_user_language(callback.from_user.id, db)
+
         template_id = int(callback.data.replace("template_spec_save_", ""))
-        
-        await callback.answer("✅ Специализации сохранены")
-        
+
+        await callback.answer(get_text("shift_management.specializations_saved", language=lang))
+
         # Создаем новый callback объект для возврата к редактированию
         from aiogram.types import CallbackQuery
         new_callback = CallbackQuery(
@@ -1547,13 +1556,14 @@ async def handle_save_template_specializations(callback: CallbackQuery, state: F
             data=f"template_edit_{template_id}",
             chat_instance=callback.chat_instance
         )
-        
+
         # Возвращаемся к редактированию шаблона
         await handle_edit_template_details(new_callback, state, db, roles, user)
-        
+
     except Exception as e:
         logger.error(f"Ошибка сохранения специализаций: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1572,18 +1582,18 @@ async def handle_delete_template(callback: CallbackQuery, state: FSMContext, db=
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
         
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         # Показываем подтверждение удаления
         await callback.message.edit_text(
-            f"🗑️ <b>Удаление шаблона</b>\n\n"
-            f"⚠️ Вы уверены, что хотите удалить шаблон <b>{template.name}</b>?\n\n"
-            f"Это действие нельзя отменить!",
+            get_text("shift_management.delete_template_confirm", language=lang, name=template.name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"template_delete_confirm_{template_id}"),
-                    InlineKeyboardButton(text="❌ Отмена", callback_data=f"template_edit_{template_id}")
+                    InlineKeyboardButton(text=get_text("shift_management.delete_yes_button", language=lang),
+                                       callback_data=f"template_delete_confirm_{template_id}"),
+                    InlineKeyboardButton(text=get_text("shift_management.delete_cancel_button", language=lang),
+                                       callback_data=f"template_edit_{template_id}")
                 ]
             ]),
             parse_mode="HTML"
@@ -1593,7 +1603,8 @@ async def handle_delete_template(callback: CallbackQuery, state: FSMContext, db=
         
     except Exception as e:
         logger.error(f"Ошибка удаления шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_delete_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1613,34 +1624,35 @@ async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMCont
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
         
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         template_name = template.name
-        
+
         # Попробуем удалить шаблон через менеджер (с проверками)
         success = template_manager.delete_template(template_id, force=False)
-        
+
         if success:
-            await callback.answer(f"✅ Шаблон '{template_name}' удален")
+            await callback.answer(get_text("shift_management.template_deleted", language=lang, name=template_name))
             # Возвращаемся к списку шаблонов
             await handle_edit_templates(callback, state, db, roles, user)
         else:
             # Показываем опцию принудительного удаления
             await callback.message.edit_text(
-                f"⚠️ <b>Невозможно удалить шаблон</b>\n\n"
-                f"Шаблон <b>{template_name}</b> используется в существующих сменах.\n\n"
-                f"Хотите удалить принудительно?",
+                get_text("shift_management.template_delete_failed", language=lang, name=template_name),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="⚠️ Принудительно удалить", callback_data=f"template_force_delete_{template_id}")],
-                    [InlineKeyboardButton(text="❌ Отмена", callback_data=f"template_edit_{template_id}")]
+                    [InlineKeyboardButton(text=get_text("shift_management.force_delete_button", language=lang),
+                                        callback_data=f"template_force_delete_{template_id}")],
+                    [InlineKeyboardButton(text=get_text("shift_management.delete_cancel_button", language=lang),
+                                        callback_data=f"template_edit_{template_id}")]
                 ]),
                 parse_mode="HTML"
             )
         
     except Exception as e:
         logger.error(f"Ошибка подтверждения удаления шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.template_delete_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1660,24 +1672,25 @@ async def handle_force_delete_template(callback: CallbackQuery, state: FSMContex
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
         
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         template_name = template.name
-        
+
         # Принудительно удаляем шаблон
         success = template_manager.delete_template(template_id, force=True)
-        
+
         if success:
-            await callback.answer(f"✅ Шаблон '{template_name}' принудительно удален")
+            await callback.answer(get_text("shift_management.template_force_deleted", language=lang, name=template_name))
             # Возвращаемся к списку шаблонов
             await handle_edit_templates(callback, state, db, roles, user)
         else:
-            await callback.answer("❌ Не удалось удалить шаблон", show_alert=True)
-        
+            await callback.answer(get_text("shift_management.template_delete_failed", language=lang), show_alert=True)
+
     except Exception as e:
         logger.error(f"Ошибка принудительного удаления шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1697,77 +1710,78 @@ async def handle_template_field_input(message: Message, state: FSMContext, db=No
         field = data.get('editing_field')
         
         if not template_id or not field:
-            await message.answer("❌ Ошибка: не найдены данные для редактирования")
+            await message.answer(get_text("shift_management.editing_data_not_found", language=lang))
             return
-        
+
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await message.answer("❌ Шаблон не найден")
+            await message.answer(get_text("shift_management.template_not_found", language=lang))
             return
-        
+
         new_value = message.text.strip()
-        
+
         # Валидация и обновление поля
         if field == "name":
             if len(new_value) < 3:
-                await message.answer("❌ Название должно содержать минимум 3 символа")
+                await message.answer(get_text("shift_management.name_min_length", language=lang))
                 return
             template.name = new_value
-            
+
         elif field == "description":
             template.description = new_value if new_value else None
-            
+
         elif field == "start_hour":
             try:
                 start_hour = int(new_value)
                 if not (0 <= start_hour <= 23):
-                    await message.answer("❌ Час должен быть от 0 до 23")
+                    await message.answer(get_text("shift_management.hour_range_error", language=lang))
                     return
                 template.start_hour = start_hour
             except ValueError:
-                await message.answer("❌ Введите корректное число от 0 до 23")
+                await message.answer(get_text("shift_management.hour_number_error", language=lang))
                 return
-                
+
         elif field == "duration_hours":
             try:
                 duration = int(new_value)
                 if not (1 <= duration <= 24):
-                    await message.answer("❌ Продолжительность должна быть от 1 до 24 часов")
+                    await message.answer(get_text("shift_management.duration_range_error", language=lang))
                     return
                 template.duration_hours = duration
             except ValueError:
-                await message.answer("❌ Введите корректное число от 1 до 24")
+                await message.answer(get_text("shift_management.duration_number_error", language=lang))
                 return
         else:
-            await message.answer("❌ Неизвестное поле для редактирования")
+            await message.answer(get_text("shift_management.unknown_field_error", language=lang))
             return
-        
+
         # Сохраняем изменения
         db.commit()
-        
+
         # Отображаем успешное сообщение с правильным текстом
         field_names = {
-            "name": "Название",
-            "description": "Описание",
-            "start_hour": "Время начала",
-            "duration_hours": "Продолжительность"
+            "name": get_text("shift_management.field_name_label", language=lang),
+            "description": get_text("shift_management.field_description_label", language=lang),
+            "start_hour": get_text("shift_management.field_start_hour_label", language=lang),
+            "duration_hours": get_text("shift_management.field_duration_label", language=lang)
         }
-        
+
         field_display = field_names.get(field, field.capitalize())
-        
+
         await message.answer(
-            f"✅ {field_display} шаблона успешно изменено!",
+            get_text("shift_management.field_updated_success", language=lang, field=field_display),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 К шаблону", callback_data=f"template_edit_{template_id}")]
+                [InlineKeyboardButton(text=get_text("shift_management.back_to_template_button", language=lang), callback_data=f"template_edit_{template_id}")]
             ])
         )
-        
+
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Ошибка обновления поля шаблона: {e}")
-        await message.answer("❌ Произошла ошибка при сохранении")
+        lang = get_user_language(message.from_user.id, db) if db else "ru"
+        await message.answer(get_text("shift_management.save_error", language=lang))
     finally:
         if db:
             db.close()
@@ -1785,30 +1799,29 @@ async def handle_create_shift_template(callback: CallbackQuery, state: FSMContex
         
         # Получаем активные шаблоны
         templates = template_manager.get_templates(active_only=True)
-        
+
         if not templates:
             await callback.message.edit_text(
-                "⚠️ <b>Нет доступных шаблонов</b>\n\n"
-                "Сначала создайте шаблоны смен в разделе управления шаблонами.",
+                get_text("shift_management.no_templates_available", language=lang),
                 reply_markup=get_planning_menu(lang),
                 parse_mode="HTML"
             )
-            await callback.answer("Нет доступных шаблонов", show_alert=True)
+            await callback.answer(get_text("shift_management.no_templates_alert", language=lang), show_alert=True)
             return
-        
+
         await callback.message.edit_text(
-            "🗂️ <b>Выбор шаблона смены</b>\n\n"
-            "Выберите шаблон для создания смены:",
+            get_text("shift_management.select_template_title", language=lang),
             reply_markup=get_template_selection_keyboard(templates, lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.selecting_template)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка выбора шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("select_template:"))
@@ -1828,28 +1841,31 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
         
         # Получаем информацию о шаблоне
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
-        
+
         if not template:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
+        any_spec = get_text("shift_management.any_specialization", language=lang)
+        specializations = ', '.join(template.required_specializations) if template.required_specializations else any_spec
+
         await callback.message.edit_text(
-            f"📅 <b>Выбор даты для смены</b>\n\n"
-            f"<b>Шаблон:</b> {template.name}\n"
-            f"<b>Время:</b> {template.start_hour:02d}:{template.start_minute or 0:02d} - "
-            f"{(template.start_hour + template.duration_hours) % 24:02d}:00\n"
-            f"<b>Специализация:</b> {', '.join(template.required_specializations) if template.required_specializations else 'Любая'}\n\n"
-            "Выберите дату:",
+            get_text("shift_management.select_date_for_shift", language=lang,
+                    template_name=template.name,
+                    start_time=f"{template.start_hour:02d}:{template.start_minute or 0:02d}",
+                    end_time=f"{(template.start_hour + template.duration_hours) % 24:02d}:00",
+                    specializations=specializations),
             reply_markup=get_date_selection_keyboard(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.selecting_date)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка выбора шаблона: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -1867,47 +1883,43 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
         template_id = data.get('template_id')
         
         if not template_id:
-            await callback.answer("❌ Шаблон не найден", show_alert=True)
+            await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
-        
+
         if not db:
             db = next(get_db())
         planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
-        
+
         # Создаем смены из шаблона
         created_shifts = planning_service.create_shift_from_template(
             template_id=template_id,
             target_date=target_date
         )
-        
+
         if created_shifts:
             await callback.message.edit_text(
-                f"✅ <b>Смены созданы успешно</b>\n\n"
-                f"<b>Дата:</b> {target_date.strftime('%d.%m.%Y')}\n"
-                f"<b>Создано смен:</b> {len(created_shifts)}\n\n"
-                f"Смены добавлены в расписание и готовы к назначению исполнителей.",
+                get_text("shift_management.shifts_created_success", language=lang,
+                        date=target_date.strftime('%d.%m.%Y'),
+                        count=len(created_shifts)),
                 reply_markup=get_planning_menu(lang),
                 parse_mode="HTML"
             )
         else:
             await callback.message.edit_text(
-                f"⚠️ <b>Смены не созданы</b>\n\n"
-                f"Возможные причины:\n"
-                f"• Смены на {target_date.strftime('%d.%m.%Y')} уже существуют\n"
-                f"• День недели не включен в шаблон\n"
-                f"• Нет доступных исполнителей\n\n"
-                f"Проверьте настройки шаблона и попробуйте снова.",
+                get_text("shift_management.shifts_not_created", language=lang,
+                        date=target_date.strftime('%d.%m.%Y')),
                 reply_markup=get_planning_menu(lang),
                 parse_mode="HTML"
             )
-        
+
         await state.set_state(ShiftManagementStates.planning_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка создания смены: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "plan_weekly_schedule")
@@ -1930,42 +1942,55 @@ async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=
         from datetime import datetime
         timestamp = datetime.now().strftime('%H:%M:%S')
 
-        week_info = (
-            f"📅 <b>Недельное планирование завершено</b>\n"
-            f"⏰ Время: {timestamp}\n\n"
-            f"<b>Период:</b> {results['week_start'].strftime('%d.%m.%Y')} - "
-            f"{(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y')}\n"
-            f"<b>Создано смен:</b> {stats['total_shifts']}\n"
-        )
+        shifts_label = get_text("shift_management.shifts_label", language=lang)
 
+        all_planned = ""
         if stats['total_shifts'] == 0:
-            week_info += "\n✅ Все смены на этот период уже запланированы.\n"
-        elif stats['shifts_by_day']:
-            week_info += f"\n<b>По дням недели:</b>\n"
+            all_planned = get_text("shift_management.all_shifts_already_planned", language=lang)
+
+        by_day = ""
+        if stats['shifts_by_day'] and stats['total_shifts'] > 0:
+            by_day_label = get_text("shift_management.by_day_label", language=lang)
+            by_day = f"\n<b>{by_day_label}:</b>\n"
             for day_name, count in stats['shifts_by_day'].items():
-                week_info += f"• {day_name}: {count} смен\n"
+                by_day += f"• {day_name}: {count} {shifts_label}\n"
 
+        by_template = ""
         if stats['shifts_by_template']:
-            week_info += f"\n<b>По шаблонам:</b>\n"
+            by_template_label = get_text("shift_management.by_template_label", language=lang)
+            by_template = f"\n<b>{by_template_label}:</b>\n"
             for template_name, count in stats['shifts_by_template'].items():
-                week_info += f"• {template_name}: {count} смен\n"
+                by_template += f"• {template_name}: {count} {shifts_label}\n"
 
+        errors_text = ""
         if results['errors']:
-            week_info += f"\n⚠️ <b>Ошибки:</b>\n"
+            errors_label = get_text("shift_management.errors_label", language=lang)
+            errors_text = f"\n⚠️ <b>{errors_label}:</b>\n"
             for error in results['errors'][:3]:  # Показываем только первые 3 ошибки
-                week_info += f"• {error}\n"
+                errors_text += f"• {error}\n"
+
+        week_info = get_text("shift_management.weekly_planning_complete", language=lang,
+                            timestamp=timestamp,
+                            week_start=results['week_start'].strftime('%d.%m.%Y'),
+                            week_end=(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y'),
+                            total_shifts=stats['total_shifts'],
+                            all_planned=all_planned,
+                            by_day=by_day,
+                            by_template=by_template,
+                            errors=errors_text)
 
         await callback.message.edit_text(
             week_info,
             reply_markup=get_planning_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка недельного планирования: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "shift_analytics")
@@ -1976,20 +2001,20 @@ async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        
+
         await callback.message.edit_text(
-            "📊 <b>Аналитика смен</b>\n\n"
-            "Выберите тип анализа:",
+            get_text("shift_management.analytics_menu_title", language=lang),
             reply_markup=get_analytics_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.analytics_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка аналитики: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2003,18 +2028,18 @@ async def handle_template_management(callback: CallbackQuery, state: FSMContext,
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        
+
         await callback.message.edit_text(
-            "🗂️ <b>Управление шаблонами</b>\n\n"
-            "Функция в разработке. Используйте команду /shifts для создания смен.",
+            get_text("shift_management.template_management_under_development", language=lang),
             parse_mode="HTML"
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка управления шаблонами: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2042,9 +2067,7 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
         if not unassigned_shifts:
             await callback.message.edit_text(
-                "👥 <b>Назначение исполнителей</b>\n\n"
-                "✅ Все смены на ближайшую неделю уже имеют назначенных исполнителей.\n\n"
-                "📋 Для назначения заявок исполнителям используйте интерфейс заявок.",
+                get_text("shift_management.no_unassigned_shifts", language=lang),
                 parse_mode="HTML",
                 reply_markup=get_main_shift_menu()
             )
@@ -2054,16 +2077,16 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
         # Показываем список смен для назначения
         from uk_management_bot.keyboards.shift_management import get_executor_assignment_keyboard
 
-        text = "👥 <b>Назначение исполнителей</b>\n\n"
-        text += f"📊 Найдено <b>{len(unassigned_shifts)}</b> смен без назначенных исполнителей:\n\n"
-
+        shift_list = ""
         for shift in unassigned_shifts:
             start_time = shift.start_time.strftime('%d.%m.%Y %H:%M')
             # Переводим специализации на язык пользователя
             specialization_text = translate_specializations(shift.specialization_focus, lang)
-            text += f"🔹 <b>{start_time}</b> - {specialization_text}\n"
+            shift_list += f"🔹 <b>{start_time}</b> - {specialization_text}\n"
 
-        text += "\n🎯 Выберите действие:"
+        text = get_text("shift_management.executor_assignment_list", language=lang,
+                       count=len(unassigned_shifts),
+                       shifts=shift_list)
 
         await callback.message.edit_text(
             text,
@@ -2075,7 +2098,8 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
     except Exception as e:
         logger.error(f"Ошибка назначения исполнителей: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.executor_assignment_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2105,49 +2129,51 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext):
         
         if 'error' in analytics:
             await callback.message.edit_text(
-                f"❌ <b>Ошибка аналитики</b>\n\n"
-                f"{analytics['error']}",
+                get_text("shift_management.analytics_error_msg", language=lang, error=analytics['error']),
                 reply_markup=get_analytics_menu(lang),
                 parse_mode="HTML"
             )
             await callback.answer()
             return
         
-        # Формируем отчет
-        report = (
-            f"📊 <b>Недельная аналитика смен</b>\n\n"
-            f"<b>Период:</b> {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}\n"
-            f"<b>Дней анализа:</b> {analytics['period']['total_days']}\n\n"
-        )
-        
-        # Статистика смен
+        # Build shift statistics section
+        shift_stats = ""
         if analytics.get('shift_analytics'):
             sa = analytics['shift_analytics']
-            report += (
-                f"<b>📈 Статистика смен:</b>\n"
-                f"• Всего смен: {sa.get('total_shifts', 0)}\n"
-                f"• Средняя эффективность: {sa.get('average_efficiency', 0):.1f}%\n"
-                f"• Процент завершенных: {sa.get('completion_rate', 0):.1f}%\n"
-                f"• Процент вовремя: {sa.get('on_time_rate', 0):.1f}%\n\n"
-            )
-        
-        # Эффективность планирования
+            shift_stats = get_text("shift_management.shift_stats_section", language=lang,
+                                   total=sa.get('total_shifts', 0),
+                                   avg_efficiency=sa.get('average_efficiency', 0),
+                                   completion_rate=sa.get('completion_rate', 0),
+                                   on_time_rate=sa.get('on_time_rate', 0))
+
+        # Build planning efficiency section
+        planning_stats = ""
         if analytics.get('planning_efficiency') and 'error' not in analytics['planning_efficiency']:
             pe = analytics['planning_efficiency']
-            report += (
-                f"<b>⚙️ Эффективность планирования:</b>\n"
-                f"• Процент назначения: {pe.get('assignment_rate', 0):.1f}%\n"
-                f"• Средняя длительность: {pe.get('avg_actual_duration', 0):.1f}ч\n"
-                f"• Неназначенных смен: {pe.get('unassigned_shifts', 0)}\n\n"
-            )
-        
-        # Рекомендации
+            planning_stats = get_text("shift_management.planning_efficiency_section", language=lang,
+                                      assignment_rate=pe.get('assignment_rate', 0),
+                                      avg_duration=pe.get('avg_actual_duration', 0),
+                                      unassigned=pe.get('unassigned_shifts', 0))
+
+        # Build recommendations section
+        recommendations_text = ""
         if analytics.get('recommendations'):
-            recommendations = analytics['recommendations'][:3]  # Первые 3 рекомендации
-            report += f"<b>💡 Рекомендации:</b>\n"
+            recommendations = analytics['recommendations'][:3]
+            no_description = get_text("shift_management.no_description", language=lang)
+            rec_list = ""
             for i, rec in enumerate(recommendations, 1):
-                rec_text = rec.get('description', rec.get('recommendation', 'Нет описания'))
-                report += f"{i}. {rec_text[:100]}...\n"
+                rec_text = rec.get('description', rec.get('recommendation', no_description))
+                rec_list += f"{i}. {rec_text[:100]}...\n"
+            recommendations_text = get_text("shift_management.recommendations_section", language=lang,
+                                          recommendations=rec_list)
+
+        report = get_text("shift_management.weekly_analytics_report", language=lang,
+                         start_date=start_date.strftime('%d.%m.%Y'),
+                         end_date=end_date.strftime('%d.%m.%Y'),
+                         total_days=analytics['period']['total_days'],
+                         shift_stats=shift_stats,
+                         planning_stats=planning_stats,
+                         recommendations=recommendations_text)
         
         await callback.message.edit_text(
             report,
@@ -2159,7 +2185,8 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка недельной аналитики: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.weekly_analytics_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "workload_forecast")
@@ -2182,8 +2209,7 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
         
         if 'error' in prediction:
             await callback.message.edit_text(
-                f"❌ <b>Ошибка прогноза</b>\n\n"
-                f"{prediction['error']}",
+                get_text("shift_management.forecast_error_msg", language=lang, error=prediction['error']),
                 reply_markup=get_analytics_menu(lang),
                 parse_mode="HTML"
             )
@@ -2193,48 +2219,53 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
         # Формируем отчет прогноза
         forecast_period = prediction['forecast_period']
         summary = prediction['summary']
-        
-        report = (
-            f"🔮 <b>Прогноз рабочей нагрузки</b>\n\n"
-            f"<b>Период:</b> {forecast_period['start_date'].strftime('%d.%m.%Y')} - "
-            f"{forecast_period['end_date'].strftime('%d.%m.%Y')}\n"
-            f"<b>Средний прогноз:</b> {summary['avg_predicted_requests']} заявок/день\n\n"
-        )
-        
-        # Ежедневные прогнозы
-        report += "<b>📅 По дням:</b>\n"
-        for daily_pred in prediction['daily_predictions'][:5]:  # Первые 5 дней
+
+        # Build daily predictions list
+        daily_list = ""
+        requests_label = get_text("shift_management.requests_label", language=lang)
+        confidence_label = get_text("shift_management.confidence_label", language=lang)
+        for daily_pred in prediction['daily_predictions'][:5]:
             date_str = daily_pred['date'].strftime('%d.%m')
             requests = daily_pred['predicted_requests']
             load_level = daily_pred['load_level']
             confidence = daily_pred['confidence']
-            
+
             load_emoji = {
                 'low': '🟢',
-                'medium': '🟡', 
+                'medium': '🟡',
                 'high': '🔴'
             }.get(load_level, '⚪')
-            
-            report += f"• {date_str}: {requests} заявок {load_emoji} (уверенность: {confidence:.0%})\n"
-        
-        # Рекомендации по ресурсам
+
+            daily_list += f"• {date_str}: {requests} {requests_label} {load_emoji} ({confidence_label}: {confidence:.0%})\n"
+
+        # Build resource recommendations section
+        resources_text = ""
         if summary.get('resource_requirements'):
             req = summary['resource_requirements']
-            report += (
-                f"\n<b>💼 Рекомендации по ресурсам:</b>\n"
-                f"• Смен в день: {req['recommended_daily_shifts']}\n"
-                f"• Пик нагрузки: {req['peak_day_shifts']} смен\n"
-                f"• Минимум исполнителей: {req['min_executors_needed']}\n"
-            )
-        
-        # Дни с высокой/низкой нагрузкой
+            resources_text = get_text("shift_management.resource_recommendations_section", language=lang,
+                                     daily_shifts=req['recommended_daily_shifts'],
+                                     peak_shifts=req['peak_day_shifts'],
+                                     min_executors=req['min_executors_needed'])
+
+        # Build peak/low load days
+        peak_days_text = ""
         if summary.get('peak_load_days'):
             peak_dates = [d.strftime('%d.%m') for d in summary['peak_load_days'][:3]]
-            report += f"\n🔴 <b>Дни высокой нагрузки:</b> {', '.join(peak_dates)}\n"
-        
+            peak_days_text = f"\n{get_text('shift_management.peak_load_days', language=lang, dates=', '.join(peak_dates))}\n"
+
+        low_days_text = ""
         if summary.get('low_load_days'):
             low_dates = [d.strftime('%d.%m') for d in summary['low_load_days'][:3]]
-            report += f"🟢 <b>Дни низкой нагрузки:</b> {', '.join(low_dates)}\n"
+            low_days_text = f"{get_text('shift_management.low_load_days', language=lang, dates=', '.join(low_dates))}\n"
+
+        report = get_text("shift_management.workload_forecast_report", language=lang,
+                         start_date=forecast_period['start_date'].strftime('%d.%m.%Y'),
+                         end_date=forecast_period['end_date'].strftime('%d.%m.%Y'),
+                         avg_requests=summary['avg_predicted_requests'],
+                         daily_list=daily_list,
+                         resources=resources_text,
+                         peak_days=peak_days_text,
+                         low_days=low_days_text)
         
         await callback.message.edit_text(
             report,
@@ -2246,7 +2277,8 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка прогноза нагрузки: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.workload_forecast_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "optimization_recommendations")
@@ -2267,8 +2299,7 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         
         if 'error' in recommendations:
             await callback.message.edit_text(
-                f"❌ <b>Ошибка получения рекомендаций</b>\n\n"
-                f"{recommendations['error']}",
+                get_text("shift_management.recommendations_error_msg", language=lang, error=recommendations['error']),
                 reply_markup=get_analytics_menu(lang),
                 parse_mode="HTML"
             )
@@ -2278,49 +2309,54 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         # Формируем отчет рекомендаций
         current_state = recommendations['current_state']
         target_date_str = recommendations['date'].strftime('%d.%m.%Y')
-        
-        report = (
-            f"💡 <b>Рекомендации по оптимизации</b>\n\n"
-            f"<b>Дата:</b> {target_date_str}\n\n"
-            f"<b>📊 Текущее состояние:</b>\n"
-            f"• Всего смен: {current_state['shifts_count']}\n"
-            f"• Назначено: {current_state['assigned_shifts']}\n"
-            f"• Не назначено: {current_state['unassigned_shifts']}\n\n"
-        )
-        
-        # Приоритетные действия
+
+        # Build priority actions list
+        priority_list = ""
         priority_actions = recommendations.get('priority_actions', [])
         if priority_actions:
-            report += "<b>🚨 Приоритетные действия:</b>\n"
             for action in priority_actions:
                 urgency_emoji = {
                     'high': '🔴',
                     'medium': '🟡',
                     'low': '🟢'
                 }.get(action.get('urgency', 'medium'), '⚪')
-                
-                report += f"{urgency_emoji} {action['description']}\n"
-                report += f"   → {action['action']}\n\n"
-        
-        # Предложения по оптимизации
+
+                priority_list += f"{urgency_emoji} {action['description']}\n"
+                priority_list += f"   → {action['action']}\n\n"
+
+        # Build optimization suggestions list
+        optimization_list = ""
         optimization_suggestions = recommendations.get('optimization_suggestions', [])
         if optimization_suggestions:
-            report += "<b>⚙️ Предложения по оптимизации:</b>\n"
+            action_label = get_text("shift_management.action_label", language=lang)
             for suggestion in optimization_suggestions:
-                report += f"• {suggestion['description']}\n"
-                report += f"  Действие: {suggestion['action']}\n\n"
-        
-        # ИИ рекомендации (если есть)
+                optimization_list += f"• {suggestion['description']}\n"
+                optimization_list += f"  {action_label}: {suggestion['action']}\n\n"
+
+        # Build AI recommendations list
+        ai_recs_list = ""
         if recommendations.get('ai_recommendations'):
             ai_recs = recommendations['ai_recommendations']
             if isinstance(ai_recs, dict) and ai_recs.get('recommendations'):
-                report += "<b>🤖 ИИ рекомендации:</b>\n"
-                for rec in ai_recs['recommendations'][:2]:  # Первые 2
-                    rec_text = rec.get('description', rec.get('recommendation', 'Нет описания'))
-                    report += f"• {rec_text[:80]}...\n"
-        
+                no_description = get_text("shift_management.no_description", language=lang)
+                for rec in ai_recs['recommendations'][:2]:
+                    rec_text = rec.get('description', rec.get('recommendation', no_description))
+                    ai_recs_list += f"• {rec_text[:80]}...\n"
+
+        # All good message if no actions
+        all_good_text = ""
         if not priority_actions and not optimization_suggestions:
-            report += "✅ <b>Все отлично!</b>\nТекущее планирование смен оптимально."
+            all_good_text = get_text("shift_management.optimization_all_good", language=lang)
+
+        report = get_text("shift_management.optimization_recommendations_report", language=lang,
+                         date=target_date_str,
+                         total_shifts=current_state['shifts_count'],
+                         assigned=current_state['assigned_shifts'],
+                         unassigned=current_state['unassigned_shifts'],
+                         priority_list=priority_list,
+                         optimization_list=optimization_list,
+                         ai_recs=ai_recs_list,
+                         all_good=all_good_text)
         
         await callback.message.edit_text(
             report,
@@ -2332,7 +2368,8 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         
     except Exception as e:
         logger.error(f"Ошибка рекомендаций по оптимизации: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.optimization_recommendations_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_shifts")
@@ -2344,18 +2381,18 @@ async def handle_back_to_shifts(callback: CallbackQuery, state: FSMContext):
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "🔧 <b>Управление сменами</b>\n\n"
-            "Выберите действие:",
+            get_text("shift_management.main_menu_title", language=lang),
             reply_markup=get_main_shift_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.main_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка возврата к меню смен: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.back_to_shifts_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_planning")
@@ -2367,18 +2404,18 @@ async def handle_back_to_planning(callback: CallbackQuery, state: FSMContext, db
         lang = get_user_language(callback.from_user.id, db)
         
         await callback.message.edit_text(
-            "📅 <b>Планирование смен</b>\n\n"
-            "Выберите действие:",
+            get_text("shift_management.planning_menu_title", language=lang),
             reply_markup=get_planning_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(ShiftManagementStates.planning_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка возврата к планированию: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.back_to_planning_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_analytics")
@@ -2390,8 +2427,7 @@ async def handle_back_to_analytics(callback: CallbackQuery, state: FSMContext, d
         lang = get_user_language(callback.from_user.id, db)
 
         await callback.message.edit_text(
-            "📊 <b>Аналитика смен</b>\n\n"
-            "Выберите тип анализа:",
+            get_text("shift_management.analytics_menu_title", language=lang),
             reply_markup=get_analytics_menu(lang),
             parse_mode="HTML"
         )
@@ -2401,7 +2437,8 @@ async def handle_back_to_analytics(callback: CallbackQuery, state: FSMContext, d
 
     except Exception as e:
         logger.error(f"Ошибка возврата к аналитике: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.back_to_analytics_error", language=lang), show_alert=True)
 
 
 # Handlers for Executor Assignment
@@ -2429,8 +2466,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
 
         if not unassigned_shifts:
             await callback.message.edit_text(
-                "✅ <b>Все смены назначены</b>\n\n"
-                "В настоящее время нет неназначенных смен.",
+                get_text("shift_management.all_shifts_assigned", language=lang),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -2438,9 +2474,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
             return
 
         # Формируем список смен для выбора
-        text = "👤 <b>Назначение на конкретную смену</b>\n\n"
-        text += "📋 <b>Неназначенные смены:</b>\n\n"
-
+        shift_details = ""
         for i, shift in enumerate(unassigned_shifts, 1):
             # Переводим специализации на язык пользователя
             specialization_text = translate_specializations(shift.specialization_focus, lang)
@@ -2449,11 +2483,14 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
             start_date = shift.start_time.strftime('%d.%m.%Y')
             start_time = shift.start_time.strftime('%H:%M')
             end_time = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
+            zone = shift.geographic_zone or get_text("shift_management.zone_not_specified", language=lang)
 
-            text += (f"{i}. <b>{start_date}</b> "
-                    f"{start_time}-{end_time}\n"
-                    f"   🔧 {specialization_text}\n"
-                    f"   📍 {shift.geographic_zone or 'Не указано'}\n\n")
+            shift_details += (f"{i}. <b>{start_date}</b> "
+                            f"{start_time}-{end_time}\n"
+                            f"   🔧 {specialization_text}\n"
+                            f"   📍 {zone}\n\n")
+
+        text = get_text("shift_management.assign_to_specific_shift", language=lang, shifts=shift_details)
 
         # Создаем клавиатуру для выбора смены
         keyboard = []
@@ -2463,7 +2500,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
                 first_two = shift.specialization_focus[:2]
                 spec_text = translate_specializations(first_two, lang)
             else:
-                spec_text = "Любая" if lang == "ru" else "Har qanday"
+                spec_text = get_text("shift_management.any_spec", language=lang)
 
             button_text = f"{shift.start_time.strftime('%d.%m %H:%M')} - {spec_text}"
             keyboard.append([InlineKeyboardButton(
@@ -2471,7 +2508,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
                 callback_data=f"select_shift_for_assignment:{shift.id}"
             )])
 
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="executor_assignment")])
+        keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data="executor_assignment")])
 
         await callback.message.edit_text(
             text,
@@ -2483,7 +2520,8 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
 
     except Exception as e:
         logger.error(f"Ошибка назначения на смену: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.assign_to_shift_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2509,8 +2547,7 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
 
         if result.get('error'):
             await callback.message.edit_text(
-                f"❌ <b>Ошибка ИИ-назначения</b>\n\n"
-                f"{result['error']}",
+                get_text("shift_management.ai_assignment_error_msg", language=lang, error=result['error']),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -2522,37 +2559,41 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
         conflicts = result.get('conflicts', [])
         unassigned = result.get('unassigned_shifts', [])
 
-        text = "🤖 <b>Результат ИИ-назначения</b>\n\n"
-        text += f"✅ <b>Назначено смен:</b> {len(assignments)}\n"
-        text += f"⚠️ <b>Конфликтов:</b> {len(conflicts)}\n"
-        text += f"❌ <b>Не назначено:</b> {len(unassigned)}\n\n"
-
+        # Формируем списки
+        assignments_list = ""
         if assignments:
-            text += "<b>📋 Успешные назначения:</b>\n"
-            for assignment in assignments[:5]:  # Показываем первые 5
+            for assignment in assignments[:5]:
                 shift = assignment.get('shift')
                 executor = assignment.get('executor')
                 confidence = assignment.get('confidence', 0)
 
                 if shift and executor:
-                    text += (f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} "
-                            f"→ {executor.first_name} {executor.last_name} "
-                            f"({confidence:.0%})\n")
+                    assignments_list += (f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} "
+                                       f"→ {executor.first_name} {executor.last_name} "
+                                       f"({confidence:.0%})\n")
 
             if len(assignments) > 5:
-                text += f"... и ещё {len(assignments) - 5} назначений\n"
-            text += "\n"
+                more_text = get_text("shift_management.and_more_assignments", language=lang, count=len(assignments) - 5)
+                assignments_list += more_text + "\n"
 
+        conflicts_list = ""
         if conflicts:
-            text += "<b>⚠️ Конфликты (требуют ручного назначения):</b>\n"
-            for conflict in conflicts[:3]:  # Показываем первые 3
+            for conflict in conflicts[:3]:
                 shift = conflict.get('shift')
-                reason = conflict.get('reason', 'Неизвестная причина')
+                reason = conflict.get('reason', get_text("shift_management.unknown_reason", language=lang))
                 if shift:
-                    text += f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} - {reason}\n"
+                    conflicts_list += f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} - {reason}\n"
 
             if len(conflicts) > 3:
-                text += f"... и ещё {len(conflicts) - 3} конфликтов\n"
+                more_text = get_text("shift_management.and_more_conflicts", language=lang, count=len(conflicts) - 3)
+                conflicts_list += more_text + "\n"
+
+        text = get_text("shift_management.ai_assignment_result", language=lang,
+                       assigned=len(assignments),
+                       conflicts=len(conflicts),
+                       unassigned=len(unassigned),
+                       assignments_list=assignments_list,
+                       conflicts_list=conflicts_list)
 
         await callback.message.edit_text(
             text,
@@ -2560,11 +2601,12 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ ИИ-назначение завершено")
+        await callback.answer(get_text("shift_management.ai_assignment_completed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка ИИ-назначения: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.ai_assignment_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2593,18 +2635,21 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db:
             User.status == 'approved'
         ).count()
 
-        text = (f"📅 <b>Массовое назначение исполнителей</b>\n\n"
-               f"📊 <b>Текущая ситуация:</b>\n"
-               f"• Неназначенных смен: {total_unassigned}\n"
-               f"• Доступно исполнителей: {available_executors}\n\n"
-               f"<b>Выберите действие:</b>")
+        text = get_text("shift_management.bulk_assignment_menu", language=lang,
+                       unassigned=total_unassigned,
+                       executors=available_executors)
 
         keyboard = [
-            [InlineKeyboardButton(text="🚀 Назначить все автоматически", callback_data="bulk_auto_assign")],
-            [InlineKeyboardButton(text="📋 Назначить по специализации", callback_data="bulk_by_specialization")],
-            [InlineKeyboardButton(text="📅 Назначить на период", callback_data="bulk_by_period")],
-            [InlineKeyboardButton(text="⚡ Назначить по приоритету", callback_data="bulk_by_priority")],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="executor_assignment")]
+            [InlineKeyboardButton(text=get_text("shift_management.bulk_auto_assign_button", language=lang),
+                                callback_data="bulk_auto_assign")],
+            [InlineKeyboardButton(text=get_text("shift_management.bulk_by_spec_button", language=lang),
+                                callback_data="bulk_by_specialization")],
+            [InlineKeyboardButton(text=get_text("shift_management.bulk_by_period_button", language=lang),
+                                callback_data="bulk_by_period")],
+            [InlineKeyboardButton(text=get_text("shift_management.bulk_by_priority_button", language=lang),
+                                callback_data="bulk_by_priority")],
+            [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
+                                callback_data="executor_assignment")]
         ]
 
         await callback.message.edit_text(
@@ -2617,7 +2662,8 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db:
 
     except Exception as e:
         logger.error(f"Ошибка массового назначения: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.bulk_assignment_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2664,33 +2710,43 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
             ~User.id.in_(assigned_executor_ids)
         ).all()
 
-        text = "📊 <b>Анализ загруженности исполнителей</b>\n\n"
-        text += f"<b>Период:</b> {date.today().strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}\n\n"
-
+        # Build executor workload list
+        workload_list = ""
         if executor_stats:
-            text += "<b>👥 Загруженность исполнителей:</b>\n"
             for stat in executor_stats[:10]:  # Показываем топ-10
                 hours = stat.total_hours or 0
                 load_level = "🔴" if hours > 40 else "🟡" if hours > 20 else "🟢"
-                text += (f"{load_level} <b>{stat.first_name} {stat.last_name}</b>\n"
-                        f"   Смен: {stat.shift_count}, Часов: {hours:.1f}ч\n")
-            text += "\n"
+                shifts_label = get_text("shift_management.shifts_count_label", language=lang)
+                hours_label = get_text("shift_management.hours_label", language=lang)
+                workload_list += (f"{load_level} <b>{stat.first_name} {stat.last_name}</b>\n"
+                                 f"   {shifts_label}: {stat.shift_count}, {hours_label}: {hours:.1f}ч\n")
 
+        # Build free executors list
+        free_list = ""
         if unassigned_executors:
-            text += f"<b>😴 Свободные исполнители ({len(unassigned_executors)}):</b>\n"
             for executor in unassigned_executors[:5]:  # Показываем первых 5
-                text += f"• {executor.first_name} {executor.last_name}\n"
+                free_list += f"• {executor.first_name} {executor.last_name}\n"
 
             if len(unassigned_executors) > 5:
-                text += f"... и ещё {len(unassigned_executors) - 5} исполнителей\n"
+                more_text = get_text("shift_management.and_more_executors", language=lang, count=len(unassigned_executors) - 5)
+                free_list += more_text + "\n"
 
-        # Рекомендации по балансировке
+        # Recommendation
+        recommendation = ""
         if executor_stats:
             max_hours = max([stat.total_hours or 0 for stat in executor_stats])
             min_hours = min([stat.total_hours or 0 for stat in executor_stats])
 
             if max_hours - min_hours > 20:
-                text += "\n⚠️ <b>Рекомендация:</b> Большой разброс в загруженности. Рекомендуется перераспределение смен."
+                recommendation = f"\n{get_text('shift_management.workload_imbalance_warning', language=lang)}"
+
+        text = get_text("shift_management.workload_analysis_result", language=lang,
+                       period_start=date.today().strftime('%d.%m.%Y'),
+                       period_end=end_date.strftime('%d.%m.%Y'),
+                       workload_list=workload_list,
+                       free_count=len(unassigned_executors),
+                       free_list=free_list,
+                       recommendation=recommendation)
 
         await callback.message.edit_text(
             text,
@@ -2702,7 +2758,8 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
 
     except Exception as e:
         logger.error(f"Ошибка анализа загруженности: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.workload_analysis_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2729,8 +2786,7 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
 
         if result.get('error'):
             await callback.message.edit_text(
-                f"❌ <b>Ошибка перераспределения</b>\n\n"
-                f"{result['error']}",
+                get_text("shift_management.redistribute_error", language=lang, error=result['error']),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -2741,25 +2797,28 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
         redistributed = result.get('redistributed_shifts', [])
         summary = result.get('summary', {})
 
-        text = "🔄 <b>Результат перераспределения нагрузки</b>\n\n"
-        text += f"✅ <b>Перераспределено смен:</b> {len(redistributed)}\n"
-        text += f"📈 <b>Улучшение баланса:</b> {summary.get('balance_improvement', 0):.1f}%\n"
-        text += f"⚖️ <b>Новый разброс нагрузки:</b> {summary.get('load_variance', 0):.1f}ч\n\n"
-
+        changes_list = ""
         if redistributed:
-            text += "<b>📋 Изменения в назначениях:</b>\n"
             for change in redistributed[:5]:  # Показываем первые 5
                 shift = change.get('shift')
                 old_executor = change.get('old_executor')
                 new_executor = change.get('new_executor')
 
                 if shift and new_executor:
-                    text += (f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')}\n"
-                            f"  {old_executor.first_name if old_executor else 'Не назначен'} "
-                            f"→ {new_executor.first_name} {new_executor.last_name}\n")
+                    not_assigned = get_text("shift_management.not_assigned", language=lang)
+                    old_name = f"{old_executor.first_name}" if old_executor else not_assigned
+                    changes_list += (f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')}\n"
+                                   f"  {old_name} → {new_executor.first_name} {new_executor.last_name}\n")
 
             if len(redistributed) > 5:
-                text += f"... и ещё {len(redistributed) - 5} изменений\n"
+                more_text = get_text("shift_management.and_more_changes", language=lang, count=len(redistributed) - 5)
+                changes_list += f"{more_text}\n"
+
+        text = get_text("shift_management.redistribute_result", language=lang,
+                       redistributed=len(redistributed),
+                       balance_improvement=summary.get('balance_improvement', 0),
+                       load_variance=summary.get('load_variance', 0),
+                       changes_list=changes_list)
 
         await callback.message.edit_text(
             text,
@@ -2767,11 +2826,12 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ Перераспределение завершено")
+        await callback.answer(get_text("shift_management.redistribute_completed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка перераспределения нагрузки: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2836,41 +2896,45 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
                             'break_hours': break_time
                         })
 
-        text = "⚠️ <b>Анализ конфликтов расписания</b>\n\n"
-        text += f"<b>Период:</b> {date.today().strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}\n"
-        text += f"<b>Найдено конфликтов:</b> {len(conflicts)}\n\n"
+        conflicts_list = ""
+        no_conflicts_msg = ""
 
         if not conflicts:
-            text += "✅ <b>Конфликтов не найдено!</b>\n"
-            text += "Все расписания исполнителей оптимальны."
+            no_conflicts_msg = get_text("shift_management.no_conflicts_found", language=lang)
         else:
-            text += "<b>🚨 Обнаруженные конфликты:</b>\n\n"
-
             for i, conflict in enumerate(conflicts[:5], 1):  # Показываем первые 5
                 executor = conflict['executor']
                 shift1 = conflict['shift1']
                 shift2 = conflict['shift2']
                 conflict_type = conflict['type']
 
-                text += f"<b>{i}. {executor.first_name} {executor.last_name}</b>\n"
-                text += f"📅 {shift1.date.strftime('%d.%m.%Y')}\n"
+                conflicts_list += f"<b>{i}. {executor.first_name} {executor.last_name}</b>\n"
+                conflicts_list += f"📅 {shift1.date.strftime('%d.%m.%Y')}\n"
 
                 if conflict_type == 'time_overlap':
-                    text += f"❌ Пересечение смен:\n"
-                    text += f"   {shift1.start_time.strftime('%H:%M')}-{shift1.end_time.strftime('%H:%M')}\n"
-                    text += f"   {shift2.start_time.strftime('%H:%M')}-{shift2.end_time.strftime('%H:%M')}\n"
+                    conflicts_list += f"❌ {get_text('shift_management.time_overlap_label', language=lang)}:\n"
+                    conflicts_list += f"   {shift1.start_time.strftime('%H:%M')}-{shift1.end_time.strftime('%H:%M')}\n"
+                    conflicts_list += f"   {shift2.start_time.strftime('%H:%M')}-{shift2.end_time.strftime('%H:%M')}\n"
                 elif conflict_type == 'short_break':
                     break_hours = conflict['break_hours']
-                    text += f"⚡ Короткий перерыв ({break_hours:.1f}ч):\n"
-                    text += f"   {shift1.start_time.strftime('%H:%M')}-{shift1.end_time.strftime('%H:%M')}\n"
-                    text += f"   {shift2.start_time.strftime('%H:%M')}-{shift2.end_time.strftime('%H:%M')}\n"
+                    conflicts_list += f"⚡ {get_text('shift_management.short_break_label', language=lang, hours=break_hours)}:\n"
+                    conflicts_list += f"   {shift1.start_time.strftime('%H:%M')}-{shift1.end_time.strftime('%H:%M')}\n"
+                    conflicts_list += f"   {shift2.start_time.strftime('%H:%M')}-{shift2.end_time.strftime('%H:%M')}\n"
 
-                text += "\n"
+                conflicts_list += "\n"
 
             if len(conflicts) > 5:
-                text += f"... и ещё {len(conflicts) - 5} конфликтов\n\n"
+                more_text = get_text("shift_management.and_more_conflicts", language=lang, count=len(conflicts) - 5)
+                conflicts_list += f"{more_text}\n\n"
 
-            text += "💡 <b>Рекомендация:</b> Используйте функцию перераспределения нагрузки для устранения конфликтов."
+            conflicts_list += get_text("shift_management.redistribute_recommendation", language=lang)
+
+        text = get_text("shift_management.conflicts_analysis_result", language=lang,
+                       period_start=date.today().strftime('%d.%m.%Y'),
+                       period_end=end_date.strftime('%d.%m.%Y'),
+                       conflicts_count=len(conflicts),
+                       conflicts_list=conflicts_list,
+                       no_conflicts=no_conflicts_msg)
 
         await callback.message.edit_text(
             text,
@@ -2882,7 +2946,8 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка анализа конфликтов: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2914,8 +2979,7 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
 
         if not unassigned_shifts:
             await callback.message.edit_text(
-                "✅ <b>Все смены уже назначены</b>\n\n"
-                f"Нет неназначенных смен на следующие 30 дней.",
+                get_text("shift_management.all_shifts_assigned_30days", language=lang),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -2930,8 +2994,7 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
 
         if result.get('error'):
             await callback.message.edit_text(
-                f"❌ <b>Ошибка автоназначения</b>\n\n"
-                f"{result['error']}",
+                get_text("shift_management.bulk_auto_assign_error_msg", language=lang, error=result['error']),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -2941,15 +3004,15 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
         assignments = result.get('assignments', [])
         unassigned = result.get('unassigned_shifts', [])
 
-        text = "🚀 <b>Результат автоматического назначения</b>\n\n"
-        text += f"✅ <b>Успешно назначено:</b> {len(assignments)} смен\n"
-        text += f"❌ <b>Не удалось назначить:</b> {len(unassigned)} смен\n\n"
+        efficiency = (len(assignments) / (len(assignments) + len(unassigned)) * 100) if assignments else 0
+        efficiency_text = f"📊 <b>{get_text('shift_management.efficiency_label', language=lang)}:</b> {efficiency:.1f}%\n\n" if assignments else ""
+        warning_text = get_text("shift_management.unassigned_need_manual", language=lang) if unassigned else ""
 
-        if assignments:
-            text += f"📊 <b>Эффективность:</b> {(len(assignments) / (len(assignments) + len(unassigned)) * 100):.1f}%\n\n"
-
-        if unassigned:
-            text += "<b>⚠️ Неназначенные смены требуют ручного назначения</b>"
+        text = get_text("shift_management.bulk_auto_assign_result", language=lang,
+                       assigned=len(assignments),
+                       unassigned=len(unassigned),
+                       efficiency=efficiency_text,
+                       warning=warning_text)
 
         await callback.message.edit_text(
             text,
@@ -2957,11 +3020,12 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ Автоназначение завершено")
+        await callback.answer(get_text("shift_management.bulk_auto_assign_completed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка автоматического назначения: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.bulk_auto_assign_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -2988,8 +3052,7 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
 
         if not unassigned_shifts:
             await callback.message.edit_text(
-                "✅ <b>Все смены уже назначены</b>\n\n"
-                "Нет неназначенных смен для обработки.",
+                get_text("shift_management.all_shifts_assigned_now", language=lang),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -3025,13 +3088,14 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
             if result.get('unassigned_shifts'):
                 total_failed += len(result['unassigned_shifts'])
 
-        text = "📋 <b>Результат назначения по специализациям</b>\n\n"
-        text += f"✅ <b>Успешно назначено:</b> {total_assigned} смен\n"
-        text += f"❌ <b>Не удалось назначить:</b> {total_failed} смен\n\n"
-        text += f"<b>🔧 Обработано групп специализаций:</b> {len(specialization_groups)}\n"
+        efficiency = (total_assigned / (total_assigned + total_failed) * 100) if total_assigned > 0 else 0
+        efficiency_text = f"📊 <b>{get_text('shift_management.efficiency_label', language=lang)}:</b> {efficiency:.1f}%\n" if total_assigned > 0 else ""
 
-        if total_assigned > 0:
-            text += f"📊 <b>Эффективность:</b> {(total_assigned / (total_assigned + total_failed) * 100):.1f}%\n"
+        text = get_text("shift_management.bulk_by_spec_result", language=lang,
+                       assigned=total_assigned,
+                       failed=total_failed,
+                       groups=len(specialization_groups),
+                       efficiency=efficiency_text)
 
         await callback.message.edit_text(
             text,
@@ -3039,11 +3103,12 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ Назначение по специализациям завершено")
+        await callback.answer(get_text("shift_management.bulk_by_spec_completed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка назначения по специализациям: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.bulk_by_spec_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -3073,8 +3138,7 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
 
         if not unassigned_shifts:
             await callback.message.edit_text(
-                "✅ <b>Все смены на период уже назначены</b>\n\n"
-                f"Нет неназначенных смен на следующие 7 дней.",
+                get_text("shift_management.all_shifts_assigned_7days", language=lang),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -3089,8 +3153,7 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
 
         if result.get('error'):
             await callback.message.edit_text(
-                f"❌ <b>Ошибка назначения на период</b>\n\n"
-                f"{result['error']}",
+                get_text("shift_management.bulk_by_period_error_msg", language=lang, error=result['error']),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -3100,16 +3163,15 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
         assignments = result.get('assignments', [])
         unassigned = result.get('unassigned_shifts', [])
 
-        text = "📅 <b>Результат назначения на период</b>\n\n"
-        text += f"<b>📆 Период:</b> Следующие 7 дней\n"
-        text += f"✅ <b>Успешно назначено:</b> {len(assignments)} смен\n"
-        text += f"❌ <b>Не удалось назначить:</b> {len(unassigned)} смен\n\n"
+        efficiency = (len(assignments) / (len(assignments) + len(unassigned)) * 100) if assignments else 0
+        efficiency_text = f"📊 <b>{get_text('shift_management.efficiency_label', language=lang)}:</b> {efficiency:.1f}%\n\n" if assignments else ""
+        warning_text = get_text("shift_management.unassigned_need_manual", language=lang) if unassigned else ""
 
-        if assignments:
-            text += f"📊 <b>Эффективность:</b> {(len(assignments) / (len(assignments) + len(unassigned)) * 100):.1f}%\n\n"
-
-        if unassigned:
-            text += "<b>⚠️ Неназначенные смены требуют ручного назначения</b>"
+        text = get_text("shift_management.bulk_by_period_result", language=lang,
+                       assigned=len(assignments),
+                       unassigned=len(unassigned),
+                       efficiency=efficiency_text,
+                       warning=warning_text)
 
         await callback.message.edit_text(
             text,
@@ -3117,11 +3179,12 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ Назначение на период завершено")
+        await callback.answer(get_text("shift_management.bulk_by_period_completed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка назначения на период: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.bulk_by_period_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -3148,8 +3211,7 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
 
         if not unassigned_shifts:
             await callback.message.edit_text(
-                "✅ <b>Все смены уже назначены</b>\n\n"
-                "Нет неназначенных смен для обработки.",
+                get_text("shift_management.all_shifts_assigned_now", language=lang),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )
@@ -3168,17 +3230,19 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
         assignments = result.get('assignments', [])
         unassigned = result.get('unassigned_shifts', [])
 
-        text = "⚡ <b>Результат назначения по приоритету</b>\n\n"
-        text += f"<b>🎯 Критерий приоритета:</b> Ближайшие по времени\n"
-        text += f"<b>📊 Обработано смен:</b> {len(priority_shifts)}\n\n"
-        text += f"✅ <b>Успешно назначено:</b> {len(assignments)} смен\n"
-        text += f"❌ <b>Не удалось назначить:</b> {len(unassigned)} смен\n\n"
+        efficiency = (len(assignments) / (len(assignments) + len(unassigned)) * 100) if assignments else 0
+        efficiency_text = f"📊 <b>{get_text('shift_management.efficiency_label', language=lang)}:</b> {efficiency:.1f}%\n" if assignments else ""
 
-        if assignments:
-            text += f"📊 <b>Эффективность:</b> {(len(assignments) / (len(assignments) + len(unassigned)) * 100):.1f}%\n"
-
+        remaining_text = ""
         if len(unassigned_shifts) > 20:
-            text += f"\n<b>ℹ️ Осталось неназначенных:</b> {len(unassigned_shifts) - 20} смен"
+            remaining_text = f"\n<b>{get_text('shift_management.remaining_unassigned_label', language=lang)}:</b> {len(unassigned_shifts) - 20} {get_text('shift_management.shifts_count_label', language=lang)}"
+
+        text = get_text("shift_management.bulk_by_priority_result", language=lang,
+                       processed=len(priority_shifts),
+                       assigned=len(assignments),
+                       unassigned=len(unassigned),
+                       efficiency=efficiency_text,
+                       remaining=remaining_text)
 
         await callback.message.edit_text(
             text,
@@ -3186,11 +3250,12 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ Назначение по приоритету завершено")
+        await callback.answer(get_text("shift_management.bulk_by_priority_completed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка назначения по приоритету: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.bulk_by_priority_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -3209,7 +3274,7 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
         # Получаем смену
         shift = db.query(Shift).filter(Shift.id == shift_id).first()
         if not shift:
-            await callback.answer("❌ Смена не найдена", show_alert=True)
+            await callback.answer(get_text("shift_management.shift_not_found", language=lang), show_alert=True)
             return
 
         # Получаем доступных исполнителей для этой смены
@@ -3259,26 +3324,21 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
             available_executors = filtered_executors
 
-        text = f"👤 <b>Назначение исполнителя на смену</b>\n\n"
-        text += f"<b>📅 Смена:</b> {shift.start_time.strftime('%d.%m.%Y')} "
-
         end_time_str = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
-        text += f"{shift.start_time.strftime('%H:%M')}-{end_time_str}\n"
+        shift_time = f"{shift.start_time.strftime('%d.%m.%Y')} {shift.start_time.strftime('%H:%M')}-{end_time_str}"
 
         # Переводим специализации
         spec_text = translate_specializations(shift.specialization_focus, lang)
-        text += f"<b>🔧 Специализация:</b> {spec_text}\n"
-
-        text += f"<b>📍 Зона:</b> {shift.geographic_zone or 'Не указано'}\n\n"
+        zone_text = shift.geographic_zone or get_text("shift_management.zone_not_specified", language=lang)
 
         if not available_executors:
-            text += "❌ <b>Нет доступных исполнителей</b>\n"
-            text += "Все исполнители заняты или не подходят по специализации."
+            text = get_text("shift_management.no_available_executors", language=lang,
+                          shift_time=shift_time,
+                          specialization=spec_text,
+                          zone=zone_text)
 
-            keyboard = [[InlineKeyboardButton(text="🔙 Назад", callback_data="assign_to_shift")]]
+            keyboard = [[InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data="assign_to_shift")]]
         else:
-            text += f"<b>👥 Доступные исполнители ({len(available_executors)}):</b>\n\n"
-
             keyboard = []
             for executor in available_executors[:10]:  # Показываем первых 10
                 # Проверяем загруженность исполнителя в этот день
@@ -3294,13 +3354,20 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
                 ).count()
 
                 load_indicator = "🔴" if day_shifts >= 3 else "🟡" if day_shifts >= 1 else "🟢"
+                shifts_label = get_text("shift_management.shifts_count_label", language=lang)
 
                 keyboard.append([InlineKeyboardButton(
-                    text=f"{load_indicator} {executor.first_name} {executor.last_name} ({day_shifts} смен)",
+                    text=f"{load_indicator} {executor.first_name} {executor.last_name} ({day_shifts} {shifts_label})",
                     callback_data=f"assign_executor_to_shift:{shift_id}:{executor.id}"
                 )])
 
-            keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="assign_to_shift")])
+            keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data="assign_to_shift")])
+
+            text = get_text("shift_management.select_executor_for_shift", language=lang,
+                          shift_time=shift_time,
+                          specialization=spec_text,
+                          zone=zone_text,
+                          count=len(available_executors))
 
         await callback.message.edit_text(
             text,
@@ -3313,7 +3380,8 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
     except Exception as e:
         logger.error(f"Ошибка выбора смены для назначения: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.select_shift_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()
@@ -3337,7 +3405,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
         executor = db.query(User).filter(User.id == executor_id).first()
 
         if not shift or not executor:
-            await callback.answer("❌ Смена или исполнитель не найдены", show_alert=True)
+            await callback.answer(get_text("shift_management.shift_or_executor_not_found", language=lang), show_alert=True)
             return
 
         from datetime import datetime, timedelta
@@ -3369,23 +3437,22 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             if missing_specs:
                 from uk_management_bot.utils.specializations import translate_specializations
                 missing_text = translate_specializations(list(missing_specs), lang)
-                available_text = translate_specializations(executor_specs, lang) if executor_specs else "нет"
+                available_text = translate_specializations(executor_specs, lang) if executor_specs else get_text("shift_management.no_specs", language=lang)
+                required_text = translate_specializations(shift_specs, lang)
 
                 await callback.message.edit_text(
-                    f"❌ <b>Несоответствие специализаций!</b>\n\n"
-                    f"Исполнитель <b>{executor.first_name} {executor.last_name}</b> "
-                    f"не может быть назначен на эту смену.\n\n"
-                    f"<b>Требуется для смены:</b> {translate_specializations(shift_specs, lang)}\n"
-                    f"<b>У исполнителя есть:</b> {available_text}\n"
-                    f"<b>Отсутствует:</b> {missing_text}\n\n"
-                    f"💡 Назначьте исполнителя с подходящими специализациями.",
+                    get_text("shift_management.spec_mismatch", language=lang,
+                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            required=required_text,
+                            available=available_text,
+                            missing=missing_text),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🔙 Выбрать другого", callback_data=f"select_shift_for_assignment:{shift_id}")],
-                        [InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_planning")]
+                        [InlineKeyboardButton(text=get_text("shift_management.select_another_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")],
+                        [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data="back_to_planning")]
                     ]),
                     parse_mode="HTML"
                 )
-                await callback.answer("❌ Несоответствие специализаций", show_alert=True)
+                await callback.answer(get_text("shift_management.spec_mismatch_popup", language=lang), show_alert=True)
                 return
 
         # ========== ПРОВЕРКА КОНФЛИКТОВ ВРЕМЕНИ И СПЕЦИАЛИЗАЦИЙ ==========
@@ -3432,14 +3499,12 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
         if has_real_conflict:
             shift_date_str = shift.start_time.strftime('%d.%m.%Y')
             await callback.message.edit_text(
-                f"⚠️ <b>Конфликт специализаций!</b>\n\n"
-                f"У исполнителя <b>{executor.first_name} {executor.last_name}</b> "
-                f"уже есть смены с такими же специализациями на {shift_date_str}.\n\n"
-                f"Один человек не может работать в одной специализации дважды одновременно.\n\n"
-                f"Всё равно назначить?",
+                get_text("shift_management.spec_conflict", language=lang,
+                        executor_name=f"{executor.first_name} {executor.last_name}",
+                        date=shift_date_str),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Да, назначить", callback_data=f"force_assign:{shift_id}:{executor_id}")],
-                    [InlineKeyboardButton(text="❌ Отменить", callback_data=f"select_shift_for_assignment:{shift_id}")]
+                    [InlineKeyboardButton(text=get_text("shift_management.force_assign_button", language=lang), callback_data=f"force_assign:{shift_id}:{executor_id}")],
+                    [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")]
                 ]),
                 parse_mode="HTML"
             )
@@ -3470,21 +3535,22 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
         end_time_str = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
 
         await callback.message.edit_text(
-            f"✅ <b>Исполнитель назначен!</b>\n\n"
-            f"<b>📅 Смена:</b> {shift_date_str} "
-            f"{start_time_str}-{end_time_str}\n"
-            f"<b>👤 Исполнитель:</b> {executor.first_name} {executor.last_name}\n"
-            f"<b>🔧 Специализация:</b> {spec_text}\n\n"
-            f"Уведомление отправлено исполнителю.",
+            get_text("shift_management.executor_assigned_success", language=lang,
+                    date=shift_date_str,
+                    start_time=start_time_str,
+                    end_time=end_time_str,
+                    executor_name=f"{executor.first_name} {executor.last_name}",
+                    specialization=spec_text),
             reply_markup=get_executor_assignment_keyboard(lang),
             parse_mode="HTML"
         )
 
-        await callback.answer("✅ Назначение выполнено")
+        await callback.answer(get_text("shift_management.assignment_completed_popup", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка назначения исполнителя: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.assignment_error", language=lang), show_alert=True)
         if db:
             db.rollback()
     finally:
@@ -3510,7 +3576,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
         executor = db.query(User).filter(User.id == executor_id).first()
 
         if not shift or not executor:
-            await callback.answer("❌ Смена или исполнитель не найдены", show_alert=True)
+            await callback.answer(get_text("shift_management.shift_or_executor_not_found", language=lang), show_alert=True)
             return
 
         # КРИТИЧЕСКАЯ ПРОВЕРКА: даже при принудительном назначении проверяем специализации
@@ -3538,19 +3604,20 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
             missing_specs = set(shift_specs) - set(executor_specs)
             if missing_specs:
                 from uk_management_bot.utils.specializations import translate_specializations
+                required_text = translate_specializations(shift_specs, lang)
+                missing_text = translate_specializations(list(missing_specs), lang)
+
                 await callback.message.edit_text(
-                    f"❌ <b>Невозможно назначить!</b>\n\n"
-                    f"Исполнитель <b>{executor.first_name} {executor.last_name}</b> "
-                    f"не имеет требуемых специализаций для этой смены.\n\n"
-                    f"Это ограничение нельзя обойти даже принудительным назначением.\n\n"
-                    f"<b>Требуется:</b> {translate_specializations(shift_specs, lang)}\n"
-                    f"<b>Отсутствует:</b> {translate_specializations(list(missing_specs), lang)}",
+                    get_text("shift_management.force_assign_impossible", language=lang,
+                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            required=required_text,
+                            missing=missing_text),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🔙 Назад", callback_data=f"select_shift_for_assignment:{shift_id}")]
+                        [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")]
                     ]),
                     parse_mode="HTML"
                 )
-                await callback.answer("❌ Нет нужных специализаций", show_alert=True)
+                await callback.answer(get_text("shift_management.missing_specs_popup", language=lang), show_alert=True)
                 return
 
         # Назначаем исполнителя принудительно
@@ -3558,22 +3625,26 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
         shift.notes = (shift.notes or "") + f"\n[КОНФЛИКТ РАСПИСАНИЯ] Назначено принудительно {date.today().strftime('%d.%m.%Y')}"
         db.commit()
 
+        shift_date = shift.start_time.date().strftime('%d.%m.%Y')
+        start_time = shift.start_time.strftime('%H:%M')
+        end_time = shift.end_time.strftime('%H:%M')
+
         await callback.message.edit_text(
-            f"⚠️ <b>Исполнитель назначен принудительно</b>\n\n"
-            f"<b>📅 Смена:</b> {shift.start_time.date().strftime('%d.%m.%Y')} "
-            f"{shift.start_time.strftime('%H:%M')}-{shift.end_time.strftime('%H:%M')}\n"
-            f"<b>👤 Исполнитель:</b> {executor.first_name} {executor.last_name}\n\n"
-            f"❗ <b>Внимание:</b> Есть конфликт с другими сменами!\n"
-            f"Рекомендуется проверить расписание исполнителя.",
+            get_text("shift_management.force_assigned_success", language=lang,
+                    date=shift_date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    executor_name=f"{executor.first_name} {executor.last_name}"),
             reply_markup=get_executor_assignment_keyboard(lang),
             parse_mode="HTML"
         )
 
-        await callback.answer("⚠️ Назначено с конфликтом")
+        await callback.answer(get_text("shift_management.force_assigned_popup", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка принудительного назначения: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.force_assign_error", language=lang), show_alert=True)
         if db:
             db.rollback()
     finally:
@@ -3591,8 +3662,7 @@ async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMCon
         lang = get_user_language(callback.from_user.id, db)
 
         await callback.message.edit_text(
-            "👥 <b>Назначение исполнителей на смены</b>\n\n"
-            "Выберите действие:",
+            get_text("shift_management.executor_assignment_menu_title", language=lang),
             reply_markup=get_executor_assignment_keyboard(lang),
             parse_mode="HTML"
         )
@@ -3601,7 +3671,8 @@ async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMCon
 
     except Exception as e:
         logger.error(f"Ошибка возврата к назначению исполнителей: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.executor_assignment_back_error", language=lang), show_alert=True)
     finally:
         if db:
             db.close()

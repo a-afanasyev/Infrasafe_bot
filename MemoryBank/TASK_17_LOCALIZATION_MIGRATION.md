@@ -70,6 +70,7 @@
 - ⚠️ **ru.json ↔ uz.json synchronization** (99.9% parity, 1 extra key)
 - ⏳ **All tests pass** in both RU and UZ languages (pending)
 - ⏳ **Dynamic language detection** working in all handlers (pending)
+- ⏳ **ASCII-only runtime strings**: все рабочие строки (условия `F.text`, названия кнопок, значения по умолчанию, ответы бота) берутся из локалей или ASCII-констант; кириллица разрешена только в комментариях и документации
 
 ---
 
@@ -463,6 +464,7 @@ Generating keys for requests.py...
 ```
 
 **Step 3: Update Handler Code**
+- Заменяем все кириллические литералы, участвующие в логике, на локализованные строки: условия `F.text`, значения кнопок, ответы бота, значения по умолчанию берём через `get_text()` либо ASCII-константы
 
 **Before:**
 ```python
@@ -536,6 +538,7 @@ Work with translator or use Google Translate API for initial draft:
 
 ✅ 30 handler files migrated to `get_text()`
 ✅ 0 hardcoded strings in handlers/
+✅ Все условия и кнопки в handlers используют локальные ключи/ASCII-значения (скан `rg "[\\u0400-\\u04FF]" handlers/` возвращает только комментарии)
 ✅ Updated tests for bilingual support
 ✅ ru.json and uz.json updated with all handler texts
 
@@ -629,8 +632,16 @@ class RequestService:
 
 ✅ 38 service files migrated
 ✅ All user-facing messages via `get_text()`
+✅ Общие утилиты и сервисы не содержат кириллических литералов в логике (fallback-строки вынесены в локали/ASCII)
 ✅ Multi-user scenarios handled (different languages per user)
 ✅ Tests updated for services
+
+#### Shared Utility Cleanup (Phase 3.b)
+
+- `uk_management_bot/utils/helpers.py`: все значения по умолчанию и форматируемые подписи берём из локалей (никаких "Детали заявки" и т.п. непосредственно в коде)
+- `uk_management_bot/utils/language_helpers.py`: словари названий языков переводим на ASCII либо выносим в локали (`get_text("languages.ru")` и т.п.)
+- Общие ASCII-константы (например, fallback "UNKNOWN") документируем отдельно, чтобы не использовать кириллицу для плейсхолдеров
+- Проверяем вспомогательные CLI-скрипты и сервисные модули: вывод и параметры по возможности делаем на английском; кириллица допустима только в help/README, но не в рабочих строках
 
 ---
 
@@ -747,6 +758,7 @@ async def show_categories(message: Message, db: Session):
 ✅ All button texts via `get_text()`
 ✅ Keyboard functions accept `language` parameter
 ✅ All handlers updated to pass language to keyboards
+✅ Строковые литералы в keyboards (callback data, сравнения) не содержат кириллицу; для пользовательского текста используем только локали
 
 ---
 
@@ -760,6 +772,10 @@ async def show_categories(message: Message, db: Session):
 $ python scripts/scan_hardcoded_strings.py
 ✅ Scanned 88 files
 ✅ Found 0 hardcoded strings
+
+# 1a. Дополнительная ASCII-проверка рантайм-кода
+$ rg "[\u0400-\u04FF]" uk_management_bot/handlers uk_management_bot/services uk_management_bot/keyboards uk_management_bot/utils | grep -v "#"
+# Результат должен быть пустым (допускаются только комментарии и docstring'и)
 
 # 2. Validate translations completeness
 $ python scripts/validate_translations.py
@@ -1403,6 +1419,7 @@ exit 0
 - [ ] P2 handlers migrated (remaining 23 files)
 - [ ] All handler tests updated and passing
 - [ ] No hardcoded strings in handlers/
+- [ ] Кириллица отсутствует в рабочих строках handlers (проверка `rg "[\\u0400-\\u04FF]" uk_management_bot/handlers` без результатов)
 
 ### Phase 3: Services
 - [ ] P0 services migrated (notification, request, auth)
@@ -1410,6 +1427,7 @@ exit 0
 - [ ] P2 services migrated (AI services - errors only)
 - [ ] P3 services migrated (remaining infrastructure)
 - [ ] All service tests updated and passing
+- [ ] Утилиты/сервисы не содержат кириллицу во вводе/выводе (helpers, language_helpers и др.)
 
 ### Phase 4: Keyboards
 - [ ] P1 keyboards migrated (base, requests, admin)
@@ -1417,6 +1435,7 @@ exit 0
 - [ ] P3 keyboards migrated (remaining 14 files)
 - [ ] All keyboard functions accept `language` parameter
 - [ ] All handlers pass language to keyboards
+- [ ] Кнопки и callback data не содержат кириллицу (все тексты идут из локалей)
 
 ### Phase 5: Testing
 - [ ] Scanner confirms 0 hardcoded strings
@@ -1429,6 +1448,7 @@ exit 0
 - [ ] Performance impact assessment completed
 - [ ] Cross-platform testing completed
 - [ ] `docs/LOCALIZATION_TESTING.md` written
+- [ ] ASCII-проверка runtime-кода (`rg "[\\u0400-\\u04FF]" ...`) зафиксирована в отчёте
 
 ### Phase 6: Improvements (Optional)
 - [ ] English language support added

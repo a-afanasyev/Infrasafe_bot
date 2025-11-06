@@ -4,10 +4,10 @@ TRANSLATION VALIDATION REPORT - TASK 17 Phase 1
 
 SUMMARY
 --------------------------------------------------------------------------------
-Total keys: 607
-Total issues: 6
+Total keys: 5729
+Total issues: 5
   Errors: 0
-  Warnings: 1
+  Warnings: 0
   Info: 5
 
 DETAILED STATISTICS
@@ -15,39 +15,36 @@ DETAILED STATISTICS
 Missing translations: 0
 Format mismatches: 0
 Missing keys (UZ): 0
-Extra keys (UZ): 1
+Extra keys (UZ): 0
 
 ISSUES BY CATEGORY
 --------------------------------------------------------------------------------
 
 DUPLICATE_VALUE_RU (5 issues):
-  [INFO] profile.status, requests.status, request_assignment.status
-     Duplicate RU value in 3 keys
-     value: Статус:
-     keys: ['profile.status', 'requests.status', 'request_assignment.status']
-
-  [INFO] profile.phone_not_set, profile.address_not_set
+  [INFO] admin.24_часа, invites.expiry_24h
      Duplicate RU value in 2 keys
-     value: Не указан
-     keys: ['profile.phone_not_set', 'profile.address_not_set']
+     value: 24 часа
+     keys: ['admin.24_часа', 'invites.expiry_24h']
 
-  [INFO] profile.edit_phone, employee_management.phone
+  [INFO] admin.7_дней, invites.expiry_7d
      Duplicate RU value in 2 keys
-     value: Телефон
-     keys: ['profile.edit_phone', 'employee_management.phone']
+     value: 7 дней
+     keys: ['admin.7_дней', 'invites.expiry_7d']
 
-  [INFO] my_shifts.history, my_shifts.history_title
+  [INFO] admin.address, requests.address_9
      Duplicate RU value in 2 keys
-     value: 📊 История смен
-     keys: ['my_shifts.history', 'my_shifts.history_title']
+     value: 
+Адрес: 
+     keys: ['admin.address', 'requests.address_9']
 
-  [INFO] my_shifts.today, shift_management.today
+  [INFO] admin.address_10, admin.address_11, admin.address_4
+     Duplicate RU value in 12 keys
+     value: 
+📍 Адрес: 
+     keys: ['admin.address_10', 'admin.address_11', 'admin.address_4', 'admin.address_5', 'admin.address_6', 'admin.address_9', 'handlers.address', 'requests.address_16', 'requests.address_21', 'requests.address_22', 'requests.address_23', 'requests.address_8']
+
+  [INFO] admin.address_2, requests.address_6
      Duplicate RU value in 2 keys
-     value: 🔥 Сегодня
-     keys: ['my_shifts.today', 'shift_management.today']
+     value: 📍 Адрес: {...}
 
-
-EXTRA_KEY_UZ (1 issues):
-  [WARNING] status.accepted
-     Key exists in uz.json but missing in ru.json
-     uz_value: Qabul qilindi
+     keys: ['admin.address_2', 'requests.address_6']

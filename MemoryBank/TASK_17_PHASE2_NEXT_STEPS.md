@@ -254,3 +254,7 @@ docker exec uk-management-bot-dev python3 /app/scripts/scan_hardcoded_strings.py
 **Статус**: ✅ Готово к продолжению работы
 
 
+
+
+
+

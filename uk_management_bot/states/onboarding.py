@@ -14,7 +14,6 @@ class OnboardingStates(StatesGroup):
 
     # Базовые этапы онбординга
     waiting_for_phone = State()
-    waiting_for_home_address = State()  # Legacy: старый текстовый адрес
 
     # Выбор квартиры из справочника (новая система)
     waiting_for_yard_selection = State()

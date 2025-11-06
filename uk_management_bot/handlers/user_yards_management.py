@@ -14,7 +14,7 @@ from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models import User, Yard
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.auth_helpers import has_admin_access
-from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.helpers import get_text, get_user_language
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -27,12 +27,13 @@ class UserYardsStates(StatesGroup):
 
 # ============= КЛАВИАТУРЫ =============
 
-def get_user_yards_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
+def get_user_yards_keyboard(user_telegram_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура управления дворами пользователя
 
     Args:
         user_telegram_id: Telegram ID пользователя
+        lang: Язык интерфейса
 
     Returns:
         InlineKeyboardMarkup: Клавиатура с дворами и кнопками управления
@@ -44,7 +45,7 @@ def get_user_yards_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
             user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
             if not user:
                 return InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="❌ Пользователь не найден", callback_data="noop")]
+                    [InlineKeyboardButton(text=get_text("user_yards.user_not_found", language=lang), callback_data="noop")]
                 ])
 
             # Дополнительные дворы
@@ -57,14 +58,14 @@ def get_user_yards_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
 
             # Заголовок
             buttons.append([InlineKeyboardButton(
-                text=f"🏘️ Дворы пользователя ({len(all_yards)})",
+                text=get_text("user_yards.yards_header", language=lang).format(count=len(all_yards)),
                 callback_data="noop"
             )])
 
             # Дополнительные дворы (можно удалить)
             if additional_yards:
                 buttons.append([InlineKeyboardButton(
-                    text="➕ Дополнительные дворы:",
+                    text=get_text("user_yards.additional_yards_label", language=lang),
                     callback_data="noop"
                 )])
                 for yard in additional_yards:
@@ -74,20 +75,20 @@ def get_user_yards_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
                             callback_data="noop"
                         ),
                         InlineKeyboardButton(
-                            text="❌ Удалить",
+                            text=get_text("user_yards.remove_button", language=lang),
                             callback_data=f"remove_user_yard_{user_telegram_id}_{yard.id}"
                         )
                     ])
 
             # Кнопка добавления
             buttons.append([InlineKeyboardButton(
-                text="➕ Добавить двор",
+                text=get_text("user_yards.add_button", language=lang),
                 callback_data=f"add_user_yard_{user_telegram_id}"
             )])
 
             # Назад - используем внутренний ID пользователя для возврата
             buttons.append([InlineKeyboardButton(
-                text="⬅️ Назад",
+                text=get_text("common.back", language=lang),
                 callback_data=f"user_mgmt_user_{user.id}"
             )])
 
@@ -99,16 +100,17 @@ def get_user_yards_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры дворов пользователя {user_telegram_id}: {e}")
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Ошибка", callback_data="noop")]
+            [InlineKeyboardButton(text=get_text("common.error_short", language=lang), callback_data="noop")]
         ])
 
 
-def get_yard_selection_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
+def get_yard_selection_keyboard(user_telegram_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура выбора двора для добавления пользователю
 
     Args:
         user_telegram_id: Telegram ID пользователя
+        lang: Язык интерфейса
 
     Returns:
         InlineKeyboardMarkup: Список доступных дворов
@@ -129,7 +131,7 @@ def get_yard_selection_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
             buttons = []
 
             buttons.append([InlineKeyboardButton(
-                text="📍 Выберите двор для добавления:",
+                text=get_text("user_yards.select_yard_prompt", language=lang),
                 callback_data="noop"
             )])
 
@@ -141,13 +143,13 @@ def get_yard_selection_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
                     )])
             else:
                 buttons.append([InlineKeyboardButton(
-                    text="ℹ️ Все дворы уже добавлены",
+                    text=get_text("user_yards.all_yards_added", language=lang),
                     callback_data="noop"
                 )])
 
             # Отмена
             buttons.append([InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("common.cancel", language=lang),
                 callback_data=f"manage_user_yards_{user_telegram_id}"
             )])
 
@@ -159,7 +161,7 @@ def get_yard_selection_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры выбора двора: {e}")
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Ошибка", callback_data="noop")]
+            [InlineKeyboardButton(text=get_text("common.error_short", language=lang), callback_data="noop")]
         ])
 
 
@@ -168,7 +170,8 @@ def get_yard_selection_keyboard(user_telegram_id: int) -> InlineKeyboardMarkup:
 @router.callback_query(F.data.startswith("manage_user_yards_"))
 async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Показать управление дворами пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    db_session = next(get_db())
+    lang = get_user_language(callback.from_user.id, db_session)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -183,31 +186,31 @@ async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: 
 
         target_user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
         if not target_user:
-            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            await callback.answer(get_text("user_yards.user_not_found_alert", language=lang), show_alert=True)
             return
 
         user_name = f"{target_user.first_name or ''} {target_user.last_name or ''}".strip() or f"ID: {user_telegram_id}"
 
         await callback.message.edit_text(
-            f"🏘️ **Управление дворами пользователя**\n\n"
-            f"👤 Пользователь: {user_name}\n"
-            f"📱 Telegram ID: {user_telegram_id}\n\n"
-            f"ℹ️ Здесь вы можете добавить дополнительные дворы для создания заявок.\n"
-            f"По умолчанию житель имеет доступ только к двору своей квартиры.",
-            reply_markup=get_user_yards_keyboard(user_telegram_id),
+            get_text("user_yards.manage_yards_message", language=lang).format(
+                user_name=user_name,
+                user_telegram_id=user_telegram_id
+            ),
+            reply_markup=get_user_yards_keyboard(user_telegram_id, lang),
             parse_mode="Markdown"
         )
         await callback.answer()
 
     except Exception as e:
         logger.error(f"Ошибка отображения управления дворами: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("common.error_short", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("add_user_yard_"))
 async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Показать список дворов для добавления"""
-    lang = callback.from_user.language_code or 'ru'
+    db_session = next(get_db())
+    lang = get_user_language(callback.from_user.id, db_session)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -221,22 +224,22 @@ async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list
         user_telegram_id = int(callback.data.split("_")[-1])
 
         await callback.message.edit_text(
-            f"➕ **Добавление двора пользователю**\n\n"
-            f"Выберите двор из списка:",
-            reply_markup=get_yard_selection_keyboard(user_telegram_id),
+            get_text("user_yards.add_yard_message", language=lang),
+            reply_markup=get_yard_selection_keyboard(user_telegram_id, lang),
             parse_mode="Markdown"
         )
         await callback.answer()
 
     except Exception as e:
         logger.error(f"Ошибка показа списка дворов: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("common.error_short", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("user_yard_add_confirm_"))
 async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Подтвердить добавление двора"""
-    lang = callback.from_user.language_code or 'ru'
+    db_session = next(get_db())
+    lang = get_user_language(callback.from_user.id, db_session)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -254,7 +257,7 @@ async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: l
 
         # user параметр содержит текущего администратора
         if not user:
-            await callback.answer("❌ Администратор не найден", show_alert=True)
+            await callback.answer(get_text("user_yards.admin_not_found", language=lang), show_alert=True)
             return
 
         # Добавляем двор
@@ -267,21 +270,22 @@ async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: l
         )
 
         if success:
-            await callback.answer("✅ Двор успешно добавлен", show_alert=True)
+            await callback.answer(get_text("user_yards.yard_added_success", language=lang), show_alert=True)
             # Возвращаемся к управлению дворами
             await handle_manage_user_yards(callback, db, roles, user)
         else:
-            await callback.answer("❌ Не удалось добавить двор", show_alert=True)
+            await callback.answer(get_text("user_yards.yard_add_failed", language=lang), show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка добавления двора: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("common.error_short", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("remove_user_yard_"))
 async def handle_remove_user_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Удалить дополнительный двор у пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    db_session = next(get_db())
+    lang = get_user_language(callback.from_user.id, db_session)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -300,12 +304,12 @@ async def handle_remove_user_yard(callback: CallbackQuery, db: Session, roles: l
         success = AddressService.remove_user_yard(db, user_telegram_id, yard_id)
 
         if success:
-            await callback.answer("✅ Двор успешно удален", show_alert=True)
+            await callback.answer(get_text("user_yards.yard_removed_success", language=lang), show_alert=True)
             # Обновляем интерфейс
             await handle_manage_user_yards(callback, db, roles, user)
         else:
-            await callback.answer("❌ Не удалось удалить двор", show_alert=True)
+            await callback.answer(get_text("user_yards.yard_remove_failed", language=lang), show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка удаления двора: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("common.error_short", language=lang), show_alert=True)

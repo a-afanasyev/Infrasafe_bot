@@ -3,8 +3,6 @@ from typing import List, Dict, Optional
 import re
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.database.session import get_db
-from uk_management_bot.utils.constants import ADDRESS_TYPE_DISPLAYS
-from uk_management_bot.utils.address_helpers import get_address_type_from_display
 import logging
 from uk_management_bot.utils.constants import (
     REQUEST_CATEGORIES,
@@ -18,26 +16,106 @@ from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 
 logger = logging.getLogger(__name__)
 
-def get_categories_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура с категориями заявок (единые тексты из REQUEST_CATEGORIES)"""
+# Category mapping: internal key -> locale key
+CATEGORY_KEYS = {
+    "electricity": "categories.electricity",
+    "plumbing": "categories.plumbing",
+    "heating": "categories.heating",
+    "elevator": "categories.elevator",
+    "cleaning": "categories.cleaning",
+    "landscaping": "categories.landscaping",
+    "security": "categories.security",
+    "internet": "categories.internet",
+}
+
+# List of internal category keys (for use in callbacks)
+CATEGORY_INTERNAL_KEYS = list(CATEGORY_KEYS.keys())
+
+# Urgency mapping: internal key -> locale key
+URGENCY_KEYS = {
+    "low": "urgency.low",
+    "medium": "urgency.medium",
+    "high": "urgency.high",
+    "critical": "urgency.critical",
+}
+
+# List of internal urgency keys (for use in callbacks)
+URGENCY_INTERNAL_KEYS = list(URGENCY_KEYS.keys())
+
+def get_localized_categories(language: str = "ru") -> list:
+    """Get list of localized category names
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        List of category names in specified language
+    """
+    return [get_text(key, language=language) for key in CATEGORY_KEYS.values()]
+
+def get_category_buttons_with_internal_keys(language: str = "ru") -> list:
+    """Get list of (display_text, internal_key) tuples for categories
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        List of tuples (localized_text, internal_key)
+    """
+    return [(get_text(locale_key, language=language), internal_key)
+            for internal_key, locale_key in CATEGORY_KEYS.items()]
+
+def get_urgency_buttons_with_internal_keys(language: str = "ru") -> list:
+    """Get list of (display_text, internal_key) tuples for urgency levels
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        List of tuples (localized_text, internal_key)
+    """
+    return [(get_text(locale_key, language=language), internal_key)
+            for internal_key, locale_key in URGENCY_KEYS.items()]
+
+def get_categories_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура с категориями заявок
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with localized category buttons
+    """
     keyboard = []
-    categories = REQUEST_CATEGORIES
+    categories = get_localized_categories(language)
     # Размещаем по 2 кнопки в ряду
     for i in range(0, len(categories), 2):
         row = [KeyboardButton(text=categories[i])]
         if i + 1 < len(categories):
             row.append(KeyboardButton(text=categories[i + 1]))
         keyboard.append(row)
-    keyboard.append([KeyboardButton(text="❌ Отмена")])
+    keyboard.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_categories_inline_keyboard() -> InlineKeyboardMarkup:
-    """Inline-клавиатура с категориями заявок (callback_query)"""
+def get_categories_inline_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    """Inline-клавиатура с категориями заявок (callback_query)
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        InlineKeyboardMarkup with localized category buttons
+    """
     keyboard: List[List[InlineKeyboardButton]] = []
     # Раскладываем по 2 в ряд
     row: List[InlineKeyboardButton] = []
-    for idx, category in enumerate(REQUEST_CATEGORIES):
-        row.append(InlineKeyboardButton(text=category, callback_data=f"{CALLBACK_PREFIX_CATEGORY}{category}"))
+    # Use internal keys in callback_data, but display localized text
+    category_buttons = get_category_buttons_with_internal_keys(language)
+    for idx, (display_text, internal_key) in enumerate(category_buttons):
+        row.append(InlineKeyboardButton(
+            text=display_text,
+            callback_data=f"{CALLBACK_PREFIX_CATEGORY}{internal_key}"
+        ))
         if (idx + 1) % 2 == 0:
             keyboard.append(row)
             row = []
@@ -46,54 +124,117 @@ def get_categories_inline_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_categories_inline_keyboard_with_cancel() -> InlineKeyboardMarkup:
-    """Inline-клавиатура категорий с кнопкой отмены внизу (для прод-UX)."""
-    kb = get_categories_inline_keyboard()
+def get_categories_inline_keyboard_with_cancel(language: str = "ru") -> InlineKeyboardMarkup:
+    """Inline-клавиатура категорий с кнопкой отмены внизу (для прод-UX).
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        InlineKeyboardMarkup with categories and cancel button
+    """
+    kb = get_categories_inline_keyboard(language)
     rows = list(kb.inline_keyboard)
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_create")])
+    rows.append([InlineKeyboardButton(
+        text=get_text("buttons.cancel", language=language),
+        callback_data="cancel_create"
+    )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-def get_urgency_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура с уровнями срочности (единые тексты из REQUEST_URGENCIES)"""
-    keyboard = [[KeyboardButton(text=urgency)] for urgency in REQUEST_URGENCIES]
-    keyboard.append([KeyboardButton(text="❌ Отмена")])
+def get_urgency_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура с уровнями срочности
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with urgency buttons
+    """
+    urgency_buttons = get_urgency_buttons_with_internal_keys(language)
+    keyboard = [[KeyboardButton(text=display_text)] for display_text, _ in urgency_buttons]
+    keyboard.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_urgency_inline_keyboard() -> InlineKeyboardMarkup:
-    """Inline-клавиатура с уровнями срочности (REQUEST_URGENCIES)"""
-    keyboard = [[InlineKeyboardButton(text=urgency, callback_data=f"{CALLBACK_PREFIX_URGENCY}{urgency}")] for urgency in REQUEST_URGENCIES]
+def get_urgency_inline_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    """Inline-клавиатура с уровнями срочности
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        InlineKeyboardMarkup with urgency buttons using internal keys in callback_data
+    """
+    urgency_buttons = get_urgency_buttons_with_internal_keys(language)
+    keyboard = [[InlineKeyboardButton(
+        text=display_text,
+        callback_data=f"{CALLBACK_PREFIX_URGENCY}{internal_key}"
+    )] for display_text, internal_key in urgency_buttons]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_cancel_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура с кнопкой отмены"""
+def get_cancel_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура с кнопкой отмены
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with cancel button
+    """
     keyboard = [
-        [KeyboardButton(text="❌ Отмена")]
+        [KeyboardButton(text=get_text("buttons.cancel", language=language))]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_media_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для загрузки медиафайлов"""
+def get_media_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура для загрузки медиафайлов
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with continue and cancel buttons
+    """
     keyboard = [
-        [KeyboardButton(text="▶️ Продолжить")],
-        [KeyboardButton(text="❌ Отмена")]
+        [KeyboardButton(text=get_text("buttons.continue", language=language))],
+        [KeyboardButton(text=get_text("buttons.cancel", language=language))]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_confirmation_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для подтверждения заявки"""
+def get_confirmation_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура для подтверждения заявки
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with confirm, back, and cancel buttons
+    """
     keyboard = [
-        [KeyboardButton(text="✅ Подтвердить")],
-        [KeyboardButton(text="🔙 Назад")],
-        [KeyboardButton(text="❌ Отмена")]
+        [KeyboardButton(text=get_text("buttons.confirm", language=language))],
+        [KeyboardButton(text=get_text("buttons.back", language=language))],
+        [KeyboardButton(text=get_text("buttons.cancel", language=language))]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_inline_confirmation_keyboard() -> InlineKeyboardMarkup:
-    """Inline-клавиатура подтверждения создания заявки"""
+def get_inline_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    """Inline-клавиатура подтверждения создания заявки
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        InlineKeyboardMarkup with confirm and cancel buttons
+    """
     keyboard = [
         [
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data="confirm_yes"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="confirm_no"),
+            InlineKeyboardButton(
+                text=get_text("buttons.confirm", language=language),
+                callback_data="confirm_yes"
+            ),
+            InlineKeyboardButton(
+                text=get_text("buttons.cancel", language=language),
+                callback_data="confirm_no"
+            ),
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -327,7 +468,7 @@ def get_apartment_selection_keyboard(user_id: int, building_id: int) -> ReplyKey
 # УСТАРЕВШАЯ КЛАВИАТУРА (для обратной совместимости)
 # =====================================
 
-def get_address_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+def get_address_selection_keyboard(user_id: int, language: str = "ru") -> ReplyKeyboardMarkup:
     """
     Создать динамическую клавиатуру выбора адреса для пользователя
 
@@ -338,6 +479,7 @@ def get_address_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 
     Args:
         user_id: Telegram ID пользователя
+        language: Language code (ru/uz)
 
     Returns:
         ReplyKeyboardMarkup: Клавиатура с адресами на трех уровнях
@@ -386,7 +528,7 @@ def get_address_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
                     all_buttons.append([KeyboardButton(text=f"🏠 {address_text}")])
 
             # Кнопка отмены
-            all_buttons.append([KeyboardButton(text="❌ Отмена")])
+            all_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             logger.info(f"Создано {len(all_buttons)} кнопок адресов для пользователя {user_id}")
 
@@ -485,121 +627,3 @@ def get_executor_filter_inline_keyboard(active_executor: Optional[str] = None, l
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _create_address_buttons(available_addresses: Dict[str, str]) -> List[List[KeyboardButton]]:
-    """
-    Создать кнопки для доступных адресов пользователя
-    
-    Args:
-        available_addresses: Словарь адресов от AuthService
-        
-    Returns:
-        List[List[KeyboardButton]]: Список строк кнопок
-    """
-    buttons = []
-    
-    if not available_addresses:
-        logger.debug("У пользователя нет доступных адресов")
-        return buttons
-    
-    # Создать кнопки для адресов (максимум 2 в строке для лучшей читаемости)
-    address_buttons = []
-    for address_type, address in available_addresses.items():
-        button_text = _format_address_button(address_type, address)
-        address_buttons.append(KeyboardButton(text=button_text))
-        logger.debug(f"Создана кнопка адреса: {button_text}")
-    
-    # Разместить кнопки по 2 в строке
-    for i in range(0, len(address_buttons), 2):
-        row = address_buttons[i:i+2]
-        buttons.append(row)
-    
-    return buttons
-
-
-def _format_address_button(address_type: str, address: str) -> str:
-    """
-    Форматировать текст кнопки адреса
-    
-    Args:
-        address_type: Тип адреса (home/apartment/yard)
-        address: Адрес пользователя
-        
-    Returns:
-        str: Отформатированный текст кнопки
-        
-    Example:
-        "🏠 Мой дом: ул. Ленина, 1"
-    """
-    display_name = ADDRESS_TYPE_DISPLAYS.get(address_type, address_type)
-    return f"{display_name}: {address}"
-
-
-def _get_manual_input_buttons() -> List[List[KeyboardButton]]:
-    """
-    Получить кнопки для ручного ввода и отмены
-    
-    Returns:
-        List[List[KeyboardButton]]: Кнопки ручного ввода и отмены
-    """
-    return [
-        [KeyboardButton(text="✏️ Ввести адрес вручную")],
-        [KeyboardButton(text="❌ Отмена")]
-    ]
-
-
-async def parse_selected_address(selected_text: str) -> Dict[str, Optional[str]]:
-    """
-    Парсить выбранный адрес из текста кнопки
-    
-    Args:
-        selected_text: Текст выбранной кнопки
-        
-    Returns:
-        dict: Структурированные данные о выборе
-        
-    Example:
-        {"type": "predefined", "address_type": "home", "address": "ул. Ленина, 1"}
-        {"type": "manual", "address": None}
-        {"type": "cancel", "address": None}
-    """
-    try:
-        logger.debug(f"Парсинг выбранного адреса: {selected_text}")
-        
-        # Проверить специальные случаи
-        if selected_text == "✏️ Ввести адрес вручную":
-            logger.debug("Выбран ручной ввод адреса")
-            return {"type": "manual", "address": None}
-        
-        if selected_text == "❌ Отмена":
-            logger.debug("Выбрана отмена")
-            return {"type": "cancel", "address": None}
-        
-        # Парсинг предустановленного адреса
-        # Формат: "🏠 Мой дом: ул. Ленина, 1"
-        if ": " in selected_text:
-            display_part, address_part = selected_text.split(": ", 1)
-            
-            # Определяем тип адреса по содержимому display_part
-            address_type = None
-            if "дом" in display_part.lower():
-                address_type = "home"
-            elif "квартира" in display_part.lower():
-                address_type = "apartment"
-            elif "двор" in display_part.lower():
-                address_type = "yard"
-            
-            if address_type:
-                logger.debug(f"Парсинг успешен - тип: {address_type}, адрес: {address_part}")
-                return {
-                    "type": "predefined",
-                    "address_type": address_type,
-                    "address": address_part
-                }
-        
-        # Если не удалось распарсить - вернуть unknown
-        logger.warning(f"Не удалось распарсить выбор: {selected_text}")
-        return {"type": "unknown", "address": selected_text}
-        
-    except Exception as e:
-        logger.error(f"Ошибка парсинга выбранного адреса '{selected_text}': {e}")
-        return {"type": "error", "address": selected_text}

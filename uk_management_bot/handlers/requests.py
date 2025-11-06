@@ -35,8 +35,7 @@ from uk_management_bot.keyboards.requests import (
     get_executor_filter_inline_keyboard,
 )
 from uk_management_bot.utils.validators import (
-    validate_address, 
-    validate_description, 
+    validate_description,
     validate_media_file
 )
 from uk_management_bot.config.settings import settings
@@ -49,6 +48,14 @@ from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.notification_service import async_notify_action_denied
 from uk_management_bot.utils.constants import ERROR_MESSAGES
 from typing import Optional
+
+# Localization imports - TASK 17 Phase 2
+from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.language_helpers import (
+    get_language_for_user,
+    get_language_from_message,
+    get_language_from_callback
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +70,41 @@ router.callback_query.middleware(role_mode_middleware)
 
 # Вспомогательные функции для улучшенной обработки ошибок и UX
 
+async def _get_user_language(message: Message = None, callback: CallbackQuery = None, user_id: int = None) -> str:
+    """Get user language from message, callback, or user_id
+
+    Args:
+        message: Telegram message object
+        callback: Telegram callback query object
+        user_id: User telegram ID
+
+    Returns:
+        Language code (ru/uz), defaults to 'ru'
+    """
+    try:
+        if message:
+            db = next(get_db())
+            try:
+                return await get_language_from_message(message, db)
+            finally:
+                db.close()
+        elif callback:
+            db = next(get_db())
+            try:
+                return await get_language_from_callback(callback, db)
+            finally:
+                db.close()
+        elif user_id:
+            db = next(get_db())
+            try:
+                return await get_language_for_user(user_id, db)
+            finally:
+                db.close()
+    except Exception as e:
+        logger.warning(f"Failed to get user language: {e}")
+
+    return "ru"  # Fallback to Russian
+
 async def _deny_if_pending_message(message: Message, user_status: Optional[str]) -> bool:
     """Единый ранний отказ для пользователей со статусом pending (Message).
 
@@ -70,8 +112,7 @@ async def _deny_if_pending_message(message: Message, user_status: Optional[str])
     """
     if user_status == "pending":
         try:
-            from uk_management_bot.utils.helpers import get_text
-            lang = getattr(message.from_user, "language_code", None) or "ru"
+            lang = await _get_user_language(message=message)
             await message.answer(get_text("auth.pending", language=lang))
         except Exception:
             await message.answer("⏳ Ваша заявка на регистрацию находится на рассмотрении.")
@@ -85,48 +126,52 @@ async def _deny_if_pending_callback(callback: CallbackQuery, user_status: Option
     """
     if user_status == "pending":
         try:
-            from uk_management_bot.utils.helpers import get_text
-            lang = getattr(callback.from_user, "language_code", None) or "ru"
+            lang = await _get_user_language(callback=callback)
             await callback.answer(get_text("auth.pending", language=lang), show_alert=True)
         except Exception:
             await callback.answer("⏳ Ожидайте одобрения администратора.", show_alert=True)
         return True
     return False
 
-def get_contextual_help(address_type: str) -> str:
+def get_contextual_help(address_type: str, language: str = "ru") -> str:
     """
     Получить контекстную помощь в зависимости от типа адреса
-    
+
     Args:
         address_type: Тип адреса (home/apartment/yard)
-        
+        language: Язык интерфейса (ru/uz)
+
     Returns:
         str: Контекстное сообщение с подсказками
     """
-    help_templates = {
-        "home": "🏠 Вы выбрали дом. Обычно проблемы связаны с:\n• Электрикой\n• Отоплением\n• Водоснабжением\n• Безопасностью\n\nОпишите проблему подробно:",
-        "apartment": "🏢 Вы выбрали квартиру. Частые проблемы:\n• Сантехника\n• Электрика\n• Вентиляция\n• Лифт\n\nОпишите проблему подробно:",
-        "yard": "🌳 Вы выбрали двор. Типичные проблемы:\n• Благоустройство\n• Освещение\n• Уборка\n• Безопасность\n\nОпишите проблему подробно:"
+    # Map address types to locale keys (using existing keys from Phase 2 auto-generation)
+    help_key_map = {
+        "home": "requests.вы_выбрали_дом",
+        "apartment": "requests.вы_выбрали_квартиру",
+        "yard": "requests.вы_выбрали_двор"
     }
-    return help_templates.get(address_type, "Опишите проблему подробно:")
 
-async def graceful_fallback(message: Message, error_type: str):
+    key = help_key_map.get(address_type, "requests.help_default")
+    return get_text(key, language=language)
+
+async def graceful_fallback(message: Message, error_type: str, language: str = "ru"):
     """
     Graceful degradation при ошибках
-    
+
     Args:
         message: Сообщение пользователя
         error_type: Тип ошибки
+        language: Язык интерфейса (ru/uz)
     """
-    fallback_messages = {
-        "auth_service_error": "Временно недоступны сохраненные адреса. Введите адрес вручную:",
-        "parsing_error": "Не удалось распознать выбор. Пожалуйста, выберите из списка:",
-        "keyboard_error": "Проблемы с отображением клавиатуры. Введите адрес вручную:",
-        "critical_error": "Произошла ошибка. Попробуйте еще раз или введите адрес вручную:"
-    }
-    
-    error_message = fallback_messages.get(error_type, "Произошла ошибка. Попробуйте еще раз:")
-    await message.answer(error_message, reply_markup=get_cancel_keyboard())
+    # Get error message from locale
+    error_key = f"errors.{error_type}"
+    error_message = get_text(error_key, language=language)
+
+    # Fallback if key not found
+    if error_message == error_key:
+        error_message = get_text("errors.default", language=language)
+
+    await message.answer(error_message, reply_markup=get_cancel_keyboard(language=language))
     
     logger.warning(f"[GRACEFUL_FALLBACK] Ошибка типа '{error_type}' для пользователя {message.from_user.id}")
 
@@ -157,10 +202,21 @@ async def auto_assign_request_by_category(request_number: str, db_session: Sessi
             logger.error(f"Менеджер {manager_telegram_id} не найден")
             return
         
-        # Маппинг категорий заявок на специализации
+        # Маппинг internal category keys на специализации
+        # Now request.category stores internal keys like "plumbing", "electricity", etc.
         category_to_specialization = {
+            "plumbing": "plumber",
+            "electricity": "electrician",
+            "landscaping": "landscaping",
+            "cleaning": "cleaning",
+            "security": "security",
+            "repair": "repair",
+            "installation": "installation",
+            "maintenance": "maintenance",
+            "hvac": "hvac",
+            # Fallback for old format (Russian names)
             "Сантехника": "plumber",
-            "Электрика": "electrician", 
+            "Электрика": "electrician",
             "Благоустройство": "landscaping",
             "Уборка": "cleaning",
             "Безопасность": "security",
@@ -169,7 +225,7 @@ async def auto_assign_request_by_category(request_number: str, db_session: Sessi
             "Обслуживание": "maintenance",
             "HVAC": "hvac"
         }
-        
+
         # Определяем специализацию по категории заявки
         specialization = category_to_specialization.get(request.category)
         if not specialization:
@@ -249,57 +305,6 @@ async def auto_assign_request_by_category(request_number: str, db_session: Sessi
         logger.error(f"Ошибка автоматического назначения заявки {request_number}: {e}")
 
 
-def smart_address_validation(address_text: str) -> dict:
-    """
-    Умная валидация адреса с предложениями
-    
-    Args:
-        address_text: Текст адреса для валидации
-        
-    Returns:
-        dict: Результат валидации с предложениями
-    """
-    suggestions = []
-    is_valid = True
-    
-    # Проверка минимальной длины
-    if len(address_text) < 10:
-        suggestions.append("Добавьте больше деталей (улица, дом, квартира)")
-        is_valid = False
-    
-    # Проверка наличия улицы
-    street_indicators = ["ул.", "улица", "проспект", "просп.", "переулок", "пер."]
-    has_street = any(indicator in address_text.lower() for indicator in street_indicators)
-    if not has_street:
-        suggestions.append("Укажите тип улицы (ул., проспект, переулок)")
-        is_valid = False
-    
-    # Проверка наличия номера дома (улучшенная логика)
-    house_indicators = ["д.", "дом", "№"]
-    has_house = any(indicator in address_text.lower() for indicator in house_indicators)
-    
-    # Дополнительная проверка: если есть цифры после запятой или пробела, считаем что номер дома есть
-    import re
-    if not has_house:
-        # Ищем паттерн: улица + запятая/пробел + цифра
-        house_pattern = r'[,\s]\d+'
-        if re.search(house_pattern, address_text):
-            has_house = True
-    
-    if not has_house:
-        suggestions.append("Укажите номер дома")
-        is_valid = False
-    
-    # Проверка на наличие цифр (номера)
-    if not any(char.isdigit() for char in address_text):
-        suggestions.append("Добавьте номера (дом, квартира)")
-        is_valid = False
-    
-    return {
-        'is_valid': is_valid,
-        'suggestions': suggestions
-    }
-
 # Временно отключаем отладочный обработчик
 # @router.message(F.text)
 # async def debug_all_messages(message: Message):
@@ -312,7 +317,6 @@ class RequestStates(StatesGroup):
     address_building = State()   # Выбор здания (шаг 2)
     address_apartment = State()  # Выбор квартиры (шаг 3)
     address = State()            # Устаревший: прямой выбор адреса
-    address_manual = State()     # Ручной ввод адреса
     description = State()        # Описание проблемы
     urgency = State()           # Выбор срочности
     media = State()             # Медиафайлы
@@ -323,47 +327,58 @@ class RequestStates(StatesGroup):
 @router.message(F.text == "📝 Создать заявку")
 async def start_request_creation(message: Message, state: FSMContext, user_status: Optional[str] = None):
     """Начало создания заявки"""
+    # Get user language
+    lang = await _get_user_language(message=message)
+
     if await _deny_if_pending_message(message, user_status):
         return
-    
+
     # Проверяем наличие телефона у пользователя
     from uk_management_bot.database.session import get_db
     from uk_management_bot.database.models.user import User
-    from uk_management_bot.utils.helpers import get_text
-    
+
     db = next(get_db())
     try:
         user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if user and not user.phone:
-            lang = getattr(message.from_user, "language_code", None) or "ru"
             await message.answer(get_text("requests.phone_required", language=lang))
             return
     except Exception as e:
         logger.error(f"Ошибка проверки телефона пользователя {message.from_user.id}: {e}")
     finally:
         db.close()
-    
+
     logger.info(f"Пользователь {message.from_user.id} нажал '📝 Создать заявку'")
     await state.set_state(RequestStates.category)
+
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
-    await message.answer("Начинаем создание заявки…", reply_markup=ReplyKeyboardRemove())
+    await message.answer(
+        get_text("requests.начинаем_создание_requests", language=lang),
+        reply_markup=ReplyKeyboardRemove()
+    )
+
     # Показываем inline-клавиатуру категорий
-    await message.answer("Выберите категорию заявки:", reply_markup=get_categories_inline_keyboard_with_cancel())
+    await message.answer(
+        get_text("requests.select_категорию_requests", language=lang),
+        reply_markup=get_categories_inline_keyboard_with_cancel(language=lang)
+    )
+
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
 
 # Обработка выбора категории (только если пользователь ввёл текст ровно из списка категорий)
 @router.message(RequestStates.category, F.text.in_(REQUEST_CATEGORIES))
 async def process_category(message: Message, state: FSMContext):
     """Обработка выбора категории с улучшенной интеграцией"""
+    lang = await _get_user_language(message=message)
     user_id = message.from_user.id
     category_text = message.text
-    
+
     logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id}: '{category_text}'")
-    
-    if category_text == "❌ Отмена":
-        await cancel_request(message, state)
+
+    if category_text == get_text("buttons.cancel", language=lang):
+        await cancel_request(message, state, lang=lang)
         return
-    
+
     # Сохраняем категорию и переходим к выбору адреса
     await state.update_data(category=category_text)
     await state.set_state(RequestStates.address)
@@ -371,36 +386,34 @@ async def process_category(message: Message, state: FSMContext):
     # Показываем единую клавиатуру с квартирами, домами и дворами
     try:
         logger.info(f"[CATEGORY_SELECTION] Создание клавиатуры выбора адреса для пользователя {user_id}")
-        keyboard = get_address_selection_keyboard(user_id)
+        keyboard = get_address_selection_keyboard(user_id, language=lang)
         logger.info(f"[CATEGORY_SELECTION] Клавиатура адресов создана, отправка пользователю {user_id}")
 
         await message.answer(
-            "📍 Выберите адрес:\n"
-            "• 🏠 Квартира - для проблем в квартире\n"
-            "• 🏢 Дом - для общедомовых проблем\n"
-            "• 🏘️ Двор - для проблем во дворе",
+            get_text("requests.select_address_help", language=lang),
             reply_markup=keyboard
         )
         logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} выбрал категорию '{category_text}', переходит к выбору адреса")
     except Exception as e:
         logger.error(f"[CATEGORY_SELECTION] Ошибка создания клавиатуры выбора адреса: {e}")
-        await graceful_fallback(message, "keyboard_error")
+        await graceful_fallback(message, "keyboard_error", language=lang)
 
 # Игнор/подсказка для любых других текстов в состоянии выбора категории
 @router.message(RequestStates.category)
 async def process_category_other_inputs(message: Message, state: FSMContext):
     """Обработчик для любых других текстовых сообщений в состоянии выбора категории"""
+    lang = await _get_user_language(message=message)
     user_id = message.from_user.id
     logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} отправил неожиданный текст: '{message.text}'")
-    
-    if message.text == "❌ Отмена":
-        await cancel_request(message, state)
+
+    if message.text == get_text("buttons.cancel", language=lang):
+        await cancel_request(message, state, lang=lang)
         return
-    
+
     # Отправляем подсказку с повторной отправкой inline-клавиатуры
     await message.answer(
-        "Пожалуйста, используйте кнопки выбора категории выше или нажмите '❌ Отмена'.",
-        reply_markup=get_categories_inline_keyboard_with_cancel()
+        get_text("requests.use_category_buttons", language=lang),
+        reply_markup=get_categories_inline_keyboard_with_cancel(language=lang)
     )
 
 # Обработка выбора адреса (обновленная логика)
@@ -411,6 +424,7 @@ async def process_address(message: Message, state: FSMContext):
 
     ОБНОВЛЕНО: Поддержка выбора квартир из справочника адресов
     """
+    lang = await _get_user_language(message=message)
     user_id = message.from_user.id
     selected_text = message.text
 
@@ -450,9 +464,8 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        f"✅ Адрес сохранен: 🏠 {full_address}\n\n"
-                        f"Опишите проблему в квартире:",
-                        reply_markup=get_cancel_keyboard()
+                        get_text("requests.apartment_saved", language=lang, address=full_address),
+                        reply_markup=get_cancel_keyboard(language=lang)
                     )
 
                     logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал квартиру: {full_address}")
@@ -460,8 +473,8 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Квартира не найдена: '{address_text}'")
                     await message.answer(
-                        "⚠️ Квартира не найдена. Выберите адрес из предложенных вариантов:",
-                        reply_markup=get_address_selection_keyboard(user_id)
+                        get_text("requests.apartment_not_found", language=lang),
+                        reply_markup=get_address_selection_keyboard(user_id, language=lang)
                     )
                     return
             finally:
@@ -479,7 +492,7 @@ async def process_address(message: Message, state: FSMContext):
 
                 if building:
                     await state.update_data(
-                        address=f"Дом: {building.address}",
+                        address=get_text("requests.building_prefix", language=lang, address=building.address),
                         apartment_id=None,
                         building_id=building.id,
                         yard_id=building.yard_id if building.yard else None,
@@ -488,9 +501,8 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        f"✅ Адрес сохранен: 🏢 {building.address}\n\n"
-                        f"Опишите общедомовую проблему:",
-                        reply_markup=get_cancel_keyboard()
+                        get_text("requests.building_saved", language=lang, address=building.address),
+                        reply_markup=get_cancel_keyboard(language=lang)
                     )
 
                     logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал дом: {building.address}")
@@ -498,8 +510,8 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Здание не найдено: '{address_text}'")
                     await message.answer(
-                        "⚠️ Здание не найдено. Выберите адрес из предложенных вариантов:",
-                        reply_markup=get_address_selection_keyboard(user_id)
+                        get_text("requests.building_not_found", language=lang),
+                        reply_markup=get_address_selection_keyboard(user_id, language=lang)
                     )
                     return
             finally:
@@ -517,7 +529,7 @@ async def process_address(message: Message, state: FSMContext):
 
                 if yard:
                     await state.update_data(
-                        address=f"Двор: {yard.name}",
+                        address=get_text("requests.yard_prefix", language=lang, name=yard.name),
                         apartment_id=None,
                         building_id=None,
                         yard_id=yard.id,
@@ -526,9 +538,8 @@ async def process_address(message: Message, state: FSMContext):
                     await state.set_state(RequestStates.description)
 
                     await message.answer(
-                        f"✅ Адрес сохранен: 🏘️ {yard.name}\n\n"
-                        f"Опишите проблему во дворе:",
-                        reply_markup=get_cancel_keyboard()
+                        get_text("requests.yard_saved", language=lang, address=yard.name),
+                        reply_markup=get_cancel_keyboard(language=lang)
                     )
 
                     logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал двор: {yard.name}")
@@ -536,8 +547,8 @@ async def process_address(message: Message, state: FSMContext):
                 else:
                     logger.warning(f"[ADDRESS_SELECTION] Двор не найден: '{address_text}'")
                     await message.answer(
-                        "⚠️ Двор не найден. Выберите адрес из предложенных вариантов:",
-                        reply_markup=get_address_selection_keyboard(user_id)
+                        get_text("requests.yard_not_found", language=lang),
+                        reply_markup=get_address_selection_keyboard(user_id, language=lang)
                     )
                     return
             finally:
@@ -555,26 +566,26 @@ async def process_address(message: Message, state: FSMContext):
             await state.set_state(RequestStates.description)
 
             # Контекстное сообщение в зависимости от типа адреса
-            context_message = get_contextual_help(result['address_type'])
-            await message.answer(context_message, reply_markup=get_cancel_keyboard())
+            context_message = get_contextual_help(result['address_type'], language=lang)
+            await message.answer(context_message, reply_markup=get_cancel_keyboard(language=lang))
 
             logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал готовый адрес: {result['address']}, тип: {result['address_type']}")
 
         elif result['type'] == 'cancel':
             # Отменить создание заявки
-            await cancel_request(message, state)
+            await cancel_request(message, state, lang=lang)
             return
 
         elif result['type'] == 'unknown':
             # Неизвестный выбор - улучшенная обработка
             logger.warning(f"[ADDRESS_SELECTION] Неизвестный выбор адреса: '{selected_text}' от пользователя {user_id}")
             await message.answer(
-                "⚠️ Пожалуйста, выберите адрес из предложенных вариантов"
+                get_text("requests.select_from_list", language=lang)
             )
             # Показываем клавиатуру снова
             try:
-                keyboard = get_address_selection_keyboard(user_id)
-                await message.answer("Выберите адрес:", reply_markup=keyboard)
+                keyboard = get_address_selection_keyboard(user_id, language=lang)
+                await message.answer(get_text("requests.choose_address_prompt", language=lang), reply_markup=keyboard)
             except Exception as keyboard_error:
                 logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
                 await graceful_fallback(message, "keyboard_error")
@@ -588,61 +599,29 @@ async def process_address(message: Message, state: FSMContext):
         logger.error(f"[ADDRESS_SELECTION] Критическая ошибка обработки выбора адреса: {e}")
         await graceful_fallback(message, "critical_error")
 
-# Обработка ручного ввода адреса (новое состояние)
-@router.message(RequestStates.address_manual)
-async def process_address_manual(message: Message, state: FSMContext):
-    """Обработка ручного ввода адреса с умной валидацией"""
-    user_id = message.from_user.id
-    address_text = message.text
-    
-    logger.info(f"[ADDRESS_MANUAL] Пользователь {user_id}: '{address_text}'")
-    
-    if address_text == "❌ Отмена":
-        await cancel_request(message, state)
-        return
-    
-    # Умная валидация с предложениями
-    validation_result = smart_address_validation(address_text)
-    if not validation_result['is_valid']:
-        suggestions_text = "\n".join([f"• {suggestion}" for suggestion in validation_result['suggestions']])
-        await message.answer(
-            f"⚠️ Адрес требует доработки:\n{suggestions_text}\n\nПопробуйте еще раз:",
-            reply_markup=get_cancel_keyboard()
-        )
-        return
-    
-    # Сохраняем адрес (без apartment_id для ручного ввода)
-    await state.update_data(address=address_text, apartment_id=None)
-
-    # В новой логике квартира вводится прямо в адресе при ручном вводе
-    await state.set_state(RequestStates.description)
-    await message.answer(
-        "✅ Адрес сохранен! Опишите проблему:",
-        reply_markup=get_cancel_keyboard()
-    )
-    logger.info(f"[ADDRESS_MANUAL] Пользователь {user_id} ввел адрес вручную: {address_text}")
-
 # Обработка ввода описания
 @router.message(RequestStates.description)
 async def process_description(message: Message, state: FSMContext):
     """Обработка ввода описания проблемы"""
-    if message.text == "❌ Отмена":
+    lang = await _get_user_language(message=message)
+
+    if message.text == get_text("buttons.cancel", language=lang):
         await cancel_request(message, state)
         return
-    
+
     # Валидируем описание с помощью валидатора
     from uk_management_bot.utils.validators import Validator
     is_valid, error_message = Validator.validate_description(message.text)
     if not is_valid:
         await message.answer(error_message)
         return
-    
+
     # Сохраняем описание и переходим к выбору срочности
     await state.update_data(description=message.text)
     await state.set_state(RequestStates.urgency)
     await message.answer(
-        "Выберите срочность:",
-        reply_markup=get_urgency_inline_keyboard()
+        get_text("requests.select_срочность", language=lang),
+        reply_markup=get_urgency_inline_keyboard(language=lang)
     )
     logger.info(f"Пользователь {message.from_user.id} ввел описание")
 
@@ -650,29 +629,18 @@ async def process_description(message: Message, state: FSMContext):
 @router.message(RequestStates.urgency)
 async def process_urgency(message: Message, state: FSMContext):
     """Обработка выбора срочности (квартира больше не запрашивается отдельно)"""
-    if message.text == "❌ Отмена":
-        await cancel_request(message, state)
+    lang = await _get_user_language(message=message)
+
+    if message.text == get_text("buttons.cancel", language=lang):
+        await cancel_request(message, state, lang=lang)
         return
-    
-    valid_urgency_levels = REQUEST_URGENCIES
-    
-    if message.text not in valid_urgency_levels:
-        # Срочность выбирается через inline-клавиатуру. Если пришел текст — показать inline-клавиатуру снова.
-        await message.answer(
-            "Пожалуйста, выберите срочность из списка:",
-            reply_markup=get_urgency_inline_keyboard()
-        )
-        return
-    
-    # Сохраняем срочность и сразу переходим к медиа
-    await state.update_data(urgency=message.text)
-    await state.set_state(RequestStates.media)
+
+    # Срочность выбирается через inline-клавиатуру. Если пришел текст — показать inline-клавиатуру снова.
     await message.answer(
-        "Отправьте фото или видео (опционально, максимум 5 файлов):\n"
-        "Или нажмите 'Продолжить' для перехода к подтверждению",
-        reply_markup=get_media_keyboard()
+        get_text("requests.select_срочность", language=lang),
+        reply_markup=get_urgency_inline_keyboard(language=lang)
     )
-    logger.info(f"Пользователь {message.from_user.id} выбрал срочность: {message.text}")
+    return
 
 ## Шаг квартиры полностью исключён из процесса.
 
@@ -680,13 +648,15 @@ async def process_urgency(message: Message, state: FSMContext):
 @router.message(RequestStates.media, F.photo | F.video)
 async def process_media(message: Message, state: FSMContext):
     """Обработка медиафайлов"""
+    lang = await _get_user_language(message=message)
+
     data = await state.get_data()
     media_files = data.get('media_files', [])
-    
+
     if len(media_files) >= 5:
-        await message.answer("Максимум 5 файлов")
+        await message.answer(get_text("requests.максимум_5_файлов", language=lang))
         return
-    
+
     # Получаем file_id
     if message.photo:
         file_id = message.photo[-1].file_id
@@ -694,18 +664,18 @@ async def process_media(message: Message, state: FSMContext):
     else:
         file_id = message.video.file_id
         file_type = "video"
-    
+
     # Проверяем размер файла (примерная проверка)
     if not validate_media_file(0, file_type):  # Размер файла проверяется на уровне Telegram
-        await message.answer("Файл слишком большой. Максимальный размер: 20MB")
+        await message.answer(get_text("requests.файл_слишком_большой", language=lang))
         return
-    
+
     media_files.append(file_id)
     await state.update_data(media_files=media_files)
-    
+
     await message.answer(
-        f"Файл добавлен ({len(media_files)}/5). Отправьте еще файлы или нажмите 'Продолжить'",
-        reply_markup=get_media_keyboard()
+        get_text("requests.файл_добавлен_5", language=lang).replace("{...}", str(len(media_files))),
+        reply_markup=get_media_keyboard(language=lang)
     )
     logger.info(f"Пользователь {message.from_user.id} добавил медиафайл")
 
@@ -713,66 +683,89 @@ async def process_media(message: Message, state: FSMContext):
 @router.message(RequestStates.media)
 async def process_media_text(message: Message, state: FSMContext):
     """Обработка текста в состоянии media"""
-    if message.text == "❌ Отмена":
+    lang = await _get_user_language(message=message)
+
+    if message.text == get_text("buttons.cancel", language=lang):
         await cancel_request(message, state)
         return
-    
-    if message.text == "▶️ Продолжить":
+
+    if message.text == get_text("buttons.continue", language=lang):
         await state.set_state(RequestStates.confirm)
         await show_confirmation(message, state)
         return
-    
+
     await message.answer(
-        "Отправьте фото/видео или нажмите 'Продолжить'",
-        reply_markup=get_media_keyboard()
+        get_text("requests.отправьте_фото_или", language=lang),
+        reply_markup=get_media_keyboard(language=lang)
     )
 
 # Показ сводки заявки
 async def show_confirmation(message: Message, state: FSMContext):
     """Показать сводку заявки для подтверждения"""
+    lang = await _get_user_language(message=message)
     data = await state.get_data()
-    
-    summary = (
-        "📋 Сводка заявки:\n\n"
-        f"🏷️ Категория: {data['category']}\n"
-        f"📍 Адрес: {data['address']}\n"
-        f"📝 Описание: {data['description']}\n"
-        f"⚡ Срочность: {data['urgency']}\n"
-        f"📸 Файлов: {len(data.get('media_files', []))}\n\n"
-        "Подтвердите создание заявки:"
+
+    # Get localized category name from internal key
+    from uk_management_bot.keyboards.requests import CATEGORY_KEYS
+    category_key = data.get('category')
+    if category_key in CATEGORY_KEYS:
+        category_display = get_text(CATEGORY_KEYS[category_key], language=lang)
+    else:
+        # Fallback for old format (localized text was saved directly)
+        category_display = category_key
+
+    # Get localized urgency name from internal key
+    from uk_management_bot.keyboards.requests import URGENCY_KEYS
+    urgency_key = data.get('urgency')
+    if urgency_key in URGENCY_KEYS:
+        urgency_display = get_text(URGENCY_KEYS[urgency_key], language=lang)
+    else:
+        # Fallback for old format (localized text was saved directly)
+        urgency_display = urgency_key
+
+    summary = get_text(
+        "requests.confirmation_summary",
+        language=lang,
+        category=category_display,
+        address=data.get('address', ''),
+        description=data.get('description', ''),
+        urgency=urgency_display,
+        files_count=len(data.get('media_files', []))
     )
-    
+
     await message.answer(
         summary,
-        reply_markup=get_inline_confirmation_keyboard()
+        reply_markup=get_inline_confirmation_keyboard(language=lang)
     )
 
 # Обработка подтверждения
 @router.message(RequestStates.confirm)
 async def process_confirmation(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None):
     """Обработка подтверждения заявки"""
-    if message.text == "❌ Отмена":
-        await cancel_request(message, state)
+    lang = await _get_user_language(message=message)
+
+    if message.text == get_text("buttons.cancel", language=lang):
+        await cancel_request(message, state, lang=lang)
         return
 
-    if message.text == "🔙 Назад":
+    if message.text == get_text("buttons.back", language=lang):
         await state.set_state(RequestStates.media)
         await message.answer(
-            "Вернулись к загрузке файлов. Отправьте фото/видео или нажмите 'Продолжить'",
-            reply_markup=get_media_keyboard()
+            get_text("requests.back_to_media", language=lang),
+            reply_markup=get_media_keyboard(language=lang)
         )
         return
 
-    if message.text == "✅ Подтвердить":
+    if message.text == get_text("buttons.confirm", language=lang):
         data = await state.get_data()
 
         # Сохраняем заявку в базу данных
         success = await save_request(data, message.from_user.id, db, message.bot)
-        
+
         if success:
             await state.clear()
             await message.answer(
-                "✅ Заявка успешно создана! Мы рассмотрим её в ближайшее время.",
+                get_text("requests.request_success_создана", language=lang),
                 reply_markup=get_contextual_keyboard(roles, active_role) if roles and active_role else get_user_contextual_keyboard(message.from_user.id)
             )
             logger.info(f"Пользователь {message.from_user.id} создал заявку")
@@ -780,23 +773,23 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
             # Очищаем состояние, чтобы пользователь мог продолжить работу (например, открыть Мои заявки)
             await state.clear()
             await message.answer(
-                "❌ Ошибка при создании заявки. Попробуйте еще раз.",
+                get_text("errors.request_save_failed", language=lang),
                 reply_markup=get_user_contextual_keyboard(message.from_user.id)
             )
             logger.error(f"Ошибка создания заявки пользователем {message.from_user.id}")
         return
-    
+
     await message.answer(
-        "Пожалуйста, выберите действие:",
-        reply_markup=get_confirmation_keyboard()
+        get_text("requests.select_action", language=lang),
+        reply_markup=get_confirmation_keyboard(language=lang)
     )
 
 # Отмена создания заявки
-async def cancel_request(message: Message, state: FSMContext, roles: list = None, active_role: str = None):
+async def cancel_request(message: Message, state: FSMContext, roles: list = None, active_role: str = None, lang: str = "ru"):
     """Отмена создания заявки"""
     await state.clear()
     await message.answer(
-        "Создание заявки отменено.",
+        get_text("requests.создание_requests_cancelled", language=lang),
         reply_markup=get_user_contextual_keyboard(message.from_user.id)
     )
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
@@ -881,39 +874,51 @@ async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -
 @router.callback_query(F.data.startswith("category_"))
 async def handle_category_selection(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None):
     """Обработка выбора категории заявки через inline клавиатуру"""
+    # Get user language
+    lang = await _get_user_language(callback=callback)
+
     if await _deny_if_pending_callback(callback, user_status):
         return
+
     try:
         logger.info(f"Обработка выбора категории для пользователя {callback.from_user.id}")
-        
-        # Извлекаем категорию из callback данных
-        category = callback.data.replace("category_", "")
-        
-        # Валидируем категорию
-        valid_categories = REQUEST_CATEGORIES
-        
-        if category not in valid_categories:
-            await callback.answer("Неверная категория", show_alert=True)
-            logger.warning(f"Неверная категория '{category}' от пользователя {callback.from_user.id}")
+
+        # Извлекаем внутренний ключ категории из callback данных
+        category_internal_key = callback.data.replace("category_", "")
+
+        # Импортируем CATEGORY_INTERNAL_KEYS из keyboards
+        from uk_management_bot.keyboards.requests import CATEGORY_INTERNAL_KEYS, CATEGORY_KEYS
+
+        # Валидируем категорию (теперь проверяем внутренний ключ)
+        if category_internal_key not in CATEGORY_INTERNAL_KEYS:
+            await callback.answer(
+                get_text("errors.invalid_category", language=lang),
+                show_alert=True
+            )
+            logger.warning(f"Неверная категория '{category_internal_key}' от пользователя {callback.from_user.id}")
             return
-        
-        # Сохраняем в FSM
-        await state.update_data(category=category)
-        logger.info(f"Категория '{category}' сохранена в state для пользователя {callback.from_user.id}")
+
+        # Сохраняем внутренний ключ в FSM
+        await state.update_data(category=category_internal_key)
+        logger.info(f"Категория '{category_internal_key}' сохранена в state для пользователя {callback.from_user.id}")
+
+        # Получаем локализованное название категории для отображения
+        category_locale_key = CATEGORY_KEYS[category_internal_key]
+        category_display = get_text(category_locale_key, language=lang)
 
         # Переходим к следующему состоянию
         await state.set_state(RequestStates.address)
 
-        # Информационное редактирование исходного сообщения (без ReplyKeyboardMarkup)
+        # Информационное редактирование исходного сообщения
         await callback.message.edit_text(
-            f"✅ Выбрана категория: {category}\n\n📍 Теперь выберите адрес:"
+            get_text("requests.category_selected", language=lang, category=category_display)
         )
 
         # Отправляем новое сообщение с ReplyKeyboardMarkup для выбора адреса
         try:
-            keyboard = get_address_selection_keyboard(callback.from_user.id)
+            keyboard = get_address_selection_keyboard(callback.from_user.id, language=lang)
             await callback.message.answer(
-                "💡 Выберите адрес из списка или введите вручную:",
+                get_text("requests.select_address", language=lang),
                 reply_markup=keyboard
             )
             logger.info(f"Клавиатура адресов отправлена пользователю {callback.from_user.id}")
@@ -921,73 +926,87 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext, 
             logger.error(f"Ошибка создания клавиатуры адресов: {keyboard_error}")
             # Fallback - показываем простую клавиатуру с отменой
             fallback_keyboard = ReplyKeyboardMarkup(
-                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                keyboard=[[KeyboardButton(text=get_text("buttons.cancel", language=lang))]],
                 resize_keyboard=True
             )
             await callback.message.answer(
-                "📍 Введите адрес вручную (например: ул. Пушкина, д. 10, кв. 5):",
+                get_text("requests.enter_address_manually", language=lang),
                 reply_markup=fallback_keyboard
             )
 
         await callback.answer()  # Убираем "часики" на кнопке
-        logger.info(f"Пользователь {callback.from_user.id} выбрал категорию: {category}")
+        logger.info(f"Пользователь {callback.from_user.id} выбрал категорию: {category_internal_key}")
 
     except Exception as e:
         logger.error(f"Ошибка обработки выбора категории: {e}", exc_info=True)
-        await callback.answer("Произошла ошибка. Попробуйте снова.", show_alert=True)
+        await callback.answer(
+            get_text("errors.default", language=lang),
+            show_alert=True
+        )
 
 
 @router.callback_query(F.data == "cancel_create")
 async def handle_cancel_create(callback: CallbackQuery, state: FSMContext):
     """Отмена создания заявки из выбора категории (inline)."""
+    lang = await _get_user_language(callback=callback)
+
     try:
         user_id = callback.from_user.id
         logger.info(f"[CANCEL_CREATE] Пользователь {user_id} отменил создание заявки через inline-кнопку")
-        
+
         await state.clear()
-        await callback.message.edit_text("Создание заявки отменено.")
-        await callback.message.answer("Возврат в главное меню.", reply_markup=get_user_contextual_keyboard(callback.from_user.id))
+        await callback.message.edit_text(get_text("requests.создание_requests_cancelled", language=lang))
+        await callback.message.answer(
+            get_text("requests.возврат_в_главное", language=lang),
+            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
+        )
         await callback.answer()
-        
+
         logger.info(f"[CANCEL_CREATE] Состояние очищено для пользователя {user_id}")
     except Exception as e:
         logger.error(f"Ошибка отмены создания заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        await callback.answer(get_text("errors.default", language=lang), show_alert=True)
 
 @router.callback_query(F.data.startswith("urgency_"))
 async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None):
     """Обработка выбора уровня срочности через inline клавиатуру"""
+    lang = await _get_user_language(callback=callback)
+
     if await _deny_if_pending_callback(callback, user_status):
         return
     try:
         logger.info(f"Обработка выбора срочности для пользователя {callback.from_user.id}")
 
-        urgency = callback.data.replace("urgency_", "")
-        valid_urgency = REQUEST_URGENCIES
+        urgency_internal_key = callback.data.replace("urgency_", "")
 
-        if urgency not in valid_urgency:
-            await callback.answer("Неверный уровень срочности", show_alert=True)
-            logger.warning(f"Неверная срочность '{urgency}' от пользователя {callback.from_user.id}")
+        from uk_management_bot.keyboards.requests import URGENCY_INTERNAL_KEYS, URGENCY_KEYS
+
+        if urgency_internal_key not in URGENCY_INTERNAL_KEYS:
+            await callback.answer(get_text("errors.invalid_urgency", language=lang), show_alert=True)
+            logger.warning(f"Неверная срочность '{urgency_internal_key}' от пользователя {callback.from_user.id}")
             return
 
-        # Сохраняем срочность в FSM
-        await state.update_data(urgency=urgency)
-        logger.info(f"Срочность '{urgency}' сохранена в state для пользователя {callback.from_user.id}")
+        # Сохраняем внутренний ключ срочности в FSM
+        await state.update_data(urgency=urgency_internal_key)
+        logger.info(f"Срочность '{urgency_internal_key}' сохранена в state для пользователя {callback.from_user.id}")
 
         # Переходим к следующему состоянию
         await state.set_state(RequestStates.media)
 
-        # Редактируем исходное сообщение (без передачи ReplyKeyboardMarkup)
+        # Получаем локализованное отображение срочности
+        urgency_locale_key = URGENCY_KEYS[urgency_internal_key]
+        urgency_display = get_text(urgency_locale_key, language=lang)
+
+        # Редактируем исходное сообщение
         await callback.message.edit_text(
-            f"✅ Выбрана срочность: {urgency}\n\n📸 Переход к загрузке медиа..."
+            get_text("requests.urgency_selected", language=lang, urgency=urgency_display)
         )
 
         # Отправляем новое сообщение с клавиатурой для медиа
         try:
-            keyboard = get_media_keyboard()
+            keyboard = get_media_keyboard(language=lang)
             await callback.message.answer(
-                "📸 Отправьте фото или видео (опционально, максимум 5 файлов):\n"
-                "Или нажмите 'Продолжить' для перехода к подтверждению",
+                get_text("requests.отправьте_фото_или", language=lang),
                 reply_markup=keyboard
             )
             logger.info(f"Клавиатура медиа отправлена пользователю {callback.from_user.id}")
@@ -996,34 +1015,35 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, u
             # Fallback - показываем простую клавиатуру с кнопками
             fallback_keyboard = ReplyKeyboardMarkup(
                 keyboard=[
-                    [KeyboardButton(text="▶️ Продолжить")],
-                    [KeyboardButton(text="❌ Отмена")]
+                    [KeyboardButton(text=get_text("buttons.continue", language=lang))],
+                    [KeyboardButton(text=get_text("buttons.cancel", language=lang))]
                 ],
                 resize_keyboard=True
             )
             await callback.message.answer(
-                "📸 Отправьте фото или видео (опционально, максимум 5 файлов):\n"
-                "Или нажмите 'Продолжить' для перехода к подтверждению",
+                get_text("requests.отправьте_фото_или", language=lang),
                 reply_markup=fallback_keyboard
             )
 
         await callback.answer()  # Убираем "часики" на кнопке
-        logger.info(f"Пользователь {callback.from_user.id} выбрал срочность: {urgency}, переход к медиа")
+        logger.info(f"Пользователь {callback.from_user.id} выбрал срочность: {urgency_internal_key}, переход к медиа")
 
     except Exception as e:
         logger.error(f"Ошибка обработки выбора срочности: {e}", exc_info=True)
-        await callback.answer("Произошла ошибка. Попробуйте снова.", show_alert=True)
+        await callback.answer(get_text("errors.default", language=lang), show_alert=True)
 
 @router.callback_query(F.data.startswith("confirm_"))
 async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None):
     """Обработка подтверждения заявки через inline клавиатуру"""
+    lang = await _get_user_language(callback=callback)
+
     if await _deny_if_pending_callback(callback, user_status):
         return
     try:
         logger.info(f"Обработка подтверждения для пользователя {callback.from_user.id}")
-        
+
         action = callback.data.replace("confirm_", "")
-        
+
         if action == "yes":
             # Получаем данные из FSM
             data = await state.get_data()
@@ -1031,18 +1051,36 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
             # Создаем заявку в базе данных
             db_session = next(get_db())
             success = await save_request(data, callback.from_user.id, db_session, callback.bot)
-            
+
             if success:
+                # Get localized display values for category and urgency
+                from uk_management_bot.keyboards.requests import CATEGORY_KEYS, URGENCY_KEYS
+
+                category_key = data.get('category')
+                if category_key in CATEGORY_KEYS:
+                    category_display = get_text(CATEGORY_KEYS[category_key], language=lang)
+                else:
+                    category_display = category_key or get_text("common.not_specified", language=lang)
+
+                urgency_key = data.get('urgency')
+                if urgency_key in URGENCY_KEYS:
+                    urgency_display = get_text(URGENCY_KEYS[urgency_key], language=lang)
+                else:
+                    urgency_display = urgency_key or get_text("urgency.low", language=lang)
+
                 # Редактируем исходное сообщение без ReplyKeyboardMarkup
                 await callback.message.edit_text(
-                    f"✅ Заявка успешно создана!\n\n"
-                    f"Категория: {data.get('category', 'Не указана')}\n"
-                    f"Адрес: {data.get('address', 'Не указан')}\n"
-                    f"Срочность: {data.get('urgency', 'Обычная')}"
+                    get_text(
+                        "requests.request_created_details",
+                        language=lang,
+                        category=category_display,
+                        address=data.get('address', get_text("common.not_specified", language=lang)),
+                        urgency=urgency_display
+                    )
                 )
                 # Отправляем отдельное сообщение с главной клавиатурой
                 await callback.message.answer(
-                    "Возврат в главное меню.",
+                    get_text("requests.возврат_в_главное", language=lang),
                     reply_markup=get_user_contextual_keyboard(callback.from_user.id)
                 )
                 await state.clear()
@@ -1051,25 +1089,25 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 # Очищаем состояние и показываем главное меню, чтобы пользователь мог продолжить
                 await state.clear()
                 await callback.message.answer(
-                    "❌ Ошибка при создании заявки. Попробуйте ещё раз.",
+                    get_text("errors.request_save_failed", language=lang),
                     reply_markup=get_user_contextual_keyboard(callback.from_user.id)
                 )
-                await callback.answer("Ошибка сохранения заявки", show_alert=True)
-                
+                await callback.answer(get_text("errors.request_save_failed", language=lang), show_alert=True)
+
         elif action == "no":
             await callback.message.edit_text(
-                "❌ Создание заявки отменено"
+                get_text("requests.создание_requests_cancelled", language=lang)
             )
             await callback.message.answer(
-                "Возврат в главное меню.",
+                get_text("requests.возврат_в_главное", language=lang),
                 reply_markup=get_user_contextual_keyboard(callback.from_user.id)
             )
             await state.clear()
             logger.info(f"Создание заявки отменено пользователем {callback.from_user.id}")
-            
+
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        await callback.answer(get_text("errors.default", language=lang), show_alert=True)
 
 
 def _get_executor_requests_query(db_session: Session, user: User):
@@ -1149,7 +1187,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
     """Обработка пагинации списков заявок"""
     try:
         logger.info(f"Обработка пагинации для пользователя {callback.from_user.id}")
-        
+
         # Парсим данные пагинации
         current_page = int(callback.data.replace("page_", ""))
 
@@ -1159,13 +1197,14 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
 
         # Получаем список заявок пользователя с учетом фильтра
         db_session = next(get_db())
-        
+        lang = get_user_language(callback.from_user.id, db_session)
+
         # Получаем пользователя из базы данных по telegram_id
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        
+
         if not user:
-            await callback.answer("Пользователь не найден в базе данных.", show_alert=True)
+            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
             return
 
         # Определяем активную роль пользователя
@@ -1194,16 +1233,19 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         total_pages = max(1, (total_requests + requests_per_page - 1) // requests_per_page)
         
         if current_page < 1 or current_page > total_pages:
-            await callback.answer("Страница не найдена", show_alert=True)
+            await callback.answer(get_text("requests.page_not_found", language=lang), show_alert=True)
             return
-        
+
         # Получаем заявки для текущей страницы
         start_idx = (current_page - 1) * requests_per_page
         end_idx = start_idx + requests_per_page
         page_requests = user_requests[start_idx:end_idx]
-        
+
         # Формируем текст сообщения с эмодзи статусов и причиной отказа
-        message_text = f"📋 Ваши заявки (страница {current_page}/{total_pages}):\n\n"
+        message_text = get_text("requests.your_requests_page", language=lang).format(
+            current_page=current_page,
+            total_pages=total_pages
+        ) + "\n\n"
         def _icon(st: str) -> str:
             mapping = {
                 "В работе": "🛠️",
@@ -1254,10 +1296,12 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             pass
         
         logger.info(f"Показана страница {current_page} для пользователя {callback.from_user.id}")
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки пагинации: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 @router.callback_query(lambda c: c.data.startswith("view_") and not c.data.startswith("view_comments") and not c.data.startswith("view_report") and not c.data.startswith("view_assignments") and not c.data.startswith("view_schedule") and not c.data.startswith("view_week") and not c.data.startswith("view_completed") and not c.data.startswith("view_completion_media") and not c.data.startswith("view_user"))
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
@@ -1270,10 +1314,12 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
 
         # Получаем заявку из базы данных
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
         # Получаем пользователя и проверяем права доступа
@@ -1282,7 +1328,7 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
         if not user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
             return
 
         # Определяем роль пользователя
@@ -1332,7 +1378,7 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 has_access = True
 
         if not has_access:
-            await callback.answer("Нет прав для просмотра этой заявки", show_alert=True)
+            await callback.answer(get_text("requests.no_access_to_request", language=lang), show_alert=True)
             return
         
         # Формируем детальную информацию о заявке
@@ -1414,10 +1460,12 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_text(message_text, reply_markup=keyboard)
         
         logger.info(f"Показаны детали заявки {request.request_number} для пользователя {callback.from_user.id}")
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки просмотра заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("back_list_"))
@@ -1438,10 +1486,12 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
         current_page = int(data.get("my_requests_page", 1))
 
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         user = db_session.query(User).filter(User.telegram_id == telegram_id).first()
 
         if not user:
-            await callback.message.answer("Пользователь не найден в базе данных.")
+            await callback.message.answer(get_text("common.user_not_found", language=lang))
             await callback.answer()
             return
 
@@ -1660,45 +1710,51 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка возврата к списку: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 @router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_employee_") & ~F.data.startswith("edit_profile") & ~F.data.startswith("edit_first_name") & ~F.data.startswith("edit_last_name"))
 async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
     """Обработка редактирования заявки"""
     try:
         logger.info(f"Обработка редактирования заявки для пользователя {callback.from_user.id}")
-        
-        request_number = callback.data.replace("edit_", "")
-        
-        # Получаем заявку из базы данных
+
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
+        request_number = callback.data.replace("edit_", "")
+
+        # Получаем заявку из базы данных
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        
+
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
-        
+
         # Проверяем права доступа (сравниваем с telegram_id пользователя)
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user or request.user_id != user.id:
-            await callback.answer("Нет прав для редактирования этой заявки", show_alert=True)
+            await callback.answer(get_text("requests.no_edit_permission", language=lang), show_alert=True)
             return
-        
+
         # Сохраняем номер заявки в FSM для редактирования
         await state.update_data(editing_request_number=request_number)
         await state.set_state(RequestStates.category)
-        
+
         await callback.message.edit_text(
-            f"Редактирование заявки #{request_number}\n\nВыберите новую категорию:",
+            get_text("requests.edit_request_select_category", language=lang).format(request_number=request_number),
             reply_markup=get_categories_keyboard()
         )
-        
+
         logger.info(f"Начато редактирование заявки {request_number} пользователем {callback.from_user.id}")
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки редактирования заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 @router.callback_query(
     F.data.startswith("delete_") &
@@ -1708,41 +1764,45 @@ async def handle_delete_request(callback: CallbackQuery, state: FSMContext):
     """Обработка удаления заявки"""
     try:
         logger.info(f"Обработка удаления заявки для пользователя {callback.from_user.id}")
-        
-        request_number = callback.data.replace("delete_", "")
-        
-        # Получаем заявку из базы данных
+
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
+        request_number = callback.data.replace("delete_", "")
+
+        # Получаем заявку из базы данных
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        
+
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
-        
+
         # Проверяем права доступа (сравниваем с telegram_id пользователя)
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user or request.user_id != user.id:
-            await callback.answer("Нет прав для удаления этой заявки", show_alert=True)
+            await callback.answer(get_text("requests.no_delete_permission", language=lang), show_alert=True)
             return
-        
+
         # Удаляем заявку
         db_session.delete(request)
         db_session.commit()
-        
+
         await callback.message.edit_text(
-            "🗑️ Заявка удалена"
+            get_text("requests.request_deleted", language=lang)
         )
         await callback.message.answer(
-            "Возврат в главное меню.",
+            get_text("common.return_to_menu", language=lang),
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
-        
+
         logger.info(f"Заявка {request_number} удалена пользователем {callback.from_user.id}")
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки удаления заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 @router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
 async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
@@ -1751,9 +1811,11 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
         logger.info(f"Обработка принятия заявки менеджером для пользователя {callback.from_user.id}")
         # Проверяем, что действие выполняет менеджер
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         auth = AuthService(db_session)
         if not await auth.is_user_manager(callback.from_user.id):
-            await callback.answer("Доступно только менеджеру", show_alert=True)
+            await callback.answer(get_text("requests.manager_only", language=lang), show_alert=True)
             return
 
         request_number = callback.data.replace("accept_", "")
@@ -1761,7 +1823,7 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
         # Получаем заявку для отображения информации
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
         # Изменяем статус на "В работе"
@@ -1773,17 +1835,19 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
         )
 
         if not result.get("success"):
-            await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+            error_msg = result.get("message", get_text("common.error", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             return
 
         # Показываем выбор типа назначения
         from uk_management_bot.keyboards.admin import get_assignment_type_keyboard
 
         await callback.message.edit_text(
-            f"✅ <b>Заявка #{request_number} принята в работу</b>\n\n"
-            f"📂 Категория: {request.category}\n"
-            f"📍 Адрес: {request.address}\n\n"
-            f"<b>Выберите способ назначения исполнителя:</b>",
+            get_text("requests.request_accepted", language=lang).format(
+                request_number=request_number,
+                category=request.category,
+                address=request.address
+            ),
             reply_markup=get_assignment_type_keyboard(request_number),
             parse_mode="HTML"
         )
@@ -1792,7 +1856,9 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 @router.callback_query(F.data.startswith("complete_"))
 async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
@@ -1801,9 +1867,11 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
         logger.info(f"Обработка завершения заявки для пользователя {callback.from_user.id}")
         # Разрешаем только исполнителю
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         auth = AuthService(db_session)
         if not await auth.is_user_executor(callback.from_user.id):
-            await callback.answer("Доступно только исполнителю", show_alert=True)
+            await callback.answer(get_text("requests.executor_only", language=lang), show_alert=True)
             return
         # Ранняя проверка смены из middleware (если подключено на роутер)
         try:
@@ -1816,7 +1884,8 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
         from uk_management_bot.services.shift_service import ShiftService
         quick_service = ShiftService(db_session)
         if not quick_service.is_user_in_active_shift(callback.from_user.id):
-            await callback.answer(ERROR_MESSAGES.get("not_in_shift", "Вы не в смене"), show_alert=True)
+            error_msg = ERROR_MESSAGES.get("not_in_shift", get_text("shift.not_in_shift", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             # Дополнительное единичное уведомление пользователю (best-effort)
             try:
                 from aiogram import Bot
@@ -1834,21 +1903,24 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
         )
 
         if not result.get("success"):
-            await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+            error_msg = result.get("message", get_text("common.error", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             return
 
         await callback.message.edit_text(
-            f"✅ Заявка #{request_number} отмечена как выполненная"
+            get_text("requests.request_completed", language=lang).format(request_number=request_number)
         )
         await callback.message.answer(
-            "Возврат в главное меню.",
+            get_text("common.return_to_menu", language=lang),
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
         logger.info(f"Заявка {request_number} завершена пользователем {callback.from_user.id}")
         
     except Exception as e:
         logger.error(f"Ошибка обработки завершения заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("clarify_"))
@@ -1858,9 +1930,11 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
         # Только менеджер
         request_number = callback.data.replace("clarify_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         auth = AuthService(db_session)
         if not await auth.is_user_manager(callback.from_user.id):
-            await callback.answer("Доступно только менеджеру", show_alert=True)
+            await callback.answer(get_text("requests.manager_only", language=lang), show_alert=True)
             return
         service = RequestService(db_session)
         result = service.update_status_by_actor(
@@ -1869,15 +1943,18 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
             actor_telegram_id=callback.from_user.id,
         )
         if not result.get("success"):
-            await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+            error_msg = result.get("message", get_text("common.error", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             return
         await callback.message.edit_text(
-            f"❓ Заявка #{request_number} переведена в статус 'Уточнение'",
+            get_text("requests.request_clarification_status", language=lang).format(request_number=request_number),
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
         logger.error(f"Ошибка обработки перевода в 'Уточнение': {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))
@@ -1887,9 +1964,11 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
         # Только менеджер
         request_number = callback.data.replace("purchase_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         auth = AuthService(db_session)
         if not await auth.is_user_manager(callback.from_user.id):
-            await callback.answer("Доступно только менеджеру", show_alert=True)
+            await callback.answer(get_text("requests.manager_only", language=lang), show_alert=True)
             return
         service = RequestService(db_session)
         result = service.update_status_by_actor(
@@ -1898,15 +1977,18 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
             actor_telegram_id=callback.from_user.id,
         )
         if not result.get("success"):
-            await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+            error_msg = result.get("message", get_text("common.error", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             return
         await callback.message.edit_text(
-            f"💰 Заявка #{request_number} переведена в статус 'Закуп'",
+            get_text("requests.request_purchase_status", language=lang).format(request_number=request_number),
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
         logger.error(f"Ошибка обработки перевода в 'Закуп': {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(
@@ -1920,6 +2002,8 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
         # Менеджер или владелец (в RequestService также есть проверка)
         request_number = callback.data.replace("cancel_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         auth = AuthService(db_session)
         is_manager = await auth.is_user_manager(callback.from_user.id)
         service = RequestService(db_session)
@@ -1929,15 +2013,18 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
             actor_telegram_id=callback.from_user.id,
         )
         if not result.get("success"):
-            await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+            error_msg = result.get("message", get_text("common.error", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             return
         await callback.message.edit_text(
-            f"❌ Заявка #{request_number} отменена",
+            get_text("requests.request_cancelled", language=lang).format(request_number=request_number),
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
         logger.error(f"Ошибка обработки отмены заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("deny_"))
@@ -1946,24 +2033,30 @@ async def handle_executor_propose_deny(callback: CallbackQuery, state: FSMContex
     try:
         request_number = callback.data.replace("deny_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         auth = AuthService(db_session)
         # Только исполнитель
         if not await auth.is_user_executor(callback.from_user.id):
-            await callback.answer("Доступно только исполнителю", show_alert=True)
+            await callback.answer(get_text("requests.executor_only", language=lang), show_alert=True)
             return
         service = RequestService(db_session)
         req = service.get_request_by_number(request_number)
         if not req:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
         existing = (req.notes or "").strip()
-        new_notes = (existing + "\n" if existing else "") + "[Исполнитель] Предложение отказа: требуется подтверждение менеджера"
+        executor_label = get_text("requests.executor_label", language=lang)
+        deny_note = get_text("requests.deny_proposal_note", language=lang)
+        new_notes = (existing + "\n" if existing else "") + f"[{executor_label}] {deny_note}"
         req.notes = new_notes
         db_session.commit()
-        await callback.answer("Предложение отказа отправлено менеджеру", show_alert=True)
+        await callback.answer(get_text("requests.deny_proposal_sent", language=lang), show_alert=True)
     except Exception as e:
         logger.error(f"Ошибка предложения отказа: {e}")
-        await callback.answer("Ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("approve_") & ~F.data.startswith("approve_employee_") & ~F.data.startswith("approve_user_"))
@@ -1972,6 +2065,8 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
     try:
         request_number = callback.data.replace("approve_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         service = RequestService(db_session)
         result = service.update_status_by_actor(
             request_number=request_number,
@@ -1979,15 +2074,18 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
             actor_telegram_id=callback.from_user.id,
         )
         if not result.get("success"):
-            await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+            error_msg = result.get("message", get_text("common.error", language=lang))
+            await callback.answer(error_msg, show_alert=True)
             return
         await callback.message.edit_text(
-            f"✅ Заявка #{request_number} подтверждена",
+            get_text("requests.request_approved", language=lang).format(request_number=request_number),
             reply_markup=get_main_keyboard()
         )
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 # ============================
@@ -2008,13 +2106,14 @@ async def show_my_requests(message: Message, state: FSMContext):
         if not data.get("my_requests_status"):
             await state.update_data(my_requests_status="all")
         db_session = next(get_db())
-        
+        lang = get_user_language(message.from_user.id, db_session)
+
         # Получаем пользователя из базы данных по telegram_id
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == telegram_id).first()
-        
+
         if not user:
-            await message.answer("Пользователь не найден в базе данных.")
+            await message.answer(get_text("common.user_not_found", language=lang))
             return
         
         # Определяем роль пользователя
@@ -2208,7 +2307,9 @@ async def show_my_requests(message: Message, state: FSMContext):
             await message.answer(message_text, reply_markup=combined)
     except Exception as e:
         logger.error(f"Ошибка отображения списка заявок для пользователя {message.from_user.id}: {e}")
-        await message.answer("Произошла ошибка при загрузке списка заявок.")
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+        await message.answer(get_text("requests.error_loading_requests", language=lang))
 
 
 @router.message(Command("my_requests"))
@@ -2223,67 +2324,77 @@ async def cmd_my_requests(message: Message, state: FSMContext):
 async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext):
     """Пользователь хочет ответить на запрос уточнения. Просим ввести текст."""
     try:
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         request_number = callback.data.replace("replyclarify_", "")
         # Показать текущий диалог из notes перед вводом
-        db_session = next(get_db())
         req = db_session.query(Request).filter(Request.request_number == request_number).first()
         await state.update_data(reply_request_number=request_number)
         await state.set_state(RequestStates.waiting_clarify_reply)
         # Получаем пользователя из базы данных по telegram_id
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        
+
         if req and user and req.user_id == user.id:
             notes_text = (req.notes or "").strip()
             if notes_text:
-                await callback.message.answer(f"Текущий диалог:\n{notes_text}")
+                await callback.message.answer(get_text("requests.current_dialog", language=lang).format(notes=notes_text))
             else:
-                await callback.message.answer("Диалог пока пуст.")
+                await callback.message.answer(get_text("requests.dialog_empty", language=lang))
         await callback.message.answer(
-            "Введите ответ для уточнения (текст будет добавлен в примечания к заявке):",
+            get_text("requests.enter_clarification_reply", language=lang),
             reply_markup=get_cancel_keyboard(),
         )
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка старта ответа на уточнение: {e}")
-        await callback.answer("Ошибка")
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang))
 
 
 @router.message(RequestStates.waiting_clarify_reply)
 async def handle_reply_clarify_text(message: Message, state: FSMContext):
     """Сохраняем ответ пользователя в notes без смены статуса."""
     try:
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+
         data = await state.get_data()
         request_number = data.get("reply_request_number")
         if not request_number:
-            await message.answer("Ошибка: номер заявки не найден")
+            await message.answer(get_text("requests.request_number_not_found", language=lang))
             await state.clear()
             return
-        
-        db_session = next(get_db())
+
         service = RequestService(db_session)
         req = service.get_request_by_number(request_number)
         # Получаем пользователя из базы данных по telegram_id
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == message.from_user.id).first()
-        
+
         if not req or not user or req.user_id != user.id:
-            await message.answer("Заявка не найдена или недоступна.")
+            await message.answer(get_text("requests.request_not_found_or_unavailable", language=lang))
             await state.clear()
-            await message.answer("Возврат в меню", reply_markup=get_user_contextual_keyboard(message.from_user.id))
+            await message.answer(get_text("common.return_to_menu", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
             return
         existing = (req.notes or "").strip()
         to_add = message.text.strip()
         # Добавляем с ролью пользователя
-        new_notes = (existing + "\n" if existing else "") + f"[Пользователь] Уточнение: {to_add}"
+        user_prefix = get_text("requests.user_prefix", language=lang)
+        clarification_label = get_text("requests.clarification_label", language=lang)
+        new_notes = (existing + "\n" if existing else "") + f"[{user_prefix}] {clarification_label}: {to_add}"
         req.notes = new_notes
         db_session.commit()
-        await message.answer("Ответ сохранён.", reply_markup=get_main_keyboard())
+        await message.answer(get_text("requests.reply_saved", language=lang), reply_markup=get_main_keyboard())
         await state.clear()
     except Exception as e:
         logger.error(f"Ошибка сохранения ответа на уточнение: {e}")
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
         await state.clear()
-        await message.answer("Не удалось сохранить ответ. Попробуйте позже.", reply_markup=get_main_keyboard())
+        await message.answer(get_text("requests.reply_save_failed", language=lang), reply_markup=get_main_keyboard())
 
 
 @router.callback_query(F.data.startswith("status_"))
@@ -2309,8 +2420,10 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         from uk_management_bot.database.models.user import User
         user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
+        lang = get_user_language(callback.from_user.id, db_session)
+
         if not user:
-            await callback.answer("Пользователь не найден в базе данных.", show_alert=True)
+            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
             return
 
         query = db_session.query(Request).filter(Request.user_id == user.id)
@@ -2411,11 +2524,16 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра статуса: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
 @router.callback_query(F.data.startswith("categoryfilter_"))
 async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора фильтра категории"""
     try:
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         choice = callback.data.replace("categoryfilter_", "")
         await state.update_data(my_requests_category=choice, my_requests_page=1)
         fake_message = callback.message
@@ -2424,13 +2542,18 @@ async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра категории: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "filters_reset")
 async def handle_filters_reset(callback: CallbackQuery, state: FSMContext):
     """Сброс всех фильтров списка заявок"""
     try:
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         await state.update_data(
             my_requests_status="all",
             my_requests_category="all",
@@ -2439,34 +2562,46 @@ async def handle_filters_reset(callback: CallbackQuery, state: FSMContext):
             my_requests_page=1,
         )
         await show_my_requests(Message.model_construct(from_user=callback.from_user, chat=callback.message.chat), state)
-        await callback.answer("Фильтры сброшены")
+        await callback.answer(get_text("requests.filters_reset", language=lang))
     except Exception as e:
         logger.error(f"Ошибка сброса фильтров: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("period_"))
 async def handle_period_filter(callback: CallbackQuery, state: FSMContext):
     try:
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         choice = callback.data.replace("period_", "")
         await state.update_data(my_requests_period=choice, my_requests_page=1)
         await show_my_requests(Message.model_construct(from_user=callback.from_user, chat=callback.message.chat), state)
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра периода: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("executorfilter_"))
 async def handle_executor_filter(callback: CallbackQuery, state: FSMContext):
     try:
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         choice = callback.data.replace("executorfilter_", "")
         await state.update_data(my_requests_executor=choice, my_requests_page=1)
         await show_my_requests(Message.model_construct(from_user=callback.from_user, chat=callback.message.chat), state)
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра исполнителя: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
 
 
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
@@ -2479,22 +2614,18 @@ async def handle_assign_duty_executor(callback: CallbackQuery):
         logger.info(f"Назначение дежурного специалиста для заявки {request_number}")
 
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
 
         # Используем существующую логику auto_assign
         await auto_assign_request_by_category(request_number, db_session, callback.from_user.id)
 
         await callback.message.edit_text(
-            f"✅ <b>Заявка #{request_number} назначена дежурному специалисту</b>\n\n"
-            f"Назначение выполнено автоматически на основе:\n"
-            f"• Текущих смен\n"
-            f"• Специализации исполнителей\n"
-            f"• Загруженности\n\n"
-            f"Исполнитель получит уведомление.",
+            get_text("requests.request_assigned_to_duty", language=lang).format(request_number=request_number),
             parse_mode="HTML"
         )
 
         await callback.message.answer(
-            "Возврат в главное меню.",
+            get_text("common.return_to_menu", language=lang),
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
 
@@ -2502,7 +2633,9 @@ async def handle_assign_duty_executor(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка назначения дежурного специалиста: {e}")
-        await callback.answer("Произошла ошибка при назначении", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.assignment_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("assign_specific_"))
@@ -2513,11 +2646,12 @@ async def handle_assign_specific_executor(callback: CallbackQuery):
         logger.info(f"Выбор конкретного исполнителя для заявки {request_number}")
 
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
 
         # Получаем заявку
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
         # Получаем исполнителей с нужной специализацией
@@ -2554,16 +2688,22 @@ async def handle_assign_specific_executor(callback: CallbackQuery):
         # Показываем клавиатуру с исполнителями
         from uk_management_bot.keyboards.admin import get_executors_by_category_keyboard
 
-        executors_text = f"Найдено исполнителей: {len(filtered_executors)}" if filtered_executors else "Нет доступных исполнителей"
+        if filtered_executors:
+            executors_text = get_text("requests.executors_found", language=lang).format(count=len(filtered_executors))
+        else:
+            executors_text = get_text("requests.no_available_executors", language=lang)
+
+        message_text = get_text("requests.select_executor_title", language=lang)
+        message_text += get_text("requests.select_executor_info", language=lang).format(
+            request_number=request_number,
+            category=request.category,
+            spec=spec,
+            executors_text=executors_text
+        )
+        message_text += get_text("requests.select_executor_legend", language=lang)
 
         await callback.message.edit_text(
-            f"👤 <b>Выбор исполнителя</b>\n\n"
-            f"📋 Заявка: #{request_number}\n"
-            f"📂 Категория: {request.category}\n"
-            f"🔧 Специализация: {spec}\n\n"
-            f"{executors_text}\n\n"
-            f"🟢 - На смене\n"
-            f"⚪ - Не на смене",
+            message_text,
             reply_markup=get_executors_by_category_keyboard(request_number, request.category, filtered_executors),
             parse_mode="HTML"
         )
@@ -2572,7 +2712,9 @@ async def handle_assign_specific_executor(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка показа списка исполнителей: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("assign_executor_"))
@@ -2587,6 +2729,7 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
         logger.info(f"Финальное назначение исполнителя {executor_id} на заявку {request_number}")
 
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
 
         # Получаем заявку и исполнителя
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
@@ -2594,7 +2737,7 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
         executor = db_session.query(User).filter(User.id == executor_id).first()
 
         if not request or not executor:
-            await callback.answer("Заявка или исполнитель не найдены", show_alert=True)
+            await callback.answer(get_text("requests.request_or_executor_not_found", language=lang), show_alert=True)
             return
 
         # Назначаем исполнителя
@@ -2607,11 +2750,12 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
             executor_name = f"@{executor.username}" if executor.username else f"ID{executor.id}"
 
         await callback.message.edit_text(
-            f"✅ <b>Заявка #{request_number} назначена исполнителю</b>\n\n"
-            f"👤 Исполнитель: {executor_name}\n"
-            f"📂 Категория: {request.category}\n"
-            f"📍 Адрес: {request.address}\n\n"
-            f"Исполнитель получит уведомление о назначении.",
+            get_text("requests.request_assigned_to_executor", language=lang).format(
+                request_number=request_number,
+                executor_name=executor_name,
+                category=request.category,
+                address=request.address
+            ),
             parse_mode="HTML"
         )
 
@@ -2620,13 +2764,14 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
             from aiogram import Bot
             bot = Bot.get_current()
 
-            notification_text = (
-                f"📋 <b>Вам назначена новая заявка!</b>\n\n"
-                f"№ заявки: #{request.format_number_for_display()}\n"
-                f"📂 Категория: {request.category}\n"
-                f"📍 Адрес: {request.address}\n"
-                f"📝 Описание: {request.description}\n\n"
-                f"Пожалуйста, приступите к выполнению."
+            # Get executor's language
+            executor_lang = get_user_language(executor.telegram_id, db_session)
+
+            notification_text = get_text("requests.new_request_assigned_notification", language=executor_lang).format(
+                request_number=request.format_number_for_display(),
+                category=request.category,
+                address=request.address,
+                description=request.description
             )
 
             await bot.send_message(executor.telegram_id, notification_text, parse_mode="HTML")
@@ -2635,7 +2780,7 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
             logger.error(f"Ошибка отправки уведомления исполнителю: {e}")
 
         await callback.message.answer(
-            "Возврат в главное меню.",
+            get_text("common.return_to_menu", language=lang),
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
 
@@ -2643,7 +2788,9 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка финального назначения исполнителя: {e}")
-        await callback.answer("Произошла ошибка при назначении", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("requests.assignment_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("back_to_assignment_type_"))
@@ -2653,19 +2800,22 @@ async def handle_back_to_assignment_type(callback: CallbackQuery):
         request_number = callback.data.replace("back_to_assignment_type_", "")
 
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
         from uk_management_bot.keyboards.admin import get_assignment_type_keyboard
 
         await callback.message.edit_text(
-            f"✅ <b>Заявка #{request_number} принята в работу</b>\n\n"
-            f"📂 Категория: {request.category}\n"
-            f"📍 Адрес: {request.address}\n\n"
-            f"<b>Выберите способ назначения исполнителя:</b>",
+            get_text("requests.request_accepted_select_assignment", language=lang).format(
+                request_number=request_number,
+                category=request.category,
+                address=request.address
+            ),
             reply_markup=get_assignment_type_keyboard(request_number),
             parse_mode="HTML"
         )
@@ -2674,7 +2824,9 @@ async def handle_back_to_assignment_type(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка возврата к выбору типа назначения: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 # ============================
@@ -2694,10 +2846,12 @@ async def executor_view_media(callback: CallbackQuery):
     try:
         request_number = callback.data.replace("executor_view_media_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
         # Отправляем медиа-файлы
@@ -2725,13 +2879,15 @@ async def executor_view_media(callback: CallbackQuery):
 
         if media_group:
             await callback.message.answer_media_group(media=media_group)
-            await callback.answer("✅ Медиа-файлы отправлены")
+            await callback.answer(get_text("requests.media_files_sent", language=lang))
         else:
-            await callback.answer("Нет медиа-файлов", show_alert=True)
+            await callback.answer(get_text("requests.no_media_files", language=lang), show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка просмотра медиа исполнителем: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("executor_purchase_"))
@@ -2739,19 +2895,23 @@ async def executor_request_purchase(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Закуп'"""
     try:
         request_number = callback.data.replace("executor_purchase_", "")
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         await state.update_data(executor_request_number=request_number)
         await state.set_state(ExecutorRequestStates.waiting_purchase_comment)
 
         await callback.message.edit_text(
-            f"💰 <b>Перевод заявки #{request_number} в статус 'Закуп'</b>\n\n"
-            f"Укажите, что требуется приобрести:",
+            get_text("requests.executor_purchase_prompt", language=lang).format(request_number=request_number),
             parse_mode="HTML"
         )
         await callback.answer()
 
     except Exception as e:
         logger.error(f"Ошибка начала процесса закупа: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.message(ExecutorRequestStates.waiting_purchase_comment)
@@ -2762,10 +2922,12 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
         request_number = data.get("executor_request_number")
 
         db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await message.answer("Заявка не найдена")
+            await message.answer(get_text("requests.request_not_found", language=lang))
             await state.clear()
             return
 
@@ -2774,7 +2936,9 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
         request.status = "Закуп"
 
         # Добавляем комментарий в notes
-        purchase_note = f"\n[Исполнитель] Требуется закуп: {message.text}"
+        executor_label = get_text("requests.executor_label", language=lang)
+        purchase_label = get_text("requests.purchase_required_label", language=lang)
+        purchase_note = f"\n[{executor_label}] {purchase_label}: {message.text}"
         request.notes = (request.notes or "") + purchase_note
         request.updated_at = db_session.query(Request).filter(Request.request_number == request_number).first().updated_at
 
@@ -2789,8 +2953,7 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
             logger.error(f"Ошибка отправки уведомления: {e}")
 
         await message.answer(
-            f"✅ Заявка #{request_number} переведена в статус 'Закуп'\n\n"
-            f"Комментарий сохранен.",
+            get_text("requests.purchase_comment_saved", language=lang).format(request_number=request_number),
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
 
@@ -2798,7 +2961,9 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
 
     except Exception as e:
         logger.error(f"Ошибка обработки комментария закупа: {e}")
-        await message.answer("Произошла ошибка")
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+        await message.answer(get_text("common.error", language=lang))
         await state.clear()
 
 
@@ -2807,19 +2972,23 @@ async def executor_complete_request(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Выполнено'"""
     try:
         request_number = callback.data.replace("executor_complete_", "")
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         await state.update_data(executor_request_number=request_number, completion_media=[])
         await state.set_state(ExecutorRequestStates.waiting_completion_comment)
 
         await callback.message.edit_text(
-            f"✅ <b>Завершение заявки #{request_number}</b>\n\n"
-            f"Напишите комментарий о выполненной работе:",
+            get_text("requests.executor_complete_prompt", language=lang).format(request_number=request_number),
             parse_mode="HTML"
         )
         await callback.answer()
 
     except Exception as e:
         logger.error(f"Ошибка начала завершения заявки: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 @router.message(ExecutorRequestStates.waiting_completion_comment)
@@ -2829,23 +2998,28 @@ async def executor_process_completion_comment(message: Message, state: FSMContex
         data = await state.get_data()
         request_number = data.get("executor_request_number")
 
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+
         await state.update_data(completion_comment=message.text)
         await state.set_state(ExecutorRequestStates.waiting_completion_media)
 
         # Создаем клавиатуру
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Завершить без медиа", callback_data=f"executor_finish_completion_{request_number}")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_request_{request_number}")]
+            [InlineKeyboardButton(text=get_text("requests.finish_without_media", language=lang), callback_data=f"executor_finish_completion_{request_number}")],
+            [InlineKeyboardButton(text=get_text("common.cancel", language=lang), callback_data=f"view_request_{request_number}")]
         ])
 
         await message.answer(
-            f"📎 Теперь отправьте фото/видео результата работ или нажмите 'Завершить без медиа'",
+            get_text("requests.send_completion_media_prompt", language=lang),
             reply_markup=keyboard
         )
 
     except Exception as e:
         logger.error(f"Ошибка обработки комментария завершения: {e}")
-        await message.answer("Произошла ошибка")
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+        await message.answer(get_text("common.error", language=lang))
         await state.clear()
 
 
@@ -2856,6 +3030,9 @@ async def executor_collect_completion_media(message: Message, state: FSMContext)
         data = await state.get_data()
         completion_media = data.get("completion_media", [])
         request_number = data.get("executor_request_number")
+
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
 
         # Добавляем файл в список
         if message.photo:
@@ -2868,19 +3045,22 @@ async def executor_collect_completion_media(message: Message, state: FSMContext)
         await state.update_data(completion_media=completion_media)
 
         # Обновляем клавиатуру с счетчиком
+        finish_button_text = get_text("requests.finish_with_files", language=lang).format(count=len(completion_media))
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"✅ Завершить ({len(completion_media)} файлов)", callback_data=f"executor_finish_completion_{request_number}")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_request_{request_number}")]
+            [InlineKeyboardButton(text=finish_button_text, callback_data=f"executor_finish_completion_{request_number}")],
+            [InlineKeyboardButton(text=get_text("common.cancel", language=lang), callback_data=f"view_request_{request_number}")]
         ])
 
         await message.answer(
-            f"📎 Файл добавлен ({len(completion_media)}). Отправьте еще или нажмите 'Завершить'",
+            get_text("requests.file_added_send_more", language=lang).format(count=len(completion_media)),
             reply_markup=keyboard
         )
 
     except Exception as e:
         logger.error(f"Ошибка сбора медиа для завершения: {e}")
-        await message.answer("Произошла ошибка")
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+        await message.answer(get_text("common.error", language=lang))
 
 
 @router.callback_query(F.data.startswith("executor_finish_completion_"))
@@ -2893,10 +3073,12 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
         completion_media = data.get("completion_media", [])
 
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             await state.clear()
             return
 
@@ -2953,7 +3135,9 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
         request.status = "Выполнена"
 
         # Добавляем комментарий
-        completion_note = f"\n[Исполнитель] Работа выполнена: {completion_comment}"
+        executor_label = get_text("requests.executor_label", language=lang)
+        work_completed_label = get_text("requests.work_completed_label", language=lang)
+        completion_note = f"\n[{executor_label}] {work_completed_label}: {completion_comment}"
         request.notes = (request.notes or "") + completion_note
 
         # Сохраняем медиа (и Telegram file_id, и Media Service IDs)
@@ -2978,21 +3162,23 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
             logger.error(f"Ошибка отправки уведомления: {e}")
 
         # Формируем сообщение с результатом
-        message_text = f"✅ <b>Заявка #{request_number} выполнена!</b>\n\n"
-        message_text += f"Комментарий: {completion_comment}\n"
+        message_text = get_text("requests.request_completed_title", language=lang).format(request_number=request_number)
+        message_text += get_text("requests.comment_label", language=lang).format(comment=completion_comment)
         if media_service_files:
-            message_text += f"📎 Загружено файлов в Media Service: {len(media_service_files)}"
+            message_text += get_text("requests.files_uploaded_to_media_service", language=lang).format(count=len(media_service_files))
         elif completion_media:
-            message_text += f"⚠️ Файлов: {len(completion_media)} (сохранены локально)"
+            message_text += get_text("requests.files_saved_locally", language=lang).format(count=len(completion_media))
 
         await callback.message.edit_text(message_text, parse_mode="HTML")
 
         await state.clear()
-        await callback.answer("✅ Заявка завершена")
+        await callback.answer(get_text("requests.request_completed_short", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка финализации завершения: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
         await state.clear()
 
 
@@ -3002,10 +3188,12 @@ async def executor_return_to_work(callback: CallbackQuery):
     try:
         request_number = callback.data.replace("executor_work_", "")
         db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+
         request = db_session.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
         old_status = request.status
@@ -3021,11 +3209,13 @@ async def executor_return_to_work(callback: CallbackQuery):
             logger.error(f"Ошибка отправки уведомления: {e}")
 
         await callback.message.edit_text(
-            f"🔄 Заявка #{request_number} возвращена в работу",
+            get_text("requests.request_returned_to_work", language=lang).format(request_number=request_number),
             parse_mode="HTML"
         )
-        await callback.answer("✅ Заявка в работе")
+        await callback.answer(get_text("requests.request_in_work", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка возврата заявки в работу: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        await callback.answer(get_text("common.error", language=lang), show_alert=True)
