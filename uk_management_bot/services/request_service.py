@@ -7,7 +7,7 @@ import logging
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.utils.validators import validate_address, validate_description
+from uk_management_bot.utils.validators import validate_description
 from uk_management_bot.utils.constants import (
     REQUEST_CATEGORIES,
     REQUEST_URGENCIES,
@@ -64,10 +64,11 @@ class RequestService:
             
             if urgency not in REQUEST_URGENCIES:
                 raise ValueError(f"Неверная срочность: {urgency}")
-            
-            if not validate_address(address):
-                raise ValueError("Неверный формат адреса")
-            
+
+            # Базовая валидация адреса (адреса теперь выбираются из справочника)
+            if not address or len(address.strip()) < 5:
+                raise ValueError("Адрес не может быть пустым")
+
             if not validate_description(description):
                 raise ValueError("Описание слишком короткое или длинное")
             

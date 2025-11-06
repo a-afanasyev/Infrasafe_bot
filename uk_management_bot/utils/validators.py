@@ -178,12 +178,11 @@ class Validator:
         is_valid, message = Validator.validate_category(data['category'])
         if not is_valid:
             return False, message
-        
-        # Проверяем адрес
-        is_valid, message = Validator.validate_address(data['address'])
-        if not is_valid:
-            return False, message
-        
+
+        # Базовая проверка адреса (адреса теперь выбираются из справочника)
+        if 'address' not in data or not data['address'] or len(str(data['address']).strip()) < 5:
+            return False, "Адрес не может быть пустым"
+
         # Проверяем описание
         is_valid, message = Validator.validate_description(data['description'])
         if not is_valid:
