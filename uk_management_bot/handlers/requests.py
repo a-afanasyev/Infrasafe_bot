@@ -52,8 +52,7 @@ from typing import Optional
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.language_helpers import (
     get_language_for_user,
-    get_language_from_message,
-    get_language_from_callback
+    get_language_from_message
 )
 
 logger = logging.getLogger(__name__)
@@ -82,17 +81,9 @@ async def _get_user_language(message: Message = None, callback: CallbackQuery = 
     """
     try:
         if message:
-            db = next(get_db())
-            try:
-                return await get_language_from_message(message, db)
-            finally:
-                db.close()
+            return get_language_from_message(message)
         elif callback:
-            db = next(get_db())
-            try:
-                return await get_language_from_callback(callback, db)
-            finally:
-                db.close()
+            return get_language_from_message(callback)
         elif user_id:
             db = next(get_db())
             try:
