@@ -54,6 +54,11 @@ from uk_management_bot.utils.language_helpers import (
     get_language_for_user,
     get_language_from_message
 )
+# Single Source of Truth for button texts - TASK 17 Entry Handler Fix
+from uk_management_bot.utils.button_texts import (
+    get_create_request_texts,
+    get_my_requests_texts
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +71,19 @@ router.message.middleware(role_mode_middleware)
 router.callback_query.middleware(auth_middleware)
 router.callback_query.middleware(role_mode_middleware)
 
+# Константа для фильтрации сообщений создания заявки
+# Использует единый источник правды для автоматического масштабирования на все языки
+# Вычисляется один раз при импорте модуля (критично для фильтров aiogram)
+CREATE_REQUEST_TEXTS = get_create_request_texts()
+MY_REQUESTS_TEXTS = get_my_requests_texts()
+
 # Вспомогательные функции для улучшенной обработки ошибок и UX
 
 async def _get_user_language(message: Message = None, callback: CallbackQuery = None, user_id: int = None) -> str:
     """Get user language from message, callback, or user_id
+    
+    ВАЖНО: Использует язык из базы данных, а не только language_code из Telegram.
+    Это обеспечивает правильную локализацию для всех пользователей.
 
     Args:
         message: Telegram message object
@@ -80,16 +94,33 @@ async def _get_user_language(message: Message = None, callback: CallbackQuery = 
         Language code (ru/uz), defaults to 'ru'
     """
     try:
+        # Получаем user_id из сообщения или callback
+        target_user_id = None
+        if message:
+            target_user_id = message.from_user.id
+        elif callback:
+            target_user_id = callback.from_user.id
+        elif user_id:
+            target_user_id = user_id
+        
+        # Используем язык из базы данных (приоритет над language_code из Telegram)
+        if target_user_id:
+            db = next(get_db())
+            try:
+                from uk_management_bot.utils.helpers import get_user_language
+                lang = get_user_language(target_user_id, db)
+                if lang and lang in ['ru', 'uz']:
+                    return lang
+            except Exception as e:
+                logger.warning(f"Failed to get user language from DB for {target_user_id}: {e}")
+            finally:
+                db.close()
+        
+        # Fallback: используем language_code из Telegram
         if message:
             return get_language_from_message(message)
         elif callback:
             return get_language_from_message(callback)
-        elif user_id:
-            db = next(get_db())
-            try:
-                return await get_language_for_user(user_id, db)
-            finally:
-                db.close()
     except Exception as e:
         logger.warning(f"Failed to get user language: {e}")
 
@@ -314,9 +345,16 @@ class RequestStates(StatesGroup):
     waiting_clarify_reply = State()  # Ответ на уточнение
 
 # Начало создания заявки
-@router.message(F.text == "📝 Создать заявку")
+# Использует единый источник правды для поддержки всех языков из SUPPORTED_LANGUAGES
+# ВАЖНО: Этот handler должен быть зарегистрирован ДО handlers с FSM состояниями
+@router.message(F.text.in_(CREATE_REQUEST_TEXTS))
 async def start_request_creation(message: Message, state: FSMContext, user_status: Optional[str] = None):
     """Начало создания заявки"""
+    # Отладочное логирование
+    logger.info(f"[ENTRY_HANDLER] ✅ Handler сработал! Сообщение: '{message.text}' от пользователя {message.from_user.id}")
+    logger.info(f"[ENTRY_HANDLER] CREATE_REQUEST_TEXTS: {CREATE_REQUEST_TEXTS}")
+    logger.info(f"[ENTRY_HANDLER] Текущее FSM состояние: {await state.get_state()}")
+    
     # Get user language
     lang = await _get_user_language(message=message)
 
@@ -338,7 +376,7 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     finally:
         db.close()
 
-    logger.info(f"Пользователь {message.from_user.id} нажал '📝 Создать заявку'")
+    logger.info(f"Пользователь {message.from_user.id} начал создание заявки (текст: '{message.text}')")
     await state.set_state(RequestStates.category)
 
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
@@ -1240,7 +1278,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         # Создаем комбинированную клавиатуру: фильтр + кнопки ответа (по каждой) + пагинация
         from uk_management_bot.keyboards.requests import get_pagination_keyboard
         from uk_management_bot.keyboards.requests import get_status_filter_inline_keyboard
-        filter_kb = get_status_filter_inline_keyboard(active_status if active_status != "all" else None)
+        filter_kb = get_status_filter_inline_keyboard(active_status if active_status != "all" else None, language=lang)
         rows = list(filter_kb.inline_keyboard)
         for i, r in enumerate(page_requests, 1):
             if r.status == "Уточнение":
@@ -1265,7 +1303,18 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         lang = get_user_language(callback.from_user.id, db_session)
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
-@router.callback_query(lambda c: c.data.startswith("view_") and not c.data.startswith("view_comments") and not c.data.startswith("view_report") and not c.data.startswith("view_assignments") and not c.data.startswith("view_schedule") and not c.data.startswith("view_week") and not c.data.startswith("view_completed") and not c.data.startswith("view_completion_media") and not c.data.startswith("view_user"))
+@router.callback_query(
+    lambda c: c.data.startswith("view_") 
+    and not c.data.startswith("view_comments") 
+    and not c.data.startswith("view_report") 
+    and not c.data.startswith("view_assignments") 
+    and not c.data.startswith("view_schedule") 
+    and not c.data.startswith("view_week") 
+    and not c.data.startswith("view_completed") 
+    and not c.data.startswith("view_completion_media") 
+    and not c.data.startswith("view_user")
+    and not c.data.startswith("view_language")  # Исключаем view_language из обработки заявок
+)
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
     """Обработка просмотра деталей заявки"""
     try:
@@ -2054,7 +2103,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
 # Мои заявки (список + пагинация)
 # ============================
 
-@router.message(F.text == "📋 Мои заявки")
+@router.message(F.text.in_(MY_REQUESTS_TEXTS))
 async def show_my_requests(message: Message, state: FSMContext):
     """Показать список заявок пользователя (страница 1)"""
     try:
@@ -2172,16 +2221,16 @@ async def show_my_requests(message: Message, state: FSMContext):
         # Определяем заголовок в зависимости от роли
         if active_role == "executor":
             # Для исполнителей - назначенные заявки
-            message_text = f"📋 Назначенные заявки (страница {current_page}/{total_pages}):\n\n"
+            message_text = f"📋 {get_text('requests.assigned_requests', language=lang)} ({get_text('requests.page', language=lang)} {current_page}/{total_pages}):\n\n"
         else:
             # Для заявителей - с фильтром
             if active_status == "active":
-                status_title = "Активные заявки"
+                status_title = get_text('requests.active_requests_title', language=lang)
             elif active_status == "archive":
-                status_title = "Архив заявок"
+                status_title = get_text('requests.archive_title', language=lang)
             else:
-                status_title = "Все заявки"
-            message_text = f"📋 {status_title} (страница {current_page}/{total_pages}):\n\n"
+                status_title = get_text('requests.all_requests', language=lang)
+            message_text = f"📋 {status_title} ({get_text('requests.page', language=lang)} {current_page}/{total_pages}):\n\n"
 
         # Иконки для статусов
         def _icon(st: str) -> str:
@@ -2199,9 +2248,9 @@ async def show_my_requests(message: Message, state: FSMContext):
 
         if not page_requests:
             if active_role == "executor":
-                message_text += "Пока нет назначенных вам заявок."
+                message_text += get_text('requests.no_assigned_requests', language=lang)
             else:
-                message_text += "Пока нет заявок. Нажмите 'Создать заявку' в главном меню."
+                message_text += get_text('requests.no_requests', language=lang)
         else:
             # Для заявителей показываем текстовый список
             if active_role != "executor":
@@ -2210,11 +2259,11 @@ async def show_my_requests(message: Message, state: FSMContext):
                     if len(address) > 60:
                         address = address[:60] + "…"
                     message_text += f"{i}. {_icon(r.status)} #{r.request_number} - {r.category} - {r.status}\n"
-                    message_text += f"   Адрес: {address}\n"
-                    message_text += f"   Создана: {r.created_at.strftime('%d.%m.%Y')}\n"
+                    message_text += f"   {get_text('requests.address_label', language=lang)} {address}\n"
+                    message_text += f"   {get_text('requests.created_at', language=lang)} {r.created_at.strftime('%d.%m.%Y')}\n"
                     # Показываем дополнительную информацию для некоторых статусов
                     if r.status == "Отменена" and r.notes:
-                        message_text += f"   Причина отказа: {r.notes[:100]}...\n" if len(r.notes) > 100 else f"   Причина отказа: {r.notes}\n"
+                        message_text += f"   {get_text('requests.rejection_reason', language=lang)} {r.notes[:100]}...\n" if len(r.notes) > 100 else f"   {get_text('requests.rejection_reason', language=lang)} {r.notes}\n"
                     elif r.status == "Уточнение" and r.notes:
                         notes_lines = r.notes.strip().split('\n')
                         last_messages = [line for line in notes_lines[-2:] if line.strip()]
@@ -2222,7 +2271,7 @@ async def show_my_requests(message: Message, state: FSMContext):
                             preview = '\n'.join(last_messages)
                             if len(preview) > 80:
                                 preview = preview[:77] + '...'
-                            message_text += f"   Уточнение: {preview}\n"
+                            message_text += f"   {get_text('requests.clarification', language=lang)} {preview}\n"
                     message_text += "\n"
 
         from uk_management_bot.keyboards.requests import get_pagination_keyboard
@@ -2234,7 +2283,7 @@ async def show_my_requests(message: Message, state: FSMContext):
         # Они видят только заявки, назначенные им
         if active_role != "executor":
             # Для заявителей и других ролей - показываем фильтры
-            filter_status_kb = get_status_filter_inline_keyboard(active_status)
+            filter_status_kb = get_status_filter_inline_keyboard(active_status, language=lang)
             rows = list(filter_status_kb.inline_keyboard)
 
             # Добавляем кнопки для заявок, требующих действий заявителя
@@ -2248,7 +2297,7 @@ async def show_my_requests(message: Message, state: FSMContext):
                 # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
         else:
             # Для исполнителей добавляем кнопки заявок
-            message_text += "Выберите заявку для просмотра деталей:\n\n"
+            message_text += f"{get_text('requests.select_request_for_details', language=lang)}\n\n"
             for i, r in enumerate(page_requests, 1):
                 button_text = f"{_icon(r.status)} #{r.request_number} - {r.category}"
                 rows.append([InlineKeyboardButton(
@@ -2458,7 +2507,7 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                 message_text += "\n"
 
         from uk_management_bot.keyboards.requests import get_pagination_keyboard
-        filter_status_kb = get_status_filter_inline_keyboard(choice)
+        filter_status_kb = get_status_filter_inline_keyboard(choice, language=lang)
 
         # Формируем клавиатуру
         combined_rows = list(filter_status_kb.inline_keyboard)

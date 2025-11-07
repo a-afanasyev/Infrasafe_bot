@@ -51,7 +51,48 @@ class ProfileService:
             specializations = []
             if user.specialization:
                 # Поддерживаем CSV формат для множественных специализаций
-                specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
+                # Также обрабатываем JSON формат, если специализации хранятся как JSON строка
+                spec_str = user.specialization.strip()
+                
+                # Сначала пробуем JSON парсинг
+                if spec_str.startswith('[') or spec_str.startswith('{'):
+                    try:
+                        parsed = json.loads(spec_str)
+                        if isinstance(parsed, list):
+                            specializations = [str(s).strip() for s in parsed if s]
+                        elif isinstance(parsed, dict):
+                            specializations = [str(s).strip() for s in parsed.values() if s]
+                    except (json.JSONDecodeError, TypeError):
+                        # Если не валидный JSON, пробуем извлечь значения вручную
+                        # Обрабатываем случаи типа: specializations.["electrician", specializations."repair"]
+                        import re
+                        # Ищем все значения в кавычках (и двойных, и одинарных)
+                        # Используем более точное регулярное выражение для извлечения значений
+                        matches = re.findall(r'["\']([^"\']+)["\']', spec_str)
+                        if matches:
+                            # Фильтруем значения, которые не являются ключами локализации
+                            # Также очищаем от префиксов "specializations."
+                            cleaned_matches = []
+                            for m in matches:
+                                cleaned = m.replace('specializations.', '').strip()
+                                # Пропускаем пустые значения и значения, которые являются ключами локализации
+                                if cleaned and not cleaned.startswith('specializations.') and cleaned not in cleaned_matches:
+                                    cleaned_matches.append(cleaned)
+                            specializations = cleaned_matches
+                        else:
+                            # Если не нашли кавычки, пробуем CSV
+                            specializations = [s.strip() for s in spec_str.split(',') if s.strip()]
+                else:
+                    # CSV формат или простой список через запятую
+                    specializations = [s.strip() for s in spec_str.split(',') if s.strip()]
+                
+                # Очищаем от префиксов "specializations." если они есть
+                cleaned_specs = []
+                for spec in specializations:
+                    cleaned = spec.replace('specializations.', '').strip().strip('"').strip("'")
+                    if cleaned and cleaned not in cleaned_specs:
+                        cleaned_specs.append(cleaned)
+                specializations = cleaned_specs
 
             # ОБНОВЛЕНО: Получаем адреса из новой системы квартир вместо устаревших полей
             apartments = []
@@ -153,7 +194,17 @@ class ProfileService:
         if 'executor' in roles or 'manager' in roles:
             specializations = profile_data.get('specializations', [])
             if specializations:
-                spec_texts = [get_text(f"specializations.{spec}", language=language) for spec in specializations]
+                # Локализуем каждую специализацию, если ключ не найден - используем исходное значение
+                spec_texts = []
+                for spec in specializations:
+                    # Очищаем от кавычек и скобок, если они есть
+                    spec_clean = spec.strip().strip('"').strip("'").strip('[').strip(']')
+                    localized = get_text(f"specializations.{spec_clean}", language=language)
+                    # Если локализация не найдена (вернулся ключ), используем исходное значение
+                    if localized == f"specializations.{spec_clean}":
+                        spec_texts.append(spec_clean)
+                    else:
+                        spec_texts.append(localized)
                 text_parts.append(f"{get_text('profile.specialization', language=language)} {', '.join(spec_texts)}")
             else:
                 text_parts.append(f"{get_text('profile.specialization', language=language)} {get_text('profile.no_specialization', language=language)}")
@@ -166,17 +217,16 @@ class ProfileService:
         if apartments:
             for apt in apartments:
                 primary_marker = " ⭐" if apt.get('is_primary') else ""
-                owner_marker = " (Владелец)" if apt.get('is_owner') else ""
+                owner_marker = f" ({get_text('profile.owner', language=language)})" if apt.get('is_owner') else ""
                 text_parts.append(f"  {apt['address']}{primary_marker}{owner_marker}")
             logger.info(f"Форматирование адресов квартир: {len(apartments)} квартир")
         else:
-            no_apartments_text = "Адреса не указаны" if language == "ru" else "Manzillar ko'rsatilmagan"
-            text_parts.append(f"  {no_apartments_text}")
+            text_parts.append(f"  {get_text('profile.no_addresses', language=language)}")
             logger.info("Адреса квартир не заполнены")
         
         # Язык
         text_parts.append("")  # пустая строка
-        lang_display = "🇷🇺 Русский" if language == "ru" else "🇺🇿 O'zbek"
+        lang_display = get_text("profile.language_ru", language=language) if language == "ru" else get_text("profile.language_uz", language=language)
         text_parts.append(f"{get_text('profile.language', language=language)} {lang_display}")
         
         return "\n".join(text_parts)

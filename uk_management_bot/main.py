@@ -234,15 +234,21 @@ async def main():
     # Регистрируем роутеры
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
     dp.include_router(auth_router)
+    
+    # ВАЖНО: profile_editing_router должен быть раньше requests_router для правильной работы смены языка
+    # Это обеспечивает, что handlers редактирования профиля срабатывают до handlers заявок
+    dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше для смены языка)
+    
+    # ВАЖНО: requests_router должен быть раньше onboarding_router для правильной работы Entry Handler
+    # Это обеспечивает, что handler создания заявки срабатывает до handlers онбординга
+    dp.include_router(requests_router)  # requests раньше для Entry Handler (создание заявки)
+    
     dp.include_router(onboarding_router)
-    dp.include_router(admin_router)  # admin раньше requests для перехвата действий менеджеров
-    dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше requests)
+    dp.include_router(admin_router)  # admin раньше для перехвата действий менеджеров
 
-    # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ requests_router!)
+    # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ других handlers заявок!)
     dp.include_router(request_acceptance_router)  # Приёмка заявок - перехватывает accept_request_* и rate_*
     dp.include_router(unaccepted_requests_router)  # Непринятые заявки для менеджеров
-
-    dp.include_router(requests_router)  # requests после acceptance для избежания конфликтов
 
     # Система управления сменами
     dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров

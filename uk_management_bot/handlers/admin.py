@@ -43,6 +43,12 @@ from datetime import datetime
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Single Source of Truth for button texts - TASK 17
+from uk_management_bot.utils.button_texts import get_admin_panel_texts
+
+# Константа для фильтрации сообщений "Админ панель"
+ADMIN_PANEL_TEXTS = get_admin_panel_texts()
+
 class ManagerStates(StatesGroup):
     cancel_reason = State()
     clarify_reason = State()
@@ -926,7 +932,7 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
     
     await message.answer(f"Тест middleware:\nroles={roles}\nactive_role={active_role}\nuser={'Есть' if user else 'Нет'}\nhas_access={'Да' if has_access else 'Нет'}")
 
-@router.message(F.text == "🔧 Админ панель")
+@router.message(F.text.in_(ADMIN_PANEL_TEXTS))
 async def open_admin_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None):
     """Открыть админ панель"""
     lang = message.from_user.language_code or 'ru'

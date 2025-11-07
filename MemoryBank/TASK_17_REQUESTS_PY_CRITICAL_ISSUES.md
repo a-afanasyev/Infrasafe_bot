@@ -14,29 +14,36 @@ The requests.py file was refactored for localization in Sessions 24-35, but **cr
 
 ## 🐛 Issues Identified
 
-### Issue #1: Entry Handler Matches Hard-Coded Russian Text (Line 380)
+### Issue #1: Entry Handler Matches Hard-Coded Russian Text (Line 317) ✅ ИСПРАВЛЕНО
 
-**Location**: `requests.py:380`
+**Location**: `requests.py:325` (обновлено)
 
+**Статус**: ✅ **ИСПРАВЛЕНО** (6 ноября 2025)
+
+**Решение реализовано**:
+- ✅ Создан единый источник правды: `uk_management_bot/utils/button_texts.py`
+- ✅ Handler использует `F.text.in_(CREATE_REQUEST_TEXTS)` вместо хардкода
+- ✅ Константа `CREATE_REQUEST_TEXTS` автоматически подхватывает все языки из `SUPPORTED_LANGUAGES`
+- ✅ Логирование обновлено для поддержки всех языков
+
+**Код после исправления**:
 ```python
-@router.message(F.text == "📝 Создать заявку")
-async def start_request_creation(message: Message, state: FSMContext, user_status: Optional[str] = None):
+from uk_management_bot.utils.button_texts import get_create_request_texts
+
+CREATE_REQUEST_TEXTS = get_create_request_texts()
+
+@router.message(F.text.in_(CREATE_REQUEST_TEXTS))
+async def start_request_creation(...):
+    logger.info(f"Пользователь {message.from_user.id} начал создание заявки (текст: '{message.text}')")
+    ...
 ```
 
-**Problem:**
-- Handler only triggers when message text exactly matches "📝 Создать заявку" (Russian)
-- When main keyboard is localized, Uzbek users click "📝 Ariza yaratish"
-- Message text doesn't match → handler never triggers → flow never starts
+**Результат**:
+- ✅ Русские пользователи: "📝 Создать заявку" → работает
+- ✅ Узбекские пользователи: "📝 Ariza yaratish" → работает
+- ✅ Автоматически: любой новый язык из `SUPPORTED_LANGUAGES` → работает автоматически
 
-**Impact**: **COMPLETE BLOCKER** - Uzbek users cannot create requests at all
-
-**Solution Required:**
-- Cannot use F.text filter with hard-coded strings
-- Options:
-  1. Use callback_data instead of text buttons
-  2. Check both Russian AND Uzbek text in filter
-  3. Use a command/state-based approach
-  4. Store button text keys in constants and compare dynamically
+**Документация**: См. `MemoryBank/TASK_17_ENTRY_HANDLER_IMPLEMENTATION_REPORT.md`
 
 ---
 

@@ -551,10 +551,15 @@ def get_status_filter_inline_keyboard(active_status: Optional[str] = None, langu
     - Все: все заявки без фильтра
     - Активные: все статусы, кроме финальных
     - Архив: финальные статусы
+    
+    Args:
+        active_status: Текущий активный фильтр (all/active/archive)
+        language: Язык интерфейса (ru/uz)
     """
-    all_label = "Все заявки"
-    active_label = "Активные"
-    archive_label = "Архив"
+    # Используем локализацию для текстов кнопок
+    all_label = get_text("requests.all_requests", language=language)
+    active_label = get_text("requests.active_requests_title", language=language)
+    archive_label = get_text("requests.archive_title", language=language)
 
     all_text = f"• {all_label}" if active_status == "all" or active_status is None else all_label
     active_text = f"• {active_label}" if active_status == "active" else active_label

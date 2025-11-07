@@ -207,25 +207,33 @@ async def handle_language_choice(callback: CallbackQuery, state: FSMContext, db:
         
         # Обновляем язык в базе данных
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if user:
-            user.language = selected_lang
-            db.commit()
-            
-            # Используем новый язык для сообщения
-            new_lang = selected_lang
-            await callback.message.edit_text(
-                get_text("profile.language_updated", language=new_lang),
-                reply_markup=get_profile_edit_keyboard(new_lang)
-            )
-        else:
+        if not user:
             await callback.answer(get_text("errors.user_not_found", language=lang), show_alert=True)
+            return
+        
+        user.language = selected_lang
+        db.commit()
+        
+        # Обновляем объект пользователя в сессии для получения актуальных данных
+        db.refresh(user)
+        
+        # Используем новый язык для сообщения
+        new_lang = selected_lang
+        await callback.message.edit_text(
+            get_text("profile.language_updated", language=new_lang),
+            reply_markup=get_profile_edit_keyboard(new_lang, user)
+        )
         
         await state.clear()
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка сохранения языка: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        logger.error(f"Ошибка сохранения языка: {e}", exc_info=True)
+        try:
+            lang = get_user_language(db, callback.from_user.id) if db else "ru"
+            await callback.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
+        except:
+            await callback.answer("Произошла ошибка", show_alert=True)
         await state.clear()
 
 

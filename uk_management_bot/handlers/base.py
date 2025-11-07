@@ -15,12 +15,34 @@ from uk_management_bot.keyboards.base import (
 )
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
 from uk_management_bot.services.notification_service import async_notify_role_switched
-from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.middlewares.auth import require_role
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+# Single Source of Truth for button texts - TASK 17
+from uk_management_bot.utils.button_texts import (
+    get_profile_texts,
+    get_switch_role_texts,
+    get_active_requests_texts,
+    get_archive_texts,
+    get_shift_texts,
+    get_help_texts,
+    get_back_texts,
+)
+from uk_management_bot.utils.helpers import get_user_language
+
+# Константы для фильтрации сообщений
+PROFILE_TEXTS = get_profile_texts()
+SWITCH_ROLE_TEXTS = get_switch_role_texts()
+ACTIVE_REQUESTS_TEXTS = get_active_requests_texts()
+ARCHIVE_TEXTS = get_archive_texts()
+SHIFT_TEXTS = get_shift_texts()
+HELP_TEXTS = get_help_texts()
+BACK_TEXTS = get_back_texts()
 
 # Добавляем middleware в роутер
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
@@ -328,16 +350,27 @@ async def cancel_action(message: Message, state: FSMContext, roles: list[str] = 
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
 
-@router.message(F.text == "🔙 Назад")
-async def go_back(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None):
+@router.message(F.text.in_(BACK_TEXTS))
+async def go_back(message: Message, state: FSMContext, db: Session = None, roles: list[str] = None, active_role: str = None):
     """Возврат в главное меню"""
-    await state.clear()
-    lang = message.from_user.language_code or "ru"
-    await message.answer(get_text("back", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
+    if not db:
+        from uk_management_bot.database.session import get_db
+        db = next(get_db())
+        need_close = True
+    else:
+        need_close = False
+    
+    try:
+        await state.clear()
+        lang = get_user_language(message.from_user.id, db)
+        await message.answer(get_text("back", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
+    finally:
+        if need_close and db:
+            db.close()
 
 
 # Обработчики меню исполнителя
-@router.message(F.text == "🛠 Активные заявки")
+@router.message(F.text.in_(ACTIVE_REQUESTS_TEXTS))
 async def executor_active_requests(message: Message, state: FSMContext):
     """Открывает список заявок пользователя с фильтром Активные."""
     await state.update_data(my_requests_status="active", my_requests_page=1)
@@ -345,7 +378,7 @@ async def executor_active_requests(message: Message, state: FSMContext):
     await show_my_requests(message, state)
 
 
-@router.message(F.text == "📦 Архив")
+@router.message(F.text.in_(ARCHIVE_TEXTS))
 async def executor_archive_requests(message: Message, state: FSMContext):
     """Открывает список заявок пользователя с фильтром Архив."""
     await state.update_data(my_requests_status="archive", my_requests_page=1)
@@ -353,13 +386,76 @@ async def executor_archive_requests(message: Message, state: FSMContext):
     await show_my_requests(message, state)
 
 
-@router.message(F.text == "🔄 Смена")
-async def executor_shift_menu(message: Message):
+@router.message(F.text.in_(SHIFT_TEXTS))
+@require_role(['executor'])
+async def executor_shift_menu(message: Message, db: Session = None, roles: list[str] = None, active_role: str = None):
     """Показывает клавиатуру управления сменой."""
-    await message.answer("Меню смены:", reply_markup=get_shifts_main_keyboard())
+    # db уже передается через middleware, не нужно создавать новую сессию
+    if not db:
+        from uk_management_bot.database.session import get_db
+        db = next(get_db())
+        need_close = True
+    else:
+        need_close = False
+    
+    try:
+        lang = get_user_language(message.from_user.id, db)
+        # Используем существующий ключ локализации или fallback
+        menu_text = get_text("shifts.menu_shifts", language=lang)
+        if "." in menu_text:  # Если вернулся ключ, значит перевод не найден
+            menu_text = "Меню смены:" if lang == "ru" else "Smena menyusi:"
+        await message.answer(menu_text, reply_markup=get_shifts_main_keyboard(language=lang))
+    finally:
+        # Закрываем сессию только если мы её создали сами
+        # Middleware закрывает сессию автоматически, если она была передана через DI
+        if need_close and db:
+            db.close()
 
 
-@router.message(F.text == "👤 Профиль")
+@router.message(F.text.in_(HELP_TEXTS))
+async def show_help(message: Message, db: Session = None):
+    """Показывает справку по использованию бота."""
+    from uk_management_bot.database.database import get_db
+    if not db:
+        db = next(get_db())
+    try:
+        lang = get_user_language(message.from_user.id, db)
+        help_text = get_text("help.usage_help", language=lang)
+        if "." in help_text:  # Если вернулся ключ, используем fallback
+            help_text = """
+🤖 **Справка по использованию бота**
+
+📝 **Создание заявки:**
+- Нажмите "Создать заявку"
+- Выберите категорию
+- Укажите адрес и описание
+- Добавьте фото/видео (опционально)
+- Выберите срочность
+
+📋 **Просмотр заявок:**
+- "Мои заявки" - ваши заявки
+- "Все заявки" - все заявки (для исполнителей и менеджеров)
+
+👤 **Профиль:**
+- Просмотр и редактирование профиля
+- Изменение языка
+
+🔧 **Админ функции (для менеджеров):**
+- Управление пользователями
+- Назначение заявок
+- Создание смен
+- Статистика
+
+❓ **Поддержка:**
+Если у вас возникли вопросы, обратитесь к администратору.
+"""
+        await message.answer(help_text)
+    finally:
+        if db:
+            db.close()
+
+
+@router.message(F.text.in_(PROFILE_TEXTS))
 async def show_profile(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
     """Показывает расширенный профиль пользователя"""
 
@@ -380,8 +476,11 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
             )
             return
         
+        # Получаем язык пользователя из базы данных
+        from uk_management_bot.utils.helpers import get_user_language
+        lang = get_user_language(message.from_user.id, db)
+        
         # Форматируем текст профиля
-        lang = message.from_user.language_code or "ru"
         profile_text = profile_service.format_profile_text(profile_data, language=lang)
         
         # Отправляем профиль с клавиатурой переключения ролей
@@ -401,9 +500,9 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
             user_roles = ['applicant']
         
         # Добавляем кнопку редактирования к профилю
-        keyboard = get_role_switch_inline(user_roles, user_active_role)
+        keyboard = get_role_switch_inline(user_roles, user_active_role, language=lang)
         rows = list(keyboard.inline_keyboard)
-        rows.append([{"text": "✏️ Редактировать профиль", "callback_data": "edit_profile"}])
+        rows.append([{"text": get_text("profile.edit", language=lang), "callback_data": "edit_profile"}])
         
         from aiogram.types import InlineKeyboardMarkup
         new_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -424,7 +523,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         )
 
 
-@router.message(F.text == "🔀 Выбрать роль")
+@router.message(F.text.in_(SWITCH_ROLE_TEXTS))
 async def choose_role(message: Message, db: Session, roles: list[str] = None, active_role: str = None):
     """Открывает inline‑переключатель ролей из главного меню.
 

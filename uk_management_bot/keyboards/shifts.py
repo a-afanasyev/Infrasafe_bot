@@ -1,12 +1,30 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from typing import Optional, List
+from uk_management_bot.utils.helpers import get_text
 
 
-def get_shifts_main_keyboard() -> ReplyKeyboardMarkup:
+def get_shifts_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """
+    Клавиатура меню смены с локализованными кнопками.
+    
+    Args:
+        language: Язык интерфейса (ru/uz)
+    
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура с кнопками меню смены
+    """
     rows = [
-        [KeyboardButton(text="🔄 Принять смену"), KeyboardButton(text="🔚 Сдать смену")],
-        [KeyboardButton(text="ℹ️ Моя смена"), KeyboardButton(text="📜 История смен")],
-        [KeyboardButton(text="🔙 Назад")],
+        [
+            KeyboardButton(text=get_text("shifts.accept_shift", language=language, fallback="🔄 Принять смену")),
+            KeyboardButton(text=get_text("shifts.end_shift", language=language, fallback="🔚 Сдать смену"))
+        ],
+        [
+            KeyboardButton(text=get_text("shifts.my_shift", language=language, fallback="ℹ️ Моя смена")),
+            KeyboardButton(text=get_text("shifts.shift_history", language=language, fallback="📜 История смен"))
+        ],
+        [
+            KeyboardButton(text=get_text("buttons.back", language=language, fallback="🔙 Назад"))
+        ],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 

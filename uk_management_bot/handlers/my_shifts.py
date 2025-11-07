@@ -28,10 +28,15 @@ from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, format_datetime
 from sqlalchemy import and_, func, or_
+# Single Source of Truth for button texts - TASK 17
+from uk_management_bot.utils.button_texts import get_my_shifts_texts
 import logging
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+# Константа для фильтрации сообщений "Мои смены"
+MY_SHIFTS_TEXTS = get_my_shifts_texts()
 
 
 @router.message(Command("my_shifts"))
@@ -60,7 +65,7 @@ async def cmd_my_shifts(message: Message, state: FSMContext, db=None):
             db.close()
 
 
-@router.message(F.text == "📋 Мои смены")
+@router.message(F.text.in_(MY_SHIFTS_TEXTS))
 @require_role(['executor'])
 async def handle_my_shifts_button(message: Message, state: FSMContext):
     """Обработчик кнопки 'Мои смены'"""

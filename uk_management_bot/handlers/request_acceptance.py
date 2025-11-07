@@ -32,8 +32,15 @@ import logging
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Single Source of Truth for button texts - TASK 17
+from uk_management_bot.utils.button_texts import get_acceptance_texts
+from uk_management_bot.utils.helpers import get_text
 
-@router.message(F.text == "✅ Ожидают приёмки")
+# Константа для фильтрации сообщений "Ожидают приёмки"
+ACCEPTANCE_TEXTS = get_acceptance_texts()
+
+
+@router.message(F.text.in_(ACCEPTANCE_TEXTS))
 async def show_pending_acceptance_requests(message: Message, db: Session = None):
     """Показать список заявок, ожидающих приёмки заявителем"""
     try:
@@ -42,11 +49,15 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
         if not db:
             db = next(get_db())
 
+        # Получаем язык пользователя из базы данных
+        from uk_management_bot.utils.helpers import get_user_language
+        lang = get_user_language(telegram_id, db)
+
         # Получаем пользователя
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
 
         if not user:
-            await message.answer("Пользователь не найден в базе данных.")
+            await message.answer(get_text("common.user_not_found", language=lang))
             return
 
         # Получаем заявки пользователя со статусом "Выполнена" (подтверждено менеджером, ждёт приёмки)
@@ -63,22 +74,21 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
 
         if not requests:
             await message.answer(
-                "📭 У вас нет заявок, ожидающих приёмки.\n\n"
-                "Когда исполнитель завершит работу и менеджер подтвердит выполнение, "
-                "заявки появятся здесь."
+                get_text("requests.no_pending_acceptance", language=lang)
             )
             return
 
         # Формируем список заявок
-        text = "✅ <b>Заявки, ожидающие приёмки</b>\n\n"
-        text += "Выберите заявку для просмотра и приёмки:\n\n"
+        text = f"{get_text('requests.pending_acceptance_title', language=lang)}\n\n"
+        text += f"{get_text('requests.select_request_for_acceptance', language=lang)}\n\n"
 
         builder = []
         for req in requests:
             text += f"📋 <b>#{req.request_number}</b>\n"
-            text += f"   Категория: {req.category}\n"
-            text += f"   Адрес: {req.address or 'Не указан'}\n"
-            text += f"   Обновлена: {req.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+            text += f"   {get_text('requests.category_label', language=lang)} {req.category}\n"
+            address_text = req.address or get_text("requests.address_не_указан", language=lang, fallback="Не указан")
+            text += f"   {get_text('requests.address_label', language=lang)} {address_text}\n"
+            text += f"   {get_text('requests.updated_at', language=lang)} {req.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
 
             builder.append([
                 InlineKeyboardButton(
@@ -95,7 +105,14 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
 
     except Exception as e:
         logger.error(f"Ошибка показа списка ожидающих приёмки заявок: {e}")
-        await message.answer("Произошла ошибка при загрузке списка заявок")
+        # Получаем язык для сообщения об ошибке
+        try:
+            if not db:
+                db = next(get_db())
+            lang = get_user_language(message.from_user.id, db) if hasattr(message, 'from_user') else 'ru'
+        except:
+            lang = 'ru'
+        await message.answer(get_text("requests.error_loading_requests", language=lang))
     finally:
         if db:
             db.close()

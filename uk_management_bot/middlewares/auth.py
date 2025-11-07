@@ -147,19 +147,48 @@ def require_role(required_roles: List[str]):
             # Debug: посмотрим что приходит
             logger.debug(f"require_role debug: args={len(args)}, kwargs_keys={list(kwargs.keys())}")
             
-            # Попробуем получить из kwargs (aiogram 3 DI)
-            user_roles = kwargs.get("roles", [])
-            user = kwargs.get("user")
+            # Получаем event (первый аргумент или из kwargs)
             event = args[0] if args else kwargs.get("event")
-            db = kwargs.get("db")
             
-            # Если данные не пришли через DI, получаем их вручную
-            if not user_roles and event and db:
-                telegram_id = None
+            # Получаем db из kwargs или извлекаем из контекста
+            db = kwargs.get("db")
+            if not db and event:
+                # Пытаемся получить db из контекста события
+                try:
+                    from aiogram import Bot
+                    bot = Bot.get_current()
+                    if bot and hasattr(bot, '_dispatcher'):
+                        # Получаем db из dispatcher context
+                        pass  # Это сложно, лучше получить из kwargs или БД напрямую
+                except:
+                    pass
+            
+            # Получаем telegram_id из event
+            telegram_id = None
+            if event:
                 if hasattr(event, 'from_user') and event.from_user:
                     telegram_id = event.from_user.id
+            
+            # Получаем роли из kwargs (aiogram 3 DI) или из БД
+            user_roles = kwargs.get("roles", [])
+            user = kwargs.get("user")
+            
+            # Если роли не получены через DI, получаем их из БД
+            if not user_roles and telegram_id:
+                if not db:
+                    # Создаем новую сессию БД, если её нет
+                    try:
+                        from uk_management_bot.database.session import get_db
+                        db = next(get_db())
+                        need_close_db = True
+                    except Exception as e:
+                        logger.warning(f"Ошибка создания сессии БД в require_role: {e}")
+                        db = None
+                        need_close_db = False
+                else:
+                    need_close_db = False
                 
-                if telegram_id:
+                if db:
                     try:
                         from uk_management_bot.database.models.user import User
                         user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -169,6 +198,12 @@ def require_role(required_roles: List[str]):
                             logger.debug(f"require_role: получили роли из БД: {user_roles}")
                     except Exception as e:
                         logger.warning(f"Ошибка получения ролей из БД: {e}")
+                    finally:
+                        if need_close_db and db:
+                            try:
+                                db.close()
+                            except:
+                                pass
             
             logger.debug(f"require_role check: user_roles={user_roles}, required_roles={required_roles}, user={user}")
             
@@ -176,14 +211,24 @@ def require_role(required_roles: List[str]):
             has_access = False
             if user_roles:
                 has_access = any(role in user_roles for role in required_roles)
+            else:
+                logger.warning(f"require_role: user_roles пустой! kwargs={list(kwargs.keys())}, event={type(event).__name__ if event else None}, telegram_id={telegram_id}")
             
             if not has_access:
-                logger.warning(f"Access denied for user {user.telegram_id if user else 'unknown'}: has roles {user_roles}, needs {required_roles}")
+                logger.warning(f"Access denied for user {user.telegram_id if user else telegram_id or 'unknown'}: has roles {user_roles}, needs {required_roles}")
                 
                 # Формируем сообщение об отсутствии прав
                 language = None
-                if hasattr(event, 'from_user') and event.from_user:
+                if event and hasattr(event, 'from_user') and event.from_user:
                     language = getattr(event.from_user, "language_code", "ru")
+                
+                # Пытаемся получить язык из БД
+                if not language and telegram_id and db:
+                    try:
+                        from uk_management_bot.utils.helpers import get_user_language
+                        language = get_user_language(telegram_id, db)
+                    except:
+                        pass
                 
                 text = get_text("auth.no_access", language=language or "ru")
                 
@@ -197,7 +242,7 @@ def require_role(required_roles: List[str]):
                 
                 return None
             
-            logger.debug(f"Access granted for user {user.telegram_id if user else 'unknown'}")
+            logger.debug(f"Access granted for user {user.telegram_id if user else telegram_id or 'unknown'}")
             
             # Если права есть, выполняем хэндлер
             return await func(*args, **kwargs)
