@@ -828,7 +828,8 @@
     "save": "💾 Сохранить",
     "skip": "⏭ Пропустить",
     "yes": "✅ Да",
-    "continue": "▶️ Продолжить"
+    "continue": "▶️ Продолжить",
+    "forward": "Вперёд ▶️"
   },
   "cancel": "Действие отменено.",
   "categories": {
@@ -5480,7 +5481,22 @@
     "select_request_for_acceptance": "Выберите заявку для просмотра и приёмки:",
     "updated_at": "Обновлена:",
     "error_loading_requests": "Произошла ошибка при загрузке списка заявок.",
-    "no_access_to_request": "Нет прав для просмотра этой заявки"
+    "no_access_to_request": "Нет прав для просмотра этой заявки",
+    "request_label": "Заявка",
+    "description_label": "Описание:",
+    "urgency_label": "Срочность:",
+    "apartment_label": "Квартира:",
+    "created_label": "Создана:",
+    "updated_label": "Обновлена:",
+    "media_count_label": "Медиа-файлов:",
+    "assigned_requests_title": "Назначенные заявки",
+    "select_request_prompt": "Выберите заявку для просмотра деталей:",
+    "page_indicator": "стр.",
+    "cancellation_reason_label": "Причина отказа:",
+    "reply_to_request": "Ответить на",
+    "all_filter": "Все",
+    "active_filter": "Активные",
+    "archive_filter": "Архив"
   },
   "role": {
     "not_allowed": "Эта роль вам недоступна",

@@ -828,7 +828,8 @@
     "save": "💾 Saqlash",
     "skip": "⏭ O'tkazib yuborish",
     "yes": "✅ Ha",
-    "continue": "▶️ Davom etish"
+    "continue": "▶️ Davom etish",
+    "forward": "Oldinga ▶️"
   },
   "cancel": "Harakat bekor qilindi.",
   "categories": {
@@ -5480,7 +5481,22 @@
     "select_request_for_acceptance": "Ko'rish va qabul qilish uchun arizani tanlang:",
     "updated_at": "Yangilangan:",
     "error_loading_requests": "Arizalar ro'yxatini yuklashda xatolik yuz berdi.",
-    "no_access_to_request": "Bu arizani ko'rish uchun huquqlar yo'q"
+    "no_access_to_request": "Bu arizani ko'rish uchun huquqlar yo'q",
+    "request_label": "Ariza",
+    "description_label": "Tavsif:",
+    "urgency_label": "Shoshilinchlik:",
+    "apartment_label": "Xonadon:",
+    "created_label": "Yaratilgan:",
+    "updated_label": "Yangilangan:",
+    "media_count_label": "Media fayllari:",
+    "assigned_requests_title": "Tayinlangan arizalar",
+    "select_request_prompt": "Tafsilotlarni ko'rish uchun arizani tanlang:",
+    "page_indicator": "sahifa",
+    "cancellation_reason_label": "Rad etish sababi:",
+    "reply_to_request": "Javob berish",
+    "all_filter": "Hammasi",
+    "active_filter": "Faol",
+    "archive_filter": "Arxiv"
   },
   "role": {
     "not_allowed": "Bu rol siz uchun mavjud emas",
