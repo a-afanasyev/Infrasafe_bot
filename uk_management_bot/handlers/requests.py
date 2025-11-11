@@ -1610,105 +1610,98 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
 
         requests = query.offset(offset).limit(ITEMS_PER_PAGE).all()
 
+        # TASK 17 Issue #5: Use localized helper functions for list formatting
+        from uk_management_bot.utils.request_helpers import (
+            format_requests_list_header,
+            format_request_list_item,
+            get_status_icon
+        )
+
         if not requests:
+            # Empty state message
             if active_role == "executor":
-                message_text = "📋 <b>Назначенные заявки</b>\n\nУ вас пока нет назначенных заявок."
+                title = get_text('requests.assigned_requests_title', language=lang)
+                empty_msg = get_text('requests.no_assigned_requests', language=lang) if 'no_assigned_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет назначенных заявок."
+                message_text = f"📋 <b>{title}</b>\n\n{empty_msg}"
             else:
                 if active_status == "active":
-                    message_text = "📋 <b>Активные заявки</b>\n\nУ вас пока нет активных заявок."
+                    title = get_text('requests.active_requests_title', language=lang)
+                    empty_msg = get_text('requests.no_active_requests', language=lang) if 'no_active_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет активных заявок."
                 elif active_status == "archive":
-                    message_text = "📋 <b>Архив заявок</b>\n\nУ вас пока нет заявок в архиве."
+                    title = get_text('requests.archive_title', language=lang)
+                    empty_msg = get_text('requests.no_archive_requests', language=lang) if 'no_archive_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет заявок в архиве."
                 else:
-                    message_text = "📋 <b>Все заявки</b>\n\nУ вас пока нет заявок."
+                    title = get_text('requests.all_filter', language=lang)
+                    empty_msg = get_text('requests.no_requests', language=lang) if 'no_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет заявок."
+                message_text = f"📋 <b>{title}</b>\n\n{empty_msg}"
 
             await callback.message.answer(message_text, parse_mode="HTML")
             await callback.answer()
             return
 
-        # Иконка в зависимости от статуса
-        def _icon(st: str) -> str:
-            mapping = {
-                "В работе": "🛠️",
-                "Выполнена": "✅",
-                "Закуп": "💰",
-                "Уточнение": "❓",
-                "Принято": "✅",
-                "Новая": "🆕",
-                "Исполнено": "✅",
-                "Отменена": "❌",
-            }
-            return mapping.get(st, "📋")
-
-        # Формируем сообщение
-        if active_role == "executor":
-            message_text = f"📋 <b>Назначенные заявки</b> (стр. {current_page}/{total_pages})\n\n"
-            message_text += "Выберите заявку для просмотра деталей:\n\n"
-        else:
-            if active_status == "active":
-                status_name = "Активные"
-            elif active_status == "archive":
-                status_name = "Архив"
-            else:
-                status_name = "Все"
-            message_text = f"📋 <b>{status_name} заявки</b> (стр. {current_page}/{total_pages})\n\n"
+        # Format list header
+        message_text = format_requests_list_header(
+            total_requests=total_requests,
+            current_page=current_page,
+            total_pages=total_pages,
+            status_filter=active_status,
+            role=active_role,
+            language=lang
+        )
 
         # Для заявителей - текстовый список, для исполнителей - кнопки
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         builder = InlineKeyboardBuilder()
 
         if active_role != "executor":
-            # Текстовый список для заявителей
+            # Текстовый список для заявителей (используем helper-функцию)
             for i, req in enumerate(requests, 1):
-                address = req.address
-                if len(address) > 60:
-                    address = address[:60] + "…"
-                message_text += f"{i}. {_icon(req.status)} #{req.request_number} - {req.category} - {req.status}\n"
-                message_text += f"   Адрес: {address}\n"
-                message_text += f"   Создана: {req.created_at.strftime('%d.%m.%Y')}\n"
-                # Дополнительная информация
-                if req.status == "Отменена" and req.notes:
-                    message_text += f"   Причина отказа: {req.notes[:100]}...\n" if len(req.notes) > 100 else f"   Причина отказа: {req.notes}\n"
-                elif req.status == "Уточнение" and req.notes:
-                    notes_lines = req.notes.strip().split('\n')
-                    last_messages = [line for line in notes_lines[-2:] if line.strip()]
-                    if last_messages:
-                        preview = '\n'.join(last_messages)
-                        if len(preview) > 80:
-                            preview = preview[:77] + '...'
-                        message_text += f"   Уточнение: {preview}\n"
-                message_text += "\n"
+                message_text += format_request_list_item(
+                    request=req,
+                    index=i,
+                    language=lang,
+                    show_details=True
+                )
         else:
             # Кнопки для исполнителей
             for req in requests:
-                button_text = f"{_icon(req.status)} #{req.request_number} - {req.category}"
+                icon = get_status_icon(req.status)
+                button_text = f"{icon} #{req.request_number} - {req.category}"
                 builder.button(text=button_text, callback_data=f"view_request_{req.request_number}")
 
             builder.adjust(1)  # По одной кнопке в ряд
 
-        # Добавляем кнопки пагинации
+        # TASK 17 Issue #5: Localized pagination and filter buttons
         pagination_buttons = []
         if current_page > 1:
-            pagination_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"requests_page_{current_page - 1}"))
+            back_text = get_text('buttons.back', language=lang)
+            pagination_buttons.append(InlineKeyboardButton(text=f"◀️ {back_text}", callback_data=f"requests_page_{current_page - 1}"))
         if current_page < total_pages:
-            pagination_buttons.append(InlineKeyboardButton(text="Вперёд ▶️", callback_data=f"requests_page_{current_page + 1}"))
+            forward_text = get_text('buttons.forward', language=lang)
+            pagination_buttons.append(InlineKeyboardButton(text=forward_text, callback_data=f"requests_page_{current_page + 1}"))
 
         if pagination_buttons:
             builder.row(*pagination_buttons)
 
         # Добавляем фильтры только для не-исполнителей
         if active_role != "executor":
+            all_text = get_text('requests.all_filter', language=lang)
+            active_text = get_text('requests.active_filter', language=lang)
+            archive_text = get_text('requests.archive_filter', language=lang)
+
             filter_buttons = [
-                InlineKeyboardButton(text="📋 Все" if active_status == "all" else "⚪️ Все", callback_data="requests_filter_all"),
-                InlineKeyboardButton(text="🟢 Активные" if active_status == "active" else "⚪️ Активные", callback_data="requests_filter_active"),
-                InlineKeyboardButton(text="📦 Архив" if active_status == "archive" else "⚪️ Архив", callback_data="requests_filter_archive")
+                InlineKeyboardButton(text=f"📋 {all_text}" if active_status == "all" else f"⚪️ {all_text}", callback_data="requests_filter_all"),
+                InlineKeyboardButton(text=f"🟢 {active_text}" if active_status == "active" else f"⚪️ {active_text}", callback_data="requests_filter_active"),
+                InlineKeyboardButton(text=f"📦 {archive_text}" if active_status == "archive" else f"⚪️ {archive_text}", callback_data="requests_filter_archive")
             ]
             builder.row(*filter_buttons)
 
             # Добавляем кнопки для заявок, требующих действий заявителя
+            reply_text = get_text('requests.reply_to_request', language=lang)
             for req in requests:
                 if req.status == "Уточнение":
                     builder.row(InlineKeyboardButton(
-                        text=f"💬 Ответить на #{req.request_number}",
+                        text=f"💬 {reply_text} #{req.request_number}",
                         callback_data=f"replyclarify_{req.request_number}"
                     ))
                 # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
@@ -2219,61 +2212,40 @@ async def show_my_requests(message: Message, state: FSMContext):
         end_idx = start_idx + requests_per_page
         page_requests = user_requests[start_idx:end_idx]
 
-        # Определяем заголовок в зависимости от роли
-        if active_role == "executor":
-            # Для исполнителей - назначенные заявки
-            message_text = f"📋 {get_text('requests.assigned_requests', language=lang)} ({get_text('requests.page', language=lang)} {current_page}/{total_pages}):\n\n"
-        else:
-            # Для заявителей - с фильтром
-            if active_status == "active":
-                status_title = get_text('requests.active_requests_title', language=lang)
-            elif active_status == "archive":
-                status_title = get_text('requests.archive_title', language=lang)
-            else:
-                status_title = get_text('requests.all_requests', language=lang)
-            message_text = f"📋 {status_title} ({get_text('requests.page', language=lang)} {current_page}/{total_pages}):\n\n"
+        # TASK 17 Issue #5: Use localized helper functions for formatting
+        from uk_management_bot.utils.request_helpers import (
+            format_requests_list_header,
+            format_request_list_item,
+            get_status_icon
+        )
 
-        # Иконки для статусов
-        def _icon(st: str) -> str:
-            mapping = {
-                "В работе": "🛠️",
-                "Закуп": "💰",
-                "Уточнение": "❓",
-                "Исполнено": "✅",
-                "Отменена": "❌",
-                "Выполнена": "✅",
-                "Новая": "🆕",
-                "Принято": "✅",
-            }
-            return mapping.get(st, "")
+        # Use helper function for list header
+        message_text = format_requests_list_header(
+            total_requests=total_requests,
+            current_page=current_page,
+            total_pages=total_pages,
+            status_filter=active_status,
+            role=active_role,
+            language=lang
+        )
 
         if not page_requests:
             if active_role == "executor":
-                message_text += get_text('requests.no_assigned_requests', language=lang)
+                no_requests_msg = get_text('requests.no_assigned_requests', language=lang) if 'no_assigned_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет назначенных заявок."
+                message_text += no_requests_msg
             else:
-                message_text += get_text('requests.no_requests', language=lang)
+                no_requests_msg = get_text('requests.no_requests', language=lang) if 'no_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет заявок."
+                message_text += no_requests_msg
         else:
-            # Для заявителей показываем текстовый список
+            # Для заявителей показываем текстовый список (используем helper-функцию)
             if active_role != "executor":
                 for i, r in enumerate(page_requests, 1):
-                    address = r.address
-                    if len(address) > 60:
-                        address = address[:60] + "…"
-                    message_text += f"{i}. {_icon(r.status)} #{r.request_number} - {r.category} - {r.status}\n"
-                    message_text += f"   {get_text('requests.address_label', language=lang)} {address}\n"
-                    message_text += f"   {get_text('requests.created_at', language=lang)} {r.created_at.strftime('%d.%m.%Y')}\n"
-                    # Показываем дополнительную информацию для некоторых статусов
-                    if r.status == "Отменена" and r.notes:
-                        message_text += f"   {get_text('requests.rejection_reason', language=lang)} {r.notes[:100]}...\n" if len(r.notes) > 100 else f"   {get_text('requests.rejection_reason', language=lang)} {r.notes}\n"
-                    elif r.status == "Уточнение" and r.notes:
-                        notes_lines = r.notes.strip().split('\n')
-                        last_messages = [line for line in notes_lines[-2:] if line.strip()]
-                        if last_messages:
-                            preview = '\n'.join(last_messages)
-                            if len(preview) > 80:
-                                preview = preview[:77] + '...'
-                            message_text += f"   {get_text('requests.clarification', language=lang)} {preview}\n"
-                    message_text += "\n"
+                    message_text += format_request_list_item(
+                        request=r,
+                        index=i,
+                        language=lang,
+                        show_details=True
+                    )
 
         from uk_management_bot.keyboards.requests import get_pagination_keyboard
 
@@ -2287,27 +2259,30 @@ async def show_my_requests(message: Message, state: FSMContext):
             filter_status_kb = get_status_filter_inline_keyboard(active_status, language=lang)
             rows = list(filter_status_kb.inline_keyboard)
 
-            # Добавляем кнопки для заявок, требующих действий заявителя
+            # TASK 17 Issue #5: Localized reply button
+            reply_text = get_text('requests.reply_to_request', language=lang)
             for r in page_requests:
                 if r.status == "Уточнение":
                     # Кнопка для ответа на уточнение
                     rows.append([InlineKeyboardButton(
-                        text=f"💬 Ответить на #{r.request_number}",
+                        text=f"💬 {reply_text} #{r.request_number}",
                         callback_data=f"replyclarify_{r.request_number}"
                     )])
                 # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
         else:
             # Для исполнителей добавляем кнопки заявок
-            message_text += f"{get_text('requests.select_request_for_details', language=lang)}\n\n"
+            select_prompt = get_text('requests.select_request_prompt', language=lang) if 'select_request_prompt' in get_text('requests', language=lang, fallback={}) else "Выберите заявку для просмотра деталей:"
+            message_text += f"{select_prompt}\n\n"
             for i, r in enumerate(page_requests, 1):
-                button_text = f"{_icon(r.status)} #{r.request_number} - {r.category}"
+                icon = get_status_icon(r.status)
+                button_text = f"{icon} #{r.request_number} - {r.category}"
                 rows.append([InlineKeyboardButton(
                     text=button_text,
                     callback_data=f"view_request_{r.request_number}"
                 )])
 
-        # Добавляем пагинацию в конце
-        pagination_kb = get_pagination_keyboard(current_page, total_pages)
+        # TASK 17 Issue #5: Add language parameter to pagination keyboard
+        pagination_kb = get_pagination_keyboard(current_page, total_pages, language=lang)
         rows += pagination_kb.inline_keyboard
         combined = InlineKeyboardMarkup(inline_keyboard=rows)
         # Сохраняем актуальную страницу в FSM

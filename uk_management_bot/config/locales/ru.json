@@ -827,6 +827,7 @@
     "reset_filters": "Сбросить фильтры",
     "save": "💾 Сохранить",
     "skip": "⏭ Пропустить",
+    "view": "Просмотр",
     "yes": "✅ Да",
     "continue": "▶️ Продолжить",
     "forward": "Вперёд ▶️"
@@ -5494,6 +5495,7 @@
     "page_indicator": "стр.",
     "cancellation_reason_label": "Причина отказа:",
     "reply_to_request": "Ответить на",
+    "reply_to_clarification": "Ответить на уточнение",
     "all_filter": "Все",
     "active_filter": "Активные",
     "archive_filter": "Архив"

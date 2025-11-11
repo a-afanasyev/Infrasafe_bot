@@ -158,14 +158,142 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
 
     return message_text
 
+def get_status_icon(status: str) -> str:
+    """
+    Get emoji icon for request status
+
+    TASK 17 Issue #5: Helper for status icons in list views
+
+    Args:
+        status: Request status (Russian text)
+
+    Returns:
+        Emoji icon for the status
+    """
+    status_icons = {
+        "Новая": "🆕",
+        "В работе": "🔧",
+        "Выполнена": "✅",
+        "Отменена": "❌",
+        "Уточнение": "💬",
+        "Закуп": "💰",
+        "Исполнено": "✅",
+        "Принято": "👍"
+    }
+    return status_icons.get(status, "📋")
+
+
+def format_requests_list_header(
+    total_requests: int,
+    current_page: int,
+    total_pages: int,
+    status_filter: str,
+    role: str,
+    language: str
+) -> str:
+    """
+    Format the header for requests list page with localization
+
+    TASK 17 Issue #5: Localized list header for all languages
+
+    Args:
+        total_requests: Total number of requests
+        current_page: Current page number
+        total_pages: Total number of pages
+        status_filter: Filter status (all/active/archive)
+        role: User's active role (executor/applicant)
+        language: Language code (ru/uz)
+
+    Returns:
+        Formatted header text with localized title
+    """
+    from uk_management_bot.utils.helpers import get_text
+
+    page_indicator = get_text('requests.page_indicator', language=language)
+
+    if role == "executor":
+        title = get_text('requests.assigned_requests_title', language=language)
+        prompt = get_text('requests.select_request_prompt', language=language)
+        return f"📋 <b>{title}</b> ({page_indicator} {current_page}/{total_pages})\n\n{prompt}\n\n"
+    else:
+        if status_filter == "active":
+            title = get_text('requests.active_requests_title', language=language)
+        elif status_filter == "archive":
+            title = get_text('requests.archive_title', language=language)
+        else:
+            title = get_text('requests.all_filter', language=language)
+
+        return f"📋 <b>{title}</b> ({page_indicator} {current_page}/{total_pages})\n\n"
+
+
+def format_request_list_item(
+    request,
+    index: int,
+    language: str,
+    show_details: bool = True
+) -> str:
+    """
+    Format a single request list item with localization
+
+    TASK 17 Issue #5: Localized list item for all languages
+
+    Args:
+        request: Request model instance
+        index: Item number in list (1-based)
+        language: Language code (ru/uz)
+        show_details: Whether to show detailed info (address, date, notes)
+
+    Returns:
+        Formatted list item text
+    """
+    from uk_management_bot.utils.helpers import get_text
+
+    icon = get_status_icon(request.status)
+    item_text = f"{index}. {icon} #{request.request_number} - {request.category} - {request.status}\n"
+
+    if show_details:
+        # Get localized labels
+        address_label = get_text('requests.address_label', language=language)
+        created_label = get_text('requests.created_label', language=language)
+
+        # Format address (truncate if too long)
+        address = request.address
+        if len(address) > 60:
+            address = address[:60] + "…"
+
+        item_text += f"   {address_label} {address}\n"
+        item_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
+
+        # Handle special statuses with notes
+        if request.status == "Отменена" and request.notes:
+            reason_label = get_text('requests.cancellation_reason_label', language=language)
+            notes = request.notes[:100] + "..." if len(request.notes) > 100 else request.notes
+            item_text += f"   {reason_label} {notes}\n"
+
+        elif request.status == "Уточнение" and request.notes:
+            clarification_label = get_text('requests.clarification_label', language=language)
+            # Show last 2 messages
+            notes_lines = request.notes.strip().split('\n')
+            last_messages = [line for line in notes_lines[-2:] if line.strip()]
+            if last_messages:
+                preview = '\n'.join(last_messages)
+                if len(preview) > 80:
+                    preview = preview[:77] + '...'
+                item_text += f"   {clarification_label} {preview}\n"
+
+        item_text += "\n"
+
+    return item_text
+
+
 def validate_callback_request_number(callback_data: str, expected_prefix: str) -> Optional[str]:
     """
     Валидирует callback data и возвращает номер заявки
-    
+
     Args:
         callback_data: Callback data для валидации
         expected_prefix: Ожидаемый префикс
-        
+
     Returns:
         Номер заявки или None если валидация не прошла
     """

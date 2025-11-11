@@ -827,6 +827,7 @@
     "reset_filters": "Filtrlarni tozalash",
     "save": "💾 Saqlash",
     "skip": "⏭ O'tkazib yuborish",
+    "view": "Ko'rish",
     "yes": "✅ Ha",
     "continue": "▶️ Davom etish",
     "forward": "Oldinga ▶️"
@@ -5494,6 +5495,7 @@
     "page_indicator": "sahifa",
     "cancellation_reason_label": "Rad etish sababi:",
     "reply_to_request": "Javob berish",
+    "reply_to_clarification": "Tushuntirishga javob berish",
     "all_filter": "Hammasi",
     "active_filter": "Faol",
     "archive_filter": "Arxiv"

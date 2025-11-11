@@ -278,33 +278,51 @@ def get_requests_filter_keyboard() -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_pagination_keyboard(current_page: int, total_pages: int, request_number: str = None, show_reply_clarify: bool = False) -> InlineKeyboardMarkup:
-    """Клавиатура для пагинации заявок"""
+def get_pagination_keyboard(current_page: int, total_pages: int, request_number: str = None, show_reply_clarify: bool = False, language: str = "ru") -> InlineKeyboardMarkup:
+    """Клавиатура для пагинации заявок
+
+    TASK 17 Issue #5: Localized pagination keyboard
+
+    Args:
+        current_page: Текущая страница
+        total_pages: Всего страниц
+        request_number: Номер заявки (если нужны кнопки действий)
+        show_reply_clarify: Показывать ли кнопку ответа на уточнение
+        language: Язык интерфейса (ru/uz)
+
+    Returns:
+        InlineKeyboardMarkup с локализованными кнопками
+    """
     keyboard = []
-    
+
     # Кнопки навигации
     nav_buttons = []
     if current_page > 1:
         nav_buttons.append(InlineKeyboardButton(text="◀️", callback_data=f"page_{current_page-1}"))
-    
+
     nav_buttons.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="current_page"))
-    
+
     if current_page < total_pages:
         nav_buttons.append(InlineKeyboardButton(text="▶️", callback_data=f"page_{current_page+1}"))
-    
+
     keyboard.append(nav_buttons)
-    
-    # Кнопки действий
+
+    # Кнопки действий (локализованные)
     if request_number:
+        view_text = get_text("buttons.view", language=language)
+        edit_text = get_text("buttons.edit", language=language)
+        delete_text = get_text("buttons.delete", language=language)
+
         action_buttons = [
-            InlineKeyboardButton(text="👁️ Просмотр", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
-            InlineKeyboardButton(text="✏️ Редактировать", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number)),
-            InlineKeyboardButton(text="🗑️ Удалить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("delete_", request_number))
+            InlineKeyboardButton(text=f"👁️ {view_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
+            InlineKeyboardButton(text=f"✏️ {edit_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number)),
+            InlineKeyboardButton(text=f"🗑️ {delete_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("delete_", request_number))
         ]
         keyboard.append(action_buttons)
         if show_reply_clarify:
-            keyboard.append([InlineKeyboardButton(text="💬 Ответить на уточнение", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("replyclarify_", request_number))])
-    
+            reply_text = get_text("requests.reply_to_clarification", language=language)
+            keyboard.append([InlineKeyboardButton(text=f"💬 {reply_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("replyclarify_", request_number))])
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_request_actions_keyboard(request_number: str) -> InlineKeyboardMarkup:
