@@ -85,69 +85,78 @@ def format_request_for_list(request, include_number=True):
     else:
         return f"📍 {request.address}\n🏷️ {request.category}\n📊 {request.status}"
 
-def format_request_details(request, language="ru"):
+def format_request_details(request, language="ru", show_executor=True, active_role=None, db_session=None):
     """
-    Форматирует детали заявки для отображения
+    Форматирует детали заявки для отображения с полной локализацией
 
-    ОБНОВЛЕНО: Поддержка отображения информации о квартире из справочника
+    TASK 17 Issue #4: Полностью локализованная версия с поддержкой всех языков.
+    Все метки используют get_text() для локализации.
 
     Args:
         request: Объект заявки
-        language: Язык интерфейса
+        language: Язык интерфейса (ru/uz)
+        show_executor: Показывать ли информацию об исполнителе
+        active_role: Активная роль пользователя (для условной логики)
+        db_session: Сессия БД (для запроса исполнителя если нужно)
 
     Returns:
-        Детальная информация о заявке
+        Детальная информация о заявке с локализованными метками
     """
-    # Форматируем номер заявки
-    number_display = request.format_number_for_display()
+    from uk_management_bot.utils.helpers import get_text
 
-    details = f"📋 Заявка {number_display}\n\n"
-    details += f"🏷️ Категория: {request.category}\n"
-    details += f"📊 Статус: {request.status}\n"
+    # Get localized labels
+    labels = {
+        'request': get_text('requests.request_label', language=language),
+        'category': get_text('requests.category_label', language=language),
+        'status': get_text('commons.status_label', language=language),
+        'address': get_text('requests.address_label', language=language),
+        'description': get_text('requests.description_label', language=language),
+        'urgency': get_text('requests.urgency_label', language=language),
+        'apartment': get_text('requests.apartment_label', language=language),
+        'created': get_text('requests.created_label', language=language),
+        'updated': get_text('requests.updated_label', language=language),
+        'executor': get_text('requests.executor_label', language=language),
+        'media_count': get_text('requests.media_count_label', language=language),
+    }
 
-    # НОВОЕ: Отображение адреса с индикатором источника
-    if hasattr(request, 'apartment_obj') and request.apartment_obj:
-        # Заявка привязана к квартире из справочника
-        from uk_management_bot.services.address_service import AddressService
-        formatted_address = AddressService.format_apartment_address(request.apartment_obj)
-        details += f"📍 Адрес: {formatted_address} 🏢\n"  # Иконка здания = из справочника
+    # Build message with localized labels
+    message_text = f"📋 {labels['request']} #{request.request_number}\n\n"
+    message_text += f"{labels['category']} {request.category}\n"
+    message_text += f"{labels['status']} {request.status}\n"
+    message_text += f"{labels['address']} {request.address}\n"
+    message_text += f"{labels['description']} {request.description}\n"
+    message_text += f"{labels['urgency']} {request.urgency}\n"
 
-        # Дополнительная информация о квартире
-        apartment = request.apartment_obj
-        apartment_details = []
-        if apartment.entrance:
-            apartment_details.append(f"Подъезд: {apartment.entrance}")
-        if apartment.floor:
-            apartment_details.append(f"Этаж: {apartment.floor}")
-        if apartment.rooms_count:
-            apartment_details.append(f"Комнат: {apartment.rooms_count}")
-        if apartment.area:
-            apartment_details.append(f"Площадь: {apartment.area} м²")
+    if request.apartment:
+        message_text += f"{labels['apartment']} {request.apartment}\n"
 
-        for i, detail in enumerate(apartment_details):
-            prefix = "   └" if i == len(apartment_details) - 1 else "   ├"
-            details += f"{prefix} {detail}\n"
-    else:
-        # Legacy: текстовый адрес
-        details += f"📍 Адрес: {request.address}\n"
+    message_text += f"{labels['created']} {request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
 
-        # Legacy поле apartment (если есть)
-        if request.apartment:
-            details += f"🏠 Квартира: {request.apartment}\n"
+    if request.updated_at:
+        message_text += f"{labels['updated']} {request.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
 
-    details += f"📝 Описание: {request.description}\n"
-    details += f"⚡ Срочность: {request.urgency}\n"
+    # Add executor info if needed
+    if show_executor and active_role != "executor" and request.executor_id:
+        if db_session:
+            from uk_management_bot.database.models.user import User
+            executor = db_session.query(User).filter(User.id == request.executor_id).first()
+            if executor:
+                executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
+                if executor_name:
+                    message_text += f"{labels['executor']} {executor_name}\n"
 
-    details += f"🕐 Создана: {request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+    # Add media files count if present
+    if hasattr(request, 'media_files') and request.media_files:
+        try:
+            import json
+            media_files = json.loads(request.media_files) if isinstance(request.media_files, str) else request.media_files
+            media_count = len(media_files) if media_files else 0
+            if media_count > 0:
+                message_text += f"\n📎 {labels['media_count']} {media_count}\n"
+        except (json.JSONDecodeError, TypeError):
+            pass
 
-    if request.executor:
-        executor_name = request.executor.first_name or request.executor.username or "Не указан"
-        details += f"👤 Исполнитель: {executor_name}\n"
-
-    if request.completed_at:
-        details += f"✅ Завершена: {request.completed_at.strftime('%d.%m.%Y %H:%M')}\n"
-
-    return details
+    return message_text
 
 def validate_callback_request_number(callback_data: str, expected_prefix: str) -> Optional[str]:
     """

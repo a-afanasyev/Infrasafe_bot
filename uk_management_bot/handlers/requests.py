@@ -1402,28 +1402,20 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         if not has_access:
             await callback.answer(get_text("requests.no_access_to_request", language=lang), show_alert=True)
             return
-        
-        # Формируем детальную информацию о заявке
-        message_text = f"📋 Заявка #{request.request_number}\n\n"
-        message_text += f"Категория: {request.category}\n"
-        message_text += f"Статус: {request.status}\n"
-        message_text += f"Адрес: {request.address}\n"
-        message_text += f"Описание: {request.description}\n"
-        message_text += f"Срочность: {request.urgency}\n"
-        if request.apartment:
-            message_text += f"Квартира: {request.apartment}\n"
-        message_text += f"Создана: {request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-        if request.updated_at:
-            message_text += f"Обновлена: {request.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
 
-        # Добавляем информацию об исполнителе для заявителей
-        if active_role != "executor" and request.executor_id:
-            executor = db_session.query(User).filter(User.id == request.executor_id).first()
-            if executor:
-                executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
-                message_text += f"Исполнитель: {executor_name}\n"
+        # TASK 17 Issue #4: Use localized helper function for request details
+        # Replaces 18 lines of hard-coded Russian text with reusable helper
+        from uk_management_bot.utils.request_helpers import format_request_details
 
-        # Проверяем наличие медиа-файлов
+        message_text = format_request_details(
+            request=request,
+            language=lang,
+            show_executor=True,
+            active_role=active_role,
+            db_session=db_session
+        )
+
+        # Check media files for keyboard logic
         has_media = bool(request.media_files)
         media_count = 0
         if has_media:
@@ -1431,9 +1423,7 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 import json
                 media_files = json.loads(request.media_files) if isinstance(request.media_files, str) else request.media_files
                 media_count = len(media_files) if media_files else 0
-                if media_count > 0:
-                    message_text += f"\n📎 Медиа-файлов: {media_count}\n"
-                else:
+                if media_count == 0:
                     has_media = False
             except (json.JSONDecodeError, TypeError):
                 has_media = False
