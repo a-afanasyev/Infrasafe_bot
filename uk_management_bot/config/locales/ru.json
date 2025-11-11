@@ -5498,7 +5498,20 @@
     "reply_to_clarification": "Ответить на уточнение",
     "all_filter": "Все",
     "active_filter": "Активные",
-    "archive_filter": "Архив"
+    "archive_filter": "Архив",
+    "apartment_search_title": "🔍 Поиск квартиры",
+    "apartment_search_prompt": "Введите номер квартиры или часть адреса здания для поиска:",
+    "apartment_search_examples": "Например:\n• <code>42</code> - найдет все квартиры с номером 42\n• <code>Ленина</code> - найдет квартиры на улице Ленина\n• <code>15/2</code> - найдет квартиры в доме 15/2",
+    "search_query_too_short": "❌ Поисковый запрос слишком короткий. Попробуйте еще раз:",
+    "search_results_title": "🔍 Результаты поиска",
+    "search_query_label": "Запрос: '<b>{query}</b>'",
+    "search_found_count": "Найдено: {count}",
+    "search_no_results": "По запросу '<b>{query}</b>' ничего не найдено.",
+    "search_no_results_action": "Попробуйте изменить запрос или создайте новую квартиру.",
+    "search_select_apartment": "Выберите квартиру:",
+    "address_system_updated_title": "⚠️ Система адресов обновлена!",
+    "address_system_updated_message": "Теперь адрес выбирается из справочника квартир.\nПожалуйста, используйте кнопку '🏘️ Мои квартиры' в профиле для добавления адреса.",
+    "legacy_address_handler_warning": "Пользователь попал в устаревший обработчик ввода адреса"
   },
   "role": {
     "not_allowed": "Эта роль вам недоступна",

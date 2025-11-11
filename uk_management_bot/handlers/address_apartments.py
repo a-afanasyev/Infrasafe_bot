@@ -19,6 +19,8 @@ from aiogram.filters import StateFilter
 from uk_management_bot.database.session import get_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
+from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.keyboards.address_management import (
     get_apartments_list_keyboard,
     get_apartment_details_keyboard,
@@ -207,15 +209,19 @@ async def paginate_apartments_by_building(callback: CallbackQuery):
 @router.callback_query(F.data == "addr_apartment_search")
 async def start_apartment_search(callback: CallbackQuery, state: FSMContext):
     """Начать поиск квартиры"""
+    # TASK 17: Localize apartment search prompt
+    lang = await get_language_for_user(callback.from_user.id)
+
     await state.set_state(ApartmentManagementStates.waiting_for_apartment_search)
 
+    message_text = (
+        f"{get_text('requests.apartment_search_title', language=lang)}\n\n"
+        f"{get_text('requests.apartment_search_prompt', language=lang)}\n\n"
+        f"{get_text('requests.apartment_search_examples', language=lang)}"
+    )
+
     await callback.message.edit_text(
-        "🔍 <b>Поиск квартиры</b>\n\n"
-        "Введите номер квартиры или часть адреса здания для поиска:\n\n"
-        "Например:\n"
-        "• <code>42</code> - найдет все квартиры с номером 42\n"
-        "• <code>Ленина</code> - найдет квартиры на улице Ленина\n"
-        "• <code>15/2</code> - найдет квартиры в доме 15/2",
+        message_text,
         reply_markup=get_cancel_keyboard_inline()
     )
 
@@ -223,10 +229,14 @@ async def start_apartment_search(callback: CallbackQuery, state: FSMContext):
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_apartment_search))
 async def process_apartment_search(message: Message, state: FSMContext):
     """Обработка поискового запроса"""
+    # TASK 17: Localize search results
+    lang = await get_language_for_user(message.from_user.id)
     query = message.text.strip()
 
     if len(query) < 1:
-        await message.answer("❌ Поисковый запрос слишком короткий. Попробуйте еще раз:")
+        await message.answer(
+            get_text('requests.search_query_too_short', language=lang)
+        )
         return
 
     db = next(get_db())
@@ -234,19 +244,24 @@ async def process_apartment_search(message: Message, state: FSMContext):
         apartments = await AddressService.search_apartments(db, query, only_active=True)
 
         if not apartments:
+            no_results_text = (
+                f"{get_text('requests.search_results_title', language=lang)}\n\n"
+                f"{get_text('requests.search_no_results', language=lang, query=query)}\n\n"
+                f"{get_text('requests.search_no_results_action', language=lang)}"
+            )
             await message.answer(
-                f"🔍 <b>Результаты поиска</b>\n\n"
-                f"По запросу '<b>{query}</b>' ничего не найдено.\n\n"
-                f"Попробуйте изменить запрос или создайте новую квартиру.",
+                no_results_text,
                 reply_markup=get_apartments_list_keyboard([], page=0)
             )
             await state.clear()
             return
 
-        text = f"🔍 <b>Результаты поиска</b>\n\n" \
-               f"Запрос: '<b>{query}</b>'\n" \
-               f"Найдено: {len(apartments)}\n\n" \
-               f"Выберите квартиру:"
+        text = (
+            f"{get_text('requests.search_results_title', language=lang)}\n\n"
+            f"{get_text('requests.search_query_label', language=lang, query=query)}\n"
+            f"{get_text('requests.search_found_count', language=lang, count=len(apartments))}\n\n"
+            f"{get_text('requests.search_select_apartment', language=lang)}"
+        )
 
         await message.answer(
             text,

@@ -5498,7 +5498,20 @@
     "reply_to_clarification": "Tushuntirishga javob berish",
     "all_filter": "Hammasi",
     "active_filter": "Faol",
-    "archive_filter": "Arxiv"
+    "archive_filter": "Arxiv",
+    "apartment_search_title": "🔍 Xonadon qidirish",
+    "apartment_search_prompt": "Xonadon raqamini yoki bino manzilining bir qismini kiriting:",
+    "apartment_search_examples": "Masalan:\n• <code>42</code> - 42 raqamli barcha xonadonlarni topadi\n• <code>Lenin</code> - Lenin ko'chasidagi xonadonlarni topadi\n• <code>15/2</code> - 15/2 uydagi xonadonlarni topadi",
+    "search_query_too_short": "❌ Qidiruv so'rovi juda qisqa. Qayta urinib ko'ring:",
+    "search_results_title": "🔍 Qidiruv natijalari",
+    "search_query_label": "So'rov: '<b>{query}</b>'",
+    "search_found_count": "Topildi: {count}",
+    "search_no_results": "'<b>{query}</b>' so'rovi bo'yicha hech narsa topilmadi.",
+    "search_no_results_action": "So'rovni o'zgartirib ko'ring yoki yangi xonadon yarating.",
+    "search_select_apartment": "Xonadonni tanlang:",
+    "address_system_updated_title": "⚠️ Manzil tizimi yangilandi!",
+    "address_system_updated_message": "Endi manzil xonadonlar ma'lumotnomаsidan tanlanadi.\nIltimos, manzil qo'shish uchun profildagi '🏘️ Mening xonadonlarim' tugmasidan foydalaning.",
+    "legacy_address_handler_warning": "Foydalanuvchi eskirgan manzil kiritish ishlov beruvchisiga tushdi"
   },
   "role": {
     "not_allowed": "Bu rol siz uchun mavjud emas",

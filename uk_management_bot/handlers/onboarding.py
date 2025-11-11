@@ -10,6 +10,7 @@ from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.profile_service import ProfileService
 from uk_management_bot.services.user_verification_service import UserVerificationService
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.utils.validators import Validator
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role, get_main_keyboard
 from uk_management_bot.keyboards.onboarding import (
@@ -297,19 +298,28 @@ async def cancel_onboarding(message: Message, state: FSMContext, db: Session, us
 @router.message(F.text == "🏠 Указать адрес")
 async def start_address_input(message: Message, state: FSMContext, db: Session):
     """
-    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.
+    LEGACY HANDLER: Обработка устаревшего ручного ввода адреса
+
+    TASK 17: Локализованная версия - адреса управляются через систему квартир.
     """
-    lang = message.from_user.language_code or "ru"
+    lang = await get_language_for_user(message.from_user.id)
 
     await state.clear()
+
+    message_text = (
+        f"{get_text('requests.address_system_updated_title', language=lang)}\n\n"
+        f"{get_text('requests.address_system_updated_message', language=lang)}"
+    )
+
     await message.answer(
-        "⚠️ <b>Система адресов обновлена!</b>\n\n"
-        "Теперь адрес выбирается из справочника квартир.\n"
-        "Пожалуйста, используйте кнопку '🏘️ Мои квартиры' в профиле для добавления адреса.",
+        message_text,
         reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved")
     )
 
-    logger.warning(f"Пользователь {message.from_user.id} попал в устаревший обработчик ввода адреса")
+    logger.warning(
+        f"{get_text('requests.legacy_address_handler_warning', language=lang)} "
+        f"(user_id={message.from_user.id})"
+    )
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
