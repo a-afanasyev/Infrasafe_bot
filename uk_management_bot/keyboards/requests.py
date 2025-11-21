@@ -28,8 +28,105 @@ CATEGORY_KEYS = {
     "internet": "categories.internet",
 }
 
+# Расширенная карта категорий с legacy текстами для обратной совместимости
+# TASK 17 Этап A: Нормализация данных категорий
+CATEGORY_DEFINITIONS = {
+    "electricity": {
+        "locale_key": "categories.electricity",
+        "legacy_texts": ["Электрика"]
+    },
+    "plumbing": {
+        "locale_key": "categories.plumbing",
+        "legacy_texts": ["Сантехника"]
+    },
+    "heating": {
+        "locale_key": "categories.heating",
+        "legacy_texts": ["Отопление"]
+    },
+    "elevator": {
+        "locale_key": "categories.elevator",
+        "legacy_texts": ["Лифт"]
+    },
+    "cleaning": {
+        "locale_key": "categories.cleaning",
+        "legacy_texts": ["Уборка"]
+    },
+    "landscaping": {
+        "locale_key": "categories.landscaping",
+        "legacy_texts": ["Благоустройство"]
+    },
+    "security": {
+        "locale_key": "categories.security",
+        "legacy_texts": ["Безопасность"]
+    },
+    "internet": {
+        "locale_key": "categories.internet",
+        "legacy_texts": ["Интернет/ТВ", "Интернет"]
+    },
+}
+
 # List of internal category keys (for use in callbacks)
 CATEGORY_INTERNAL_KEYS = list(CATEGORY_KEYS.keys())
+
+
+# TASK 17 Этап A: Helper функции для работы с категориями
+
+def get_category_display(category_key: str, language: str = "ru") -> str:
+    """
+    Получить локализованное отображаемое название категории по внутреннему ключу.
+    
+    Args:
+        category_key: Внутренний ключ категории (например, "electricity", "plumbing")
+        language: Язык интерфейса (ru/uz)
+        
+    Returns:
+        Локализованное название категории или оригинальный ключ, если не найден
+        
+    Example:
+        get_category_display("electricity", "ru") -> "Электрика"
+        get_category_display("electricity", "uz") -> "Elektr"
+    """
+    if category_key in CATEGORY_DEFINITIONS:
+        locale_key = CATEGORY_DEFINITIONS[category_key]["locale_key"]
+        return get_text(locale_key, language=language)
+    
+    # Fallback: если ключ не найден, возвращаем оригинальный ключ
+    logger.warning(f"Unknown category key: {category_key}, returning as-is")
+    return category_key
+
+
+def resolve_category_key(raw_value: str) -> str:
+    """
+    Разрешить значение категории (legacy текст или внутренний ключ) в внутренний ключ.
+    
+    Используется для обратной совместимости со старыми данными в БД,
+    где категории могут храниться как русские строки.
+    
+    Args:
+        raw_value: Значение из БД (может быть внутренний ключ или legacy текст)
+        
+    Returns:
+        Внутренний ключ категории или оригинальное значение, если не найдено соответствие
+        
+    Example:
+        resolve_category_key("Электрика") -> "electricity"
+        resolve_category_key("electricity") -> "electricity"
+        resolve_category_key("unknown") -> "unknown" (с предупреждением в логах)
+    """
+    # Если это уже внутренний ключ, возвращаем как есть
+    if raw_value in CATEGORY_INTERNAL_KEYS:
+        return raw_value
+    
+    # Ищем в legacy текстах
+    for internal_key, definition in CATEGORY_DEFINITIONS.items():
+        if raw_value in definition.get("legacy_texts", []):
+            logger.info(f"Resolved legacy category '{raw_value}' to internal key '{internal_key}'")
+            return internal_key
+    
+    # Если не найдено, логируем предупреждение и возвращаем оригинал
+    logger.warning(f"Could not resolve category value '{raw_value}' to internal key, using as-is")
+    return raw_value
+
 
 # Urgency mapping: internal key -> locale key
 URGENCY_KEYS = {
@@ -41,6 +138,50 @@ URGENCY_KEYS = {
 
 # List of internal urgency keys (for use in callbacks)
 URGENCY_INTERNAL_KEYS = list(URGENCY_KEYS.keys())
+
+# TASK 17 Этап C: Status mapping - статусы заявок
+# Маппинг русских статусов (из БД) на ключи локализации
+STATUS_KEYS = {
+    "Новая": "requests.status_new",
+    "В работе": "requests.status_in_progress",
+    "Закуп": "requests.status_purchase",
+    "Уточнение": "requests.status_clarification",
+    "Выполнена": "requests.status_executed",
+    "Исполнено": "requests.status_completed",
+    "Принято": "requests.status_approved",
+    "Отменена": "requests.status_cancelled",
+}
+
+
+# TASK 17 Этап C: Helper функция для получения локализованного статуса
+def get_status_display(status: str, language: str = "ru") -> str:
+    """
+    Получить локализованное отображаемое название статуса заявки.
+    
+    Args:
+        status: Статус из БД (например, "Новая", "В работе")
+        language: Язык интерфейса (ru/uz)
+        
+    Returns:
+        Локализованное название статуса или оригинальный статус, если не найден
+        
+    Example:
+        get_status_display("Новая", "ru") -> "Новая"
+        get_status_display("Новая", "uz") -> "Yangi"
+    """
+    if status in STATUS_KEYS:
+        locale_key = STATUS_KEYS[status]
+        localized = get_text(locale_key, language=language)
+        # Если ключ не найден, get_text вернёт сам ключ - используем fallback
+        if localized == locale_key:
+            logger.warning(f"Locale key '{locale_key}' not found for status '{status}', using original")
+            return status
+        return localized
+    
+    # Fallback: если статус не найден в маппинге, возвращаем оригинал
+    logger.warning(f"Unknown status: {status}, returning as-is")
+    return status
+
 
 def get_localized_categories(language: str = "ru") -> list:
     """Get list of localized category names
@@ -325,30 +466,50 @@ def get_pagination_keyboard(current_page: int, total_pages: int, request_number:
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_request_actions_keyboard(request_number: str) -> InlineKeyboardMarkup:
-    """Клавиатура действий с заявкой"""
+def get_request_actions_keyboard(request_number: str, language: str = "ru") -> InlineKeyboardMarkup:
+    """
+    Клавиатура действий с заявкой
+    
+    TASK 17 Этап C: Локализованные кнопки действий
+    
+    Args:
+        request_number: Номер заявки
+        language: Язык интерфейса (ru/uz)
+    """
+    # TASK 17 Этап C: Локализованные тексты кнопок
+    view_text = get_text("buttons.view", language=language) or "👁️ Просмотр"
+    edit_text = get_text("buttons.edit", language=language) or "✏️ Редактировать"
+    accept_text = get_text("buttons.accept", language=language) or "🔧 В работу"
+    clarify_text = get_text("buttons.clarify", language=language) or "❓ Уточнение"
+    work_text = get_text("buttons.work", language=language) or "🔄 В работу"
+    purchase_text = get_text("buttons.purchase", language=language) or "💰 Закуп"
+    complete_text = get_text("buttons.complete", language=language) or "✅ Выполнена"
+    approve_text = get_text("buttons.approve", language=language) or "✅ Подтвердить"
+    cancel_text = get_text("buttons.cancel", language=language) or "❌ Отменить"
+    deny_text = get_text("buttons.deny", language=language) or "🚫 Предложить отказ"
+    
     keyboard = [
         [
-            InlineKeyboardButton(text="👁️ Просмотр", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
-            InlineKeyboardButton(text="✏️ Редактировать", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number))
+            InlineKeyboardButton(text=view_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
+            InlineKeyboardButton(text=edit_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number))
         ],
         [
-            InlineKeyboardButton(text="🔧 В работу", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("accept_", request_number)),
-            InlineKeyboardButton(text="❓ Уточнение", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("clarify_", request_number))
+            InlineKeyboardButton(text=accept_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("accept_", request_number)),
+            InlineKeyboardButton(text=clarify_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("clarify_", request_number))
         ],
         [
-            InlineKeyboardButton(text="🔄 В работу", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("work_", request_number)),
-            InlineKeyboardButton(text="💰 Закуп", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number))
+            InlineKeyboardButton(text=work_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("work_", request_number)),
+            InlineKeyboardButton(text=purchase_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number))
         ],
         [
-            InlineKeyboardButton(text="✅ Выполнена", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_", request_number)),
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("approve_", request_number))
+            InlineKeyboardButton(text=complete_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_", request_number)),
+            InlineKeyboardButton(text=approve_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("approve_", request_number))
         ],
         [
-            InlineKeyboardButton(text="❌ Отменить", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("cancel_", request_number))
+            InlineKeyboardButton(text=cancel_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("cancel_", request_number))
         ],
         [
-            InlineKeyboardButton(text="🚫 Предложить отказ", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("deny_", request_number))
+            InlineKeyboardButton(text=deny_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("deny_", request_number))
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -593,17 +754,33 @@ def get_status_filter_inline_keyboard(active_status: Optional[str] = None, langu
 
 
 def get_category_filter_inline_keyboard(active_category: Optional[str] = None, language: str = "ru") -> InlineKeyboardMarkup:
-    """Inline-клавиатура фильтра по категории."""
+    """
+    Inline-клавиатура фильтра по категории.
+    
+    TASK 17 Этап A: Использует внутренние ключи в callback_data и локализованные тексты в labels.
+    
+    Args:
+        active_category: Внутренний ключ активной категории (например, "electricity") или None
+        language: Язык интерфейса (ru/uz)
+        
+    Returns:
+        InlineKeyboardMarkup с локализованными кнопками категорий
+    """
     buttons = []
     all_label = get_text("requests.all_categories", language) or "Все категории"
     all_text = all_label if not active_category else f"• {all_label}"
     buttons.append([InlineKeyboardButton(text=all_text, callback_data="categoryfilter_all")])
 
     # Раскладываем категории по 2 в ряд
+    # TASK 17 Этап A: Используем внутренние ключи вместо REQUEST_CATEGORIES
     row: List[InlineKeyboardButton] = []
-    for idx, category in enumerate(REQUEST_CATEGORIES):
-        text = f"• {category}" if active_category == category else category
-        row.append(InlineKeyboardButton(text=text, callback_data=f"categoryfilter_{category}"))
+    for idx, internal_key in enumerate(CATEGORY_INTERNAL_KEYS):
+        # Получаем локализованное название категории
+        display_text = get_category_display(internal_key, language=language)
+        # Отмечаем активную категорию
+        text = f"• {display_text}" if active_category == internal_key else display_text
+        # Используем внутренний ключ в callback_data
+        row.append(InlineKeyboardButton(text=text, callback_data=f"categoryfilter_{internal_key}"))
         if (idx + 1) % 2 == 0:
             buttons.append(row)
             row = []

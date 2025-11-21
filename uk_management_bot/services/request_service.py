@@ -59,7 +59,13 @@ class RequestService:
         """
         try:
             # Валидация входных данных
-            if category not in REQUEST_CATEGORIES:
+            # TASK 17 Этап B: Валидация через внутренние ключи
+            from uk_management_bot.keyboards.requests import (
+                CATEGORY_INTERNAL_KEYS,
+                resolve_category_key
+            )
+            category_key = resolve_category_key(category)
+            if category_key not in CATEGORY_INTERNAL_KEYS:
                 raise ValueError(f"Неверная категория: {category}")
             
             if urgency not in REQUEST_URGENCIES:
@@ -569,10 +575,25 @@ class RequestService:
                 status_stats[status] = count
             
             # Статистика по категориям
+            # TASK 17 Этап B: Используем внутренние ключи и учитываем legacy тексты
+            from uk_management_bot.keyboards.requests import (
+                CATEGORY_INTERNAL_KEYS,
+                CATEGORY_DEFINITIONS
+            )
+            from sqlalchemy import or_
+            
             category_stats = {}
-            for category in REQUEST_CATEGORIES:
-                count = query.filter(Request.category == category).count()
-                category_stats[category] = count
+            for internal_key in CATEGORY_INTERNAL_KEYS:
+                # Создаём условие для поиска: внутренний ключ ИЛИ legacy тексты
+                legacy_texts = CATEGORY_DEFINITIONS[internal_key].get("legacy_texts", [])
+                conditions = [Request.category == internal_key]
+                for legacy_text in legacy_texts:
+                    conditions.append(Request.category == legacy_text)
+                
+                # Используем OR для поиска по внутреннему ключу или legacy текстам
+                count = query.filter(or_(*conditions)).count()
+                # Сохраняем статистику под внутренним ключом
+                category_stats[internal_key] = count
             
             # Статистика по срочности
             urgency_stats = {}

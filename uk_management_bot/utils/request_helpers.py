@@ -90,6 +90,7 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
     Форматирует детали заявки для отображения с полной локализацией
 
     TASK 17 Issue #4: Полностью локализованная версия с поддержкой всех языков.
+    TASK 17 Этап A: Использует resolve_category_key и get_category_display для нормализации категорий.
     Все метки используют get_text() для локализации.
 
     Args:
@@ -103,6 +104,7 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
         Детальная информация о заявке с локализованными метками
     """
     from uk_management_bot.utils.helpers import get_text
+    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 
     # Get localized labels
     labels = {
@@ -119,10 +121,18 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
         'media_count': get_text('requests.media_count_label', language=language),
     }
 
+    # TASK 17 Этап A: Разрешаем категорию из БД (может быть legacy текст) в внутренний ключ
+    category_key = resolve_category_key(request.category)
+    category_display = get_category_display(category_key, language=language)
+
+    # TASK 17 Этап C: Локализуем статус
+    from uk_management_bot.keyboards.requests import get_status_display
+    status_display = get_status_display(request.status, language=language)
+
     # Build message with localized labels
     message_text = f"📋 {labels['request']} #{request.request_number}\n\n"
-    message_text += f"{labels['category']} {request.category}\n"
-    message_text += f"{labels['status']} {request.status}\n"
+    message_text += f"{labels['category']} {category_display}\n"
+    message_text += f"{labels['status']} {status_display}\n"
     message_text += f"{labels['address']} {request.address}\n"
     message_text += f"{labels['description']} {request.description}\n"
     message_text += f"{labels['urgency']} {request.urgency}\n"
@@ -236,6 +246,7 @@ def format_request_list_item(
     Format a single request list item with localization
 
     TASK 17 Issue #5: Localized list item for all languages
+    TASK 17 Этап A: Использует resolve_category_key и get_category_display для нормализации категорий.
 
     Args:
         request: Request model instance
@@ -247,9 +258,18 @@ def format_request_list_item(
         Formatted list item text
     """
     from uk_management_bot.utils.helpers import get_text
+    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
+
+    # TASK 17 Этап A: Разрешаем категорию из БД в внутренний ключ и получаем локализованное отображение
+    category_key = resolve_category_key(request.category)
+    category_display = get_category_display(category_key, language=language)
+
+    # TASK 17 Этап C: Локализуем статус
+    from uk_management_bot.keyboards.requests import get_status_display
+    status_display = get_status_display(request.status, language=language)
 
     icon = get_status_icon(request.status)
-    item_text = f"{index}. {icon} #{request.request_number} - {request.category} - {request.status}\n"
+    item_text = f"{index}. {icon} #{request.request_number} - {category_display} - {status_display}\n"
 
     if show_details:
         # Get localized labels

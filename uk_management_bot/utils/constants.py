@@ -78,6 +78,14 @@ URGENCY_HIGH = "Срочная"
 URGENCY_CRITICAL = "Критическая"
 
 # Категории заявок
+# TASK 17 Этап B: DEPRECATED - больше не используется напрямую в фильтрах и валидации
+# Используйте CATEGORY_INTERNAL_KEYS из uk_management_bot.keyboards.requests
+# для работы с категориями. Для отображения используйте get_category_display().
+# Для обратной совместимости с legacy данными используйте resolve_category_key().
+#
+# Этот список оставлен только для обратной совместимости и будет удалён в будущем.
+# Вместо него используйте:
+#   from uk_management_bot.keyboards.requests import CATEGORY_INTERNAL_KEYS, get_category_display
 REQUEST_CATEGORIES = [
     "Электрика",
     "Сантехника",

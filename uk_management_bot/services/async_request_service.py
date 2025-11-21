@@ -261,9 +261,18 @@ class AsyncRequestService:
             ValueError: При неверных данных
         """
         try:
-            # Валидация входных данных
-            if category not in REQUEST_CATEGORIES:
-                raise ValueError(f"Неверная категория: {category}")
+            # TASK 17 Этап B: Валидация категории через внутренние ключи
+            from uk_management_bot.keyboards.requests import (
+                CATEGORY_INTERNAL_KEYS,
+                resolve_category_key
+            )
+            
+            # Разрешаем legacy тексты в внутренние ключи
+            category_key = resolve_category_key(category)
+            
+            # Проверяем, что это валидный внутренний ключ
+            if category_key not in CATEGORY_INTERNAL_KEYS:
+                raise ValueError(f"Неверная категория: {category} (разрешено в ключ: {category_key})")
 
             if urgency not in REQUEST_URGENCIES:
                 raise ValueError(f"Неверная срочность: {urgency}")
@@ -594,13 +603,28 @@ class AsyncRequestService:
                 status_stats[status] = result.scalar()
 
             # Статистика по категориям
+            # TASK 17 Этап B: Используем внутренние ключи и учитываем legacy тексты
+            from uk_management_bot.keyboards.requests import (
+                CATEGORY_INTERNAL_KEYS,
+                CATEGORY_DEFINITIONS
+            )
+            from sqlalchemy import or_
+            
             category_stats = {}
-            for category in REQUEST_CATEGORIES:
-                query = select(func.count()).select_from(Request).where(Request.category == category)
+            for internal_key in CATEGORY_INTERNAL_KEYS:
+                # Создаём условие для поиска: внутренний ключ ИЛИ legacy тексты
+                legacy_texts = CATEGORY_DEFINITIONS[internal_key].get("legacy_texts", [])
+                conditions = [Request.category == internal_key]
+                for legacy_text in legacy_texts:
+                    conditions.append(Request.category == legacy_text)
+                
+                # Используем OR для поиска по внутреннему ключу или legacy текстам
+                query = select(func.count()).select_from(Request).where(or_(*conditions))
                 if user_id:
                     query = query.where(Request.user_id == user_id)
                 result = await self.db.execute(query)
-                category_stats[category] = result.scalar()
+                # Сохраняем статистику под внутренним ключом
+                category_stats[internal_key] = result.scalar()
 
             # Статистика по срочности
             urgency_stats = {}

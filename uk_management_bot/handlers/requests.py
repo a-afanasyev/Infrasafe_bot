@@ -717,13 +717,13 @@ async def show_confirmation(message: Message, state: FSMContext):
     data = await state.get_data()
 
     # Get localized category name from internal key
-    from uk_management_bot.keyboards.requests import CATEGORY_KEYS
-    category_key = data.get('category')
-    if category_key in CATEGORY_KEYS:
-        category_display = get_text(CATEGORY_KEYS[category_key], language=lang)
-    else:
-        # Fallback for old format (localized text was saved directly)
-        category_display = category_key
+    # TASK 17 Этап A: Используем resolve_category_key для обратной совместимости
+    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
+    category_raw = data.get('category')
+    # Разрешаем legacy тексты в внутренние ключи
+    category_key = resolve_category_key(category_raw)
+    # Получаем локализованное отображение
+    category_display = get_category_display(category_key, language=lang)
 
     # Get localized urgency name from internal key
     from uk_management_bot.keyboards.requests import URGENCY_KEYS
@@ -1269,21 +1269,34 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
                 "Новая": "🆕",
             }
             return mapping.get(st, "")
+        # TASK 17 Этап A: Используем resolve_category_key и get_category_display для нормализации категорий
+        # TASK 17 Этап C: Локализуем статусы
+        from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_status_display
         for i, request in enumerate(page_requests, 1):
-            message_text += f"{i}. {_icon(request.status)} #{request.request_number} - {request.category} - {request.status}\n"
-            message_text += f"   Адрес: {request.address}\n"
-            message_text += f"   Создана: {request.created_at.strftime('%d.%m.%Y')}\n"
+            category_key = resolve_category_key(request.category)
+            category_display = get_category_display(category_key, language=lang)
+            status_display = get_status_display(request.status, language=lang)
+            message_text += f"{i}. {_icon(request.status)} #{request.request_number} - {category_display} - {status_display}\n"
+            # TASK 17 Этап C: Локализованные метки
+            address_label = get_text("requests.address_label", language=lang) or "Адрес"
+            created_label = get_text("requests.created_label", language=lang) or "Создана"
+            message_text += f"   {address_label}: {request.address}\n"
+            message_text += f"   {created_label}: {request.created_at.strftime('%d.%m.%Y')}\n"
             if request.status == "Отменена" and request.notes:
-                message_text += f"   Причина отказа: {request.notes}\n"
+                # TASK 17 Этап C: Локализованная метка
+                reason_label = get_text("requests.cancellation_reason_label", language=lang) or "Причина отказа"
+                message_text += f"   {reason_label}: {request.notes}\n"
             elif request.status == "Уточнение" and request.notes:
                 # Показываем последние сообщения из диалога уточнения
+                # TASK 17 Этап C: Локализованная метка
+                clarification_label = get_text("requests.clarification_label", language=lang) or "Уточнение"
                 notes_lines = request.notes.strip().split('\n')
                 last_messages = [line for line in notes_lines[-3:] if line.strip()]  # Последние 3 сообщения
                 if last_messages:
                     preview = '\n'.join(last_messages)
                     if len(preview) > 100:
                         preview = preview[:97] + '...'
-                    message_text += f"   Уточнение: {preview}\n"
+                    message_text += f"   {clarification_label}: {preview}\n"
             message_text += "\n"
         
         # Создаем комбинированную клавиатуру: фильтр + кнопки ответа (по каждой) + пагинация
@@ -1293,7 +1306,9 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         rows = list(filter_kb.inline_keyboard)
         for i, r in enumerate(page_requests, 1):
             if r.status == "Уточнение":
-                rows.append([InlineKeyboardButton(text=f"💬 Ответить по #{r.request_number}", callback_data=f"replyclarify_{r.request_number}")])
+                # TASK 17 Этап C: Локализованная кнопка ответа
+                reply_text = get_text("buttons.reply", language=lang) or "💬 Ответить"
+                rows.append([InlineKeyboardButton(text=f"{reply_text} по #{r.request_number}", callback_data=f"replyclarify_{r.request_number}")])
         pagination_kb = get_pagination_keyboard(current_page, total_pages, request_number=None, show_reply_clarify=False)
         rows += pagination_kb.inline_keyboard
         combined = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1433,40 +1448,53 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
 
         if active_role == "executor":
             # Для исполнителей: только действия по работе с заявкой
+            # TASK 17 Этап C: Локализованные кнопки
             if request.status == "В работе":
-                rows.append([InlineKeyboardButton(text="✅ Выполнена", callback_data=f"executor_complete_{request.request_number}")])
-                rows.append([InlineKeyboardButton(text="💰 Нужен закуп", callback_data=f"executor_purchase_{request.request_number}")])
+                complete_text = get_text("buttons.complete", language=lang) or "✅ Выполнена"
+                purchase_text = get_text("buttons.purchase", language=lang) or "💰 Нужен закуп"
+                rows.append([InlineKeyboardButton(text=complete_text, callback_data=f"executor_complete_{request.request_number}")])
+                rows.append([InlineKeyboardButton(text=purchase_text, callback_data=f"executor_purchase_{request.request_number}")])
             elif request.status == "Закуп":
-                rows.append([InlineKeyboardButton(text="🔄 Вернуть в работу", callback_data=f"executor_work_{request.request_number}")])
+                back_to_work_text = get_text("buttons.back_to_work", language=lang) or "🔄 Вернуть в работу"
+                rows.append([InlineKeyboardButton(text=back_to_work_text, callback_data=f"executor_work_{request.request_number}")])
             elif request.status == "Уточнение":
-                rows.append([InlineKeyboardButton(text="🔄 Вернуть в работу", callback_data=f"executor_work_{request.request_number}")])
+                back_to_work_text = get_text("buttons.back_to_work", language=lang) or "🔄 Вернуть в работу"
+                rows.append([InlineKeyboardButton(text=back_to_work_text, callback_data=f"executor_work_{request.request_number}")])
             elif request.status in ["Выполнена", "Исполнено", "Принято"]:
                 # Заявка завершена - только просмотр
                 pass
 
             # Кнопка просмотра медиа (если есть)
+            # TASK 17 Этап C: Локализованная кнопка
             if has_media:
-                rows.append([InlineKeyboardButton(text="📎 Просмотр медиа", callback_data=f"executor_view_media_{request.request_number}")])
+                view_media_text = get_text("buttons.view_media", language=lang) or "📎 Просмотр медиа"
+                rows.append([InlineKeyboardButton(text=view_media_text, callback_data=f"executor_view_media_{request.request_number}")])
         elif active_role in ["admin", "manager"]:
             # Для менеджеров/админов: полная клавиатура управления
+            # TASK 17 Этап C: Передаём язык для локализации кнопок
             from uk_management_bot.keyboards.requests import get_request_actions_keyboard
-            actions_kb = get_request_actions_keyboard(request.request_number)
+            actions_kb = get_request_actions_keyboard(request.request_number, language=lang)
             rows = list(actions_kb.inline_keyboard)
         else:
             # Для заявителей: ограниченная клавиатура (только просмотр и ответ на уточнения)
+            # TASK 17 Этап C: Локализованные кнопки
             if request.status == "Уточнение":
                 # Если требуется уточнение - кнопка ответа
-                rows.append([InlineKeyboardButton(text="💬 Ответить", callback_data=f"replyclarify_{request.request_number}")])
+                reply_text = get_text("buttons.reply", language=lang) or "💬 Ответить"
+                rows.append([InlineKeyboardButton(text=reply_text, callback_data=f"replyclarify_{request.request_number}")])
             # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
 
             # Кнопка просмотра медиа (если есть)
             if has_media:
-                rows.append([InlineKeyboardButton(text="📎 Просмотр медиа", callback_data=f"view_request_media_{request.request_number}")])
+                view_media_text = get_text("buttons.view_media", language=lang) or "📎 Просмотр медиа"
+                rows.append([InlineKeyboardButton(text=view_media_text, callback_data=f"view_request_media_{request.request_number}")])
 
         # Добавляем кнопку "Назад к списку"
+        # TASK 17 Этап C: Локализованная кнопка
         data = await state.get_data()
         current_page = int(data.get("my_requests_page", 1))
-        rows.append([InlineKeyboardButton(text="🔙 Назад к списку", callback_data=f"back_list_{current_page}")])
+        back_to_list_text = get_text("buttons.back_to_list", language=lang) or "🔙 Назад к списку"
+        rows.append([InlineKeyboardButton(text=back_to_list_text, callback_data=f"back_list_{current_page}")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
         await callback.message.edit_text(message_text, reply_markup=keyboard)
@@ -1664,9 +1692,13 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
                 )
         else:
             # Кнопки для исполнителей
+            # TASK 17 Этап A: Используем resolve_category_key и get_category_display для нормализации категорий
+            from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
             for req in requests:
                 icon = get_status_icon(req.status)
-                button_text = f"{icon} #{req.request_number} - {req.category}"
+                category_key = resolve_category_key(req.category)
+                category_display = get_category_display(category_key, language=lang)
+                button_text = f"{icon} #{req.request_number} - {category_display}"
                 builder.button(text=button_text, callback_data=f"view_request_{req.request_number}")
 
             builder.adjust(1)  # По одной кнопке в ряд
@@ -2466,12 +2498,24 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                 address = request.address
                 if len(address) > 60:
                     address = address[:60] + "…"
-                message_text += f"{i}. {_icon(request.status)} #{request.request_number} - {request.category} - {request.status}\n"
-                message_text += f"   Адрес: {address}\n"
-                message_text += f"   Создана: {request.created_at.strftime('%d.%m.%Y')}\n"
+                # TASK 17 Этап A и C: Локализуем категорию и статус
+                from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_status_display
+                category_key = resolve_category_key(request.category)
+                category_display = get_category_display(category_key, language=lang)
+                status_display = get_status_display(request.status, language=lang)
+                message_text += f"{i}. {_icon(request.status)} #{request.request_number} - {category_display} - {status_display}\n"
+                # TASK 17 Этап C: Локализованные метки
+                address_label = get_text("requests.address_label", language=lang) or "Адрес"
+                created_label = get_text("requests.created_label", language=lang) or "Создана"
+                message_text += f"   {address_label}: {address}\n"
+                message_text += f"   {created_label}: {request.created_at.strftime('%d.%m.%Y')}\n"
                 if choice == "archive" and request.status == "Отменена" and request.notes:
-                    message_text += f"   Причина отказа: {request.notes}\n"
+                    # TASK 17 Этап C: Локализованная метка
+                    reason_label = get_text("requests.cancellation_reason_label", language=lang) or "Причина отказа"
+                    message_text += f"   {reason_label}: {request.notes}\n"
                 elif request.status == "Уточнение" and request.notes:
+                    # TASK 17 Этап C: Локализованная метка
+                    clarification_label = get_text("requests.clarification_label", language=lang) or "Уточнение"
                     # Показываем последние сообщения из диалога уточнения
                     notes_lines = request.notes.strip().split('\n')
                     last_messages = [line for line in notes_lines[-3:] if line.strip()]  # Последние 3 сообщения
@@ -2479,7 +2523,7 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                         preview = '\n'.join(last_messages)
                         if len(preview) > 100:
                             preview = preview[:97] + '...'
-                        message_text += f"   Уточнение: {preview}\n"
+                        message_text += f"   {clarification_label}: {preview}\n"
                 message_text += "\n"
 
         from uk_management_bot.keyboards.requests import get_pagination_keyboard
@@ -2516,12 +2560,18 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
 @router.callback_query(F.data.startswith("categoryfilter_"))
 async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
-    """Обработка выбора фильтра категории"""
+    """
+    Обработка выбора фильтра категории
+    
+    TASK 17 Этап A: Теперь работает с внутренними ключами категорий вместо русских текстов.
+    """
     try:
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
 
+        # TASK 17 Этап A: Извлекаем внутренний ключ категории (или "all")
         choice = callback.data.replace("categoryfilter_", "")
+        # choice теперь содержит внутренний ключ (например, "electricity") или "all"
         await state.update_data(my_requests_category=choice, my_requests_page=1)
         fake_message = callback.message
         fake_message.from_user = callback.from_user

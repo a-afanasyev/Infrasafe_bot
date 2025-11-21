@@ -61,15 +61,73 @@ class Validator:
         return True, "Номер квартиры корректен"
     
     @staticmethod
-    def validate_category(category: str) -> Tuple[bool, str]:
-        """Валидация категории заявки"""
+    def validate_category(category: str, language: str = "ru") -> Tuple[bool, str]:
+        """
+        Валидация категории заявки
+        
+        TASK 17 Этап B: Работает с внутренними ключами категорий вместо русских текстов.
+        Поддерживает обратную совместимость с legacy данными через resolve_category_key.
+        
+        Args:
+            category: Внутренний ключ категории или legacy текст
+            language: Язык для сообщений об ошибках (ru/uz)
+            
+        Returns:
+            Tuple[bool, str]: (валидна ли категория, сообщение)
+        """
+        from uk_management_bot.utils.helpers import get_text
+        from uk_management_bot.keyboards.requests import (
+            CATEGORY_INTERNAL_KEYS,
+            resolve_category_key,
+            get_category_display
+        )
+        
         if not category:
-            return False, "Категория не может быть пустой"
+            error_msg = get_text("errors.category_empty", language=language)
+            if error_msg == "errors.category_empty":  # Fallback если ключ не найден
+                error_msg = "Категория не может быть пустой"
+            return False, error_msg
         
-        if category not in REQUEST_CATEGORIES:
-            return False, f"Неверная категория. Доступные категории: {', '.join(REQUEST_CATEGORIES)}"
+        # TASK 17 Этап B: Разрешаем legacy тексты в внутренние ключи
+        category_key = resolve_category_key(category)
         
-        return True, "Категория корректна"
+        # Проверяем, что это валидный внутренний ключ
+        if category_key not in CATEGORY_INTERNAL_KEYS:
+            # Получаем список доступных категорий на языке пользователя
+            available_categories = [
+                get_category_display(key, language=language)
+                for key in CATEGORY_INTERNAL_KEYS
+            ]
+            categories_list = ", ".join(available_categories)
+            
+            error_msg = get_text("errors.invalid_category", language=language)
+            if error_msg == "errors.invalid_category":  # Fallback если ключ не найден
+                error_msg = f"Неверная категория. Доступные категории: {categories_list}"
+            else:
+                # Подставляем список категорий в сообщение, если есть placeholder
+                # TASK 17 Fix: Безопасная подстановка с обработкой KeyError
+                # Если в locale файле есть другие плейсхолдеры, используем fallback
+                try:
+                    error_msg = error_msg.format(categories=categories_list)
+                except (KeyError, ValueError) as e:
+                    # Если формат строки содержит другие плейсхолдеры или неверный формат,
+                    # используем простую конкатенацию как fallback
+                    # TASK 17 Fix: Импортируем logger для логирования ошибки
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Error formatting invalid_category message: {e}. "
+                        f"Using fallback format. Original message: {error_msg}"
+                    )
+                    error_msg = f"{error_msg} Доступные категории: {categories_list}"
+            
+            return False, error_msg
+        
+        success_msg = get_text("validation.category_valid", language=language)
+        if success_msg == "validation.category_valid":  # Fallback
+            success_msg = "Категория корректна"
+        
+        return True, success_msg
     
     @staticmethod
     def validate_status(status: str) -> Tuple[bool, str]:
@@ -175,7 +233,9 @@ class Validator:
                 return False, f"Поле '{field}' обязательно для заполнения"
         
         # Проверяем категорию
-        is_valid, message = Validator.validate_category(data['category'])
+        # TASK 17 Этап B: Передаём язык для локализованных сообщений об ошибках
+        # По умолчанию используем русский, так как validate_request_data не имеет параметра language
+        is_valid, message = Validator.validate_category(data['category'], language="ru")
         if not is_valid:
             return False, message
 
