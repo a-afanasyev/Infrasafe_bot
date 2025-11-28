@@ -50,7 +50,8 @@ async def start_shift(message: Message, db=None, roles: list[str] = None, active
             try:
                 await message.answer(get_text("auth.pending", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
             except Exception:
-                await message.answer("⏳ Ожидайте одобрения администратора.", reply_markup=get_shifts_main_keyboard(language=lang))
+                from uk_management_bot.utils.safe_localization import safe_get_text
+                await message.answer(safe_get_text("shifts.awaiting_admin_approval", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
             return
         
         service = ShiftService(db)
@@ -287,7 +288,9 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
 
     except Exception as e:
         logger.error(f"Ошибка показа деталей смены: {e}")
-        await message.answer("❌ Произошла ошибка")
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = message.from_user.language_code or "ru"
+        await message.answer(safe_get_text("errors.unknown_error", language=lang))
 
 
 @router.callback_query(F.data.startswith("end_shift_select:"))
@@ -575,9 +578,13 @@ async def manager_active_shifts(message: Message, state: FSMContext):
     service = ShiftService(db)
     shifts = service.list_shifts(status="active")
     if not shifts:
-        await message.answer("Нет активных смен")
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = message.from_user.language_code or "ru"
+        await message.answer(safe_get_text("shifts.no_active_shifts", language=lang))
         return
-    lines = ["Активные смены:"]
+    from uk_management_bot.utils.safe_localization import safe_get_text
+    lang = message.from_user.language_code or "ru"
+    lines = [safe_get_text("shifts.active_shifts_list", language=lang, default="Активные смены:")]
     for s in shifts[:10]:
         lines.append(f"- user_id={s.user_id} с {s.start_time.strftime('%d.%m.%Y %H:%M')}")
     await message.answer("\n".join(lines))

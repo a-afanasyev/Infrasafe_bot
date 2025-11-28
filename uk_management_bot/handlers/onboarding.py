@@ -173,7 +173,8 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
     
     # Валидируем телефон
     phone_number = message.text.strip()
-    is_valid, error_message = Validator.validate_phone(phone_number)
+    lang = message.from_user.language_code or "ru"
+    is_valid, error_message = Validator.validate_phone(phone_number, language=lang)
     if not is_valid:
         await message.answer(get_text("onboarding.phone_invalid", language=lang))
         return

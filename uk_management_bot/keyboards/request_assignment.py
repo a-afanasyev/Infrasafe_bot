@@ -36,7 +36,7 @@ def get_request_assignment_keyboard(request_number: str, language: str = "ru") -
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("buttons.cancel", language=language),
                 callback_data="cancel_assignment"
             )
         ]

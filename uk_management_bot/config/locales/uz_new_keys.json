@@ -1,0 +1,39 @@
+{
+  "errors": {
+    "search_error": "❌ Qidirishda xatolik. Qaytadan urinib ko'ring.",
+    "apartment_not_found": "❌ Xatolik: kvartira topilmadi",
+    "building_not_found": "❌ Xatolik: bino topilmadi. Qaytadan boshlang.",
+    "request_not_found": "Ariza topilmadi",
+    "user_not_found": "Foydalanuvchi topilmadi",
+    "unknown_error": "❌ Xatolik yuz berdi",
+    "name_empty": "❌ Ism bo'sh bo'lishi mumkin emas",
+    "last_name_empty": "❌ Familiya bo'sh bo'lishi mumkin emas",
+    "cancelled": "Bekor qilindi.",
+    "error_occurred": "Xatolik yuz berdi"
+  },
+  "admin": {
+    "assigned_successfully": "✅ **Muvaffaqiyatli!**\n\nSiz tizim administratori etib tayinlandingiz.\nEndi sizda arizalarni va foydalanuvchilarni boshqarish uchun menejer huquqlari bor.",
+    "assignment_failed": "❌ **Xatolik!**\n\nAdministrator paroli noto'g'ri.\nQaytadan urinib ko'ring yoki ishlab chiquvchiga murojaat qiling."
+  },
+  "shifts": {
+    "no_active_shifts": "Faol smenalar yo'q",
+    "registration_pending": "⏳ Sizning ro'yxatdan o'tish arizangiz ko'rib chiqilmoqda.",
+    "awaiting_admin_approval": "⏳ Administrator tasdig'ini kutish."
+  },
+  "apartment": {
+    "details_title": "🏠 Kvartira {number}",
+    "address_label": "Manzil:",
+    "yard_label": "Hovli:",
+    "status_label": "Holati:",
+    "active_status": "✅ Faol",
+    "inactive_status": "❌ Faol emas",
+    "entrance_label": "Kirish:",
+    "floor_label": "Qavat:",
+    "rooms_label": "Xonalar:",
+    "area_label": "Maydon:",
+    "residents_label": "Aholisi (tasdiqlangan):",
+    "pending_requests_label": "Ko'rib chiqilayotgan arizalar:",
+    "description_label": "Tavsif:",
+    "created_label": "Yaratilgan:"
+  }
+}

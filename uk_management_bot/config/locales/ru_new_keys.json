@@ -1,0 +1,39 @@
+{
+  "errors": {
+    "search_error": "❌ Ошибка поиска. Попробуйте еще раз.",
+    "apartment_not_found": "❌ Ошибка: квартира не найдена",
+    "building_not_found": "❌ Ошибка: здание не найдено. Начните заново.",
+    "request_not_found": "Заявка не найдена",
+    "user_not_found": "Пользователь не найден",
+    "unknown_error": "❌ Произошла ошибка",
+    "name_empty": "❌ Имя не может быть пустым",
+    "last_name_empty": "❌ Фамилия не может быть пустой",
+    "cancelled": "Отменено.",
+    "error_occurred": "Произошла ошибка"
+  },
+  "admin": {
+    "assigned_successfully": "✅ **Успешно!**\n\nВы назначены администратором системы.\nТеперь у вас есть права менеджера для управления заявками и пользователями.",
+    "assignment_failed": "❌ **Ошибка!**\n\nНеверный пароль администратора.\nПопробуйте еще раз или обратитесь к разработчику."
+  },
+  "shifts": {
+    "no_active_shifts": "Нет активных смен",
+    "registration_pending": "⏳ Ваша заявка на регистрацию находится на рассмотрении.",
+    "awaiting_admin_approval": "⏳ Ожидайте одобрения администратора."
+  },
+  "apartment": {
+    "details_title": "🏠 Квартира {number}",
+    "address_label": "Адрес:",
+    "yard_label": "Двор:",
+    "status_label": "Статус:",
+    "active_status": "✅ Активна",
+    "inactive_status": "❌ Неактивна",
+    "entrance_label": "Подъезд:",
+    "floor_label": "Этаж:",
+    "rooms_label": "Комнат:",
+    "area_label": "Площадь:",
+    "residents_label": "Жителей (подтвержденных):",
+    "pending_requests_label": "Заявок на рассмотрении:",
+    "description_label": "Описание:",
+    "created_label": "Создана:"
+  }
+}

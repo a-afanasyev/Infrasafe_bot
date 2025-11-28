@@ -609,11 +609,13 @@ async def cmd_admin(message: Message, state: FSMContext):
 @router.message(AdminPasswordStates.waiting_for_password)
 async def process_admin_password(message: Message, state: FSMContext, db: Session, user_status: str = None):
     """Обработка введенного пароля администратора"""
+    from uk_management_bot.utils.safe_localization import safe_get_text
     auth_service = AuthService(db)
+    lang = message.from_user.language_code or "ru"
     
     if message.text == "❌ Отмена":
         await state.clear()
-        await message.answer("Отменено.", reply_markup=get_user_contextual_keyboard(message.from_user.id))
+        await message.answer(safe_get_text("errors.cancelled", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
     
     # Проверяем пароль и назначаем администратора
@@ -651,17 +653,13 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
             active_role = "applicant"
 
         await message.answer(
-            "✅ **Успешно!**\n\n"
-            "Вы назначены администратором системы.\n"
-            "Теперь у вас есть права менеджера для управления заявками и пользователями.",
+            safe_get_text("admin.assigned_successfully", language=lang),
             reply_markup=get_main_keyboard_for_role(active_role, roles_list, "approved")
         )
         logger.info(f"Пользователь {message.from_user.id} назначен администратором")
     else:
         await message.answer(
-            "❌ **Ошибка!**\n\n"
-            "Неверный пароль администратора.\n"
-            "Попробуйте еще раз или обратитесь к разработчику.",
+            safe_get_text("admin.assignment_failed", language=lang),
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         logger.warning(f"Неверная попытка назначения администратора от {message.from_user.id}")

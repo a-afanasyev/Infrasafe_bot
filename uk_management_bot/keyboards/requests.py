@@ -139,6 +139,37 @@ URGENCY_KEYS = {
 # List of internal urgency keys (for use in callbacks)
 URGENCY_INTERNAL_KEYS = list(URGENCY_KEYS.keys())
 
+
+# TASK 17: Helper функция для получения локализованного названия срочности
+def get_urgency_display(urgency_key: str, language: str = "ru") -> str:
+    """
+    Получить локализованное отображаемое название срочности по внутреннему ключу.
+    
+    Args:
+        urgency_key: Внутренний ключ срочности (low, medium, high, critical)
+        language: Язык интерфейса (ru/uz)
+        
+    Returns:
+        Локализованное название срочности или оригинальный ключ, если не найден
+        
+    Example:
+        get_urgency_display("low", "ru") -> "Обычная"
+        get_urgency_display("low", "uz") -> "Oddiy"
+    """
+    if urgency_key in URGENCY_KEYS:
+        locale_key = URGENCY_KEYS[urgency_key]
+        localized = get_text(locale_key, language=language)
+        # Если ключ не найден, get_text вернёт сам ключ - используем fallback
+        if localized == locale_key:
+            logger.warning(f"Locale key '{locale_key}' not found for urgency '{urgency_key}', using original")
+            return urgency_key
+        return localized
+    
+    # Fallback: если ключ не найден, возвращаем оригинальный ключ
+    logger.warning(f"Unknown urgency key: {urgency_key}, returning as-is")
+    return urgency_key
+
+
 # TASK 17 Этап C: Status mapping - статусы заявок
 # Маппинг русских статусов (из БД) на ключи локализации
 STATUS_KEYS = {

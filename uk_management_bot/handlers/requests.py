@@ -132,11 +132,13 @@ async def _deny_if_pending_message(message: Message, user_status: Optional[str])
     Возвращает True, если обработку нужно прервать.
     """
     if user_status == "pending":
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = message.from_user.language_code or "ru"
         try:
             lang = await _get_user_language(message=message)
             await message.answer(get_text("auth.pending", language=lang))
         except Exception:
-            await message.answer("⏳ Ваша заявка на регистрацию находится на рассмотрении.")
+            await message.answer(safe_get_text("shifts.registration_pending", language=lang))
         return True
     return False
 
@@ -146,11 +148,13 @@ async def _deny_if_pending_callback(callback: CallbackQuery, user_status: Option
     Возвращает True, если обработку нужно прервать.
     """
     if user_status == "pending":
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = callback.from_user.language_code or "ru"
         try:
             lang = await _get_user_language(callback=callback)
             await callback.answer(get_text("auth.pending", language=lang), show_alert=True)
         except Exception:
-            await callback.answer("⏳ Ожидайте одобрения администратора.", show_alert=True)
+            await callback.answer(safe_get_text("shifts.awaiting_admin_approval", language=lang), show_alert=True)
         return True
     return False
 
@@ -622,7 +626,7 @@ async def process_description(message: Message, state: FSMContext):
 
     # Валидируем описание с помощью валидатора
     from uk_management_bot.utils.validators import Validator
-    is_valid, error_message = Validator.validate_description(message.text)
+    is_valid, error_message = Validator.validate_description(message.text, language=lang)
     if not is_valid:
         await message.answer(error_message)
         return

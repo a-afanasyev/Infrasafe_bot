@@ -42,7 +42,9 @@ async def handle_status_change_start(callback: CallbackQuery, state: FSMContext,
         # Проверяем существование заявки
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(safe_get_text("errors.request_not_found", language=lang), show_alert=True)
             return
         
         # Проверяем права доступа
@@ -575,7 +577,7 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
         # Показываем подтверждение
         lang = get_language_from_event(callback, db)
         success_text = get_text("status_management.work_completed", language=lang).format(
-            request_id=request_id
+            request_id=request_number
         )
         
         await message.answer(success_text)

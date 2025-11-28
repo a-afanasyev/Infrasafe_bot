@@ -39,7 +39,9 @@ async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Ses
         # Проверяем существование заявки
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(safe_get_text("errors.request_not_found", language=lang), show_alert=True)
             return
         
         # Проверяем права доступа
@@ -47,7 +49,9 @@ async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Ses
         user = db.query(User).filter(User.id == user_id).first()
         
         if not user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(safe_get_text("errors.user_not_found", language=lang), show_alert=True)
             return
         
         # Проверяем, что пользователь имеет отношение к заявке

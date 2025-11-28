@@ -322,7 +322,8 @@ async def handle_first_name_input(message: Message, state: FSMContext, db: Sessi
         first_name = message.text.strip()
         
         if not first_name:
-            await message.answer("❌ Имя не может быть пустым")
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            await message.answer(safe_get_text("errors.name_empty", language=lang))
             return
         
         # Обновляем имя в базе данных
@@ -362,7 +363,9 @@ async def handle_edit_last_name(callback: CallbackQuery, state: FSMContext, db: 
         
     except Exception as e:
         logger.error(f"Ошибка редактирования фамилии: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(safe_get_text("errors.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ProfileEditingStates.waiting_for_last_name)
@@ -373,7 +376,8 @@ async def handle_last_name_input(message: Message, state: FSMContext, db: Sessio
         last_name = message.text.strip()
         
         if not last_name:
-            await message.answer("❌ Фамилия не может быть пустой")
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            await message.answer(safe_get_text("errors.last_name_empty", language=lang))
             return
         
         # Обновляем фамилию в базе данных

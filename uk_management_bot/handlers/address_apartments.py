@@ -272,7 +272,9 @@ async def process_apartment_search(message: Message, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при поиске квартир: {e}")
-        await message.answer("❌ Ошибка поиска. Попробуйте еще раз.")
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = message.from_user.language_code or "ru"
+        await message.answer(safe_get_text("errors.search_error", language=lang))
     finally:
         db.close()
 
@@ -291,41 +293,47 @@ async def show_apartment_details(callback: CallbackQuery):
         apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
 
         if not apartment:
-            await callback.answer("❌ Квартира не найдена", show_alert=True)
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(safe_get_text("errors.apartment_not_found", language=lang), show_alert=True)
             return
 
-        status = "✅ Активна" if apartment.is_active else "❌ Неактивна"
+        # Получаем локализованные метки
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = callback.from_user.language_code or "ru"
+        
+        status_text = safe_get_text("apartment.active_status", language=lang) if apartment.is_active else safe_get_text("apartment.inactive_status", language=lang)
         residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
         pending_count = apartment.pending_requests_count if hasattr(apartment, 'pending_requests_count') else 0
 
-        text = f"🏠 <b>Квартира {apartment.apartment_number}</b>\n\n"
+        text = f"🏠 <b>{safe_get_text('apartment.details_title', language=lang).format(number=apartment.apartment_number)}</b>\n\n"
 
         if apartment.building:
-            text += f"<b>Адрес:</b> {apartment.building.address}\n"
+            text += f"<b>{safe_get_text('apartment.address_label', language=lang)}</b> {apartment.building.address}\n"
             if apartment.building.yard:
-                text += f"<b>Двор:</b> {apartment.building.yard.name}\n"
+                text += f"<b>{safe_get_text('apartment.yard_label', language=lang)}</b> {apartment.building.yard.name}\n"
 
-        text += f"<b>Статус:</b> {status}\n\n"
+        text += f"<b>{safe_get_text('apartment.status_label', language=lang)}</b> {status_text}\n\n"
 
         if apartment.entrance:
-            text += f"<b>Подъезд:</b> {apartment.entrance}\n"
+            text += f"<b>{safe_get_text('apartment.entrance_label', language=lang)}</b> {apartment.entrance}\n"
         if apartment.floor:
-            text += f"<b>Этаж:</b> {apartment.floor}\n"
+            text += f"<b>{safe_get_text('apartment.floor_label', language=lang)}</b> {apartment.floor}\n"
         if apartment.rooms_count:
-            text += f"<b>Комнат:</b> {apartment.rooms_count}\n"
+            text += f"<b>{safe_get_text('apartment.rooms_label', language=lang)}</b> {apartment.rooms_count}\n"
         if apartment.area:
-            text += f"<b>Площадь:</b> {apartment.area} м²\n"
+            text += f"<b>{safe_get_text('apartment.area_label', language=lang)}</b> {apartment.area} м²\n"
 
-        text += f"\n<b>Жителей (подтвержденных):</b> {residents_count}\n"
+        text += f"\n<b>{safe_get_text('apartment.residents_label', language=lang)}</b> {residents_count}\n"
 
         if pending_count > 0:
-            text += f"<b>Заявок на рассмотрении:</b> {pending_count}\n"
+            text += f"<b>{safe_get_text('apartment.pending_requests_label', language=lang)}</b> {pending_count}\n"
 
         if apartment.description:
-            text += f"\n<b>Описание:</b>\n{apartment.description}\n"
+            text += f"\n<b>{safe_get_text('apartment.description_label', language=lang)}</b>\n{apartment.description}\n"
 
         if apartment.created_at:
-            text += f"\n<b>Создана:</b> {apartment.created_at.strftime('%d.%m.%Y %H:%M')}"
+            text += f"\n<b>{safe_get_text('apartment.created_label', language=lang)}</b> {apartment.created_at.strftime('%d.%m.%Y %H:%M')}"
 
         await callback.message.edit_text(
             text,
@@ -860,7 +868,9 @@ async def process_new_apartment_area(message: Message, state: FSMContext):
     apartment_id = data.get('editing_apartment_id')
 
     if not apartment_id:
-        await message.answer("❌ Ошибка: квартира не найдена")
+        from uk_management_bot.utils.safe_localization import safe_get_text
+        lang = message.from_user.language_code or "ru"
+        await message.answer(safe_get_text("errors.apartment_not_found", language=lang))
         await state.clear()
         return
 
