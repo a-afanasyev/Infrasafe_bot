@@ -6432,5 +6432,15 @@
   "user_by_telegram_id": {},
   "added_statuses": {},
   "removed_status": {},
-  "status_transitions": {}
+  "status_transitions": {},
+  "statuses": {
+    "new": "Yangi",
+    "in_progress": "Ishda",
+    "purchase": "Xarid",
+    "clarification": "Aniqlashtirish",
+    "executed": "Bajarildi",
+    "completed": "Ijro etildi",
+    "approved": "Qabul qilindi",
+    "cancelled": "Bekor qilindi"
+  }
 }

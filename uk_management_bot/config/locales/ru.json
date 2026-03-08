@@ -6464,5 +6464,15 @@
     ],
     "Принято": [],
     "Отменена": []
+  },
+  "statuses": {
+    "new": "Новая",
+    "in_progress": "В работе",
+    "purchase": "Закуп",
+    "clarification": "Уточнение",
+    "executed": "Выполнена",
+    "completed": "Исполнено",
+    "approved": "Принято",
+    "cancelled": "Отменена"
   }
 }
