@@ -941,7 +941,8 @@
     "media": "📎 Медиа",
     "phone_required": "📱 Указать телефон",
     "upload_documents": "📄 Загрузить документы",
-    "complete_without_docs": "✅ Завершить без документов"
+    "complete_without_docs": "✅ Завершить без документов",
+    "back_arrow": "⬅️ Назад"
   },
   "cancel": "Действие отменено.",
   "categories": {
@@ -1026,7 +1027,21 @@
     "stats": "Статистика",
     "stats_title": "Статистика сотрудников",
     "status": "Статус",
-    "unblock": "Разблокировать"
+    "unblock": "Разблокировать",
+    "keyboards": {
+      "role_executor": "Исполнитель",
+      "role_manager": "Менеджер",
+      "role_applicant": "Заявитель",
+      "spec_plumber": "Сантехник",
+      "spec_electrician": "Электрик",
+      "spec_hvac": "HVAC",
+      "spec_cleaning": "Уборка",
+      "spec_security": "Охрана",
+      "spec_maintenance": "Обслуживание",
+      "spec_landscaping": "Ландшафт",
+      "spec_repair": "Ремонт",
+      "spec_installation": "Монтаж"
+    }
   },
   "errors": {
     "document_not_found": "❌ Документ не найден",
@@ -3999,7 +4014,26 @@
     "указать_телефон": "📱 Указать телефон",
     "устаревший_обработчик_теперь": "\n    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.\n\n    Этот обработчик бо",
     "устаревший_обработчик_теперь_2": "\n    УСТАРЕВШИЙ ОБРАБОТЧИК: Теперь адреса управляются через систему квартир.\n    ",
-    "файл": "\nФайл: "
+    "файл": "\nФайл: ",
+    "keyboards": {
+      "passport": "📄 Паспорт",
+      "property_deed": "🏠 Кадастровая выписка",
+      "rental_agreement": "📋 Договор аренды",
+      "other_documents": "📄 Другие документы",
+      "skip_documents": "⏭️ Пропустить документы",
+      "complete_onboarding": "✅ Завершить онбординг",
+      "confirm_upload": "✅ Подтвердить загрузку",
+      "cancel": "❌ Отменить",
+      "upload_another_document": "🔄 Загрузить другой документ",
+      "add_more_documents": "📄 Добавить еще документы",
+      "add_document": "📄 Добавить документ",
+      "complete": "✅ Завершить",
+      "doc_name_passport": "Паспорт",
+      "doc_name_property_deed": "Кадастровая выписка",
+      "doc_name_rental_agreement": "Договор аренды",
+      "doc_name_utility_bill": "Квитанция ЖКХ",
+      "doc_name_other": "Другие документы"
+    }
   },
   "pagination": {
     "info": "Страница {page} из {total_pages} (всего: {total_items})",
@@ -4173,7 +4207,19 @@
     "язык_пользовате": "Язык пользователя {...}: {...}",
     "язык_пользовате_2": "Язык пользователя ",
     "язык_пользовате_3": "Язык пользователя: {...}",
-    "язык_пользовате_4": "Язык пользователя: "
+    "язык_пользовате_4": "Язык пользователя: ",
+    "keyboards": {
+      "not_specified_m": "не указан",
+      "not_specified_n": "не указано",
+      "my_apartments": "🏠 Мои квартиры",
+      "lang_russian": "🇷🇺 Русский",
+      "lang_uzbek_selected": "🇺🇿 O'zbek ✓",
+      "lang_russian_selected": "🇷🇺 Русский ✓",
+      "lang_uzbek": "🇺🇿 O'zbek",
+      "address_home": "🏠 Домашний адрес",
+      "address_apartment": "🏢 Адрес квартиры",
+      "address_yard": "🏘️ Адрес двора"
+    }
   },
   "ratings": {
     "rate": "Оцените качество выполненной работы:",
@@ -4234,7 +4280,31 @@
     "status": "Статус:",
     "status_label": "Статус",
     "title": "📋 Назначение заявки на исполнение",
-    "view_assignments": "👥 Просмотр назначений"
+    "view_assignments": "👥 Просмотр назначений",
+    "keyboards": {
+      "spec_plumber": "Сантехник",
+      "spec_electrician": "Электрик",
+      "spec_cleaner": "Уборщик",
+      "spec_janitor": "Дворник",
+      "spec_guard": "Охранник",
+      "spec_specialist": "Специалист",
+      "cancel": "❌ Отмена",
+      "executor_item": "👤 {name}",
+      "confirm": "✅ Подтвердить",
+      "assign_request": "📋 Назначить заявку",
+      "view_assignments": "👥 Просмотр назначений",
+      "add_comment": "📝 Добавить комментарий",
+      "change_status": "🔄 Изменить статус",
+      "my_requests": "📋 Мои заявки",
+      "statistics": "📊 Статистика",
+      "back": "🔙 Назад",
+      "purchase_materials": "🛒 Закупка материалов",
+      "request_clarification": "❓ Запросить уточнение",
+      "complete_work": "✅ Завершить работу",
+      "return_to_work": "🔄 Вернуть в работу",
+      "view_comments": "📋 Просмотр комментариев",
+      "back_to_requests": "🔙 Назад к заявкам"
+    }
   },
   "request_status": {
     "comment_required": "Введите комментарий к изменению статуса:",
@@ -4251,7 +4321,34 @@
     "take_to_work": "🛠️ Взять в работу",
     "title": "📊 Управление статусом заявки",
     "work_completed": "✅ Работа завершена",
-    "work_taken": "✅ Заявка взята в работу"
+    "work_taken": "✅ Заявка взята в работу",
+    "keyboards": {
+      "status_in_progress": "🔄 В работу",
+      "status_purchase": "🛒 Закупка материалов",
+      "status_clarification": "❓ Уточнение",
+      "status_completed": "✅ Исполнено",
+      "status_approved": "👍 Принято",
+      "cancel": "❌ Отмена",
+      "confirm": "✅ Подтвердить",
+      "purchase_materials": "🛒 Закупка материалов",
+      "request_clarification": "❓ Запросить уточнение",
+      "complete_work": "✅ Завершить работу",
+      "return_to_work": "🔄 Вернуть в работу",
+      "view_report": "📋 Просмотр отчета",
+      "add_comment": "📝 Добавить комментарий",
+      "view_comments": "📋 Просмотр комментариев",
+      "back_to_requests": "🔙 Назад к заявкам",
+      "assign_request": "📋 Назначить заявку",
+      "take_to_work": "🔄 Взять в работу",
+      "accept_work": "👍 Принять работу",
+      "view_assignments": "👥 Просмотр назначений",
+      "view_report_stats": "📊 Просмотр отчета",
+      "quick_in_progress": "🔄 В работу",
+      "quick_clarification": "❓ Уточнение",
+      "quick_completed": "✅ Исполнено",
+      "quick_approved": "👍 Принято",
+      "comment": "📝 Комментарий"
+    }
   },
   "requests": {
     "5_отправьте_еще": "/5). Отправьте еще файлы или нажмите 'Продолжить'",
@@ -5702,7 +5799,28 @@
     "search_select_apartment": "Выберите квартиру:",
     "address_system_updated_title": "⚠️ Система адресов обновлена!",
     "address_system_updated_message": "Теперь адрес выбирается из справочника квартир.\nПожалуйста, используйте кнопку '🏘️ Мои квартиры' в профиле для добавления адреса.",
-    "legacy_address_handler_warning": "Пользователь попал в устаревший обработчик ввода адреса"
+    "legacy_address_handler_warning": "Пользователь попал в устаревший обработчик ввода адреса",
+    "keyboards": {
+      "edit_category": "🏷️ Изменить категорию",
+      "edit_address": "📍 Изменить адрес",
+      "edit_description": "📝 Изменить описание",
+      "edit_urgency": "⚡ Изменить срочность",
+      "edit_apartment": "🏠 Изменить квартиру",
+      "edit_files": "📸 Изменить файлы",
+      "status_to_work": "🔧 В работу",
+      "status_in_progress": "🔄 В работе",
+      "status_purchase": "💰 Закуп",
+      "status_clarification": "❓ Уточнение",
+      "status_completed": "✅ Выполнена",
+      "status_cancel": "❌ Отменить",
+      "filter_all": "📋 Все заявки",
+      "filter_new": "🆕 Новые",
+      "filter_in_progress": "🔄 В работе",
+      "filter_purchase": "💰 Закуп",
+      "filter_completed": "✅ Выполненные",
+      "filter_cancelled": "❌ Отмененные",
+      "apartment_number": "🏠 Квартира {num}"
+    }
   },
   "role": {
     "not_allowed": "Эта роль вам недоступна",
@@ -6345,7 +6463,25 @@
     "ℹ_моя_shift": "ℹ️ Моя смена",
     "no_active_shifts": "Нет активных смен",
     "registration_pending": "⏳ Ваша заявка на регистрацию находится на рассмотрении.",
-    "awaiting_admin_approval": "⏳ Ожидайте одобрения администратора."
+    "awaiting_admin_approval": "⏳ Ожидайте одобрения администратора.",
+    "keyboards": {
+      "confirm_yes": "✅ Да",
+      "confirm_no": "❌ Нет",
+      "period_all_time": "Все время",
+      "period_today": "Сегодня",
+      "period_7_days": "7 дней",
+      "period_30_days": "30 дней",
+      "period_90_days": "90 дней",
+      "status_all": "Все статусы",
+      "status_active": "Активные",
+      "status_completed": "Завершенные",
+      "status_cancelled": "Отмененные",
+      "reset_filters": "Сбросить фильтры",
+      "page_prev": "◀️",
+      "page_next": "▶️",
+      "page_indicator": "{current}/{total}",
+      "force_end_shift": "❗ Завершить смену"
+    }
   },
   "specializations": {
     "cleaning": "Уборка",
@@ -6394,7 +6530,12 @@
     "staff_users": "Сотрудники",
     "stats": "Статистика",
     "stats_text": "📊 Статистика пользователей:\n\n🏠 Жители:\n📝 Новые: {pending}\n✅ Одобренные: {approved}\n🚫 Заблокированные: {blocked}\n\n👷 Сотрудники: {staff}\n📈 Всего пользователей: {total}",
-    "user_list_title": "👥 Список жителей"
+    "user_list_title": "👥 Список жителей",
+    "keyboards": {
+      "manage_yards": "Управление дворами",
+      "manage_apartments": "Управление квартирами",
+      "documents": "Документы"
+    }
   },
   "user_status": {
     "approved": "✅ Одобрен",
@@ -6790,6 +6931,78 @@
       "confirm_no": "❌ Нет",
       "skip": "⏭ Пропустить",
       "cancel": "❌ Отмена"
+    }
+  },
+  "request_comments": {
+    "keyboards": {
+      "type_clarification": "❓ Уточнение",
+      "type_purchase": "🛒 Закупка материалов",
+      "type_report": "📋 Отчет о выполнении",
+      "type_general": "💬 Общий комментарий",
+      "cancel": "❌ Отмена",
+      "confirm_add_comment": "✅ Добавить комментарий",
+      "filter_clarifications": "❓ Только уточнения",
+      "filter_purchases": "🛒 Только закупки",
+      "filter_reports": "📋 Только отчеты",
+      "add_comment": "📝 Добавить комментарий",
+      "back_to_request": "🔙 Назад к заявке",
+      "reply_to_comment": "📝 Ответить на комментарий",
+      "back_to_comments": "🔙 Назад к комментариям"
+    }
+  },
+  "request_reports": {
+    "keyboards": {
+      "confirm_accept_request": "✅ Принять заявку",
+      "cancel": "❌ Отмена",
+      "approve_request": "👍 Принять заявку",
+      "request_revision": "🔧 Запросить доработку",
+      "request_already_approved": "✅ Заявка принята",
+      "add_comment": "📝 Добавить комментарий",
+      "view_comments": "📋 Просмотр комментариев",
+      "back_to_request": "🔙 Назад к заявке",
+      "full_report": "📊 Полный отчет",
+      "change_history": "📝 История изменений",
+      "assignments": "👥 Назначения",
+      "back_to_report": "🔙 Назад к отчету"
+    }
+  },
+  "shift_transfer": {
+    "keyboards": {
+      "shift_info": "📅 {date} {time} ({status})",
+      "status_planned": "Запланирована",
+      "status_active": "Активна",
+      "status_paused": "Пауза",
+      "back": "⬅️ Назад",
+      "reason_illness": "🤒 Болезнь",
+      "reason_emergency": "🚨 Экстренная ситуация",
+      "reason_workload": "📊 Перегрузка",
+      "reason_vacation": "🏖️ Отпуск",
+      "reason_other": "❓ Другое",
+      "urgency_low": "🟢 Низкий приоритет",
+      "urgency_normal": "🟡 Обычный приоритет",
+      "urgency_high": "🟠 Высокий приоритет",
+      "urgency_critical": "🔴 Критический приоритет",
+      "confirm_transfer": "✅ Подтвердить передачу",
+      "edit": "✏️ Изменить",
+      "cancel": "❌ Отмена",
+      "unknown_user": "Неизвестный",
+      "auto_assign": "🤖 Автоназначение",
+      "accept": "✅ Принять",
+      "reject": "❌ Отклонить",
+      "details": "ℹ️ Подробности",
+      "transfer_status_pending": "⏳ Ожидает",
+      "transfer_status_assigned": "👤 Назначен",
+      "transfer_status_accepted": "✅ Принята",
+      "transfer_status_rejected": "❌ Отклонена",
+      "transfer_status_cancelled": "🚫 Отменена",
+      "transfer_status_completed": "✅ Завершена",
+      "skip": "⏭️ Пропустить"
+    }
+  },
+  "user_verification": {
+    "keyboards": {
+      "download_document": "Скачать документ",
+      "request_additional_documents": "Запросить дополнительные документы"
     }
   }
 }

@@ -55,21 +55,21 @@ def get_specialization_selection_keyboard(language: str = "ru") -> InlineKeyboar
         InlineKeyboardMarkup: Клавиатура с кнопками специализаций
     """
     specializations = [
-        "сантехник",
-        "электрик", 
-        "уборщик",
-        "дворник",
-        "охранник",
-        "специалист"
+        ("сантехник", "spec_plumber"),
+        ("электрик", "spec_electrician"),
+        ("уборщик", "spec_cleaner"),
+        ("дворник", "spec_janitor"),
+        ("охранник", "spec_guard"),
+        ("специалист", "spec_specialist"),
     ]
-    
+
     keyboard = []
     row = []
-    
-    for spec in specializations:
+
+    for spec_value, spec_key in specializations:
         row.append(InlineKeyboardButton(
-            text=spec.title(),
-            callback_data=f"specialization_{spec}"
+            text=get_text(f"request_assignment.keyboards.{spec_key}", language=language),
+            callback_data=f"specialization_{spec_value}"
         ))
         
         if len(row) == 2:  # 2 кнопки в ряду
@@ -83,11 +83,11 @@ def get_specialization_selection_keyboard(language: str = "ru") -> InlineKeyboar
     # Добавляем кнопку отмены
     keyboard.append([
         InlineKeyboardButton(
-            text="❌ Отмена",
+            text=get_text("request_assignment.keyboards.cancel", language=language),
             callback_data="cancel_assignment"
         )
     ])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_executor_selection_keyboard(executors: List[User], language: str = "ru") -> InlineKeyboardMarkup:
@@ -106,15 +106,15 @@ def get_executor_selection_keyboard(executors: List[User], language: str = "ru")
     for executor in executors:
         keyboard.append([
             InlineKeyboardButton(
-                text=f"👤 {executor.full_name}",
+                text=get_text("request_assignment.keyboards.executor_item", language=language).format(name=executor.full_name),
                 callback_data=f"executor_{executor.id}"
             )
         ])
-    
+
     # Добавляем кнопку отмены
     keyboard.append([
         InlineKeyboardButton(
-            text="❌ Отмена",
+            text=get_text("request_assignment.keyboards.cancel", language=language),
             callback_data="cancel_assignment"
         )
     ])
@@ -135,13 +135,13 @@ def get_assignment_confirmation_keyboard(assignment_type: str, language: str = "
     keyboard = [
         [
             InlineKeyboardButton(
-                text="✅ Подтвердить",
+                text=get_text("request_assignment.keyboards.confirm", language=language),
                 callback_data="confirm_assignment"
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("request_assignment.keyboards.cancel", language=language),
                 callback_data="cancel_assignment"
             )
         ]
@@ -163,30 +163,30 @@ def get_request_actions_keyboard(request_number: str, language: str = "ru") -> I
     keyboard = [
         [
             InlineKeyboardButton(
-                text="📋 Назначить заявку",
+                text=get_text("request_assignment.keyboards.assign_request", language=language),
                 callback_data=f"assign_request_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="👥 Просмотр назначений",
+                text=get_text("request_assignment.keyboards.view_assignments", language=language),
                 callback_data=f"view_assignments_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📝 Добавить комментарий",
+                text=get_text("request_assignment.keyboards.add_comment", language=language),
                 callback_data=f"add_comment_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔄 Изменить статус",
+                text=get_text("request_assignment.keyboards.change_status", language=language),
                 callback_data=f"change_status_{request_number}"
             )
         ]
     ]
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_executor_requests_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
@@ -202,24 +202,24 @@ def get_executor_requests_keyboard(language: str = "ru") -> InlineKeyboardMarkup
     keyboard = [
         [
             InlineKeyboardButton(
-                text="📋 Мои заявки",
+                text=get_text("request_assignment.keyboards.my_requests", language=language),
                 callback_data="my_requests"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📊 Статистика",
+                text=get_text("request_assignment.keyboards.statistics", language=language),
                 callback_data="executor_stats"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад",
+                text=get_text("request_assignment.keyboards.back", language=language),
                 callback_data="back_to_main"
             )
         ]
     ]
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_request_executor_actions_keyboard(request_number: int, status: str, language: str = "ru") -> InlineKeyboardMarkup:
@@ -241,19 +241,19 @@ def get_request_executor_actions_keyboard(request_number: int, status: str, lang
         keyboard.extend([
             [
                 InlineKeyboardButton(
-                    text="🛒 Закупка материалов",
+                    text=get_text("request_assignment.keyboards.purchase_materials", language=language),
                     callback_data=f"purchase_materials_{request_number}"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="❓ Запросить уточнение",
+                    text=get_text("request_assignment.keyboards.request_clarification", language=language),
                     callback_data=f"request_clarification_{request_number}"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Завершить работу",
+                    text=get_text("request_assignment.keyboards.complete_work", language=language),
                     callback_data=f"complete_work_{request_number}"
                 )
             ]
@@ -261,28 +261,28 @@ def get_request_executor_actions_keyboard(request_number: int, status: str, lang
     elif status == "Закуп":
         keyboard.append([
             InlineKeyboardButton(
-                text="🔄 Вернуть в работу",
+                text=get_text("request_assignment.keyboards.return_to_work", language=language),
                 callback_data=f"return_to_work_{request_number}"
             )
         ])
-    
+
     # Общие действия
     keyboard.extend([
         [
             InlineKeyboardButton(
-                text="📝 Добавить комментарий",
+                text=get_text("request_assignment.keyboards.add_comment", language=language),
                 callback_data=f"add_comment_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📋 Просмотр комментариев",
+                text=get_text("request_assignment.keyboards.view_comments", language=language),
                 callback_data=f"view_comments_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад к заявкам",
+                text=get_text("request_assignment.keyboards.back_to_requests", language=language),
                 callback_data="back_to_requests"
             )
         ]

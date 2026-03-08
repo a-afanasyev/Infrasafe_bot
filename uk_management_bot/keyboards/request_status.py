@@ -29,11 +29,11 @@ def get_status_selection_keyboard(available_statuses: List[str], language: str =
     
     # Маппинг статусов на отображаемые названия
     status_display_names = {
-        REQUEST_STATUS_IN_PROGRESS: "🔄 В работу",
-        REQUEST_STATUS_PURCHASE: "🛒 Закупка материалов",
-        REQUEST_STATUS_CLARIFICATION: "❓ Уточнение",
-        REQUEST_STATUS_COMPLETED: "✅ Исполнено",
-        REQUEST_STATUS_APPROVED: "👍 Принято"
+        REQUEST_STATUS_IN_PROGRESS: get_text("request_status.keyboards.status_in_progress", language=language),
+        REQUEST_STATUS_PURCHASE: get_text("request_status.keyboards.status_purchase", language=language),
+        REQUEST_STATUS_CLARIFICATION: get_text("request_status.keyboards.status_clarification", language=language),
+        REQUEST_STATUS_COMPLETED: get_text("request_status.keyboards.status_completed", language=language),
+        REQUEST_STATUS_APPROVED: get_text("request_status.keyboards.status_approved", language=language)
     }
     
     for status in available_statuses:
@@ -48,7 +48,7 @@ def get_status_selection_keyboard(available_statuses: List[str], language: str =
     # Добавляем кнопку отмены
     keyboard.append([
         InlineKeyboardButton(
-            text="❌ Отмена",
+            text=get_text("request_status.keyboards.cancel", language=language),
             callback_data="cancel_status_change"
         )
     ])
@@ -68,13 +68,13 @@ def get_status_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMark
     keyboard = [
         [
             InlineKeyboardButton(
-                text="✅ Подтвердить",
+                text=get_text("request_status.keyboards.confirm", language=language),
                 callback_data="confirm_status_change"
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("request_status.keyboards.cancel", language=language),
                 callback_data="cancel_status_change"
             )
         ]
@@ -101,19 +101,19 @@ def get_executor_status_actions_keyboard(request_number: str, current_status: st
         keyboard.extend([
             [
                 InlineKeyboardButton(
-                    text="🛒 Закупка материалов",
+                    text=get_text("request_status.keyboards.purchase_materials", language=language),
                     callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_materials_", request_number)
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="❓ Запросить уточнение",
+                    text=get_text("request_status.keyboards.request_clarification", language=language),
                     callback_data=RequestCallbackHelper.create_callback_data_with_request_number("request_clarification_", request_number)
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Завершить работу",
+                    text=get_text("request_status.keyboards.complete_work", language=language),
                     callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_work_", request_number)
                 )
             ]
@@ -121,35 +121,35 @@ def get_executor_status_actions_keyboard(request_number: str, current_status: st
     elif current_status == REQUEST_STATUS_PURCHASE:
         keyboard.append([
             InlineKeyboardButton(
-                text="🔄 Вернуть в работу",
+                text=get_text("request_status.keyboards.return_to_work", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("return_to_work_", request_number)
             )
         ])
     elif current_status == REQUEST_STATUS_COMPLETED:
         keyboard.append([
             InlineKeyboardButton(
-                text="📋 Просмотр отчета",
+                text=get_text("request_status.keyboards.view_report", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_report_", request_number)
             )
         ])
-    
+
     # Общие действия
     keyboard.extend([
         [
             InlineKeyboardButton(
-                text="📝 Добавить комментарий",
+                text=get_text("request_status.keyboards.add_comment", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("add_comment_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="📋 Просмотр комментариев",
+                text=get_text("request_status.keyboards.view_comments", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_comments_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад к заявкам",
+                text=get_text("request_status.keyboards.back_to_requests", language=language),
                 callback_data="back_to_requests"
             )
         ]
@@ -176,13 +176,13 @@ def get_manager_status_actions_keyboard(request_number: str, current_status: str
         keyboard.extend([
             [
                 InlineKeyboardButton(
-                    text="📋 Назначить заявку",
+                    text=get_text("request_status.keyboards.assign_request", language=language),
                     callback_data=RequestCallbackHelper.create_callback_data_with_request_number("assign_request_", request_number)
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🔄 Взять в работу",
+                    text=get_text("request_status.keyboards.take_to_work", language=language),
                     callback_data=f"status_{REQUEST_STATUS_IN_PROGRESS}"
                 )
             ]
@@ -191,13 +191,13 @@ def get_manager_status_actions_keyboard(request_number: str, current_status: str
         keyboard.extend([
             [
                 InlineKeyboardButton(
-                    text="❓ Запросить уточнение",
+                    text=get_text("request_status.keyboards.request_clarification", language=language),
                     callback_data=f"status_{REQUEST_STATUS_CLARIFICATION}"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Завершить работу",
+                    text=get_text("request_status.keyboards.complete_work", language=language),
                     callback_data=f"status_{REQUEST_STATUS_COMPLETED}"
                 )
             ]
@@ -205,48 +205,48 @@ def get_manager_status_actions_keyboard(request_number: str, current_status: str
     elif current_status == REQUEST_STATUS_PURCHASE:
         keyboard.append([
             InlineKeyboardButton(
-                text="🔄 Вернуть в работу",
+                text=get_text("request_status.keyboards.return_to_work", language=language),
                 callback_data=f"status_{REQUEST_STATUS_IN_PROGRESS}"
             )
         ])
     elif current_status == REQUEST_STATUS_CLARIFICATION:
         keyboard.append([
             InlineKeyboardButton(
-                text="🔄 Вернуть в работу",
+                text=get_text("request_status.keyboards.return_to_work", language=language),
                 callback_data=f"status_{REQUEST_STATUS_IN_PROGRESS}"
             )
         ])
     elif current_status == REQUEST_STATUS_COMPLETED:
         keyboard.append([
             InlineKeyboardButton(
-                text="👍 Принять работу",
+                text=get_text("request_status.keyboards.accept_work", language=language),
                 callback_data=f"status_{REQUEST_STATUS_APPROVED}"
             )
         ])
-    
+
     # Общие действия
     keyboard.extend([
         [
             InlineKeyboardButton(
-                text="📝 Добавить комментарий",
+                text=get_text("request_status.keyboards.add_comment", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("add_comment_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="📋 Просмотр комментариев",
+                text=get_text("request_status.keyboards.view_comments", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_comments_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="👥 Просмотр назначений",
+                text=get_text("request_status.keyboards.view_assignments", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_assignments_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад к заявкам",
+                text=get_text("request_status.keyboards.back_to_requests", language=language),
                 callback_data="back_to_requests"
             )
         ]
@@ -272,28 +272,28 @@ def get_applicant_status_actions_keyboard(request_number: str, current_status: s
     if current_status == REQUEST_STATUS_COMPLETED:
         keyboard.append([
             InlineKeyboardButton(
-                text="👍 Принять работу",
+                text=get_text("request_status.keyboards.accept_work", language=language),
                 callback_data=f"status_{REQUEST_STATUS_APPROVED}"
             )
         ])
-    
+
     # Общие действия
     keyboard.extend([
         [
             InlineKeyboardButton(
-                text="📋 Просмотр комментариев",
+                text=get_text("request_status.keyboards.view_comments", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_comments_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="📊 Просмотр отчета",
+                text=get_text("request_status.keyboards.view_report_stats", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_report_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад к заявкам",
+                text=get_text("request_status.keyboards.back_to_requests", language=language),
                 callback_data="back_to_requests"
             )
         ]
@@ -315,33 +315,33 @@ def get_quick_status_actions_keyboard(request_number: str, language: str = "ru")
     keyboard = [
         [
             InlineKeyboardButton(
-                text="🔄 В работу",
+                text=get_text("request_status.keyboards.quick_in_progress", language=language),
                 callback_data=f"quick_status_{REQUEST_STATUS_IN_PROGRESS}_{request_number}"
             ),
             InlineKeyboardButton(
-                text="❓ Уточнение",
+                text=get_text("request_status.keyboards.quick_clarification", language=language),
                 callback_data=f"quick_status_{REQUEST_STATUS_CLARIFICATION}_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="✅ Исполнено",
+                text=get_text("request_status.keyboards.quick_completed", language=language),
                 callback_data=f"quick_status_{REQUEST_STATUS_COMPLETED}_{request_number}"
             ),
             InlineKeyboardButton(
-                text="👍 Принято",
+                text=get_text("request_status.keyboards.quick_approved", language=language),
                 callback_data=f"quick_status_{REQUEST_STATUS_APPROVED}_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📝 Комментарий",
+                text=get_text("request_status.keyboards.comment", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("add_comment_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("request_status.keyboards.cancel", language=language),
                 callback_data="cancel_status_change"
             )
         ]

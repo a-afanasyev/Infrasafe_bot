@@ -183,7 +183,7 @@ def get_document_verification_keyboard(document_id: int, language: str = 'ru') -
             callback_data=f"document_reject_{document_id}"
         )],
         [InlineKeyboardButton(
-            text=f"📥 Скачать документ",
+            text=f"📥 {get_text('user_verification.keyboards.download_document', language=language)}",
             callback_data=f"download_document_{document_id}"
         )],
         
@@ -210,7 +210,7 @@ def get_document_management_keyboard(user_id: int, language: str = 'ru') -> Inli
     buttons = [
         # Действия с документами
         [InlineKeyboardButton(
-            text=f"📝 Запросить дополнительные документы",
+            text=f"📝 {get_text('user_verification.keyboards.request_additional_documents', language=language)}",
             callback_data=f"request_documents_{user_id}"
         )],
         

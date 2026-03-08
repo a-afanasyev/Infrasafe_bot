@@ -8,54 +8,36 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.helpers import get_text
 
 
-def shift_selection_keyboard(shifts: List[Shift], user_lang: str = "ru") -> InlineKeyboardMarkup:
+def shift_selection_keyboard(shifts: List[Shift], language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура для выбора смены для передачи
 
     Args:
         shifts: Список доступных смен
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    texts = {
-        "ru": {
-            "select_shift": "🔄 Передать смену",
-            "shift_info": "📅 {date} {time} ({status})",
-            "back": "⬅️ Назад"
-        },
-        "uz": {
-            "select_shift": "🔄 Smena o'tkazish",
-            "shift_info": "📅 {date} {time} ({status})",
-            "back": "⬅️ Ortga"
-        }
-    }
-
-    t = texts.get(user_lang, texts["ru"])
-
     for shift in shifts:
         shift_date = shift.start_time.strftime("%d.%m")
         shift_time = shift.start_time.strftime("%H:%M")
 
         # Маппинг статусов
-        status_map = {
-            "planned": "Запланирована" if user_lang == "ru" else "Rejalashtirilgan",
-            "active": "Активна" if user_lang == "ru" else "Faol",
-            "paused": "Пауза" if user_lang == "ru" else "Pauza"
-        }
+        status = get_text(
+            f"shift_transfer.keyboards.status_{shift.status}",
+            language=language
+        ) if shift.status in ("planned", "active", "paused") else shift.status
 
-        status = status_map.get(shift.status, shift.status)
-
-        shift_text = t["shift_info"].format(
-            date=shift_date,
-            time=shift_time,
-            status=status
-        )
+        shift_text = get_text(
+            "shift_transfer.keyboards.shift_info",
+            language=language
+        ).format(date=shift_date, time=shift_time, status=status)
 
         builder.row(
             InlineKeyboardButton(
@@ -67,7 +49,7 @@ def shift_selection_keyboard(shifts: List[Shift], user_lang: str = "ru") -> Inli
     # Кнопка назад
     builder.row(
         InlineKeyboardButton(
-            text=t["back"],
+            text=get_text("shift_transfer.keyboards.back", language=language),
             callback_data="shift_transfer:back"
         )
     )
@@ -75,51 +57,36 @@ def shift_selection_keyboard(shifts: List[Shift], user_lang: str = "ru") -> Inli
     return builder.as_markup()
 
 
-def transfer_reason_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
+def transfer_reason_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура для выбора причины передачи
 
     Args:
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    reasons = {
-        "ru": {
-            "illness": "🤒 Болезнь",
-            "emergency": "🚨 Экстренная ситуация",
-            "workload": "📊 Перегрузка",
-            "vacation": "🏖️ Отпуск",
-            "other": "❓ Другое"
-        },
-        "uz": {
-            "illness": "🤒 Kasallik",
-            "emergency": "🚨 Favqulodda holat",
-            "workload": "📊 Ortiqcha ish",
-            "vacation": "🏖️ Ta'til",
-            "other": "❓ Boshqa"
-        }
-    }
-
-    reason_texts = reasons.get(user_lang, reasons["ru"])
+    reason_keys = ["illness", "emergency", "workload", "vacation", "other"]
 
     # Создаем кнопки причин
-    for reason_key, reason_text in reason_texts.items():
+    for reason_key in reason_keys:
         builder.row(
             InlineKeyboardButton(
-                text=reason_text,
+                text=get_text(
+                    f"shift_transfer.keyboards.reason_{reason_key}",
+                    language=language
+                ),
                 callback_data=f"transfer_reason:{reason_key}"
             )
         )
 
     # Кнопка назад
-    back_text = "⬅️ Назад" if user_lang == "ru" else "⬅️ Ortga"
     builder.row(
         InlineKeyboardButton(
-            text=back_text,
+            text=get_text("shift_transfer.keyboards.back", language=language),
             callback_data="transfer_step:back"
         )
     )
@@ -127,48 +94,35 @@ def transfer_reason_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def urgency_level_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
+def urgency_level_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура для выбора уровня срочности
 
     Args:
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    urgency_levels = {
-        "ru": {
-            "low": "🟢 Низкий приоритет",
-            "normal": "🟡 Обычный приоритет",
-            "high": "🟠 Высокий приоритет",
-            "critical": "🔴 Критический приоритет"
-        },
-        "uz": {
-            "low": "🟢 Past ustunlik",
-            "normal": "🟡 Oddiy ustunlik",
-            "high": "🟠 Yuqori ustunlik",
-            "critical": "🔴 Kritik ustunlik"
-        }
-    }
+    level_keys = ["low", "normal", "high", "critical"]
 
-    levels = urgency_levels.get(user_lang, urgency_levels["ru"])
-
-    for level_key, level_text in levels.items():
+    for level_key in level_keys:
         builder.row(
             InlineKeyboardButton(
-                text=level_text,
+                text=get_text(
+                    f"shift_transfer.keyboards.urgency_{level_key}",
+                    language=language
+                ),
                 callback_data=f"transfer_urgency:{level_key}"
             )
         )
 
     # Кнопка назад
-    back_text = "⬅️ Назад" if user_lang == "ru" else "⬅️ Ortga"
     builder.row(
         InlineKeyboardButton(
-            text=back_text,
+            text=get_text("shift_transfer.keyboards.back", language=language),
             callback_data="transfer_step:back"
         )
     )
@@ -176,47 +130,32 @@ def urgency_level_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def confirm_transfer_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
+def confirm_transfer_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура для подтверждения передачи
 
     Args:
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    texts = {
-        "ru": {
-            "confirm": "✅ Подтвердить передачу",
-            "edit": "✏️ Изменить",
-            "cancel": "❌ Отмена"
-        },
-        "uz": {
-            "confirm": "✅ O'tkazishni tasdiqlash",
-            "edit": "✏️ O'zgartirish",
-            "cancel": "❌ Bekor qilish"
-        }
-    }
-
-    t = texts.get(user_lang, texts["ru"])
-
     builder.row(
         InlineKeyboardButton(
-            text=t["confirm"],
+            text=get_text("shift_transfer.keyboards.confirm_transfer", language=language),
             callback_data="transfer_confirm:yes"
         )
     )
 
     builder.row(
         InlineKeyboardButton(
-            text=t["edit"],
+            text=get_text("shift_transfer.keyboards.edit", language=language),
             callback_data="transfer_confirm:edit"
         ),
         InlineKeyboardButton(
-            text=t["cancel"],
+            text=get_text("shift_transfer.keyboards.cancel", language=language),
             callback_data="transfer_confirm:cancel"
         )
     )
@@ -224,13 +163,13 @@ def confirm_transfer_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def executor_selection_keyboard(users: List[User], user_lang: str = "ru") -> InlineKeyboardMarkup:
+def executor_selection_keyboard(users: List[User], language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура для выбора исполнителя (для менеджеров)
 
     Args:
         users: Список доступных исполнителей
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
@@ -239,7 +178,9 @@ def executor_selection_keyboard(users: List[User], user_lang: str = "ru") -> Inl
 
     for user in users:
         # Формируем имя пользователя
-        display_name = user.first_name or "Неизвестный"
+        display_name = user.first_name or get_text(
+            "shift_transfer.keyboards.unknown_user", language=language
+        )
         if user.last_name:
             display_name += f" {user.last_name}"
 
@@ -262,19 +203,17 @@ def executor_selection_keyboard(users: List[User], user_lang: str = "ru") -> Inl
         )
 
     # Кнопка автоназначения
-    auto_text = "🤖 Автоназначение" if user_lang == "ru" else "🤖 Avtomatik tayinlash"
     builder.row(
         InlineKeyboardButton(
-            text=auto_text,
+            text=get_text("shift_transfer.keyboards.auto_assign", language=language),
             callback_data="assign_executor:auto"
         )
     )
 
     # Кнопка назад
-    back_text = "⬅️ Назад" if user_lang == "ru" else "⬅️ Ortga"
     builder.row(
         InlineKeyboardButton(
-            text=back_text,
+            text=get_text("shift_transfer.keyboards.back", language=language),
             callback_data="assign_step:back"
         )
     )
@@ -282,47 +221,32 @@ def executor_selection_keyboard(users: List[User], user_lang: str = "ru") -> Inl
     return builder.as_markup()
 
 
-def transfer_response_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
+def transfer_response_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура для ответа на передачу смены
 
     Args:
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    texts = {
-        "ru": {
-            "accept": "✅ Принять",
-            "reject": "❌ Отклонить",
-            "details": "ℹ️ Подробности"
-        },
-        "uz": {
-            "accept": "✅ Qabul qilish",
-            "reject": "❌ Rad etish",
-            "details": "ℹ️ Tafsilotlar"
-        }
-    }
-
-    t = texts.get(user_lang, texts["ru"])
-
     builder.row(
         InlineKeyboardButton(
-            text=t["accept"],
+            text=get_text("shift_transfer.keyboards.accept", language=language),
             callback_data="transfer_response:accept"
         ),
         InlineKeyboardButton(
-            text=t["reject"],
+            text=get_text("shift_transfer.keyboards.reject", language=language),
             callback_data="transfer_response:reject"
         )
     )
 
     builder.row(
         InlineKeyboardButton(
-            text=t["details"],
+            text=get_text("shift_transfer.keyboards.details", language=language),
             callback_data="transfer_response:details"
         )
     )
@@ -330,45 +254,28 @@ def transfer_response_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def transfers_list_keyboard(transfers: List[ShiftTransfer], user_lang: str = "ru") -> InlineKeyboardMarkup:
+def transfers_list_keyboard(transfers: List[ShiftTransfer], language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура со списком передач
 
     Args:
         transfers: Список передач
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    # Маппинг статусов
-    status_map = {
-        "ru": {
-            "pending": "⏳ Ожидает",
-            "assigned": "👤 Назначен",
-            "accepted": "✅ Принята",
-            "rejected": "❌ Отклонена",
-            "cancelled": "🚫 Отменена",
-            "completed": "✅ Завершена"
-        },
-        "uz": {
-            "pending": "⏳ Kutmoqda",
-            "assigned": "👤 Tayinlangan",
-            "accepted": "✅ Qabul qilingan",
-            "rejected": "❌ Rad etilgan",
-            "cancelled": "🚫 Bekor qilingan",
-            "completed": "✅ Tugallangan"
-        }
-    }
-
-    statuses = status_map.get(user_lang, status_map["ru"])
-
     for transfer in transfers:
         # Формируем текст кнопки
         date_str = transfer.created_at.strftime("%d.%m")
-        status_text = statuses.get(transfer.status, transfer.status)
+        status_text = get_text(
+            f"shift_transfer.keyboards.transfer_status_{transfer.status}",
+            language=language
+        ) if transfer.status in (
+            "pending", "assigned", "accepted", "rejected", "cancelled", "completed"
+        ) else transfer.status
 
         button_text = f"{date_str} - {status_text}"
 
@@ -380,10 +287,9 @@ def transfers_list_keyboard(transfers: List[ShiftTransfer], user_lang: str = "ru
         )
 
     # Кнопка назад
-    back_text = "⬅️ Назад" if user_lang == "ru" else "⬅️ Ortga"
     builder.row(
         InlineKeyboardButton(
-            text=back_text,
+            text=get_text("shift_transfer.keyboards.back", language=language),
             callback_data="transfers:back"
         )
     )
@@ -391,31 +297,28 @@ def transfers_list_keyboard(transfers: List[ShiftTransfer], user_lang: str = "ru
     return builder.as_markup()
 
 
-def skip_comment_keyboard(user_lang: str = "ru") -> InlineKeyboardMarkup:
+def skip_comment_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура с возможностью пропустить комментарий
 
     Args:
-        user_lang: Язык пользователя
+        language: Язык пользователя
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    skip_text = "⏭️ Пропустить" if user_lang == "ru" else "⏭️ O'tkazib yuborish"
-    back_text = "⬅️ Назад" if user_lang == "ru" else "⬅️ Ortga"
-
     builder.row(
         InlineKeyboardButton(
-            text=skip_text,
+            text=get_text("shift_transfer.keyboards.skip", language=language),
             callback_data="transfer_comment:skip"
         )
     )
 
     builder.row(
         InlineKeyboardButton(
-            text=back_text,
+            text=get_text("shift_transfer.keyboards.back", language=language),
             callback_data="transfer_step:back"
         )
     )

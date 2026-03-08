@@ -190,13 +190,13 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
 
     # Управление дворами (для всех пользователей)
     buttons.append([InlineKeyboardButton(
-        text="🏘️ Управление дворами",
+        text=f"🏘️ {get_text('user_management.keyboards.manage_yards', language=language)}",
         callback_data=f"manage_user_yards_{user.telegram_id}"
     )])
 
     # Управление квартирами (для всех пользователей)
     buttons.append([InlineKeyboardButton(
-        text="🏠 Управление квартирами",
+        text=f"🏠 {get_text('user_management.keyboards.manage_apartments', language=language)}",
         callback_data=f"admin_manage_apartments_{user.telegram_id}"
     )])
 
@@ -220,19 +220,19 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
         if documents_summary['total_documents'] > 0:
             # Показываем количество документов
             buttons.append([InlineKeyboardButton(
-                text=f"📄 Документы ({documents_summary['total_documents']})",
+                text=f"📄 {get_text('user_management.keyboards.documents', language=language)} ({documents_summary['total_documents']})",
                 callback_data=f"user_action_view_documents_{user.id}"
             )])
         else:
             # Показываем кнопку без счетчика
             buttons.append([InlineKeyboardButton(
-                text=f"📄 Документы",
+                text=f"📄 {get_text('user_management.keyboards.documents', language=language)}",
                 callback_data=f"user_action_view_documents_{user.id}"
             )])
     except Exception as e:
         # В случае ошибки все равно показываем кнопку
         buttons.append([InlineKeyboardButton(
-            text=f"📄 Документы",
+            text=f"📄 {get_text('user_management.keyboards.documents', language=language)}",
             callback_data=f"user_action_view_documents_{user.id}"
         )])
     

@@ -411,42 +411,63 @@ def get_inline_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMark
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_edit_request_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для редактирования заявки"""
+def get_edit_request_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура для редактирования заявки
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with localized edit options
+    """
     keyboard = [
-        ["🏷️ Изменить категорию"],
-        ["📍 Изменить адрес"],
-        ["📝 Изменить описание"],
-        ["⚡ Изменить срочность"],
-        ["🏠 Изменить квартиру"],
-        ["📸 Изменить файлы"],
-        ["❌ Отмена"]
+        [get_text("requests.keyboards.edit_category", language=language)],
+        [get_text("requests.keyboards.edit_address", language=language)],
+        [get_text("requests.keyboards.edit_description", language=language)],
+        [get_text("requests.keyboards.edit_urgency", language=language)],
+        [get_text("requests.keyboards.edit_apartment", language=language)],
+        [get_text("requests.keyboards.edit_files", language=language)],
+        [get_text("buttons.cancel", language=language)]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_request_status_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для изменения статуса заявки"""
+def get_request_status_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура для изменения статуса заявки
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with localized status options
+    """
     keyboard = [
-        ["🔧 В работу"],
-        ["🔄 В работе"],
-        ["💰 Закуп"],
-        ["❓ Уточнение"],
-        ["✅ Выполнена"],
-        ["❌ Отменить"],
-        ["🔙 Назад"]
+        [get_text("requests.keyboards.status_to_work", language=language)],
+        [get_text("requests.keyboards.status_in_progress", language=language)],
+        [get_text("requests.keyboards.status_purchase", language=language)],
+        [get_text("requests.keyboards.status_clarification", language=language)],
+        [get_text("requests.keyboards.status_completed", language=language)],
+        [get_text("requests.keyboards.status_cancel", language=language)],
+        [get_text("buttons.back", language=language)]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
-def get_requests_filter_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура для фильтрации заявок"""
+def get_requests_filter_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
+    """Клавиатура для фильтрации заявок
+
+    Args:
+        language: Language code (ru/uz)
+
+    Returns:
+        ReplyKeyboardMarkup with localized filter options
+    """
     keyboard = [
-        ["📋 Все заявки"],
-        ["🆕 Новые"],
-        ["🔄 В работе"],
-        ["💰 Закуп"],
-        ["✅ Выполненные"],
-        ["❌ Отмененные"],
-        ["🔙 Назад"]
+        [get_text("requests.keyboards.filter_all", language=language)],
+        [get_text("requests.keyboards.filter_new", language=language)],
+        [get_text("requests.keyboards.filter_in_progress", language=language)],
+        [get_text("requests.keyboards.filter_purchase", language=language)],
+        [get_text("requests.keyboards.filter_completed", language=language)],
+        [get_text("requests.keyboards.filter_cancelled", language=language)],
+        [get_text("buttons.back", language=language)]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
@@ -550,12 +571,13 @@ def get_request_actions_keyboard(request_number: str, language: str = "ru") -> I
 # КЛАВИАТУРА ПОШАГОВОГО ВЫБОРА АДРЕСА
 # =====================================
 
-def get_yard_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+def get_yard_selection_keyboard(user_id: int, language: str = "ru") -> ReplyKeyboardMarkup:
     """
     Создать клавиатуру выбора двора для пользователя (шаг 1)
 
     Args:
         user_id: Telegram ID пользователя
+        language: Language code (ru/uz)
 
     Returns:
         ReplyKeyboardMarkup: Клавиатура с доступными дворами
@@ -575,7 +597,7 @@ def get_yard_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
                 yard_buttons.append([KeyboardButton(text=f"🏘️ {yard.name}")])
 
             # Добавляем кнопку отмены
-            yard_buttons.append([KeyboardButton(text="❌ Отмена")])
+            yard_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             return ReplyKeyboardMarkup(keyboard=yard_buttons, resize_keyboard=True)
 
@@ -585,18 +607,19 @@ def get_yard_selection_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры дворов для пользователя {user_id}: {e}")
         return ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            keyboard=[[KeyboardButton(text=get_text("buttons.cancel", language=language))]],
             resize_keyboard=True
         )
 
 
-def get_building_selection_keyboard(user_id: int, yard_id: int) -> ReplyKeyboardMarkup:
+def get_building_selection_keyboard(user_id: int, yard_id: int, language: str = "ru") -> ReplyKeyboardMarkup:
     """
     Создать клавиатуру выбора здания в выбранном дворе (шаг 2)
 
     Args:
         user_id: Telegram ID пользователя
         yard_id: ID выбранного двора
+        language: Language code (ru/uz)
 
     Returns:
         ReplyKeyboardMarkup: Клавиатура с доступными зданиями
@@ -616,8 +639,8 @@ def get_building_selection_keyboard(user_id: int, yard_id: int) -> ReplyKeyboard
                 building_buttons.append([KeyboardButton(text=f"🏢 {building.address}")])
 
             # Добавляем кнопки назад и отмены
-            building_buttons.append([KeyboardButton(text="⬅️ Назад")])
-            building_buttons.append([KeyboardButton(text="❌ Отмена")])
+            building_buttons.append([KeyboardButton(text=get_text("buttons.back_arrow", language=language))])
+            building_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             return ReplyKeyboardMarkup(keyboard=building_buttons, resize_keyboard=True)
 
@@ -627,18 +650,19 @@ def get_building_selection_keyboard(user_id: int, yard_id: int) -> ReplyKeyboard
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры зданий для пользователя {user_id}: {e}")
         return ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            keyboard=[[KeyboardButton(text=get_text("buttons.cancel", language=language))]],
             resize_keyboard=True
         )
 
 
-def get_apartment_selection_keyboard(user_id: int, building_id: int) -> ReplyKeyboardMarkup:
+def get_apartment_selection_keyboard(user_id: int, building_id: int, language: str = "ru") -> ReplyKeyboardMarkup:
     """
     Создать клавиатуру выбора квартиры в выбранном здании (шаг 3)
 
     Args:
         user_id: Telegram ID пользователя
         building_id: ID выбранного здания
+        language: Language code (ru/uz)
 
     Returns:
         ReplyKeyboardMarkup: Клавиатура с доступными квартирами
@@ -655,11 +679,12 @@ def get_apartment_selection_keyboard(user_id: int, building_id: int) -> ReplyKey
             # Создаем кнопки для квартир
             apartment_buttons = []
             for apartment in apartments:
-                apartment_buttons.append([KeyboardButton(text=f"🏠 Квартира {apartment.apartment_number}")])
+                apt_text = get_text("requests.keyboards.apartment_number", language=language).format(num=apartment.apartment_number)
+                apartment_buttons.append([KeyboardButton(text=apt_text)])
 
             # Добавляем кнопки назад и отмены
-            apartment_buttons.append([KeyboardButton(text="⬅️ Назад")])
-            apartment_buttons.append([KeyboardButton(text="❌ Отмена")])
+            apartment_buttons.append([KeyboardButton(text=get_text("buttons.back_arrow", language=language))])
+            apartment_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             return ReplyKeyboardMarkup(keyboard=apartment_buttons, resize_keyboard=True)
 
@@ -669,7 +694,7 @@ def get_apartment_selection_keyboard(user_id: int, building_id: int) -> ReplyKey
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры квартир для пользователя {user_id}: {e}")
         return ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            keyboard=[[KeyboardButton(text=get_text("buttons.cancel", language=language))]],
             resize_keyboard=True
         )
 
@@ -750,7 +775,7 @@ def get_address_selection_keyboard(user_id: int, language: str = "ru") -> ReplyK
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры выбора адреса для пользователя {user_id}: {e}")
         return ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="❌ Отмена")]],
+            keyboard=[[KeyboardButton(text=get_text("buttons.cancel", language=language))]],
             resize_keyboard=True
         )
 

@@ -228,16 +228,16 @@ def get_roles_management_keyboard(selected_roles: list = None, language: str = '
     
     # Роли с галочками
     roles = [
-        ('executor', '🛠️ Исполнитель'),
-        ('manager', '👨‍💼 Менеджер'),
-        ('applicant', '👤 Заявитель')
+        ('executor', '🛠️', get_text('employee_management.keyboards.role_executor', language=language)),
+        ('manager', '👨‍💼', get_text('employee_management.keyboards.role_manager', language=language)),
+        ('applicant', '👤', get_text('employee_management.keyboards.role_applicant', language=language))
     ]
-    
-    for role_key, role_name in roles:
+
+    for role_key, role_emoji, role_name in roles:
         is_selected = role_key in selected_roles
         checkbox = "✅" if is_selected else "⬜"
         buttons.append([InlineKeyboardButton(
-            text=f"{checkbox} {role_name}",
+            text=f"{checkbox} {role_emoji} {role_name}",
             callback_data=f"role_toggle_{role_key}"
         )])
     
@@ -274,22 +274,22 @@ def get_specializations_selection_keyboard(selected_specializations: list = None
     
     # Специализации с галочками
     specializations = [
-        ('plumber', '🔧 Сантехник'),
-        ('electrician', '⚡ Электрик'),
-        ('hvac', '🌡️ HVAC'),
-        ('cleaning', '🧹 Уборка'),
-        ('security', '🔒 Охрана'),
-        ('maintenance', '🔧 Обслуживание'),
-        ('landscaping', '🌳 Ландшафт'),
-        ('repair', '🔨 Ремонт'),
-        ('installation', '📦 Монтаж')
+        ('plumber', '🔧', get_text('employee_management.keyboards.spec_plumber', language=language)),
+        ('electrician', '⚡', get_text('employee_management.keyboards.spec_electrician', language=language)),
+        ('hvac', '🌡️', get_text('employee_management.keyboards.spec_hvac', language=language)),
+        ('cleaning', '🧹', get_text('employee_management.keyboards.spec_cleaning', language=language)),
+        ('security', '🔒', get_text('employee_management.keyboards.spec_security', language=language)),
+        ('maintenance', '🔧', get_text('employee_management.keyboards.spec_maintenance', language=language)),
+        ('landscaping', '🌳', get_text('employee_management.keyboards.spec_landscaping', language=language)),
+        ('repair', '🔨', get_text('employee_management.keyboards.spec_repair', language=language)),
+        ('installation', '📦', get_text('employee_management.keyboards.spec_installation', language=language))
     ]
-    
-    for spec_key, spec_name in specializations:
+
+    for spec_key, spec_emoji, spec_name in specializations:
         is_selected = spec_key in selected_specializations
         checkbox = "✅" if is_selected else "⬜"
         buttons.append([InlineKeyboardButton(
-            text=f"{checkbox} {spec_name}",
+            text=f"{checkbox} {spec_emoji} {spec_name}",
             callback_data=f"spec_toggle_{spec_key}"
         )])
     

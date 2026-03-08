@@ -24,36 +24,36 @@ def get_comment_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
-                text="❓ Уточнение",
+                text=get_text("request_comments.keyboards.type_clarification", language=language),
                 callback_data=f"comment_type_{COMMENT_TYPE_CLARIFICATION}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🛒 Закупка материалов",
+                text=get_text("request_comments.keyboards.type_purchase", language=language),
                 callback_data=f"comment_type_{COMMENT_TYPE_PURCHASE}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📋 Отчет о выполнении",
+                text=get_text("request_comments.keyboards.type_report", language=language),
                 callback_data=f"comment_type_{COMMENT_TYPE_REPORT}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="💬 Общий комментарий",
+                text=get_text("request_comments.keyboards.type_general", language=language),
                 callback_data="comment_type_general"
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("request_comments.keyboards.cancel", language=language),
                 callback_data="cancel_comment"
             )
         ]
     ]
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_comment_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
@@ -69,18 +69,18 @@ def get_comment_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMar
     keyboard = [
         [
             InlineKeyboardButton(
-                text="✅ Добавить комментарий",
+                text=get_text("request_comments.keyboards.confirm_add_comment", language=language),
                 callback_data="confirm_comment"
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=get_text("request_comments.keyboards.cancel", language=language),
                 callback_data="cancel_comment"
             )
         ]
     ]
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_comments_list_keyboard(request_number: str, language: str = "ru") -> InlineKeyboardMarkup:
@@ -97,31 +97,31 @@ def get_comments_list_keyboard(request_number: str, language: str = "ru") -> Inl
     keyboard = [
         [
             InlineKeyboardButton(
-                text="❓ Только уточнения",
+                text=get_text("request_comments.keyboards.filter_clarifications", language=language),
                 callback_data=f"view_comments_by_type_{COMMENT_TYPE_CLARIFICATION}_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🛒 Только закупки",
+                text=get_text("request_comments.keyboards.filter_purchases", language=language),
                 callback_data=f"view_comments_by_type_{COMMENT_TYPE_PURCHASE}_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📋 Только отчеты",
+                text=get_text("request_comments.keyboards.filter_reports", language=language),
                 callback_data=f"view_comments_by_type_{COMMENT_TYPE_REPORT}_{request_number}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="📝 Добавить комментарий",
+                text=get_text("request_comments.keyboards.add_comment", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("add_comment_", request_number)
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад к заявке",
+                text=get_text("request_comments.keyboards.back_to_request", language=language),
                 callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_request_", request_number)
             )
         ]
@@ -144,13 +144,13 @@ def get_comment_actions_keyboard(request_number: str, comment_id: int, language:
     keyboard = [
         [
             InlineKeyboardButton(
-                text="📝 Ответить на комментарий",
+                text=get_text("request_comments.keyboards.reply_to_comment", language=language),
                 callback_data=f"reply_to_comment_{comment_id}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔙 Назад к комментариям",
+                text=get_text("request_comments.keyboards.back_to_comments", language=language),
                 callback_data=f"back_to_comments_{request_number}"
             )
         ]

@@ -941,7 +941,8 @@
     "media": "📎 Media",
     "phone_required": "📱 Telefon raqamini",
     "upload_documents": "📄 Hujjatlar yuklash",
-    "complete_without_docs": "✅ Hujjatsiz tugatish"
+    "complete_without_docs": "✅ Hujjatsiz tugatish",
+    "back_arrow": "⬅️ Orqaga"
   },
   "cancel": "Harakat bekor qilindi.",
   "categories": {
@@ -1026,7 +1027,21 @@
     "stats": "Statistika",
     "stats_title": "Xodim statistikasi",
     "status": "Holat",
-    "unblock": "Ochmoq"
+    "unblock": "Ochmoq",
+    "keyboards": {
+      "role_executor": "Ijrochi",
+      "role_manager": "Menejer",
+      "role_applicant": "Ariza beruvchi",
+      "spec_plumber": "Santexnik",
+      "spec_electrician": "Elektrik",
+      "spec_hvac": "HVAC",
+      "spec_cleaning": "Tozalash",
+      "spec_security": "Qo'riqlash",
+      "spec_maintenance": "Texnik xizmat",
+      "spec_landscaping": "Landshaft",
+      "spec_repair": "Ta'mirlash",
+      "spec_installation": "O'rnatish"
+    }
   },
   "errors": {
     "document_not_found": "❌ Hujjat topilmadi",
@@ -3999,7 +4014,26 @@
     "указать_телефон": "📱 Telefon raqamini ko'rsating",
     "устаревший_обработчик_теперь": "Yuridik ishlov beruvchilar: Endi manzillar kvartira tizimi orqali boshqariladi.\n\nUshbu qo'llanma",
     "устаревший_обработчик_теперь_2": "Yuridik ishlov beruvchilar: Endi manzillar kvartira tizimi orqali boshqariladi.",
-    "файл": "Fayl:"
+    "файл": "Fayl:",
+    "keyboards": {
+      "passport": "📄 Pasport",
+      "property_deed": "🏠 Kadastr ko'chirma",
+      "rental_agreement": "📋 Ijara shartnomasi",
+      "other_documents": "📄 Boshqa hujjatlar",
+      "skip_documents": "⏭️ Hujjatlarni o'tkazib yuborish",
+      "complete_onboarding": "✅ Ro'yxatdan o'tishni yakunlash",
+      "confirm_upload": "✅ Yuklashni tasdiqlash",
+      "cancel": "❌ Bekor qilish",
+      "upload_another_document": "🔄 Boshqa hujjat yuklash",
+      "add_more_documents": "📄 Yana hujjatlar qo'shish",
+      "add_document": "📄 Hujjat qo'shish",
+      "complete": "✅ Yakunlash",
+      "doc_name_passport": "Pasport",
+      "doc_name_property_deed": "Kadastr ko'chirma",
+      "doc_name_rental_agreement": "Ijara shartnomasi",
+      "doc_name_utility_bill": "Kommunal to'lov kvitansiyasi",
+      "doc_name_other": "Boshqa hujjatlar"
+    }
   },
   "pagination": {
     "info": "Sahifa {page} dan {total_pages} (jami: {total_items})",
@@ -4173,7 +4207,19 @@
     "язык_пользовате": "Foydalanuvchi tili {...}: {...}",
     "язык_пользовате_2": "Foydalanuvchi tili",
     "язык_пользовате_3": "Foydalanuvchi til: {...}",
-    "язык_пользовате_4": "Foydalanuvchi tili:"
+    "язык_пользовате_4": "Foydalanuvchi tili:",
+    "keyboards": {
+      "not_specified_m": "ko'rsatilmagan",
+      "not_specified_n": "ko'rsatilmagan",
+      "my_apartments": "🏠 Mening kvartiralarim",
+      "lang_russian": "🇷🇺 Ruscha",
+      "lang_uzbek_selected": "🇺🇿 O'zbek ✓",
+      "lang_russian_selected": "🇷🇺 Ruscha ✓",
+      "lang_uzbek": "🇺🇿 O'zbek",
+      "address_home": "🏠 Uy manzili",
+      "address_apartment": "🏢 Kvartira manzili",
+      "address_yard": "🏘️ Hovli manzili"
+    }
   },
   "ratings": {
     "rate": "Bajarilgan ish sifatini baholang:",
@@ -4234,7 +4280,31 @@
     "status": "Status:",
     "status_label": "Status",
     "title": "📋 Ariza ishga olishni taklif qilish",
-    "view_assignments": "👥 Tayinlashlarni ko'rish"
+    "view_assignments": "👥 Tayinlashlarni ko'rish",
+    "keyboards": {
+      "spec_plumber": "Santexnik",
+      "spec_electrician": "Elektrik",
+      "spec_cleaner": "Tozalagich",
+      "spec_janitor": "Farrosh",
+      "spec_guard": "Qo'riqchi",
+      "spec_specialist": "Mutaxassis",
+      "cancel": "❌ Bekor qilish",
+      "executor_item": "👤 {name}",
+      "confirm": "✅ Tasdiqlash",
+      "assign_request": "📋 Arizani tayinlash",
+      "view_assignments": "👥 Tayinlashlarni ko'rish",
+      "add_comment": "📝 Izoh qo'shish",
+      "change_status": "🔄 Statusni o'zgartirish",
+      "my_requests": "📋 Mening arizalarim",
+      "statistics": "📊 Statistika",
+      "back": "🔙 Orqaga",
+      "purchase_materials": "🛒 Materiallarni sotib olish",
+      "request_clarification": "❓ Aniqlik so'rash",
+      "complete_work": "✅ Ishni tugatish",
+      "return_to_work": "🔄 Ishga qaytarish",
+      "view_comments": "📋 Izohlarni ko'rish",
+      "back_to_requests": "🔙 Arizalarga qaytish"
+    }
   },
   "request_status": {
     "comment_required": "Statusni o'zgartirishning sababini kiriting:",
@@ -4251,7 +4321,34 @@
     "take_to_work": "🛠️ Ishga olish",
     "title": "📊 Ariza statusini boshqarish",
     "work_completed": "✅ Ishni tugatildi",
-    "work_taken": "✅ Ariza ishga olingan"
+    "work_taken": "✅ Ariza ishga olingan",
+    "keyboards": {
+      "status_in_progress": "🔄 Ishga olish",
+      "status_purchase": "🛒 Material xaridi",
+      "status_clarification": "❓ Aniqlashtirish",
+      "status_completed": "✅ Bajarildi",
+      "status_approved": "👍 Qabul qilindi",
+      "cancel": "❌ Bekor qilish",
+      "confirm": "✅ Tasdiqlash",
+      "purchase_materials": "🛒 Material xaridi",
+      "request_clarification": "❓ Aniqlik so'rash",
+      "complete_work": "✅ Ishni yakunlash",
+      "return_to_work": "🔄 Ishga qaytarish",
+      "view_report": "📋 Hisobotni ko'rish",
+      "add_comment": "📝 Izoh qo'shish",
+      "view_comments": "📋 Izohlarni ko'rish",
+      "back_to_requests": "🔙 Arizalarga qaytish",
+      "assign_request": "📋 Arizani tayinlash",
+      "take_to_work": "🔄 Ishga olish",
+      "accept_work": "👍 Ishni qabul qilish",
+      "view_assignments": "👥 Tayinlashlarni ko'rish",
+      "view_report_stats": "📊 Hisobotni ko'rish",
+      "quick_in_progress": "🔄 Ishga olish",
+      "quick_clarification": "❓ Aniqlashtirish",
+      "quick_completed": "✅ Bajarildi",
+      "quick_approved": "👍 Qabul qilindi",
+      "comment": "📝 Izoh"
+    }
   },
   "requests": {
     "5_отправьте_еще": "/ 5).Ko'proq fayllarni yuklang yoki \"Davom etish\" ni bosing",
@@ -5702,7 +5799,28 @@
     "search_select_apartment": "Xonadonni tanlang:",
     "address_system_updated_title": "⚠️ Manzil tizimi yangilandi!",
     "address_system_updated_message": "Endi manzil xonadonlar ma'lumotnomаsidan tanlanadi.\nIltimos, manzil qo'shish uchun profildagi '🏘️ Mening xonadonlarim' tugmasidan foydalaning.",
-    "legacy_address_handler_warning": "Foydalanuvchi eskirgan manzil kiritish ishlov beruvchisiga tushdi"
+    "legacy_address_handler_warning": "Foydalanuvchi eskirgan manzil kiritish ishlov beruvchisiga tushdi",
+    "keyboards": {
+      "edit_category": "🏷️ Turkumni o'zgartirish",
+      "edit_address": "📍 Manzilni o'zgartirish",
+      "edit_description": "📝 Tavsifni o'zgartirish",
+      "edit_urgency": "⚡ Shoshilinchlikni o'zgartirish",
+      "edit_apartment": "🏠 Kvartirni o'zgartirish",
+      "edit_files": "📸 Fayllarni o'zgartirish",
+      "status_to_work": "🔧 Ishga olish",
+      "status_in_progress": "🔄 Bajarilmoqda",
+      "status_purchase": "💰 Xarid",
+      "status_clarification": "❓ Aniqlashtirish",
+      "status_completed": "✅ Bajarildi",
+      "status_cancel": "❌ Bekor qilish",
+      "filter_all": "📋 Barcha arizalar",
+      "filter_new": "🆕 Yangilar",
+      "filter_in_progress": "🔄 Bajarilmoqda",
+      "filter_purchase": "💰 Xarid",
+      "filter_completed": "✅ Bajarilganlar",
+      "filter_cancelled": "❌ Bekor qilinganlar",
+      "apartment_number": "🏠 Kvartira {num}"
+    }
   },
   "role": {
     "not_allowed": "Bu rol siz uchun mavjud emas",
@@ -6345,7 +6463,25 @@
     "ℹ_моя_shift": "ℹ️ Mening smenasim",
     "no_active_shifts": "Faol smenalar yo'q",
     "registration_pending": "⏳ Sizning ro'yxatdan o'tish arizangiz ko'rib chiqilmoqda.",
-    "awaiting_admin_approval": "⏳ Administrator tasdig'ini kutish."
+    "awaiting_admin_approval": "⏳ Administrator tasdig'ini kutish.",
+    "keyboards": {
+      "confirm_yes": "✅ Ha",
+      "confirm_no": "❌ Yo'q",
+      "period_all_time": "Barcha vaqt",
+      "period_today": "Bugun",
+      "period_7_days": "7 kun",
+      "period_30_days": "30 kun",
+      "period_90_days": "90 kun",
+      "status_all": "Barcha holatlar",
+      "status_active": "Faol",
+      "status_completed": "Yakunlangan",
+      "status_cancelled": "Bekor qilingan",
+      "reset_filters": "Filtrlarni tiklash",
+      "page_prev": "◀️",
+      "page_next": "▶️",
+      "page_indicator": "{current}/{total}",
+      "force_end_shift": "❗ Smenani tugatish"
+    }
   },
   "specializations": {
     "cleaning": "Tozalash",
@@ -6394,7 +6530,12 @@
     "staff_users": "Xodimlar",
     "stats": "Statistika",
     "stats_text": "📊 Foydalanuvchilar statistikasi:\n\n📝 Yangi (pending): {pending}\n✅ Tasdiqlangan (approved): {approved}\n🚫 Bloklangan (blocked): {blocked}\n👷 Xodimlar: {staff}\n📈 Jami foydalanuvchilar: {total}",
-    "user_list_title": "👥 Foydalanuvchilar ro'yxati"
+    "user_list_title": "👥 Foydalanuvchilar ro'yxati",
+    "keyboards": {
+      "manage_yards": "Hovlilarni boshqarish",
+      "manage_apartments": "Kvartiralarni boshqarish",
+      "documents": "Hujjatlar"
+    }
   },
   "user_status": {
     "approved": "✅ Tasdiqlangan",
@@ -6758,6 +6899,78 @@
       "confirm_no": "❌ Yo'q",
       "skip": "⏭ O'tkazib yuborish",
       "cancel": "❌ Bekor qilish"
+    }
+  },
+  "request_comments": {
+    "keyboards": {
+      "type_clarification": "❓ Aniqlashtirish",
+      "type_purchase": "🛒 Materiallar xaridi",
+      "type_report": "📋 Bajarilish hisoboti",
+      "type_general": "💬 Umumiy izoh",
+      "cancel": "❌ Bekor qilish",
+      "confirm_add_comment": "✅ Izoh qo'shish",
+      "filter_clarifications": "❓ Faqat aniqlashtirish",
+      "filter_purchases": "🛒 Faqat xaridlar",
+      "filter_reports": "📋 Faqat hisobotlar",
+      "add_comment": "📝 Izoh qo'shish",
+      "back_to_request": "🔙 Arizaga qaytish",
+      "reply_to_comment": "📝 Izohga javob berish",
+      "back_to_comments": "🔙 Izohlarga qaytish"
+    }
+  },
+  "request_reports": {
+    "keyboards": {
+      "confirm_accept_request": "✅ Arizani qabul qilish",
+      "cancel": "❌ Bekor qilish",
+      "approve_request": "👍 Arizani qabul qilish",
+      "request_revision": "🔧 Qayta ishlashni so'rash",
+      "request_already_approved": "✅ Ariza qabul qilindi",
+      "add_comment": "📝 Izoh qo'shish",
+      "view_comments": "📋 Izohlarni ko'rish",
+      "back_to_request": "🔙 Arizaga qaytish",
+      "full_report": "📊 To'liq hisobot",
+      "change_history": "📝 O'zgarishlar tarixi",
+      "assignments": "👥 Tayinlashlar",
+      "back_to_report": "🔙 Hisobotga qaytish"
+    }
+  },
+  "shift_transfer": {
+    "keyboards": {
+      "shift_info": "📅 {date} {time} ({status})",
+      "status_planned": "Rejalashtirilgan",
+      "status_active": "Faol",
+      "status_paused": "Pauza",
+      "back": "⬅️ Ortga",
+      "reason_illness": "🤒 Kasallik",
+      "reason_emergency": "🚨 Favqulodda holat",
+      "reason_workload": "📊 Ortiqcha ish",
+      "reason_vacation": "🏖️ Ta'til",
+      "reason_other": "❓ Boshqa",
+      "urgency_low": "🟢 Past ustunlik",
+      "urgency_normal": "🟡 Oddiy ustunlik",
+      "urgency_high": "🟠 Yuqori ustunlik",
+      "urgency_critical": "🔴 Kritik ustunlik",
+      "confirm_transfer": "✅ O'tkazishni tasdiqlash",
+      "edit": "✏️ O'zgartirish",
+      "cancel": "❌ Bekor qilish",
+      "unknown_user": "Noma'lum",
+      "auto_assign": "🤖 Avtomatik tayinlash",
+      "accept": "✅ Qabul qilish",
+      "reject": "❌ Rad etish",
+      "details": "ℹ️ Tafsilotlar",
+      "transfer_status_pending": "⏳ Kutmoqda",
+      "transfer_status_assigned": "👤 Tayinlangan",
+      "transfer_status_accepted": "✅ Qabul qilingan",
+      "transfer_status_rejected": "❌ Rad etilgan",
+      "transfer_status_cancelled": "🚫 Bekor qilingan",
+      "transfer_status_completed": "✅ Tugallangan",
+      "skip": "⏭️ O'tkazib yuborish"
+    }
+  },
+  "user_verification": {
+    "keyboards": {
+      "download_document": "Hujjatni yuklab olish",
+      "request_additional_documents": "Qo'shimcha hujjatlarni so'rash"
     }
   }
 }

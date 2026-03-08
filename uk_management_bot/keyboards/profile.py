@@ -17,9 +17,9 @@ def get_profile_edit_keyboard(language: str = "ru", user=None) -> InlineKeyboard
         builder = InlineKeyboardBuilder()
 
         # Получаем текущие значения
-        current_phone = user.phone if user and user.phone else "не указан"
-        current_first_name = user.first_name if user and user.first_name else "не указано"
-        current_last_name = user.last_name if user and user.last_name else "не указано"
+        current_phone = user.phone if user and user.phone else get_text("profile.keyboards.not_specified_m", language=language)
+        current_first_name = user.first_name if user and user.first_name else get_text("profile.keyboards.not_specified_n", language=language)
+        current_last_name = user.last_name if user and user.last_name else get_text("profile.keyboards.not_specified_n", language=language)
 
         # Определяем текущий язык
         if user and user.language:
@@ -56,7 +56,7 @@ def get_profile_edit_keyboard(language: str = "ru", user=None) -> InlineKeyboard
 
         # Кнопка "Мои квартиры" для управления квартирами из справочника
         builder.add(InlineKeyboardButton(
-            text="🏠 Мои квартиры",
+            text=get_text("profile.keyboards.my_apartments", language=language),
             callback_data="my_apartments"
         ))
 
@@ -85,12 +85,12 @@ def get_language_choice_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     # Кнопки языков с учетом текущего языка
     if language == "uz":
         builder.add(InlineKeyboardButton(
-            text="🇷🇺 Русский",
+            text=get_text("profile.keyboards.lang_russian", language=language),
             callback_data="set_language_ru"
         ))
-        
+
         builder.add(InlineKeyboardButton(
-            text="🇺🇿 O'zbek ✓",
+            text=get_text("profile.keyboards.lang_uzbek_selected", language=language),
             callback_data="set_language_uz"
         ))
         
@@ -101,12 +101,12 @@ def get_language_choice_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ))
     else:
         builder.add(InlineKeyboardButton(
-            text="🇷🇺 Русский ✓",
+            text=get_text("profile.keyboards.lang_russian_selected", language=language),
             callback_data="set_language_ru"
         ))
-        
+
         builder.add(InlineKeyboardButton(
-            text="🇺🇿 O'zbek",
+            text=get_text("profile.keyboards.lang_uzbek", language=language),
             callback_data="set_language_uz"
         ))
         
@@ -126,23 +126,23 @@ def get_address_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     
     # Кнопки типов адресов
     builder.add(InlineKeyboardButton(
-        text="🏠 Домашний адрес",
+        text=get_text("profile.keyboards.address_home", language=language),
         callback_data="address_type_home"
     ))
     
     builder.add(InlineKeyboardButton(
-        text="🏢 Адрес квартиры",
+        text=get_text("profile.keyboards.address_apartment", language=language),
         callback_data="address_type_apartment"
     ))
     
     builder.add(InlineKeyboardButton(
-        text="🏘️ Адрес двора",
+        text=get_text("profile.keyboards.address_yard", language=language),
         callback_data="address_type_yard"
     ))
     
     # Кнопка отмены
     builder.add(InlineKeyboardButton(
-        text="❌ Отмена",
+        text=f"❌ {get_text('buttons.cancel', language=language)}",
         callback_data="cancel_address_type"
     ))
     
