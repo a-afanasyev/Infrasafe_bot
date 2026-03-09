@@ -275,7 +275,7 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
             get_text("unaccepted.handlers.request_accepted_by_manager", language=lang).format(
                 request_number=request_number
             ),
-            reply_markup=get_manager_main_keyboard(),
+            reply_markup=get_manager_main_keyboard(language=lang),
             parse_mode="HTML"
         )
 

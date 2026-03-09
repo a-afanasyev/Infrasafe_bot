@@ -152,12 +152,12 @@ async def end_shift_confirm(message: Message, db=None):
                 except:
                     specializations = [specializations] if specializations else []
 
-            spec_text = ", ".join(specializations) if specializations else get_text("shifts.universal", language=lang, fallback="Универсальная")
+            spec_text = ", ".join(specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
 
             text += f"{idx}. 🔵 <b>{get_text('shifts.shift', language=lang)} #{shift.id}</b>\n"
             text += f"   📅 {get_text('shifts.start_time', language=lang)}: {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
-            text += f"   ⏱️ {get_text('shifts.duration', language=lang).replace('{duration}', '')}: {hours}{get_text('shifts.hours', language=lang, fallback='ч')} {minutes}{get_text('shifts.minutes', language=lang, fallback='м')}\n"
-            text += f"   🔧 {get_text('shifts.specialization', language=lang, fallback='Специализация')}: {spec_text}\n\n"
+            text += f"   ⏱️ {get_text('shifts.duration', language=lang).replace('{duration}', '')}: {hours}{get_text('shifts.hours', language=lang) or 'ч'} {minutes}{get_text('shifts.minutes', language=lang) or 'м'}\n"
+            text += f"   🔧 {get_text('shifts.specialization', language=lang) or 'Специализация'}: {spec_text}\n\n"
 
             keyboard_rows.append([
                 InlineKeyboardButton(

@@ -509,7 +509,7 @@ async def process_apartment_entrance(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -545,7 +545,7 @@ async def process_apartment_floor(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -581,7 +581,7 @@ async def process_apartment_rooms(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -617,7 +617,7 @@ async def process_apartment_area(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -642,7 +642,7 @@ async def process_apartment_area(message: Message, state: FSMContext):
         if not user:
             await message.answer(
                 get_text("address_apartments.handlers.user_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -661,7 +661,7 @@ async def process_apartment_area(message: Message, state: FSMContext):
         if error:
             await message.answer(
                 get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -692,7 +692,7 @@ async def process_apartment_area(message: Message, state: FSMContext):
         logger.error(f"Ошибка при создании квартиры: {e}")
         await message.answer(
             get_text("address_apartments.handlers.creation_exception", language=lang).format(error=str(e)),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
         db.close()
@@ -839,7 +839,7 @@ async def start_edit_apartment_area(callback: CallbackQuery, state: FSMContext):
 
     await callback.message.answer(
         get_text("address_apartments.handlers.edit_area_prompt", language=lang),
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(language=lang)
     )
     await callback.answer()
 
@@ -892,14 +892,14 @@ async def process_new_apartment_area(message: Message, state: FSMContext):
         if error:
             await message.answer(
                 get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
 
         await message.answer(
             get_text("address_apartments.handlers.area_update_success", language=lang).format(area=area),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
 
         logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
@@ -908,7 +908,7 @@ async def process_new_apartment_area(message: Message, state: FSMContext):
         logger.error(f"Ошибка при обновлении площади квартиры: {e}")
         await message.answer(
             get_text("address_apartments.handlers.area_update_exception", language=lang).format(error=str(e)),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
         db.close()

@@ -46,10 +46,10 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session, lan
             from uk_management_bot.keyboards.base import get_main_keyboard_for_role
             await message.answer(
                 get_text("welcome", language=lang),
-                reply_markup=get_main_keyboard_for_role(user.active_role or user.role, user.roles or [user.role], user.status)
+                reply_markup=get_main_keyboard_for_role(user.active_role or user.role, user.roles or [user.role], user.status, language=lang)
             )
             return
-        
+
         # Если профиль не заполнен, начинаем онбординг
         # ОБНОВЛЕНО: Проверяем наличие телефона и одобренных квартир (вместо устаревшего home_address)
         has_approved_apartment = any(ua.status == 'approved' for ua in user.user_apartments) if user.user_apartments else False
@@ -275,9 +275,9 @@ async def complete_onboarding_without_documents(message: Message, state: FSMCont
         
         await message.answer(
             completion_text,
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status)
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=lang)
         )
-        
+
         logger.info(f"Онбординг без документов завершен для пользователя {message.from_user.id}")
         
     except Exception as e:
@@ -290,9 +290,9 @@ async def cancel_onboarding(message: Message, state: FSMContext, db: Session, us
     
     await message.answer(
         get_text("onboarding.cancelled", language=lang),
-        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved")
+        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved", language=lang)
     )
-    
+
     await state.clear()
     logger.info(f"Онбординг отменен для пользователя {message.from_user.id}")
 
@@ -314,7 +314,7 @@ async def start_address_input(message: Message, state: FSMContext, db: Session):
 
     await message.answer(
         message_text,
-        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved")
+        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved", language=lang)
     )
 
     logger.warning(
@@ -571,9 +571,9 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
         
         await message.answer(
             completion_text,
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status)
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=lang)
         )
-        
+
         await state.clear()
         logger.info(f"Онбординг с документами завершен для пользователя {message.from_user.id}")
         

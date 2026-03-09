@@ -288,7 +288,7 @@ async def process_entrance_count(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_buildings.handlers.building_creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -323,7 +323,7 @@ async def process_floor_count(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_buildings.handlers.building_creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -359,7 +359,7 @@ async def process_building_gps(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_buildings.handlers.building_creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -391,7 +391,7 @@ async def process_building_gps(message: Message, state: FSMContext):
         if not user:
             await message.answer(
                 get_text("address_buildings.handlers.user_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -410,7 +410,7 @@ async def process_building_gps(message: Message, state: FSMContext):
         if error:
             await message.answer(
                 get_text("address_buildings.handlers.building_creation_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -431,7 +431,7 @@ async def process_building_gps(message: Message, state: FSMContext):
         logger.error(f"Ошибка при создании здания: {e}")
         await message.answer(
             get_text("address_buildings.handlers.building_creation_error", language=lang).format(error=str(e)),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
         db.close()

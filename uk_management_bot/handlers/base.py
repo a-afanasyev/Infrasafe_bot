@@ -34,7 +34,6 @@ from uk_management_bot.utils.button_texts import (
     get_help_texts,
     get_back_texts,
 )
-from uk_management_bot.utils.helpers import get_user_language
 
 # Константы для фильтрации сообщений
 PROFILE_TEXTS = get_profile_texts()
@@ -218,7 +217,7 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
     except Exception:
         pass
 
-    await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user.status))
+    await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user.status, language=lang))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
 
 @router.message(Command("menu"))
@@ -279,7 +278,7 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
         # Отправляем новое сообщение с обновленным меню
         await callback.message.answer(
             welcome_text,
-            reply_markup=get_main_keyboard_for_role(active_role, roles, user.status)
+            reply_markup=get_main_keyboard_for_role(active_role, roles, user.status, language=language)
         )
         
         lang = language
@@ -380,10 +379,10 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
             lang = language
             await message.answer(
                 get_text("errors.unknown_error", language=lang),
-                reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], user_status)
+                reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], user_status, language=lang)
             )
             return
-        
+
         # Получаем язык пользователя из базы данных
         from uk_management_bot.utils.helpers import get_user_language
         lang = get_user_language(message.from_user.id, db)
@@ -427,7 +426,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         lang = language
         await message.answer(
             get_text("errors.unknown_error", language=lang),
-            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], "approved")
+            reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], "approved", language=lang)
         )
 
 
@@ -453,7 +452,7 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
         pass
     role_name = get_text(f"roles.{active_role}", language=language)
     text = get_text("role.switch_title", language=language, role=role_name)
-    await message.answer(text, reply_markup=get_role_switch_inline(roles, active_role))
+    await message.answer(text, reply_markup=get_role_switch_inline(roles, active_role, language=language))
 
 
 @router.callback_query(RoleSwitchCB.filter())
@@ -488,9 +487,9 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Sessio
         lang = language
         await cb.message.answer(
             get_text("base.handlers.main_menu", language=lang), 
-            reply_markup=get_main_keyboard_for_role(target, roles, "approved")
+            reply_markup=get_main_keyboard_for_role(target, roles, "approved", language=lang)
         )
-        
+
         # Отправляем уведомление о смене режима
         try:
             from aiogram import Bot
@@ -511,7 +510,7 @@ async def cmd_admin(message: Message, state: FSMContext, language: str = "ru"):
     lang = language
     await message.answer(
         get_text("base.handlers.admin_password_prompt", language=lang),
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(language=lang)
     )
 
 @router.message(AdminPasswordStates.waiting_for_password)
@@ -562,7 +561,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
 
         await message.answer(
             safe_get_text("admin.assigned_successfully", language=lang),
-            reply_markup=get_main_keyboard_for_role(active_role, roles_list, "approved")
+            reply_markup=get_main_keyboard_for_role(active_role, roles_list, "approved", language=lang)
         )
         logger.info(f"Пользователь {message.from_user.id} назначен администратором")
     else:

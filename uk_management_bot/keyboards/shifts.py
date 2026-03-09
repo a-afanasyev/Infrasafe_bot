@@ -15,15 +15,15 @@ def get_shifts_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """
     rows = [
         [
-            KeyboardButton(text=get_text("shifts.accept_shift", language=language, fallback="🔄 Принять смену")),
-            KeyboardButton(text=get_text("shifts.end_shift", language=language, fallback="🔚 Сдать смену"))
+            KeyboardButton(text=get_text("shifts.accept_shift", language=language) or "🔄 Принять смену"),
+            KeyboardButton(text=get_text("shifts.end_shift", language=language) or "🔚 Сдать смену")
         ],
         [
-            KeyboardButton(text=get_text("shifts.my_shift", language=language, fallback="ℹ️ Моя смена")),
-            KeyboardButton(text=get_text("shifts.shift_history", language=language, fallback="📜 История смен"))
+            KeyboardButton(text=get_text("shifts.my_shift", language=language) or "ℹ️ Моя смена"),
+            KeyboardButton(text=get_text("shifts.shift_history", language=language) or "📜 История смен")
         ],
         [
-            KeyboardButton(text=get_text("buttons.back", language=language, fallback="🔙 Назад"))
+            KeyboardButton(text=get_text("buttons.back", language=language) or "🔙 Назад")
         ],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)

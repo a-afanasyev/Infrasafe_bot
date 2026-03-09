@@ -437,7 +437,7 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
                 text += f"   📍 {addr}\n\n"
             
             from uk_management_bot.keyboards.admin import get_manager_main_keyboard
-            await message.answer(text, reply_markup=get_manager_main_keyboard())
+            await message.answer(text, reply_markup=get_manager_main_keyboard(language=lang))
         
         # Очищаем состояние
         await state.clear()

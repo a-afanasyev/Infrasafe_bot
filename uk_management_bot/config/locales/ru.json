@@ -780,7 +780,8 @@
       "no_available_executors": "❌ Нет доступных исполнителей",
       "remind_applicant": "🔔 Напомнить заявителю",
       "accept_for_applicant": "✅ Принять за заявителя",
-      "back_to_unaccepted_list": "🔙 К списку непринятых"
+      "back_to_unaccepted_list": "🔙 К списку непринятых",
+      "back_nav": "🔙 Назад"
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Новая заявка для дежурных {specialization}</b>\n\n№ {request_number}\nКатегория: {category}\nАдрес: {address}\nСрочность: {urgency}\n\nОписание: {description}",
@@ -923,7 +924,8 @@
       "error_assignment_detail": "Ошибка назначения: {error}",
       "executor_assigned_success": "✅ <b>Заявка #{request_number} назначена исполнителю</b>\n\n👤 Исполнитель: {executor_name}\n📂 Категория: {category}\n📍 Адрес: {address}\n\nИсполнитель получит уведомление о назначении.",
       "notify_executor_assigned": "📋 <b>Вам назначена новая заявка!</b>\n\n№ заявки: #{request_number}\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению."
-    }
+    },
+    "panel_title": "⚙️ Панель управления"
   },
   "auth": {
     "already_authorized": "Вы уже авторизованы.",
@@ -1087,7 +1089,17 @@
     "phone_required": "📱 Указать телефон",
     "upload_documents": "📄 Загрузить документы",
     "complete_without_docs": "✅ Завершить без документов",
-    "back_arrow": "⬅️ Назад"
+    "back_arrow": "⬅️ Назад",
+    "accept": "🔧 В работу",
+    "approve": "✅ Подтвердить",
+    "back_to_list": "🔙 Назад к списку",
+    "back_to_work": "🔄 Вернуть в работу",
+    "clarify": "❓ Уточнение",
+    "complete": "✅ Выполнена",
+    "deny": "🚫 Предложить отказ",
+    "purchase": "💰 Закуп",
+    "reply": "💬 Ответить",
+    "work": "🔄 В работу"
   },
   "cancel": "Действие отменено.",
   "categories": {
@@ -1215,7 +1227,11 @@
     "name_empty": "❌ Имя не может быть пустым",
     "last_name_empty": "❌ Фамилия не может быть пустой",
     "cancelled": "Отменено.",
-    "error_occurred": "Произошла ошибка"
+    "error_occurred": "Произошла ошибка",
+    "category_empty": "Категория не может быть пустой",
+    "phone_empty": "Номер телефона не может быть пустым",
+    "phone_invalid_format": "Неверный формат номера телефона",
+    "phone_valid": "Номер телефона корректен"
   },
   "filters": {
     "by_role": "По роли",
@@ -3814,7 +3830,10 @@
     "ℹ_здесь_вы": "\n\nℹ️ Здесь вы можете добавить дополнительные дворы для создания заявок.\nПо умолчанию житель имеет до",
     "ℹ_смен_требующих": "ℹ️ Смен, требующих передачи, не обнаружено.\n"
   },
-  "help": "🤖 Справка по использованию бота",
+  "help": {
+    "title": "🤖 Справка по использованию бота",
+    "usage_help": "📖 Справка по командам бота:\n\n/start - Начать работу с ботом\n/help - Показать справку\n/requests - Мои заявки\n/shifts - Мои смены\n/language - Сменить язык"
+  },
   "invites": {
     "already_registered": "❌ Вы уже зарегистрированы в системе",
     "bot_registration_info": "🤖 Регистрация через бота\n\nКандидат сможет:\n• Перейти по ссылке\n• Автоматически откроется бот\n• Выполнится команда /join с токеном\n• Автоматически присоединиться к системе",
@@ -5985,6 +6004,7 @@
     "no_requests": "Пока нет заявок. Нажмите 'Создать заявку' в главном меню.",
     "select_request_for_details": "Выберите заявку для просмотра деталей:",
     "address_label": "Адрес:",
+    "address_not_specified": "Адрес не указан",
     "rejection_reason": "Причина отказа:",
     "clarification": "Уточнение:",
     "page": "страница",
@@ -6050,7 +6070,11 @@
       "archive_requests_title": "Архив заявок",
       "no_requests_hint": "Пока нет заявок. Нажмите 'Создать заявку' в главном меню.",
       "reply_to": "💬 Ответить на #{number}"
-    }
+    },
+    "count": "заявок",
+    "enter_address_manually": "📍 Введите адрес вручную:",
+    "no_active_requests": "У вас пока нет активных заявок.",
+    "no_archive_requests": "У вас пока нет заявок в архиве."
   },
   "role": {
     "not_allowed": "Эта роль вам недоступна",
@@ -6442,7 +6466,9 @@
       "workload_analysis": "📊 Анализ загруженности",
       "schedule_conflicts": "⚠️ Конфликты расписания",
       "confirm": "✅ Подтвердить",
-      "cancel_action": "❌ Отмена"
+      "cancel_action": "❌ Отмена",
+      "date_entry": "📅 {date_text}",
+      "tomorrow_short": "Завтра"
     }
   },
   "shifts": {
@@ -6746,7 +6772,14 @@
       "filters_reset": "Фильтры сброшены",
       "invalid_data": "Неверные данные",
       "shift_ended_by_manager": "Смена завершена менеджером"
-    }
+    },
+    "active_shifts_list": "Активные смены:",
+    "hours": "ч",
+    "minutes": "м",
+    "shift": "Смена",
+    "specialization": "Специализация",
+    "start_time": "Начало",
+    "universal": "Универсальная"
   },
   "specializations": {
     "cleaning": "Уборка",
@@ -6864,7 +6897,12 @@
     "error": "Ошибка",
     "return_to_menu": "Возврат в меню",
     "user_not_found": "Пользователь не найден в базе данных.",
-    "cancel": "❌ Отмена"
+    "cancel": "❌ Отмена",
+    "back": "🔙 Назад",
+    "error_occurred": "❌ Произошла ошибка: {error}",
+    "error_short": "❌ Ошибка",
+    "none": "не указано",
+    "not_specified": "Не указано"
   },
   "shift": {
     "not_in_shift": "Вы не в смене"
@@ -6969,7 +7007,8 @@
     "files_count_valid": "Количество файлов корректно",
     "field_required": "Поле '{field}' обязательно для заполнения",
     "address_empty": "Адрес не может быть пустым",
-    "all_data_valid": "Все данные корректны"
+    "all_data_valid": "Все данные корректны",
+    "category_valid": "Категория корректна"
   },
   "apartment": {
     "details_title": "🏠 Квартира {number}",
@@ -6987,7 +7026,6 @@
     "description_label": "Описание:",
     "created_label": "Создана:"
   },
-  "created_label": {},
   "description_empty": {},
   "description_too_short": {},
   "description_too_long": {},
@@ -7262,7 +7300,8 @@
       "confirm_yes": "✅ Да",
       "confirm_no": "❌ Нет",
       "skip": "⏭ Пропустить",
-      "cancel": "❌ Отмена"
+      "cancel": "❌ Отмена",
+      "page_back": "⬅️ Назад"
     }
   },
   "request_comments": {
@@ -7776,9 +7815,6 @@
       "unaccepted_list_title": "⏳ <b>Непринятые заявки</b> ({count}):\n\n<i>Время указывает сколько заявка ожидает принятия</i>"
     }
   },
-  "action_cancelled": "❌ Действие отменено",
-  "activated": "активирован",
-  "add_apartment_step1": "🏘️ <b>Добавление квартиры</b>\n\nШаг 1 из 3: Выберите двор:",
   "address_buildings": {
     "handlers": {
       "activated": "активировано",
@@ -7822,9 +7858,6 @@
       "yard_not_found": "❌ Двор не найден"
     }
   },
-  "address_directory_empty": "❌ <b>К сожалению, справочник адресов пуст</b>\n\nОбратитесь к администратору для добавления адресов.\n\nВы можете продолжить регистрацию без указания квартиры.",
-  "address_directory_empty_short": "❌ <b>К сожалению, справочник адресов пуст</b>\n\nОбратитесь к администратору для добавления адресов.",
-  "address_directory_menu": "📍 <b>Справочник адресов</b>\n\nУправление структурой адресов:\n🏘 Дворы → 🏢 Здания → 🏠 Квартиры → 👤 Жители\n\nВыберите раздел:",
   "address_moderation": {
     "handlers": {
       "action_cancelled": "❌ Действие отменено",
@@ -7859,11 +7892,6 @@
       "yes_owner": "Да (владелец)"
     }
   },
-  "admin_new_apartment_request": "🔔 <b>Новая заявка на квартиру!</b>\n\n👤 <b>Пользователь:</b> {user_name}\n📱 <b>Username:</b> {username}\n🆔 <b>ID:</b> <code>{telegram_id}</code>\n🏠 <b>Квартира:</b> {apartment_address}\n\n📋 Перейдите в раздел <b>Модерация заявок</b> для проверки.",
-  "admin_panel_menu": "👨‍💼 <b>Панель управления</b>\n\nВыберите раздел:",
-  "apartment_label": "Квартира {number}",
-  "apartment_not_found": "❌ Квартира не найдена",
-  "apartment_selection_cancelled": "❌ <b>Выбор квартиры отменен</b>\n\nВы можете выбрать квартиру позже в настройках профиля.\n\nПродолжим регистрацию...",
   "base": {
     "handlers": {
       "admin_password_prompt": "<b>Назначение администратора</b>\n\nВведите пароль администратора для получения прав менеджера:",
@@ -7878,37 +7906,6 @@
       "specialization_label": "Специализация"
     }
   },
-  "building_not_found": "❌ Здание не найдено",
-  "confirm_apartment_selection": "📋 <b>Подтверждение выбора квартиры</b>\n\n🏘 <b>Двор:</b> {yard_name}\n🏢 <b>Здание:</b> {building_address}\n🏠 <b>Квартира:</b> {apartment_info}\n\n❓ <b>Подтвердите выбор квартиры?</b>\n\nПосле подтверждения ваша заявка будет отправлена на модерацию администратору.",
-  "confirm_delete_yard": "❓ <b>Удаление двора</b>\n\nВы уверены, что хотите удалить двор:\n<b>{name}</b>?",
-  "create_yard_description": "✅ Название: <b>{name}</b>\n\nТеперь введите описание двора (или нажмите 'Пропустить'):",
-  "create_yard_gps": "Теперь введите GPS координаты двора в формате:\nширота, долгота\n\nНапример: 41.2995, 69.2401\n\nИли нажмите 'Пропустить':",
-  "create_yard_name": "➕ <b>Создание нового двора</b>\n\nВведите название двора:",
-  "deactivated": "деактивирован",
-  "delete_warning_buildings": "\n\n⚠️ <b>Внимание:</b> В этом дворе {count} зданий. Удаление возможно только после деактивации всех зданий.",
-  "description_info": "\n<b>Описание:</b> {desc}",
-  "description_label": "\n<b>Описание:</b>\n{description}\n",
-  "edit_yard_menu": "✏️ <b>Редактирование двора</b>\n\nВыберите, что хотите изменить:",
-  "edit_yard_name": "✏️ <b>Редактирование названия двора</b>\n\nВведите новое название:",
-  "entrance_label": ", подъезд {entrance}",
-  "error_deletion": "❌ Ошибка удаления",
-  "error_generic": "❌ Ошибка",
-  "error_loading_data": "❌ Ошибка загрузки данных",
-  "error_loading_yards": "❌ Ошибка при загрузке списка дворов. Попробуйте позже.",
-  "error_no_apartment_selected": "❌ Ошибка: квартира не выбрана",
-  "error_processing": "❌ Ошибка обработки",
-  "error_request_failed": "❌ Не удалось создать заявку",
-  "error_sending_request": "❌ <b>Произошла ошибка</b>\n\nНе удалось отправить заявку. Попробуйте позже или обратитесь к администратору.",
-  "error_status_change": "❌ Ошибка изменения статуса",
-  "floor_label": ", {floor} этаж",
-  "gps_not_set": "📍 Не указаны",
-  "invalid_gps_format": "❌ Неверный формат координат.\n\nВведите координаты в формате: широта, долгота\nНапример: 41.2995, 69.2401\n\nИли нажмите 'Пропустить':",
-  "name_invalid_length": "❌ Название должно содержать от 3 до 200 символов.\n\nПопробуйте еще раз:",
-  "name_too_long": "❌ Название двора слишком длинное (максимум 200 символов).\n\nПопробуйте еще раз:",
-  "name_too_short": "❌ Название двора должно содержать минимум 3 символа.\n\nПопробуйте еще раз:",
-  "no_apartments_in_building": "❌ В здании по адресу '{address}' пока нет квартир. Выберите другое здание.",
-  "no_buildings_in_yard": "❌ В дворе '{yard_name}' пока нет зданий. Выберите другой двор.",
-  "not_specified": "Не указан",
   "profile_editing": {
     "handlers": {
       "error_cancel": "Ошибка при отмене",
@@ -7919,29 +7916,92 @@
       "user_not_found": "Пользователь не найден"
     }
   },
-  "request_already_exists": "⚠️ Ваша заявка на эту квартиру {status}",
-  "request_creation_error": "❌ <b>Ошибка создания заявки:</b>\n\n{error}",
-  "request_sent_success": "✅ <b>Заявка успешно отправлена!</b>\n\n🏠 <b>Адрес:</b> {address}\n\n⏳ Ваша заявка отправлена на рассмотрение администратору.\nВы получите уведомление после проверки.\n\nА пока продолжим регистрацию...",
-  "request_status_approved": "уже подтверждена",
-  "request_status_exists": "уже существует",
-  "request_status_pending": "уже на рассмотрении",
-  "request_status_rejected": "была отклонена. Обратитесь к администратору",
-  "select_apartment_step3": "✅ Двор: <b>{yard_name}</b>\n✅ Здание: <b>{building_address}</b>\n\n🏠 Шаг 3 из 3: Выберите вашу квартиру:",
-  "select_building_step2": "✅ Двор: <b>{yard_name}</b>\n\n🏢 Шаг 2 из 3: Выберите здание:",
-  "select_yard_step1": "🏘 <b>Выбор квартиры</b>\n\nШаг 1 из 3: Выберите двор, в котором находится ваша квартира:",
-  "status_active": "✅ Активен",
-  "status_inactive": "❌ Неактивен",
-  "upload_documents_prompt": "📄 <b>Загрузка документов</b>\n\nДля подтверждения личности загрузите один из документов:\n• Паспорт\n• Водительские права\n• Другой документ с фото\n\nВыберите тип документа:",
-  "user_not_found": "❌ Пользователь не найден",
-  "yard_created_success": "✅ <b>Двор успешно создан!</b>\n\n🏘 <b>Название:</b> {name}\n<b>GPS координаты:</b> {gps}{desc_info}\n\nВыберите действие:",
-  "yard_creation_cancelled": "❌ Создание двора отменено",
-  "yard_creation_error": "❌ Ошибка создания двора:\n{error}",
-  "yard_deleted_success": "✅ <b>Двор успешно удален (деактивирован)</b>",
-  "yard_details": "🏘 <b>Двор: {name}</b>\n\n<b>Статус:</b> {status}\n<b>Зданий:</b> {buildings}\n<b>GPS координаты:</b> {gps}\n",
-  "yard_name_updated": "✅ Название двора успешно изменено на:\n<b>{name}</b>",
-  "yard_not_found": "❌ Двор не найден",
-  "yard_status_changed": "✅ Двор {status}",
-  "yards_list_empty": "📋 <b>Список дворов пуст</b>\n\nДобавьте первый двор для начала работы.",
-  "yards_list_page": "📋 <b>Список дворов</b> (страница {page})\n\nВсего дворов: {total}\n\nВыберите двор для просмотра:",
-  "yards_list_title": "📋 <b>Список дворов</b>\n\nВсего дворов: {total}\nАктивных: {active}\n\nВыберите двор для просмотра:"
+  "address_yards": {
+    "handlers": {
+      "action_cancelled": "❌ Действие отменено",
+      "activated": "активирован",
+      "address_directory_menu": "📍 <b>Справочник адресов</b>\n\nУправление структурой адресов:\n🏘 Дворы → 🏢 Здания → 🏠 Квартиры → 👤 Жители\n\nВыберите раздел:",
+      "admin_panel_menu": "👨‍💼 <b>Панель управления</b>\n\nВыберите раздел:",
+      "confirm_delete_yard": "❓ <b>Удаление двора</b>\n\nВы уверены, что хотите удалить двор:\n<b>{name}</b>?",
+      "create_yard_description": "✅ Название: <b>{name}</b>\n\nТеперь введите описание двора (или нажмите 'Пропустить'):",
+      "create_yard_gps": "Теперь введите GPS координаты двора в формате:\nширота, долгота\n\nНапример: 41.2995, 69.2401\n\nИли нажмите 'Пропустить':",
+      "create_yard_name": "➕ <b>Создание нового двора</b>\n\nВведите название двора:",
+      "created_label": {},
+      "deactivated": "деактивирован",
+      "delete_warning_buildings": "\n\n⚠️ <b>Внимание:</b> В этом дворе {count} зданий. Удаление возможно только после деактивации всех зданий.",
+      "description_info": "\n<b>Описание:</b> {desc}",
+      "description_label": "\n<b>Описание:</b>\n{description}\n",
+      "edit_yard_menu": "✏️ <b>Редактирование двора</b>\n\nВыберите, что хотите изменить:",
+      "edit_yard_name": "✏️ <b>Редактирование названия двора</b>\n\nВведите новое название:",
+      "error_deletion": "❌ Ошибка удаления",
+      "error_generic": "❌ Ошибка",
+      "error_loading_data": "❌ Ошибка загрузки данных",
+      "error_status_change": "❌ Ошибка изменения статуса",
+      "gps_not_set": "📍 Не указаны",
+      "invalid_gps_format": "❌ Неверный формат координат.\n\nВведите координаты в формате: широта, долгота\nНапример: 41.2995, 69.2401\n\nИли нажмите 'Пропустить':",
+      "name_invalid_length": "❌ Название должно содержать от 3 до 200 символов.\n\nПопробуйте еще раз:",
+      "name_too_long": "❌ Название двора слишком длинное (максимум 200 символов).\n\nПопробуйте еще раз:",
+      "name_too_short": "❌ Название двора должно содержать минимум 3 символа.\n\nПопробуйте еще раз:",
+      "status_active": "✅ Активен",
+      "status_inactive": "❌ Неактивен",
+      "user_not_found": "❌ Пользователь не найден",
+      "yard_created_success": "✅ <b>Двор успешно создан!</b>\n\n🏘 <b>Название:</b> {name}\n<b>GPS координаты:</b> {gps}{desc_info}\n\nВыберите действие:",
+      "yard_creation_cancelled": "❌ Создание двора отменено",
+      "yard_creation_error": "❌ Ошибка создания двора:\n{error}",
+      "yard_deleted_success": "✅ <b>Двор успешно удален (деактивирован)</b>",
+      "yard_details": "🏘 <b>Двор: {name}</b>\n\n<b>Статус:</b> {status}\n<b>Зданий:</b> {buildings}\n<b>GPS координаты:</b> {gps}\n",
+      "yard_name_updated": "✅ Название двора успешно изменено на:\n<b>{name}</b>",
+      "yard_not_found": "❌ Двор не найден",
+      "yard_status_changed": "✅ Двор {status}",
+      "yards_list_empty": "📋 <b>Список дворов пуст</b>\n\nДобавьте первый двор для начала работы.",
+      "yards_list_page": "📋 <b>Список дворов</b> (страница {page})\n\nВсего дворов: {total}\n\nВыберите двор для просмотра:",
+      "yards_list_title": "📋 <b>Список дворов</b>\n\nВсего дворов: {total}\nАктивных: {active}\n\nВыберите двор для просмотра:"
+    }
+  },
+  "user_apt_selection": {
+    "handlers": {
+      "add_apartment_step1": "🏘️ <b>Добавление квартиры</b>\n\nШаг 1 из 3: Выберите двор:",
+      "address_directory_empty": "❌ <b>К сожалению, справочник адресов пуст</b>\n\nОбратитесь к администратору для добавления адресов.\n\nВы можете продолжить регистрацию без указания квартиры.",
+      "address_directory_empty_short": "❌ <b>К сожалению, справочник адресов пуст</b>\n\nОбратитесь к администратору для добавления адресов.",
+      "admin_new_apartment_request": "🔔 <b>Новая заявка на квартиру!</b>\n\n👤 <b>Пользователь:</b> {user_name}\n📱 <b>Username:</b> {username}\n🆔 <b>ID:</b> <code>{telegram_id}</code>\n🏠 <b>Квартира:</b> {apartment_address}\n\n📋 Перейдите в раздел <b>Модерация заявок</b> для проверки.",
+      "apartment_label": "Квартира {number}",
+      "apartment_not_found": "❌ Квартира не найдена",
+      "apartment_selection_cancelled": "❌ <b>Выбор квартиры отменен</b>\n\nВы можете выбрать квартиру позже в настройках профиля.\n\nПродолжим регистрацию...",
+      "building_not_found": "❌ Здание не найдено",
+      "confirm_apartment_selection": "📋 <b>Подтверждение выбора квартиры</b>\n\n🏘 <b>Двор:</b> {yard_name}\n🏢 <b>Здание:</b> {building_address}\n🏠 <b>Квартира:</b> {apartment_info}\n\n❓ <b>Подтвердите выбор квартиры?</b>\n\nПосле подтверждения ваша заявка будет отправлена на модерацию администратору.",
+      "entrance_label": ", подъезд {entrance}",
+      "error_loading_yards": "❌ Ошибка при загрузке списка дворов. Попробуйте позже.",
+      "error_no_apartment_selected": "❌ Ошибка: квартира не выбрана",
+      "error_processing": "❌ Ошибка обработки",
+      "error_request_failed": "❌ Не удалось создать заявку",
+      "error_sending_request": "❌ <b>Произошла ошибка</b>\n\nНе удалось отправить заявку. Попробуйте позже или обратитесь к администратору.",
+      "floor_label": ", {floor} этаж",
+      "no_apartments_in_building": "❌ В здании по адресу '{address}' пока нет квартир. Выберите другое здание.",
+      "no_buildings_in_yard": "❌ В дворе '{yard_name}' пока нет зданий. Выберите другой двор.",
+      "not_specified": "Не указан",
+      "request_already_exists": "⚠️ Ваша заявка на эту квартиру {status}",
+      "request_creation_error": "❌ <b>Ошибка создания заявки:</b>\n\n{error}",
+      "request_sent_success": "✅ <b>Заявка успешно отправлена!</b>\n\n🏠 <b>Адрес:</b> {address}\n\n⏳ Ваша заявка отправлена на рассмотрение администратору.\nВы получите уведомление после проверки.\n\nА пока продолжим регистрацию...",
+      "request_status_approved": "уже подтверждена",
+      "request_status_exists": "уже существует",
+      "request_status_pending": "уже на рассмотрении",
+      "request_status_rejected": "была отклонена. Обратитесь к администратору",
+      "select_apartment_step3": "✅ Двор: <b>{yard_name}</b>\n✅ Здание: <b>{building_address}</b>\n\n🏠 Шаг 3 из 3: Выберите вашу квартиру:",
+      "select_building_step2": "✅ Двор: <b>{yard_name}</b>\n\n🏢 Шаг 2 из 3: Выберите здание:",
+      "select_yard_step1": "🏘 <b>Выбор квартиры</b>\n\nШаг 1 из 3: Выберите двор, в котором находится ваша квартира:",
+      "upload_documents_prompt": "📄 <b>Загрузка документов</b>\n\nДля подтверждения личности загрузите один из документов:\n• Паспорт\n• Водительские права\n• Другой документ с фото\n\nВыберите тип документа:",
+      "user_not_found": "❌ Пользователь не найден",
+      "error_loading_data": "❌ Ошибка загрузки данных",
+      "yard_not_found": "❌ Двор не найден"
+    }
+  },
+  "bot": {
+    "restarted": "🔄 Бот был перезапущен. Выберите действие:"
+  },
+  "commons": {
+    "status_label": "Статус"
+  },
+  "menu": {
+    "main": "📋 Главное меню"
+  }
 }

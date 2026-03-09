@@ -196,8 +196,7 @@ async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: 
                 user_name=user_name,
                 user_telegram_id=user_telegram_id
             ),
-            reply_markup=get_user_yards_keyboard(user_telegram_id, lang),
-            parse_mode="Markdown"
+            reply_markup=get_user_yards_keyboard(user_telegram_id, lang)
         )
         await callback.answer()
 
@@ -225,8 +224,7 @@ async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list
 
         await callback.message.edit_text(
             get_text("user_yards.add_yard_message", language=lang),
-            reply_markup=get_yard_selection_keyboard(user_telegram_id, lang),
-            parse_mode="Markdown"
+            reply_markup=get_yard_selection_keyboard(user_telegram_id, lang)
         )
         await callback.answer()
 

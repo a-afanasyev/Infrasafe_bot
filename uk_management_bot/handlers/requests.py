@@ -1639,18 +1639,18 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
             # Empty state message
             if active_role == "executor":
                 title = get_text('requests.assigned_requests_title', language=lang)
-                empty_msg = get_text('requests.no_assigned_requests', language=lang) if 'no_assigned_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет назначенных заявок."
+                empty_msg = get_text('requests.no_assigned_requests', language=lang) or "У вас пока нет назначенных заявок."
                 message_text = f"📋 <b>{title}</b>\n\n{empty_msg}"
             else:
                 if active_status == "active":
                     title = get_text('requests.active_requests_title', language=lang)
-                    empty_msg = get_text('requests.no_active_requests', language=lang) if 'no_active_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет активных заявок."
+                    empty_msg = get_text('requests.no_active_requests', language=lang) or "У вас пока нет активных заявок."
                 elif active_status == "archive":
                     title = get_text('requests.archive_title', language=lang)
-                    empty_msg = get_text('requests.no_archive_requests', language=lang) if 'no_archive_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет заявок в архиве."
+                    empty_msg = get_text('requests.no_archive_requests', language=lang) or "У вас пока нет заявок в архиве."
                 else:
                     title = get_text('requests.all_filter', language=lang)
-                    empty_msg = get_text('requests.no_requests', language=lang) if 'no_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет заявок."
+                    empty_msg = get_text('requests.no_requests', language=lang) or "У вас пока нет заявок."
                 message_text = f"📋 <b>{title}</b>\n\n{empty_msg}"
 
             await callback.message.answer(message_text, parse_mode="HTML")
@@ -1975,7 +1975,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
             return
         await callback.message.edit_text(
             get_text("requests.request_clarification_status", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_keyboard(language=lang)
         )
     except Exception as e:
         logger.error(f"Ошибка обработки перевода в 'Уточнение': {e}")
@@ -2009,7 +2009,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
             return
         await callback.message.edit_text(
             get_text("requests.request_purchase_status", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_keyboard(language=lang)
         )
     except Exception as e:
         logger.error(f"Ошибка обработки перевода в 'Закуп': {e}")
@@ -2045,7 +2045,7 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
             return
         await callback.message.edit_text(
             get_text("requests.request_cancelled", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_keyboard(language=lang)
         )
     except Exception as e:
         logger.error(f"Ошибка обработки отмены заявки: {e}")
@@ -2106,7 +2106,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
             return
         await callback.message.edit_text(
             get_text("requests.request_approved", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_keyboard(language=lang)
         )
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения заявки: {e}")
@@ -2253,10 +2253,10 @@ async def show_my_requests(message: Message, state: FSMContext):
 
         if not page_requests:
             if active_role == "executor":
-                no_requests_msg = get_text('requests.no_assigned_requests', language=lang) if 'no_assigned_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет назначенных заявок."
+                no_requests_msg = get_text('requests.no_assigned_requests', language=lang) or "У вас пока нет назначенных заявок."
                 message_text += no_requests_msg
             else:
-                no_requests_msg = get_text('requests.no_requests', language=lang) if 'no_requests' in get_text('requests', language=lang, fallback={}) else "У вас пока нет заявок."
+                no_requests_msg = get_text('requests.no_requests', language=lang) or "У вас пока нет заявок."
                 message_text += no_requests_msg
         else:
             # Для заявителей показываем текстовый список (используем helper-функцию)
@@ -2293,7 +2293,7 @@ async def show_my_requests(message: Message, state: FSMContext):
                 # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
         else:
             # Для исполнителей добавляем кнопки заявок
-            select_prompt = get_text('requests.select_request_prompt', language=lang) if 'select_request_prompt' in get_text('requests', language=lang, fallback={}) else "Выберите заявку для просмотра деталей:"
+            select_prompt = get_text('requests.select_request_prompt', language=lang) or "Выберите заявку для просмотра деталей:"
             message_text += f"{select_prompt}\n\n"
             for i, r in enumerate(page_requests, 1):
                 icon = get_status_icon(r.status)
@@ -2353,7 +2353,7 @@ async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext)
                 await callback.message.answer(get_text("requests.dialog_empty", language=lang))
         await callback.message.answer(
             get_text("requests.enter_clarification_reply", language=lang),
-            reply_markup=get_cancel_keyboard(),
+            reply_markup=get_cancel_keyboard(language=lang),
         )
         await callback.answer()
     except Exception as e:
@@ -2396,14 +2396,14 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
         new_notes = (existing + "\n" if existing else "") + f"[{user_prefix}] {clarification_label}: {to_add}"
         req.notes = new_notes
         db_session.commit()
-        await message.answer(get_text("requests.reply_saved", language=lang), reply_markup=get_main_keyboard())
+        await message.answer(get_text("requests.reply_saved", language=lang), reply_markup=get_main_keyboard(language=lang))
         await state.clear()
     except Exception as e:
         logger.error(f"Ошибка сохранения ответа на уточнение: {e}")
         db_session = next(get_db())
         lang = get_user_language(message.from_user.id, db_session)
         await state.clear()
-        await message.answer(get_text("requests.reply_save_failed", language=lang), reply_markup=get_main_keyboard())
+        await message.answer(get_text("requests.reply_save_failed", language=lang), reply_markup=get_main_keyboard(language=lang))
 
 
 @router.callback_query(F.data.startswith("status_"))

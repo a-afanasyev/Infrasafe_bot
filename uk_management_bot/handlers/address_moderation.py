@@ -221,7 +221,7 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
             lang = language
             await message.answer(
                 get_text("address_moderation.handlers.request_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -242,7 +242,7 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
         if not reviewer:
             await message.answer(
                 get_text("address_moderation.handlers.admin_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -258,7 +258,7 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
         if not success:
             await message.answer(
                 get_text("address_moderation.handlers.approve_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -275,7 +275,7 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
 
         await message.answer(
             get_text("address_moderation.handlers.approve_success", language=lang) + comment_text,
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
 
         logger.info(f"Заявка {user_apartment_id} подтверждена администратором {reviewer.telegram_id} (DB ID: {reviewer.id})")
@@ -284,7 +284,7 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
         logger.error(f"Ошибка при подтверждении заявки: {e}")
         await message.answer(
             get_text("address_moderation.handlers.approve_exception", language=lang).format(error=str(e)),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
         db.close()
@@ -346,7 +346,7 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
             lang = language
             await message.answer(
                 get_text("address_moderation.handlers.request_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -367,7 +367,7 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
         if not reviewer:
             await message.answer(
                 get_text("address_moderation.handlers.admin_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -383,7 +383,7 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
         if not success:
             await message.answer(
                 get_text("address_moderation.handlers.reject_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -398,7 +398,7 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
 
         await message.answer(
             get_text("address_moderation.handlers.reject_success", language=lang).format(comment=comment),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
 
         logger.info(f"Заявка {user_apartment_id} отклонена администратором {reviewer.telegram_id} (DB ID: {reviewer.id})")
@@ -407,7 +407,7 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
         logger.error(f"Ошибка при отклонении заявки: {e}")
         await message.answer(
             get_text("address_moderation.handlers.reject_exception", language=lang).format(error=str(e)),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
         db.close()

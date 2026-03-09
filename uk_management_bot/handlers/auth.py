@@ -9,7 +9,6 @@ from ..states.registration import RegistrationStates
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.keyboards.base import get_main_keyboard, get_cancel_keyboard, get_main_keyboard_for_role
 import logging
 import json
@@ -19,9 +18,8 @@ router = Router()
 
 
 @router.message(F.text == "🔑 Войти")
-async def login_via_button(message: Message, db: Session, user_status: str = None):
-    # Get user language
-    language = await get_language_for_user(message.from_user.id, db, message)
+async def login_via_button(message: Message, db: Session, user_status: str = None, language: str = "ru"):
+    # language injected by middleware
 
     auth = AuthService(db)
     user = await auth.get_or_create_user(
@@ -33,19 +31,19 @@ async def login_via_button(message: Message, db: Session, user_status: str = Non
     if user.status == "approved":
         await message.answer(
             get_text("auth.already_authorized", language=language),
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status)
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=language)
         )
         return
     ok = await auth.approve_user(message.from_user.id, role="applicant")
     if ok:
         await message.answer(
             get_text("auth.login_success", language=language),
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status),
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=language),
         )
     else:
         await message.answer(
             get_text("auth.login_failed", language=language),
-            reply_markup=get_cancel_keyboard(),
+            reply_markup=get_cancel_keyboard(language=language),
         )
 
 

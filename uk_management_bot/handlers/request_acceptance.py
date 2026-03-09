@@ -89,7 +89,7 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
         for req in requests:
             text += f"📋 <b>#{req.request_number}</b>\n"
             text += f"   {get_text('requests.category_label', language=lang)} {req.category}\n"
-            address_text = req.address or get_text("requests.address_не_указан", language=lang, fallback="Не указан")
+            address_text = req.address or get_text("requests.address_not_specified", language=lang) or "Не указан"
             text += f"   {get_text('requests.address_label', language=lang)} {address_text}\n"
             text += f"   {get_text('requests.updated_at', language=lang)} {req.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
 

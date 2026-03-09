@@ -193,29 +193,23 @@ async def show_user_stats_with_verification(callback: CallbackQuery, db: Session
         verification_stats = verification_service.get_verification_stats()
         
         # Формируем расширенную статистику
-        extended_stats = f"""
-📊 **Расширенная статистика пользователей**
+        extended_stats = get_text('user_mgmt.handlers.extended_stats', language=lang).format(
+            total=stats.get('total', 0),
+            pending=stats.get('pending', 0),
+            approved=stats.get('approved', 0),
+            blocked=stats.get('blocked', 0),
+            staff=stats.get('staff', 0),
+            ver_pending=verification_stats.get('pending', 0),
+            ver_verified=verification_stats.get('verified', 0),
+            ver_rejected=verification_stats.get('rejected', 0),
+            ver_pending_docs=verification_stats.get('pending_documents', 0),
+            ver_total_docs=verification_stats.get('total_documents', 0)
+        )
 
-👥 **Пользователи:**
-• Всего: {stats.get('total', 0)}
-• Новые (pending): {stats.get('pending', 0)}
-• Одобренные (approved): {stats.get('approved', 0)}
-• Заблокированные (blocked): {stats.get('blocked', 0)}
-• Сотрудники: {stats.get('staff', 0)}
-
-🔍 **Верификация:**
-• Ожидают верификации: {verification_stats.get('pending', 0)}
-• Верифицированные: {verification_stats.get('verified', 0)}
-• Отклоненные: {verification_stats.get('rejected', 0)}
-• Документов на проверке: {verification_stats.get('pending_documents', 0)}
-• Всего документов: {verification_stats.get('total_documents', 0)}
-        """
-        
         # Показываем расширенную статистику
         await callback.message.edit_text(
             extended_stats,
-            reply_markup=get_user_management_main_keyboard(stats, lang),
-            parse_mode="Markdown"
+            reply_markup=get_user_management_main_keyboard(stats, lang)
         )
         
         await callback.answer()
@@ -241,7 +235,7 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, db: Ses
         logger.info(f"🔵 Parsed user_id: {user_id}")
     except (IndexError, ValueError) as e:
         logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
-        await callback.answer("Ошибка обработки запроса", show_alert=True)
+        await callback.answer(get_text('user_mgmt.handlers.error_processing_request', language=lang), show_alert=True)
         return
 
     # Проверяем права доступа
@@ -260,31 +254,31 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, db: Ses
         target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
 
         if not target_user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.user_not_found', language=lang), show_alert=True)
             return
 
         # Одобряем пользователя (используем sync метод с user_id)
         auth_service = AuthService(db)
         # Получаем ID текущего менеджера (из параметра user или callback)
         manager_id = user.id if user else callback.from_user.id
-        success = auth_service.approve_user(user_id, manager_id, "Одобрено через уведомление о регистрации")
+        success = auth_service.approve_user(user_id, manager_id, get_text('user_mgmt.handlers.approved_via_notification', language=lang))
 
         if success:
-            await callback.answer(f"✅ Пользователь {target_user.first_name} одобрен", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.user_approved_alert', language=lang).format(name=target_user.first_name), show_alert=True)
 
             # Обновляем сообщение
             await callback.message.edit_text(
-                callback.message.text + f"\n\n✅ Одобрено {callback.from_user.first_name}",
+                callback.message.text + get_text('user_mgmt.handlers.approved_by', language=lang).format(name=callback.from_user.first_name),
                 reply_markup=None
             )
 
             logger.info(f"Пользователь {user_id} одобрен менеджером {callback.from_user.id}")
         else:
-            await callback.answer("Ошибка одобрения пользователя", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.error_approving_user', language=lang), show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка одобрения пользователя {user_id}: {e}", exc_info=True)
-        await callback.answer("Произошла ошибка", show_alert=True)
+        await callback.answer(get_text('user_mgmt.handlers.error_occurred', language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("reject_user_"))
@@ -296,7 +290,7 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, db: Sess
         user_id = int(callback.data.split("_")[2])
     except (IndexError, ValueError) as e:
         logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
-        await callback.answer("Ошибка обработки запроса", show_alert=True)
+        await callback.answer(get_text('user_mgmt.handlers.error_processing_request', language=lang), show_alert=True)
         return
 
     # Проверяем права доступа
@@ -314,7 +308,7 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, db: Sess
         target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
 
         if not target_user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.user_not_found', language=lang), show_alert=True)
             return
 
         # Отклоняем пользователя (блокируем) - используем sync метод с user_id
@@ -326,24 +320,24 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, db: Sess
         manager = db.query(UserModel).filter(UserModel.telegram_id == callback.from_user.id).first()
         manager_id = manager.id if manager else callback.from_user.id
 
-        success = auth_service.block_user(user_id, manager_id, "Отклонено через уведомление о регистрации")
+        success = auth_service.block_user(user_id, manager_id, get_text('user_mgmt.handlers.rejected_via_notification', language=lang))
 
         if success:
-            await callback.answer(f"❌ Пользователь {target_user.first_name} отклонен", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.user_rejected_alert', language=lang).format(name=target_user.first_name), show_alert=True)
 
             # Обновляем сообщение
             await callback.message.edit_text(
-                callback.message.text + f"\n\n❌ Отклонено {callback.from_user.first_name}",
+                callback.message.text + get_text('user_mgmt.handlers.rejected_by', language=lang).format(name=callback.from_user.first_name),
                 reply_markup=None
             )
 
             logger.info(f"Пользователь {user_id} отклонен менеджером {callback.from_user.id}")
         else:
-            await callback.answer("Ошибка отклонения пользователя", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.error_rejecting_user', language=lang), show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка отклонения пользователя {user_id}: {e}", exc_info=True)
-        await callback.answer("Произошла ошибка", show_alert=True)
+        await callback.answer(get_text('user_mgmt.handlers.error_occurred', language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("view_user_"))
@@ -357,7 +351,7 @@ async def handle_view_user_from_notification(callback: CallbackQuery, db: Sessio
         logger.info(f"🔵 Parsed user_id: {user_id}")
     except (IndexError, ValueError) as e:
         logger.error(f"Ошибка парсинга user_id из callback.data '{callback.data}': {e}")
-        await callback.answer("Ошибка обработки запроса", show_alert=True)
+        await callback.answer(get_text('user_mgmt.handlers.error_processing_request', language=lang), show_alert=True)
         return
 
     # Проверяем права доступа
@@ -375,31 +369,32 @@ async def handle_view_user_from_notification(callback: CallbackQuery, db: Sessio
         target_user = db.query(UserModel).filter(UserModel.id == user_id).first()
 
         if not target_user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.user_not_found', language=lang), show_alert=True)
             return
 
         # Формируем информацию о пользователе
-        profile_text = f"👤 <b>Профиль пользователя</b>\n\n"
+        not_specified = get_text('user_mgmt.handlers.not_specified', language=lang)
+        profile_text = get_text('user_mgmt.handlers.profile_title', language=lang) + "\n\n"
         profile_text += f"🆔 ID: {target_user.id}\n"
-        profile_text += f"👤 Имя: {target_user.first_name or 'Не указано'}"
+        profile_text += get_text('user_mgmt.handlers.profile_name', language=lang).format(name=target_user.first_name or not_specified)
         if target_user.last_name:
             profile_text += f" {target_user.last_name}"
-        profile_text += f"\n"
+        profile_text += "\n"
 
         if target_user.username:
             profile_text += f"📱 Username: @{target_user.username}\n"
 
         profile_text += f"🆔 Telegram ID: {target_user.telegram_id}\n"
-        profile_text += f"🎯 Роль: {get_text(f'roles.{target_user.role}', language=lang) if target_user.role else 'Не указана'}\n"
-        profile_text += f"📊 Статус: {target_user.status}\n"
+        profile_text += get_text('user_mgmt.handlers.profile_role', language=lang).format(role=get_text(f'roles.{target_user.role}', language=lang) if target_user.role else not_specified) + "\n"
+        profile_text += get_text('user_mgmt.handlers.profile_status', language=lang).format(status=target_user.status) + "\n"
 
         if target_user.specialization:
-            profile_text += f"🛠️ Специализация: {target_user.specialization}\n"
+            profile_text += get_text('user_mgmt.handlers.profile_specialization', language=lang).format(spec=target_user.specialization) + "\n"
 
         if target_user.created_at:
-            profile_text += f"📅 Регистрация: {target_user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            profile_text += get_text('user_mgmt.handlers.profile_registered', language=lang).format(date=target_user.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
 
-        # Отправляем новое сообщени�� с профилем
+        # Отправляем новое сообщение с профилем
         await callback.message.answer(profile_text, parse_mode="HTML")
         await callback.answer()
 
@@ -407,7 +402,7 @@ async def handle_view_user_from_notification(callback: CallbackQuery, db: Sessio
 
     except Exception as e:
         logger.error(f"Ошибка просмотра профиля пользователя {user_id}: {e}", exc_info=True)
-        await callback.answer("Произошла ошибка", show_alert=True)
+        await callback.answer(get_text('user_mgmt.handlers.error_occurred', language=lang), show_alert=True)
 
 
 # ═══ БЫСТРЫЕ ДЕЙСТВИЯ С ВЕРИФИКАЦИЕЙ ═══
@@ -469,22 +464,26 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                     
                     # Создаем клавиатуру с кнопкой перезапуска
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+                    # Определяем язык целевого пользователя
+                    target_lang = 'ru'  # По умолчанию
+
                     restart_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")]
+                        [InlineKeyboardButton(text=get_text('user_mgmt.handlers.restart_bot_btn', language=target_lang), callback_data="restart_bot")]
                     ])
-                    
+
                     # Отправляем уведомление об одобрении с кнопкой перезапуска
                     await bot.send_message(
                         chat_id=target_user.telegram_id,
-                        text="✅ Ваша заявка одобрена! Нажмите кнопку ниже для перезапуска бота.",
+                        text=get_text('user_mgmt.handlers.application_approved_restart', language=target_lang),
                         reply_markup=restart_keyboard
                     )
-                    
+
                     await bot.session.close()
-                    
+
             except Exception as e:
                 logger.error(f"Ошибка отправки обновленного меню пользователю {user_id}: {e}")
-            
+
             await callback.answer(
                 get_text('verification.user_approved', language=lang),
                 show_alert=True
@@ -494,7 +493,7 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                 get_text('errors.operation_failed', language=lang),
                 show_alert=True
             )
-        
+
     except Exception as e:
         logger.error(f"Ошибка быстрой верификации: {e}")
         await callback.answer(
@@ -538,7 +537,7 @@ async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = 
         if not user:
             logger.error(f"Пользователь с ID {user_id} не найден в базе данных")
             await callback.answer(
-                "Пользователь не найден",
+                get_text('user_mgmt.handlers.user_not_found', language=lang),
                 show_alert=True
             )
             return
@@ -554,7 +553,7 @@ async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = 
         success = verification_service.reject_verification(
             user_id=user_id,
             admin_id=callback.from_user.id,
-            notes="Верификация отклонена администратором"
+            notes=get_text('user_mgmt.handlers.verification_rejected_by_admin', language=lang)
         )
 
         if success:
@@ -681,7 +680,7 @@ async def show_user_list(callback: CallbackQuery, db: Session, roles: list = Non
         except Exception as edit_error:
             # Если сообщение не изменилось, просто отвечаем на callback
             if "message is not modified" in str(edit_error):
-                await callback.answer("Данные актуальны")
+                await callback.answer(get_text('user_mgmt.handlers.data_up_to_date', language=lang))
             else:
                 raise edit_error
         
@@ -769,7 +768,7 @@ async def handle_approve_user(callback: CallbackQuery, state: FSMContext, db: Se
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         # Сохраняем данные в состоянии FSM
@@ -818,7 +817,7 @@ async def handle_block_user(callback: CallbackQuery, state: FSMContext, db: Sess
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         await state.update_data({
@@ -866,7 +865,7 @@ async def handle_unblock_user(callback: CallbackQuery, state: FSMContext, db: Se
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         await state.update_data({
@@ -914,7 +913,7 @@ async def handle_delete_user(callback: CallbackQuery, state: FSMContext, db: Ses
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         await state.update_data({
@@ -978,49 +977,39 @@ async def handle_view_user_documents(callback: CallbackQuery, db: Session,
         documents = verification_service.get_user_documents(target_user_id)
         
         if not documents:
+            unknown = get_text('user_mgmt.handlers.unknown_user', language=lang)
             await callback.message.edit_text(
-                f"📄 **Документы пользователя {target_user.first_name or target_user.username or 'Неизвестный'}**\n\n"
-                f"Документы не загружены.",
-                reply_markup=get_cancel_keyboard(lang),
-                parse_mode="Markdown"
+                get_text('user_mgmt.handlers.documents_title', language=lang).format(name=target_user.first_name or target_user.username or unknown) + "\n\n"
+                + get_text('user_mgmt.handlers.no_documents_uploaded', language=lang),
+                reply_markup=get_cancel_keyboard(lang)
             )
             await callback.answer()
             return
-        
+
         # Формируем список документов
-        user_name = target_user.first_name or target_user.username or 'Неизвестный'
-        # Экранируем специальные символы для Markdown
-        user_name = user_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)').replace('~', '\\~').replace('`', '\\`').replace('>', '\\>').replace('#', '\\#').replace('+', '\\+').replace('-', '\\-').replace('=', '\\=').replace('|', '\\|').replace('{', '\\{').replace('}', '\\}').replace('.', '\\.').replace('!', '\\!')
-        
-        documents_text = f"📄 **Документы пользователя {user_name}**\n\n"
+        unknown = get_text('user_mgmt.handlers.unknown_user', language=lang)
+        user_name = target_user.first_name or target_user.username or unknown
+
+        documents_text = get_text('user_mgmt.handlers.documents_title', language=lang).format(name=user_name) + "\n\n"
         
         for i, doc in enumerate(documents, 1):
             from uk_management_bot.database.models.user_verification import VerificationStatus
             status_emoji = "✅" if doc.verification_status == VerificationStatus.APPROVED else "⏳" if doc.verification_status == VerificationStatus.PENDING else "❌"
-            
+
             # Получаем название типа документа
-            doc_type_names = {
-                'passport': 'Паспорт',
-                'property_deed': 'Кадастровая выписка',
-                'rental_agreement': 'Договор аренды',
-                'utility_bill': 'Квитанция ЖКХ',
-                'other': 'Другие документы'
-            }
-            doc_type_name = doc_type_names.get(doc.document_type.value, doc.document_type.value)
-            
-            # Экранируем специальные символы
-            file_name = (doc.file_name or 'Без названия').replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)').replace('~', '\\~').replace('`', '\\`').replace('>', '\\>').replace('#', '\\#').replace('+', '\\+').replace('-', '\\-').replace('=', '\\=').replace('|', '\\|').replace('{', '\\{').replace('}', '\\}').replace('.', '\\.').replace('!', '\\!')
-            
-            documents_text += f"{i}. {status_emoji} **{doc_type_name}**\n"
-            documents_text += f"   📁 Файл: `{file_name}`\n"
+            doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{doc.document_type.value}', language=lang)
+
+            file_name = doc.file_name or get_text('user_mgmt.handlers.no_title', language=lang)
+
+            documents_text += f"{i}. {status_emoji} <b>{doc_type_name}</b>\n"
+            documents_text += get_text('user_mgmt.handlers.doc_file', language=lang).format(name=file_name) + "\n"
             if doc.file_size:
-                documents_text += f"   📏 Размер: {doc.file_size // 1024} KB\n"
-            documents_text += f"   📅 Загружен: {doc.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-            
+                documents_text += get_text('user_mgmt.handlers.doc_size', language=lang).format(size=doc.file_size // 1024) + "\n"
+            documents_text += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=doc.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
+
             if doc.verification_notes:
-                notes = doc.verification_notes.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)').replace('~', '\\~').replace('`', '\\`').replace('>', '\\>').replace('#', '\\#').replace('+', '\\+').replace('-', '\\-').replace('=', '\\=').replace('|', '\\|').replace('{', '\\{').replace('}', '\\}').replace('.', '\\.').replace('!', '\\!')
-                documents_text += f"   📝 Комментарий: {notes}\n"
-            
+                documents_text += get_text('user_mgmt.handlers.doc_comment', language=lang).format(comment=doc.verification_notes) + "\n"
+
             documents_text += "\n"
         
         # Создаем клавиатуру с кнопками для каждого документа
@@ -1030,23 +1019,16 @@ async def handle_view_user_documents(callback: CallbackQuery, db: Session,
         
         # Добавляем кнопки для каждого документа
         for i, doc in enumerate(documents, 1):
-            doc_type_names = {
-                'passport': 'Паспорт',
-                'property_deed': 'Кадастровая выписка',
-                'rental_agreement': 'Договор аренды',
-                'utility_bill': 'Квитанция ЖКХ',
-                'other': 'Другие документы'
-            }
-            doc_type_name = doc_type_names.get(doc.document_type.value, doc.document_type.value)
-            
+            doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{doc.document_type.value}', language=lang)
+
             keyboard_buttons.append([InlineKeyboardButton(
-                text=f"📥 Скачать {doc_type_name}",
+                text=get_text('user_mgmt.handlers.download_doc_btn', language=lang).format(doc_type=doc_type_name),
                 callback_data=f"download_document_{doc.id}"
             )])
         
         # Добавляем кнопки управления
         keyboard_buttons.append([InlineKeyboardButton(
-            text=f"📝 Запросить дополнительные документы",
+            text=get_text('user_mgmt.handlers.request_additional_docs_btn', language=lang),
             callback_data=f"request_documents_{target_user_id}"
         )])
         
@@ -1059,8 +1041,7 @@ async def handle_view_user_documents(callback: CallbackQuery, db: Session,
         
         await callback.message.edit_text(
             documents_text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
         
         await callback.answer()
@@ -1097,7 +1078,7 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
         
         if not document:
             await callback.answer(
-                "Документ не найден",
+                get_text('user_mgmt.handlers.document_not_found', language=lang),
                 show_alert=True
             )
             return
@@ -1110,20 +1091,13 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
         
         try:
             # Получаем название типа документа
-            doc_type_names = {
-                'passport': 'Паспорт',
-                'property_deed': 'Кадастровая выписка',
-                'rental_agreement': 'Договор аренды',
-                'utility_bill': 'Квитанция ЖКХ',
-                'other': 'Другие документы'
-            }
-            doc_type_name = doc_type_names.get(document.document_type.value, document.document_type.value)
-            
+            doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{document.document_type.value}', language=lang)
+
             caption = f"📄 {doc_type_name}\n"
-            caption += f"📅 Загружен: {document.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            caption += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=document.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
 
             if document.file_size:
-                caption += f"📏 Размер: {document.file_size // 1024} KB"
+                caption += get_text('user_mgmt.handlers.doc_size', language=lang).format(size=document.file_size // 1024)
 
             # Определяем тип файла по file_name или пробуем отправить как фото
             try:
@@ -1133,7 +1107,7 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
                     document=document.file_id,
                     caption=caption
                 )
-                await callback.answer("Документ отправлен в личные сообщения")
+                await callback.answer(get_text('user_mgmt.handlers.document_sent_to_dm', language=lang))
             except Exception as doc_error:
                 # Если ошибка "can't use file of type Photo", отправляем как фото
                 if "can't use file of type Photo" in str(doc_error):
@@ -1143,13 +1117,13 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
                         photo=document.file_id,
                         caption=caption
                     )
-                    await callback.answer("Документ отправлен в личные сообщения")
+                    await callback.answer(get_text('user_mgmt.handlers.document_sent_to_dm', language=lang))
                 else:
                     raise  # Пробрасываем другие ошибки
-            
+
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")
-            await callback.answer("Ошибка отправки документа", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.error_sending_document', language=lang), show_alert=True)
         finally:
             await bot.session.close()
         
@@ -1184,7 +1158,7 @@ async def handle_request_documents(callback: CallbackQuery, state: FSMContext, d
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         await state.update_data({
@@ -1242,7 +1216,7 @@ async def handle_request_documents(callback: CallbackQuery, state: FSMContext, d
 #         # Получаем внутренний ID менеджера из базы данных
 #         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 #         if not manager:
-#             await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+#             await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
 #             return
 #             
 #         await state.update_data({
@@ -1316,7 +1290,7 @@ async def handle_check_document(callback: CallbackQuery, state: FSMContext, db: 
             reply_markup=get_document_checklist_keyboard(target_user_id, selected_docs, lang)
         )
         
-        await callback.answer(f"✅ {get_text(f'verification.document_types.{document_type}', language=lang)} выбран")
+        await callback.answer(get_text('user_mgmt.handlers.doc_selected', language=lang).format(doc_type=get_text(f'verification.document_types.{document_type}', language=lang)))
         
     except Exception as e:
         logger.error(f"Ошибка выбора документа: {e}")
@@ -1361,7 +1335,7 @@ async def handle_uncheck_document(callback: CallbackQuery, state: FSMContext, db
             reply_markup=get_document_checklist_keyboard(target_user_id, selected_docs, lang)
         )
         
-        await callback.answer(f"⬜️ {get_text(f'verification.document_types.{document_type}', language=lang)} убран")
+        await callback.answer(get_text('user_mgmt.handlers.doc_deselected', language=lang).format(doc_type=get_text(f'verification.document_types.{document_type}', language=lang)))
         
     except Exception as e:
         logger.error(f"Ошибка отмены выбора документа: {e}")
@@ -1399,7 +1373,7 @@ async def handle_request_selected_documents(callback: CallbackQuery, state: FSMC
         # Получаем внутренний ID менеджера
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
         
         # Сохраняем данные в состоянии
@@ -1455,7 +1429,7 @@ async def handle_cancel_document_selection(callback: CallbackQuery, state: FSMCo
             target_user_id = int(parts[3])
         else:
             logger.error(f"Неверный формат callback_data: {callback.data}")
-            await callback.answer("Ошибка: неверный формат данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.error_invalid_format', language=lang), show_alert=True)
             return
         
         # Очищаем состояние
@@ -1600,14 +1574,18 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
                 
                 # Создаем клавиатуру с кнопкой перезапуска
                 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+                # Определяем язык целевого пользователя
+                target_lang = 'ru'  # По умолчанию
+
                 restart_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")]
+                    [InlineKeyboardButton(text=get_text('user_mgmt.handlers.restart_bot_btn', language=target_lang), callback_data="restart_bot")]
                 ])
-                
+
                 # Отправляем уведомление об одобрении с кнопкой перезапуска
                 await bot.send_message(
                     chat_id=target_user.telegram_id,
-                    text="✅ Ваша заявка одобрена! Нажмите кнопку ниже для перезапуска бота.",
+                    text=get_text('user_mgmt.handlers.application_approved_restart', language=target_lang),
                     reply_markup=restart_keyboard
                 )
                 
@@ -1765,8 +1743,8 @@ async def process_delete_reason(message: Message, state: FSMContext, db: Session
             except Exception as e:
                 logger.error(f"Ошибка при возврате к панели управления пользователями после удаления: {e}")
                 await message.answer(
-                    get_text('moderation.user_deleted_successfully', language=lang) + 
-                    "\n\nОшибка при возврате к панели управления."
+                    get_text('moderation.user_deleted_successfully', language=lang) +
+                    "\n\n" + get_text('user_mgmt.handlers.error_returning_to_panel', language=lang)
                 )
         else:
             await message.answer(
@@ -1989,7 +1967,7 @@ async def show_user_roles_management(callback: CallbackQuery, state: FSMContext,
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         # Сохраняем данные в состоянии
@@ -2255,7 +2233,7 @@ async def show_user_specializations_management(callback: CallbackQuery, state: F
         # Получаем внутренний ID менеджера из базы данных
         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not manager:
-            await callback.answer("Ошибка: менеджер не найден в базе данных", show_alert=True)
+            await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
             
         # Сохраняем данные в состоянии
@@ -2480,10 +2458,10 @@ async def back_to_admin_panel(callback: CallbackQuery):
         from uk_management_bot.keyboards.admin import get_manager_main_keyboard
         
         await callback.message.answer(
-            "Панель менеджера",
-            reply_markup=get_manager_main_keyboard()
+            get_text('user_mgmt.handlers.manager_panel', language=lang),
+            reply_markup=get_manager_main_keyboard(language=lang)
         )
-        
+
         await callback.answer()
         
     except Exception as e:

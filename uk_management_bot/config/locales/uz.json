@@ -780,7 +780,8 @@
       "no_available_executors": "❌ Mavjud ijrochilar yo'q",
       "remind_applicant": "🔔 Ariza beruvchiga eslatish",
       "accept_for_applicant": "✅ Ariza beruvchi o'rniga qabul qilish",
-      "back_to_unaccepted_list": "🔙 Qabul qilinmaganlar ro'yxatiga"
+      "back_to_unaccepted_list": "🔙 Qabul qilinmaganlar ro'yxatiga",
+      "back_nav": "🔙 Orqaga"
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Navbatchi {specialization} uchun yangi ariza</b>\n\n№ {request_number}\nKategoriya: {category}\nManzil: {address}\nShoshilinchlik: {urgency}\n\nTavsif: {description}",
@@ -923,7 +924,8 @@
       "error_assignment_detail": "Tayinlash xatosi: {error}",
       "executor_assigned_success": "✅ <b>Ariza #{request_number} ijrochiga tayinlandi</b>\n\n👤 Ijrochi: {executor_name}\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n\nIjrochi tayinlash haqida xabar oladi.",
       "notify_executor_assigned": "📋 <b>Sizga yangi ariza tayinlandi!</b>\n\n№ ariza: #{request_number}\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n\nIltimos, bajarishga kirishin."
-    }
+    },
+    "panel_title": "⚙️ Boshqaruv paneli"
   },
   "auth": {
     "already_authorized": "Siz allaqachon avtorizatsiya qilgansiz.",
@@ -1087,7 +1089,17 @@
     "phone_required": "📱 Telefon raqamini",
     "upload_documents": "📄 Hujjatlar yuklash",
     "complete_without_docs": "✅ Hujjatsiz tugatish",
-    "back_arrow": "⬅️ Orqaga"
+    "back_arrow": "⬅️ Orqaga",
+    "accept": "🔧 Ishga olish",
+    "approve": "✅ Tasdiqlash",
+    "back_to_list": "🔙 Ro'yxatga qaytish",
+    "back_to_work": "🔄 Ishga qaytarish",
+    "clarify": "❓ Aniqlashtirish",
+    "complete": "✅ Bajarildi",
+    "deny": "🚫 Rad etishni taklif qilish",
+    "purchase": "💰 Xarid",
+    "reply": "💬 Javob berish",
+    "work": "🔄 Ishga"
   },
   "cancel": "Harakat bekor qilindi.",
   "categories": {
@@ -1215,7 +1227,11 @@
     "name_empty": "❌ Ism bo'sh bo'lishi mumkin emas",
     "last_name_empty": "❌ Familiya bo'sh bo'lishi mumkin emas",
     "cancelled": "Bekor qilindi.",
-    "error_occurred": "Xatolik yuz berdi"
+    "error_occurred": "Xatolik yuz berdi",
+    "category_empty": "Kategoriya bo'sh bo'lishi mumkin emas",
+    "phone_empty": "Telefon raqami bo'sh bo'lishi mumkin emas",
+    "phone_invalid_format": "Telefon raqami formati noto'g'ri",
+    "phone_valid": "Telefon raqami to'g'ri"
   },
   "filters": {
     "by_role": "Rol bo'yicha",
@@ -3814,7 +3830,10 @@
     "ℹ_здесь_вы": "ℹ️ Bu erda ilovalar yaratish uchun qo'shimcha hovli qo'shishingiz mumkin.\nSukut bo'yicha, rezident bor",
     "ℹ_смен_требующих": "① pul o'tkazishni talab qilmasa."
   },
-  "help": "🤖 Bot foydalanish bo'yicha ma'lumot",
+  "help": {
+    "title": "🤖 Botdan foydalanish bo'yicha yordam",
+    "usage_help": "📖 Bot buyruqlari bo'yicha yordam:\n\n/start - Botni ishga tushirish\n/help - Yordam ko'rsatish\n/requests - Mening arizalarim\n/shifts - Mening smenalarim\n/language - Tilni o'zgartirish"
+  },
   "invites": {
     "already_registered": "❌ Siz allaqachon tizimda ro'yxatdan o'tgansiz",
     "bot_registration_info": "🤖 Bot orqali ro'yxatdan o'tish\n\nNomzod quyidagicha:\n• havolani kuzatib boring\n• Bot avtomatik ravishda ochiladi\n• / qo'shilish buyrug'i token bilan bajariladi\n• Tizimga avtomatik ravishda avtomatik ravishda qo'shiling",
@@ -5985,6 +6004,7 @@
     "no_requests": "Hozircha arizalar yo'q. Bosh menyudan 'Ariza yaratish' tugmasini bosing.",
     "select_request_for_details": "Tafsilotlarni ko'rish uchun arizani tanlang:",
     "address_label": "Manzil:",
+    "address_not_specified": "Manzil ko'rsatilmagan",
     "rejection_reason": "Rad etish sababi:",
     "clarification": "Tushuntirish:",
     "page": "sahifa",
@@ -6050,7 +6070,11 @@
       "archive_requests_title": "Arizalar arxivi",
       "no_requests_hint": "Hozircha arizalar yo'q. Asosiy menyuda 'Ariza yaratish' tugmasini bosing.",
       "reply_to": "💬 #{number} ga javob berish"
-    }
+    },
+    "count": "arizalar",
+    "enter_address_manually": "📍 Manzilni qo'lda kiriting:",
+    "no_active_requests": "Sizda hali faol arizalar yo'q.",
+    "no_archive_requests": "Sizda hali arxivda arizalar yo'q."
   },
   "role": {
     "not_allowed": "Bu rol siz uchun mavjud emas",
@@ -6442,7 +6466,9 @@
       "workload_analysis": "📊 Yuklanish tahlili",
       "schedule_conflicts": "⚠️ Jadval ziddiyatlari",
       "confirm": "✅ Tasdiqlash",
-      "cancel_action": "❌ Bekor qilish"
+      "cancel_action": "❌ Bekor qilish",
+      "date_entry": "📅 {date_text}",
+      "tomorrow_short": "Ertaga"
     }
   },
   "shifts": {
@@ -6746,7 +6772,14 @@
       "filters_reset": "Filtrlar tiklandi",
       "invalid_data": "Noto'g'ri ma'lumotlar",
       "shift_ended_by_manager": "Smena menejer tomonidan tugatildi"
-    }
+    },
+    "active_shifts_list": "Faol smenalar:",
+    "hours": "s",
+    "minutes": "d",
+    "shift": "Smena",
+    "specialization": "Mutaxassislik",
+    "start_time": "Boshlanish",
+    "universal": "Universal"
   },
   "specializations": {
     "cleaning": "Tozalash",
@@ -6864,7 +6897,12 @@
     "error": "Xato",
     "return_to_menu": "Menyuga qaytish",
     "user_not_found": "Foydalanuvchi ma'lumotlar bazasida topilmadi.",
-    "cancel": "❌ Bekor qilish"
+    "cancel": "❌ Bekor qilish",
+    "back": "🔙 Orqaga",
+    "error_occurred": "❌ Xatolik yuz berdi: {error}",
+    "error_short": "❌ Xatolik",
+    "none": "ko'rsatilmagan",
+    "not_specified": "Ko'rsatilmagan"
   },
   "shift": {
     "not_in_shift": "Siz smenada emassiz"
@@ -6969,7 +7007,8 @@
     "files_count_valid": "Fayllar soni to'g'ri",
     "field_required": "'{field}' maydoni to'ldirish majburiy",
     "address_empty": "Manzil bo'sh bo'lishi mumkin emas",
-    "all_data_valid": "Barcha ma'lumotlar to'g'ri"
+    "all_data_valid": "Barcha ma'lumotlar to'g'ri",
+    "category_valid": "Kategoriya to'g'ri"
   },
   "apartment": {
     "details_title": "🏠 Kvartira {number}",
@@ -7262,7 +7301,8 @@
       "confirm_yes": "✅ Ha",
       "confirm_no": "❌ Yo'q",
       "skip": "⏭ O'tkazib yuborish",
-      "cancel": "❌ Bekor qilish"
+      "cancel": "❌ Bekor qilish",
+      "page_back": "⬅️ Orqaga"
     }
   },
   "request_comments": {
@@ -7955,5 +7995,14 @@
       "user_not_found": "❌ Foydalanuvchi topilmadi",
       "yard_not_found": "❌ Hovli topilmadi"
     }
+  },
+  "bot": {
+    "restarted": "🔄 Bot qayta ishga tushirildi. Amalni tanlang:"
+  },
+  "commons": {
+    "status_label": "Holat"
+  },
+  "menu": {
+    "main": "📋 Asosiy menyu"
   }
 }

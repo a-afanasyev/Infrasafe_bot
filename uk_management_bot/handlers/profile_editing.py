@@ -99,7 +99,7 @@ async def handle_cancel_profile_edit(callback: CallbackQuery, state: FSMContext,
             profile_text = profile_service.format_profile_text(profile_data, language=lang)
             
             # Добавляем кнопку редактирования к профилю
-            keyboard = get_role_switch_inline(roles, active_role)
+            keyboard = get_role_switch_inline(roles, active_role, language=lang)
             rows = list(keyboard.inline_keyboard)
             rows.append([{"text": get_text("profile.edit", language=lang), "callback_data": "edit_profile"}])
             

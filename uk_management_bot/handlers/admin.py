@@ -987,7 +987,7 @@ async def open_admin_panel(message: Message, db: Session, roles: list = None, ac
         )
         return
     
-    await message.answer(get_text("admin.handlers.manager_panel", language=lang), reply_markup=get_manager_main_keyboard())
+    await message.answer(get_text("admin.handlers.manager_panel", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
 
 
 @router.message(F.text == "👥 Управление пользователями")  
@@ -1078,7 +1078,7 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
     requests = q.limit(10).all()
     
     if not requests:
-        await message.answer(get_text("admin.handlers.no_new_requests", language=lang), reply_markup=get_manager_main_keyboard())
+        await message.answer(get_text("admin.handlers.no_new_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
 
     items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
@@ -1107,7 +1107,7 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
     requests = q.limit(10).all()
 
     if not requests:
-        await message.answer(get_text("admin.handlers.no_active_requests", language=lang), reply_markup=get_manager_main_keyboard())
+        await message.answer(get_text("admin.handlers.no_active_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
 
     items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
@@ -1155,7 +1155,7 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
         unaccepted_count=unaccepted_count
     )
 
-    await message.answer(stats_text, reply_markup=get_completed_requests_submenu(), parse_mode="HTML")
+    await message.answer(stats_text, reply_markup=get_completed_requests_submenu(language=lang), parse_mode="HTML")
 
 
 @router.message(F.text.in_(["📋 Все исполненные", "📋 Ожидают проверки"]))
@@ -1188,7 +1188,7 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
     requests = q.limit(10).all()
 
     if not requests:
-        await message.answer(get_text("admin.handlers.no_completed_requests", language=lang), reply_markup=get_completed_requests_submenu())
+        await message.answer(get_text("admin.handlers.no_completed_requests", language=lang), reply_markup=get_completed_requests_submenu(language=lang))
         return
 
     # Добавляем пометку "возвратная" для возвратных заявок
@@ -1237,7 +1237,7 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
     if not requests:
         await message.answer(
             get_text("admin.handlers.no_returned_requests", language=lang),
-            reply_markup=get_completed_requests_submenu()
+            reply_markup=get_completed_requests_submenu(language=lang)
         )
         return
 
@@ -1296,7 +1296,7 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
     if not requests:
         await message.answer(
             get_text("admin.handlers.no_unaccepted_requests", language=lang),
-            reply_markup=get_completed_requests_submenu(),
+            reply_markup=get_completed_requests_submenu(language=lang),
             parse_mode="HTML"
         )
         return
@@ -1363,7 +1363,7 @@ async def back_to_main_menu(message: Message, db: Session, roles: list = None, a
     # Используем универсальную клавиатуру для активной роли пользователя
     await message.answer(
         get_text("menu.main", language=lang),
-        reply_markup=get_main_keyboard_for_role(active_role or user.role, roles or [user.role], user.status)
+        reply_markup=get_main_keyboard_for_role(active_role or user.role, roles or [user.role], user.status, language=lang)
     )
 
 
@@ -1389,7 +1389,7 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
     )
     requests = q.limit(10).all()
     if not requests:
-        await message.answer(get_text("admin.handlers.archive_empty", language=lang), reply_markup=get_manager_main_keyboard())
+        await message.answer(get_text("admin.handlers.archive_empty", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
     # Каждую заявку отправляем отдельным сообщением
     for r in requests:
@@ -1405,7 +1405,7 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
             else:
                 text += "\n" + get_text("admin.handlers.archive_notes", language=lang).format(notes=r.notes.strip())
         await message.answer(text)
-    await message.answer(get_text("admin.handlers.archive_end", language=lang), reply_markup=get_manager_main_keyboard())
+    await message.answer(get_text("admin.handlers.archive_end", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
 
 @router.message(F.text == "💰 Закуп")
 async def list_procurement_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
@@ -1429,7 +1429,7 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
     requests = q.limit(10).all()
 
     if not requests:
-        await message.answer(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard())
+        await message.answer(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
 
     # Каждую заявку отправляем отдельным сообщением
@@ -1457,7 +1457,7 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
 
         await message.answer(text, reply_markup=keyboard)
 
-    await message.answer(get_text("admin.handlers.procurement_end", language=lang), reply_markup=get_manager_main_keyboard())
+    await message.answer(get_text("admin.handlers.procurement_end", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
     logger.info(f"Показаны заявки в статусе закуп менеджеру {message.from_user.id}")
 
 
@@ -1647,7 +1647,7 @@ async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext,
         )
         await callback.message.answer(
             get_text("admin.handlers.back_to_admin_panel", language=lang),
-            reply_markup=get_manager_main_keyboard()
+            reply_markup=get_manager_main_keyboard(language=lang)
         )
         
         # Очищаем состояние
@@ -1662,7 +1662,7 @@ async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext,
         )
         await callback.message.answer(
             get_text("admin.handlers.back_to_admin_panel", language=lang),
-            reply_markup=get_manager_main_keyboard()
+            reply_markup=get_manager_main_keyboard(language=lang)
         )
         await state.clear()
     
@@ -1679,7 +1679,7 @@ async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: S
     )
     await callback.message.answer(
         "Вернуться в админ-панель:",
-        reply_markup=get_manager_main_keyboard()
+        reply_markup=get_manager_main_keyboard(language=lang)
     )
     
     # Очищаем состояние
@@ -2244,7 +2244,7 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
                 request_number=request_number,
                 cancel_reason=cancel_reason
             ),
-            reply_markup=get_manager_main_keyboard()
+            reply_markup=get_manager_main_keyboard(language=lang)
         )
 
         # Очищаем состояние
@@ -2282,7 +2282,7 @@ async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Se
         # Сначала обновляем Reply клавиатуру на главную клавиатуру менеджера
         await message.answer(
             get_text("admin.handlers.shift_management_title", language=lang),
-            reply_markup=get_manager_main_keyboard(),
+            reply_markup=get_manager_main_keyboard(language=lang),
             parse_mode="HTML"
         )
 
@@ -2300,7 +2300,7 @@ async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Se
         await message.answer(
             get_text("admin.handlers.shift_management_unavailable", language=lang),
             parse_mode="HTML",
-            reply_markup=get_manager_main_keyboard()
+            reply_markup=get_manager_main_keyboard(language=lang)
         )
 
 
@@ -2385,7 +2385,7 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
         requests = q.limit(10).all()
         
         if not requests:
-            await callback.message.edit_text(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard())
+            await callback.message.edit_text(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
             return
 
         # Показываем обновленный список заявок в закупе
@@ -2395,7 +2395,7 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
             text += f"{i}. #{r.request_number} - {r.category}\n"
             text += f"   📍 {addr}\n\n"
         
-        await callback.message.edit_text(text, reply_markup=get_manager_main_keyboard())
+        await callback.message.edit_text(text, reply_markup=get_manager_main_keyboard(language=lang))
         
         logger.info(f"Заявка {request_number} возвращена в работу менеджером {callback.from_user.id}")
         
@@ -2499,7 +2499,7 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
             
         db.commit()
         
-        await message.answer(get_text("admin.handlers.materials_comment_updated", language=lang).format(request_number=request_number), reply_markup=get_manager_main_keyboard())
+        await message.answer(get_text("admin.handlers.materials_comment_updated", language=lang).format(request_number=request_number), reply_markup=get_manager_main_keyboard(language=lang))
         
         # Добавляем комментарий об изменении
         if user:

@@ -1426,11 +1426,11 @@ async def back_to_admin_panel(callback: CallbackQuery, db: Session, roles: list 
         
         await callback.message.edit_text(
             get_text('admin.panel_title', language=lang),
-            reply_markup=get_manager_main_keyboard()
+            reply_markup=get_manager_main_keyboard(language=lang)
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка возврата к админ панели: {e}")
         await callback.answer(

@@ -227,7 +227,7 @@ async def process_yard_description(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_yards.handlers.yard_creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -256,7 +256,7 @@ async def process_yard_gps(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(
             get_text("address_yards.handlers.yard_creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
         return
     else:
@@ -286,7 +286,7 @@ async def process_yard_gps(message: Message, state: FSMContext):
         if not user:
             await message.answer(
                 get_text("address_yards.handlers.user_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -303,7 +303,7 @@ async def process_yard_gps(message: Message, state: FSMContext):
         if error:
             await message.answer(
                 get_text("address_yards.handlers.yard_creation_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
             await state.clear()
             return
@@ -324,7 +324,7 @@ async def process_yard_gps(message: Message, state: FSMContext):
         logger.error(f"Ошибка при создании двора: {e}")
         await message.answer(
             get_text("address_yards.handlers.yard_creation_error", language=lang).format(error=str(e)),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
         db.close()
@@ -389,7 +389,7 @@ async def process_new_yard_name(message: Message, state: FSMContext):
 
         await message.answer(
             get_text("address_yards.handlers.yard_name_updated", language=lang).format(name=new_name),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
 
         logger.info(f"Двор {yard_id} переименован в '{new_name}' пользователем {message.from_user.id}")
@@ -531,7 +531,7 @@ async def cancel_with_button(message: Message, state: FSMContext):
     lang = message.from_user.language_code or 'ru'
     await message.answer(
         get_text("address_yards.handlers.action_cancelled", language=lang),
-        reply_markup=get_main_keyboard_for_role("manager", ["manager"])
+        reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
     )
 
 
@@ -545,7 +545,7 @@ async def back_to_admin_menu(callback: CallbackQuery, state: FSMContext):
     lang = callback.from_user.language_code or 'ru'
     await callback.message.answer(
         get_text("address_yards.handlers.admin_panel_menu", language=lang),
-        reply_markup=get_manager_main_keyboard()
+        reply_markup=get_manager_main_keyboard(language=lang)
     )
 
     # Удаляем предыдущее сообщение с inline-клавиатурой
