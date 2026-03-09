@@ -173,37 +173,17 @@ def require_role(required_roles: List[str]):
             user_roles = kwargs.get("roles", [])
             user = kwargs.get("user")
             
-            # Если роли не получены через DI, получаем их из БД
-            if not user_roles and telegram_id:
-                if not db:
-                    # Создаем новую сессию БД, если её нет
-                    try:
-                        from uk_management_bot.database.session import get_db
-                        db = next(get_db())
-                        need_close_db = True
-                    except Exception as e:
-                        logger.warning(f"Ошибка создания сессии БД в require_role: {e}")
-                        db = None
-                        need_close_db = False
-                else:
-                    need_close_db = False
-                
-                if db:
-                    try:
-                        from uk_management_bot.database.models.user import User
-                        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-                        if user:
-                            from uk_management_bot.utils.auth_helpers import get_user_roles
-                            user_roles = get_user_roles(user)
-                            logger.debug(f"require_role: получили роли из БД: {user_roles}")
-                    except Exception as e:
-                        logger.warning(f"Ошибка получения ролей из БД: {e}")
-                    finally:
-                        if need_close_db and db:
-                            try:
-                                db.close()
-                            except:
-                                pass
+            # Если роли не получены через DI, получаем их из БД (db from middleware DI)
+            if not user_roles and telegram_id and db:
+                try:
+                    from uk_management_bot.database.models.user import User as _User
+                    user = db.query(_User).filter(_User.telegram_id == telegram_id).first()
+                    if user:
+                        from uk_management_bot.utils.auth_helpers import get_user_roles as _get_user_roles
+                        user_roles = _get_user_roles(user)
+                        logger.debug(f"require_role: получили роли из БД: {user_roles}")
+                except Exception as e:
+                    logger.warning(f"Ошибка получения ролей из БД: {e}")
             
             logger.debug(f"require_role check: user_roles={user_roles}, required_roles={required_roles}, user={user}")
             

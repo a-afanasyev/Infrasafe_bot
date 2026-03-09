@@ -117,33 +117,31 @@ async def send_startup_notification(bot: Bot):
         # Проверяем статус медиа-сервиса
         media_status = "✅ Активен" if settings.MEDIA_SERVICE_ENABLED else "⏸️ Отключен"
 
-        startup_message = f"""
-🤖 **UK Management Bot запущен!**
+        startup_message = (
+            "<b>UK Management Bot запущен!</b>\n\n"
+            f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+            "Статус: Активен\n"
+            "Версия: 1.0.0\n"
+            "База данных: Подключена\n"
+            "Система верификации: Активна\n"
+            f"{scheduler_info}\n"
+            f"Media Service: {media_status}\n\n"
+            "Бот готов к работе!"
+        )
 
-📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}
-✅ Статус: Активен
-🔧 Версия: 1.0.0
-📊 База данных: Подключена
-🔍 Система верификации: Активна
-{scheduler_info}
-📸 Media Service: {media_status}
-
-Бот готов к работе! 🚀
-        """
-        
-        # Отправляем уведомление администраторам
+        # Отправляем уведомление администраторам (HTML is default parse_mode)
         if settings.ADMIN_USER_IDS:
             for admin_id in settings.ADMIN_USER_IDS:
                 try:
-                    await bot.send_message(admin_id, startup_message, parse_mode="Markdown")
+                    await bot.send_message(admin_id, startup_message)
                     logger.info(f"Уведомление о запуске отправлено администратору {admin_id}")
                 except Exception as e:
                     logger.warning(f"Не удалось отправить уведомление администратору {admin_id}: {e}")
-        
+
         # Отправляем в канал если указан
         if settings.TELEGRAM_CHANNEL_ID:
             try:
-                await bot.send_message(settings.TELEGRAM_CHANNEL_ID, startup_message, parse_mode="Markdown")
+                await bot.send_message(settings.TELEGRAM_CHANNEL_ID, startup_message)
                 logger.info("Уведомление о запуске отправлено в канал")
             except Exception as e:
                 logger.warning(f"Не удалось отправить уведомление в канал: {e}")
@@ -156,11 +154,7 @@ async def send_startup_notification(bot: Bot):
 async def main():
     """Главная функция запуска бота"""
     
-    # Проверяем наличие токена
-    if not settings.BOT_TOKEN:
-        logger.error("BOT_TOKEN не найден в переменных окружения!")
-        return
-    
+    # BOT_TOKEN is validated in settings.py at import time
     # Создаем таблицы в базе данных
     import uk_management_bot.database.models  # Импортируем все модели
     Base.metadata.create_all(bind=engine)
@@ -174,6 +168,17 @@ async def main():
             logger.info(f"Администраторы инициализированы: создано {created}, обновлено {updated}")
     except Exception as e:
         logger.warning(f"Не удалось инициализировать администраторов: {e}")
+
+    # Миграция legacy-данных: проставить manager_confirmed для старых заявок
+    try:
+        from uk_management_bot.database.migrations.fix_manager_confirmed_legacy import migrate_legacy_manager_confirmed
+        migration_db = SessionLocal()
+        migrated = migrate_legacy_manager_confirmed(migration_db)
+        if migrated > 0:
+            logger.info(f"Legacy-миграция manager_confirmed: обновлено {migrated} заявок")
+        migration_db.close()
+    except Exception as e:
+        logger.warning(f"Ошибка legacy-миграции manager_confirmed: {e}")
     
     # Инициализируем бота и диспетчер
     # ВАЖНО: parse_mode="HTML" позволяет использовать HTML теги (<b>, <i>, <code> и т.д.)
@@ -184,7 +189,18 @@ async def main():
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
-    storage = MemoryStorage()
+    # FSM Storage: Redis in production, MemoryStorage in debug
+    if not settings.DEBUG and settings.REDIS_URL:
+        try:
+            from aiogram.fsm.storage.redis import RedisStorage
+            storage = RedisStorage.from_url(settings.REDIS_URL)
+            logger.info("FSM storage: Redis")
+        except Exception as e:
+            logger.warning(f"Redis FSM storage unavailable, falling back to MemoryStorage: {e}")
+            storage = MemoryStorage()
+    else:
+        storage = MemoryStorage()
+        logger.info("FSM storage: MemoryStorage")
     dp = Dispatcher(storage=storage)
     
     # Middleware для внедрения сессии БД (ДОЛЖЕН БЫТЬ ПЕРВЫМ!)
@@ -226,11 +242,21 @@ async def main():
         result = await role_mode_middleware(handler, event, data)
         return result
 
+    # Localization middleware: injects `language` into handler data
+    from uk_management_bot.middlewares.localization import localization_middleware
+    @dp.update.middleware()
+    async def _localization_middleware(handler, event, data):
+        return await localization_middleware(handler, event, data)
+
     # Подключаем shift-middleware глобально через декоратор (последний)
     @dp.update.middleware()
     async def _shift_middleware(handler, event, data):
         return await shift_context_middleware(handler, event, data)
-    
+
+    # Throttling middleware: max 2 messages/sec per user
+    from uk_management_bot.middlewares.throttling import ThrottlingMiddleware
+    dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
+
     # Регистрируем роутеры
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
     dp.include_router(auth_router)

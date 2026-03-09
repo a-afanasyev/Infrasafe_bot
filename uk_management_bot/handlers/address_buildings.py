@@ -30,10 +30,14 @@ from uk_management_bot.keyboards.address_management import (
 )
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.button_texts import get_skip_texts, get_cancel_texts
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+SKIP_TEXTS = get_skip_texts()
+CANCEL_TEXTS = get_cancel_texts()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -41,7 +45,7 @@ router = Router()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_buildings_list")
-async def show_buildings_list(callback: CallbackQuery, state: FSMContext):
+async def show_buildings_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать список всех зданий"""
     await state.clear()
 
@@ -59,14 +63,14 @@ async def show_buildings_list(callback: CallbackQuery, state: FSMContext):
         buildings = result.scalars().all()
 
         if not buildings:
-            lang = callback.from_user.language_code or 'ru'
+            lang = language
             await callback.message.edit_text(
                 get_text("address_buildings.handlers.buildings_list_empty", language=lang),
                 reply_markup=get_buildings_list_keyboard([], page=0)
             )
             return
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         text = get_text("address_buildings.handlers.buildings_list_title", language=lang).format(count=len(buildings))
 
         await callback.message.edit_text(
@@ -76,14 +80,14 @@ async def show_buildings_list(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка зданий: {e}")
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.answer(get_text("address_buildings.handlers.error_loading_data", language=lang), show_alert=True)
     finally:
         db.close()
 
 
 @router.callback_query(F.data.startswith("addr_buildings_page:"))
-async def show_buildings_page(callback: CallbackQuery):
+async def show_buildings_page(callback: CallbackQuery, language: str = "ru"):
     """Показать конкретную страницу списка зданий"""
     page = int(callback.data.split(":")[1])
 
@@ -99,7 +103,7 @@ async def show_buildings_page(callback: CallbackQuery):
         )
         buildings = result.scalars().all()
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         text = get_text("address_buildings.handlers.buildings_list_page", language=lang).format(page=page + 1, count=len(buildings))
 
         await callback.message.edit_text(
@@ -109,20 +113,20 @@ async def show_buildings_page(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы зданий: {e}")
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.answer(get_text("address_buildings.handlers.error_loading_data", language=lang), show_alert=True)
     finally:
         db.close()
 
 
 @router.callback_query(F.data.startswith("addr_buildings_by_yard:"))
-async def show_buildings_by_yard(callback: CallbackQuery):
+async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru"):
     """Показать здания конкретного двора"""
     yard_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         yard = await AddressService.get_yard_by_id(db, yard_id)
         if not yard:
             await callback.answer(get_text("address_buildings.handlers.yard_not_found", language=lang), show_alert=True)
@@ -152,13 +156,13 @@ async def show_buildings_by_yard(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_view:"))
-async def show_building_details(callback: CallbackQuery):
+async def show_building_details(callback: CallbackQuery, language: str = "ru"):
     """Показать детальную информацию о здании"""
     building_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
 
         if not building:
@@ -199,7 +203,7 @@ async def show_building_details(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_building_create")
-async def start_building_creation(callback: CallbackQuery, state: FSMContext):
+async def start_building_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать создание нового здания - выбор двора"""
     await state.clear()
 
@@ -207,7 +211,7 @@ async def start_building_creation(callback: CallbackQuery, state: FSMContext):
     try:
         yards = await AddressService.get_all_yards(db, only_active=True)
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         if not yards:
             await callback.message.edit_text(
                 get_text("address_buildings.handlers.no_yards_available", language=lang),
@@ -230,7 +234,7 @@ async def start_building_creation(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("building_create_yard:"))
-async def process_building_yard_selection(callback: CallbackQuery, state: FSMContext):
+async def process_building_yard_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка выбора двора для нового здания"""
     yard_id = int(callback.data.split(":")[1])
 
@@ -239,7 +243,7 @@ async def process_building_yard_selection(callback: CallbackQuery, state: FSMCon
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         yard = await AddressService.get_yard_by_id(db, yard_id)
         yard_name = yard.name if yard else get_text("address_buildings.handlers.unknown_yard", language=lang)
 
@@ -252,11 +256,11 @@ async def process_building_yard_selection(callback: CallbackQuery, state: FSMCon
 
 
 @router.message(StateFilter(BuildingManagementStates.waiting_for_building_address))
-async def process_building_address(message: Message, state: FSMContext):
+async def process_building_address(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка адреса здания"""
     address = message.text.strip()
 
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     if len(address) < 5:
         await message.answer(
             get_text("address_buildings.handlers.address_too_short", language=lang)
@@ -279,12 +283,12 @@ async def process_building_address(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(BuildingManagementStates.waiting_for_entrance_count))
-async def process_entrance_count(message: Message, state: FSMContext):
+async def process_entrance_count(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка количества подъездов"""
-    if message.text == "⏭ Пропустить":
+    if message.text in SKIP_TEXTS:
         entrance_count = 1
-    elif message.text == "❌ Отмена":
-        lang = message.from_user.language_code or 'ru'
+    elif message.text in CANCEL_TEXTS:
+        lang = language
         await state.clear()
         await message.answer(
             get_text("address_buildings.handlers.building_creation_cancelled", language=lang),
@@ -292,7 +296,7 @@ async def process_entrance_count(message: Message, state: FSMContext):
         )
         return
     else:
-        lang = message.from_user.language_code or 'ru'
+        lang = language
         try:
             entrance_count = int(message.text.strip())
             if entrance_count < 1 or entrance_count > 50:
@@ -303,7 +307,7 @@ async def process_entrance_count(message: Message, state: FSMContext):
             )
             return
 
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     await state.update_data(entrance_count=entrance_count)
     await state.set_state(BuildingManagementStates.waiting_for_floor_count)
 
@@ -314,12 +318,12 @@ async def process_entrance_count(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(BuildingManagementStates.waiting_for_floor_count))
-async def process_floor_count(message: Message, state: FSMContext):
+async def process_floor_count(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка количества этажей"""
-    lang = message.from_user.language_code or 'ru'
-    if message.text == "⏭ Пропустить":
+    lang = language
+    if message.text in SKIP_TEXTS:
         floor_count = 1
-    elif message.text == "❌ Отмена":
+    elif message.text in CANCEL_TEXTS:
         await state.clear()
         await message.answer(
             get_text("address_buildings.handlers.building_creation_cancelled", language=lang),
@@ -347,15 +351,15 @@ async def process_floor_count(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(BuildingManagementStates.waiting_for_building_gps))
-async def process_building_gps(message: Message, state: FSMContext):
+async def process_building_gps(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка GPS координат здания и создание записи"""
     gps_latitude = None
     gps_longitude = None
 
-    lang = message.from_user.language_code or 'ru'
-    if message.text == "⏭ Пропустить":
+    lang = language
+    if message.text in SKIP_TEXTS:
         pass
-    elif message.text == "❌ Отмена":
+    elif message.text in CANCEL_TEXTS:
         await state.clear()
         await message.answer(
             get_text("address_buildings.handlers.building_creation_cancelled", language=lang),
@@ -443,11 +447,11 @@ async def process_building_gps(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_edit:"))
-async def show_building_edit_menu(callback: CallbackQuery):
+async def show_building_edit_menu(callback: CallbackQuery, language: str = "ru"):
     """Показать меню редактирования здания"""
     building_id = int(callback.data.split(":")[1])
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(
         get_text("address_buildings.handlers.edit_building_menu", language=lang),
         reply_markup=get_building_edit_keyboard(building_id)
@@ -455,13 +459,13 @@ async def show_building_edit_menu(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_building_toggle:"))
-async def toggle_building_status(callback: CallbackQuery):
+async def toggle_building_status(callback: CallbackQuery, language: str = "ru"):
     """Переключить активность здания"""
     building_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         building = await AddressService.get_building_by_id(db, building_id)
         if not building:
             await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
@@ -496,13 +500,13 @@ async def toggle_building_status(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_delete:"))
-async def confirm_building_deletion(callback: CallbackQuery):
+async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru"):
     """Подтверждение удаления здания"""
     building_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         building = await AddressService.get_building_by_id(db, building_id)
         if not building:
             await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
@@ -534,7 +538,7 @@ async def confirm_building_deletion(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_building_delete_confirm:"))
-async def delete_building(callback: CallbackQuery):
+async def delete_building(callback: CallbackQuery, language: str = "ru"):
     """Удаление здания"""
     building_id = int(callback.data.split(":")[1])
 
@@ -546,7 +550,7 @@ async def delete_building(callback: CallbackQuery):
             await callback.answer(f"❌ {error}", show_alert=True)
             return
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.message.edit_text(
             get_text("address_buildings.handlers.building_deleted_success", language=lang)
         )

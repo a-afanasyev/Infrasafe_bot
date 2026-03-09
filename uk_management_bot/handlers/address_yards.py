@@ -28,10 +28,15 @@ from uk_management_bot.keyboards.address_management import (
 )
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.button_texts import get_address_directory_texts, get_cancel_texts, get_skip_texts
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+ADDRESS_DIRECTORY_TEXTS = get_address_directory_texts()
+CANCEL_TEXTS = get_cancel_texts()
+SKIP_TEXTS = get_skip_texts()
 
 # Примечание: Проверка ролей происходит на уровне глобальных middleware (auth_middleware)
 # Дополнительная проверка в handlers при необходимости
@@ -41,14 +46,14 @@ router = Router()
 # ГЛАВНОЕ МЕНЮ СПРАВОЧНИКА АДРЕСОВ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.message(F.text == "📍 Справочник адресов")
-async def show_address_management_menu(message: Message, state: FSMContext):
+@router.message(F.text.in_(ADDRESS_DIRECTORY_TEXTS))
+async def show_address_management_menu(message: Message, state: FSMContext, language: str = "ru"):
     """Показать главное меню управления адресами"""
     await state.clear()
 
     from uk_management_bot.keyboards.address_management import get_address_management_menu
 
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     await message.answer(
         get_text("address_yards.handlers.address_directory_menu", language=lang),
         reply_markup=get_address_management_menu()
@@ -56,13 +61,13 @@ async def show_address_management_menu(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "addr_menu")
-async def show_address_menu_callback(callback: CallbackQuery, state: FSMContext):
+async def show_address_menu_callback(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать главное меню управления адресами (callback)"""
     await state.clear()
 
     from uk_management_bot.keyboards.address_management import get_address_management_menu
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(
         get_text("address_yards.handlers.address_directory_menu", language=lang),
         reply_markup=get_address_management_menu()
@@ -74,7 +79,7 @@ async def show_address_menu_callback(callback: CallbackQuery, state: FSMContext)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_yards_list")
-async def show_yards_list(callback: CallbackQuery, state: FSMContext):
+async def show_yards_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать список всех дворов"""
     await state.clear()
 
@@ -83,14 +88,14 @@ async def show_yards_list(callback: CallbackQuery, state: FSMContext):
         yards = await AddressService.get_all_yards(db, only_active=False, include_stats=True)
 
         if not yards:
-            lang = callback.from_user.language_code or 'ru'
+            lang = language
             await callback.message.edit_text(
                 get_text("address_yards.handlers.yards_list_empty", language=lang),
                 reply_markup=get_yards_list_keyboard([], page=0)
             )
             return
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         text = get_text("address_yards.handlers.yards_list_title", language=lang).format(
             total=len(yards), active=len([y for y in yards if y.is_active])
         )
@@ -102,14 +107,14 @@ async def show_yards_list(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка дворов: {e}")
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.answer(get_text("address_yards.handlers.error_loading_data", language=lang), show_alert=True)
     finally:
         db.close()
 
 
 @router.callback_query(F.data.startswith("addr_yards_page:"))
-async def show_yards_page(callback: CallbackQuery):
+async def show_yards_page(callback: CallbackQuery, language: str = "ru"):
     """Показать конкретную страницу списка дворов"""
     page = int(callback.data.split(":")[1])
 
@@ -117,7 +122,7 @@ async def show_yards_page(callback: CallbackQuery):
     try:
         yards = await AddressService.get_all_yards(db, only_active=False, include_stats=True)
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         text = get_text("address_yards.handlers.yards_list_page", language=lang).format(page=page + 1, total=len(yards))
 
         await callback.message.edit_text(
@@ -127,7 +132,7 @@ async def show_yards_page(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы дворов: {e}")
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.answer(get_text("address_yards.handlers.error_loading_data", language=lang), show_alert=True)
     finally:
         db.close()
@@ -138,7 +143,7 @@ async def show_yards_page(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_yard_view:"))
-async def show_yard_details(callback: CallbackQuery):
+async def show_yard_details(callback: CallbackQuery, language: str = "ru"):
     """Показать детальную информацию о дворе"""
     yard_id = int(callback.data.split(":")[1])
 
@@ -146,7 +151,7 @@ async def show_yard_details(callback: CallbackQuery):
     try:
         yard = await AddressService.get_yard_by_id(db, yard_id)
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         if not yard:
             await callback.answer(get_text("address_yards.handlers.yard_not_found", language=lang), show_alert=True)
             return
@@ -182,12 +187,12 @@ async def show_yard_details(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_yard_create")
-async def start_yard_creation(callback: CallbackQuery, state: FSMContext):
+async def start_yard_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать создание нового двора"""
     await state.clear()
     await state.set_state(YardManagementStates.waiting_for_yard_name)
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(
         get_text("address_yards.handlers.create_yard_name", language=lang),
         reply_markup=get_cancel_keyboard_inline()
@@ -195,11 +200,11 @@ async def start_yard_creation(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(YardManagementStates.waiting_for_yard_name))
-async def process_yard_name(message: Message, state: FSMContext):
+async def process_yard_name(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка названия двора"""
     name = message.text.strip()
 
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     if len(name) < 3:
         await message.answer(get_text("address_yards.handlers.name_too_short", language=lang))
         return
@@ -218,12 +223,12 @@ async def process_yard_name(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(YardManagementStates.waiting_for_yard_description))
-async def process_yard_description(message: Message, state: FSMContext):
+async def process_yard_description(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка описания двора"""
-    if message.text == "⏭ Пропустить":
+    if message.text in SKIP_TEXTS:
         description = None
-    elif message.text == "❌ Отмена":
-        lang = message.from_user.language_code or 'ru'
+    elif message.text in CANCEL_TEXTS:
+        lang = language
         await state.clear()
         await message.answer(
             get_text("address_yards.handlers.yard_creation_cancelled", language=lang),
@@ -233,7 +238,7 @@ async def process_yard_description(message: Message, state: FSMContext):
     else:
         description = message.text.strip()
 
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     await state.update_data(description=description)
     await state.set_state(YardManagementStates.waiting_for_yard_gps)
 
@@ -244,15 +249,15 @@ async def process_yard_description(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(YardManagementStates.waiting_for_yard_gps))
-async def process_yard_gps(message: Message, state: FSMContext):
+async def process_yard_gps(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка GPS координат двора"""
     gps_latitude = None
     gps_longitude = None
 
-    lang = message.from_user.language_code or 'ru'
-    if message.text == "⏭ Пропустить":
+    lang = language
+    if message.text in SKIP_TEXTS:
         pass
-    elif message.text == "❌ Отмена":
+    elif message.text in CANCEL_TEXTS:
         await state.clear()
         await message.answer(
             get_text("address_yards.handlers.yard_creation_cancelled", language=lang),
@@ -336,11 +341,11 @@ async def process_yard_gps(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_yard_edit:"))
-async def show_yard_edit_menu(callback: CallbackQuery):
+async def show_yard_edit_menu(callback: CallbackQuery, language: str = "ru"):
     """Показать меню редактирования двора"""
     yard_id = int(callback.data.split(":")[1])
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(
         get_text("address_yards.handlers.edit_yard_menu", language=lang),
         reply_markup=get_yard_edit_keyboard(yard_id)
@@ -348,14 +353,14 @@ async def show_yard_edit_menu(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_yard_edit_name:"))
-async def start_yard_name_edit(callback: CallbackQuery, state: FSMContext):
+async def start_yard_name_edit(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать редактирование названия двора"""
     yard_id = int(callback.data.split(":")[1])
 
     await state.update_data(yard_id=yard_id)
     await state.set_state(YardManagementStates.waiting_for_new_yard_name)
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(
         get_text("address_yards.handlers.edit_yard_name", language=lang),
         reply_markup=get_cancel_keyboard_inline()
@@ -363,11 +368,11 @@ async def start_yard_name_edit(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(YardManagementStates.waiting_for_new_yard_name))
-async def process_new_yard_name(message: Message, state: FSMContext):
+async def process_new_yard_name(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка нового названия двора"""
     new_name = message.text.strip()
 
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     if len(new_name) < 3 or len(new_name) > 200:
         await message.answer(get_text("address_yards.handlers.name_invalid_length", language=lang))
         return
@@ -403,13 +408,13 @@ async def process_new_yard_name(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("addr_yard_toggle:"))
-async def toggle_yard_status(callback: CallbackQuery):
+async def toggle_yard_status(callback: CallbackQuery, language: str = "ru"):
     """Переключить активность двора"""
     yard_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         yard = await AddressService.get_yard_by_id(db, yard_id)
         if not yard:
             await callback.answer(get_text("address_yards.handlers.yard_not_found", language=lang), show_alert=True)
@@ -444,13 +449,13 @@ async def toggle_yard_status(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_yard_delete:"))
-async def confirm_yard_deletion(callback: CallbackQuery):
+async def confirm_yard_deletion(callback: CallbackQuery, language: str = "ru"):
     """Подтверждение удаления двора"""
     yard_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         yard = await AddressService.get_yard_by_id(db, yard_id)
         if not yard:
             await callback.answer(get_text("address_yards.handlers.yard_not_found", language=lang), show_alert=True)
@@ -482,7 +487,7 @@ async def confirm_yard_deletion(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_yard_delete_confirm:"))
-async def delete_yard(callback: CallbackQuery):
+async def delete_yard(callback: CallbackQuery, language: str = "ru"):
     """Удаление двора"""
     yard_id = int(callback.data.split(":")[1])
 
@@ -494,7 +499,7 @@ async def delete_yard(callback: CallbackQuery):
             await callback.answer(f"❌ {error}", show_alert=True)
             return
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.message.edit_text(
             get_text("address_yards.handlers.yard_deleted_success", language=lang)
         )
@@ -516,19 +521,19 @@ async def delete_yard(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "cancel_action")
-async def cancel_action(callback: CallbackQuery, state: FSMContext):
+async def cancel_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена текущего действия"""
     await state.clear()
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(get_text("address_yards.handlers.action_cancelled", language=lang))
     await show_yards_list(callback, state)
 
 
-@router.message(F.text == "❌ Отмена")
-async def cancel_with_button(message: Message, state: FSMContext):
+@router.message(F.text.in_(CANCEL_TEXTS))
+async def cancel_with_button(message: Message, state: FSMContext, language: str = "ru"):
     """Отмена через кнопку"""
     await state.clear()
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     await message.answer(
         get_text("address_yards.handlers.action_cancelled", language=lang),
         reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
@@ -536,13 +541,13 @@ async def cancel_with_button(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "admin_menu")
-async def back_to_admin_menu(callback: CallbackQuery, state: FSMContext):
+async def back_to_admin_menu(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Возврат в главное админское меню"""
     await state.clear()
 
     from uk_management_bot.keyboards.admin import get_manager_main_keyboard
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.answer(
         get_text("address_yards.handlers.admin_panel_menu", language=lang),
         reply_markup=get_manager_main_keyboard(language=lang)

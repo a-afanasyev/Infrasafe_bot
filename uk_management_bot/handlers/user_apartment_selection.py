@@ -33,7 +33,7 @@ router = Router()
 # НАЧАЛО ВЫБОРА КВАРТИРЫ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def start_apartment_selection(message: Message, state: FSMContext):
+async def start_apartment_selection(message: Message, state: FSMContext, language: str = "ru"):
     """
     Начать процесс выбора квартиры (может вызываться из onboarding или профиля)
 
@@ -44,7 +44,7 @@ async def start_apartment_selection(message: Message, state: FSMContext):
         yards = await AddressService.get_all_yards(db, only_active=True)
 
         if not yards:
-            lang = message.from_user.language_code or 'ru'
+            lang = language
             await message.answer(
                 get_text("user_apt_selection.handlers.address_directory_empty", language=lang)
             )
@@ -54,7 +54,7 @@ async def start_apartment_selection(message: Message, state: FSMContext):
 
         await state.set_state(OnboardingStates.waiting_for_yard_selection)
 
-        lang = message.from_user.language_code or 'ru'
+        lang = language
         await message.answer(
             get_text("user_apt_selection.handlers.select_yard_step1", language=lang),
             reply_markup=get_user_apartment_selection_keyboard(
@@ -66,7 +66,7 @@ async def start_apartment_selection(message: Message, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при начале выбора квартиры: {e}")
-        lang = message.from_user.language_code or 'ru'
+        lang = language
         await message.answer(
             get_text("user_apt_selection.handlers.error_loading_yards", language=lang)
         )
@@ -79,14 +79,14 @@ async def start_apartment_selection(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("user_apartment_yard:"))
-async def process_yard_selection(callback: CallbackQuery, state: FSMContext):
+async def process_yard_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка выбора двора пользователем"""
     yard_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
         yard = await AddressService.get_yard_by_id(db, yard_id)
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         if not yard or not yard.is_active:
             await callback.answer(get_text("user_apt_selection.handlers.yard_not_found", language=lang), show_alert=True)
             return
@@ -128,14 +128,14 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("user_apartment_building:"))
-async def process_building_selection(callback: CallbackQuery, state: FSMContext):
+async def process_building_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка выбора здания пользователем"""
     building_id = int(callback.data.split(":")[1])
 
     db = next(get_db())
     try:
         building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         if not building or not building.is_active:
             await callback.answer(get_text("user_apt_selection.handlers.building_not_found", language=lang), show_alert=True)
             return
@@ -182,7 +182,7 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("user_apartment_final:"))
-async def process_apartment_selection(callback: CallbackQuery, state: FSMContext):
+async def process_apartment_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка финального выбора квартиры - показать подтверждение"""
     apartment_id = int(callback.data.split(":")[1])
 
@@ -191,7 +191,7 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
         # Получаем user.id из базы данных (не telegram_id!)
         from uk_management_bot.database.models.user import User
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         if not user:
             await callback.answer(get_text("user_apt_selection.handlers.user_not_found", language=lang), show_alert=True)
             return
@@ -262,12 +262,12 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "user_apartment_confirm")
-async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext):
+async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Подтверждение выбора и создание заявки на модерацию"""
     data = await state.get_data()
     apartment_id = data.get('selected_apartment_id')
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     if not apartment_id:
         await callback.answer(get_text("user_apt_selection.handlers.error_no_apartment_selected", language=lang), show_alert=True)
         return
@@ -346,7 +346,7 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "user_apartment_cancel")
-async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext):
+async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена выбора квартиры"""
     await state.update_data(
         selected_yard_id=None,
@@ -356,7 +356,7 @@ async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext):
         selected_apartment_id=None
     )
 
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     await callback.message.edit_text(
         get_text("user_apt_selection.handlers.apartment_selection_cancelled", language=lang)
     )
@@ -443,7 +443,7 @@ async def send_apartment_request_notification(
 # АДАПТЕР ДЛЯ ВЫЗОВА ИЗ ПРОФИЛЯ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def start_apartment_selection_for_profile(callback: CallbackQuery, state: FSMContext):
+async def start_apartment_selection_for_profile(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """
     Начать выбор квартиры из профиля (для добавления дополнительной квартиры)
 
@@ -461,7 +461,7 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
         yards = await AddressService.get_all_yards(db, only_active=True)
 
         if not yards:
-            lang = callback.from_user.language_code or 'ru'
+            lang = language
             await callback.message.edit_text(
                 get_text("user_apt_selection.handlers.address_directory_empty_short", language=lang)
             )
@@ -474,7 +474,7 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
             callback_prefix='user_apartment_yard'
         )
 
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         await callback.message.edit_text(
             get_text("user_apt_selection.handlers.add_apartment_step1", language=lang),
             reply_markup=keyboard

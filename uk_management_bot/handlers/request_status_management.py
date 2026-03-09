@@ -659,7 +659,7 @@ def get_comment_prompt(status: str, language: str = "ru") -> str:
 
     return prompts.get(status, get_text("request_status_mgmt.handlers.prompt_default", language=language))
 
-async def show_status_confirmation(callback_or_message, state: FSMContext, db: Session, new_status: str, comment: str = None):
+async def show_status_confirmation(callback_or_message, state: FSMContext, db: Session, new_status: str, comment: str = None, language: str = "ru"):
     """Показ подтверждения изменения статуса"""
     try:
         # Получаем данные из состояния
@@ -670,7 +670,7 @@ async def show_status_confirmation(callback_or_message, state: FSMContext, db: S
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang_fallback = callback_or_message.from_user.language_code or "ru" if hasattr(callback_or_message, 'from_user') else "ru"
+            lang_fallback = language
             not_found_text = get_text("request_status_mgmt.handlers.request_not_found", language=lang_fallback)
             if hasattr(callback_or_message, 'edit_text'):
                 await callback_or_message.answer(not_found_text, show_alert=True)
@@ -704,7 +704,7 @@ async def show_status_confirmation(callback_or_message, state: FSMContext, db: S
         
     except Exception as e:
         logger.error(f"Ошибка показа подтверждения: {e}")
-        lang_err = callback_or_message.from_user.language_code or "ru" if hasattr(callback_or_message, 'from_user') else "ru"
+        lang_err = language
         err_text = get_text("request_status_mgmt.handlers.error_occurred", language=lang_err).format(error=str(e))
         if hasattr(callback_or_message, 'edit_text'):
             await callback_or_message.answer(err_text, show_alert=True)

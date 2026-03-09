@@ -33,6 +33,7 @@ from uk_management_bot.utils.button_texts import (
     get_shift_texts,
     get_help_texts,
     get_back_texts,
+    get_cancel_texts,
 )
 
 # Константы для фильтрации сообщений
@@ -43,6 +44,7 @@ ARCHIVE_TEXTS = get_archive_texts()
 SHIFT_TEXTS = get_shift_texts()
 HELP_TEXTS = get_help_texts()
 BACK_TEXTS = get_back_texts()
+CANCEL_TEXTS = get_cancel_texts()
 
 # NOTE: auth_middleware and role_mode_middleware are registered globally in main.py
 # Do NOT register them again at router level to avoid double execution.
@@ -70,11 +72,8 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
         # Если это команда join с токеном
         if param.startswith("join_"):
             token = param.replace("join_", "")
-            
-            # Если это токен приглашения, обрабатываем его
-            if token.startswith("invite_v1:"):
-                lang = language
-            
+            lang = language
+
             try:
                 # Проверяем rate limiting
                 if not await InviteRateLimiter.is_allowed(message.from_user.id):
@@ -140,7 +139,7 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
     # Если нет токена, продолжаем обычную обработку /start
     await handle_regular_start(message, db, roles, active_role, user_status)
 
-async def handle_regular_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def handle_regular_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Обработка обычного /start без токена"""
     auth_service = AuthService(db)
     
@@ -160,7 +159,7 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
         )
     
     # Проверяем, нужен ли онбординг
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     # ОБНОВЛЕНО: Проверяем полноту профиля с новой системой квартир
     has_approved_apartment = any(ua.status == 'approved' for ua in user.user_apartments) if user.user_apartments else False
@@ -221,7 +220,7 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
 
 @router.message(Command("menu"))
-async def cmd_menu(message: Message, state: FSMContext, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def cmd_menu(message: Message, state: FSMContext, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Обработчик команды /menu - возврат в главное меню с очисткой состояния"""
     logger.info(f"Получена команда /menu от пользователя {message.from_user.id}")
     
@@ -297,7 +296,7 @@ async def cmd_help(message: Message, language: str = "ru"):
 
     await message.answer(help_text, reply_markup=get_user_contextual_keyboard(message.from_user.id))
 
-@router.message(F.text == "❌ Отмена")
+@router.message(F.text.in_(CANCEL_TEXTS))
 async def cancel_action(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None, language: str = "ru"):
     """Отмена текущего действия"""
     current_state = await state.get_state()
@@ -353,7 +352,7 @@ async def executor_shift_menu(message: Message, db: Session = None, roles: list[
 
 
 @router.message(F.text.in_(HELP_TEXTS))
-async def show_help(message: Message, db: Session = None):
+async def show_help(message: Message, db: Session = None, language: str = "ru"):
     """Показывает справку по использованию бота."""
     lang = get_user_language(message.from_user.id, db)
     help_text = get_text("help.usage_help", language=lang)
@@ -520,7 +519,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
     auth_service = AuthService(db)
     lang = language
     
-    if message.text == "❌ Отмена":
+    if message.text in CANCEL_TEXTS:
         await state.clear()
         await message.answer(safe_get_text("errors.cancelled", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return

@@ -781,7 +781,8 @@
       "remind_applicant": "🔔 Ariza beruvchiga eslatish",
       "accept_for_applicant": "✅ Ariza beruvchi o'rniga qabul qilish",
       "back_to_unaccepted_list": "🔙 Qabul qilinmaganlar ro'yxatiga",
-      "back_nav": "🔙 Orqaga"
+      "back_nav": "🔙 Orqaga",
+      "test_middleware": "🧪 Middleware test"
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Navbatchi {specialization} uchun yangi ariza</b>\n\n№ {request_number}\nKategoriya: {category}\nManzil: {address}\nShoshilinchlik: {urgency}\n\nTavsif: {description}",
@@ -4142,7 +4143,8 @@
       "skip_documents": "⏭️ Hujjatni yuklashni o'tkazib yuborish",
       "title": "📄 Hujjatlar yuklanmoqda",
       "upload_cancelled": "❌ Hujjatni yuklash bekor qilindi.",
-      "upload_file": "📤 Hujjat faylini yuklash:"
+      "upload_file": "📤 Hujjat faylini yuklash:",
+      "unknown_type": "❌ Noma'lum hujjat turi. Taklif qilingan variantlardan birini tanlang."
     },
     "error_завершения_онбординга": "{...}: {...} uchun hujjatsiz ro'yxatdan o'tishda xato",
     "error_завершения_онбординга_2": "Hujjatlarsiz ro'yxatga olishda xato",
@@ -4274,7 +4276,8 @@
       "file_field": "Fayl",
       "size_field": "Hajmi",
       "total_documents": "Jami hujjatlar",
-      "type_short_field": "Turi"
+      "type_short_field": "Turi",
+      "btn_specify_address": "🏠 Manzilni ko'rsatish"
     }
   },
   "pagination": {
@@ -6074,7 +6077,17 @@
     "count": "arizalar",
     "enter_address_manually": "📍 Manzilni qo'lda kiriting:",
     "no_active_requests": "Sizda hali faol arizalar yo'q.",
-    "no_archive_requests": "Sizda hali arxivda arizalar yo'q."
+    "no_archive_requests": "Sizda hali arxivda arizalar yo'q.",
+    "starting_request_creation": "📝 Ariza yaratishni boshlaymiz...",
+    "select_category": "Ariza toifasini tanlang:",
+    "select_urgency": "Ariza dolzarbligini tanlang:",
+    "max_5_files": "⚠️ Maksimum 5 ta fayl. Siz allaqachon maksimal miqdorni yukladingiz.",
+    "file_too_large": "⚠️ Fayl juda katta. Maksimal hajm: 20 MB.",
+    "file_added": "✅ Fayl qo'shildi ({count}/5). Yana yuboring yoki davom etish uchun tugmani bosing.",
+    "send_photo_or_video": "📎 Rasm yoki video yuboring (5 tagacha) yoki davom etish uchun tugmani bosing.",
+    "request_created_success": "✅ Ariza muvaffaqiyatli yaratildi!",
+    "request_creation_cancelled": "❌ Ariza yaratish bekor qilindi.",
+    "return_to_main": "🔙 Asosiy menyuga qaytish"
   },
   "role": {
     "not_allowed": "Bu rol siz uchun mavjud emas",
@@ -6736,7 +6749,8 @@
       "page_prev": "◀️",
       "page_next": "▶️",
       "page_indicator": "{current}/{total}",
-      "force_end_shift": "❗ Smenani tugatish"
+      "force_end_shift": "❗ Smenani tugatish",
+      "active_shifts_button": "🟢 Faol smenalar"
     },
     "handlers": {
       "universal": "Universal",
@@ -6779,7 +6793,15 @@
     "shift": "Smena",
     "specialization": "Mutaxassislik",
     "start_time": "Boshlanish",
-    "universal": "Universal"
+    "universal": "Universal",
+    "user_not_found": "❌ Foydalanuvchi topilmadi",
+    "select_shift_to_end": "Tugatish uchun smenani tanlang:",
+    "complete_shift": "Smenani tugatish",
+    "error_showing_list": "❌ Smenalar ro'yxatini ko'rsatishda xatolik",
+    "shift_not_found": "❌ Smena topilmadi",
+    "error_selecting_shift": "❌ Smenani tanlashda xatolik",
+    "active_shift_since": "🟢 Faol smena {start_time} dan beri",
+    "shift_history_empty": "📋 Smenalar tarixi bo'sh"
   },
   "specializations": {
     "cleaning": "Tozalash",
@@ -8004,5 +8026,52 @@
   },
   "menu": {
     "main": "📋 Asosiy menyu"
+  },
+  "notifications": {
+    "admin_requested_documents": "📋 **Administrator hujjatlarni so'radi**",
+    "required_document": "🔍 **Talab qilinadigan hujjat:** {doc_name}",
+    "required_documents": "🔍 **Talab qilinadigan hujjatlar:**\n{doc_list}",
+    "comment": "💬 **Izoh:**\n{comment}",
+    "please_upload_document": "📤 Iltimos, so'ralgan hujjatni tez orada yuklang.",
+    "please_upload_all_documents": "📤 Iltimos, barcha so'ralgan hujjatlarni tez orada yuklang.",
+    "request_additional_info_title": "📝 **Qo'shimcha ma'lumot so'rovi**",
+    "admin_requests_info": "Administrator sizdan {info_name} so'ramoqda.",
+    "please_provide_info": "Iltimos, so'ralgan ma'lumotni tez orada taqdim eting.",
+    "verification_approved_title": "✅ **Verifikatsiya tasdiqlandi!**",
+    "verification_approved_body": "Hisobingiz administrator tomonidan muvaffaqiyatli tasdiqlandi.\n\nEndi tizimning barcha funksiyalaridan to'liq foydalanishingiz mumkin.",
+    "verification_rejected_title": "❌ **Verifikatsiya rad etildi**",
+    "verification_rejected_body": "Afsuski, hisobingiz verifikatsiyadan o'tmadi.\n\nIltimos, tafsilotlar uchun administrator bilan bog'laning.",
+    "document_approved_title": "✅ **Hujjat tasdiqlandi**",
+    "document_approved_body": "Sizning {doc_name} administrator tomonidan muvaffaqiyatli tekshirildi va tasdiqlandi.",
+    "document_rejected_title": "❌ **Hujjat rad etildi**",
+    "document_rejected_body": "Sizning {doc_name} tekshiruvdan o'tmadi.",
+    "document_rejected_reason": "💬 **Sabab:**\n{reason}",
+    "please_upload_correct": "Iltimos, to'g'ri hujjatni yuklang.",
+    "access_granted_title": "🔑 **Kirish huquqlari berildi**",
+    "access_granted_body": "Sizga {level_name} uchun ariza berish huquqlari berildi.",
+    "access_details": "📍 **Tafsilotlar:**\n{details}",
+    "access_revoked_title": "🚫 **Kirish huquqlari bekor qilindi**",
+    "access_revoked_body": "{level_name} uchun ariza berish huquqlaringiz bekor qilindi.",
+    "access_revoked_reason": "💬 **Sabab:**\n{reason}"
+  },
+  "document_types": {
+    "passport": "pasport",
+    "property_deed": "mulk guvohnomasi",
+    "rental_agreement": "ijara shartnomasi",
+    "utility_bill": "kommunal to'lov kvitansiyasi",
+    "other": "qo'shimcha hujjatlar"
+  },
+  "info_types": {
+    "address": "aniq manzil",
+    "passport": "pasport",
+    "property_deed": "mulk guvohnomasi",
+    "rental_agreement": "ijara shartnomasi",
+    "utility_bill": "kommunal to'lov kvitansiyasi",
+    "other": "qo'shimcha ma'lumot"
+  },
+  "access_levels": {
+    "apartment": "kvartira",
+    "house": "uy",
+    "yard": "hovli"
   }
 }

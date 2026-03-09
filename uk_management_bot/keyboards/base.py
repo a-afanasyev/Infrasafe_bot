@@ -1,6 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.callback_factories import RoleSwitchCB, RatingCB
 
 def get_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Главная клавиатура (вариант по умолчанию для обратной совместимости).
@@ -25,34 +26,25 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 
     Если роли не найдены, возвращает базовую клавиатуру.
     """
-    try:
-        from uk_management_bot.database.session import SessionLocal
-        from uk_management_bot.database.models.user import User
-        import json
+    from uk_management_bot.database.session import SessionLocal
+    from uk_management_bot.database.models.user import User
 
-        db = SessionLocal()
+    db = SessionLocal()
+    try:
         user = db.query(User).filter(User.telegram_id == user_id).first()
 
         if user:
-            # Получаем роли безопасно (поддержка JSON и CSV форматов)
             from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
             roles = parse_roles_safe(user.roles)
 
-            # Fallback к legacy полю role
             if not roles and user.role:
                 roles = [user.role]
 
-            # Определяем активную роль
             active_role = user.active_role or (roles[0] if roles else "applicant")
-
-            # Получаем статус пользователя
             user_status = user.status or "approved"
-
-            # Получаем язык пользователя
             language = user.language or "ru"
 
-            db.close()
             return get_main_keyboard_for_role(
                 active_role=active_role,
                 roles=roles,
@@ -60,11 +52,12 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
                 language=language
             )
 
-        db.close()
         return get_main_keyboard()
 
     except Exception:
         return get_main_keyboard()
+    finally:
+        db.close()
 
 def get_cancel_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Клавиатура с кнопкой отмены"""
@@ -88,7 +81,7 @@ def get_rating_keyboard() -> InlineKeyboardMarkup:
     for i in range(1, 6):
         builder.add(InlineKeyboardButton(
             text=f"{'⭐' * i}",
-            callback_data=f"rate_{i}"
+            callback_data=RatingCB(score=i).pack()
         ))
 
     builder.adjust(5)
@@ -159,7 +152,10 @@ def get_role_switch_inline(roles: list[str], active_role: str, language: str = "
     for role in roles or []:
         name = get_text(f"roles.{role}", language=language)
         mark = " ✓" if role == active_role else ""
-        builder.add(InlineKeyboardButton(text=f"{name}{mark}", callback_data=f"switch_role:{role}"))
+        builder.add(InlineKeyboardButton(
+            text=f"{name}{mark}",
+            callback_data=RoleSwitchCB(target=role).pack()
+        ))
 
     builder.adjust(3)
     return builder.as_markup()
@@ -173,11 +169,11 @@ def get_executor_suggestion_inline(yes_text: str, no_text: str) -> InlineKeyboar
     - no_text: Подпись кнопки отказа (локализованный текст)
 
     Возвращает InlineKeyboardMarkup с двумя кнопками:
-    - Перейти в режим сотрудника → callback_data "switch_role:executor"
+    - Перейти в режим сотрудника → RoleSwitchCB(target="executor")
     - Остаться в текущем режиме → callback_data "suggest_executor_skip"
     """
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text=yes_text, callback_data="switch_role:executor"))
+    builder.add(InlineKeyboardButton(text=yes_text, callback_data=RoleSwitchCB(target="executor").pack()))
     builder.add(InlineKeyboardButton(text=no_text, callback_data="suggest_executor_skip"))
     builder.adjust(1)
     return builder.as_markup()

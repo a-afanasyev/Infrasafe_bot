@@ -137,16 +137,20 @@ class InviteService:
                 "message": "Ошибка валидации токена"
             }
     
-    def validate_invite(self, token: str) -> Dict[str, Any]:
+    def validate_invite(self, token: str, mark_used_by: int = None) -> Dict[str, Any]:
         """
-        Валидирует токен приглашения
-        
+        Валидирует токен приглашения.
+
+        If mark_used_by is provided, atomically validates AND marks the nonce
+        as used in a single transaction, preventing race conditions.
+
         Args:
             token: Токен для валидации
-            
+            mark_used_by: If set, atomically mark nonce as used by this user
+
         Returns:
             Словарь с данными приглашения или поднимает исключение
-            
+
         Raises:
             ValueError: При ошибках валидации
         """
@@ -154,59 +158,65 @@ class InviteService:
             # Проверяем формат токена
             if not token.startswith('invite_v1:'):
                 raise ValueError("Invalid token format")
-                
+
             # Извлекаем payload и signature
             token_body = token[10:]  # убираем "invite_v1:"
             if '.' not in token_body:
                 raise ValueError("Invalid token structure")
-                
+
             payload_b64, signature = token_body.rsplit('.', 1)
-            
+
             # Проверяем HMAC подпись
             expected_signature = hmac.new(
                 self.secret,
                 payload_b64.encode(),
                 hashlib.sha256
             ).hexdigest()
-            
+
             if not hmac.compare_digest(signature, expected_signature):
                 raise ValueError("Invalid token signature")
-            
+
             # Декодируем payload
             # Добавляем padding если нужно
             missing_padding = len(payload_b64) % 4
             if missing_padding:
                 payload_b64 += '=' * (4 - missing_padding)
-                
+
             payload_json = base64.urlsafe_b64decode(payload_b64.encode()).decode()
             payload = json.loads(payload_json)
-            
+
             # Проверяем срок действия
             if payload.get('expires_at', 0) < time.time():
                 raise ValueError("Token has expired")
-            
+
             # Проверяем nonce на повторное использование
             nonce = payload.get('nonce')
             if not nonce:
                 raise ValueError("Token missing nonce")
-                
+
             if self.is_nonce_used(nonce):
                 raise ValueError("Token already used")
-            
+
             # Валидируем структуру данных
             required_fields = ['role', 'expires_at', 'nonce', 'created_by']
             for field in required_fields:
                 if field not in payload:
                     raise ValueError(f"Token missing required field: {field}")
-            
+
             if payload['role'] not in ['applicant', 'executor', 'manager']:
                 raise ValueError("Invalid role in token")
-                
+
+            # Atomically mark nonce as used within the same transaction
+            if mark_used_by is not None:
+                self.mark_nonce_used(nonce, mark_used_by, payload)
+
             logger.info(f"Successfully validated invite token with nonce {nonce}")
             return payload
-            
+
         except json.JSONDecodeError:
             raise ValueError("Invalid token payload")
+        except ValueError:
+            raise
         except Exception as e:
             logger.warning(f"Token validation failed: {str(e)}")
             raise ValueError(f"Token validation failed: {str(e)}")

@@ -28,7 +28,7 @@ class Settings:
     GOOGLE_SHEETS_RETRY_DELAY = int(os.getenv("GOOGLE_SHEETS_RETRY_DELAY", "60"))  # секунды
     
     # Application
-    DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+    DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     
     # Admin
@@ -101,6 +101,15 @@ class Settings:
     MEDIA_SERVICE_URL = os.getenv("MEDIA_SERVICE_URL", "http://localhost:8001")
     MEDIA_SERVICE_TIMEOUT = int(os.getenv("MEDIA_SERVICE_TIMEOUT", "30"))
     MEDIA_SERVICE_ENABLED = os.getenv("MEDIA_SERVICE_ENABLED", "True").lower() == "true"
+
+    # Startup validation (production-only checks)
+    if not DEBUG:
+        if not BOT_TOKEN:
+            raise ValueError("BOT_TOKEN must be set in environment variables")
+        if DATABASE_URL.startswith("sqlite"):
+            raise ValueError("SQLite is not allowed in production (DEBUG=False). Use PostgreSQL.")
+        if ADMIN_PASSWORD and len(ADMIN_PASSWORD) < 8:
+            raise ValueError("ADMIN_PASSWORD must be at least 8 characters in production")
 
 # Создаем экземпляр настроек
 settings = Settings()

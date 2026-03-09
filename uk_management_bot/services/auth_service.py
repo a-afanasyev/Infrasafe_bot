@@ -7,6 +7,7 @@ from uk_management_bot.utils.constants import MAX_ADDRESS_LENGTH
 from typing import List
 import logging
 import re
+import secrets
 import time
 import json
 from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
@@ -55,7 +56,7 @@ class AuthService:
             return True
         return False
     
-    async def approve_user(self, telegram_id: int, role: str = "applicant") -> bool:
+    async def auto_approve_user(self, telegram_id: int, role: str = "applicant") -> bool:
         """Одобрить пользователя (только для менеджеров)"""
         if role not in settings.USER_ROLES:
             return False
@@ -77,8 +78,8 @@ class AuthService:
             return True
         return False
     
-    async def block_user(self, telegram_id: int) -> bool:
-        """Заблокировать пользователя"""
+    async def block_user_by_telegram_id(self, telegram_id: int) -> bool:
+        """Заблокировать пользователя по telegram_id"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
             user.status = "blocked"
@@ -545,38 +546,32 @@ class AuthService:
         return self.db.query(User).all()
     
     async def get_users_by_role(self, role: str) -> list[User]:
-        """Получить пользователей по роли (поддерживает новую систему ролей)"""
-        all_users = self.db.query(User).filter(User.status == "approved").all()
-        matching_users = []
-        
-        for user in all_users:
-            # Проверяем активную роль
-            if user.active_role == role:
-                matching_users.append(user)
-                continue
-                
-            # Проверяем наличие роли в списке ролей
-            try:
-                if user.roles:
-                    import json
-                    parsed_roles = json.loads(user.roles)
-                    if isinstance(parsed_roles, list) and role in parsed_roles:
-                        matching_users.append(user)
-                        continue
-            except Exception:
-                pass
-                
-            # Fallback к старому полю
-            if user.role == role:
-                matching_users.append(user)
-                
-        return matching_users
+        """Получить пользователей по роли (SQL-level filtering instead of Python loop).
+
+        Uses LIKE with JSON-style quoting to match exact role strings
+        in the JSON array stored in User.roles TEXT column.
+        """
+        from sqlalchemy import or_
+        # Match exact role in JSON array: look for "role" as array element
+        # Handles both cases: ["role"] and [..., "role", ...]
+        json_pattern = f'"%{role}%"'  # would false-match substrings
+        # More precise: match "role" preceded by [ or , and followed by ] or ,
+        # But SQLite LIKE doesn't support regex. Use exact element match instead.
+        exact_match = f'"{role}"'
+        return self.db.query(User).filter(
+            User.status == "approved",
+            or_(
+                User.active_role == role,
+                User.roles.contains(exact_match),
+                User.role == role,
+            )
+        ).all()
     
     async def make_admin_by_password(self, telegram_id: int, password: str) -> bool:
         """Назначить пользователя администратором по паролю"""
         from uk_management_bot.config.settings import settings
         
-        if password != settings.ADMIN_PASSWORD:
+        if not secrets.compare_digest(password.encode('utf-8'), settings.ADMIN_PASSWORD.encode('utf-8')):
             logger.warning(f"Неверный пароль администратора от пользователя {telegram_id}")
             return False
         

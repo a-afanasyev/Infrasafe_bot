@@ -123,14 +123,14 @@ async def _get_user_language(message: Message = None, callback: CallbackQuery = 
 
     return "ru"  # Fallback to Russian
 
-async def _deny_if_pending_message(message: Message, user_status: Optional[str]) -> bool:
+async def _deny_if_pending_message(message: Message, user_status: Optional[str], language: str = "ru") -> bool:
     """Единый ранний отказ для пользователей со статусом pending (Message).
 
     Возвращает True, если обработку нужно прервать.
     """
     if user_status == "pending":
         from uk_management_bot.utils.safe_localization import safe_get_text
-        lang = message.from_user.language_code or "ru"
+        lang = language
         try:
             lang = await _get_user_language(message=message)
             await message.answer(get_text("auth.pending", language=lang))
@@ -139,14 +139,14 @@ async def _deny_if_pending_message(message: Message, user_status: Optional[str])
         return True
     return False
 
-async def _deny_if_pending_callback(callback: CallbackQuery, user_status: Optional[str]) -> bool:
+async def _deny_if_pending_callback(callback: CallbackQuery, user_status: Optional[str], language: str = "ru") -> bool:
     """Единый ранний отказ для пользователей со статусом pending (CallbackQuery).
 
     Возвращает True, если обработку нужно прервать.
     """
     if user_status == "pending":
         from uk_management_bot.utils.safe_localization import safe_get_text
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         try:
             lang = await _get_user_language(callback=callback)
             await callback.answer(get_text("auth.pending", language=lang), show_alert=True)
@@ -382,13 +382,13 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
 
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
     await message.answer(
-        get_text("requests.начинаем_создание_requests", language=lang),
+        get_text("requests.starting_request_creation", language=lang),
         reply_markup=ReplyKeyboardRemove()
     )
 
     # Показываем inline-клавиатуру категорий
     await message.answer(
-        get_text("requests.select_категорию_requests", language=lang),
+        get_text("requests.select_category", language=lang),
         reply_markup=get_categories_inline_keyboard_with_cancel(language=lang)
     )
 
@@ -632,7 +632,7 @@ async def process_description(message: Message, state: FSMContext):
     await state.update_data(description=message.text)
     await state.set_state(RequestStates.urgency)
     await message.answer(
-        get_text("requests.select_срочность", language=lang),
+        get_text("requests.select_urgency", language=lang),
         reply_markup=get_urgency_inline_keyboard(language=lang)
     )
     logger.info(f"Пользователь {message.from_user.id} ввел описание")
@@ -649,7 +649,7 @@ async def process_urgency(message: Message, state: FSMContext):
 
     # Срочность выбирается через inline-клавиатуру. Если пришел текст — показать inline-клавиатуру снова.
     await message.answer(
-        get_text("requests.select_срочность", language=lang),
+        get_text("requests.select_urgency", language=lang),
         reply_markup=get_urgency_inline_keyboard(language=lang)
     )
     return
@@ -666,7 +666,7 @@ async def process_media(message: Message, state: FSMContext):
     media_files = data.get('media_files', [])
 
     if len(media_files) >= 5:
-        await message.answer(get_text("requests.максимум_5_файлов", language=lang))
+        await message.answer(get_text("requests.max_5_files", language=lang))
         return
 
     # Получаем file_id
@@ -679,14 +679,14 @@ async def process_media(message: Message, state: FSMContext):
 
     # Проверяем размер файла (примерная проверка)
     if not validate_media_file(0, file_type):  # Размер файла проверяется на уровне Telegram
-        await message.answer(get_text("requests.файл_слишком_большой", language=lang))
+        await message.answer(get_text("requests.file_too_large", language=lang))
         return
 
     media_files.append(file_id)
     await state.update_data(media_files=media_files)
 
     await message.answer(
-        get_text("requests.файл_добавлен_5", language=lang).replace("{...}", str(len(media_files))),
+        get_text("requests.file_added", language=lang).replace("{...}", str(len(media_files))),
         reply_markup=get_media_keyboard(language=lang)
     )
     logger.info(f"Пользователь {message.from_user.id} добавил медиафайл")
@@ -707,7 +707,7 @@ async def process_media_text(message: Message, state: FSMContext):
         return
 
     await message.answer(
-        get_text("requests.отправьте_фото_или", language=lang),
+        get_text("requests.send_photo_or_video", language=lang),
         reply_markup=get_media_keyboard(language=lang)
     )
 
@@ -777,7 +777,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
         if success:
             await state.clear()
             await message.answer(
-                get_text("requests.request_success_создана", language=lang),
+                get_text("requests.request_created_success", language=lang),
                 reply_markup=get_contextual_keyboard(roles, active_role) if roles and active_role else get_user_contextual_keyboard(message.from_user.id)
             )
             logger.info(f"Пользователь {message.from_user.id} создал заявку")
@@ -801,7 +801,7 @@ async def cancel_request(message: Message, state: FSMContext, roles: list = None
     """Отмена создания заявки"""
     await state.clear()
     await message.answer(
-        get_text("requests.создание_requests_cancelled", language=lang),
+        get_text("requests.request_creation_cancelled", language=lang),
         reply_markup=get_user_contextual_keyboard(message.from_user.id)
     )
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
@@ -967,9 +967,9 @@ async def handle_cancel_create(callback: CallbackQuery, state: FSMContext):
         logger.info(f"[CANCEL_CREATE] Пользователь {user_id} отменил создание заявки через inline-кнопку")
 
         await state.clear()
-        await callback.message.edit_text(get_text("requests.создание_requests_cancelled", language=lang))
+        await callback.message.edit_text(get_text("requests.request_creation_cancelled", language=lang))
         await callback.message.answer(
-            get_text("requests.возврат_в_главное", language=lang),
+            get_text("requests.return_to_main", language=lang),
             reply_markup=get_user_contextual_keyboard(callback.from_user.id)
         )
         await callback.answer()
@@ -1018,7 +1018,7 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, u
         try:
             keyboard = get_media_keyboard(language=lang)
             await callback.message.answer(
-                get_text("requests.отправьте_фото_или", language=lang),
+                get_text("requests.send_photo_or_video", language=lang),
                 reply_markup=keyboard
             )
             logger.info(f"Клавиатура медиа отправлена пользователю {callback.from_user.id}")
@@ -1033,7 +1033,7 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, u
                 resize_keyboard=True
             )
             await callback.message.answer(
-                get_text("requests.отправьте_фото_или", language=lang),
+                get_text("requests.send_photo_or_video", language=lang),
                 reply_markup=fallback_keyboard
             )
 
@@ -1092,7 +1092,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 )
                 # Отправляем отдельное сообщение с главной клавиатурой
                 await callback.message.answer(
-                    get_text("requests.возврат_в_главное", language=lang),
+                    get_text("requests.return_to_main", language=lang),
                     reply_markup=get_user_contextual_keyboard(callback.from_user.id)
                 )
                 await state.clear()
@@ -1108,10 +1108,10 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 
         elif action == "no":
             await callback.message.edit_text(
-                get_text("requests.создание_requests_cancelled", language=lang)
+                get_text("requests.request_creation_cancelled", language=lang)
             )
             await callback.message.answer(
-                get_text("requests.возврат_в_главное", language=lang),
+                get_text("requests.return_to_main", language=lang),
                 reply_markup=get_user_contextual_keyboard(callback.from_user.id)
             )
             await state.clear()

@@ -41,9 +41,9 @@ class QuarterlyPlanningStates(StatesGroup):
 
 @router.message(Command("quarterly_planning"))
 @require_role(['admin', 'manager'])
-async def cmd_quarterly_planning(message: Message, state: FSMContext, db=None):
+async def cmd_quarterly_planning(message: Message, state: FSMContext, db=None, language: str = "ru"):
     """Главное меню квартального планирования"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -63,9 +63,9 @@ async def cmd_quarterly_planning(message: Message, state: FSMContext, db=None):
 
 
 @router.callback_query(F.data == "quarterly_plan_create")
-async def start_quarterly_planning(callback: CallbackQuery, state: FSMContext, db=None):
+async def start_quarterly_planning(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Начало создания квартального плана"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -88,9 +88,9 @@ async def start_quarterly_planning(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data.startswith("quarter_"), StateFilter(QuarterlyPlanningStates.selecting_quarter))
-async def select_quarter(callback: CallbackQuery, state: FSMContext, db=None):
+async def select_quarter(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Выбор квартала для планирования"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -143,9 +143,9 @@ async def select_quarter(callback: CallbackQuery, state: FSMContext, db=None):
 
 
 @router.callback_query(F.data.startswith("spec_"), StateFilter(QuarterlyPlanningStates.selecting_specializations))
-async def toggle_specialization(callback: CallbackQuery, state: FSMContext, db=None):
+async def toggle_specialization(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Переключение выбора специализации"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -185,9 +185,9 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext, db=N
 
 
 @router.callback_query(F.data == "spec_confirm", StateFilter(QuarterlyPlanningStates.selecting_specializations))
-async def confirm_specializations(callback: CallbackQuery, state: FSMContext, db=None):
+async def confirm_specializations(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Подтверждение выбора специализаций"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -260,9 +260,9 @@ async def confirm_specializations(callback: CallbackQuery, state: FSMContext, db
 
 
 @router.callback_query(F.data == "plan_execute", StateFilter(QuarterlyPlanningStates.confirming_plan))
-async def execute_quarterly_plan(callback: CallbackQuery, state: FSMContext, db=None):
+async def execute_quarterly_plan(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Выполнение квартального планирования"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -336,9 +336,9 @@ async def execute_quarterly_plan(callback: CallbackQuery, state: FSMContext, db=
 
 
 @router.callback_query(F.data == "view_statistics")
-async def view_planning_statistics(callback: CallbackQuery, state: FSMContext, db=None):
+async def view_planning_statistics(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Просмотр статистики планирования"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -393,9 +393,9 @@ async def view_planning_statistics(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data == "transfer_management")
-async def transfer_management_menu(callback: CallbackQuery, state: FSMContext, db=None):
+async def transfer_management_menu(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Меню управления передачами смен"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -444,9 +444,9 @@ async def transfer_management_menu(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data == "auto_initiate_transfers")
-async def auto_initiate_transfers(callback: CallbackQuery, state: FSMContext, db=None):
+async def auto_initiate_transfers(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Автоматическая инициация передач"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         if not db:
             db = next(get_db())
@@ -532,9 +532,9 @@ def _parse_custom_date(quarter_data: str) -> date:
 # ========== ОБРАБОТЧИКИ ОТМЕНЫ И ВОЗВРАТА ==========
 
 @router.callback_query(F.data == "quarterly_menu")
-async def back_to_quarterly_menu(callback: CallbackQuery, state: FSMContext, db=None):
+async def back_to_quarterly_menu(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Возврат в главное меню квартального планирования"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         await state.clear()
         await cmd_quarterly_planning(callback.message, state, db)
@@ -545,9 +545,9 @@ async def back_to_quarterly_menu(callback: CallbackQuery, state: FSMContext, db=
 
 
 @router.callback_query(F.data == "quarterly_cancel")
-async def cancel_quarterly_planning(callback: CallbackQuery, state: FSMContext):
+async def cancel_quarterly_planning(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена квартального планирования"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     try:
         await state.clear()
 

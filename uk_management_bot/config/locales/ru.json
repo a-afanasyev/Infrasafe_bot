@@ -781,7 +781,8 @@
       "remind_applicant": "🔔 Напомнить заявителю",
       "accept_for_applicant": "✅ Принять за заявителя",
       "back_to_unaccepted_list": "🔙 К списку непринятых",
-      "back_nav": "🔙 Назад"
+      "back_nav": "🔙 Назад",
+      "test_middleware": "🧪 Тест middleware"
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Новая заявка для дежурных {specialization}</b>\n\n№ {request_number}\nКатегория: {category}\nАдрес: {address}\nСрочность: {urgency}\n\nОписание: {description}",
@@ -4142,7 +4143,8 @@
       "skip_documents": "⏭️ Пропустить загрузку документов",
       "title": "📄 Загрузка документов",
       "upload_cancelled": "❌ Загрузка документа отменена.",
-      "upload_file": "📤 Загрузите файл документа:"
+      "upload_file": "📤 Загрузите файл документа:",
+      "unknown_type": "❌ Неизвестный тип документа. Выберите из предложенных вариантов."
     },
     "error_завершения_онбординга": "Ошибка завершения онбординга без документов для {...}: {...}",
     "error_завершения_онбординга_2": "Ошибка завершения онбординга без документов для ",
@@ -4274,7 +4276,8 @@
       "file_field": "Файл",
       "size_field": "Размер",
       "total_documents": "Всего документов",
-      "type_short_field": "Тип"
+      "type_short_field": "Тип",
+      "btn_specify_address": "🏠 Указать адрес"
     }
   },
   "pagination": {
@@ -6074,7 +6077,17 @@
     "count": "заявок",
     "enter_address_manually": "📍 Введите адрес вручную:",
     "no_active_requests": "У вас пока нет активных заявок.",
-    "no_archive_requests": "У вас пока нет заявок в архиве."
+    "no_archive_requests": "У вас пока нет заявок в архиве.",
+    "starting_request_creation": "📝 Начинаем создание заявки...",
+    "select_category": "Выберите категорию заявки:",
+    "select_urgency": "Выберите срочность заявки:",
+    "max_5_files": "⚠️ Максимум 5 файлов. Вы уже загрузили максимальное количество.",
+    "file_too_large": "⚠️ Файл слишком большой. Максимальный размер: 20 МБ.",
+    "file_added": "✅ Файл добавлен ({count}/5). Отправьте ещё или нажмите кнопку для продолжения.",
+    "send_photo_or_video": "📎 Отправьте фото или видео (до 5 файлов) или нажмите кнопку для продолжения.",
+    "request_created_success": "✅ Заявка успешно создана!",
+    "request_creation_cancelled": "❌ Создание заявки отменено.",
+    "return_to_main": "🔙 Возврат в главное меню"
   },
   "role": {
     "not_allowed": "Эта роль вам недоступна",
@@ -6736,7 +6749,8 @@
       "page_prev": "◀️",
       "page_next": "▶️",
       "page_indicator": "{current}/{total}",
-      "force_end_shift": "❗ Завершить смену"
+      "force_end_shift": "❗ Завершить смену",
+      "active_shifts_button": "🟢 Активные смены"
     },
     "handlers": {
       "universal": "Универсальная",
@@ -6779,7 +6793,15 @@
     "shift": "Смена",
     "specialization": "Специализация",
     "start_time": "Начало",
-    "universal": "Универсальная"
+    "universal": "Универсальная",
+    "user_not_found": "❌ Пользователь не найден",
+    "select_shift_to_end": "Выберите смену для завершения:",
+    "complete_shift": "Завершить смену",
+    "error_showing_list": "❌ Ошибка при отображении списка смен",
+    "shift_not_found": "❌ Смена не найдена",
+    "error_selecting_shift": "❌ Ошибка при выборе смены",
+    "active_shift_since": "🟢 Активная смена с {start_time}",
+    "shift_history_empty": "📋 История смен пуста"
   },
   "specializations": {
     "cleaning": "Уборка",
@@ -8003,5 +8025,52 @@
   },
   "menu": {
     "main": "📋 Главное меню"
+  },
+  "notifications": {
+    "admin_requested_documents": "📋 **Администратор запросил документы**",
+    "required_document": "🔍 **Требуемый документ:** {doc_name}",
+    "required_documents": "🔍 **Требуемые документы:**\n{doc_list}",
+    "comment": "💬 **Комментарий:**\n{comment}",
+    "please_upload_document": "📤 Пожалуйста, загрузите запрошенный документ в ближайшее время.",
+    "please_upload_all_documents": "📤 Пожалуйста, загрузите все запрошенные документы в ближайшее время.",
+    "request_additional_info_title": "📝 **Запрос дополнительной информации**",
+    "admin_requests_info": "Администратор запрашивает у вас {info_name}.",
+    "please_provide_info": "Пожалуйста, предоставьте запрашиваемую информацию в ближайшее время.",
+    "verification_approved_title": "✅ **Верификация одобрена!**",
+    "verification_approved_body": "Ваша учетная запись успешно верифицирована администратором.\n\nТеперь вы можете полноценно использовать все функции системы.",
+    "verification_rejected_title": "❌ **Верификация отклонена**",
+    "verification_rejected_body": "К сожалению, ваша учетная запись не прошла верификацию.\n\nПожалуйста, свяжитесь с администратором для уточнения деталей.",
+    "document_approved_title": "✅ **Документ одобрен**",
+    "document_approved_body": "Ваш {doc_name} успешно проверен и одобрен администратором.",
+    "document_rejected_title": "❌ **Документ отклонен**",
+    "document_rejected_body": "Ваш {doc_name} не прошел проверку.",
+    "document_rejected_reason": "💬 **Причина:**\n{reason}",
+    "please_upload_correct": "Пожалуйста, загрузите корректный документ.",
+    "access_granted_title": "🔑 **Права доступа предоставлены**",
+    "access_granted_body": "Вам предоставлены права на подачу заявок для {level_name}.",
+    "access_details": "📍 **Детали:**\n{details}",
+    "access_revoked_title": "🚫 **Права доступа отозваны**",
+    "access_revoked_body": "Ваши права на подачу заявок для {level_name} были отозваны.",
+    "access_revoked_reason": "💬 **Причина:**\n{reason}"
+  },
+  "document_types": {
+    "passport": "паспорт",
+    "property_deed": "свидетельство о собственности",
+    "rental_agreement": "договор аренды",
+    "utility_bill": "квитанция ЖКХ",
+    "other": "дополнительные документы"
+  },
+  "info_types": {
+    "address": "точный адрес",
+    "passport": "паспорт",
+    "property_deed": "свидетельство о собственности",
+    "rental_agreement": "договор аренды",
+    "utility_bill": "квитанцию ЖКХ",
+    "other": "дополнительную информацию"
+  },
+  "access_levels": {
+    "apartment": "квартиры",
+    "house": "дома",
+    "yard": "двора"
   }
 }

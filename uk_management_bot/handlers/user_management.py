@@ -41,9 +41,9 @@ router = Router()
 # ═══ ГЛАВНОЕ МЕНЮ УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ ═══
 
 @router.callback_query(F.data == "user_management_panel")
-async def show_user_management_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def show_user_management_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать панель управления пользователями"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -80,15 +80,15 @@ async def show_user_management_panel(callback: CallbackQuery, db: Session, roles
 
 
 @router.callback_query(F.data == "user_mgmt_main")
-async def back_to_main_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def back_to_main_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Вернуться к главному меню панели управления"""
     await show_user_management_panel(callback, db, roles, active_role, user)
 
 
 @router.callback_query(F.data == "user_mgmt_stats")
-async def show_user_stats(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def show_user_stats(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать статистику пользователей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -124,9 +124,9 @@ async def show_user_stats(callback: CallbackQuery, db: Session, roles: list = No
 # ═══ ИНТЕГРАЦИЯ С СИСТЕМОЙ ВЕРИФИКАЦИИ ═══
 
 @router.callback_query(F.data == "user_verification_panel")
-async def show_verification_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def show_verification_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать панель верификации пользователей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -168,9 +168,9 @@ async def show_verification_panel(callback: CallbackQuery, db: Session, roles: l
 # ═══ ОБНОВЛЕНИЕ СТАТИСТИКИ С ВЕРИФИКАЦИЕЙ ═══
 
 @router.callback_query(F.data == "user_mgmt_stats_with_verification")
-async def show_user_stats_with_verification(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def show_user_stats_with_verification(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать расширенную статистику пользователей с верификацией"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -225,9 +225,9 @@ async def show_user_stats_with_verification(callback: CallbackQuery, db: Session
 # ═══ ОБРАБОТЧИКИ ДЛЯ УВЕДОМЛЕНИЙ О РЕГИСТРАЦИИ ═══
 
 @router.callback_query(F.data.startswith("approve_user_"))
-async def handle_approve_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_approve_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
     """Одобрить пользователя из уведомления о регистрации"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     logger.info(f"🔵 handle_approve_user_from_notification вызван: callback_data={callback.data}, roles={roles}")
 
     try:
@@ -282,9 +282,9 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, db: Ses
 
 
 @router.callback_query(F.data.startswith("reject_user_"))
-async def handle_reject_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None):
+async def handle_reject_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Отклонить пользователя из уведомления о регистрации"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
 
     try:
         user_id = int(callback.data.split("_")[2])
@@ -341,9 +341,9 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, db: Sess
 
 
 @router.callback_query(F.data.startswith("view_user_"))
-async def handle_view_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None):
+async def handle_view_user_from_notification(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Просмотреть профиль пользователя из уведомления о регистрации"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     logger.info(f"🔵 handle_view_user_from_notification вызван: callback_data={callback.data}, roles={roles}")
 
     try:
@@ -408,9 +408,9 @@ async def handle_view_user_from_notification(callback: CallbackQuery, db: Sessio
 # ═══ БЫСТРЫЕ ДЕЙСТВИЯ С ВЕРИФИКАЦИЕЙ ═══
 
 @router.callback_query(F.data.startswith("quick_verify_"))
-async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Быстрая верификация пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа через утилитарную функцию
@@ -442,15 +442,11 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
             
             # Отправляем обновленное главное меню пользователю
             try:
-                from aiogram import Bot
-                from uk_management_bot.config.settings import settings
                 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
-                
+
                 # Получаем пользователя
                 target_user = db.query(User).filter(User.id == user_id).first()
                 if target_user:
-                    bot = Bot(token=settings.BOT_TOKEN)
-                    
                     # Получаем роли пользователя
                     user_roles = []
                     if target_user.roles:
@@ -461,7 +457,7 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                             user_roles = ["applicant"]
                     else:
                         user_roles = ["applicant"]
-                    
+
                     # Создаем клавиатуру с кнопкой перезапуска
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -473,13 +469,11 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                     ])
 
                     # Отправляем уведомление об одобрении с кнопкой перезапуска
-                    await bot.send_message(
+                    await callback.bot.send_message(
                         chat_id=target_user.telegram_id,
                         text=get_text('user_mgmt.handlers.application_approved_restart', language=target_lang),
                         reply_markup=restart_keyboard
                     )
-
-                    await bot.session.close()
 
             except Exception as e:
                 logger.error(f"Ошибка отправки обновленного меню пользователю {user_id}: {e}")
@@ -503,9 +497,9 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
 
 
 @router.callback_query(F.data.startswith("quick_reject_"))
-async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = None):
+async def quick_reject_user(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Быстрое отклонение пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
 
     logger.debug(f"quick_reject_user: callback.data = {callback.data}")
 
@@ -626,9 +620,9 @@ def get_user_management_main_keyboard_with_verification(stats: Dict[str, int], l
 # ═══ СПИСКИ ПОЛЬЗОВАТЕЛЕЙ ═══
 
 @router.callback_query(F.data.startswith("user_mgmt_list_"))
-async def show_user_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def show_user_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать список пользователей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -697,9 +691,9 @@ async def show_user_list(callback: CallbackQuery, db: Session, roles: list = Non
 # ═══ ДЕЙСТВИЯ С ПОЛЬЗОВАТЕЛЯМИ ═══
 
 @router.callback_query(F.data.startswith("user_mgmt_user_"))
-async def show_user_details(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def show_user_details(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать детали пользователя и доступные действия"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -747,9 +741,9 @@ async def show_user_details(callback: CallbackQuery, db: Session, roles: list = 
 
 @router.callback_query(F.data.startswith("user_action_approve_"))
 async def handle_approve_user(callback: CallbackQuery, state: FSMContext, db: Session, 
-                             roles: list = None, active_role: str = None, user: User = None):
+                             roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать одобрение пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -797,9 +791,9 @@ async def handle_approve_user(callback: CallbackQuery, state: FSMContext, db: Se
 
 @router.callback_query(F.data.startswith("user_action_block_"))
 async def handle_block_user(callback: CallbackQuery, state: FSMContext, db: Session, 
-                           roles: list = None, active_role: str = None, user: User = None):
+                           roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать блокировку пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -845,9 +839,9 @@ async def handle_block_user(callback: CallbackQuery, state: FSMContext, db: Sess
 
 @router.callback_query(F.data.startswith("user_action_unblock_"))
 async def handle_unblock_user(callback: CallbackQuery, state: FSMContext, db: Session, 
-                             roles: list = None, active_role: str = None, user: User = None):
+                             roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать разблокировку пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -893,9 +887,9 @@ async def handle_unblock_user(callback: CallbackQuery, state: FSMContext, db: Se
 
 @router.callback_query(F.data.startswith("user_action_delete_"))
 async def handle_delete_user(callback: CallbackQuery, state: FSMContext, db: Session, 
-                           roles: list = None, active_role: str = None, user: User = None):
+                           roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать удаление пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -941,9 +935,9 @@ async def handle_delete_user(callback: CallbackQuery, state: FSMContext, db: Ses
 
 @router.callback_query(F.data.startswith("user_action_view_documents_"))
 async def handle_view_user_documents(callback: CallbackQuery, db: Session, 
-                                   roles: list = None, active_role: str = None, user: User = None):
+                                   roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать документы пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -1055,9 +1049,9 @@ async def handle_view_user_documents(callback: CallbackQuery, db: Session,
 
 @router.callback_query(F.data.startswith("download_document_"))
 async def handle_download_document(callback: CallbackQuery, db: Session, 
-                                 roles: list = None, active_role: str = None, user: User = None):
+                                 roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Скачать документ пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -1084,11 +1078,8 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
             return
         
         # Отправляем файл
-        from aiogram import Bot
-        from uk_management_bot.config.settings import settings
-        
-        bot = Bot(token=settings.BOT_TOKEN)
-        
+        bot = callback.bot
+
         try:
             # Получаем название типа документа
             doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{document.document_type.value}', language=lang)
@@ -1124,8 +1115,6 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")
             await callback.answer(get_text('user_mgmt.handlers.error_sending_document', language=lang), show_alert=True)
-        finally:
-            await bot.session.close()
         
     except Exception as e:
         logger.error(f"Ошибка скачивания документа: {e}")
@@ -1136,9 +1125,9 @@ async def handle_download_document(callback: CallbackQuery, db: Session,
 
 @router.callback_query(F.data.startswith("user_action_request_docs_"))
 async def handle_request_documents(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                 roles: list = None, active_role: str = None, user: User = None):
+                                 roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать запрос дополнительных документов"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     logger.info(f"🔍 HANDLE_REQUEST_DOCUMENTS: Вызван обработчик для {callback.data}")
     
@@ -1192,7 +1181,7 @@ async def handle_request_documents(callback: CallbackQuery, state: FSMContext, d
 # async def handle_document_type_selection(callback: CallbackQuery, state: FSMContext, db: Session, 
 #                                        roles: list = None, active_role: str = None, user: User = None):
 #     """Обработать выбор типа документа для запроса"""
-#     lang = callback.from_user.language_code or 'ru'
+#     lang = language
 #     
 #     logger.info(f"🔍 HANDLE_DOCUMENT_TYPE_SELECTION: Вызван обработчик для {callback.data}")
 #     logger.info(f"🔍 HANDLE_DOCUMENT_TYPE_SELECTION: Это старый обработчик, который не должен вызываться!")
@@ -1254,9 +1243,9 @@ async def handle_request_documents(callback: CallbackQuery, state: FSMContext, d
 
 @router.callback_query(F.data.startswith("check_document_"))
 async def handle_check_document(callback: CallbackQuery, state: FSMContext, db: Session, 
-                               roles: list = None, active_role: str = None, user: User = None):
+                               roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать выбор документа (галочка)"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
@@ -1299,9 +1288,9 @@ async def handle_check_document(callback: CallbackQuery, state: FSMContext, db: 
 
 @router.callback_query(F.data.startswith("uncheck_document_"))
 async def handle_uncheck_document(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                 roles: list = None, active_role: str = None, user: User = None):
+                                 roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать отмену выбора документа (убрать галочку)"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
@@ -1344,9 +1333,9 @@ async def handle_uncheck_document(callback: CallbackQuery, state: FSMContext, db
 
 @router.callback_query(F.data.startswith("req_docs_"))
 async def handle_request_selected_documents(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                           roles: list = None, active_role: str = None, user: User = None):
+                                           roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать запрос выбранных документов"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
@@ -1410,9 +1399,9 @@ async def handle_request_selected_documents(callback: CallbackQuery, state: FSMC
 
 @router.callback_query(F.data.startswith("cancel_document_selection_"))
 async def handle_cancel_document_selection(callback: CallbackQuery, state: FSMContext, db: Session,
-                                         roles: list = None, active_role: str = None, user: User = None):
+                                         roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Отменить выбор документов"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     logger.info(f"🔍 HANDLE_CANCEL_DOCUMENT_SELECTION: Вызван обработчик для {callback.data}")
     
@@ -1455,9 +1444,9 @@ async def handle_cancel_document_selection(callback: CallbackQuery, state: FSMCo
 
 @router.callback_query(F.data == "cancel_action")
 async def handle_cancel_action(callback: CallbackQuery, state: FSMContext, db: Session, 
-                              roles: list = None, active_role: str = None, user: User = None):
+                              roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать отмену действия (кнопка Отмена в клавиатурах)"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
@@ -1487,9 +1476,9 @@ async def handle_cancel_action(callback: CallbackQuery, state: FSMContext, db: S
 
 @router.callback_query(F.data.startswith("back_to_user_details_"))
 async def handle_back_to_user_details(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                     roles: list = None, active_role: str = None, user: User = None):
+                                     roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Вернуться к деталям пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
@@ -1526,9 +1515,9 @@ async def handle_back_to_user_details(callback: CallbackQuery, state: FSMContext
 # ═══ ОБРАБОТКА КОММЕНТАРИЕВ ═══
 
 @router.message(UserManagementStates.waiting_for_approval_comment)
-async def process_approval_comment(message: Message, state: FSMContext, db: Session):
+async def process_approval_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработать комментарий для одобрения"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -1555,12 +1544,8 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
             
             # Отправляем обновленное главное меню пользователю
             try:
-                from aiogram import Bot
-                from uk_management_bot.config.settings import settings
                 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
-                
-                bot = Bot(token=settings.BOT_TOKEN)
-                
+
                 # Получаем роли пользователя
                 user_roles = []
                 if target_user.roles:
@@ -1571,7 +1556,7 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
                         user_roles = ["applicant"]
                 else:
                     user_roles = ["applicant"]
-                
+
                 # Создаем клавиатуру с кнопкой перезапуска
                 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -1583,14 +1568,12 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
                 ])
 
                 # Отправляем уведомление об одобрении с кнопкой перезапуска
-                await bot.send_message(
+                await message.bot.send_message(
                     chat_id=target_user.telegram_id,
                     text=get_text('user_mgmt.handlers.application_approved_restart', language=target_lang),
                     reply_markup=restart_keyboard
                 )
-                
-                await bot.session.close()
-                
+
             except Exception as e:
                 logger.error(f"Ошибка отправки обновленного меню пользователю {target_user.telegram_id}: {e}")
             
@@ -1616,9 +1599,9 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
 
 
 @router.message(UserManagementStates.waiting_for_block_reason)
-async def process_block_reason(message: Message, state: FSMContext, db: Session):
+async def process_block_reason(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработать причину блокировки"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -1664,9 +1647,9 @@ async def process_block_reason(message: Message, state: FSMContext, db: Session)
 
 
 @router.message(UserManagementStates.waiting_for_unblock_comment)
-async def process_unblock_comment(message: Message, state: FSMContext, db: Session):
+async def process_unblock_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработать комментарий для разблокировки"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -1712,9 +1695,9 @@ async def process_unblock_comment(message: Message, state: FSMContext, db: Sessi
 
 
 @router.message(UserManagementStates.waiting_for_delete_reason)
-async def process_delete_reason(message: Message, state: FSMContext, db: Session):
+async def process_delete_reason(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработать причину удаления пользователя"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -1763,9 +1746,9 @@ async def process_delete_reason(message: Message, state: FSMContext, db: Session
 
 @router.message(UserManagementStates.waiting_for_document_request)
 async def process_document_request(message: Message, state: FSMContext, db: Session, 
-                                 roles: list = None, active_role: str = None, user: User = None):
+                                 roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработать запрос дополнительных документов"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     logger.info(f"🔍 PROCESS_DOCUMENT_REQUEST: Начало обработки запроса документов")
     logger.info(f"🔍 PROCESS_DOCUMENT_REQUEST: Пользователь: {message.from_user.id}, Текст: {message.text}")
@@ -1874,9 +1857,9 @@ async def process_document_request(message: Message, state: FSMContext, db: Sess
 
 @router.callback_query(F.data == "user_mgmt_cancel")
 async def cancel_user_management_operation(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                         roles: list = None, active_role: str = None, user: User = None):
+                                         roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Отменить текущую операцию управления пользователями"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         await state.clear()
@@ -1905,7 +1888,7 @@ async def cancel_user_management_operation(callback: CallbackQuery, state: FSMCo
 # ═══ ЗАГЛУШКИ ДЛЯ НЕАКТИВНЫХ КНОПОК ═══
 
 @router.callback_query(F.data == "user_mgmt_nop")
-async def user_management_nop(callback: CallbackQuery):
+async def user_management_nop(callback: CallbackQuery, language: str = "ru"):
     """Заглушка для неактивных кнопок"""
     await callback.answer()
 
@@ -1913,9 +1896,9 @@ async def user_management_nop(callback: CallbackQuery):
 # ═══ НАВИГАЦИЯ ═══
 
 @router.callback_query(F.data == "user_mgmt_back_to_list")
-async def back_to_user_list(callback: CallbackQuery, state: FSMContext, db: Session):
+async def back_to_user_list(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Вернуться к списку пользователей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         # Очищаем состояние
@@ -1944,9 +1927,9 @@ async def back_to_user_list(callback: CallbackQuery, state: FSMContext, db: Sess
 
 @router.callback_query(F.data.startswith("user_roles_"))
 async def show_user_roles_management(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                   roles: list = None, active_role: str = None, user: User = None):
+                                   roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать управление ролями пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -2004,9 +1987,9 @@ async def show_user_roles_management(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data.startswith("role_add_"), UserManagementStates.selecting_roles)
-async def add_role_to_user(callback: CallbackQuery, state: FSMContext):
+async def add_role_to_user(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Добавить роль пользователю"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         role = callback.data.split('_')[-1]
@@ -2033,9 +2016,9 @@ async def add_role_to_user(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("role_remove_"), UserManagementStates.selecting_roles)
-async def remove_role_from_user(callback: CallbackQuery, state: FSMContext):
+async def remove_role_from_user(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Удалить роль у пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         role = callback.data.split('_')[-1]
@@ -2070,9 +2053,9 @@ async def remove_role_from_user(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "roles_save", UserManagementStates.selecting_roles)
-async def save_user_roles(callback: CallbackQuery, state: FSMContext):
+async def save_user_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Сохранить изменения ролей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -2109,9 +2092,9 @@ async def save_user_roles(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "roles_cancel", UserManagementStates.selecting_roles)
-async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: Session):
+async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отменить редактирование ролей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -2143,9 +2126,9 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: S
 
 
 @router.message(UserManagementStates.waiting_for_role_comment)
-async def process_role_change_comment(message: Message, state: FSMContext, db: Session):
+async def process_role_change_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработать комментарий к изменению ролей"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -2210,9 +2193,9 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
 
 @router.callback_query(F.data.startswith("user_specializations_"))
 async def show_user_specializations_management(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                             roles: list = None, active_role: str = None, user: User = None):
+                                             roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать управление специализациями пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -2270,9 +2253,9 @@ async def show_user_specializations_management(callback: CallbackQuery, state: F
 
 
 @router.callback_query(F.data.startswith("spec_toggle_"), UserManagementStates.selecting_specializations)
-async def toggle_specialization(callback: CallbackQuery, state: FSMContext):
+async def toggle_specialization(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Переключить специализацию (добавить/удалить)"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         specialization = callback.data.split('_')[-1]
@@ -2302,9 +2285,9 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "spec_save", UserManagementStates.selecting_specializations)
-async def save_user_specializations(callback: CallbackQuery, state: FSMContext):
+async def save_user_specializations(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Сохранить изменения специализаций"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -2339,9 +2322,9 @@ async def save_user_specializations(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "spec_cancel", UserManagementStates.selecting_specializations)
-async def cancel_specializations_editing(callback: CallbackQuery, state: FSMContext, db: Session):
+async def cancel_specializations_editing(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отменить редактирование специализаций"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -2373,9 +2356,9 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
 
 
 @router.message(UserManagementStates.waiting_for_specialization_comment)
-async def process_specialization_change_comment(message: Message, state: FSMContext, db: Session):
+async def process_specialization_change_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработать комментарий к изменению специализаций"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         data = await state.get_data()
@@ -2427,9 +2410,9 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
 
 # ═══ ИНТЕГРАЦИЯ С АДМИН ПАНЕЛЬЮ ═══
 
-async def open_user_management(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def open_user_management(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Открыть панель управления пользователями (для интеграции с админ панелью)"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     try:
         # Получаем статистику пользователей
@@ -2450,9 +2433,9 @@ async def open_user_management(message: Message, db: Session, roles: list = None
 
 
 @router.callback_query(F.data == "admin_panel")
-async def back_to_admin_panel(callback: CallbackQuery):
+async def back_to_admin_panel(callback: CallbackQuery, language: str = "ru"):
     """Вернуться в админ панель"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         from uk_management_bot.keyboards.admin import get_manager_main_keyboard

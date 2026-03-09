@@ -3,6 +3,7 @@ Redis Rate Limiter для production окружения
 Поддерживает горизонтальное масштабирование
 """
 import asyncio
+import threading
 import time
 import logging
 from typing import Optional
@@ -141,44 +142,47 @@ class RedisRateLimiter:
 
 
 class InMemoryRateLimiter:
-    """Fallback in-memory rate limiter (как было раньше)"""
-    
+    """Fallback in-memory rate limiter (thread-safe)"""
+
     _storage = {}
-    
+    _lock = threading.Lock()
+
     @classmethod
     def is_allowed(cls, key: str, max_requests: int, window_seconds: int) -> bool:
         """In-memory rate limiting с очисткой старых записей"""
         now = time.time()
-        
-        if key not in cls._storage:
-            cls._storage[key] = []
-        
-        # Очищаем старые записи
-        cls._storage[key] = [
-            timestamp for timestamp in cls._storage[key] 
-            if now - timestamp < window_seconds
-        ]
-        
-        # Проверяем лимит
-        if len(cls._storage[key]) >= max_requests:
-            return False
-        
-        # Добавляем текущий запрос
-        cls._storage[key].append(now)
-        return True
-    
+
+        with cls._lock:
+            if key not in cls._storage:
+                cls._storage[key] = []
+
+            # Очищаем старые записи
+            cls._storage[key] = [
+                timestamp for timestamp in cls._storage[key]
+                if now - timestamp < window_seconds
+            ]
+
+            # Проверяем лимит
+            if len(cls._storage[key]) >= max_requests:
+                return False
+
+            # Добавляем текущий запрос
+            cls._storage[key].append(now)
+            return True
+
     @classmethod
     def get_remaining_time(cls, key: str, window_seconds: int) -> int:
         """Время до сброса in-memory лимита"""
         now = time.time()
-        
-        if key not in cls._storage or not cls._storage[key]:
-            return 0
-        
-        oldest_time = min(cls._storage[key])
-        remaining = window_seconds - (now - oldest_time)
-        
-        return max(0, int(remaining))
+
+        with cls._lock:
+            if key not in cls._storage or not cls._storage[key]:
+                return 0
+
+            oldest_time = min(cls._storage[key])
+            remaining = window_seconds - (now - oldest_time)
+
+            return max(0, int(remaining))
 
 
 # Фабрика для выбора rate limiter

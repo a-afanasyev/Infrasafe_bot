@@ -13,11 +13,15 @@ from uk_management_bot.keyboards.base import get_main_keyboard, get_cancel_keybo
 import logging
 import json
 
+from uk_management_bot.utils.button_texts import get_login_texts
+
 logger = logging.getLogger(__name__)
 router = Router()
 
+LOGIN_TEXTS = get_login_texts()
 
-@router.message(F.text == "🔑 Войти")
+
+@router.message(F.text.in_(LOGIN_TEXTS))
 async def login_via_button(message: Message, db: Session, user_status: str = None, language: str = "ru"):
     # language injected by middleware
 
@@ -34,7 +38,7 @@ async def login_via_button(message: Message, db: Session, user_status: str = Non
             reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=language)
         )
         return
-    ok = await auth.approve_user(message.from_user.id, role="applicant")
+    ok = await auth.auto_approve_user(message.from_user.id, role="applicant")
     if ok:
         await message.answer(
             get_text("auth.login_success", language=language),

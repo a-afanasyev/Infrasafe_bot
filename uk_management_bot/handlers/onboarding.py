@@ -22,9 +22,57 @@ from uk_management_bot.keyboards.onboarding import (
 )
 from uk_management_bot.states.onboarding import OnboardingStates
 from uk_management_bot.database.models.user_verification import DocumentType
+from uk_management_bot.utils.button_texts import (
+    get_specify_phone_texts,
+    get_complete_without_docs_texts,
+    get_specify_address_texts,
+    get_upload_documents_texts,
+    get_add_more_documents_texts,
+    get_complete_onboarding_texts,
+    get_skip_documents_texts,
+    get_confirm_upload_texts,
+    get_onboarding_cancel_texts,
+    get_upload_another_document_texts,
+    get_profile_texts,
+    get_create_request_texts,
+    get_my_requests_texts,
+    get_help_texts,
+    get_shift_texts,
+    get_switch_role_texts,
+    get_cancel_texts,
+    get_my_shifts_texts,
+    get_active_requests_texts,
+    get_archive_texts,
+    get_acceptance_texts,
+    get_admin_panel_texts,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+# Button text constants for filters
+SPECIFY_PHONE_TEXTS = get_specify_phone_texts()
+COMPLETE_WITHOUT_DOCS_TEXTS = get_complete_without_docs_texts()
+SPECIFY_ADDRESS_TEXTS = get_specify_address_texts()
+UPLOAD_DOCUMENTS_TEXTS = get_upload_documents_texts()
+ADD_MORE_DOCUMENTS_TEXTS = get_add_more_documents_texts()
+COMPLETE_ONBOARDING_TEXTS = get_complete_onboarding_texts()
+SKIP_DOCUMENTS_TEXTS = get_skip_documents_texts()
+CONFIRM_UPLOAD_TEXTS = get_confirm_upload_texts()
+ONBOARDING_CANCEL_TEXTS = get_onboarding_cancel_texts()
+UPLOAD_ANOTHER_DOCUMENT_TEXTS = get_upload_another_document_texts()
+PROFILE_TEXTS = get_profile_texts()
+CREATE_REQUEST_TEXTS = get_create_request_texts()
+MY_REQUESTS_TEXTS = get_my_requests_texts()
+HELP_TEXTS = get_help_texts()
+SHIFT_TEXTS = get_shift_texts()
+SWITCH_ROLE_TEXTS = get_switch_role_texts()
+CANCEL_TEXTS = get_cancel_texts()
+MY_SHIFTS_TEXTS = get_my_shifts_texts()
+ACTIVE_REQUESTS_TEXTS = get_active_requests_texts()
+ARCHIVE_TEXTS = get_archive_texts()
+ACCEPTANCE_TEXTS = get_acceptance_texts()
+ADMIN_PANEL_TEXTS = get_admin_panel_texts()
 
 @router.message(F.text == "/start")
 async def start_onboarding(message: Message, state: FSMContext, db: Session, language: str = "ru"):
@@ -84,7 +132,7 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session, lan
         logger.error(f"Ошибка начала онбординга для {message.from_user.id}: {e}")
         await message.answer(get_text("errors.unknown_error", language=lang))
 
-@router.message(F.text == "📱 Указать телефон")
+@router.message(F.text.in_(SPECIFY_PHONE_TEXTS))
 async def start_phone_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Начинает процесс ввода телефона"""
     lang = language
@@ -155,16 +203,19 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
     lang = language
     
     # Проверяем на отмену
-    if message.text == get_text("buttons.cancel", language=lang):
+    if message.text in CANCEL_TEXTS:
         await cancel_onboarding(message, state, db, user_status)
         return
     
     # Проверяем системные команды/кнопки - не обрабатываем их как телефон
-    system_commands = [
-        "👤 Профиль", "📝 Создать заявку", "📋 Мои заявки", "❓ Помощь",
-        "🔄 Смена", "🔀 Выбрать роль", "/start", "/help",
-        "🏠 Указать адрес", "📱 Указать телефон"
-    ]
+    system_commands = ["/start", "/help"]
+    for texts_list in [PROFILE_TEXTS, CREATE_REQUEST_TEXTS, MY_REQUESTS_TEXTS,
+                       HELP_TEXTS, SHIFT_TEXTS, SWITCH_ROLE_TEXTS,
+                       SPECIFY_ADDRESS_TEXTS, SPECIFY_PHONE_TEXTS,
+                       MY_SHIFTS_TEXTS, ACTIVE_REQUESTS_TEXTS, ARCHIVE_TEXTS,
+                       ACCEPTANCE_TEXTS, ADMIN_PANEL_TEXTS, CANCEL_TEXTS,
+                       UPLOAD_DOCUMENTS_TEXTS, COMPLETE_WITHOUT_DOCS_TEXTS]:
+        system_commands.extend(texts_list)
     
     if message.text in system_commands:
         # Очищаем состояние и пропускаем обработку
@@ -210,9 +261,9 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None):
+async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None, language: str = "ru"):
     """Завершает процесс онбординга"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     # Показываем сводку онбординга
     profile_service = ProfileService(db)
@@ -256,7 +307,7 @@ async def complete_onboarding(message: Message, state: FSMContext, db: Session, 
     await state.clear()
     logger.info(f"Онбординг завершен для пользователя {message.from_user.id}")
 
-@router.message(F.text == "✅ Завершить без документов")
+@router.message(F.text.in_(COMPLETE_WITHOUT_DOCS_TEXTS))
 async def complete_onboarding_without_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Завершает онбординг без документов"""
     lang = language
@@ -284,9 +335,9 @@ async def complete_onboarding_without_documents(message: Message, state: FSMCont
         logger.error(f"Ошибка завершения онбординга без документов для {message.from_user.id}: {e}")
         await message.answer(get_text("errors.unknown_error", language=lang))
 
-async def cancel_onboarding(message: Message, state: FSMContext, db: Session, user_status: str = None):
+async def cancel_onboarding(message: Message, state: FSMContext, db: Session, user_status: str = None, language: str = "ru"):
     """Отменяет процесс онбординга"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     await message.answer(
         get_text("onboarding.cancelled", language=lang),
@@ -296,8 +347,8 @@ async def cancel_onboarding(message: Message, state: FSMContext, db: Session, us
     await state.clear()
     logger.info(f"Онбординг отменен для пользователя {message.from_user.id}")
 
-@router.message(F.text == "🏠 Указать адрес")
-async def start_address_input(message: Message, state: FSMContext, db: Session):
+@router.message(F.text.in_(SPECIFY_ADDRESS_TEXTS))
+async def start_address_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """
     LEGACY HANDLER: Обработка устаревшего ручного ввода адреса
 
@@ -324,7 +375,7 @@ async def start_address_input(message: Message, state: FSMContext, db: Session):
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
-@router.message(F.text == "📄 Загрузить документы")
+@router.message(F.text.in_(UPLOAD_DOCUMENTS_TEXTS))
 async def start_document_upload(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Начинает процесс загрузки документов"""
     lang = language
@@ -343,16 +394,23 @@ async def process_document_type_selection(message: Message, state: FSMContext, d
     lang = language
     
     # Проверяем специальные команды
-    if message.text == "⏭️ Пропустить документы":
+    if message.text in SKIP_DOCUMENTS_TEXTS:
         await skip_documents(message, state, db)
         return
-    elif message.text == "✅ Завершить онбординг":
+    elif message.text in COMPLETE_ONBOARDING_TEXTS:
         await complete_onboarding_with_documents(message, state, db)
         return
     
     # Определяем тип документа
-    document_type = get_document_type_from_text(message.text)
-    
+    document_type = get_document_type_from_text(message.text, language=lang)
+
+    if document_type is None:
+        await message.answer(
+            get_text("onboarding.documents.unknown_type", language=lang),
+            reply_markup=get_document_type_keyboard(lang)
+        )
+        return
+
     # Сохраняем выбранный тип в состоянии
     await state.update_data(selected_document_type=document_type.value)
     
@@ -437,18 +495,18 @@ async def process_document_confirmation(message: Message, state: FSMContext, db:
     """Обрабатывает подтверждение загрузки документа"""
     lang = language
     
-    if message.text == "✅ Подтвердить загрузку":
+    if message.text in CONFIRM_UPLOAD_TEXTS:
         await save_document(message, state, db)
-    elif message.text == "❌ Отменить":
+    elif message.text in ONBOARDING_CANCEL_TEXTS:
         await cancel_document_upload(message, state, db)
-    elif message.text == "🔄 Загрузить другой документ":
+    elif message.text in UPLOAD_ANOTHER_DOCUMENT_TEXTS:
         await start_document_upload(message, state, db)
     else:
         await message.answer(get_text("errors.unknown_error", language=lang))
 
-async def save_document(message: Message, state: FSMContext, db: Session):
+async def save_document(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Сохраняет документ в базе данных"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         # Получаем данные из состояния
@@ -515,9 +573,9 @@ async def save_document(message: Message, state: FSMContext, db: Session):
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-async def cancel_document_upload(message: Message, state: FSMContext, db: Session):
+async def cancel_document_upload(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Отменяет загрузку документа"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     await message.answer(
         get_text("onboarding.documents.upload_cancelled", language=lang),
@@ -525,9 +583,9 @@ async def cancel_document_upload(message: Message, state: FSMContext, db: Sessio
     )
     await state.clear()
 
-async def skip_documents(message: Message, state: FSMContext, db: Session):
+async def skip_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Пропускает загрузку документов"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     await message.answer(
         f"⏭️ {get_text('onboarding.documents.skip_documents', language=lang)}\n\n" +
@@ -536,9 +594,9 @@ async def skip_documents(message: Message, state: FSMContext, db: Session):
     )
     await state.clear()
 
-async def complete_onboarding_with_documents(message: Message, state: FSMContext, db: Session):
+async def complete_onboarding_with_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Завершает онбординг с документами"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         # Получаем пользователя
@@ -584,7 +642,7 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
 
 # ═══ ОБРАБОТЧИКИ КНОПОК ЗАВЕРШЕНИЯ ОНБОРДИНГА ═══
 
-@router.message(F.text == "📄 Добавить еще документы")
+@router.message(F.text.in_(ADD_MORE_DOCUMENTS_TEXTS))
 async def add_more_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обрабатывает нажатие кнопки 'Добавить еще документы'"""
     lang = language
@@ -597,7 +655,7 @@ async def add_more_documents(message: Message, state: FSMContext, db: Session, l
     await state.set_state(OnboardingStates.waiting_for_document_type)
     logger.info(f"Пользователь {message.from_user.id} решил добавить еще документы")
 
-@router.message(F.text == "✅ Завершить онбординг")
+@router.message(F.text.in_(COMPLETE_ONBOARDING_TEXTS))
 async def complete_onboarding_final(message: Message, state: FSMContext, db: Session):
     """Обрабатывает нажатие кнопки 'Завершить онбординг'"""
     await complete_onboarding_with_documents(message, state, db)

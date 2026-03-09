@@ -1,7 +1,14 @@
 import json
+import logging
 import os
 from typing import Dict, Any
 from uk_management_bot.config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+# In-memory cache for locale data: {language_code: parsed_dict}
+_locale_cache: Dict[str, Dict[str, Any]] = {}
+
 
 def _resolve_locales_dir() -> str:
     """Возвращает абсолютный путь к директории локалей.
@@ -18,7 +25,10 @@ def _resolve_locales_dir() -> str:
 
 
 def load_locale(language: str = "ru") -> Dict[str, Any]:
-    """Загрузка файла локализации по безопасному абсолютному пути с фолбэком на RU."""
+    """Загрузка файла локализации по безопасному абсолютному пути с фолбэком на RU. Cached in memory."""
+    if language in _locale_cache:
+        return _locale_cache[language]
+
     locales_dir = _resolve_locales_dir()
     locale_file = os.path.join(locales_dir, f"{language}.json")
 
@@ -28,9 +38,11 @@ def load_locale(language: str = "ru") -> Dict[str, Any]:
 
     try:
         with open(locale_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            _locale_cache[language] = data
+            return data
     except Exception as e:
-        print(f"Ошибка загрузки локализации: {e}")
+        logger.error(f"Ошибка загрузки локализации: {e}")
         return {}
 
 def get_text(key: str, language: str = "ru", **kwargs) -> str:
@@ -118,7 +130,7 @@ def get_text(key: str, language: str = "ru", **kwargs) -> str:
         return result
 
     except Exception as e:
-        print(f"Ошибка в get_text для ключа {key}, язык {language}: {e}")
+        logger.error(f"Ошибка в get_text для ключа {key}, язык {language}: {e}")
         return key
 
 

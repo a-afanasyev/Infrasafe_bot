@@ -15,7 +15,6 @@ from sqlalchemy import text
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.auth_helpers import has_admin_access
-from uk_management_bot.database.session import get_db
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -98,12 +97,7 @@ async def check_redis_health() -> Dict[str, Any]:
             "timestamp": datetime.utcnow().isoformat()
         }
     finally:
-        # Закрываем соединение Redis если оно было создано
-        if redis is not None:
-            try:
-                await redis.close()
-            except Exception as e:
-                logger.debug(f"Error closing Redis connection in health check: {e}")
+        pass  # Don't close global Redis singleton — it's managed by startup/shutdown lifecycle
 
 
 async def get_system_info() -> Dict[str, Any]:
@@ -130,8 +124,7 @@ async def health_check_command(message: Message, db: Session):
     """
     Команда для проверки здоровья системы (доступна всем пользователям)
     """
-    db_session = next(get_db())
-    lang = get_user_language(message.from_user.id, db_session)
+    lang = get_user_language(message.from_user.id, db)
 
     try:
         # Проверяем все компоненты
@@ -167,17 +160,17 @@ async def health_check_command(message: Message, db: Session):
         checked_at_text = get_text("health.checked_at", language=lang)
 
         message_text = f"""
-{status_emoji[overall_status]} **{system_status_text}: {overall_status.upper()}**
+{status_emoji[overall_status]} <b>{system_status_text}: {overall_status.upper()}</b>
 
-📊 **{database_text}:**
+📊 <b>{database_text}:</b>
 └ {status_text}: {db_health['status']}
 └ {response_time_text}: {db_health.get('response_time_ms', 'N/A')} ms
 
-🔄 **{redis_cache_text}:**
+🔄 <b>{redis_cache_text}:</b>
 └ {status_text}: {redis_health['status']}
 └ {response_time_text}: {redis_health.get('response_time_ms', 'N/A')} ms
 
-🖥️ **{system_text}:**
+🖥️ <b>{system_text}:</b>
 └ {uptime_text}: {system_info['uptime_human']}
 └ {debug_mode_text}: {enabled_text if system_info['debug_mode'] else disabled_text}
 └ {log_level_text}: {system_info['log_level']}
@@ -185,18 +178,16 @@ async def health_check_command(message: Message, db: Session):
 🕐 {checked_at_text}: {datetime.now().strftime('%H:%M:%S %d.%m.%Y')}
         """.strip()
 
-        await message.answer(message_text, parse_mode="Markdown")
+        await message.answer(message_text)
 
     except Exception as e:
         logger.error(f"Health check command failed: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = get_user_language(message.from_user.id, db)
         error_title = get_text("health.error_title", language=lang)
         error_details = get_text("health.error_details", language=lang)
         await message.answer(
-            f"❌ **{error_title}**\n\n"
-            f"{error_details}: {str(e)}",
-            parse_mode="Markdown"
+            f"❌ <b>{error_title}</b>\n\n"
+            f"{error_details}: {str(e)}"
         )
 
 
@@ -205,8 +196,7 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
     """
     Детальная проверка здоровья системы (только для менеджеров)
     """
-    db_session = next(get_db())
-    lang = get_user_language(message.from_user.id, db_session)
+    lang = get_user_language(message.from_user.id, db)
 
     # Проверяем права доступа
     if not roles or not any(role in ['admin', 'manager'] for role in roles):
@@ -243,24 +233,18 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
         checked_at_text = get_text("health.checked_at", language=lang)
 
         message_text = f"""
-🔧 **{detailed_info_text}**
+🔧 <b>{detailed_info_text}</b>
 
-📊 **{database_text}:**
-```json
+📊 <b>{database_text}:</b>
 {db_health}
-```
 
-🔄 **{redis_text}:**
-```json
+🔄 <b>{redis_text}:</b>
 {redis_health}
-```
 
-🖥️ **{system_text}:**
-```json
+🖥️ <b>{system_text}:</b>
 {system_info}
-```
 
-⚙️ **{security_config_text}:**
+⚙️ <b>{security_config_text}:</b>
 └ {invite_secret_set_text}: {'✅' if config_info['invite_secret_set'] else '❌'}
 └ {admin_password_secure_text}: {'✅' if config_info['admin_password_secure'] else '❌'}
 └ {redis_enabled_text}: {'✅' if config_info['redis_enabled'] else '⚠️'}
@@ -270,26 +254,23 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
 🕐 {checked_at_text}: {datetime.now().strftime('%H:%M:%S %d.%m.%Y')}
         """.strip()
 
-        await message.answer(message_text, parse_mode="Markdown")
+        await message.answer(message_text)
 
     except Exception as e:
         logger.error(f"Detailed health check failed: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = get_user_language(message.from_user.id, db)
         detailed_error_title = get_text("health.detailed_error_title", language=lang)
         error_details = get_text("health.error_details", language=lang)
         await message.answer(
-            f"❌ **{detailed_error_title}**\n\n"
-            f"{error_details}: {str(e)}",
-            parse_mode="Markdown"
+            f"❌ <b>{detailed_error_title}</b>\n\n"
+            f"{error_details}: {str(e)}"
         )
 
 
 @router.message(Command("ping"))
-async def ping_command(message: Message):
+async def ping_command(message: Message, db: Session):
     """Простая ping команда для быстрой проверки доступности"""
-    db_session = next(get_db())
-    lang = get_user_language(message.from_user.id, db_session)
+    lang = get_user_language(message.from_user.id, db)
     await message.answer(get_text("health.ping_response", language=lang))
 
 

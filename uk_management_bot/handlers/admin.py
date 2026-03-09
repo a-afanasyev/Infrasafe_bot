@@ -53,10 +53,39 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 # Single Source of Truth for button texts - TASK 17
-from uk_management_bot.utils.button_texts import get_admin_panel_texts
+from uk_management_bot.utils.button_texts import (
+    get_admin_panel_texts,
+    get_test_middleware_texts,
+    get_admin_user_management_texts,
+    get_admin_employee_management_texts,
+    get_admin_new_requests_texts,
+    get_admin_active_requests_texts,
+    get_admin_completed_requests_texts,
+    get_admin_awaiting_review_texts,
+    get_admin_returned_texts,
+    get_admin_not_accepted_texts,
+    get_admin_back_to_menu_texts,
+    get_admin_archive_texts,
+    get_admin_purchase_texts,
+    get_admin_create_invite_texts,
+    get_admin_shifts_texts,
+)
 
-# Константа для фильтрации сообщений "Админ панель"
 ADMIN_PANEL_TEXTS = get_admin_panel_texts()
+TEST_MIDDLEWARE_TEXTS = get_test_middleware_texts()
+ADMIN_USER_MANAGEMENT_TEXTS = get_admin_user_management_texts()
+ADMIN_EMPLOYEE_MANAGEMENT_TEXTS = get_admin_employee_management_texts()
+ADMIN_NEW_REQUESTS_TEXTS = get_admin_new_requests_texts()
+ADMIN_ACTIVE_REQUESTS_TEXTS = get_admin_active_requests_texts()
+ADMIN_COMPLETED_REQUESTS_TEXTS = get_admin_completed_requests_texts()
+ADMIN_AWAITING_REVIEW_TEXTS = get_admin_awaiting_review_texts()
+ADMIN_RETURNED_TEXTS = get_admin_returned_texts()
+ADMIN_NOT_ACCEPTED_TEXTS = get_admin_not_accepted_texts()
+ADMIN_BACK_TO_MENU_TEXTS = get_admin_back_to_menu_texts()
+ADMIN_ARCHIVE_TEXTS = get_admin_archive_texts()
+ADMIN_PURCHASE_TEXTS = get_admin_purchase_texts()
+ADMIN_CREATE_INVITE_TEXTS = get_admin_create_invite_texts()
+ADMIN_SHIFTS_TEXTS = get_admin_shifts_texts()
 
 class ManagerStates(StatesGroup):
     cancel_reason = State()
@@ -91,12 +120,9 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             "Благоустройство": "landscaping",
             "Уборка": "cleaning",
             "Безопасность": "security",
-            "Ремонт": "repair",
-            "Установка": "installation",
-            "Обслуживание": "maintenance",
-            "HVAC": "hvac",
             "Отопление": "hvac",
-            "Вентиляция": "hvac"
+            "Лифт": "maintenance",
+            "Интернет/ТВ": "electrician",
         }
 
         # Определяем специализацию по категории заявки
@@ -213,10 +239,9 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         # Отправляем уведомления исполнителям в активных сменах
         from uk_management_bot.database.models.shift import Shift
         from datetime import datetime as dt
-        from aiogram import Bot
-        from uk_management_bot.config.settings import settings
+        from uk_management_bot.services.notification_service import _get_shared_bot
 
-        bot = Bot(token=settings.BOT_TOKEN)
+        bot = _get_shared_bot()
         now = dt.now()
 
         # Находим исполнителей в активных сменах с нужной специализацией
@@ -255,10 +280,10 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
 # ===== ОБРАБОТЧИКИ ПРОСМОТРА ЗАЯВОК ДЛЯ МЕНЕДЖЕРОВ =====
 
 @router.callback_query(F.data.startswith("mview_"))
-async def handle_manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка просмотра деталей заявки для менеджеров"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка просмотра заявки менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -401,11 +426,11 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
 
 @router.callback_query(F.data.startswith("media_"))
-async def handle_view_request_media(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_view_request_media(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка просмотра медиафайлов заявки"""
     try:
         from aiogram.types import InputMediaPhoto, InputMediaVideo, InputMediaDocument
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
 
         logger.info(f"Просмотр медиафайлов заявки менеджером {callback.from_user.id}")
 
@@ -535,12 +560,12 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
 
 
 @router.callback_query(F.data.startswith("confirm_completed_"))
-async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
     """Менеджер подтверждает выполнение заявки"""
     try:
         from datetime import datetime
         from uk_management_bot.services.notification_service import NotificationService
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
 
         logger.info(f"Подтверждение выполнения заявки менеджером {callback.from_user.id}")
 
@@ -615,12 +640,12 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
 
 
 @router.callback_query(F.data.startswith("reconfirm_completed_"))
-async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
     """Менеджер повторно подтверждает выполнение возвратной заявки"""
     try:
         from datetime import datetime
         from uk_management_bot.services.notification_service import NotificationService
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
 
         logger.info(f"Повторное подтверждение возвратной заявки менеджером {callback.from_user.id}")
 
@@ -696,10 +721,10 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
 
 
 @router.callback_query(F.data.startswith("return_to_work_"))
-async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
     """Менеджер возвращает заявку в работу"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Возврат заявки в работу менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -756,10 +781,10 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
 
 
 @router.callback_query(F.data.startswith("mreq_page_"))
-async def handle_manager_request_pagination(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_manager_request_pagination(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка пагинации списков заявок для менеджеров"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка пагинации заявок менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -817,10 +842,10 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
 
 
 @router.callback_query(F.data == "mreq_back_to_list")
-async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Возврат из деталей заявки к списку для менеджеров"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Возврат к списку заявок менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -944,8 +969,8 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.message(F.text == "🧪 Тест middleware")
-async def test_middleware(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None):
+@router.message(F.text.in_(TEST_MIDDLEWARE_TEXTS))
+async def test_middleware(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None, language: str = "ru"):
     """Тестовый обработчик для проверки middleware"""
     
     # Логирование параметров middleware для отладки
@@ -965,7 +990,7 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
     
     print(f"🔧 Доступ к админ панели: {'✅ Есть' if has_access else '❌ Нет'}")
     
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     await message.answer(get_text("admin.handlers.test_middleware_result", language=lang).format(
         roles=roles, active_role=active_role,
         user_status=get_text("admin.handlers.yes", language=lang) if user else get_text("admin.handlers.no", language=lang),
@@ -973,9 +998,9 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
     ))
 
 @router.message(F.text.in_(ADMIN_PANEL_TEXTS))
-async def open_admin_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None):
+async def open_admin_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None, language: str = "ru"):
     """Открыть админ панель"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа через утилитарную функцию
     has_access = has_admin_access(roles=roles, user=user)
@@ -990,10 +1015,10 @@ async def open_admin_panel(message: Message, db: Session, roles: list = None, ac
     await message.answer(get_text("admin.handlers.manager_panel", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
 
 
-@router.message(F.text == "👥 Управление пользователями")  
-async def open_user_management_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_USER_MANAGEMENT_TEXTS))  
+async def open_user_management_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Открыть панель управления пользователями"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # ОТЛАДКА
     logger.debug(f"User management panel opened: user_id={message.from_user.id}, roles={roles}, user_status={user.status if user else None}")
@@ -1022,10 +1047,10 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
         )
 
 
-@router.message(F.text == "👷 Управление сотрудниками")
-async def open_employee_management_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_EMPLOYEE_MANAGEMENT_TEXTS))
+async def open_employee_management_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Открыть панель управления сотрудниками"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
@@ -1056,10 +1081,10 @@ async def open_employee_management_panel(message: Message, db: Session, roles: l
         await message.answer(get_text("admin.handlers.error_opening_employee_panel", language=lang))
 
 
-@router.message(F.text == "🆕 Новые заявки")
-async def list_new_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_NEW_REQUESTS_TEXTS))
+async def list_new_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать новые заявки"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1085,10 +1110,10 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
     await message.answer(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
-@router.message(F.text == "🔄 Активные заявки")
-async def list_active_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_ACTIVE_REQUESTS_TEXTS))
+async def list_active_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать активные заявки"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1114,10 +1139,10 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
     await message.answer(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
-@router.message(F.text == "✅ Исполненные заявки")
-async def show_completed_requests_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_COMPLETED_REQUESTS_TEXTS))
+async def show_completed_requests_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать подменю для исполненных заявок"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1158,10 +1183,10 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
     await message.answer(stats_text, reply_markup=get_completed_requests_submenu(language=lang), parse_mode="HTML")
 
 
-@router.message(F.text.in_(["📋 Все исполненные", "📋 Ожидают проверки"]))
-async def list_all_completed_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_AWAITING_REVIEW_TEXTS))
+async def list_all_completed_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать заявки, ожидающие проверки менеджером"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1205,10 +1230,10 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
     await message.answer(get_text("admin.handlers.all_completed_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
-@router.message(F.text == "🔄 Возвращённые")
-async def list_returned_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_RETURNED_TEXTS))
+async def list_returned_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать только возвращённые заявки"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1263,10 +1288,10 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
     )
 
 
-@router.message(F.text == "⏳ Не принятые")
-async def list_unaccepted_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_NOT_ACCEPTED_TEXTS))
+async def list_unaccepted_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать непринятые заявки (выполненные, но не принятые заявителем)"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1344,10 +1369,10 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
     )
 
 
-@router.message(F.text == "🔙 Назад в меню")
-async def back_to_main_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_BACK_TO_MENU_TEXTS))
+async def back_to_main_menu(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Вернуться в главное меню"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1367,10 +1392,10 @@ async def back_to_main_menu(message: Message, db: Session, roles: list = None, a
     )
 
 
-@router.message(F.text == "📦 Архив")
-async def list_archive_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_ARCHIVE_TEXTS))
+async def list_archive_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать архивные заявки"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1407,10 +1432,10 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         await message.answer(text)
     await message.answer(get_text("admin.handlers.archive_end", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
 
-@router.message(F.text == "💰 Закуп")
-async def list_procurement_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_PURCHASE_TEXTS))
+async def list_procurement_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать заявки в статусе закупа"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -1467,10 +1492,10 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
 
 # ===== ОБРАБОТЧИКИ СОЗДАНИЯ ПРИГЛАШЕНИЙ =====
 
-@router.message(F.text == "📨 Создать приглашение")
-async def start_invite_creation(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_CREATE_INVITE_TEXTS))
+async def start_invite_creation(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Начать процесс создания приглашения"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа (только менеджеры могут создавать приглашения)
     if not has_admin_access(roles=roles, user=user):
@@ -1487,9 +1512,9 @@ async def start_invite_creation(message: Message, db: Session, roles: list = Non
 
 
 @router.callback_query(F.data.startswith("invite_role_"))
-async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик выбора роли для приглашения"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Извлекаем роль из callback_data
     role = callback.data.replace("invite_role_", "")
@@ -1520,9 +1545,9 @@ async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data.startswith("invite_spec_"))
-async def handle_invite_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_invite_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик выбора специализации для исполнителя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Извлекаем специализацию из callback_data
     specialization = callback.data.replace("invite_spec_", "")
@@ -1541,9 +1566,9 @@ async def handle_invite_specialization_selection(callback: CallbackQuery, state:
 
 
 @router.callback_query(F.data.startswith("invite_expiry_"))
-async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик выбора срока действия приглашения"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Извлекаем срок действия из callback_data
     expiry = callback.data.replace("invite_expiry_", "")
@@ -1590,9 +1615,9 @@ async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data == "invite_confirm")
-async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик подтверждения создания приглашения"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     try:
         # Получаем данные из состояния
@@ -1670,9 +1695,9 @@ async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data == "invite_cancel")
-async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик отмены создания приглашения"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     await callback.message.edit_text(
         get_text("buttons.operation_cancelled", language=lang)
@@ -1691,10 +1716,10 @@ async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: S
 # ===== ОБРАБОТЧИКИ ДЕЙСТВИЙ С ЗАЯВКАМИ ДЛЯ МЕНЕДЖЕРОВ =====
 
 @router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
-async def handle_accept_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_accept_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка принятия заявки менеджером - показ выбора типа назначения"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка принятия заявки менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -1748,10 +1773,10 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
 
 
 @router.callback_query(F.data.startswith("deny_"))
-async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка отклонения заявки менеджером"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка отклонения заявки менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -1793,10 +1818,10 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
 
 
 @router.callback_query(F.data.startswith("clarify_"))
-async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка запроса уточнения по заявке"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка запроса уточнения по заявке менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -1843,10 +1868,10 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
 
 
 @router.callback_query(F.data == "cancel_clarification")
-async def handle_cancel_clarification(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_cancel_clarification(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Отмена уточнения"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         # Очищаем состояние
         await state.clear()
 
@@ -1861,10 +1886,10 @@ async def handle_cancel_clarification(callback: CallbackQuery, state: FSMContext
 
 
 @router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))
-async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка перевода заявки в статус 'Закуп' менеджером"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка перевода заявки в закуп менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -1947,10 +1972,10 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
 
 
 @router.callback_query(F.data.startswith("complete_"))
-async def handle_complete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_complete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка завершения заявки менеджером"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Обработка завершения заявки менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -2002,10 +2027,10 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
     F.data.startswith("delete_") &
     ~F.data.startswith("delete_employee_")
 )
-async def handle_delete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_delete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка удаления заявки администратором (только для админов!)"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Попытка удаления заявки пользователем {callback.from_user.id}")
 
         # Проверяем права доступа - ТОЛЬКО АДМИНИСТРАТОРЫ могут удалять заявки
@@ -2057,10 +2082,10 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
 
 
 @router.message(ManagerStates.waiting_for_clarification_text)
-async def handle_clarification_text(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_clarification_text(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка текста уточнения от менеджера"""
     try:
-        lang = message.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Получен текст уточнения от менеджера {message.from_user.id}")
 
         # Проверяем права доступа
@@ -2174,10 +2199,10 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
 
 
 @router.message(ManagerStates.cancel_reason)
-async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка причины отклонения заявки"""
     try:
-        lang = message.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Получена причина отклонения от менеджера {message.from_user.id}")
 
         # Проверяем права доступа
@@ -2258,10 +2283,10 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
         await state.clear()
 
 
-@router.message(F.text == "👥 Смены")
-async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+@router.message(F.text.in_(ADMIN_SHIFTS_TEXTS))
+async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработчик кнопки 'Смены' в админ панели"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -2305,10 +2330,10 @@ async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Se
 
 
 @router.callback_query(F.data.startswith("purchase_return_to_work_"))
-async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка возврата заявки из закупа в работу"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Возврат заявки из закупа в работу менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -2405,10 +2430,10 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
 
 
 @router.callback_query(F.data.startswith("edit_materials_"))
-async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка редактирования списка материалов для закупа"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         logger.info(f"Редактирование списка материалов менеджером {callback.from_user.id}")
 
         # Проверяем права доступа
@@ -2459,10 +2484,10 @@ async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: 
 
 
 @router.message(ManagerStates.waiting_for_materials_edit)
-async def handle_materials_edit_text(message: Message, state: FSMContext, db: Session, user: User = None):
+async def handle_materials_edit_text(message: Message, state: FSMContext, db: Session, user: User = None, language: str = "ru"):
     """Обработка нового текста списка материалов"""
     try:
-        lang = message.from_user.language_code or 'ru'
+        lang = language
         data = await state.get_data()
         request_number = data.get("edit_materials_request_number")
 
@@ -2531,10 +2556,10 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
 
 @router.callback_query(F.data.startswith("assign_duty_"))
-async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session, user: User = None):
+async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session, user: User = None, language: str = "ru"):
     """Назначение дежурного специалиста (автоматическое по сменам)"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         request_number = callback.data.replace("assign_duty_", "")
         logger.info(f"Назначение дежурного специалиста для заявки {request_number}")
 
@@ -2577,10 +2602,10 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
 
 
 @router.callback_query(F.data.startswith("assign_specific_"))
-async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Session):
+async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Session, language: str = "ru"):
     """Показать список исполнителей для ручного выбора"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         request_number = callback.data.replace("assign_specific_", "")
         logger.info(f"Выбор конкретного исполнителя для заявки {request_number}")
 
@@ -2664,10 +2689,10 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 
 
 @router.callback_query(F.data.startswith("assign_executor_"))
-async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, user: User = None):
+async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, user: User = None, language: str = "ru"):
     """Финальное назначение конкретного исполнителя"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         # Парсим данные: assign_executor_251013-001_123
         parts = callback.data.replace("assign_executor_", "").split("_")
         request_number = parts[0]
@@ -2774,10 +2799,10 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
 
 @router.callback_query(F.data.startswith("back_to_assignment_type_"))
-async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Session):
+async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Session, language: str = "ru"):
     """Возврат к выбору типа назначения"""
     try:
-        lang = callback.from_user.language_code or 'ru'
+        lang = language
         request_number = callback.data.replace("back_to_assignment_type_", "")
 
         request = db.query(Request).filter(Request.request_number == request_number).first()

@@ -40,9 +40,9 @@ router = Router()
 # ═══ ГЛАВНОЕ МЕНЮ ВЕРИФИКАЦИИ ═══
 
 @router.callback_query(F.data == "user_verification_panel")
-async def show_verification_panel(callback: CallbackQuery, db: Session, roles: list = None):
+async def show_verification_panel(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Показать панель верификации пользователей"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     
     # Проверяем права доступа
     if not roles or not any(role in ['admin', 'manager'] for role in roles):
@@ -76,9 +76,9 @@ async def show_verification_panel(callback: CallbackQuery, db: Session, roles: l
 # ═══ УПРАВЛЕНИЕ ВЕРИФИКАЦИЕЙ ПОЛЬЗОВАТЕЛЕЙ ═══
 
 @router.callback_query(F.data.startswith("verification_user_"))
-async def show_user_verification(callback: CallbackQuery, db: Session, roles: list = None):
+async def show_user_verification(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Показать информацию о верификации пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -182,9 +182,9 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
 # ═══ ЗАПРОС ДОПОЛНИТЕЛЬНОЙ ИНФОРМАЦИИ ═══
 
 @router.callback_query(F.data.startswith("verification_request_"))
-async def request_additional_info(callback: CallbackQuery, db: Session, roles: list = None):
+async def request_additional_info(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Запросить дополнительную информацию от пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -214,9 +214,9 @@ async def request_additional_info(callback: CallbackQuery, db: Session, roles: l
 # ═══ ПРОСМОТР ДОКУМЕНТОВ ПОЛЬЗОВАТЕЛЯ ═══
 
 @router.callback_query(F.data.startswith("view_user_documents_"))
-async def view_user_documents(callback: CallbackQuery, db: Session, roles: list = None):
+async def view_user_documents(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Показать документы пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[3])
     
     # Проверяем права доступа
@@ -292,9 +292,9 @@ async def view_user_documents(callback: CallbackQuery, db: Session, roles: list 
         )
 
 @router.callback_query(F.data.startswith("download_document_"))
-async def download_user_document(callback: CallbackQuery, db: Session, roles: list = None):
+async def download_user_document(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Скачать документ пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     document_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -318,11 +318,8 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
             return
         
         # Отправляем файл
-        from aiogram import Bot
-        from uk_management_bot.config.settings import settings
-        
-        bot = Bot(token=settings.BOT_TOKEN)
-        
+        bot = callback.bot
+
         try:
             caption = (f"📄 {get_text(f'verification.document_types.{document.document_type.value}', language=lang)}\n"
                       f"📅 Загружен: {document.created_at.strftime('%d.%m.%Y %H:%M')}")
@@ -350,8 +347,6 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")
             await callback.answer(get_text("user_verification.handlers.error_sending_document", language=lang), show_alert=True)
-        finally:
-            await bot.session.close()
         
     except Exception as e:
         logger.error(f"Ошибка скачивания документа: {e}")
@@ -362,9 +357,9 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
 
 
 @router.callback_query(F.data.startswith("request_info_"))
-async def select_info_type(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None):
+async def select_info_type(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, language: str = "ru"):
     """Выбрать тип запрашиваемой информации"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     parts = callback.data.split("_")
     user_id = int(parts[2])
     info_type = parts[3]
@@ -403,9 +398,9 @@ async def select_info_type(callback: CallbackQuery, state: FSMContext, db: Sessi
 
 
 @router.message(UserVerificationStates.enter_request_comment)
-async def process_request_comment(message: Message, state: FSMContext, db: Session, roles: list = None):
+async def process_request_comment(message: Message, state: FSMContext, db: Session, roles: list = None, language: str = "ru"):
     """Обработать комментарий к запросу информации"""
-    lang = message.from_user.language_code or 'ru'
+    lang = language
     comment = message.text
     
     # Проверяем права доступа
@@ -452,9 +447,9 @@ async def process_request_comment(message: Message, state: FSMContext, db: Sessi
 # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ ═══
 
 @router.callback_query(F.data.startswith("document_verify_"))
-async def verify_document(callback: CallbackQuery, db: Session, roles: list = None):
+async def verify_document(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Проверить документ пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     document_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -506,9 +501,9 @@ async def verify_document(callback: CallbackQuery, db: Session, roles: list = No
 
 
 @router.callback_query(F.data.startswith("document_approve_"))
-async def approve_document(callback: CallbackQuery, db: Session, roles: list = None):
+async def approve_document(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Одобрить документ"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     document_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -547,9 +542,9 @@ async def approve_document(callback: CallbackQuery, db: Session, roles: list = N
 
 
 @router.callback_query(F.data.startswith("document_reject_"))
-async def reject_document(callback: CallbackQuery, db: Session, roles: list = None):
+async def reject_document(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Отклонить документ"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     document_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -591,9 +586,9 @@ async def reject_document(callback: CallbackQuery, db: Session, roles: list = No
 # ═══ УПРАВЛЕНИЕ ПРАВАМИ ДОСТУПА ═══
 
 @router.callback_query(F.data.startswith("access_rights_"))
-async def manage_access_rights(callback: CallbackQuery, db: Session, roles: list = None):
+async def manage_access_rights(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Управление правами доступа пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -660,9 +655,9 @@ async def manage_access_rights(callback: CallbackQuery, db: Session, roles: list
 # ═══ ОДОБРЕНИЕ/ОТКЛОНЕНИЕ ВЕРИФИКАЦИИ ═══
 
 @router.callback_query(F.data.startswith("verify_approve_"))
-async def approve_user_verification(callback: CallbackQuery, db: Session, roles: list = None):
+async def approve_user_verification(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Одобрить верификацию пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа
@@ -687,16 +682,12 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
             
             # Отправляем обновленное главное меню пользователю
             try:
-                from aiogram import Bot
-                from uk_management_bot.config.settings import settings
                 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
                 from uk_management_bot.database.models.user import User
-                
+
                 # Получаем пользователя
                 target_user = db.query(User).filter(User.id == user_id).first()
                 if target_user:
-                    bot = Bot(token=settings.BOT_TOKEN)
-                    
                     # Получаем роли пользователя
                     user_roles = []
                     if target_user.roles:
@@ -707,7 +698,7 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
                             user_roles = ["applicant"]
                     else:
                         user_roles = ["applicant"]
-                    
+
                     # Создаем клавиатуру с кнопкой перезапуска
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
                     target_lang = target_user.language or "ru"
@@ -716,13 +707,11 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
                     ])
 
                     # Отправляем уведомление об одобрении с кнопкой перезапуска
-                    await bot.send_message(
+                    await callback.bot.send_message(
                         chat_id=target_user.telegram_id,
                         text=get_text("user_verification.handlers.application_approved_notification", language=target_lang),
                         reply_markup=restart_keyboard
                     )
-                    
-                    await bot.session.close()
                     
             except Exception as e:
                 logger.error(f"Ошибка отправки обновленного меню пользователю {user_id}: {e}")
@@ -746,9 +735,9 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
 
 
 @router.callback_query(F.data.startswith("verify_reject_"))
-async def reject_user_verification(callback: CallbackQuery, db: Session, roles: list = None):
+async def reject_user_verification(callback: CallbackQuery, db: Session, roles: list = None, language: str = "ru"):
     """Отклонить верификацию пользователя"""
-    lang = callback.from_user.language_code or 'ru'
+    lang = language
     user_id = int(callback.data.split("_")[2])
     
     # Проверяем права доступа

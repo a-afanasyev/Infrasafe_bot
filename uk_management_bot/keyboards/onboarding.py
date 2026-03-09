@@ -10,6 +10,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from uk_management_bot.database.models.user_verification import DocumentType
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.language_helpers import SUPPORTED_LANGUAGES
 
 def get_document_type_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """
@@ -163,28 +164,36 @@ def get_document_management_keyboard(language: str = "ru") -> InlineKeyboardMark
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_document_type_from_text(text: str) -> DocumentType:
+def get_document_type_from_text(text: str, language: str = "ru") -> DocumentType | None:
     """
-    Определяет тип документа по тексту кнопки
+    Определяет тип документа по тексту кнопки (мультиязычный)
 
     Args:
         text: Текст кнопки
+        language: Язык интерфейса
 
     Returns:
-        DocumentType enum значение
+        DocumentType enum значение или None если текст не распознан
     """
-    text_lower = text.lower()
+    locale_to_type = {
+        "onboarding.keyboards.passport": DocumentType.PASSPORT,
+        "onboarding.keyboards.property_deed": DocumentType.PROPERTY_DEED,
+        "onboarding.keyboards.rental_agreement": DocumentType.RENTAL_AGREEMENT,
+        "onboarding.keyboards.other_documents": DocumentType.OTHER,
+    }
 
-    if "паспорт" in text_lower:
-        return DocumentType.PASSPORT
-    elif "кадастровая" in text_lower or "выписка" in text_lower:
-        return DocumentType.PROPERTY_DEED
-    elif "договор" in text_lower or "аренда" in text_lower:
-        return DocumentType.RENTAL_AGREEMENT
-    elif "другие" in text_lower or "other" in text_lower:
-        return DocumentType.OTHER
-    else:
-        return DocumentType.OTHER
+    # Check requested language first
+    for locale_key, doc_type in locale_to_type.items():
+        if text == get_text(locale_key, language=language):
+            return doc_type
+
+    # Fallback: check all supported languages
+    for lang in SUPPORTED_LANGUAGES:
+        for locale_key, doc_type in locale_to_type.items():
+            if text == get_text(locale_key, language=lang):
+                return doc_type
+
+    return None
 
 def get_document_type_name(document_type: DocumentType, language: str = "ru") -> str:
     """

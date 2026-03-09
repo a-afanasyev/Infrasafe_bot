@@ -20,6 +20,7 @@ from uk_management_bot.utils.button_texts import (
     get_end_shift_texts,
     get_my_shift_texts,
     get_shift_history_texts,
+    get_active_shifts_button_texts,
 )
 
 
@@ -31,6 +32,7 @@ ACCEPT_SHIFT_TEXTS = get_accept_shift_texts()
 END_SHIFT_TEXTS = get_end_shift_texts()
 MY_SHIFT_TEXTS = get_my_shift_texts()
 SHIFT_HISTORY_TEXTS = get_shift_history_texts()
+ACTIVE_SHIFTS_BUTTON_TEXTS = get_active_shifts_button_texts()
 
 
 @router.message(F.text.in_(ACCEPT_SHIFT_TEXTS))
@@ -110,7 +112,7 @@ async def end_shift_confirm(message: Message, db=None):
 
         user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if not user:
-            await message.answer(get_text("shifts.user_не_найден", language=lang))
+            await message.answer(get_text("shifts.user_not_found", language=lang))
             return
 
         # Получаем ВСЕ активные смены пользователя
@@ -134,7 +136,7 @@ async def end_shift_confirm(message: Message, db=None):
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         from datetime import datetime
 
-        text = get_text("shifts.bвыберите_смену_для", language=lang) + "\n\n"
+        text = get_text("shifts.select_shift_to_end", language=lang) + "\n\n"
 
         keyboard_rows = []
         for idx, shift in enumerate(active_shifts, 1):
@@ -161,7 +163,7 @@ async def end_shift_confirm(message: Message, db=None):
 
             keyboard_rows.append([
                 InlineKeyboardButton(
-                    text=f"🔚 {get_text('shifts.complete_смену_2', language=lang)} {shift.id}",
+                    text=f"🔚 {get_text('shifts.complete_shift', language=lang)} {shift.id}",
                     callback_data=f"end_shift_select:{shift.id}"
                 )
             ])
@@ -179,7 +181,7 @@ async def end_shift_confirm(message: Message, db=None):
     except Exception as e:
         logger.error(f"Ошибка показа списка смен: {e}")
         lang = get_user_language(message.from_user.id, db) if db else "ru"
-        await message.answer(get_text("shifts.error_показа_списка", language=lang))
+        await message.answer(get_text("shifts.error_showing_list", language=lang))
     finally:
         if need_close and db:
             db.close()
@@ -197,7 +199,7 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
 
         shift = db.query(Shift).filter(Shift.id == shift_id).first()
         if not shift:
-            await message.answer(get_text("shifts.shift_не_найдена", language=lang))
+            await message.answer(get_text("shifts.shift_not_found", language=lang))
             return
 
         # Рассчитываем длительность
@@ -289,12 +291,12 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
     except Exception as e:
         logger.error(f"Ошибка показа деталей смены: {e}")
         from uk_management_bot.utils.safe_localization import safe_get_text
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(safe_get_text("errors.unknown_error", language=lang))
 
 
 @router.callback_query(F.data.startswith("end_shift_select:"))
-async def handle_shift_selection(callback: CallbackQuery, db=None):
+async def handle_shift_selection(callback: CallbackQuery, db=None, language: str = "ru"):
     """Обработка выбора конкретной смены для завершения"""
     if not db:
         db = next(get_db())
@@ -310,7 +312,7 @@ async def handle_shift_selection(callback: CallbackQuery, db=None):
     except Exception as e:
         logger.error(f"Ошибка выбора смены: {e}")
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
-        await callback.answer(get_text("shifts.error_выбора_shifts", language=lang), show_alert=True)
+        await callback.answer(get_text("shifts.error_selecting_shift", language=lang), show_alert=True)
     finally:
         if need_close and db:
             db.close()
@@ -475,7 +477,7 @@ async def my_shift(message: Message, db=None):
             await message.answer(get_text("shifts.no_active", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
             return
         await message.answer(
-            get_text("shifts.активная_shift_с", language=lang).replace("{...}", active.start_time.strftime('%d.%m.%Y %H:%M')),
+            get_text("shifts.active_shift_since", language=lang).replace("{...}", active.start_time.strftime('%d.%m.%Y %H:%M')),
             reply_markup=get_shifts_main_keyboard(language=lang),
         )
     finally:
@@ -510,7 +512,7 @@ async def shifts_history(message: Message, state: FSMContext, db=None):
         page_items = shifts[start:end]
 
         if not page_items:
-            text = get_text("shifts.bистория_сменb_за", language=lang)
+            text = get_text("shifts.shift_history_empty", language=lang)
         else:
             lines = [get_text("shifts.shift_history", language=lang) + ":"]
             for s in page_items:
@@ -551,7 +553,7 @@ async def shifts_history_page(callback: CallbackQuery, state: FSMContext, langua
 
 
 @router.callback_query(F.data.startswith("shifts_period_"))
-async def shifts_filter_period(callback: CallbackQuery, state: FSMContext):
+async def shifts_filter_period(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     value = callback.data.replace("shifts_period_", "")
     await state.update_data(my_shifts_period=value, my_shifts_page=1)
     fake = callback.message
@@ -561,7 +563,7 @@ async def shifts_filter_period(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("shifts_status_"))
-async def shifts_filter_status(callback: CallbackQuery, state: FSMContext):
+async def shifts_filter_status(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     value = callback.data.replace("shifts_status_", "")
     await state.update_data(my_shifts_status=value, my_shifts_page=1)
     fake = callback.message
@@ -580,7 +582,7 @@ async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext, langu
     await callback.answer(get_text("shifts.handlers.filters_reset", language=lang))
 
 
-@router.message(F.text == "🟢 Активные смены")
+@router.message(F.text.in_(ACTIVE_SHIFTS_BUTTON_TEXTS))
 async def manager_active_shifts(message: Message, state: FSMContext, language: str = "ru"):
     # Здесь предполагается, что проверка роли происходит отдельно (например, через middleware)
     db = next(get_db())

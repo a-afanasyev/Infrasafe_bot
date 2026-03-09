@@ -9,6 +9,7 @@ from uk_management_bot.utils.constants import (
     NOTIFICATION_TYPE_CLARIFICATION,
 )
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.helpers import get_text
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -174,13 +175,36 @@ async def async_notify_multiple_documents_request(bot, db: Session, user: User, 
         logger.warning(f"Ошибка async уведомления о запросе множественных документов: {e}")
 
 
+# ====== Shared Bot instance for notifications ======
+
+_shared_bot = None
+
+
+def _get_shared_bot():
+    """Get or create a shared Bot instance for sending notifications."""
+    global _shared_bot
+    if _shared_bot is None:
+        from aiogram import Bot
+        _shared_bot = Bot(token=settings.BOT_TOKEN)
+    return _shared_bot
+
+
 # ====== Уведомления для системы верификации ======
 
 class NotificationService:
     """Сервис уведомлений для системы верификации"""
-    
-    def __init__(self, db: Session):
+
+    def __init__(self, db: Session, bot=None):
         self.db = db
+        self.bot = bot
+
+    def _get_bot(self):
+        """Return the bot instance — prefer injected, fall back to shared singleton."""
+        return self.bot or _get_shared_bot()
+
+    def _get_user_lang(self, user) -> str:
+        """Get language from user object, default to 'ru'."""
+        return getattr(user, 'language', None) or 'ru'
     
     async def send_verification_request_notification(self, user_id: int, info_type: str, comment: str) -> None:
         """
@@ -200,41 +224,20 @@ class NotificationService:
                 return
             
             # Формируем сообщение
-            info_type_names = {
-                'address': 'точный адрес',
-                'passport': 'паспорт',
-                'property_deed': 'свидетельство о собственности',
-                'rental_agreement': 'договор аренды',
-                'utility_bill': 'квитанцию ЖКХ',
-                'other': 'дополнительную информацию'
-            }
-            
-            info_name = info_type_names.get(info_type, info_type)
-            
-            message = f"""
-📝 **Запрос дополнительной информации**
+            lang = self._get_user_lang(user)
+            info_name = get_text(f"info_types.{info_type}", language=lang)
 
-Администратор запрашивает у вас {info_name}.
-
-💬 **Комментарий:**
-{comment}
-
-Пожалуйста, предоставьте запрашиваемую информацию в ближайшее время.
-            """
+            message = (
+                f"{get_text('notifications.request_additional_info_title', language=lang)}\n\n"
+                f"{get_text('notifications.admin_requests_info', language=lang).replace('{info_name}', info_name)}\n\n"
+                f"{get_text('notifications.comment', language=lang).replace('{comment}', comment)}\n\n"
+                f"{get_text('notifications.please_provide_info', language=lang)}"
+            )
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление о запросе информации отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление о запросе информации отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о запросе информации: {e}")
@@ -254,27 +257,16 @@ class NotificationService:
                 logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
                 return
             
-            message = f"""
-✅ **Верификация одобрена!**
-
-Ваша учетная запись успешно верифицирована администратором.
-
-Теперь вы можете полноценно использовать все функции системы.
-            """
+            lang = self._get_user_lang(user)
+            message = (
+                f"{get_text('notifications.verification_approved_title', language=lang)}\n\n"
+                f"{get_text('notifications.verification_approved_body', language=lang)}"
+            )
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление об одобрении верификации отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление об одобрении верификации отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об одобрении верификации: {e}")
@@ -294,27 +286,16 @@ class NotificationService:
                 logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
                 return
             
-            message = f"""
-❌ **Верификация отклонена**
-
-К сожалению, ваша учетная запись не прошла верификацию.
-
-Пожалуйста, свяжитесь с администратором для уточнения деталей.
-            """
+            lang = self._get_user_lang(user)
+            message = (
+                f"{get_text('notifications.verification_rejected_title', language=lang)}\n\n"
+                f"{get_text('notifications.verification_rejected_body', language=lang)}"
+            )
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление об отклонении верификации отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление об отклонении верификации отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об отклонении верификации: {e}")
@@ -335,35 +316,18 @@ class NotificationService:
                 logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
                 return
             
-            document_names = {
-                'passport': 'паспорт',
-                'property_deed': 'свидетельство о собственности',
-                'rental_agreement': 'договор аренды',
-                'utility_bill': 'квитанция ЖКХ',
-                'other': 'документ'
-            }
-            
-            doc_name = document_names.get(document_type, document_type)
-            
-            message = f"""
-✅ **Документ одобрен**
+            lang = self._get_user_lang(user)
+            doc_name = get_text(f"document_types.{document_type}", language=lang)
 
-Ваш {doc_name} успешно проверен и одобрен администратором.
-            """
+            message = (
+                f"{get_text('notifications.document_approved_title', language=lang)}\n\n"
+                f"{get_text('notifications.document_approved_body', language=lang).replace('{doc_name}', doc_name)}"
+            )
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление об одобрении документа отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление об одобрении документа отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об одобрении документа: {e}")
@@ -385,40 +349,23 @@ class NotificationService:
                 logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
                 return
             
-            document_names = {
-                'passport': 'паспорт',
-                'property_deed': 'свидетельство о собственности',
-                'rental_agreement': 'договор аренды',
-                'utility_bill': 'квитанция ЖКХ',
-                'other': 'документ'
-            }
-            
-            doc_name = document_names.get(document_type, document_type)
-            
-            message = f"""
-❌ **Документ отклонен**
+            lang = self._get_user_lang(user)
+            doc_name = get_text(f"document_types.{document_type}", language=lang)
 
-Ваш {doc_name} не прошел проверку.
-            """
-            
+            message = (
+                f"{get_text('notifications.document_rejected_title', language=lang)}\n\n"
+                f"{get_text('notifications.document_rejected_body', language=lang).replace('{doc_name}', doc_name)}"
+            )
+
             if reason:
-                message += f"\n\n💬 **Причина:**\n{reason}"
-            
-            message += "\n\nПожалуйста, загрузите корректный документ."
+                message += f"\n\n{get_text('notifications.document_rejected_reason', language=lang).replace('{reason}', reason)}"
+
+            message += f"\n\n{get_text('notifications.please_upload_correct', language=lang)}"
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление об отклонении документа отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление об отклонении документа отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об отклонении документа: {e}")
@@ -440,36 +387,21 @@ class NotificationService:
                 logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
                 return
             
-            level_names = {
-                'apartment': 'квартиры',
-                'house': 'дома',
-                'yard': 'двора'
-            }
-            
-            level_name = level_names.get(access_level, access_level)
-            
-            message = f"""
-🔑 **Права доступа предоставлены**
+            lang = self._get_user_lang(user)
+            level_name = get_text(f"access_levels.{access_level}", language=lang)
 
-Вам предоставлены права на подачу заявок для {level_name}.
-            """
-            
+            message = (
+                f"{get_text('notifications.access_granted_title', language=lang)}\n\n"
+                f"{get_text('notifications.access_granted_body', language=lang).replace('{level_name}', level_name)}"
+            )
+
             if details:
-                message += f"\n\n📍 **Детали:**\n{details}"
+                message += f"\n\n{get_text('notifications.access_details', language=lang).replace('{details}', details)}"
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление о предоставлении прав доступа отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление о предоставлении прав доступа отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о предоставлении прав доступа: {e}")
@@ -491,36 +423,21 @@ class NotificationService:
                 logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
                 return
             
-            level_names = {
-                'apartment': 'квартиры',
-                'house': 'дома',
-                'yard': 'двора'
-            }
-            
-            level_name = level_names.get(access_level, access_level)
-            
-            message = f"""
-🚫 **Права доступа отозваны**
+            lang = self._get_user_lang(user)
+            level_name = get_text(f"access_levels.{access_level}", language=lang)
 
-Ваши права на подачу заявок для {level_name} были отозваны.
-            """
-            
+            message = (
+                f"{get_text('notifications.access_revoked_title', language=lang)}\n\n"
+                f"{get_text('notifications.access_revoked_body', language=lang).replace('{level_name}', level_name)}"
+            )
+
             if reason:
-                message += f"\n\n💬 **Причина:**\n{reason}"
+                message += f"\n\n{get_text('notifications.access_revoked_reason', language=lang).replace('{reason}', reason)}"
             
             # Отправляем уведомление пользователю
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-            
-            try:
-                await bot.send_message(
-                    user.telegram_id,
-                    message,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Уведомление об отзыве прав доступа отправлено пользователю {user_id}")
-            finally:
-                await bot.session.close()
+            bot = self._get_bot()
+            await bot.send_message(user.telegram_id, message)
+            logger.info(f"Уведомление об отзыве прав доступа отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об отзыве прав доступа: {e}")
@@ -534,16 +451,10 @@ class NotificationService:
             message: Текст сообщения
         """
         try:
-            from aiogram import Bot
-            bot = Bot(token=settings.BOT_TOKEN)
-
-            try:
-                system_message = f"{title}\n{message}"
-                await send_to_channel(bot, system_message)
-                logger.info(f"Системное уведомление отправлено: {title}")
-            finally:
-                await bot.session.close()
-
+            bot = self._get_bot()
+            system_message = f"{title}\n{message}"
+            await send_to_channel(bot, system_message)
+            logger.info(f"Системное уведомление отправлено: {title}")
         except Exception as e:
             logger.warning(f"Ошибка отправки системного уведомления: {e}")
 

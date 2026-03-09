@@ -1,7 +1,6 @@
 """
 HTTP Health Check Server для Docker health checks
 """
-import asyncio
 import json
 import logging
 from datetime import datetime
@@ -10,9 +9,7 @@ from threading import Thread
 from typing import Dict, Any
 import time
 
-from sqlalchemy.orm import Session
 from uk_management_bot.database.session import SessionLocal
-from uk_management_bot.handlers.health import get_health_status
 
 logger = logging.getLogger(__name__)
 
@@ -33,42 +30,29 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self._send_404()
     
     def _handle_health_check(self):
-        """Обработка /health endpoint"""
+        """Обработка /health endpoint — purely synchronous, no event loop creation"""
+        db = None
         try:
-            # Создаем сессию БД
+            from sqlalchemy import text as sa_text
             db = SessionLocal()
-            loop = None
-            try:
-                # Получаем статус системы
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                health_data = loop.run_until_complete(get_health_status(db))
 
-                # Определяем HTTP статус код
-                status_code = 200
-                if health_data.get('status') == 'unhealthy':
-                    status_code = 503  # Service Unavailable
-                elif health_data.get('status') == 'degraded':
-                    status_code = 200  # Still OK, but with warnings
+            # Synchronous DB ping
+            start = time.time()
+            db.execute(sa_text("SELECT 1"))
+            db_ms = round((time.time() - start) * 1000, 2)
 
-                self._send_json_response(health_data, status_code)
+            health_data = {
+                'status': 'healthy',
+                'timestamp': datetime.utcnow().isoformat(),
+                'components': {
+                    'database': {
+                        'status': 'healthy',
+                        'response_time_ms': db_ms,
+                    }
+                }
+            }
+            self._send_json_response(health_data, 200)
 
-            finally:
-                db.close()
-                # Закрываем event loop только если он был создан
-                if loop is not None and not loop.is_closed():
-                    try:
-                        # Закрываем все pending задачи
-                        pending = asyncio.all_tasks(loop)
-                        for task in pending:
-                            task.cancel()
-                        # Даем время на завершение задач
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    except Exception as e:
-                        logger.debug(f"Error cleaning up loop tasks: {e}")
-                    finally:
-                        loop.close()
-                
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             self._send_json_response({
@@ -76,6 +60,12 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
                 'error': str(e),
                 'timestamp': datetime.utcnow().isoformat()
             }, 503)
+        finally:
+            if db is not None:
+                try:
+                    db.close()
+                except Exception:
+                    pass
     
     def _handle_ping(self):
         """Обработка /ping endpoint - простая проверка доступности"""
