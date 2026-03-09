@@ -68,9 +68,9 @@ async def _return_to_employee_info(callback: CallbackQuery, db: Session, employe
             full_name = f"ID: {employee.telegram_id}"
             
         employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
-        employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or 'Не указано'}\n"
-        employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or 'Не указано'}\n"
-        employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {employee.status or 'Не указано'}\n"
+        employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
+        employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
+        employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {employee.status or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
         
         if employee.specialization:
             employee_info += f"🛠️ {get_text('employee_management.specialization', language=lang)}: {employee.specialization}\n"
@@ -319,7 +319,7 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
             full_name = f"ID: {employee.telegram_id}"
             
         employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
-        employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or 'Не указано'}\n"
+        employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
         
         # Отображаем все роли пользователя
         if employee.roles:
@@ -329,14 +329,14 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
                     roles_text = ", ".join(user_roles)
                     employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {roles_text}\n"
                 else:
-                    employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: Не указано\n"
+                    employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(f"Ошибка парсинга ролей сотрудника {employee.id}: {e}")
-                employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or 'Не указано'}\n"
+                employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
         else:
-            employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or 'Не указано'}\n"
+            employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
         
-        employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {employee.status or 'Не указано'}\n"
+        employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {employee.status or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
         
         if employee.specialization:
             employee_info += f"🛠️ {get_text('employee_management.specialization', language=lang)}: {employee.specialization}\n"
@@ -611,8 +611,10 @@ async def edit_employee_name(callback: CallbackQuery, state: FSMContext, db: Ses
         
         # Запрашиваем новое ФИО
         await callback.message.edit_text(
-            f"📝 Введите новое ФИО для {_format_employee_name(employee)}:\n\n"
-            f"Текущее ФИО: {employee.first_name or ''} {employee.last_name or ''}",
+            get_text("employee_mgmt.handlers.enter_new_name", language=lang).format(
+                employee_name=_format_employee_name(employee),
+                current_name=f"{employee.first_name or ''} {employee.last_name or ''}"
+            ),
             reply_markup=get_cancel_keyboard(lang)
         )
         
@@ -665,8 +667,10 @@ async def edit_employee_phone(callback: CallbackQuery, state: FSMContext, db: Se
         
         # Запрашиваем новый телефон
         await callback.message.edit_text(
-            f"📱 Введите новый номер телефона для {_format_employee_name(employee)}:\n\n"
-            f"Текущий телефон: {employee.phone or 'Не указан'}",
+            get_text("employee_mgmt.handlers.enter_new_phone", language=lang).format(
+                employee_name=_format_employee_name(employee),
+                current_phone=employee.phone or get_text("employee_mgmt.handlers.not_specified", language=lang)
+            ),
             reply_markup=get_cancel_keyboard(lang)
         )
         
@@ -689,7 +693,8 @@ async def process_employee_name_edit(message: Message, state: FSMContext, db: Se
         target_employee_id = data.get('target_employee_id')
         
         if not new_name:
-            await message.answer("ФИО не может быть пустым. Попробуйте еще раз.")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.name_cannot_be_empty", language=lang))
             return
         
         # Обновляем ФИО
@@ -706,15 +711,18 @@ async def process_employee_name_edit(message: Message, state: FSMContext, db: Se
             
             db.commit()
             
-            await message.answer(f"✅ ФИО обновлено: {new_name}")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.name_updated", language=lang).format(name=new_name))
         else:
-            await message.answer("❌ Сотрудник не найден")
-        
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.employee_not_found", language=lang))
+
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки изменения ФИО: {e}")
-        await message.answer("Произошла ошибка при обновлении ФИО")
+        lang = message.from_user.language_code or 'ru'
+        await message.answer(get_text("employee_mgmt.handlers.error_updating_name", language=lang))
         await state.clear()
 
 
@@ -727,7 +735,8 @@ async def process_employee_phone_edit(message: Message, state: FSMContext, db: S
         target_employee_id = data.get('target_employee_id')
         
         if not new_phone:
-            await message.answer("Номер телефона не может быть пустым. Попробуйте еще раз.")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.phone_cannot_be_empty", language=lang))
             return
         
         # Обновляем телефон
@@ -736,15 +745,18 @@ async def process_employee_phone_edit(message: Message, state: FSMContext, db: S
             user.phone = new_phone
             db.commit()
             
-            await message.answer(f"✅ Телефон обновлен: {new_phone}")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.phone_updated", language=lang).format(phone=new_phone))
         else:
-            await message.answer("❌ Сотрудник не найден")
-        
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.employee_not_found", language=lang))
+
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки изменения телефона: {e}")
-        await message.answer("Произошла ошибка при обновлении телефона")
+        lang = message.from_user.language_code or 'ru'
+        await message.answer(get_text("employee_mgmt.handlers.error_updating_phone", language=lang))
         await state.clear()
 
 
@@ -798,7 +810,8 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: S
         # Формируем сообщение
         user_name = _format_employee_name(employee)
         message_text = f"🎯 {get_text('employee_management.change_role', language=lang)}: {user_name}\n\n"
-        message_text += f"Текущие роли: {', '.join(user_roles) if user_roles else 'Нет ролей'}"
+        no_roles_text = get_text("employee_mgmt.handlers.no_roles", language=lang)
+        message_text += get_text("employee_mgmt.handlers.current_roles", language=lang).format(roles=', '.join(user_roles) if user_roles else no_roles_text)
         
         # Показываем меню выбора ролей
         from uk_management_bot.keyboards.employee_management import get_roles_management_keyboard
@@ -937,7 +950,7 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
                 spec_names.append(spec_text)
             message_text += ", ".join(spec_names)
         else:
-            message_text += "Нет специализаций"
+            message_text += get_text("employee_mgmt.handlers.no_specializations", language=lang)
         
         # Показываем меню выбора специализаций
         from uk_management_bot.keyboards.employee_management import get_specializations_selection_keyboard
@@ -1014,7 +1027,7 @@ async def show_employee_specializations_management(callback: CallbackQuery, db: 
         detailed_stats = spec_service.get_detailed_specialization_stats()
         
         # Формируем сообщение со статистикой и списком сотрудников
-        message_text = "🛠️ Статистика специализаций сотрудников:\n\n"
+        message_text = get_text("employee_mgmt.handlers.specialization_stats_title", language=lang) + "\n\n"
         
         if detailed_stats:
             for spec_key, spec_data in detailed_stats.items():
@@ -1023,7 +1036,7 @@ async def show_employee_specializations_management(callback: CallbackQuery, db: 
                 count = spec_data['count']
                 employees = spec_data['employees']
                 
-                message_text += f"• {spec_name}: {count} сотрудников\n"
+                message_text += get_text("employee_mgmt.handlers.spec_employee_count", language=lang).format(spec_name=spec_name, count=count) + "\n"
                 
                 # Добавляем список сотрудников
                 if employees:
@@ -1040,13 +1053,13 @@ async def show_employee_specializations_management(callback: CallbackQuery, db: 
                         
                         message_text += f"  - {employee_name}\n"
                 else:
-                    message_text += f"  - Нет сотрудников\n"
+                    message_text += f"  - {get_text('employee_mgmt.handlers.no_employees', language=lang)}\n"
                 
                 message_text += "\n"
         else:
-            message_text += "Нет данных о специализациях\n"
+            message_text += get_text("employee_mgmt.handlers.no_specialization_data", language=lang) + "\n"
         
-        message_text += "Для управления специализациями конкретного сотрудника используйте 'Управление пользователями' → выберите сотрудника → 'Специализации'"
+        message_text += get_text("employee_mgmt.handlers.specialization_management_hint", language=lang)
         
         # Кнопка "Назад"
         from uk_management_bot.keyboards.employee_management import get_cancel_keyboard
@@ -1094,7 +1107,8 @@ async def toggle_role(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка переключения роли: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or 'ru'
+        await callback.answer(get_text("employee_mgmt.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "role_save", EmployeeManagementStates.selecting_roles)
@@ -1108,7 +1122,8 @@ async def save_employee_roles(callback: CallbackQuery, state: FSMContext, db: Se
         
         # Проверяем, изменились ли роли
         if set(original_roles) == set(current_roles):
-            await callback.answer("Роли не изменились", show_alert=True)
+            lang = callback.from_user.language_code or 'ru'
+            await callback.answer(get_text("employee_mgmt.handlers.roles_not_changed", language=lang), show_alert=True)
             await state.clear()
             return
         
@@ -1126,7 +1141,8 @@ async def save_employee_roles(callback: CallbackQuery, state: FSMContext, db: Se
         
     except Exception as e:
         logger.error(f"Ошибка сохранения ролей: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or 'ru'
+        await callback.answer(get_text("employee_mgmt.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "role_cancel", EmployeeManagementStates.selecting_roles)
@@ -1143,7 +1159,8 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: S
         
     except Exception as e:
         logger.error(f"Ошибка отмены редактирования ролей: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or 'ru'
+        await callback.answer(get_text("employee_mgmt.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(EmployeeManagementStates.waiting_for_role_comment)
@@ -1161,10 +1178,11 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
         current_user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if not current_user:
             logger.error(f"User not found: telegram_id={message.from_user.id}")
-            await message.answer("❌ Ошибка: пользователь не найден")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.user_not_found_error", language=lang))
             await state.clear()
             return
-        
+
         # Обновляем роли пользователя
         user = db.query(User).filter(User.id == target_employee_id).first()
         if user:
@@ -1208,20 +1226,25 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
             logger.debug(f" Роли успешно обновлены и сохранены")
         else:
             logger.error(f"Employee not found: ID {target_employee_id}")
-            await message.answer("❌ Ошибка: сотрудник не найден")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.employee_not_found", language=lang))
             await state.clear()
             return
-        
+
         await state.clear()
-        
+
         lang = message.from_user.language_code or 'ru'
+        no_roles_text = get_text("employee_mgmt.handlers.no_roles", language=lang)
         await message.answer(
-            f"✅ Роли сотрудника обновлены: {', '.join(current_roles) if current_roles else 'Нет ролей'}"
+            get_text("employee_mgmt.handlers.roles_updated", language=lang).format(
+                roles=', '.join(current_roles) if current_roles else no_roles_text
+            )
         )
-        
+
     except Exception as e:
         logger.error(f"Error processing role change comment: {e}")
-        await message.answer("❌ Произошла ошибка при обновлении ролей")
+        lang = message.from_user.language_code or 'ru'
+        await message.answer(get_text("employee_mgmt.handlers.error_updating_roles", language=lang))
         await state.clear()
 
 
@@ -1252,7 +1275,8 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка переключения специализации: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or 'ru'
+        await callback.answer(get_text("employee_mgmt.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "spec_save", EmployeeManagementStates.selecting_specializations)
@@ -1266,7 +1290,8 @@ async def save_employee_specializations(callback: CallbackQuery, state: FSMConte
         
         # Проверяем, изменились ли специализации
         if set(original_specializations) == set(current_specializations):
-            await callback.answer("Специализации не изменились", show_alert=True)
+            lang = callback.from_user.language_code or 'ru'
+            await callback.answer(get_text("employee_mgmt.handlers.specializations_not_changed", language=lang), show_alert=True)
             await state.clear()
             return
         
@@ -1284,7 +1309,8 @@ async def save_employee_specializations(callback: CallbackQuery, state: FSMConte
         
     except Exception as e:
         logger.error(f"Ошибка сохранения специализаций: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or 'ru'
+        await callback.answer(get_text("employee_mgmt.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "spec_cancel", EmployeeManagementStates.selecting_specializations)
@@ -1301,7 +1327,8 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
         
     except Exception as e:
         logger.error(f"Ошибка отмены редактирования специализаций: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or 'ru'
+        await callback.answer(get_text("employee_mgmt.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(EmployeeManagementStates.waiting_for_specialization_comment)
@@ -1316,10 +1343,11 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
         # Получаем ID пользователя, который вносит изменения
         current_user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if not current_user:
-            await message.answer("❌ Ошибка: пользователь не найден")
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.user_not_found_error", language=lang))
             await state.clear()
             return
-        
+
         # Сохраняем специализации напрямую в базу (обходя проверки сервиса)
         user = db.query(User).filter(User.id == target_employee_id).first()
         if user:
@@ -1363,15 +1391,20 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
         
         if success:
             lang = message.from_user.language_code or 'ru'
+            no_specs_text = get_text("employee_mgmt.handlers.no_specializations", language=lang)
             await message.answer(
-                f"✅ Специализации сотрудника обновлены: {', '.join(current_specializations) if current_specializations else 'Нет специализаций'}"
+                get_text("employee_mgmt.handlers.specializations_updated", language=lang).format(
+                    specializations=', '.join(current_specializations) if current_specializations else no_specs_text
+                )
             )
         else:
-            await message.answer("❌ Ошибка при сохранении специализаций")
-        
+            lang = message.from_user.language_code or 'ru'
+            await message.answer(get_text("employee_mgmt.handlers.error_saving_specializations", language=lang))
+
     except Exception as e:
         logger.error(f"Ошибка обработки комментария специализаций: {e}")
-        await message.answer("❌ Произошла ошибка при обновлении специализаций")
+        lang = message.from_user.language_code or 'ru'
+        await message.answer(get_text("employee_mgmt.handlers.error_updating_specializations", language=lang))
         await state.clear()
 
 

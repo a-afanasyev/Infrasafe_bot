@@ -214,13 +214,13 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
             except:
                 specializations = [specializations] if specializations else []
 
-        spec_text = ", ".join(specializations) if specializations else "Универсальная"
+        spec_text = ", ".join(specializations) if specializations else get_text("shifts.handlers.universal", language=lang)
 
         # Формируем текст
-        text = f"⚠️ <b>Подтверждение завершения смены</b>\n\n"
-        text += f"📅 <b>Смена:</b> {shift.start_time.strftime('%d.%m.%Y %H:%M')} - текущее время\n"
-        text += f"⏱️ <b>Длительность:</b> {hours}ч {minutes}м\n"
-        text += f"🔧 <b>Специализация:</b> {spec_text}\n\n"
+        text = f"⚠️ <b>{get_text('shifts.handlers.end_shift_confirmation', language=lang)}</b>\n\n"
+        text += f"📅 <b>{get_text('shifts.handlers.shift_label', language=lang)}:</b> {shift.start_time.strftime('%d.%m.%Y %H:%M')} - {get_text('shifts.handlers.current_time', language=lang)}\n"
+        text += f"⏱️ <b>{get_text('shifts.handlers.duration_label', language=lang)}:</b> {hours}{get_text('shifts.handlers.hours_short', language=lang)} {minutes}{get_text('shifts.handlers.minutes_short', language=lang)}\n"
+        text += f"🔧 <b>{get_text('shifts.handlers.specialization_label', language=lang)}:</b> {spec_text}\n\n"
 
         # Получаем активные заявки
         # 1. Групповые заявки (назначенные через specialization)
@@ -252,35 +252,35 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
 
         # Показываем информацию о заявках
         if group_requests or individual_requests:
-            text += "📋 <b>Активные заявки:</b>\n\n"
+            text += f"📋 <b>{get_text('shifts.handlers.active_requests', language=lang)}:</b>\n\n"
 
             if group_requests:
-                text += f"🔵 <b>Дежурные заявки</b> (будут переданы следующей смене): {len(group_requests)}\n"
-                for req in group_requests[:3]:  # Показываем первые 3
+                text += f"🔵 <b>{get_text('shifts.handlers.duty_requests', language=lang)}</b> ({get_text('shifts.handlers.will_be_transferred', language=lang)}): {len(group_requests)}\n"
+                for req in group_requests[:3]:
                     text += f"   • #{req.request_number} - {req.category}\n"
                 if len(group_requests) > 3:
-                    text += f"   • и ещё {len(group_requests) - 3}...\n"
+                    text += f"   • {get_text('shifts.handlers.and_more', language=lang).format(count=len(group_requests) - 3)}...\n"
                 text += "\n"
 
             if individual_requests:
-                text += f"👤 <b>Персональные заявки</b> (остаются за вами): {len(individual_requests)}\n"
-                for req in individual_requests[:3]:  # Показываем первые 3
+                text += f"👤 <b>{get_text('shifts.handlers.personal_requests', language=lang)}</b> ({get_text('shifts.handlers.stay_with_you', language=lang)}): {len(individual_requests)}\n"
+                for req in individual_requests[:3]:
                     text += f"   • #{req.request_number} - {req.category}\n"
                 if len(individual_requests) > 3:
-                    text += f"   • и ещё {len(individual_requests) - 3}...\n"
+                    text += f"   • {get_text('shifts.handlers.and_more', language=lang).format(count=len(individual_requests) - 3)}...\n"
                 text += "\n"
 
-            text += "ℹ️ <i>Дежурные заявки автоматически передадутся следующему исполнителю на смене.\n"
-            text += "Персональные заявки останутся за вами до завершения.</i>\n\n"
+            text += f"ℹ️ <i>{get_text('shifts.handlers.duty_requests_info', language=lang)}\n"
+            text += f"{get_text('shifts.handlers.personal_requests_info', language=lang)}</i>\n\n"
         else:
-            text += "✅ <b>Активных заявок нет</b>\n\n"
+            text += f"✅ <b>{get_text('shifts.handlers.no_active_requests', language=lang)}</b>\n\n"
 
-        text += "Подтвердить завершение смены?"
+        text += get_text("shifts.handlers.confirm_end_shift", language=lang)
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Да, завершить", callback_data=f"shift_end_confirm_yes:{shift_id}"),
-                InlineKeyboardButton(text="❌ Отмена", callback_data="end_shift_cancel")
+                InlineKeyboardButton(text=get_text("shifts.handlers.btn_yes_end", language=lang), callback_data=f"shift_end_confirm_yes:{shift_id}"),
+                InlineKeyboardButton(text=get_text("shifts.handlers.btn_cancel", language=lang), callback_data="end_shift_cancel")
             ]
         ])
 
@@ -320,7 +320,8 @@ async def handle_shift_selection(callback: CallbackQuery, db=None):
 async def handle_end_shift_cancel(callback: CallbackQuery):
     """Отмена завершения смены"""
     try:
-        await callback.message.edit_text("❌ Завершение смены отменено")
+        lang = callback.from_user.language_code or "ru"
+        await callback.message.edit_text(get_text("shifts.handlers.shift_end_cancelled", language=lang))
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка отмены: {e}")
@@ -334,13 +335,14 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
         try:
             await callback.answer(get_text("auth.pending", language=callback.from_user.language_code or "ru"), show_alert=True)
         except Exception:
-            await callback.answer("⏳ Ожидайте одобрения администратора.", show_alert=True)
+            await callback.answer(get_text("shifts.handlers.awaiting_approval", language=callback.from_user.language_code or "ru"), show_alert=True)
         return
 
     try:
         shift_id = int(callback.data.split(":")[1])
         db = next(get_db())
         service = ShiftService(db)
+        lang = get_user_language(callback.from_user.id, db)
 
         # Завершаем конкретную смену
         from uk_management_bot.database.models.shift import Shift
@@ -349,7 +351,7 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
 
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user:
-            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            await callback.answer(get_text("shifts.handlers.user_not_found", language=lang), show_alert=True)
             return
 
         shift = db.query(Shift).filter(
@@ -359,7 +361,7 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
         ).first()
 
         if not shift:
-            await callback.answer("❌ Смена не найдена или уже завершена", show_alert=True)
+            await callback.answer(get_text("shifts.handlers.shift_not_found_or_ended", language=lang), show_alert=True)
             return
 
         # Завершаем смену
@@ -378,10 +380,12 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
         db.commit()
 
         await callback.message.edit_text(
-            f"✅ <b>Смена #{shift.id} завершена</b>\n\n"
-            f"⏱️ Длительность: {((shift.end_time - shift.start_time).total_seconds() // 3600):.0f}ч "
-            f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}м\n"
-            f"📅 Время окончания: {shift.end_time.strftime('%d.%m.%Y %H:%M')}",
+            get_text("shifts.handlers.shift_ended_details", language=lang).format(
+                shift_id=shift.id,
+                hours=f"{((shift.end_time - shift.start_time).total_seconds() // 3600):.0f}",
+                minutes=f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}",
+                end_time=shift.end_time.strftime('%d.%m.%Y %H:%M')
+            ),
             parse_mode="HTML"
         )
 
@@ -394,11 +398,12 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
         except Exception as e:
             logger.error(f"Ошибка отправки уведомлений: {e}")
 
-        await callback.answer("✅ Смена завершена")
+        await callback.answer(get_text("shifts.handlers.shift_ended_toast", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
-        await callback.answer("❌ Произошла ошибка при завершении смены", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("shifts.handlers.error_ending_shift", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "shift_end_confirm_yes")
@@ -412,10 +417,11 @@ async def end_shift_yes(callback: CallbackQuery, user_status: str | None = None)
     db = next(get_db())
     service = ShiftService(db)
     result = service.end_shift(callback.from_user.id)
+    lang = get_user_language(callback.from_user.id, db)
     if not result.get("success"):
-        await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+        await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)
         return
-    await callback.message.edit_text("✅ Смена завершена", reply_markup=None)
+    await callback.message.edit_text(get_text("shifts.handlers.shift_ended_simple", language=lang), reply_markup=None)
     # async notifications
     try:
         from aiogram import Bot
@@ -447,7 +453,8 @@ async def suggest_executor_skip(callback: CallbackQuery):
 
 @router.callback_query(F.data == "shift_end_confirm_no")
 async def end_shift_no(callback: CallbackQuery):
-    await callback.message.edit_text("Отмена сдачи смены", reply_markup=None)
+    lang = callback.from_user.language_code or "ru"
+    await callback.message.edit_text(get_text("shifts.handlers.shift_end_cancelled", language=lang), reply_markup=None)
     await callback.answer()
 
 
@@ -532,7 +539,8 @@ async def shifts_history_page(callback: CallbackQuery, state: FSMContext):
     try:
         page = int(page_str)
     except ValueError:
-        await callback.answer("Неверная страница", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("shifts.handlers.invalid_page", language=lang), show_alert=True)
         return
     await state.update_data(my_shifts_page=page)
     # Перерисовать через message flow
@@ -568,7 +576,8 @@ async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext):
     fake = callback.message
     fake.from_user = callback.from_user
     await shifts_history(fake, state)
-    await callback.answer("Фильтры сброшены")
+    lang = callback.from_user.language_code or "ru"
+    await callback.answer(get_text("shifts.handlers.filters_reset", language=lang))
 
 
 @router.message(F.text == "🟢 Активные смены")
@@ -597,12 +606,14 @@ async def force_end_shift(callback: CallbackQuery):
     try:
         target_tg = int(callback.data.replace("force_end_shift_", ""))
     except ValueError:
-        await callback.answer("Неверные данные", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("shifts.handlers.invalid_data", language=lang), show_alert=True)
         return
+    lang = callback.from_user.language_code or "ru"
     result = service.force_end_shift(callback.from_user.id, target_tg)
     if not result.get("success"):
-        await callback.answer(result.get("message", "Ошибка"), show_alert=True)
+        await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)
         return
-    await callback.answer("Смена завершена менеджером")
+    await callback.answer(get_text("shifts.handlers.shift_ended_by_manager", language=lang))
 
 

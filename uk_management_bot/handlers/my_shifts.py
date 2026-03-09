@@ -26,7 +26,7 @@ from uk_management_bot.keyboards.shift_transfer import (
 )
 from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
-from uk_management_bot.utils.helpers import get_user_language, format_datetime
+from uk_management_bot.utils.helpers import get_user_language, format_datetime, get_text
 from sqlalchemy import and_, func, or_
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import get_my_shifts_texts
@@ -49,8 +49,7 @@ async def cmd_my_shifts(message: Message, state: FSMContext, db=None):
         lang = get_user_language(message.from_user.id, db)
         
         await message.answer(
-            "👤 <b>Мои смены</b>\n\n"
-            "Здесь вы можете просматривать и управлять своими сменами:",
+            get_text("my_shifts.handlers.main_menu", language=lang),
             reply_markup=get_my_shifts_menu(lang),
             parse_mode="HTML"
         )
@@ -59,7 +58,8 @@ async def cmd_my_shifts(message: Message, state: FSMContext, db=None):
         
     except Exception as e:
         logger.error(f"Ошибка команды /my_shifts: {e}")
-        await message.answer("❌ Произошла ошибка при загрузке моих смен")
+        lang = message.from_user.language_code or "ru"
+        await message.answer(get_text("my_shifts.handlers.error_loading", language=lang))
     finally:
         if db:
             db.close()
@@ -95,9 +95,7 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext):
         
         if not current_shifts:
             await callback.message.edit_text(
-                "📅 <b>Текущие смены</b>\n\n"
-                "У вас нет запланированных смен на сегодня и завтра.\n\n"
-                "Обратитесь к менеджеру для назначения смен.",
+                get_text("my_shifts.handlers.no_current_shifts", language=lang),
                 reply_markup=get_my_shifts_menu(lang),
                 parse_mode="HTML"
             )
@@ -105,12 +103,12 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext):
             return
         
         # Формируем список смен
-        shifts_text = "📅 <b>Ваши текущие смены</b>\n\n"
-        
+        shifts_text = f"📅 <b>{get_text('my_shifts.handlers.your_current_shifts', language=lang)}</b>\n\n"
+
         for shift in current_shifts:
             shift_date = shift.planned_start_time.date()
             is_today = shift_date == today
-            date_prefix = "🔥 Сегодня" if is_today else "📅 Завтра"
+            date_prefix = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}"
             
             start_time = shift.planned_start_time.strftime("%H:%M")
             end_time = shift.planned_end_time.strftime("%H:%M") if shift.planned_end_time else "?"
@@ -144,7 +142,7 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext):
             # Информация о заявках
             if shift.max_requests:
                 current_requests = shift.current_request_count or 0
-                shifts_text += f"📋 Заявки: {current_requests}/{shift.max_requests}\n"
+                shifts_text += f"📋 {get_text('my_shifts.handlers.requests_label', language=lang)}: {current_requests}/{shift.max_requests}\n"
             
             shifts_text += "\n"
         
@@ -159,7 +157,8 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра текущих смен: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "view_week_schedule")
@@ -186,7 +185,15 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext):
         ).order_by(Shift.planned_start_time).all()
         
         # Группируем по дням недели
-        days_of_week = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+        days_of_week = [
+            get_text("my_shifts.handlers.monday", language=lang),
+            get_text("my_shifts.handlers.tuesday", language=lang),
+            get_text("my_shifts.handlers.wednesday", language=lang),
+            get_text("my_shifts.handlers.thursday", language=lang),
+            get_text("my_shifts.handlers.friday", language=lang),
+            get_text("my_shifts.handlers.saturday", language=lang),
+            get_text("my_shifts.handlers.sunday", language=lang),
+        ]
         week_schedule = {day: [] for day in days_of_week}
         
         for shift in week_shifts:
@@ -195,8 +202,8 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext):
         
         # Формируем текст расписания
         schedule_text = (
-            f"📆 <b>Расписание на неделю</b>\n"
-            f"<b>Период:</b> {start_of_week.strftime('%d.%m')} - {end_of_week.strftime('%d.%m.%Y')}\n\n"
+            f"📆 <b>{get_text('my_shifts.handlers.week_schedule', language=lang)}</b>\n"
+            f"<b>{get_text('my_shifts.handlers.period', language=lang)}:</b> {start_of_week.strftime('%d.%m')} - {end_of_week.strftime('%d.%m.%Y')}\n\n"
         )
         
         total_shifts = len(week_shifts)
@@ -230,13 +237,13 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext):
                 
                 schedule_text += "\n"
             else:
-                schedule_text += f"📅 <b>{day_name}</b> ({day_date.strftime('%d.%m')}): Выходной\n\n"
+                schedule_text += f"📅 <b>{day_name}</b> ({day_date.strftime('%d.%m')}): {get_text('my_shifts.handlers.day_off', language=lang)}\n\n"
         
         # Итоговая статистика
         schedule_text += (
-            f"📊 <b>Итого:</b>\n"
-            f"• Смен: {total_shifts}\n"
-            f"• Часов: {total_hours:.1f}\n"
+            f"📊 <b>{get_text('my_shifts.handlers.total', language=lang)}:</b>\n"
+            f"• {get_text('my_shifts.handlers.shifts_count', language=lang)}: {total_shifts}\n"
+            f"• {get_text('my_shifts.handlers.hours_count', language=lang)}: {total_hours:.1f}\n"
         )
         
         await callback.message.edit_text(
@@ -250,7 +257,8 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра недельного расписания: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("shift_details:"))
@@ -272,51 +280,52 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext):
         ).first()
         
         if not shift:
-            await callback.answer("❌ Смена не найдена", show_alert=True)
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(get_text("my_shifts.handlers.shift_not_found", language=lang), show_alert=True)
             return
-        
+
         # Формируем подробную информацию
         shift_date = shift.planned_start_time.date()
         is_today = shift_date == date.today()
         is_tomorrow = shift_date == date.today() + timedelta(days=1)
-        
-        date_text = "🔥 Сегодня" if is_today else "📅 Завтра" if is_tomorrow else shift_date.strftime('%d.%m.%Y')
+
+        date_text = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}" if is_tomorrow else shift_date.strftime('%d.%m.%Y')
         
         start_time = shift.planned_start_time.strftime("%H:%M")
         end_time = shift.planned_end_time.strftime("%H:%M") if shift.planned_end_time else "?"
         
         status_text = {
-            'planned': '⏱️ Запланирована',
-            'active': '🔴 Активна',
-            'completed': '✅ Завершена',
-            'cancelled': '❌ Отменена'
-        }.get(shift.status, '⚪ Неизвестно')
-        
+            'planned': f"⏱️ {get_text('my_shifts.handlers.status_planned', language=lang)}",
+            'active': f"🔴 {get_text('my_shifts.handlers.status_active', language=lang)}",
+            'completed': f"✅ {get_text('my_shifts.handlers.status_completed', language=lang)}",
+            'cancelled': f"❌ {get_text('my_shifts.handlers.status_cancelled', language=lang)}"
+        }.get(shift.status, f"⚪ {get_text('my_shifts.handlers.status_unknown', language=lang)}")
+
         details_text = (
-            f"📋 <b>Детали смены</b>\n\n"
-            f"<b>Дата:</b> {date_text}\n"
-            f"<b>Время:</b> {start_time} - {end_time}\n"
-            f"<b>Статус:</b> {status_text}\n\n"
+            f"📋 <b>{get_text('my_shifts.handlers.shift_details', language=lang)}</b>\n\n"
+            f"<b>{get_text('my_shifts.handlers.date_label', language=lang)}:</b> {date_text}\n"
+            f"<b>{get_text('my_shifts.handlers.time_label', language=lang)}:</b> {start_time} - {end_time}\n"
+            f"<b>{get_text('my_shifts.handlers.status_label', language=lang)}:</b> {status_text}\n\n"
         )
         
         # Длительность
         if shift.planned_start_time and shift.planned_end_time:
             duration = (shift.planned_end_time - shift.planned_start_time).total_seconds() / 3600
-            details_text += f"<b>Длительность:</b> {duration:.1f} часов\n"
-        
+            details_text += f"<b>{get_text('my_shifts.handlers.duration_label', language=lang)}:</b> {duration:.1f} {get_text('my_shifts.handlers.hours_word', language=lang)}\n"
+
         # Специализации
         if shift.specialization_focus:
             specializations = ', '.join(shift.specialization_focus)
-            details_text += f"<b>Специализации:</b> {specializations}\n"
-        
+            details_text += f"<b>{get_text('my_shifts.handlers.specializations_label', language=lang)}:</b> {specializations}\n"
+
         # Географическая зона
         if shift.geographic_zone:
-            details_text += f"<b>Зона:</b> {shift.geographic_zone}\n"
-        
+            details_text += f"<b>{get_text('my_shifts.handlers.zone_label', language=lang)}:</b> {shift.geographic_zone}\n"
+
         # Области покрытия
         if shift.coverage_areas:
             coverage = ', '.join(shift.coverage_areas)
-            details_text += f"<b>Области:</b> {coverage}\n"
+            details_text += f"<b>{get_text('my_shifts.handlers.areas_label', language=lang)}:</b> {coverage}\n"
         
         details_text += "\n"
         
@@ -325,28 +334,28 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext):
         max_requests = shift.max_requests or 0
         
         if max_requests > 0:
-            details_text += f"<b>📋 Заявки:</b> {current_requests}/{max_requests}\n"
-            
+            details_text += f"<b>📋 {get_text('my_shifts.handlers.requests_label', language=lang)}:</b> {current_requests}/{max_requests}\n"
+
             if current_requests > 0:
                 progress = (current_requests / max_requests) * 100
                 progress_bar = "🟩" * int(progress // 20) + "⬜" * (5 - int(progress // 20))
-                details_text += f"Загрузка: {progress_bar} {progress:.0f}%\n"
-        
+                details_text += f"{get_text('my_shifts.handlers.workload', language=lang)}: {progress_bar} {progress:.0f}%\n"
+
         # Статистика (если есть)
         if shift.completed_requests:
-            details_text += f"<b>Выполнено заявок:</b> {shift.completed_requests}\n"
-        
+            details_text += f"<b>{get_text('my_shifts.handlers.completed_requests', language=lang)}:</b> {shift.completed_requests}\n"
+
         if shift.average_completion_time:
             avg_time = shift.average_completion_time
-            details_text += f"<b>Среднее время:</b> {avg_time:.1f} мин\n"
-        
+            details_text += f"<b>{get_text('my_shifts.handlers.average_time', language=lang)}:</b> {avg_time:.1f} {get_text('my_shifts.handlers.minutes_word', language=lang)}\n"
+
         if shift.efficiency_score:
             score = shift.efficiency_score
-            details_text += f"<b>Эффективность:</b> {score:.1f}%\n"
-        
+            details_text += f"<b>{get_text('my_shifts.handlers.efficiency', language=lang)}:</b> {score:.1f}%\n"
+
         # Заметки
         if shift.notes:
-            details_text += f"\n<b>Заметки:</b>\n{shift.notes}"
+            details_text += f"\n<b>{get_text('my_shifts.handlers.notes_label', language=lang)}:</b>\n{shift.notes}"
         
         await callback.message.edit_text(
             details_text,
@@ -360,7 +369,8 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра деталей смены: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "start_shift")
@@ -372,7 +382,8 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext):
         shift_id = data.get('current_shift_id')
         
         if not shift_id:
-            await callback.answer("❌ Смена не выбрана", show_alert=True)
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(get_text("my_shifts.handlers.shift_not_selected", language=lang), show_alert=True)
             return
         
         db = next(get_db())
@@ -389,7 +400,7 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext):
         ).first()
         
         if not shift:
-            await callback.answer("❌ Смена не найдена или уже запущена", show_alert=True)
+            await callback.answer(get_text("my_shifts.handlers.shift_not_found_or_started", language=lang), show_alert=True)
             return
         
         # Начинаем смену
@@ -398,19 +409,19 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext):
         db.commit()
         
         await callback.message.edit_text(
-            "✅ <b>Смена начата!</b>\n\n"
-            f"⏰ Время начала: {shift.start_time.strftime('%H:%M')}\n\n"
-            "Теперь вы можете принимать заявки.\n"
-            "Не забудьте завершить смену в конце рабочего времени.",
+            get_text("my_shifts.handlers.shift_started", language=lang).format(
+                start_time=shift.start_time.strftime('%H:%M')
+            ),
             reply_markup=get_shift_actions_keyboard(shift, lang),
             parse_mode="HTML"
         )
-        
-        await callback.answer("Смена начата!")
+
+        await callback.answer(get_text("my_shifts.handlers.shift_started_toast", language=lang))
         
     except Exception as e:
         logger.error(f"Ошибка начала смены: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "end_shift")
@@ -422,7 +433,8 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext):
         shift_id = data.get('current_shift_id')
         
         if not shift_id:
-            await callback.answer("❌ Смена не выбрана", show_alert=True)
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(get_text("my_shifts.handlers.shift_not_selected", language=lang), show_alert=True)
             return
         
         db = next(get_db())
@@ -439,7 +451,7 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext):
         ).first()
         
         if not shift:
-            await callback.answer("❌ Смена не найдена или не активна", show_alert=True)
+            await callback.answer(get_text("my_shifts.handlers.shift_not_found_or_inactive", language=lang), show_alert=True)
             return
         
         # Завершаем смену
@@ -456,20 +468,10 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext):
         db.commit()
         
         # Формируем итоги смены
-        summary_text = (
-            "✅ <b>Смена завершена!</b>\n\n"
-            f"⏰ Время завершения: {end_time.strftime('%H:%M')}\n"
-        )
-        
-        if shift.start_time:
-            summary_text += f"⏱️ Фактическая длительность: {actual_duration:.1f} ч\n"
-        
-        if shift.current_request_count:
-            summary_text += f"📋 Обработано заявок: {shift.current_request_count}\n"
-        
-        summary_text += (
-            f"\nСпасибо за работу! 👍\n"
-            f"Информация о смене сохранена в системе."
+        summary_text = get_text("my_shifts.handlers.shift_ended_summary", language=lang).format(
+            end_time=end_time.strftime('%H:%M'),
+            actual_duration=f"{actual_duration:.1f}",
+            request_count=shift.current_request_count or 0
         )
         
         await callback.message.edit_text(
@@ -479,11 +481,12 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext):
         )
         
         await state.set_state(MyShiftsStates.main_menu)
-        await callback.answer("Смена завершена!")
-        
+        await callback.answer(get_text("my_shifts.handlers.shift_ended_toast", language=lang))
+
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "shift_history")
@@ -510,8 +513,7 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext):
         
         if not history_shifts:
             await callback.message.edit_text(
-                "📊 <b>История смен</b>\n\n"
-                "За последние 30 дней у вас не было завершенных смен.",
+                get_text("my_shifts.handlers.no_shift_history", language=lang),
                 reply_markup=get_my_shifts_menu(lang),
                 parse_mode="HTML"
             )
@@ -534,15 +536,12 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext):
                 total_requests += shift.completed_requests
         
         # Формируем текст истории
-        history_text = (
-            f"📊 <b>История смен</b> (30 дней)\n\n"
-            f"<b>📈 Статистика:</b>\n"
-            f"• Завершено смен: {len(completed_shifts)}\n"
-            f"• Отменено смен: {len(cancelled_shifts)}\n"
-            f"• Отработано часов: {total_hours:.1f}\n"
-            f"• Обработано заявок: {total_requests}\n\n"
-            f"<b>🗓️ Последние смены:</b>\n"
-        )
+        history_text = get_text("my_shifts.handlers.shift_history_header", language=lang).format(
+            completed_count=len(completed_shifts),
+            cancelled_count=len(cancelled_shifts),
+            total_hours=f"{total_hours:.1f}",
+            total_requests=total_requests
+        ) + "\n"
         
         for shift in history_shifts[:10]:  # Показываем последние 10
             shift_date = shift.planned_start_time.strftime('%d.%m')
@@ -560,12 +559,12 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext):
             
             requests = ""
             if shift.completed_requests:
-                requests = f" • {shift.completed_requests} заявок"
+                requests = f" • {shift.completed_requests} {get_text('my_shifts.handlers.requests_word', language=lang)}"
             
             history_text += f"{status_emoji} {shift_date} {start_time}{duration}{requests}\n"
         
         if len(history_shifts) > 10:
-            history_text += f"\n... и еще {len(history_shifts) - 10} смен"
+            history_text += f"\n... {get_text('my_shifts.handlers.and_more_shifts', language=lang).format(count=len(history_shifts) - 10)}"
         
         await callback.message.edit_text(
             history_text,
@@ -578,7 +577,8 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра истории смен: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_my_shifts")
@@ -588,18 +588,18 @@ async def handle_back_to_my_shifts(callback: CallbackQuery, state: FSMContext):
         lang = await get_user_language(callback.from_user.id)
         
         await callback.message.edit_text(
-            "👤 <b>Мои смены</b>\n\n"
-            "Здесь вы можете просматривать и управлять своими сменами:",
+            get_text("my_shifts.handlers.main_menu", language=lang),
             reply_markup=get_my_shifts_menu(lang),
             parse_mode="HTML"
         )
-        
+
         await state.set_state(MyShiftsStates.main_menu)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка возврата к моим сменам: {e}")
-        await callback.answer("❌ Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
 
 
 # ========== ИНТЕГРАЦИЯ С ПЕРЕДАЧЕЙ СМЕН ==========
@@ -614,8 +614,7 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext)
             # Получаем активные смены пользователя для передачи
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
             if not user:
-                error_text = "Пользователь не найден" if user_lang == "ru" else "Foydalanuvchi topilmadi"
-                await callback.answer(error_text, show_alert=True)
+                await callback.answer(get_text("my_shifts.handlers.user_not_found", language=user_lang), show_alert=True)
                 return
 
             active_shifts = db.query(Shift).filter(
@@ -632,41 +631,23 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext)
                 )
             ).order_by(ShiftTransfer.created_at.desc()).limit(5).all()
 
-            if user_lang == "ru":
-                menu_text = f"""
-🔄 <b>Меню передачи смен</b>
-
-📊 <b>Статус:</b>
-• Активных смен: {len(active_shifts)}
-• Ваших передач: {len(my_transfers)}
-
-Выберите действие:
-"""
-            else:
-                menu_text = f"""
-🔄 <b>Smena o'tkazish menyusi</b>
-
-📊 <b>Holat:</b>
-• Faol smenalar: {len(active_shifts)}
-• Sizning o'tkazishlaringiz: {len(my_transfers)}
-
-Amalni tanlang:
-"""
+            menu_text = get_text("my_shifts.handlers.transfer_menu", language=user_lang).format(
+                active_shifts_count=len(active_shifts),
+                transfers_count=len(my_transfers)
+            )
 
             # Создаем клавиатуру меню передач
             keyboard = []
 
             if active_shifts:
-                transfer_text = "📤 Передать смену" if user_lang == "ru" else "📤 Smenani o'tkazish"
                 keyboard.append([InlineKeyboardButton(
-                    text=transfer_text,
+                    text=get_text("my_shifts.handlers.btn_transfer_shift", language=user_lang),
                     callback_data="initiate_transfer"
                 )])
 
             if my_transfers:
-                view_text = "📋 Мои передачи" if user_lang == "ru" else "📋 Mening o'tkazishlarim"
                 keyboard.append([InlineKeyboardButton(
-                    text=view_text,
+                    text=get_text("my_shifts.handlers.btn_my_transfers", language=user_lang),
                     callback_data="view_my_transfers"
                 )])
 
@@ -680,8 +661,7 @@ Amalni tanlang:
 
     except Exception as e:
         logger.error(f"Ошибка меню передачи смен: {e}")
-        error_text = "Ошибка загрузки меню" if user_lang == "ru" else "Menyuni yuklashda xatolik"
-        await callback.answer(error_text, show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_loading_menu", language=user_lang), show_alert=True)
 
 
 @router.callback_query(F.data == "initiate_transfer")
@@ -701,18 +681,11 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext):
             ).order_by(Shift.start_time).limit(10).all()
 
             if not active_shifts:
-                no_shifts_text = (
-                    "У вас нет активных смен для передачи" if user_lang == "ru"
-                    else "Sizda o'tkazish uchun faol smenalar yo'q"
-                )
-                await callback.answer(no_shifts_text, show_alert=True)
+                await callback.answer(get_text("my_shifts.handlers.no_shifts_to_transfer", language=user_lang), show_alert=True)
                 return
 
             # Показываем список смен для выбора
-            select_text = (
-                "Выберите смену для передачи:" if user_lang == "ru"
-                else "O'tkazish uchun smenani tanlang:"
-            )
+            select_text = get_text("my_shifts.handlers.select_shift_to_transfer", language=user_lang)
 
             await callback.message.edit_text(
                 select_text,
@@ -721,8 +694,7 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка инициации передачи: {e}")
-        error_text = "Ошибка инициации передачи" if user_lang == "ru" else "O'tkazishni boshlashda xatolik"
-        await callback.answer(error_text, show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_initiating_transfer", language=user_lang), show_alert=True)
 
 
 @router.callback_query(F.data == "view_my_transfers")
@@ -743,14 +715,10 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext):
             ).order_by(ShiftTransfer.created_at.desc()).limit(10).all()
 
             if not my_transfers:
-                no_transfers_text = (
-                    "У вас нет передач" if user_lang == "ru"
-                    else "Sizda o'tkazishlar yo'q"
-                )
-                await callback.answer(no_transfers_text, show_alert=True)
+                await callback.answer(get_text("my_shifts.handlers.no_transfers", language=user_lang), show_alert=True)
                 return
 
-            view_text = "Ваши передачи:" if user_lang == "ru" else "Sizning o'tkazishlaringiz:"
+            view_text = get_text("my_shifts.handlers.your_transfers", language=user_lang)
 
             await callback.message.edit_text(
                 view_text,
@@ -759,5 +727,4 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка просмотра передач: {e}")
-        error_text = "Ошибка загрузки передач" if user_lang == "ru" else "O'tkazishlarni yuklashda xatolik"
-        await callback.answer(error_text, show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_loading_transfers", language=user_lang), show_alert=True)

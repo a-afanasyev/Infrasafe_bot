@@ -18,6 +18,10 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.keyboards.admin import get_manager_main_keyboard, get_manager_request_list_kb
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_EXECUTED, REQUEST_STATUS_APPROVED,
+)
+from uk_management_bot.utils.helpers import get_text
 
 import logging
 
@@ -41,8 +45,9 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
     """Напомнить заявителю о необходимости принять заявку"""
     try:
         # Проверяем права доступа
+        lang = callback.from_user.language_code or "ru"
         if not has_admin_access(roles=roles, user=user):
-            await callback.answer("Нет прав для выполнения операции", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
             return
 
         request_number = callback.data.replace("unaccepted_remind_", "")
@@ -51,19 +56,19 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
         request = db.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         # Проверяем что заявка действительно непринята
-        if request.status != "Выполнена" or not request.manager_confirmed or request.is_returned:
-            await callback.answer("Заявка уже обработана", show_alert=True)
+        if request.status != REQUEST_STATUS_EXECUTED or not request.manager_confirmed or request.is_returned:
+            await callback.answer(get_text("unaccepted.handlers.request_already_processed", language=lang), show_alert=True)
             return
 
         # Получаем заявителя
         applicant = db.query(User).filter(User.id == request.user_id).first()
 
         if not applicant:
-            await callback.answer("Заявитель не найден", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.applicant_not_found", language=lang), show_alert=True)
             return
 
         # Формируем уведомление заявителю
@@ -74,22 +79,19 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
                 completed_at = completed_at.replace(tzinfo=dt_tz.utc)
             completed_str = completed_at.strftime('%d.%m.%Y %H:%M')
         else:
-            completed_str = "неизвестно"
+            completed_str = get_text("unaccepted.handlers.unknown_time", language=lang)
 
-        notification_text = (
-            f"🔔 <b>Напоминание о приёмке заявки</b>\n\n"
-            f"📋 Заявка #{request.request_number}\n"
-            f"📂 Категория: {request.category}\n"
-            f"📍 Адрес: {request.address or 'Не указан'}\n"
-            f"✅ Завершена: {completed_str}\n\n"
-            f"<b>Пожалуйста, примите выполненную работу или верните заявку на доработку.</b>\n\n"
-            f"Для просмотра деталей и приёмки перейдите в раздел \"✅ Ожидают приёмки\"."
+        notification_text = get_text("unaccepted.handlers.reminder_notification", language=lang).format(
+            request_number=request.request_number,
+            category=request.category,
+            address=request.address or get_text("unaccepted.handlers.not_specified", language=lang),
+            completed_str=completed_str
         )
 
         # Создаём клавиатуру с кнопкой просмотра
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text="👁️ Просмотреть заявку",
+                text=get_text("unaccepted.handlers.btn_view_request", language=lang),
                 callback_data=f"view_completed_{request.request_number}"
             )]
         ])
@@ -103,26 +105,28 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
                 parse_mode="HTML"
             )
 
-            await callback.answer("✅ Напоминание отправлено заявителю", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.reminder_sent", language=lang), show_alert=True)
 
             logger.info(f"Отправлено напоминание заявителю {applicant.telegram_id} о заявке {request_number}")
 
         except Exception as send_error:
             logger.error(f"Ошибка отправки напоминания заявителю: {send_error}")
-            await callback.answer("❌ Не удалось отправить напоминание", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.reminder_failed", language=lang), show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка обработки напоминания заявителю: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("unaccepted.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("unaccepted_accept_"))
 async def handle_manager_accept_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
     """Менеджер принимает заявку за заявителя (требуется комментарий)"""
     try:
+        lang = callback.from_user.language_code or "ru"
         # Проверяем права доступа
         if not has_admin_access(roles=roles, user=user):
-            await callback.answer("Нет прав для выполнения операции", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
             return
 
         request_number = callback.data.replace("unaccepted_accept_", "")
@@ -131,12 +135,12 @@ async def handle_manager_accept_request(callback: CallbackQuery, state: FSMConte
         request = db.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await callback.answer("Заявка не найдена", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         # Проверяем что заявка действительно непринята
-        if request.status != "Выполнена" or not request.manager_confirmed or request.is_returned:
-            await callback.answer("Заявка уже обработана", show_alert=True)
+        if request.status != REQUEST_STATUS_EXECUTED or not request.manager_confirmed or request.is_returned:
+            await callback.answer(get_text("unaccepted.handlers.request_already_processed", language=lang), show_alert=True)
             return
 
         # Сохраняем номер заявки в состояние
@@ -146,10 +150,9 @@ async def handle_manager_accept_request(callback: CallbackQuery, state: FSMConte
         await state.set_state(ManagerAcceptanceStates.awaiting_manager_acceptance_comment)
 
         await callback.message.edit_text(
-            f"✅ <b>Принятие заявки за заявителя</b>\n\n"
-            f"📋 Заявка #{request_number}\n\n"
-            f"<b>Обязательно укажите комментарий</b> (причину принятия за заявителя):\n\n"
-            f"<i>Например: \"Заявитель не отвечает более 3 дней\", \"Заявитель на связи подтвердил выполнение\" и т.д.</i>",
+            get_text("unaccepted.handlers.accept_for_applicant_prompt", language=lang).format(
+                request_number=request_number
+            ),
             parse_mode="HTML"
         )
 
@@ -159,7 +162,8 @@ async def handle_manager_accept_request(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка начала принятия заявки менеджером: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("unaccepted.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ManagerAcceptanceStates.awaiting_manager_acceptance_comment)
@@ -170,8 +174,9 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         data = await state.get_data()
         request_number = data.get("request_number")
 
+        lang = message.from_user.language_code or "ru"
         if not request_number:
-            await message.answer("❌ Ошибка: номер заявки не найден")
+            await message.answer(get_text("unaccepted.handlers.request_number_not_found", language=lang))
             await state.clear()
             return
 
@@ -179,13 +184,13 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         request = db.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            await message.answer("❌ Заявка не найдена")
+            await message.answer(get_text("unaccepted.handlers.request_not_found", language=lang))
             await state.clear()
             return
 
         # Проверяем что заявка всё ещё непринята
-        if request.status != "Выполнена" or not request.manager_confirmed or request.is_returned:
-            await message.answer("❌ Заявка уже обработана")
+        if request.status != REQUEST_STATUS_EXECUTED or not request.manager_confirmed or request.is_returned:
+            await message.answer(get_text("unaccepted.handlers.request_already_processed", language=lang))
             await state.clear()
             return
 
@@ -193,13 +198,13 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
 
         if len(comment) < 10:
             await message.answer(
-                "❌ Комментарий слишком короткий (минимум 10 символов).\n\n"
-                "Пожалуйста, укажите подробную причину принятия заявки за заявителя:"
+                get_text("unaccepted.handlers.comment_too_short", language=lang)
             )
             return
 
         # Принимаем заявку от имени менеджера
-        request.status = "Принято"
+        old_status = request.status
+        request.status = REQUEST_STATUS_APPROVED
         request.manager_confirmed = True
         request.manager_confirmed_by = user.id if user else None
         request.manager_confirmed_at = datetime.now(timezone.utc)
@@ -217,6 +222,19 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         else:
             request.manager_confirmation_notes = manager_comment
 
+        # Аудит
+        from uk_management_bot.database.models.audit import AuditLog
+        db.add(AuditLog(
+            user_id=user.id if user else None,
+            action="request_status_changed",
+            details={
+                "request_number": request.request_number,
+                "old_status": old_status,
+                "new_status": REQUEST_STATUS_APPROVED,
+                "actor": "manager_accept_for_applicant",
+            }
+        ))
+
         db.commit()
 
         # Уведомляем заявителя
@@ -226,13 +244,11 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
             try:
                 await message.bot.send_message(
                     chat_id=applicant.telegram_id,
-                    text=(
-                        f"✅ <b>Заявка принята менеджером</b>\n\n"
-                        f"📋 Заявка #{request_number}\n"
-                        f"📂 Категория: {request.category}\n"
-                        f"📍 Адрес: {request.address or 'Не указан'}\n\n"
-                        f"💬 Комментарий менеджера:\n{comment}\n\n"
-                        f"Спасибо за использование нашего сервиса!"
+                    text=get_text("unaccepted.handlers.applicant_notification", language=lang).format(
+                        request_number=request_number,
+                        category=request.category,
+                        address=request.address or get_text("unaccepted.handlers.not_specified", language=lang),
+                        comment=comment
                     ),
                     parse_mode="HTML"
                 )
@@ -246,11 +262,9 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
                 try:
                     await message.bot.send_message(
                         chat_id=executor.telegram_id,
-                        text=(
-                            f"✅ <b>Заявка принята</b>\n\n"
-                            f"📋 Заявка #{request_number}\n"
-                            f"📂 Категория: {request.category}\n\n"
-                            f"Заявка была принята менеджером."
+                        text=get_text("unaccepted.handlers.executor_notification", language=lang).format(
+                            request_number=request_number,
+                            category=request.category
                         ),
                         parse_mode="HTML"
                     )
@@ -258,9 +272,9 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
                     logger.error(f"Ошибка отправки уведомления исполнителю: {send_error}")
 
         await message.answer(
-            f"✅ <b>Заявка #{request_number} принята</b>\n\n"
-            f"Заявка принята от имени менеджера без оценки заявителя.\n"
-            f"Комментарий добавлен в историю заявки.",
+            get_text("unaccepted.handlers.request_accepted_by_manager", language=lang).format(
+                request_number=request_number
+            ),
             reply_markup=get_manager_main_keyboard(),
             parse_mode="HTML"
         )
@@ -271,7 +285,8 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
 
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки менеджером: {e}")
-        await message.answer("❌ Произошла ошибка при принятии заявки")
+        lang = message.from_user.language_code or "ru"
+        await message.answer(get_text("unaccepted.handlers.error_accepting_request", language=lang))
         await state.clear()
 
 
@@ -280,15 +295,16 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, r
     """Возврат к списку непринятых заявок"""
     try:
         # Проверяем права доступа
+        lang = callback.from_user.language_code or "ru"
         if not has_admin_access(roles=roles, user=user):
-            await callback.answer("Нет прав для просмотра списка", show_alert=True)
+            await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
             return
 
         # Получаем список непринятых заявок
         q = (
             db.query(Request)
             .filter(
-                Request.status == "Выполнена",
+                Request.status == REQUEST_STATUS_EXECUTED,
                 Request.manager_confirmed == True,
                 Request.is_returned == False
             )
@@ -302,8 +318,7 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, r
 
         if not requests:
             await callback.message.edit_text(
-                "⏳ <b>Непринятых заявок нет</b>\n\n"
-                "Все выполненные заявки приняты заявителями.",
+                get_text("unaccepted.handlers.no_unaccepted_requests", language=lang),
                 parse_mode="HTML"
             )
             await callback.answer()
@@ -337,14 +352,13 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, r
             item = {
                 "request_number": r.request_number,
                 "category": r.category,
-                "address": r.address or "Адрес не указан",
+                "address": r.address or get_text("unaccepted.handlers.address_not_specified", language=lang),
                 "status": f"⏳ {time_str}"
             }
             items.append(item)
 
         await callback.message.edit_text(
-            f"⏳ <b>Непринятые заявки</b> ({len(requests)}):\n\n"
-            f"<i>Время указывает сколько заявка ожидает принятия</i>",
+            get_text("unaccepted.handlers.unaccepted_list_title", language=lang).format(count=len(requests)),
             reply_markup=get_manager_request_list_kb(items, 1, 1),
             parse_mode="HTML"
         )
@@ -353,4 +367,5 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, r
 
     except Exception as e:
         logger.error(f"Ошибка возврата к списку непринятых заявок: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("unaccepted.handlers.error_occurred", language=lang), show_alert=True)
