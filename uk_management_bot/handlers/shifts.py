@@ -317,10 +317,10 @@ async def handle_shift_selection(callback: CallbackQuery, db=None):
 
 
 @router.callback_query(F.data == "end_shift_cancel")
-async def handle_end_shift_cancel(callback: CallbackQuery):
+async def handle_end_shift_cancel(callback: CallbackQuery, language: str = "ru"):
     """Отмена завершения смены"""
     try:
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.message.edit_text(get_text("shifts.handlers.shift_end_cancelled", language=lang))
         await callback.answer()
     except Exception as e:
@@ -329,13 +329,13 @@ async def handle_end_shift_cancel(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("shift_end_confirm_yes:"))
-async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None = None):
+async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None = None, language: str = "ru"):
     """Подтверждение завершения конкретной смены"""
     if user_status == "pending":
         try:
-            await callback.answer(get_text("auth.pending", language=callback.from_user.language_code or "ru"), show_alert=True)
+            await callback.answer(get_text("auth.pending", language=language), show_alert=True)
         except Exception:
-            await callback.answer(get_text("shifts.handlers.awaiting_approval", language=callback.from_user.language_code or "ru"), show_alert=True)
+            await callback.answer(get_text("shifts.handlers.awaiting_approval", language=language), show_alert=True)
         return
 
     try:
@@ -402,15 +402,15 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("shifts.handlers.error_ending_shift", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "shift_end_confirm_yes")
-async def end_shift_yes(callback: CallbackQuery, user_status: str | None = None):
+async def end_shift_yes(callback: CallbackQuery, user_status: str | None = None, language: str = "ru"):
     if user_status == "pending":
         try:
-            await callback.answer(get_text("auth.pending", language=callback.from_user.language_code or "ru"), show_alert=True)
+            await callback.answer(get_text("auth.pending", language=language), show_alert=True)
         except Exception:
             await callback.answer("⏳ Ожидайте одобрения администратора.", show_alert=True)
         return
@@ -436,10 +436,10 @@ async def end_shift_yes(callback: CallbackQuery, user_status: str | None = None)
 
 
 @router.callback_query(F.data == "suggest_executor_skip")
-async def suggest_executor_skip(callback: CallbackQuery):
+async def suggest_executor_skip(callback: CallbackQuery, language: str = "ru"):
     """Обработчик отказа от автоматического переключения роли после старта смены."""
     try:
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         text = get_text("role.suggest_executor_skipped", language=lang)
         await callback.answer()
         await callback.message.answer(text)
@@ -452,8 +452,8 @@ async def suggest_executor_skip(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == "shift_end_confirm_no")
-async def end_shift_no(callback: CallbackQuery):
-    lang = callback.from_user.language_code or "ru"
+async def end_shift_no(callback: CallbackQuery, language: str = "ru"):
+    lang = language
     await callback.message.edit_text(get_text("shifts.handlers.shift_end_cancelled", language=lang), reply_markup=None)
     await callback.answer()
 
@@ -530,7 +530,7 @@ async def shifts_history(message: Message, state: FSMContext, db=None):
 
 
 @router.callback_query(F.data.startswith("shifts_page_"))
-async def shifts_history_page(callback: CallbackQuery, state: FSMContext):
+async def shifts_history_page(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     data = await state.get_data()
     page_str = callback.data.replace("shifts_page_", "")
     if page_str == "current":
@@ -539,7 +539,7 @@ async def shifts_history_page(callback: CallbackQuery, state: FSMContext):
     try:
         page = int(page_str)
     except ValueError:
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("shifts.handlers.invalid_page", language=lang), show_alert=True)
         return
     await state.update_data(my_shifts_page=page)
@@ -571,28 +571,28 @@ async def shifts_filter_status(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "shifts_filters_reset")
-async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext):
+async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     await state.update_data(my_shifts_status="all", my_shifts_period="all", my_shifts_page=1)
     fake = callback.message
     fake.from_user = callback.from_user
     await shifts_history(fake, state)
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     await callback.answer(get_text("shifts.handlers.filters_reset", language=lang))
 
 
 @router.message(F.text == "🟢 Активные смены")
-async def manager_active_shifts(message: Message, state: FSMContext):
+async def manager_active_shifts(message: Message, state: FSMContext, language: str = "ru"):
     # Здесь предполагается, что проверка роли происходит отдельно (например, через middleware)
     db = next(get_db())
     service = ShiftService(db)
     shifts = service.list_shifts(status="active")
     if not shifts:
         from uk_management_bot.utils.safe_localization import safe_get_text
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(safe_get_text("shifts.no_active_shifts", language=lang))
         return
     from uk_management_bot.utils.safe_localization import safe_get_text
-    lang = message.from_user.language_code or "ru"
+    lang = language
     lines = [safe_get_text("shifts.active_shifts_list", language=lang, default="Активные смены:")]
     for s in shifts[:10]:
         lines.append(f"- user_id={s.user_id} с {s.start_time.strftime('%d.%m.%Y %H:%M')}")
@@ -600,16 +600,16 @@ async def manager_active_shifts(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("force_end_shift_"))
-async def force_end_shift(callback: CallbackQuery):
+async def force_end_shift(callback: CallbackQuery, language: str = "ru"):
     db = next(get_db())
     service = ShiftService(db)
     try:
         target_tg = int(callback.data.replace("force_end_shift_", ""))
     except ValueError:
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("shifts.handlers.invalid_data", language=lang), show_alert=True)
         return
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     result = service.force_end_shift(callback.from_user.id, target_tg)
     if not result.get("success"):
         await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)

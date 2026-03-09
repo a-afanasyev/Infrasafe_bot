@@ -53,7 +53,7 @@ class AdminPasswordStates(StatesGroup):
     waiting_for_password = State()
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, db: Session, state: FSMContext = None, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def cmd_start(message: Message, db: Session, state: FSMContext = None, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Обработчик команды /start"""
     logger.info(f"Получена команда /start от пользователя {message.from_user.id}. Текст: '{message.text}'")
     
@@ -74,7 +74,7 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
             
             # Если это токен приглашения, обрабатываем его
             if token.startswith("invite_v1:"):
-                lang = message.from_user.language_code or "ru"
+                lang = language
             
             try:
                 # Проверяем rate limiting
@@ -237,7 +237,7 @@ async def cmd_menu(message: Message, state: FSMContext, db: Session, roles: list
 # Telegram автоматически обрабатывает кнопку "Начать" и отправляет /start
 
 @router.callback_query(F.data == "restart_bot")
-async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Обработчик кнопки перезапуска бота"""
     try:
         # Получаем пользователя
@@ -245,7 +245,7 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
         user = await auth_service.get_user_by_telegram_id(callback.from_user.id)
         
         if not user:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("base.handlers.error_user_not_found", language=lang), show_alert=True)
             return
         
@@ -256,7 +256,7 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
                 callback.from_user.language_code
             )
         
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         welcome_text = get_text("bot.restarted", language=lang)
         
         # Формируем клавиатуру в зависимости от роли
@@ -282,36 +282,36 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
             reply_markup=get_main_keyboard_for_role(active_role, roles, user.status)
         )
         
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("base.handlers.bot_restarted", language=lang))
         logger.info(f"Пользователь {callback.from_user.id} перезапустил бота через кнопку")
         
     except Exception as e:
         logger.error(f"Ошибка перезапуска бота: {e}")
-        await callback.answer(get_text("base.handlers.error_restart", language=callback.from_user.language_code or "ru"), show_alert=True)
+        await callback.answer(get_text("base.handlers.error_restart", language=language), show_alert=True)
 
 @router.message(Command("help"))
-async def cmd_help(message: Message):
+async def cmd_help(message: Message, language: str = "ru"):
     """Обработчик команды /help"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     help_text = get_text("base.handlers.help_text", language=lang)
 
     await message.answer(help_text, reply_markup=get_user_contextual_keyboard(message.from_user.id))
 
 @router.message(F.text == "❌ Отмена")
-async def cancel_action(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None):
+async def cancel_action(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None, language: str = "ru"):
     """Отмена текущего действия"""
     current_state = await state.get_state()
     if current_state:
         await state.clear()
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(
             get_text("cancel", language=lang),
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
         )
         logger.info(f"Пользователь {message.from_user.id} отменил действие в состоянии {current_state}")
     else:
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(
             get_text("cancel", language=lang),
             reply_markup=get_user_contextual_keyboard(message.from_user.id)
@@ -364,7 +364,7 @@ async def show_help(message: Message, db: Session = None):
 
 
 @router.message(F.text.in_(PROFILE_TEXTS))
-async def show_profile(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def show_profile(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Показывает расширенный профиль пользователя"""
 
     
@@ -377,7 +377,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         
         if not profile_data:
             # Ошибка получения данных
-            lang = message.from_user.language_code or "ru"
+            lang = language
             await message.answer(
                 get_text("errors.unknown_error", language=lang),
                 reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], user_status)
@@ -424,7 +424,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         
     except Exception as e:
         logger.error(f"Ошибка отображения профиля {message.from_user.id}: {e}")
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(
             get_text("errors.unknown_error", language=lang),
             reply_markup=get_main_keyboard_for_role(active_role or "applicant", roles or ["applicant"], "approved")
@@ -432,7 +432,7 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
 
 
 @router.message(F.text.in_(SWITCH_ROLE_TEXTS))
-async def choose_role(message: Message, db: Session, roles: list[str] = None, active_role: str = None):
+async def choose_role(message: Message, db: Session, roles: list[str] = None, active_role: str = None, language: str = "ru"):
     """Открывает inline‑переключатель ролей из главного меню.
 
     Показывается только если у пользователя более одной роли.
@@ -451,20 +451,20 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
             active_role = get_active_role(user)
     except Exception:
         pass
-    role_name = get_text(f"roles.{active_role}", language=message.from_user.language_code or "ru")
-    text = get_text("role.switch_title", language=message.from_user.language_code or "ru", role=role_name)
+    role_name = get_text(f"roles.{active_role}", language=language)
+    text = get_text("role.switch_title", language=language, role=role_name)
     await message.answer(text, reply_markup=get_role_switch_inline(roles, active_role))
 
 
 @router.callback_query(RoleSwitchCB.filter())
-async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Переключение роли пользователя"""
     roles = roles or ["applicant"]
     target = callback_data.target
     
     # Проверяем, что целевая роль доступна пользователю
     if target not in roles:
-        lang = cb.from_user.language_code or "ru"
+        lang = language
         await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
         return
     
@@ -473,7 +473,7 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Sessio
         from uk_management_bot.database.models.user import User
         user = db.query(User).filter(User.telegram_id == cb.from_user.id).first()
         if not user:
-            lang = cb.from_user.language_code or "ru"
+            lang = language
             await cb.answer(get_text("errors.user_not_found", language=lang), show_alert=True)
             return
         
@@ -482,10 +482,10 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Sessio
         db.commit()
         
         # Уведомляем пользователя
-        await cb.answer(get_text("role.switched", language=cb.from_user.language_code or "ru"))
+        await cb.answer(get_text("role.switched", language=language))
         
         # Пересобираем меню с новой активной ролью
-        lang = cb.from_user.language_code or "ru"
+        lang = language
         await cb.message.answer(
             get_text("base.handlers.main_menu", language=lang), 
             reply_markup=get_main_keyboard_for_role(target, roles, "approved")
@@ -501,25 +501,25 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Sessio
             
     except Exception as e:
         logger.error(f"Ошибка при переключении роли: {e}")
-        lang = cb.from_user.language_code or "ru"
+        lang = language
         await cb.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
 
 @router.message(Command("admin"))
-async def cmd_admin(message: Message, state: FSMContext):
+async def cmd_admin(message: Message, state: FSMContext, language: str = "ru"):
     """Обработчик команды /admin - назначение администратора по паролю"""
     await state.set_state(AdminPasswordStates.waiting_for_password)
-    lang = message.from_user.language_code or "ru"
+    lang = language
     await message.answer(
         get_text("base.handlers.admin_password_prompt", language=lang),
         reply_markup=get_cancel_keyboard()
     )
 
 @router.message(AdminPasswordStates.waiting_for_password)
-async def process_admin_password(message: Message, state: FSMContext, db: Session, user_status: str = None):
+async def process_admin_password(message: Message, state: FSMContext, db: Session, user_status: str = None, language: str = "ru"):
     """Обработка введенного пароля администратора"""
     from uk_management_bot.utils.safe_localization import safe_get_text
     auth_service = AuthService(db)
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     if message.text == "❌ Отмена":
         await state.clear()

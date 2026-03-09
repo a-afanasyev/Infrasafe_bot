@@ -41,12 +41,12 @@ MY_SHIFTS_TEXTS = get_my_shifts_texts()
 
 @router.message(Command("my_shifts"))
 @require_role(['executor'])
-async def cmd_my_shifts(message: Message, state: FSMContext, db=None):
+async def cmd_my_shifts(message: Message, state: FSMContext, language: str = "ru", db=None):
     """Главное меню моих смен"""
     try:
         if not db:
             db = next(get_db())
-        lang = get_user_language(message.from_user.id, db)
+        lang = language
         
         await message.answer(
             get_text("my_shifts.handlers.main_menu", language=lang),
@@ -58,8 +58,7 @@ async def cmd_my_shifts(message: Message, state: FSMContext, db=None):
         
     except Exception as e:
         logger.error(f"Ошибка команды /my_shifts: {e}")
-        lang = message.from_user.language_code or "ru"
-        await message.answer(get_text("my_shifts.handlers.error_loading", language=lang))
+        await message.answer(get_text("my_shifts.handlers.error_loading", language=language))
     finally:
         if db:
             db.close()
@@ -67,19 +66,19 @@ async def cmd_my_shifts(message: Message, state: FSMContext, db=None):
 
 @router.message(F.text.in_(MY_SHIFTS_TEXTS))
 @require_role(['executor'])
-async def handle_my_shifts_button(message: Message, state: FSMContext):
+async def handle_my_shifts_button(message: Message, state: FSMContext, language: str = "ru"):
     """Обработчик кнопки 'Мои смены'"""
-    await cmd_my_shifts(message, state)
+    await cmd_my_shifts(message, state, language=language)
 
 
 @router.callback_query(F.data == "view_current_shifts")
 @require_role(['executor'])
-async def handle_current_shifts(callback: CallbackQuery, state: FSMContext):
+async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Просмотр текущих смен"""
     try:
         db = next(get_db())
         user_id = callback.from_user.id
-        lang = await get_user_language(user_id)
+        lang = language
         
         # Получаем смены на сегодня и завтра
         today = date.today()
@@ -157,18 +156,17 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра текущих смен: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 @router.callback_query(F.data == "view_week_schedule")
 @require_role(['executor'])
-async def handle_week_schedule(callback: CallbackQuery, state: FSMContext):
+async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Просмотр расписания на неделю"""
     try:
         db = next(get_db())
         user_id = callback.from_user.id
-        lang = await get_user_language(user_id)
+        lang = language
         
         # Получаем смены на текущую неделю
         today = date.today()
@@ -257,19 +255,18 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра недельного расписания: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("shift_details:"))
 @require_role(['executor'])
-async def handle_shift_details(callback: CallbackQuery, state: FSMContext):
+async def handle_shift_details(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Подробная информация о смене"""
     try:
         shift_id = int(callback.data.split(':')[1])
         db = next(get_db())
         user_id = callback.from_user.id
-        lang = await get_user_language(user_id)
+        lang = language
         
         # Получаем смену
         shift = db.query(Shift).filter(
@@ -280,8 +277,7 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext):
         ).first()
         
         if not shift:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("my_shifts.handlers.shift_not_found", language=lang), show_alert=True)
+            await callback.answer(get_text("my_shifts.handlers.shift_not_found", language=language), show_alert=True)
             return
 
         # Формируем подробную информацию
@@ -369,26 +365,24 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра деталей смены: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 @router.callback_query(F.data == "start_shift")
 @require_role(['executor'])
-async def handle_start_shift(callback: CallbackQuery, state: FSMContext):
+async def handle_start_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать смену"""
     try:
+        lang = language
         data = await state.get_data()
         shift_id = data.get('current_shift_id')
-        
+
         if not shift_id:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("my_shifts.handlers.shift_not_selected", language=lang), show_alert=True)
             return
-        
+
         db = next(get_db())
         user_id = callback.from_user.id
-        lang = await get_user_language(user_id)
         
         # Получаем и обновляем смену
         shift = db.query(Shift).filter(
@@ -420,26 +414,24 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка начала смены: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 @router.callback_query(F.data == "end_shift")
 @require_role(['executor'])
-async def handle_end_shift(callback: CallbackQuery, state: FSMContext):
+async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Завершить смену"""
     try:
+        lang = language
         data = await state.get_data()
         shift_id = data.get('current_shift_id')
-        
+
         if not shift_id:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("my_shifts.handlers.shift_not_selected", language=lang), show_alert=True)
             return
-        
+
         db = next(get_db())
         user_id = callback.from_user.id
-        lang = await get_user_language(user_id)
         
         # Получаем и обновляем смену
         shift = db.query(Shift).filter(
@@ -485,18 +477,17 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 @router.callback_query(F.data == "shift_history")
 @require_role(['executor'])
-async def handle_shift_history(callback: CallbackQuery, state: FSMContext):
+async def handle_shift_history(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """История смен"""
     try:
         db = next(get_db())
         user_id = callback.from_user.id
-        lang = await get_user_language(user_id)
+        lang = language
         
         # Получаем историю смен за последние 30 дней
         end_date = date.today()
@@ -577,15 +568,14 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Ошибка просмотра истории смен: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_my_shifts")
-async def handle_back_to_my_shifts(callback: CallbackQuery, state: FSMContext):
+async def handle_back_to_my_shifts(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Возврат к главному меню моих смен"""
     try:
-        lang = await get_user_language(callback.from_user.id)
+        lang = language
         
         await callback.message.edit_text(
             get_text("my_shifts.handlers.main_menu", language=lang),
@@ -598,17 +588,16 @@ async def handle_back_to_my_shifts(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка возврата к моим сменам: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
 
 
 # ========== ИНТЕГРАЦИЯ С ПЕРЕДАЧЕЙ СМЕН ==========
 
 @router.callback_query(F.data == "shift_transfer_menu")
-async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext):
+async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка меню передачи смен"""
     try:
-        user_lang = await get_user_language(callback.from_user.id)
+        user_lang = language
 
         with get_db() as db:
             # Получаем активные смены пользователя для передачи
@@ -665,10 +654,10 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext)
 
 
 @router.callback_query(F.data == "initiate_transfer")
-async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext):
+async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Инициация передачи смены через меню 'Мои смены'"""
     try:
-        user_lang = await get_user_language(callback.from_user.id)
+        user_lang = language
 
         with get_db() as db:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
@@ -698,10 +687,10 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "view_my_transfers")
-async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext):
+async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Просмотр передач пользователя"""
     try:
-        user_lang = await get_user_language(callback.from_user.id)
+        user_lang = language
 
         with get_db() as db:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()

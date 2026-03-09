@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 @router.message(F.text == "/start")
-async def start_onboarding(message: Message, state: FSMContext, db: Session):
+async def start_onboarding(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Начинает процесс онбординга для нового пользователя"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         # Проверяем, существует ли пользователь
@@ -85,9 +85,9 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session):
         await message.answer(get_text("errors.unknown_error", language=lang))
 
 @router.message(F.text == "📱 Указать телефон")
-async def start_phone_input(message: Message, state: FSMContext, db: Session):
+async def start_phone_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Начинает процесс ввода телефона"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     # Создаем клавиатуру для запроса контакта
     contact_keyboard = ReplyKeyboardMarkup(
@@ -107,9 +107,9 @@ async def start_phone_input(message: Message, state: FSMContext, db: Session):
     logger.info(f"Пользователь {message.from_user.id} начал ввод телефона")
 
 @router.message(OnboardingStates.waiting_for_phone, F.contact)
-async def process_contact(message: Message, state: FSMContext, db: Session):
+async def process_contact(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обрабатывает получение контакта"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         # Получаем номер телефона
@@ -150,9 +150,9 @@ async def process_contact(message: Message, state: FSMContext, db: Session):
         await state.clear()
 
 @router.message(OnboardingStates.waiting_for_phone, F.text)
-async def process_manual_phone(message: Message, state: FSMContext, db: Session, user_status: str = None):
+async def process_manual_phone(message: Message, state: FSMContext, db: Session, user_status: str = None, language: str = "ru"):
     """Обрабатывает ручной ввод телефона"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     # Проверяем на отмену
     if message.text == get_text("buttons.cancel", language=lang):
@@ -173,7 +173,7 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
     
     # Валидируем телефон
     phone_number = message.text.strip()
-    lang = message.from_user.language_code or "ru"
+    lang = language
     is_valid, error_message = Validator.validate_phone(phone_number, language=lang)
     if not is_valid:
         await message.answer(get_text("onboarding.phone_invalid", language=lang))
@@ -257,9 +257,9 @@ async def complete_onboarding(message: Message, state: FSMContext, db: Session, 
     logger.info(f"Онбординг завершен для пользователя {message.from_user.id}")
 
 @router.message(F.text == "✅ Завершить без документов")
-async def complete_onboarding_without_documents(message: Message, state: FSMContext, db: Session):
+async def complete_onboarding_without_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Завершает онбординг без документов"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         # Получаем пользователя
@@ -325,9 +325,9 @@ async def start_address_input(message: Message, state: FSMContext, db: Session):
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
 @router.message(F.text == "📄 Загрузить документы")
-async def start_document_upload(message: Message, state: FSMContext, db: Session):
+async def start_document_upload(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Начинает процесс загрузки документов"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     await message.answer(
         get_text("onboarding.documents.title", language=lang) + "\n\n" +
@@ -338,9 +338,9 @@ async def start_document_upload(message: Message, state: FSMContext, db: Session
     logger.info(f"Пользователь {message.from_user.id} начал загрузку документов")
 
 @router.message(OnboardingStates.waiting_for_document_type, F.text)
-async def process_document_type_selection(message: Message, state: FSMContext, db: Session):
+async def process_document_type_selection(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обрабатывает выбор типа документа"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     # Проверяем специальные команды
     if message.text == "⏭️ Пропустить документы":
@@ -367,9 +367,9 @@ async def process_document_type_selection(message: Message, state: FSMContext, d
     logger.info(f"Пользователь {message.from_user.id} выбрал тип документа: {document_type.value}")
 
 @router.message(OnboardingStates.waiting_for_document_file)
-async def process_document_file(message: Message, state: FSMContext, db: Session):
+async def process_document_file(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обрабатывает загрузку файла документа"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     # Получаем данные из состояния
     data = await state.get_data()
@@ -433,9 +433,9 @@ async def process_document_file(message: Message, state: FSMContext, db: Session
     await state.set_state(OnboardingStates.waiting_for_document_confirmation)
 
 @router.message(OnboardingStates.waiting_for_document_confirmation, F.text)
-async def process_document_confirmation(message: Message, state: FSMContext, db: Session):
+async def process_document_confirmation(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обрабатывает подтверждение загрузки документа"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     if message.text == "✅ Подтвердить загрузку":
         await save_document(message, state, db)
@@ -585,9 +585,9 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
 # ═══ ОБРАБОТЧИКИ КНОПОК ЗАВЕРШЕНИЯ ОНБОРДИНГА ═══
 
 @router.message(F.text == "📄 Добавить еще документы")
-async def add_more_documents(message: Message, state: FSMContext, db: Session):
+async def add_more_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обрабатывает нажатие кнопки 'Добавить еще документы'"""
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     await message.answer(
         get_text("onboarding.documents.title", language=lang) + "\n\n" +

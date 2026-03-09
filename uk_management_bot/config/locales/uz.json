@@ -7018,7 +7018,46 @@
   "user_by_telegram_id": {},
   "added_statuses": {},
   "removed_status": {},
-  "status_transitions": {},
+  "status_transitions": {
+    "Yangi": [
+      "Ishda",
+      "Xarid",
+      "Aniqlashtirish",
+      "Bekor qilindi"
+    ],
+    "Ishda": [
+      "Aniqlashtirish",
+      "Xarid",
+      "Bajarildi",
+      "Bekor qilindi"
+    ],
+    "Aniqlashtirish": [
+      "Ishda",
+      "Xarid",
+      "Bajarildi",
+      "Bekor qilindi"
+    ],
+    "Xarid": [
+      "Ishda",
+      "Aniqlashtirish",
+      "Bajarildi",
+      "Bekor qilindi"
+    ],
+    "Bajarildi": [
+      "Qabul qilindi",
+      "Ishda",
+      "Bekor qilindi"
+    ],
+    "Qabul qilindi": [],
+    "Bekor qilindi": [],
+    "new_to_in_progress": "Yangi → Ishda",
+    "in_progress_to_executed": "Ishda → Bajarildi",
+    "executed_to_approved": "Bajarildi → Qabul qilindi",
+    "executed_to_completed": "Bajarildi → Ijro etildi",
+    "completed_to_executed": "Ijro etildi → Bajarildi",
+    "in_progress_to_clarification": "Ishda → Aniqlashtirish",
+    "purchase_to_in_progress": "Xarid → Ishda"
+  },
   "statuses": {
     "new": "Yangi",
     "in_progress": "Ishda",

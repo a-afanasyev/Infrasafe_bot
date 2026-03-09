@@ -122,7 +122,7 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
 
 
 @router.callback_query(F.data.startswith("view_completed_"))
-async def view_completed_request(callback: CallbackQuery, db: Session = None):
+async def view_completed_request(callback: CallbackQuery, db: Session = None, language: str = "ru"):
     """Просмотр деталей выполненной заявки заявителем"""
     try:
         telegram_id = callback.from_user.id
@@ -135,14 +135,14 @@ async def view_completed_request(callback: CallbackQuery, db: Session = None):
         request = db.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         # Проверяем, что это заявка этого пользователя
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if request.user_id != user.id:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=lang), show_alert=True)
             return
 
@@ -188,7 +188,7 @@ async def view_completed_request(callback: CallbackQuery, db: Session = None):
 
     except Exception as e:
         logger.error(f"Ошибка просмотра выполненной заявки: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
     finally:
         if db:
@@ -196,7 +196,7 @@ async def view_completed_request(callback: CallbackQuery, db: Session = None):
 
 
 @router.callback_query(F.data.startswith("view_completion_media_"))
-async def view_completion_media(callback: CallbackQuery, db: Session = None):
+async def view_completion_media(callback: CallbackQuery, db: Session = None, language: str = "ru"):
     """Просмотр медиафайлов выполненной заявки"""
     try:
         from aiogram.types import InputMediaPhoto, InputMediaDocument
@@ -209,18 +209,18 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None):
         request = db.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         completion_media = request.completion_media if request.completion_media else []
 
         if not completion_media:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.media_not_found", language=lang), show_alert=True)
             return
 
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.message.answer(
             get_text("request_acceptance.handlers.media_files_title", language=lang).format(request_number=request.request_number),
             parse_mode="HTML"
@@ -265,7 +265,7 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None):
 
     except Exception as e:
         logger.error(f"Ошибка просмотра медиафайлов завершения: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
     finally:
         if db:
@@ -273,7 +273,7 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None):
 
 
 @router.callback_query(F.data.startswith("accept_request_"))
-async def accept_request(callback: CallbackQuery):
+async def accept_request(callback: CallbackQuery, language: str = "ru"):
     """Принятие заявки заявителем - запрос оценки"""
     try:
         request_number = callback.data.replace("accept_request_", "")
@@ -281,7 +281,7 @@ async def accept_request(callback: CallbackQuery):
         # Показываем клавиатуру с оценками
         keyboard = get_rating_keyboard(request_number)
 
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.message.edit_text(
             get_text("request_acceptance.handlers.rate_request", language=lang),
             reply_markup=keyboard,
@@ -292,12 +292,12 @@ async def accept_request(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка запроса оценки: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("rate_"))
-async def save_rating(callback: CallbackQuery, db: Session = None):
+async def save_rating(callback: CallbackQuery, db: Session = None, language: str = "ru"):
     """Сохранение оценки и принятие заявки"""
     try:
         telegram_id = callback.from_user.id
@@ -314,7 +314,7 @@ async def save_rating(callback: CallbackQuery, db: Session = None):
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
 
         if not user:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.user_not_found", language=lang), show_alert=True)
             return
 
@@ -322,13 +322,13 @@ async def save_rating(callback: CallbackQuery, db: Session = None):
         request = db.query(Request).filter(Request.request_number == request_number).first()
 
         if not request:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         # Проверяем, что это заявка этого пользователя
         if request.user_id != user.id:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=lang), show_alert=True)
             return
 
@@ -370,7 +370,7 @@ async def save_rating(callback: CallbackQuery, db: Session = None):
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 
         # Формируем текст с звёздами
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         stars = "⭐" * rating_value
 
         await callback.message.edit_text(
@@ -388,7 +388,7 @@ async def save_rating(callback: CallbackQuery, db: Session = None):
         logger.error(f"Ошибка сохранения оценки: {e}")
         if db:
             db.rollback()
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_saving_rating", language=lang), show_alert=True)
     finally:
         if db:
@@ -396,7 +396,7 @@ async def save_rating(callback: CallbackQuery, db: Session = None):
 
 
 @router.callback_query(F.data.startswith("return_request_"))
-async def return_request(callback: CallbackQuery, state: FSMContext):
+async def return_request(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Возврат заявки заявителем - запрос причины"""
     try:
         request_number = callback.data.replace("return_request_", "")
@@ -404,7 +404,7 @@ async def return_request(callback: CallbackQuery, state: FSMContext):
         await state.update_data(request_number=request_number)
         await state.set_state(ApplicantAcceptanceStates.awaiting_return_reason)
 
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.message.edit_text(
             get_text("request_acceptance.handlers.return_request_prompt", language=lang),
             parse_mode="HTML"
@@ -414,12 +414,12 @@ async def return_request(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка запроса причины возврата: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ApplicantAcceptanceStates.awaiting_return_reason)
-async def save_return_reason(message: Message, state: FSMContext, db: Session = None):
+async def save_return_reason(message: Message, state: FSMContext, db: Session = None, language: str = "ru"):
     """Сохранение причины возврата и запрос медиа"""
     try:
         telegram_id = message.from_user.id
@@ -427,7 +427,7 @@ async def save_return_reason(message: Message, state: FSMContext, db: Session = 
         request_number = data.get('request_number')
 
         if not request_number:
-            lang = message.from_user.language_code or "ru"
+            lang = language
             await message.answer(get_text("request_acceptance.handlers.request_not_found", language=lang))
             await state.clear()
             return
@@ -440,7 +440,7 @@ async def save_return_reason(message: Message, state: FSMContext, db: Session = 
 
         keyboard = get_skip_media_keyboard()
 
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(
             get_text("request_acceptance.handlers.attach_media_prompt", language=lang),
             reply_markup=keyboard,
@@ -451,25 +451,25 @@ async def save_return_reason(message: Message, state: FSMContext, db: Session = 
 
     except Exception as e:
         logger.error(f"Ошибка сохранения причины возврата: {e}")
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(get_text("request_acceptance.handlers.error_occurred", language=lang))
         await state.clear()
 
 
 @router.callback_query(F.data == "skip_return_media")
-async def skip_return_media(callback: CallbackQuery, state: FSMContext, db: Session = None):
+async def skip_return_media(callback: CallbackQuery, state: FSMContext, db: Session = None, language: str = "ru"):
     """Пропуск медиа и завершение возврата заявки"""
     try:
         await process_return_request(callback.from_user.id, state, db, callback.message)
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка при пропуске медиа: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ApplicantAcceptanceStates.awaiting_return_media, F.photo | F.video)
-async def save_return_media(message: Message, state: FSMContext, db: Session = None):
+async def save_return_media(message: Message, state: FSMContext, db: Session = None, language: str = "ru"):
     """Сохранение медиа при возврате заявки"""
     try:
         # Получаем file_id
@@ -486,18 +486,18 @@ async def save_return_media(message: Message, state: FSMContext, db: Session = N
             return_media.append(file_id)
             await state.update_data(return_media=return_media)
 
-            lang = message.from_user.language_code or "ru"
+            lang = language
             await message.answer(
                 get_text("request_acceptance.handlers.media_saved", language=lang),
                 reply_markup=get_skip_media_keyboard()
             )
         else:
-            lang = message.from_user.language_code or "ru"
+            lang = language
             await message.answer(get_text("request_acceptance.handlers.media_save_failed", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка сохранения медиа возврата: {e}")
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(get_text("request_acceptance.handlers.error_saving_media", language=lang))
 
 
@@ -615,10 +615,10 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
 
 
 @router.callback_query(F.data == "back_to_pending_acceptance")
-async def back_to_pending_acceptance(callback: CallbackQuery):
+async def back_to_pending_acceptance(callback: CallbackQuery, language: str = "ru"):
     """Возврат к списку ожидающих приёмки заявок"""
     try:
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.message.answer(get_text("request_acceptance.handlers.pending_acceptance_title", language=lang))
         # Trigger the show_pending_acceptance_requests handler
         from aiogram.types import Message as TgMessage
@@ -633,5 +633,5 @@ async def back_to_pending_acceptance(callback: CallbackQuery):
         )
     except Exception as e:
         logger.error(f"Ошибка возврата к списку: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)

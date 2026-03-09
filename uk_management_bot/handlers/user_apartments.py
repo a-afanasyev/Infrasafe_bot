@@ -29,10 +29,10 @@ router = Router()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "my_apartments")
-async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
+async def show_my_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать список квартир пользователя"""
     await state.clear()
-    lang = callback.from_user.language_code or "ru"
+    lang = language
 
     db = next(get_db())
     try:
@@ -129,10 +129,10 @@ async def start_add_apartment(callback: CallbackQuery, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("set_primary:"))
-async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
+async def set_primary_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Установить квартиру как основную"""
     user_apartment_id = int(callback.data.split(":")[1])
-    lang = callback.from_user.language_code or "ru"
+    lang = language
 
     db = next(get_db())
     try:
@@ -188,10 +188,10 @@ async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("view_apartment:"))
-async def view_apartment_details(callback: CallbackQuery, state: FSMContext):
+async def view_apartment_details(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать детальную информацию о квартире"""
     user_apartment_id = int(callback.data.split(":")[1])
-    lang = callback.from_user.language_code or "ru"
+    lang = language
 
     db = next(get_db())
     try:
@@ -381,10 +381,10 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("admin_manage_apartments_"))
-async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContext):
+async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Админ: просмотр и управление квартирами пользователя"""
     await state.clear()
-    lang = callback.from_user.language_code or "ru"
+    lang = language
 
     try:
         user_telegram_id = int(callback.data.split("_")[-1])
@@ -475,10 +475,10 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data.startswith("admin_apartment_detail_"))
-async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext):
+async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Админ: просмотр деталей квартиры"""
     await state.clear()
-    lang = callback.from_user.language_code or "ru"
+    lang = language
 
     try:
         parts = callback.data.split("_")
@@ -549,9 +549,9 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("admin_approve_apartment_"))
-async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
+async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Админ: одобрить квартиру"""
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     try:
         user_apartment_id = int(callback.data.split("_")[-1])
 
@@ -600,9 +600,9 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("admin_reject_apartment_"))
-async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
+async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Админ: отклонить квартиру"""
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     try:
         user_apartment_id = int(callback.data.split("_")[-1])
 
@@ -651,9 +651,9 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("admin_toggle_owner_"))
-async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext):
+async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Админ: переключить статус владелец/жилец"""
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     try:
         user_apartment_id = int(callback.data.split("_")[-1])
 

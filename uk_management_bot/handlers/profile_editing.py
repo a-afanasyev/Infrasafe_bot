@@ -355,7 +355,7 @@ async def handle_first_name_input(message: Message, state: FSMContext, db: Sessi
 
 
 @router.callback_query(F.data == "edit_last_name")
-async def handle_edit_last_name(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_edit_last_name(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Редактирование фамилии"""
     try:
         lang = get_user_language(db, callback.from_user.id)
@@ -371,7 +371,7 @@ async def handle_edit_last_name(callback: CallbackQuery, state: FSMContext, db: 
     except Exception as e:
         logger.error(f"Ошибка редактирования фамилии: {e}")
         from uk_management_bot.utils.safe_localization import safe_get_text
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(safe_get_text("errors.error_occurred", language=lang), show_alert=True)
 
 

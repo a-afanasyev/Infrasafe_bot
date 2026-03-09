@@ -7049,7 +7049,14 @@
       "Отменена"
     ],
     "Принято": [],
-    "Отменена": []
+    "Отменена": [],
+    "new_to_in_progress": "Новая → В работе",
+    "in_progress_to_executed": "В работе → Выполнена",
+    "executed_to_approved": "Выполнена → Принято",
+    "executed_to_completed": "Выполнена → Исполнено",
+    "completed_to_executed": "Исполнено → Выполнена",
+    "in_progress_to_clarification": "В работе → Уточнение",
+    "purchase_to_in_progress": "Закуп → В работе"
   },
   "statuses": {
     "new": "Новая",

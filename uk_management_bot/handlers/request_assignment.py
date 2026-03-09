@@ -21,7 +21,7 @@ from uk_management_bot.keyboards.request_assignment import (
     get_specialization_selection_keyboard,
     get_assignment_confirmation_keyboard
 )
-from uk_management_bot.utils.helpers import get_text, get_language_from_event, get_user_language
+from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.constants import ROLE_MANAGER, REQUEST_STATUS_IN_PROGRESS
 
@@ -29,9 +29,9 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 @router.callback_query(F.data.startswith("assign_request_"))
-async def handle_request_assignment_start(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_request_assignment_start(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Начало процесса назначения заявки"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Проверяем права доступа (только менеджеры)
@@ -66,9 +66,9 @@ async def handle_request_assignment_start(callback: CallbackQuery, state: FSMCon
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("assign_group_"))
-async def handle_group_assignment(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_group_assignment(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Назначение заявки группе исполнителей"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Проверяем права доступа
@@ -102,9 +102,9 @@ async def handle_group_assignment(callback: CallbackQuery, state: FSMContext, db
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("assign_individual_"))
-async def handle_individual_assignment(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_individual_assignment(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Назначение заявки конкретному исполнителю"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Проверяем права доступа
@@ -168,9 +168,9 @@ async def handle_individual_assignment(callback: CallbackQuery, state: FSMContex
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("specialization_"))
-async def handle_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка выбора специализации для группового назначения"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем специализацию из callback data
@@ -211,9 +211,9 @@ async def handle_specialization_selection(callback: CallbackQuery, state: FSMCon
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("executor_"))
-async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка выбора конкретного исполнителя"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем ID исполнителя из callback data
@@ -256,9 +256,9 @@ async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, 
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "confirm_assignment")
-async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Подтверждение назначения заявки"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем данные из состояния
@@ -308,9 +308,9 @@ async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMCont
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "cancel_assignment")
-async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отмена процесса назначения"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Очищаем состояние
@@ -324,9 +324,9 @@ async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMCont
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("view_assignments_"))
-async def handle_view_assignments(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_view_assignments(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Просмотр назначений заявки"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем номер заявки

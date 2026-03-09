@@ -35,7 +35,7 @@ router = Router()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_moderation_list")
-async def show_moderation_list(callback: CallbackQuery, state: FSMContext):
+async def show_moderation_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать список заявок на модерацию"""
     await state.clear()
 
@@ -44,14 +44,14 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext):
         requests = await AddressService.get_pending_requests(db, limit=50)
 
         if not requests:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.message.edit_text(
                 get_text("address_moderation.handlers.moderation_list_empty", language=lang),
                 reply_markup=get_moderation_requests_keyboard([], page=0)
             )
             return
 
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         text = get_text("address_moderation.handlers.moderation_list", language=lang).format(count=len(requests))
 
         await callback.message.edit_text(
@@ -61,13 +61,13 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка заявок: {e}")
-        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=callback.from_user.language_code or "ru"), show_alert=True)
+        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=language), show_alert=True)
     finally:
         db.close()
 
 
 @router.callback_query(F.data.startswith("addr_moderation_page:"))
-async def show_moderation_page(callback: CallbackQuery):
+async def show_moderation_page(callback: CallbackQuery, language: str = "ru"):
     """Показать конкретную страницу списка заявок"""
     page = int(callback.data.split(":")[1])
 
@@ -75,7 +75,7 @@ async def show_moderation_page(callback: CallbackQuery):
     try:
         requests = await AddressService.get_pending_requests(db, limit=50)
 
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         text = get_text("address_moderation.handlers.moderation_list_page", language=lang).format(page=page + 1, total=len(requests))
 
         await callback.message.edit_text(
@@ -85,7 +85,7 @@ async def show_moderation_page(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы заявок: {e}")
-        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=callback.from_user.language_code or "ru"), show_alert=True)
+        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=language), show_alert=True)
     finally:
         db.close()
 
@@ -95,7 +95,7 @@ async def show_moderation_page(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_moderation_view:"))
-async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
+async def show_moderation_details(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать детальную информацию о заявке"""
     user_apartment_id = int(callback.data.split(":")[1])
 
@@ -116,12 +116,12 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
         user_apartment = result.scalar_one_or_none()
 
         if not user_apartment:
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(get_text("address_moderation.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         if user_apartment.status != 'pending':
-            lang = callback.from_user.language_code or "ru"
+            lang = language
             await callback.answer(
                 get_text("address_moderation.handlers.request_already_processed", language=lang).format(status=user_apartment.status),
                 show_alert=True
@@ -134,7 +134,7 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
         if not user_name:
             user_name = f"ID: {user.telegram_id}"
 
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         username = f"@{user.username}" if user.username else get_text("address_moderation.handlers.no_username", language=lang)
         phone = user.phone if user.phone else get_text("address_moderation.handlers.not_specified", language=lang)
 
@@ -168,7 +168,7 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке информации о заявке {user_apartment_id}: {e}")
-        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=callback.from_user.language_code or "ru"), show_alert=True)
+        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=language), show_alert=True)
     finally:
         db.close()
 
@@ -178,14 +178,14 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_moderation_approve:"))
-async def start_approve_request(callback: CallbackQuery, state: FSMContext):
+async def start_approve_request(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать подтверждение заявки - запросить комментарий"""
     user_apartment_id = int(callback.data.split(":")[1])
 
     await state.update_data(user_apartment_id=user_apartment_id)
     await state.set_state(ApartmentModerationStates.waiting_for_approval_comment)
 
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     await callback.message.edit_text(
         get_text("address_moderation.handlers.approve_comment_prompt", language=lang),
         reply_markup=get_cancel_keyboard_inline()
@@ -193,7 +193,7 @@ async def start_approve_request(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentModerationStates.waiting_for_approval_comment))
-async def process_approve_comment(message: Message, state: FSMContext):
+async def process_approve_comment(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка комментария и подтверждение заявки"""
     comment = None if message.text == "/skip" else message.text.strip()
 
@@ -218,7 +218,7 @@ async def process_approve_comment(message: Message, state: FSMContext):
         user_apartment = result.scalar_one_or_none()
 
         if not user_apartment:
-            lang = message.from_user.language_code or "ru"
+            lang = language
             await message.answer(
                 get_text("address_moderation.handlers.request_not_found", language=lang),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
@@ -227,7 +227,7 @@ async def process_approve_comment(message: Message, state: FSMContext):
             return
 
         # Сохраняем данные для уведомления
-        lang = message.from_user.language_code or "ru"
+        lang = language
         user_telegram_id = user_apartment.user.telegram_id
         apartment = user_apartment.apartment
         apartment_address = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
@@ -296,14 +296,14 @@ async def process_approve_comment(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_moderation_reject:"))
-async def start_reject_request(callback: CallbackQuery, state: FSMContext):
+async def start_reject_request(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать отклонение заявки - запросить причину"""
     user_apartment_id = int(callback.data.split(":")[1])
 
     await state.update_data(user_apartment_id=user_apartment_id)
     await state.set_state(ApartmentModerationStates.waiting_for_rejection_comment)
 
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     await callback.message.edit_text(
         get_text("address_moderation.handlers.reject_reason_prompt", language=lang),
         reply_markup=get_cancel_keyboard_inline()
@@ -311,12 +311,12 @@ async def start_reject_request(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentModerationStates.waiting_for_rejection_comment))
-async def process_reject_comment(message: Message, state: FSMContext):
+async def process_reject_comment(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка причины и отклонение заявки"""
     comment = message.text.strip()
 
     if len(comment) < 3:
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(
             get_text("address_moderation.handlers.reject_reason_too_short", language=lang)
         )
@@ -343,7 +343,7 @@ async def process_reject_comment(message: Message, state: FSMContext):
         user_apartment = result.scalar_one_or_none()
 
         if not user_apartment:
-            lang = message.from_user.language_code or "ru"
+            lang = language
             await message.answer(
                 get_text("address_moderation.handlers.request_not_found", language=lang),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
@@ -352,7 +352,7 @@ async def process_reject_comment(message: Message, state: FSMContext):
             return
 
         # Сохраняем данные для уведомления
-        lang = message.from_user.language_code or "ru"
+        lang = language
         user_telegram_id = user_apartment.user.telegram_id
         apartment = user_apartment.apartment
         apartment_address = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
@@ -419,19 +419,19 @@ async def process_reject_comment(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "cancel_action")
-async def cancel_moderation_action(callback: CallbackQuery, state: FSMContext):
+async def cancel_moderation_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена действия модерации"""
     current_state = await state.get_state()
 
     if current_state:
         await state.clear()
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.message.edit_text(get_text("address_moderation.handlers.action_cancelled", language=lang))
 
         # Вернуться к списку заявок
         await show_moderation_list(callback, state)
     else:
-        await callback.answer(get_text("address_moderation.handlers.no_active_actions", language=callback.from_user.language_code or "ru"))
+        await callback.answer(get_text("address_moderation.handlers.no_active_actions", language=language))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

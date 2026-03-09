@@ -19,7 +19,7 @@ from uk_management_bot.keyboards.request_reports import (
     get_report_confirmation_keyboard,
     get_report_actions_keyboard
 )
-from uk_management_bot.utils.helpers import get_text, get_language_from_event
+from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.constants import (
     ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,
@@ -31,7 +31,7 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 @router.callback_query(F.data.startswith("view_report_"))
-async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Просмотр отчета о выполнении заявки"""
     try:
         # Получаем номер заявки
@@ -41,20 +41,18 @@ async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Ses
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             from uk_management_bot.utils.safe_localization import safe_get_text
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(safe_get_text("errors.request_not_found", language=lang), show_alert=True)
+            await callback.answer(safe_get_text("errors.request_not_found", language=language), show_alert=True)
             return
-        
+
         # Проверяем права доступа
         user_id = callback.from_user.id
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
             from uk_management_bot.utils.safe_localization import safe_get_text
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(safe_get_text("errors.user_not_found", language=lang), show_alert=True)
+            await callback.answer(safe_get_text("errors.user_not_found", language=language), show_alert=True)
             return
-        
+
         # Проверяем, что пользователь имеет отношение к заявке
         user_roles = user.roles if user.roles else []
         has_access = (
@@ -62,24 +60,22 @@ async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Ses
             request.executor_id == user_id or  # Исполнитель
             ROLE_MANAGER in user_roles  # Менеджер
         )
-        
+
         if not has_access:
-            lang = get_language_from_event(callback, db)
-            await callback.answer(get_text("request_reports.handlers.no_access_view_report", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.no_access_view_report", language=language), show_alert=True)
             return
-        
+
         # Проверяем, есть ли отчет
         if not request.completion_report:
-            lang = get_language_from_event(callback, db)
-            await callback.answer(get_text("request_reports.handlers.no_report_yet", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.no_report_yet", language=language), show_alert=True)
             return
-        
+
         # Получаем комментарии с отчетами
         comment_service = CommentService(db)
         report_comments = comment_service.get_comments_by_type(request.request_number, "report")
-        
+
         # Формируем текст отчета
-        lang = get_language_from_event(callback, db)
+        lang = language
         report_text = format_report_for_display(request, report_comments, lang)
         
         # Показываем отчет
@@ -94,17 +90,15 @@ async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Ses
         
     except Exception as e:
         logger.error(f"Ошибка просмотра отчета: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("approve_request_"))
-async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Принятие заявки заявителем"""
     try:
         # Проверяем права доступа (только заявитель)
         if not await check_user_role(callback.from_user.id, ROLE_APPLICANT, db):
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.no_access_approve", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.no_access_approve", language=language), show_alert=True)
             return
         
         request_number = callback.data.split("_")[-1]
@@ -112,20 +106,17 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
         # Проверяем существование заявки
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.request_not_found", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.request_not_found", language=language), show_alert=True)
             return
 
         # Проверяем, что заявка принадлежит этому пользователю
         if request.user_id != callback.from_user.id:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.only_own_requests", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.only_own_requests", language=language), show_alert=True)
             return
 
         # Проверяем, что заявка выполнена
         if request.status != REQUEST_STATUS_COMPLETED:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.only_completed_requests", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.only_completed_requests", language=language), show_alert=True)
             return
         
         # Сохраняем данные в состоянии
@@ -135,7 +126,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
         )
         
         # Показываем подтверждение принятия
-        lang = get_language_from_event(callback, db)
+        lang = language
         keyboard = get_report_confirmation_keyboard(lang)
         
         confirmation_text = get_text("reports.approval_confirmation", language=lang).format(
@@ -156,11 +147,10 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
         
     except Exception as e:
         logger.error(f"Ошибка принятия заявки: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "confirm_approval")
-async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Подтверждение принятия заявки"""
     try:
         # Получаем данные из состояния
@@ -169,8 +159,7 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         current_status = data.get("current_status")
         
         if not request_number:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.request_data_not_found", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.request_data_not_found", language=language), show_alert=True)
             return
         
         # Создаем сервисы
@@ -193,7 +182,7 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         )
         
         # Показываем сообщение об успехе
-        lang = get_language_from_event(callback, db)
+        lang = language
         success_text = get_text("reports.approval_success", language=lang).format(
             request_id=request_number
         )
@@ -207,33 +196,30 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения принятия: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "cancel_approval")
-async def handle_approval_cancellation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_approval_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отмена принятия заявки"""
     try:
         # Очищаем состояние
         await state.clear()
         
-        lang = get_language_from_event(callback, db)
+        lang = language
         await callback.message.edit_text(get_text("request_reports.handlers.approval_cancelled", language=lang))
         await callback.answer(get_text("request_reports.handlers.approval_cancelled", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка отмены принятия: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("request_revision_"))
-async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Запрос доработки заявки"""
     try:
         # Проверяем права доступа (только заявитель)
         if not await check_user_role(callback.from_user.id, ROLE_APPLICANT, db):
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.no_access_revision", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.no_access_revision", language=language), show_alert=True)
             return
 
         request_number = callback.data.split("_")[-1]
@@ -241,20 +227,17 @@ async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db
         # Проверяем существование заявки
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.request_not_found", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.request_not_found", language=language), show_alert=True)
             return
 
         # Проверяем, что заявка принадлежит этому пользователю
         if request.user_id != callback.from_user.id:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.only_own_revision", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.only_own_revision", language=language), show_alert=True)
             return
 
         # Проверяем, что заявка выполнена
         if request.status != REQUEST_STATUS_COMPLETED:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.only_completed_revision", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.only_completed_revision", language=language), show_alert=True)
             return
         
         # Сохраняем данные в состоянии
@@ -264,7 +247,7 @@ async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db
         )
         
         # Запрашиваем причину доработки
-        lang = get_language_from_event(callback, db)
+        lang = language
         await callback.message.edit_text(
             get_text("reports.enter_revision_reason", language=lang)
         )
@@ -276,24 +259,21 @@ async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db
         
     except Exception as e:
         logger.error(f"Ошибка запроса доработки: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.message(RequestReportStates.waiting_for_revision_reason)
-async def handle_revision_reason_input(message: Message, state: FSMContext, db: Session):
+async def handle_revision_reason_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка ввода причины доработки"""
     try:
         # Получаем причину доработки
         revision_reason = message.text.strip()
         
         if not revision_reason:
-            lang = message.from_user.language_code or "ru"
-            await message.answer(get_text("request_reports.handlers.enter_revision_reason_prompt", language=lang))
+            await message.answer(get_text("request_reports.handlers.enter_revision_reason_prompt", language=language))
             return
 
         if len(revision_reason) < 10:
-            lang = message.from_user.language_code or "ru"
-            await message.answer(get_text("request_reports.handlers.revision_reason_too_short", language=lang))
+            await message.answer(get_text("request_reports.handlers.revision_reason_too_short", language=language))
             return
         
         # Получаем данные из состояния
@@ -307,10 +287,9 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         # Получаем текущую заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = message.from_user.language_code or "ru"
-            await message.answer(get_text("request_reports.handlers.request_not_found", language=lang))
+            await message.answer(get_text("request_reports.handlers.request_not_found", language=language))
             return
-        
+
         # Изменяем статус на "В работе" (возвращаем к доработке)
         updated_request = request_service.update_request_status(
             request_number=request_number,
@@ -325,7 +304,7 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         )
         
         # Показываем подтверждение
-        lang = get_language_from_event(message, db)
+        lang = language
         success_text = get_text("reports.revision_requested", language=lang).format(
             request_id=request_number,
             reason=revision_reason
@@ -338,11 +317,10 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         
     except Exception as e:
         logger.error(f"Ошибка сохранения причины доработки: {e}")
-        lang = message.from_user.language_code or "ru"
-        await message.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)))
+        await message.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)))
 
 @router.callback_query(F.data.startswith("back_to_report_"))
-async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Возврат к отчету"""
     try:
         # Получаем ID заявки
@@ -351,16 +329,15 @@ async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: 
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = callback.from_user.language_code or "ru"
-            await callback.answer(get_text("request_reports.handlers.request_not_found", language=lang), show_alert=True)
+            await callback.answer(get_text("request_reports.handlers.request_not_found", language=language), show_alert=True)
             return
 
         # Получаем комментарии с отчетами
         comment_service = CommentService(db)
         report_comments = comment_service.get_comments_by_type(request.request_number, "report")
-        
+
         # Формируем текст отчета
-        lang = get_language_from_event(callback, db)
+        lang = language
         report_text = format_report_for_display(request, report_comments, lang)
         
         # Показываем отчет
@@ -375,8 +352,7 @@ async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: 
         
     except Exception as e:
         logger.error(f"Ошибка возврата к отчету: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 # Вспомогательные функции
 

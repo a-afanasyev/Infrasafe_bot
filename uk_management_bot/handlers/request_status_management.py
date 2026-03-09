@@ -34,9 +34,10 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 @router.callback_query(F.data.startswith("change_status_"))
-async def handle_status_change_start(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_status_change_start(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Начало процесса изменения статуса заявки"""
     try:
+        lang = language
         # Получаем номер заявки
         request_number = callback.data.split("_")[-1]
 
@@ -44,36 +45,32 @@ async def handle_status_change_start(callback: CallbackQuery, state: FSMContext,
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             from uk_management_bot.utils.safe_localization import safe_get_text
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(safe_get_text("errors.request_not_found", language=lang), show_alert=True)
             return
-        
+
         # Проверяем права доступа
         user_id = callback.from_user.id
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.user_not_found", language=lang), show_alert=True)
             return
-        
+
         # Определяем доступные статусы в зависимости от роли и текущего статуса
         available_statuses = get_available_statuses(user, request)
-        
+
         if not available_statuses:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.no_available_statuses", language=lang), show_alert=True)
             return
-        
+
         # Сохраняем данные в состоянии
         await state.update_data(
             request_number=request_number,
             current_status=request.status,
             user_roles=user.roles
         )
-        
+
         # Показываем выбор нового статуса
-        lang = get_language_from_event(callback, db)
         keyboard = get_status_selection_keyboard(available_statuses, lang)
         
         await callback.message.edit_text(
@@ -90,36 +87,34 @@ async def handle_status_change_start(callback: CallbackQuery, state: FSMContext,
         
     except Exception as e:
         logger.error(f"Ошибка начала изменения статуса: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("status_"))
-async def handle_status_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_status_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка выбора нового статуса"""
     try:
+        lang = language
         # Получаем новый статус из callback data
         new_status = callback.data.split("_", 1)[1]
-        
+
         # Сохраняем новый статус в состоянии
         await state.update_data(new_status=new_status)
-        
+
         # Получаем данные заявки
         data = await state.get_data()
         request_number = data.get("request_number")
-        
+
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         # Проверяем, нужен ли комментарий для этого статуса
         requires_comment = new_status in [REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION, REQUEST_STATUS_EXECUTED]
-        
+
         if requires_comment:
             # Запрашиваем комментарий
-            lang = get_language_from_event(callback, db)
             comment_prompt = get_comment_prompt(new_status, lang)
             
             await callback.message.edit_text(comment_prompt)
@@ -134,18 +129,17 @@ async def handle_status_selection(callback: CallbackQuery, state: FSMContext, db
         
     except Exception as e:
         logger.error(f"Ошибка выбора статуса: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.message(RequestStatusStates.waiting_for_comment)
-async def handle_comment_input(message: Message, state: FSMContext, db: Session):
+async def handle_comment_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка ввода комментария для изменения статуса"""
     try:
+        lang = language
         # Получаем комментарий
         comment = message.text.strip()
-        
+
         if not comment:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.please_enter_comment", language=lang))
             return
         
@@ -161,22 +155,21 @@ async def handle_comment_input(message: Message, state: FSMContext, db: Session)
         
     except Exception as e:
         logger.error(f"Ошибка ввода комментария: {e}")
-        lang = message.from_user.language_code or "ru"
-        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)))
+        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)))
 
 @router.callback_query(F.data == "confirm_status_change")
-async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, user: User = None):
+async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru", user: User = None):
     """Подтверждение изменения статуса"""
     try:
+        lang = language
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
         current_status = data.get("current_status")
         new_status = data.get("new_status")
         comment = data.get("comment")
-        
+
         if not request_number or not new_status:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.data_not_found", language=lang), show_alert=True)
             return
         
@@ -214,7 +207,6 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
                 )
         
         # Показываем сообщение об успехе
-        lang = get_language_from_event(callback, db)
         success_text = get_text("request_status_mgmt.handlers.success", language=lang).format(
             request_number=request_number,
             old_status=get_status_display(current_status, language=lang),
@@ -230,34 +222,32 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения изменения статуса: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "cancel_status_change")
-async def handle_status_cancellation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_status_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отмена изменения статуса"""
     try:
+        lang = language
         # Очищаем состояние
         await state.clear()
 
-        lang = get_language_from_event(callback, db)
         await callback.message.edit_text(get_text("request_status_mgmt.handlers.status_change_cancelled", language=lang))
         await callback.answer(get_text("request_status_mgmt.handlers.status_change_cancelled", language=lang))
-        
+
     except Exception as e:
         logger.error(f"Ошибка отмены изменения статуса: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 # Специальные обработчики для исполнителей
 
 @router.callback_query(F.data.startswith("take_to_work_"))
-async def handle_take_to_work(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_take_to_work(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Исполнитель берет заявку в работу"""
     try:
+        lang = language
         # Проверяем права доступа
         if not await check_user_role(callback.from_user.id, ROLE_EXECUTOR, db):
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.no_permission", language=lang), show_alert=True)
             return
 
@@ -266,7 +256,6 @@ async def handle_take_to_work(callback: CallbackQuery, state: FSMContext, db: Se
         # Проверяем, что заявка назначена этому исполнителю
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request or request.executor_id != callback.from_user.id:
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.request_not_assigned_to_you", language=lang), show_alert=True)
             return
         
@@ -292,21 +281,19 @@ async def handle_take_to_work(callback: CallbackQuery, state: FSMContext, db: Se
             additional_comment="Исполнитель взял заявку в работу"
         )
 
-        lang = get_language_from_event(callback, db)
         await callback.answer(get_text("request_status_mgmt.handlers.request_taken_to_work", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка взятия в работу: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("purchase_materials_"))
-async def handle_purchase_materials(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_purchase_materials(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Перевод заявки в статус закупки материалов"""
     try:
+        lang = language
         # Проверяем права доступа
         if not await check_user_role(callback.from_user.id, ROLE_EXECUTOR, db):
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.no_permission", language=lang), show_alert=True)
             return
 
@@ -319,7 +306,6 @@ async def handle_purchase_materials(callback: CallbackQuery, state: FSMContext, 
         )
 
         # Запрашиваем список материалов
-        lang = get_language_from_event(callback, db)
         await callback.message.edit_text(
             get_text("request_status_mgmt.handlers.enter_materials", language=lang)
         )
@@ -331,18 +317,17 @@ async def handle_purchase_materials(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка закупки материалов: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.message(RequestStatusStates.waiting_for_materials)
-async def handle_materials_input(message: Message, state: FSMContext, db: Session, user: User = None):
+async def handle_materials_input(message: Message, state: FSMContext, db: Session, language: str = "ru", user: User = None):
     """Обработка ввода списка материалов"""
     try:
+        lang = language
         # Получаем список материалов
         materials = message.text.strip()
-        
+
         if not materials:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.please_enter_materials", language=lang))
             return
         
@@ -357,7 +342,6 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
         # Получаем текущую заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.request_not_found", language=lang))
             return
 
@@ -423,7 +407,6 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
         db.commit()
         
         # Показываем подтверждение с текущими данными
-        lang = get_language_from_event(message, db)
         confirmation_text = get_text("request_status_mgmt.handlers.purchase_status_set", language=lang).format(request_number=request_number)
 
         if request.requested_materials:
@@ -461,16 +444,15 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
         
     except Exception as e:
         logger.error(f"Ошибка сохранения материалов: {e}")
-        lang = message.from_user.language_code or "ru"
-        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)))
+        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)))
 
 @router.callback_query(F.data.startswith("complete_work_"))
-async def handle_complete_work(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_complete_work(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Завершение работы по заявке"""
     try:
+        lang = language
         # Проверяем права доступа
         if not await check_user_role(callback.from_user.id, ROLE_EXECUTOR, db):
-            lang = callback.from_user.language_code or "ru"
             await callback.answer(get_text("request_status_mgmt.handlers.no_permission", language=lang), show_alert=True)
             return
 
@@ -483,7 +465,6 @@ async def handle_complete_work(callback: CallbackQuery, state: FSMContext, db: S
         )
 
         # Запрашиваем отчет о выполнении
-        lang = get_language_from_event(callback, db)
         await callback.message.edit_text(
             get_text("request_status_mgmt.handlers.enter_completion_report", language=lang)
         )
@@ -495,19 +476,18 @@ async def handle_complete_work(callback: CallbackQuery, state: FSMContext, db: S
 
     except Exception as e:
         logger.error(f"Ошибка завершения работы: {e}")
-        lang = callback.from_user.language_code or "ru"
-        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)), show_alert=True)
+        await callback.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.message(RequestStatusStates.waiting_for_completion_report, F.photo | F.video)
-async def handle_completion_report_media(message: Message, state: FSMContext, db: Session, user: User = None):
+async def handle_completion_report_media(message: Message, state: FSMContext, db: Session, language: str = "ru", user: User = None):
     """Обработка фото/видео в отчете о выполнении"""
     try:
+        lang = language
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
 
         if not request_number:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.request_not_found_in_state", language=lang))
             return
 
@@ -522,7 +502,6 @@ async def handle_completion_report_media(message: Message, state: FSMContext, db
         # Сохраняем file_id в FSM
         report_media = data.get('report_media', [])
         if len(report_media) >= 5:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.max_files_reached", language=lang))
             return
 
@@ -544,7 +523,6 @@ async def handle_completion_report_media(message: Message, state: FSMContext, db
         except Exception as e:
             logger.error(f"Ошибка загрузки файла отчета в Media Service: {e}")
 
-        lang = message.from_user.language_code or "ru"
         await message.answer(
             get_text("request_status_mgmt.handlers.file_added", language=lang).format(
                 count=len(report_media), max=5
@@ -553,19 +531,18 @@ async def handle_completion_report_media(message: Message, state: FSMContext, db
 
     except Exception as e:
         logger.error(f"Ошибка обработки медиа отчета: {e}")
-        lang = message.from_user.language_code or "ru"
-        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)))
+        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)))
 
 
 @router.message(RequestStatusStates.waiting_for_completion_report)
-async def handle_completion_report_input(message: Message, state: FSMContext, db: Session, user: User = None):
+async def handle_completion_report_input(message: Message, state: FSMContext, db: Session, language: str = "ru", user: User = None):
     """Обработка ввода отчета о выполнении"""
     try:
+        lang = language
         # Получаем отчет
         report = message.text.strip() if message.text else ""
 
         if not report:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.please_enter_report", language=lang))
             return
 
@@ -581,7 +558,6 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
         # Получаем текущую заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.request_not_found", language=lang))
             return
 
@@ -592,7 +568,6 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
             actor_telegram_id=message.from_user.id
         )
         if not result["success"]:
-            lang = message.from_user.language_code or "ru"
             await message.answer(get_text("request_status_mgmt.handlers.work_completion_failed", language=lang).format(message=result['message']))
             await state.clear()
             return
@@ -600,8 +575,7 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
         # Сохраняем отчет в заявке
         full_report = report
         if report_media:
-            lang_for_report = message.from_user.language_code or "ru"
-            full_report += "\n" + get_text("request_status_mgmt.handlers.attached_files", language=lang_for_report).format(count=len(report_media))
+            full_report += "\n" + get_text("request_status_mgmt.handlers.attached_files", language=lang).format(count=len(report_media))
         request.completion_report = full_report
 
         # Добавляем комментарий с отчетом
@@ -620,7 +594,6 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
         await notification_service.notify_request_completed(request.request_number, request.user_id)
         
         # Показываем подтверждение
-        lang = get_language_from_event(message, db)
         success_text = get_text("request_status_mgmt.handlers.work_completed", language=lang).format(
             request_id=request_number
         )
@@ -632,8 +605,7 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
 
     except Exception as e:
         logger.error(f"Ошибка завершения работы: {e}")
-        lang = message.from_user.language_code or "ru"
-        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=lang).format(error=str(e)))
+        await message.answer(get_text("request_status_mgmt.handlers.error_occurred", language=language).format(error=str(e)))
 
 # Вспомогательные функции
 

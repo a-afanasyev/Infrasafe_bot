@@ -56,13 +56,13 @@ async def login_command(message: Message, db: Session):
 
 
 @router.message(Command("join"))
-async def join_with_invite(message: Message, state: FSMContext, db: Session):
+async def join_with_invite(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """
     Обработчик команды /join <token>
     Открывает веб-приложение для регистрации по приглашению
     """
     logger.info(f"Команда /join получена от пользователя {message.from_user.id}: {message.text}")
-    lang = message.from_user.language_code or "ru"
+    lang = language
     telegram_id = message.from_user.id
     
     try:
@@ -179,7 +179,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session):
 # Обработчики пошаговой регистрации
 
 @router.message(RegistrationStates.waiting_for_full_name)
-async def handle_full_name_input(message: Message, state: FSMContext, db: Session):
+async def handle_full_name_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик ввода ФИО"""
     logger.info(f"Обработчик ФИО вызван для пользователя {message.from_user.id}")
     
@@ -187,7 +187,7 @@ async def handle_full_name_input(message: Message, state: FSMContext, db: Sessio
     current_state = await state.get_state()
     logger.info(f"Текущее состояние пользователя {message.from_user.id}: {current_state}")
     
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         full_name = message.text.strip()
@@ -242,10 +242,10 @@ async def handle_full_name_input(message: Message, state: FSMContext, db: Sessio
 
 
 @router.message(RegistrationStates.waiting_for_phone)
-async def handle_phone_input(message: Message, state: FSMContext, db: Session):
+async def handle_phone_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик ввода номера телефона"""
     logger.info(f"Обработчик телефона вызван для пользователя {message.from_user.id}")
-    lang = message.from_user.language_code or "ru"
+    lang = language
     
     try:
         phone = message.text.strip()
@@ -307,9 +307,9 @@ async def handle_phone_input(message: Message, state: FSMContext, db: Session):
 
 
 @router.callback_query(F.data == "confirm_position")
-async def handle_position_confirmation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_position_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработчик подтверждения должности"""
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     
     try:
         # Получаем все данные
@@ -393,14 +393,14 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         
     except Exception as e:
         logger.error(f"Ошибка подтверждения должности: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("auth.error_try_again", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "cancel_registration")
-async def handle_registration_cancel(callback: CallbackQuery, state: FSMContext):
+async def handle_registration_cancel(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработчик отмены регистрации"""
-    lang = callback.from_user.language_code or "ru"
+    lang = language
     try:
         await callback.message.edit_text(get_text("auth.registration_cancelled", language=lang))
         await state.clear()

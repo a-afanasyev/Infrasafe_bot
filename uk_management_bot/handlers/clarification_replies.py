@@ -20,9 +20,9 @@ class ReplyStates(StatesGroup):
     waiting_for_reply_text = State()
 
 @router.message(F.text.startswith("/reply_"))
-async def handle_reply_command(message: Message, state: FSMContext, db: Session):
+async def handle_reply_command(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка команды ответа на уточнение"""
-    lang = get_user_language(message.from_user.id, db)
+    lang = language
 
     try:
         # Извлекаем ID заявки из команды
@@ -73,9 +73,9 @@ async def handle_reply_command(message: Message, state: FSMContext, db: Session)
         await message.answer(get_text("common.error", language=lang))
 
 @router.message(ReplyStates.waiting_for_reply_text)
-async def handle_reply_text(message: Message, state: FSMContext, db: Session):
+async def handle_reply_text(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка текста ответа от заявителя"""
-    lang = get_user_language(message.from_user.id, db)
+    lang = language
 
     try:
         # Получаем данные из состояния

@@ -19,7 +19,7 @@ from uk_management_bot.keyboards.request_comments import (
     get_comment_confirmation_keyboard,
     get_comments_list_keyboard
 )
-from uk_management_bot.utils.helpers import get_text, get_language_from_event, get_user_language
+from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.constants import (
     ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,
@@ -30,9 +30,9 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 @router.callback_query(F.data.startswith("add_comment_"))
-async def handle_add_comment_start(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_add_comment_start(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Начало процесса добавления комментария"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем ID заявки
@@ -88,9 +88,9 @@ async def handle_add_comment_start(callback: CallbackQuery, state: FSMContext, d
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("comment_type_"))
-async def handle_comment_type_selection(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_comment_type_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка выбора типа комментария"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем тип комментария из callback data
@@ -114,9 +114,9 @@ async def handle_comment_type_selection(callback: CallbackQuery, state: FSMConte
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.message(RequestCommentStates.waiting_for_comment)
-async def handle_comment_input(message: Message, state: FSMContext, db: Session):
+async def handle_comment_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка ввода комментария"""
-    lang = get_user_language(message.from_user.id, db)
+    lang = language
 
     try:
         # Получаем текст комментария
@@ -163,9 +163,9 @@ async def handle_comment_input(message: Message, state: FSMContext, db: Session)
         await message.answer(get_text("common.error_occurred", language=lang).format(error=str(e)))
 
 @router.callback_query(F.data == "confirm_comment")
-async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Подтверждение добавления комментария"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем данные из состояния
@@ -213,9 +213,9 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "cancel_comment")
-async def handle_comment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_comment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отмена добавления комментария"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Очищаем состояние
@@ -229,9 +229,9 @@ async def handle_comment_cancellation(callback: CallbackQuery, state: FSMContext
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("view_comments_"))
-async def handle_view_comments(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_view_comments(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Просмотр комментариев заявки"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем ID заявки
@@ -289,9 +289,9 @@ async def handle_view_comments(callback: CallbackQuery, state: FSMContext, db: S
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("view_comments_by_type_"))
-async def handle_view_comments_by_type(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_view_comments_by_type(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Просмотр комментариев определенного типа"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем данные из callback
@@ -331,9 +331,9 @@ async def handle_view_comments_by_type(callback: CallbackQuery, state: FSMContex
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("back_to_comments_"))
-async def handle_back_to_comments(callback: CallbackQuery, state: FSMContext, db: Session):
+async def handle_back_to_comments(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Возврат к списку комментариев"""
-    lang = get_language_from_event(callback, db)
+    lang = language
 
     try:
         # Получаем ID заявки

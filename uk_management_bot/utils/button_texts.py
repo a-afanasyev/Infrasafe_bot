@@ -96,89 +96,89 @@ def _init_button_texts() -> dict:
     # Основные кнопки главного меню
     button_texts['create_request'] = get_button_texts_for_all_languages(
         "main_menu.create_request",
-        fallback_text="📝 Создать заявку"
+        fallback_text="Create Request"
     )
-    
+
     button_texts['my_requests'] = get_button_texts_for_all_languages(
         "main_menu.my_requests",
-        fallback_text="📋 Мои заявки"
+        fallback_text="My Requests"
     )
-    
+
     button_texts['profile'] = get_button_texts_for_all_languages(
         "main_menu.profile",
-        fallback_text="👤 Профиль"
+        fallback_text="Profile"
     )
-    
+
     button_texts['help'] = get_button_texts_for_all_languages(
         "main_menu.help",
-        fallback_text="ℹ️ Помощь"
+        fallback_text="Help"
     )
-    
+
     button_texts['active_requests'] = get_button_texts_for_all_languages(
         "main_menu.active_requests",
-        fallback_text="🛠 Активные заявки"
+        fallback_text="Active Requests"
     )
-    
+
     button_texts['archive'] = get_button_texts_for_all_languages(
         "main_menu.archive",
-        fallback_text="📦 Архив"
+        fallback_text="Archive"
     )
-    
+
     button_texts['shift'] = get_button_texts_for_all_languages(
         "main_menu.shift",
-        fallback_text="🔄 Смена"
+        fallback_text="Shift"
     )
-    
+
     button_texts['my_shifts'] = get_button_texts_for_all_languages(
         "main_menu.my_shifts",
-        fallback_text="📋 Мои смены"
+        fallback_text="My Shifts"
     )
-    
+
     button_texts['switch_role'] = get_button_texts_for_all_languages(
         "main_menu.switch_role",
-        fallback_text="🔀 Выбрать роль"
+        fallback_text="Switch Role"
     )
-    
+
     button_texts['admin_panel'] = get_button_texts_for_all_languages(
         "main_menu.admin_panel",
-        fallback_text="🔧 Админ панель"
+        fallback_text="Admin Panel"
     )
-    
+
     button_texts['acceptance'] = get_button_texts_for_all_languages(
         "main_menu.acceptance",
-        fallback_text="✅ Ожидают приёмки"
+        fallback_text="Pending Acceptance"
     )
-    
+
     # Кнопки отмены и назад
     button_texts['cancel'] = get_button_texts_for_all_languages(
         "buttons.cancel",
-        fallback_text="❌ Отмена"
+        fallback_text="Cancel"
     )
-    
+
     button_texts['back'] = get_button_texts_for_all_languages(
         "buttons.back",
-        fallback_text="🔙 Назад"
+        fallback_text="Back"
     )
-    
+
     # Кнопки меню смены
     button_texts['accept_shift'] = get_button_texts_for_all_languages(
         "shifts.accept_shift",
-        fallback_text="🔄 Принять смену"
+        fallback_text="Accept Shift"
     )
-    
+
     button_texts['end_shift'] = get_button_texts_for_all_languages(
         "shifts.end_shift",
-        fallback_text="🔚 Сдать смену"
+        fallback_text="End Shift"
     )
-    
+
     button_texts['my_shift'] = get_button_texts_for_all_languages(
         "shifts.my_shift",
-        fallback_text="ℹ️ Моя смена"
+        fallback_text="My Shift"
     )
-    
+
     button_texts['shift_history'] = get_button_texts_for_all_languages(
         "shifts.shift_history",
-        fallback_text="📜 История смен"
+        fallback_text="Shift History"
     )
     
     # Логирование для отладки
@@ -216,7 +216,7 @@ def get_create_request_texts() -> List[str]:
         async def start_request_creation(...):
             ...
     """
-    return BUTTON_TEXTS.get('create_request', ["📝 Создать заявку"])
+    return BUTTON_TEXTS.get('create_request', ["Create Request"])
 
 
 def get_my_requests_texts() -> List[str]:
@@ -226,7 +226,7 @@ def get_my_requests_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('my_requests', ["📋 Мои заявки"])
+    return BUTTON_TEXTS.get('my_requests', ["My Requests"])
 
 
 def get_profile_texts() -> List[str]:
@@ -236,7 +236,7 @@ def get_profile_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('profile', ["👤 Профиль"])
+    return BUTTON_TEXTS.get('profile', ["Profile"])
 
 
 def get_help_texts() -> List[str]:
@@ -246,7 +246,7 @@ def get_help_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('help', ["ℹ️ Помощь"])
+    return BUTTON_TEXTS.get('help', ["Help"])
 
 
 def get_active_requests_texts() -> List[str]:
@@ -256,7 +256,7 @@ def get_active_requests_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('active_requests', ["🛠 Активные заявки"])
+    return BUTTON_TEXTS.get('active_requests', ["Active Requests"])
 
 
 def get_archive_texts() -> List[str]:
@@ -266,7 +266,7 @@ def get_archive_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('archive', ["📦 Архив"])
+    return BUTTON_TEXTS.get('archive', ["Archive"])
 
 
 def get_shift_texts() -> List[str]:
@@ -276,7 +276,7 @@ def get_shift_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('shift', ["🔄 Смена"])
+    return BUTTON_TEXTS.get('shift', ["Shift"])
 
 
 def get_my_shifts_texts() -> List[str]:
@@ -286,7 +286,7 @@ def get_my_shifts_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('my_shifts', ["📋 Мои смены"])
+    return BUTTON_TEXTS.get('my_shifts', ["My Shifts"])
 
 
 def get_switch_role_texts() -> List[str]:
@@ -296,7 +296,7 @@ def get_switch_role_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('switch_role', ["🔀 Выбрать роль"])
+    return BUTTON_TEXTS.get('switch_role', ["Switch Role"])
 
 
 def get_admin_panel_texts() -> List[str]:
@@ -306,7 +306,7 @@ def get_admin_panel_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('admin_panel', ["🔧 Админ панель"])
+    return BUTTON_TEXTS.get('admin_panel', ["Admin Panel"])
 
 
 def get_acceptance_texts() -> List[str]:
@@ -316,7 +316,7 @@ def get_acceptance_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('acceptance', ["✅ Ожидают приёмки"])
+    return BUTTON_TEXTS.get('acceptance', ["Pending Acceptance"])
 
 
 def get_cancel_texts() -> List[str]:
@@ -326,7 +326,7 @@ def get_cancel_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('cancel', ["❌ Отмена"])
+    return BUTTON_TEXTS.get('cancel', ["Cancel"])
 
 
 def get_back_texts() -> List[str]:
@@ -336,7 +336,7 @@ def get_back_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('back', ["🔙 Назад"])
+    return BUTTON_TEXTS.get('back', ["Back"])
 
 
 def get_accept_shift_texts() -> List[str]:
@@ -346,7 +346,7 @@ def get_accept_shift_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('accept_shift', ["🔄 Принять смену"])
+    return BUTTON_TEXTS.get('accept_shift', ["Accept Shift"])
 
 
 def get_end_shift_texts() -> List[str]:
@@ -356,7 +356,7 @@ def get_end_shift_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('end_shift', ["🔚 Сдать смену"])
+    return BUTTON_TEXTS.get('end_shift', ["End Shift"])
 
 
 def get_my_shift_texts() -> List[str]:
@@ -366,7 +366,7 @@ def get_my_shift_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('my_shift', ["ℹ️ Моя смена"])
+    return BUTTON_TEXTS.get('my_shift', ["My Shift"])
 
 
 def get_shift_history_texts() -> List[str]:
@@ -376,7 +376,7 @@ def get_shift_history_texts() -> List[str]:
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
-    return BUTTON_TEXTS.get('shift_history', ["📜 История смен"])
+    return BUTTON_TEXTS.get('shift_history', ["Shift History"])
 
 
 def get_button_texts(button_key: str) -> List[str]:

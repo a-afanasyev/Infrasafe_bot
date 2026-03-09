@@ -41,11 +41,11 @@ def has_admin_access(roles: list = None, user: User = None) -> bool:
 
 
 @router.callback_query(F.data.startswith("unaccepted_remind_"))
-async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Напомнить заявителю о необходимости принять заявку"""
     try:
         # Проверяем права доступа
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         if not has_admin_access(roles=roles, user=user):
             await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
             return
@@ -115,15 +115,15 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
 
     except Exception as e:
         logger.error(f"Ошибка обработки напоминания заявителю: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("unaccepted.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("unaccepted_accept_"))
-async def handle_manager_accept_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_manager_accept_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Менеджер принимает заявку за заявителя (требуется комментарий)"""
     try:
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         # Проверяем права доступа
         if not has_admin_access(roles=roles, user=user):
             await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
@@ -162,19 +162,19 @@ async def handle_manager_accept_request(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка начала принятия заявки менеджером: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("unaccepted.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ManagerAcceptanceStates.awaiting_manager_acceptance_comment)
-async def process_manager_acceptance_comment(message: Message, state: FSMContext, db: Session, user: User = None):
+async def process_manager_acceptance_comment(message: Message, state: FSMContext, db: Session, user: User = None, language: str = "ru"):
     """Обработка комментария менеджера при принятии заявки за заявителя"""
     try:
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
 
-        lang = message.from_user.language_code or "ru"
+        lang = language
         if not request_number:
             await message.answer(get_text("unaccepted.handlers.request_number_not_found", language=lang))
             await state.clear()
@@ -285,17 +285,17 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
 
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки менеджером: {e}")
-        lang = message.from_user.language_code or "ru"
+        lang = language
         await message.answer(get_text("unaccepted.handlers.error_accepting_request", language=lang))
         await state.clear()
 
 
 @router.callback_query(F.data == "unaccepted_back_to_list")
-async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None):
+async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Возврат к списку непринятых заявок"""
     try:
         # Проверяем права доступа
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         if not has_admin_access(roles=roles, user=user):
             await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
             return
@@ -367,5 +367,5 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, r
 
     except Exception as e:
         logger.error(f"Ошибка возврата к списку непринятых заявок: {e}")
-        lang = callback.from_user.language_code or "ru"
+        lang = language
         await callback.answer(get_text("unaccepted.handlers.error_occurred", language=lang), show_alert=True)
