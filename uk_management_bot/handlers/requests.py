@@ -64,12 +64,8 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-# Добавляем middleware в роутер
-from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
-router.message.middleware(auth_middleware)
-router.message.middleware(role_mode_middleware)
-router.callback_query.middleware(auth_middleware)
-router.callback_query.middleware(role_mode_middleware)
+# NOTE: auth_middleware and role_mode_middleware are registered globally in main.py
+# Do NOT register them again at router level to avoid double execution.
 
 # Константа для фильтрации сообщений создания заявки
 # Использует единый источник правды для автоматического масштабирования на все языки
@@ -2477,14 +2473,14 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
 
         # Определяем заголовок в зависимости от фильтра
         if choice == "active":
-            status_title = "Активные заявки"
+            status_title = get_text("requests.handlers.active_requests_title", language=lang)
         elif choice == "archive":
-            status_title = "Архив заявок"
+            status_title = get_text("requests.handlers.archive_requests_title", language=lang)
         else:
-            status_title = "Все заявки"
+            status_title = get_text("requests.handlers.all_requests_title", language=lang)
         message_text = f"📋 {status_title} (страница {current_page}/{total_pages}):\n\n"
         if not page_requests:
-            message_text += "Пока нет заявок. Нажмите 'Создать заявку' в главном меню."
+            message_text += get_text("requests.handlers.no_requests_hint", language=lang)
         else:
             def _icon(st: str) -> str:
                 mapping = {
@@ -2541,7 +2537,7 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
             if r.status == "Уточнение":
                 # Кнопка для ответа на уточнение
                 combined_rows.append([InlineKeyboardButton(
-                    text=f"💬 Ответить на #{r.request_number}",
+                    text=get_text("requests.handlers.reply_to", language=lang).format(number=r.request_number),
                     callback_data=f"replyclarify_{r.request_number}"
                 )])
             # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
@@ -3154,7 +3150,7 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
                         file_id=file_id,
                         request_number=request_number,
                         report_type=report_type,
-                        description=f"Отчет о выполнении работы #{idx}",
+                        description=f"Report #{idx}",
                         uploaded_by=uploaded_by
                     )
 

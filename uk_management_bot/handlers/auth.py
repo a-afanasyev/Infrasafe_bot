@@ -79,8 +79,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session):
         text_parts = message.text.split(maxsplit=1)
         if len(text_parts) < 2:
             await message.answer(
-                get_text("invites.usage_help", language=lang),
-                parse_mode="Markdown"
+                get_text("invites.usage_help", language=lang)
             )
             return
         
@@ -140,7 +139,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session):
         if role == "executor" and invite_data.get("specialization"):
             specializations = invite_data["specialization"].split(",")
             spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
-            invite_info += f"\n\n🛠️ Специализация: {', '.join(spec_names)}"
+            invite_info += "\n\n🛠️ " + get_text("auth.handlers.specialization_label", language=lang) + ": " + ", ".join(spec_names)
         
         # Создаем короткий хеш токена для идентификации
         import hashlib

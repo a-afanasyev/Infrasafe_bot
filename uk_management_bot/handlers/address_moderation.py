@@ -23,6 +23,7 @@ from uk_management_bot.keyboards.address_management import (
     get_cancel_keyboard_inline
 )
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -43,17 +44,15 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext):
         requests = await AddressService.get_pending_requests(db, limit=50)
 
         if not requests:
+            lang = callback.from_user.language_code or "ru"
             await callback.message.edit_text(
-                "📋 <b>Заявки на модерацию</b>\n\n"
-                "✅ Нет заявок на рассмотрении.\n\n"
-                "Все заявки обработаны!",
+                get_text("address_moderation.handlers.moderation_list_empty", language=lang),
                 reply_markup=get_moderation_requests_keyboard([], page=0)
             )
             return
 
-        text = f"📋 <b>Заявки на модерацию</b>\n\n" \
-               f"🔔 Заявок на рассмотрении: {len(requests)}\n\n" \
-               f"Выберите заявку для просмотра:"
+        lang = callback.from_user.language_code or "ru"
+        text = get_text("address_moderation.handlers.moderation_list", language=lang).format(count=len(requests))
 
         await callback.message.edit_text(
             text,
@@ -62,7 +61,7 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка заявок: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=callback.from_user.language_code or "ru"), show_alert=True)
     finally:
         db.close()
 
@@ -76,9 +75,8 @@ async def show_moderation_page(callback: CallbackQuery):
     try:
         requests = await AddressService.get_pending_requests(db, limit=50)
 
-        text = f"📋 <b>Заявки на модерацию</b> (страница {page + 1})\n\n" \
-               f"Всего заявок: {len(requests)}\n\n" \
-               f"Выберите заявку для просмотра:"
+        lang = callback.from_user.language_code or "ru"
+        text = get_text("address_moderation.handlers.moderation_list_page", language=lang).format(page=page + 1, total=len(requests))
 
         await callback.message.edit_text(
             text,
@@ -87,7 +85,7 @@ async def show_moderation_page(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы заявок: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=callback.from_user.language_code or "ru"), show_alert=True)
     finally:
         db.close()
 
@@ -118,12 +116,14 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
         user_apartment = result.scalar_one_or_none()
 
         if not user_apartment:
-            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(get_text("address_moderation.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         if user_apartment.status != 'pending':
+            lang = callback.from_user.language_code or "ru"
             await callback.answer(
-                f"⚠️ Заявка уже обработана (статус: {user_apartment.status})",
+                get_text("address_moderation.handlers.request_already_processed", language=lang).format(status=user_apartment.status),
                 show_alert=True
             )
             return
@@ -134,12 +134,13 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
         if not user_name:
             user_name = f"ID: {user.telegram_id}"
 
-        username = f"@{user.username}" if user.username else "Нет username"
-        phone = user.phone if user.phone else "Не указан"
+        lang = callback.from_user.language_code or "ru"
+        username = f"@{user.username}" if user.username else get_text("address_moderation.handlers.no_username", language=lang)
+        phone = user.phone if user.phone else get_text("address_moderation.handlers.not_specified", language=lang)
 
         # Информация о квартире
         apartment = user_apartment.apartment
-        apartment_info = f"Квартира {apartment.apartment_number}"
+        apartment_info = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
 
         if apartment.building:
             apartment_info = f"{apartment_info}, {apartment.building.address}"
@@ -147,23 +148,14 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
                 apartment_info = f"{apartment_info} ({apartment.building.yard.name})"
 
         # Дополнительная информация
-        requested_date = user_apartment.requested_at.strftime('%d.%m.%Y %H:%M') if user_apartment.requested_at else "Неизвестно"
-        is_owner_text = "Да (владелец)" if user_apartment.is_owner else "Нет (проживающий)"
+        requested_date = user_apartment.requested_at.strftime('%d.%m.%Y %H:%M') if user_apartment.requested_at else get_text("address_moderation.handlers.unknown", language=lang)
+        is_owner_text = get_text("address_moderation.handlers.yes_owner", language=lang) if user_apartment.is_owner else get_text("address_moderation.handlers.no_resident", language=lang)
 
-        text = f"📋 <b>Заявка на квартиру</b>\n\n" \
-               f"<b>👤 Пользователь:</b>\n" \
-               f"• Имя: {user_name}\n" \
-               f"• Username: {username}\n" \
-               f"• Телефон: {phone}\n" \
-               f"• Telegram ID: <code>{user.telegram_id}</code>\n\n" \
-               f"<b>🏠 Квартира:</b>\n" \
-               f"{apartment_info}\n\n" \
-               f"<b>ℹ️ Дополнительно:</b>\n" \
-               f"• Владелец: {is_owner_text}\n" \
-               f"• Дата заявки: {requested_date}\n\n" \
-               f"<b>Что делать?</b>\n" \
-               f"✅ Подтвердить - пользователь получит доступ к квартире\n" \
-               f"❌ Отклонить - заявка будет отклонена"
+        text = get_text("address_moderation.handlers.request_details", language=lang).format(
+                user_name=user_name, username=username, phone=phone,
+                telegram_id=user.telegram_id, apartment_info=apartment_info,
+                is_owner_text=is_owner_text, requested_date=requested_date
+            )
 
         # Сохраняем ID заявки в состояние
         await state.update_data(user_apartment_id=user_apartment_id)
@@ -176,7 +168,7 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке информации о заявке {user_apartment_id}: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("address_moderation.handlers.error_loading_data", language=callback.from_user.language_code or "ru"), show_alert=True)
     finally:
         db.close()
 
@@ -193,13 +185,9 @@ async def start_approve_request(callback: CallbackQuery, state: FSMContext):
     await state.update_data(user_apartment_id=user_apartment_id)
     await state.set_state(ApartmentModerationStates.waiting_for_approval_comment)
 
+    lang = callback.from_user.language_code or "ru"
     await callback.message.edit_text(
-        "✅ <b>Подтверждение заявки</b>\n\n"
-        "Введите комментарий для пользователя (необязательно):\n\n"
-        "Например:\n"
-        "• \"Добро пожаловать!\"\n"
-        "• \"Документы проверены\"\n\n"
-        "Или отправьте <code>/skip</code> чтобы подтвердить без комментария.",
+        get_text("address_moderation.handlers.approve_comment_prompt", language=lang),
         reply_markup=get_cancel_keyboard_inline()
     )
 
@@ -230,17 +218,19 @@ async def process_approve_comment(message: Message, state: FSMContext):
         user_apartment = result.scalar_one_or_none()
 
         if not user_apartment:
+            lang = message.from_user.language_code or "ru"
             await message.answer(
-                "❌ Заявка не найдена",
+                get_text("address_moderation.handlers.request_not_found", language=lang),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
             )
             await state.clear()
             return
 
         # Сохраняем данные для уведомления
+        lang = message.from_user.language_code or "ru"
         user_telegram_id = user_apartment.user.telegram_id
         apartment = user_apartment.apartment
-        apartment_address = f"Квартира {apartment.apartment_number}"
+        apartment_address = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
         if apartment.building:
             apartment_address = f"{apartment_address}, {apartment.building.address}"
             if apartment.building.yard:
@@ -251,7 +241,7 @@ async def process_approve_comment(message: Message, state: FSMContext):
         reviewer = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if not reviewer:
             await message.answer(
-                "❌ Ошибка: администратор не найден",
+                get_text("address_moderation.handlers.admin_not_found", language=lang),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
             )
             await state.clear()
@@ -267,7 +257,7 @@ async def process_approve_comment(message: Message, state: FSMContext):
 
         if not success:
             await message.answer(
-                f"❌ Ошибка подтверждения заявки:\n{error}",
+                get_text("address_moderation.handlers.approve_error", language=lang).format(error=error),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
             )
             await state.clear()
@@ -281,12 +271,10 @@ async def process_approve_comment(message: Message, state: FSMContext):
             comment=comment
         )
 
-        comment_text = f"\n\n<b>Комментарий:</b> {comment}" if comment else ""
+        comment_text = "\n\n<b>" + get_text("address_moderation.handlers.comment_label", language=lang) + ":</b> " + comment if comment else ""
 
         await message.answer(
-            f"✅ <b>Заявка успешно подтверждена!</b>\n\n"
-            f"Пользователь получит уведомление о подтверждении."
-            f"{comment_text}",
+            get_text("address_moderation.handlers.approve_success", language=lang) + comment_text,
             reply_markup=get_main_keyboard_for_role("manager", ["manager"])
         )
 
@@ -295,7 +283,7 @@ async def process_approve_comment(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка при подтверждении заявки: {e}")
         await message.answer(
-            f"❌ Ошибка при подтверждении заявки: {str(e)}",
+            get_text("address_moderation.handlers.approve_exception", language=lang).format(error=str(e)),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"])
         )
     finally:
@@ -315,13 +303,9 @@ async def start_reject_request(callback: CallbackQuery, state: FSMContext):
     await state.update_data(user_apartment_id=user_apartment_id)
     await state.set_state(ApartmentModerationStates.waiting_for_rejection_comment)
 
+    lang = callback.from_user.language_code or "ru"
     await callback.message.edit_text(
-        "❌ <b>Отклонение заявки</b>\n\n"
-        "Введите причину отклонения для пользователя:\n\n"
-        "Например:\n"
-        "• \"Адрес не подтвержден\"\n"
-        "• \"Неверные документы\"\n"
-        "• \"Обратитесь в офис для уточнения\"",
+        get_text("address_moderation.handlers.reject_reason_prompt", language=lang),
         reply_markup=get_cancel_keyboard_inline()
     )
 
@@ -332,9 +316,9 @@ async def process_reject_comment(message: Message, state: FSMContext):
     comment = message.text.strip()
 
     if len(comment) < 3:
+        lang = message.from_user.language_code or "ru"
         await message.answer(
-            "❌ Причина отклонения должна содержать минимум 3 символа.\n\n"
-            "Попробуйте еще раз:"
+            get_text("address_moderation.handlers.reject_reason_too_short", language=lang)
         )
         return
 
@@ -359,17 +343,19 @@ async def process_reject_comment(message: Message, state: FSMContext):
         user_apartment = result.scalar_one_or_none()
 
         if not user_apartment:
+            lang = message.from_user.language_code or "ru"
             await message.answer(
-                "❌ Заявка не найдена",
+                get_text("address_moderation.handlers.request_not_found", language=lang),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
             )
             await state.clear()
             return
 
         # Сохраняем данные для уведомления
+        lang = message.from_user.language_code or "ru"
         user_telegram_id = user_apartment.user.telegram_id
         apartment = user_apartment.apartment
-        apartment_address = f"Квартира {apartment.apartment_number}"
+        apartment_address = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
         if apartment.building:
             apartment_address = f"{apartment_address}, {apartment.building.address}"
             if apartment.building.yard:
@@ -380,7 +366,7 @@ async def process_reject_comment(message: Message, state: FSMContext):
         reviewer = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         if not reviewer:
             await message.answer(
-                "❌ Ошибка: администратор не найден",
+                get_text("address_moderation.handlers.admin_not_found", language=lang),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
             )
             await state.clear()
@@ -396,7 +382,7 @@ async def process_reject_comment(message: Message, state: FSMContext):
 
         if not success:
             await message.answer(
-                f"❌ Ошибка отклонения заявки:\n{error}",
+                get_text("address_moderation.handlers.reject_error", language=lang).format(error=error),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"])
             )
             await state.clear()
@@ -411,9 +397,7 @@ async def process_reject_comment(message: Message, state: FSMContext):
         )
 
         await message.answer(
-            f"✅ <b>Заявка успешно отклонена</b>\n\n"
-            f"<b>Причина:</b> {comment}\n\n"
-            f"Пользователь получит уведомление об отклонении.",
+            get_text("address_moderation.handlers.reject_success", language=lang).format(comment=comment),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"])
         )
 
@@ -422,7 +406,7 @@ async def process_reject_comment(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка при отклонении заявки: {e}")
         await message.answer(
-            f"❌ Ошибка при отклонении заявки: {str(e)}",
+            get_text("address_moderation.handlers.reject_exception", language=lang).format(error=str(e)),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"])
         )
     finally:
@@ -441,12 +425,13 @@ async def cancel_moderation_action(callback: CallbackQuery, state: FSMContext):
 
     if current_state:
         await state.clear()
-        await callback.message.edit_text("❌ Действие отменено")
+        lang = callback.from_user.language_code or "ru"
+        await callback.message.edit_text(get_text("address_moderation.handlers.action_cancelled", language=lang))
 
         # Вернуться к списку заявок
         await show_moderation_list(callback, state)
     else:
-        await callback.answer("Нет активных действий")
+        await callback.answer(get_text("address_moderation.handlers.no_active_actions", language=callback.from_user.language_code or "ru"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -486,17 +471,12 @@ async def send_approval_notification(user_apartment_id: int, user_telegram_id: i
             lang = user.language or 'ru'
 
             # Формируем текст уведомления
-            notification_text = (
-                f"✅ <b>Ваша заявка на квартиру одобрена!</b>\n\n"
-                f"🏠 <b>Квартира:</b> {apartment_address}\n"
-            )
+            notification_text = get_text("address_moderation.handlers.approval_notification", language=lang).format(apartment_address=apartment_address)
 
             if comment:
-                notification_text += f"\n💬 <b>Комментарий администратора:</b>\n{comment}\n"
+                notification_text += "\n\n💬 <b>" + get_text("address_moderation.handlers.admin_comment_label", language=lang) + ":</b>\n" + comment
 
-            notification_text += (
-                f"\nТеперь вы можете создавать заявки с этим адресом."
-            )
+            notification_text += "\n\n" + get_text("address_moderation.handlers.can_create_requests", language=lang)
 
             # Отправляем уведомление
             await bot.send_message(user_telegram_id, notification_text)
@@ -542,11 +522,8 @@ async def send_rejection_notification(user_apartment_id: int, user_telegram_id: 
             lang = user.language or 'ru'
 
             # Формируем текст уведомления
-            notification_text = (
-                f"❌ <b>Ваша заявка на квартиру отклонена</b>\n\n"
-                f"🏠 <b>Квартира:</b> {apartment_address}\n\n"
-                f"📝 <b>Причина отклонения:</b>\n{comment}\n\n"
-                f"Для уточнения информации обратитесь к администратору."
+            notification_text = get_text("address_moderation.handlers.rejection_notification", language=lang).format(
+                apartment_address=apartment_address, comment=comment
             )
 
             # Отправляем уведомление

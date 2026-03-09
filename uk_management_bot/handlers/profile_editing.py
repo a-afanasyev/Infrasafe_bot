@@ -46,7 +46,8 @@ async def handle_edit_profile_start(callback: CallbackQuery, state: FSMContext, 
         # Получаем данные пользователя
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            lang = get_user_language(db, callback.from_user.id)
+            await callback.answer(get_text("profile_editing.handlers.user_not_found", language=lang), show_alert=True)
             return
 
         # Показываем меню редактирования с текущими значениями
@@ -59,7 +60,8 @@ async def handle_edit_profile_start(callback: CallbackQuery, state: FSMContext, 
         
     except Exception as e:
         logger.error(f"Ошибка начала редактирования профиля: {e}")
-        await callback.answer(f"Произошла ошибка: {str(e)}", show_alert=True)
+        lang = get_user_language(db, callback.from_user.id) if db else "ru"
+        await callback.answer(get_text("profile_editing.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "cancel_profile_edit")
@@ -69,7 +71,8 @@ async def handle_cancel_profile_edit(callback: CallbackQuery, state: FSMContext,
         # Получаем данные пользователя для отображения профиля
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+            lang = get_user_language(db, callback.from_user.id)
+            await callback.answer(get_text("profile_editing.handlers.user_not_found", language=lang), show_alert=True)
             return
         
         # Парсим роли
@@ -111,7 +114,8 @@ async def handle_cancel_profile_edit(callback: CallbackQuery, state: FSMContext,
         logger.error(f"Ошибка отмены редактирования профиля: {e}")
         logger.error(f"Тип ошибки: {type(e).__name__}")
         logger.error(f"Детали ошибки: {str(e)}")
-        await callback.answer(f"Ошибка при отмене редактирования: {type(e).__name__}", show_alert=True)
+        lang = get_user_language(db, callback.from_user.id) if db else "ru"
+        await callback.answer(get_text("profile_editing.handlers.error_cancel_edit", language=lang), show_alert=True)
 
 
 # ===== РЕДАКТИРОВАНИЕ ТЕЛЕФОНА =====
@@ -132,7 +136,8 @@ async def handle_edit_phone(callback: CallbackQuery, state: FSMContext, db: Sess
         
     except Exception as e:
         logger.error(f"Ошибка редактирования телефона: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = get_user_language(db, callback.from_user.id) if db else "ru"
+        await callback.answer(get_text("profile_editing.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ProfileEditingStates.waiting_for_phone)
@@ -191,7 +196,8 @@ async def handle_edit_language(callback: CallbackQuery, state: FSMContext, db: S
         
     except Exception as e:
         logger.error(f"Ошибка редактирования языка: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = get_user_language(db, callback.from_user.id) if db else "ru"
+        await callback.answer(get_text("profile_editing.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("set_language_"))
@@ -202,7 +208,7 @@ async def handle_language_choice(callback: CallbackQuery, state: FSMContext, db:
         selected_lang = callback.data.replace("set_language_", "")
         
         if selected_lang not in ["ru", "uz"]:
-            await callback.answer("Неподдерживаемый язык", show_alert=True)
+            await callback.answer(get_text("profile_editing.handlers.unsupported_language", language=lang), show_alert=True)
             return
         
         # Обновляем язык в базе данных
@@ -233,7 +239,7 @@ async def handle_language_choice(callback: CallbackQuery, state: FSMContext, db:
             lang = get_user_language(db, callback.from_user.id) if db else "ru"
             await callback.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
         except:
-            await callback.answer("Произошла ошибка", show_alert=True)
+            await callback.answer(get_text("profile_editing.handlers.error_occurred", language="ru"), show_alert=True)
         await state.clear()
 
 
@@ -277,8 +283,8 @@ async def handle_cancel_input(callback: CallbackQuery, state: FSMContext, db: Se
         logger.error(f"Детали ошибки: {str(e)}")
         
         # Показываем пользователю более информативное сообщение об ошибке
-        error_message = f"Ошибка при отмене: {type(e).__name__}"
-        await callback.answer(error_message, show_alert=True)
+        lang = get_user_language(db, callback.from_user.id) if db else "ru"
+        await callback.answer(get_text("profile_editing.handlers.error_cancel", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "cancel_language_choice")
@@ -290,7 +296,7 @@ async def handle_cancel_language_choice(callback: CallbackQuery, state: FSMConte
     except Exception as e:
         logger.error(f"Ошибка отмены выбора языка: {e}")
         logger.error(f"Тип ошибки: {type(e).__name__}")
-        await callback.answer(f"Ошибка при отмене выбора языка: {type(e).__name__}", show_alert=True)
+        await callback.answer(get_text("profile_editing.handlers.error_cancel_language", language="ru"), show_alert=True)
 
 
 # ===== РЕДАКТИРОВАНИЕ ФИО =====
@@ -311,7 +317,8 @@ async def handle_edit_first_name(callback: CallbackQuery, state: FSMContext, db:
         
     except Exception as e:
         logger.error(f"Ошибка редактирования имени: {e}")
-        await callback.answer("Произошла ошибка", show_alert=True)
+        lang = get_user_language(db, callback.from_user.id) if db else "ru"
+        await callback.answer(get_text("profile_editing.handlers.error_occurred", language=lang), show_alert=True)
 
 
 @router.message(ProfileEditingStates.waiting_for_first_name)

@@ -63,7 +63,7 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session):
             from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
             onboarding_keyboard = ReplyKeyboardMarkup(
                 keyboard=[
-                    [KeyboardButton(text="📱 Указать телефон")]
+                    [KeyboardButton(text=get_text("onboarding.handlers.btn_specify_phone", language=lang))]
                 ],
                 resize_keyboard=True
             )
@@ -242,8 +242,8 @@ async def complete_onboarding(message: Message, state: FSMContext, db: Session, 
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     completion_keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📄 Загрузить документы")],
-            [KeyboardButton(text="✅ Завершить без документов")]
+            [KeyboardButton(text=get_text("onboarding.handlers.btn_upload_documents", language=lang))],
+            [KeyboardButton(text=get_text("onboarding.handlers.btn_complete_without_docs", language=lang))]
         ],
         resize_keyboard=True
     )
@@ -359,8 +359,8 @@ async def process_document_type_selection(message: Message, state: FSMContext, d
     # Запрашиваем файл
     document_type_name = get_document_type_name(document_type, lang)
     await message.answer(
-        f"📤 {get_text('onboarding.documents.upload_file', language=lang)}\n\n"
-        f"Тип документа: {document_type_name}",
+        f"📤 {get_text('onboarding.documents.upload_file', language=lang)}\n\n" +
+        get_text("onboarding.handlers.document_type_label", language=lang).format(document_type_name=document_type_name),
         reply_markup=ReplyKeyboardRemove()
     )
     await state.set_state(OnboardingStates.waiting_for_document_file)
@@ -421,9 +421,9 @@ async def process_document_file(message: Message, state: FSMContext, db: Session
     document_type_name = get_document_type_name(document_type, lang)
     confirmation_text = (
         f"📄 {get_text('onboarding.documents.confirm_upload', language=lang)}\n\n"
-        f"Тип документа: {document_type_name}\n"
-        f"Файл: {file_name}\n"
-        f"Размер: {file_size // 1024} KB"
+        f"{get_text('onboarding.handlers.doc_type_field', language=lang)}: {document_type_name}\n"
+        f"{get_text('onboarding.handlers.file_field', language=lang)}: {file_name}\n"
+        f"{get_text('onboarding.handlers.size_field', language=lang)}: {file_size // 1024} KB"
     )
     
     await message.answer(
@@ -501,8 +501,8 @@ async def save_document(message: Message, state: FSMContext, db: Session):
         document_type_name = get_document_type_name(document_type, lang)
         await message.answer(
             f"✅ {get_text('onboarding.documents.document_saved', language=lang)}\n\n"
-            f"Тип: {document_type_name}\n"
-            f"Файл: {file_name}",
+            f"{get_text('onboarding.handlers.type_short_field', language=lang)}: {document_type_name}\n"
+            f"{get_text('onboarding.handlers.file_field', language=lang)}: {file_name}",
             reply_markup=get_onboarding_completion_keyboard(lang)
         )
         
@@ -530,8 +530,8 @@ async def skip_documents(message: Message, state: FSMContext, db: Session):
     lang = message.from_user.language_code or "ru"
     
     await message.answer(
-        f"⏭️ {get_text('onboarding.documents.skip_documents', language=lang)}\n\n"
-        f"Вы можете загрузить документы позже в настройках профиля.",
+        f"⏭️ {get_text('onboarding.documents.skip_documents', language=lang)}\n\n" +
+        get_text("onboarding.handlers.can_upload_later", language=lang),
         reply_markup=get_onboarding_completion_keyboard(lang)
     )
     await state.clear()
@@ -559,7 +559,7 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
         
         if documents_summary['total_documents'] > 0:
             completion_text += f"\n\n{get_text('onboarding.documents.documents_summary', language=lang)}"
-            completion_text += f"\n📄 Всего документов: {documents_summary['total_documents']}"
+            completion_text += f"\n📄 {get_text('onboarding.handlers.total_documents', language=lang)}: {documents_summary['total_documents']}"
             
             for doc_type, count in documents_summary['documents_by_type'].items():
                 doc_type_name = get_document_type_name(DocumentType(doc_type), lang)

@@ -112,16 +112,13 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
         ).all()
         
         # Формируем информацию о пользователе
-        user_info = f"""
-👤 **Информация о пользователе**
-
-📝 **Основные данные:**
-• Имя: {user.first_name or 'Не указано'}
-• Фамилия: {user.last_name or 'Не указано'}
-• Username: @{user.username or 'Не указано'}
-• Телефон: {user.phone or 'Не указано'}
-
-📍 **Адреса:**"""
+        not_specified = get_text("user_verification.handlers.not_specified", language=lang)
+        user_info = get_text("user_verification.handlers.user_info_header", language=lang).format(
+            first_name=user.first_name or not_specified,
+            last_name=user.last_name or not_specified,
+            username=user.username or not_specified,
+            phone=user.phone or not_specified
+        )
 
         # ОБНОВЛЕНО: Используем новую систему квартир
         if user.user_apartments:
@@ -131,48 +128,45 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
                 for ua in approved_apartments:
                     apartment = ua.apartment
                     primary_marker = " ⭐" if ua.is_primary else ""
-                    owner_marker = " (Владелец)" if ua.is_owner else ""
-                    address = apartment.full_address if hasattr(apartment, 'full_address') else f"Квартира {apartment.apartment_number}"
+                    owner_marker = " (" + get_text("user_verification.handlers.owner", language=lang) + ")" if ua.is_owner else ""
+                    address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("user_verification.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
                     user_info += f"• {address}{primary_marker}{owner_marker}\n"
             else:
-                user_info += "\n• Адреса не указаны (заявки на рассмотрении)\n"
+                user_info += "\n• " + get_text("user_verification.handlers.addresses_pending", language=lang) + "\n"
         else:
-            user_info += "\n• Адреса не указаны\n"
+            user_info += "\n• " + get_text("user_verification.handlers.addresses_not_specified", language=lang) + "\n"
 
-        user_info += """
+        verification_status = get_text(f'verification.status.{user.verification_status}', language=lang)
+        user_info += "\n\n📋 <b>" + get_text("user_verification.handlers.verification_status_label", language=lang) + ":</b> " + verification_status
 
-📋 **Статус верификации:** {get_text(f'verification.status.{user.verification_status}', language=lang)}
-"""
-        
         if user.verification_notes:
-            user_info += f"\n📝 **Комментарии:** {user.verification_notes}"
-        
+            user_info += "\n📝 <b>" + get_text("user_verification.handlers.comments_label", language=lang) + ":</b> " + user.verification_notes
+
         # Добавляем информацию о документах
         if documents:
-            user_info += f"\n\n📄 **Документы ({len(documents)}):**"
+            user_info += "\n\n📄 <b>" + get_text("user_verification.handlers.documents_count", language=lang).format(count=len(documents)) + ":</b>"
             for doc in documents:
                 status_emoji = "✅" if doc.verification_status == VerificationStatus.APPROVED else "⏳" if doc.verification_status == VerificationStatus.PENDING else "❌"
                 doc_type_name = get_text(f'verification.document_types.{doc.document_type.value}', language=lang)
                 user_info += f"\n{status_emoji} {doc_type_name}"
         else:
-            user_info += f"\n\n📄 **Документы:** Не загружены"
+            user_info += "\n\n📄 <b>" + get_text("user_verification.handlers.documents_label", language=lang) + ":</b> " + get_text("user_verification.handlers.not_uploaded", language=lang)
         
         # Добавляем информацию о правах доступа
         if access_rights:
-            user_info += f"\n\n🔑 **Права доступа ({len(access_rights)}):**"
+            user_info += "\n\n🔑 <b>" + get_text("user_verification.handlers.access_rights_count", language=lang).format(count=len(access_rights)) + ":</b>"
             for right in access_rights:
                 user_info += f"\n• {right.access_level.value}"
                 if right.apartment_number:
-                    user_info += f" (кв. {right.apartment_number})"
+                    user_info += f" ({get_text('user_verification.handlers.apt_short', language=lang)} {right.apartment_number})"
                 elif right.house_number:
-                    user_info += f" (дом {right.house_number})"
+                    user_info += f" ({get_text('user_verification.handlers.house_short', language=lang)} {right.house_number})"
                 elif right.yard_name:
-                    user_info += f" (двор {right.yard_name})"
-        
+                    user_info += f" ({get_text('user_verification.handlers.yard_short', language=lang)} {right.yard_name})"
+
         await callback.message.edit_text(
             user_info,
-            reply_markup=get_user_verification_keyboard(user_id, lang),
-            parse_mode="Markdown"
+            reply_markup=get_user_verification_keyboard(user_id, lang)
         )
         
         await callback.answer()
@@ -249,31 +243,33 @@ async def view_user_documents(callback: CallbackQuery, db: Session, roles: list 
         # Получаем документы пользователя
         documents = db.query(UserDocument).filter(UserDocument.user_id == user_id).order_by(UserDocument.created_at.desc()).all()
         
+        unknown_name = get_text("user_verification.handlers.unknown", language=lang)
+        user_display_name = user.first_name or user.username or unknown_name
+
         if not documents:
             await callback.message.edit_text(
-                f"📄 **Документы пользователя {user.first_name or user.username or 'Неизвестный'}**\n\n"
-                f"Документы не загружены.",
-                reply_markup=get_cancel_keyboard(lang),
-                parse_mode="Markdown"
+                get_text("user_verification.handlers.user_documents_title", language=lang).format(name=user_display_name) + "\n\n" +
+                get_text("user_verification.handlers.documents_not_loaded", language=lang),
+                reply_markup=get_cancel_keyboard(lang)
             )
             await callback.answer()
             return
-        
+
         # Формируем список документов
-        documents_text = f"📄 **Документы пользователя {user.first_name or user.username or 'Неизвестный'}**\n\n"
-        
+        documents_text = get_text("user_verification.handlers.user_documents_title", language=lang).format(name=user_display_name) + "\n\n"
+
         for i, doc in enumerate(documents, 1):
             status_emoji = "✅" if doc.verification_status == VerificationStatus.APPROVED else "⏳" if doc.verification_status == VerificationStatus.PENDING else "❌"
             doc_type_name = get_text(f'verification.document_types.{doc.document_type.value}', language=lang)
-            
-            documents_text += f"{i}. {status_emoji} **{doc_type_name}**\n"
-            documents_text += f"   📁 Файл: {doc.file_name or 'Без названия'}\n"
+
+            documents_text += f"{i}. {status_emoji} <b>{doc_type_name}</b>\n"
+            documents_text += f"   📁 {get_text('user_verification.handlers.file_label', language=lang)}: {doc.file_name or get_text('user_verification.handlers.no_title', language=lang)}\n"
             if doc.file_size:
-                documents_text += f"   📏 Размер: {doc.file_size // 1024} KB\n"
-            documents_text += f"   📅 Загружен: {doc.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-            
+                documents_text += f"   📏 {get_text('user_verification.handlers.size_label', language=lang)}: {doc.file_size // 1024} KB\n"
+            documents_text += f"   📅 {get_text('user_verification.handlers.uploaded_date', language=lang)}: {doc.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+
             if doc.verification_notes:
-                documents_text += f"   📝 Комментарий: {doc.verification_notes}\n"
+                documents_text += f"   📝 {get_text('user_verification.handlers.comment_label', language=lang)}: {doc.verification_notes}\n"
             
             documents_text += "\n"
         
@@ -283,12 +279,11 @@ async def view_user_documents(callback: CallbackQuery, db: Session, roles: list 
         
         await callback.message.edit_text(
             documents_text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка просмотра документов пользователя: {e}")
         await callback.answer(
@@ -317,7 +312,7 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
         document = db.query(UserDocument).filter(UserDocument.id == document_id).first()
         if not document:
             await callback.answer(
-                "Документ не найден",
+                get_text("user_verification.handlers.document_not_found", language=lang),
                 show_alert=True
             )
             return
@@ -339,7 +334,7 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
                     document=document.file_id,
                     caption=caption
                 )
-                await callback.answer("Документ отправлен в личные сообщения")
+                await callback.answer(get_text("user_verification.handlers.document_sent_dm", language=lang))
             except Exception as doc_error:
                 # Если ошибка "can't use file of type Photo", отправляем как фото
                 if "can't use file of type Photo" in str(doc_error):
@@ -349,12 +344,12 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
                         photo=document.file_id,
                         caption=caption
                     )
-                    await callback.answer("Документ отправлен в личные сообщения")
+                    await callback.answer(get_text("user_verification.handlers.document_sent_dm", language=lang))
                 else:
                     raise  # Пробрасываем другие ошибки
         except Exception as e:
             logger.error(f"Ошибка отправки документа: {e}")
-            await callback.answer("Ошибка отправки документа", show_alert=True)
+            await callback.answer(get_text("user_verification.handlers.error_sending_document", language=lang), show_alert=True)
         finally:
             await bot.session.close()
         
@@ -483,22 +478,21 @@ async def verify_document(callback: CallbackQuery, db: Session, roles: list = No
             return
         
         # Показываем информацию о документе
-        document_info = f"""
-📄 **Информация о документе**
+        doc_size = str(document.file_size) if document.file_size else get_text("user_verification.handlers.unknown_value", language=lang)
+        doc_status = get_text(f'verification.document_status.{document.verification_status.value}', language=lang)
+        document_info = get_text("user_verification.handlers.document_info", language=lang).format(
+            doc_type=document.document_type.value,
+            uploaded=document.created_at.strftime('%d.%m.%Y %H:%M'),
+            size=doc_size,
+            status=doc_status
+        )
 
-📋 **Тип:** {document.document_type.value}
-📅 **Загружен:** {document.created_at.strftime('%d.%m.%Y %H:%M')}
-📊 **Размер:** {document.file_size or 'Неизвестно'} байт
-📝 **Статус:** {get_text(f'verification.document_status.{document.verification_status.value}', language=lang)}
-"""
-        
         if document.verification_notes:
-            document_info += f"\n📝 **Комментарии:** {document.verification_notes}"
+            document_info += "\n📝 <b>" + get_text("user_verification.handlers.comments_label", language=lang) + ":</b> " + document.verification_notes
         
         await callback.message.edit_text(
             document_info,
-            reply_markup=get_document_verification_keyboard(document_id, lang),
-            parse_mode="Markdown"
+            reply_markup=get_document_verification_keyboard(document_id, lang)
         )
         
         await callback.answer()
@@ -572,7 +566,7 @@ async def reject_document(callback: CallbackQuery, db: Session, roles: list = No
             document_id=document_id,
             admin_id=callback.from_user.id,
             status=VerificationStatus.REJECTED,
-            notes="Документ отклонен администратором"
+            notes=get_text("user_verification.handlers.document_rejected_by_admin", language=lang)
         )
         
         if success:
@@ -630,31 +624,27 @@ async def manage_access_rights(callback: CallbackQuery, db: Session, roles: list
         ).all()
         
         # Формируем информацию о правах доступа
-        rights_info = f"""
-🔑 **Права доступа пользователя**
+        rights_info = get_text("user_verification.handlers.access_rights_title", language=lang).format(
+            name=f"{user.first_name} {user.last_name or ''}".strip(),
+            count=len(current_rights)
+        )
 
-👤 **Пользователь:** {user.first_name} {user.last_name or ''}
-
-📋 **Текущие права ({len(current_rights)}):**
-"""
-        
         if current_rights:
             for right in current_rights:
                 rights_info += f"• {right.access_level.value}"
                 if right.apartment_number:
-                    rights_info += f" (кв. {right.apartment_number})"
+                    rights_info += f" ({get_text('user_verification.handlers.apt_short', language=lang)} {right.apartment_number})"
                 elif right.house_number:
-                    rights_info += f" (дом {right.house_number})"
+                    rights_info += f" ({get_text('user_verification.handlers.house_short', language=lang)} {right.house_number})"
                 elif right.yard_name:
-                    rights_info += f" (двор {right.yard_name})"
+                    rights_info += f" ({get_text('user_verification.handlers.yard_short', language=lang)} {right.yard_name})"
                 rights_info += "\n"
         else:
-            rights_info += "• Права доступа не назначены\n"
+            rights_info += "• " + get_text("user_verification.handlers.no_access_rights", language=lang) + "\n"
         
         await callback.message.edit_text(
             rights_info,
-            reply_markup=get_access_rights_keyboard(user_id, lang),
-            parse_mode="Markdown"
+            reply_markup=get_access_rights_keyboard(user_id, lang)
         )
         
         await callback.answer()
@@ -720,14 +710,15 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
                     
                     # Создаем клавиатуру с кнопкой перезапуска
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                    target_lang = target_user.language or "ru"
                     restart_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")]
+                        [InlineKeyboardButton(text=get_text("user_verification.handlers.btn_restart_bot", language=target_lang), callback_data="restart_bot")]
                     ])
-                    
+
                     # Отправляем уведомление об одобрении с кнопкой перезапуска
                     await bot.send_message(
                         chat_id=target_user.telegram_id,
-                        text="✅ Ваша заявка одобрена! Нажмите кнопку ниже для перезапуска бота.",
+                        text=get_text("user_verification.handlers.application_approved_notification", language=target_lang),
                         reply_markup=restart_keyboard
                     )
                     
@@ -773,7 +764,7 @@ async def reject_user_verification(callback: CallbackQuery, db: Session, roles: 
         success = verification_service.reject_verification(
             user_id=user_id,
             admin_id=callback.from_user.id,
-            notes="Верификация отклонена администратором"
+            notes=get_text("user_verification.handlers.verification_rejected_by_admin", language=lang)
         )
         
         if success:

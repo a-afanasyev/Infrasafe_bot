@@ -16,6 +16,7 @@ from uk_management_bot.keyboards.base import (
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
 from uk_management_bot.services.notification_service import async_notify_role_switched
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_role
 import logging
 
@@ -44,12 +45,8 @@ SHIFT_TEXTS = get_shift_texts()
 HELP_TEXTS = get_help_texts()
 BACK_TEXTS = get_back_texts()
 
-# Добавляем middleware в роутер
-from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
-router.message.middleware(auth_middleware)
-router.message.middleware(role_mode_middleware)
-router.callback_query.middleware(auth_middleware)
-router.callback_query.middleware(role_mode_middleware)
+# NOTE: auth_middleware and role_mode_middleware are registered globally in main.py
+# Do NOT register them again at router level to avoid double execution.
 
 class AdminPasswordStates(StatesGroup):
     """Состояния для ввода пароля администратора"""
@@ -81,8 +78,8 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
             
             try:
                 # Проверяем rate limiting
-                if not InviteRateLimiter.is_allowed(message.from_user.id):
-                    remaining_minutes = InviteRateLimiter.get_remaining_time(message.from_user.id) // 60
+                if not await InviteRateLimiter.is_allowed(message.from_user.id):
+                    remaining_minutes = await InviteRateLimiter.get_remaining_time(message.from_user.id) // 60
                     await message.answer(
                         get_text("invites.rate_limited", language=lang, minutes=remaining_minutes)
                     )
@@ -93,7 +90,8 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
                 invite_service = InviteService(db)
                 
                 try:
-                    invite_data = invite_service.validate_invite(token)
+                    # Atomically validate and mark nonce as used in one transaction
+                    invite_data = invite_service.validate_invite(token, mark_used_by=message.from_user.id)
                 except ValueError as e:
                     error_msg = str(e).lower()
                     if "expired" in error_msg:
@@ -102,10 +100,10 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
                         await message.answer(get_text("invites.used_token", language=lang))
                     else:
                         await message.answer(get_text("invites.invalid_token", language=lang))
-                    
+
                     logger.info(f"Невалидный токен в /start от {message.from_user.id}: {e}")
                     return
-                
+
                 # Обрабатываем присоединение
                 user = await auth_service.process_invite_join(
                     telegram_id=message.from_user.id,
@@ -113,13 +111,6 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
                     username=message.from_user.username,
                     first_name=message.from_user.first_name,
                     last_name=message.from_user.last_name
-                )
-                
-                # Отмечаем nonce как использованный
-                invite_service.mark_nonce_used(
-                    invite_data["nonce"], 
-                    message.from_user.id, 
-                    invite_data
                 )
                 
                 # Отправляем подтверждение
@@ -136,7 +127,7 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
                 if role == "executor" and invite_data.get("specialization"):
                     specializations = invite_data["specialization"].split(",")
                     spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
-                    success_message += f"\nСпециализация: {', '.join(spec_names)}"
+                    success_message += "\n" + get_text("base.handlers.specialization_label", language=lang) + ": " + ", ".join(spec_names)
                 
                 await message.answer(success_message)
                 logger.info(f"Пользователь {message.from_user.id} присоединился по токену через /start")
@@ -185,9 +176,9 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
         from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
         missing_items = []
         if not user.phone:
-            missing_items.append("📱 Указать телефон" if lang == "ru" else "📱 Telefon ko'rsatish")
+            missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
         if not has_approved_apartment:
-            missing_items.append("🏠 Выбрать квартиру" if lang == "ru" else "🏠 Kvartira tanlash")
+            missing_items.append(get_text("base.handlers.btn_select_apartment", language=lang))
         
         if missing_items:
             onboarding_keyboard = ReplyKeyboardMarkup(
@@ -254,7 +245,8 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
         user = await auth_service.get_user_by_telegram_id(callback.from_user.id)
         
         if not user:
-            await callback.answer("Ошибка: пользователь не найден", show_alert=True)
+            lang = callback.from_user.language_code or "ru"
+            await callback.answer(get_text("base.handlers.error_user_not_found", language=lang), show_alert=True)
             return
         
         # Обновляем язык пользователя
@@ -264,9 +256,8 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
                 callback.from_user.language_code
             )
         
-        # Формируем простое сообщение об успешном перезапуске
         lang = callback.from_user.language_code or "ru"
-        welcome_text = "✅ Бот успешно перезапущен!\n\nТеперь вы можете использовать все функции."
+        welcome_text = get_text("bot.restarted", language=lang)
         
         # Формируем клавиатуру в зависимости от роли
         roles = roles or ["applicant"]
@@ -291,44 +282,20 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
             reply_markup=get_main_keyboard_for_role(active_role, roles, user.status)
         )
         
-        await callback.answer("Бот перезапущен!")
+        lang = callback.from_user.language_code or "ru"
+        await callback.answer(get_text("base.handlers.bot_restarted", language=lang))
         logger.info(f"Пользователь {callback.from_user.id} перезапустил бота через кнопку")
         
     except Exception as e:
         logger.error(f"Ошибка перезапуска бота: {e}")
-        await callback.answer("Ошибка перезапуска", show_alert=True)
+        await callback.answer(get_text("base.handlers.error_restart", language=callback.from_user.language_code or "ru"), show_alert=True)
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     """Обработчик команды /help"""
-    help_text = """
-🤖 **Справка по использованию бота**
+    lang = message.from_user.language_code or "ru"
+    help_text = get_text("base.handlers.help_text", language=lang)
 
-📝 **Создание заявки:**
-- Нажмите "Создать заявку"
-- Выберите категорию
-- Укажите адрес и описание
-- Добавьте фото/видео (опционально)
-- Выберите срочность
-
-📋 **Просмотр заявок:**
-- "Мои заявки" - ваши заявки
-- "Все заявки" - все заявки (для исполнителей и менеджеров)
-
-👤 **Профиль:**
-- Просмотр и редактирование профиля
-- Изменение языка
-
-🔧 **Админ функции (для менеджеров):**
-- Управление пользователями
-- Назначение заявок
-- Создание смен
-- Статистика
-
-❓ **Поддержка:**
-Если у вас возникли вопросы, обратитесь к администратору.
-    """
-    
     await message.answer(help_text, reply_markup=get_user_contextual_keyboard(message.from_user.id))
 
 @router.message(F.text == "❌ Отмена")
@@ -353,20 +320,9 @@ async def cancel_action(message: Message, state: FSMContext, roles: list[str] = 
 @router.message(F.text.in_(BACK_TEXTS))
 async def go_back(message: Message, state: FSMContext, db: Session = None, roles: list[str] = None, active_role: str = None):
     """Возврат в главное меню"""
-    if not db:
-        from uk_management_bot.database.session import get_db
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
-    
-    try:
-        await state.clear()
-        lang = get_user_language(message.from_user.id, db)
-        await message.answer(get_text("back", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
-    finally:
-        if need_close and db:
-            db.close()
+    await state.clear()
+    lang = get_user_language(message.from_user.id, db)
+    await message.answer(get_text("back", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
 
 
 # Обработчики меню исполнителя
@@ -390,69 +346,21 @@ async def executor_archive_requests(message: Message, state: FSMContext):
 @require_role(['executor'])
 async def executor_shift_menu(message: Message, db: Session = None, roles: list[str] = None, active_role: str = None):
     """Показывает клавиатуру управления сменой."""
-    # db уже передается через middleware, не нужно создавать новую сессию
-    if not db:
-        from uk_management_bot.database.session import get_db
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
-    
-    try:
-        lang = get_user_language(message.from_user.id, db)
-        # Используем существующий ключ локализации или fallback
-        menu_text = get_text("shifts.menu_shifts", language=lang)
-        if "." in menu_text:  # Если вернулся ключ, значит перевод не найден
-            menu_text = "Меню смены:" if lang == "ru" else "Smena menyusi:"
-        await message.answer(menu_text, reply_markup=get_shifts_main_keyboard(language=lang))
-    finally:
-        # Закрываем сессию только если мы её создали сами
-        # Middleware закрывает сессию автоматически, если она была передана через DI
-        if need_close and db:
-            db.close()
+    lang = get_user_language(message.from_user.id, db)
+    menu_text = get_text("shifts.menu_shifts", language=lang)
+    if "." in menu_text:
+        menu_text = get_text("base.handlers.shift_menu", language=lang)
+    await message.answer(menu_text, reply_markup=get_shifts_main_keyboard(language=lang))
 
 
 @router.message(F.text.in_(HELP_TEXTS))
 async def show_help(message: Message, db: Session = None):
     """Показывает справку по использованию бота."""
-    from uk_management_bot.database.database import get_db
-    if not db:
-        db = next(get_db())
-    try:
-        lang = get_user_language(message.from_user.id, db)
-        help_text = get_text("help.usage_help", language=lang)
-        if "." in help_text:  # Если вернулся ключ, используем fallback
-            help_text = """
-🤖 **Справка по использованию бота**
-
-📝 **Создание заявки:**
-- Нажмите "Создать заявку"
-- Выберите категорию
-- Укажите адрес и описание
-- Добавьте фото/видео (опционально)
-- Выберите срочность
-
-📋 **Просмотр заявок:**
-- "Мои заявки" - ваши заявки
-- "Все заявки" - все заявки (для исполнителей и менеджеров)
-
-👤 **Профиль:**
-- Просмотр и редактирование профиля
-- Изменение языка
-
-🔧 **Админ функции (для менеджеров):**
-- Управление пользователями
-- Назначение заявок
-- Создание смен
-- Статистика
-
-❓ **Поддержка:**
-Если у вас возникли вопросы, обратитесь к администратору.
-"""
-        await message.answer(help_text)
-    finally:
-        if db:
-            db.close()
+    lang = get_user_language(message.from_user.id, db)
+    help_text = get_text("help.usage_help", language=lang)
+    if "." in help_text:
+        help_text = get_text("base.handlers.help_text", language=lang)
+    await message.answer(help_text)
 
 
 @router.message(F.text.in_(PROFILE_TEXTS))
@@ -548,11 +456,11 @@ async def choose_role(message: Message, db: Session, roles: list[str] = None, ac
     await message.answer(text, reply_markup=get_role_switch_inline(roles, active_role))
 
 
-@router.callback_query(F.data.startswith("switch_role:"))
-async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
+@router.callback_query(RoleSwitchCB.filter())
+async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None):
     """Переключение роли пользователя"""
     roles = roles or ["applicant"]
-    target = cb.data.split(":", 1)[1]
+    target = callback_data.target
     
     # Проверяем, что целевая роль доступна пользователю
     if target not in roles:
@@ -577,8 +485,9 @@ async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, a
         await cb.answer(get_text("role.switched", language=cb.from_user.language_code or "ru"))
         
         # Пересобираем меню с новой активной ролью
+        lang = cb.from_user.language_code or "ru"
         await cb.message.answer(
-            "Главное меню:", 
+            get_text("base.handlers.main_menu", language=lang), 
             reply_markup=get_main_keyboard_for_role(target, roles, "approved")
         )
         
@@ -599,10 +508,9 @@ async def switch_role(cb: CallbackQuery, db: Session, roles: list[str] = None, a
 async def cmd_admin(message: Message, state: FSMContext):
     """Обработчик команды /admin - назначение администратора по паролю"""
     await state.set_state(AdminPasswordStates.waiting_for_password)
+    lang = message.from_user.language_code or "ru"
     await message.answer(
-        "🔐 **Назначение администратора**\n\n"
-        "Введите пароль администратора для получения прав менеджера:\n"
-        "_(Пароль: 12345)_",
+        get_text("base.handlers.admin_password_prompt", language=lang),
         reply_markup=get_cancel_keyboard()
     )
 

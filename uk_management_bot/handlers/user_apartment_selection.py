@@ -22,6 +22,7 @@ from uk_management_bot.keyboards.address_management import (
     get_confirmation_keyboard
 )
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,9 @@ async def start_apartment_selection(message: Message, state: FSMContext):
         yards = await AddressService.get_all_yards(db, only_active=True)
 
         if not yards:
+            lang = message.from_user.language_code or 'ru'
             await message.answer(
-                "❌ <b>К сожалению, справочник адресов пуст</b>\n\n"
-                "Обратитесь к администратору для добавления адресов.\n\n"
-                "Вы можете продолжить регистрацию без указания квартиры."
+                get_text("user_apt_selection.handlers.address_directory_empty", language=lang)
             )
             # Переход к документам
             await state.set_state(OnboardingStates.waiting_for_document_type)
@@ -54,9 +54,9 @@ async def start_apartment_selection(message: Message, state: FSMContext):
 
         await state.set_state(OnboardingStates.waiting_for_yard_selection)
 
+        lang = message.from_user.language_code or 'ru'
         await message.answer(
-            "🏘 <b>Выбор квартиры</b>\n\n"
-            "Шаг 1 из 3: Выберите двор, в котором находится ваша квартира:",
+            get_text("user_apt_selection.handlers.select_yard_step1", language=lang),
             reply_markup=get_user_apartment_selection_keyboard(
                 yards,
                 "yard",
@@ -66,8 +66,9 @@ async def start_apartment_selection(message: Message, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при начале выбора квартиры: {e}")
+        lang = message.from_user.language_code or 'ru'
         await message.answer(
-            "❌ Ошибка при загрузке списка дворов. Попробуйте позже."
+            get_text("user_apt_selection.handlers.error_loading_yards", language=lang)
         )
     finally:
         db.close()
@@ -85,8 +86,9 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext):
     db = next(get_db())
     try:
         yard = await AddressService.get_yard_by_id(db, yard_id)
+        lang = callback.from_user.language_code or 'ru'
         if not yard or not yard.is_active:
-            await callback.answer("❌ Двор не найден", show_alert=True)
+            await callback.answer(get_text("user_apt_selection.handlers.yard_not_found", language=lang), show_alert=True)
             return
 
         # Получаем здания этого двора
@@ -94,7 +96,7 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext):
 
         if not buildings:
             await callback.answer(
-                f"❌ В дворе '{yard.name}' пока нет зданий. Выберите другой двор.",
+                get_text("user_apt_selection.handlers.no_buildings_in_yard", language=lang).format(yard_name=yard.name),
                 show_alert=True
             )
             return
@@ -106,8 +108,7 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext):
         await state.set_state(OnboardingStates.waiting_for_building_selection)
 
         await callback.message.edit_text(
-            f"✅ Двор: <b>{yard.name}</b>\n\n"
-            f"🏢 Шаг 2 из 3: Выберите здание:",
+            get_text("user_apt_selection.handlers.select_building_step2", language=lang).format(yard_name=yard.name),
             reply_markup=get_user_apartment_selection_keyboard(
                 buildings,
                 "building",
@@ -117,7 +118,7 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при выборе двора {yard_id}: {e}")
-        await callback.answer("❌ Ошибка обработки", show_alert=True)
+        await callback.answer(get_text("user_apt_selection.handlers.error_processing", language=lang), show_alert=True)
     finally:
         db.close()
 
@@ -134,8 +135,9 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext)
     db = next(get_db())
     try:
         building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
+        lang = callback.from_user.language_code or 'ru'
         if not building or not building.is_active:
-            await callback.answer("❌ Здание не найдено", show_alert=True)
+            await callback.answer(get_text("user_apt_selection.handlers.building_not_found", language=lang), show_alert=True)
             return
 
         # Получаем квартиры этого здания
@@ -143,13 +145,13 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext)
 
         if not apartments:
             await callback.answer(
-                f"❌ В здании по адресу '{building.address}' пока нет квартир. Выберите другое здание.",
+                get_text("user_apt_selection.handlers.no_apartments_in_building", language=lang).format(address=building.address),
                 show_alert=True
             )
             return
 
         data = await state.get_data()
-        yard_name = data.get('selected_yard_name', 'Не указан')
+        yard_name = data.get('selected_yard_name', get_text("user_apt_selection.handlers.not_specified", language=lang))
 
         await state.update_data(
             selected_building_id=building_id,
@@ -158,9 +160,9 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext)
         await state.set_state(OnboardingStates.waiting_for_apartment_selection)
 
         await callback.message.edit_text(
-            f"✅ Двор: <b>{yard_name}</b>\n"
-            f"✅ Здание: <b>{building.address}</b>\n\n"
-            f"🏠 Шаг 3 из 3: Выберите вашу квартиру:",
+            get_text("user_apt_selection.handlers.select_apartment_step3", language=lang).format(
+                yard_name=yard_name, building_address=building.address
+            ),
             reply_markup=get_user_apartment_selection_keyboard(
                 apartments,
                 "apartment",
@@ -170,7 +172,7 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext)
 
     except Exception as e:
         logger.error(f"Ошибка при выборе здания {building_id}: {e}")
-        await callback.answer("❌ Ошибка обработки", show_alert=True)
+        await callback.answer(get_text("user_apt_selection.handlers.error_processing", language=lang), show_alert=True)
     finally:
         db.close()
 
@@ -189,13 +191,14 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
         # Получаем user.id из базы данных (не telegram_id!)
         from uk_management_bot.database.models.user import User
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        lang = callback.from_user.language_code or 'ru'
         if not user:
-            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            await callback.answer(get_text("user_apt_selection.handlers.user_not_found", language=lang), show_alert=True)
             return
 
         apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
         if not apartment or not apartment.is_active:
-            await callback.answer("❌ Квартира не найдена", show_alert=True)
+            await callback.answer(get_text("user_apt_selection.handlers.apartment_not_found", language=lang), show_alert=True)
             return
 
         # Проверяем, не подавал ли пользователь уже заявку на эту квартиру
@@ -210,39 +213,37 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
         ).scalar_one_or_none()
 
         if existing:
-            status_text = {
-                'pending': 'уже на рассмотрении',
-                'approved': 'уже подтверждена',
-                'rejected': 'была отклонена. Обратитесь к администратору'
-            }.get(existing.status, 'уже существует')
+            status_key = {
+                'pending': 'user_apt_selection.handlers.request_status_pending',
+                'approved': 'user_apt_selection.handlers.request_status_approved',
+                'rejected': 'user_apt_selection.handlers.request_status_rejected'
+            }.get(existing.status, 'user_apt_selection.handlers.request_status_exists')
+            status_text = get_text(status_key, language=lang)
 
             await callback.answer(
-                f"⚠️ Ваша заявка на эту квартиру {status_text}",
+                get_text("user_apt_selection.handlers.request_already_exists", language=lang).format(status=status_text),
                 show_alert=True
             )
             return
 
         data = await state.get_data()
-        yard_name = data.get('selected_yard_name', 'Не указан')
+        yard_name = data.get('selected_yard_name', get_text("user_apt_selection.handlers.not_specified", language=lang))
         building_address = data.get('selected_building_address', 'Не указан')
 
         await state.update_data(selected_apartment_id=apartment_id)
         await state.set_state(OnboardingStates.confirming_apartment)
 
         # Формируем информацию о квартире
-        apartment_info = f"Квартира {apartment.apartment_number}"
+        apartment_info = get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
         if apartment.entrance:
-            apartment_info += f", подъезд {apartment.entrance}"
+            apartment_info += get_text("user_apt_selection.handlers.entrance_label", language=lang).format(entrance=apartment.entrance)
         if apartment.floor:
-            apartment_info += f", {apartment.floor} этаж"
+            apartment_info += get_text("user_apt_selection.handlers.floor_label", language=lang).format(floor=apartment.floor)
 
         await callback.message.edit_text(
-            f"📋 <b>Подтверждение выбора квартиры</b>\n\n"
-            f"🏘 <b>Двор:</b> {yard_name}\n"
-            f"🏢 <b>Здание:</b> {building_address}\n"
-            f"🏠 <b>Квартира:</b> {apartment_info}\n\n"
-            f"❓ <b>Подтвердите выбор квартиры?</b>\n\n"
-            f"После подтверждения ваша заявка будет отправлена на модерацию администратору.",
+            get_text("user_apt_selection.handlers.confirm_apartment_selection", language=lang).format(
+                yard_name=yard_name, building_address=building_address, apartment_info=apartment_info
+            ),
             reply_markup=get_confirmation_keyboard(
                 confirm_callback="user_apartment_confirm",
                 cancel_callback="user_apartment_cancel"
@@ -251,7 +252,7 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
 
     except Exception as e:
         logger.error(f"Ошибка при выборе квартиры {apartment_id}: {e}")
-        await callback.answer("❌ Ошибка обработки", show_alert=True)
+        await callback.answer(get_text("user_apt_selection.handlers.error_processing", language=lang), show_alert=True)
     finally:
         db.close()
 
@@ -266,8 +267,9 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     apartment_id = data.get('selected_apartment_id')
 
+    lang = callback.from_user.language_code or 'ru'
     if not apartment_id:
-        await callback.answer("❌ Ошибка: квартира не выбрана", show_alert=True)
+        await callback.answer(get_text("user_apt_selection.handlers.error_no_apartment_selected", language=lang), show_alert=True)
         return
 
     db = next(get_db())
@@ -276,7 +278,7 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext):
         from uk_management_bot.database.models.user import User
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user:
-            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            await callback.answer(get_text("user_apt_selection.handlers.user_not_found", language=lang), show_alert=True)
             return
 
         # Создаем заявку на квартиру
@@ -290,21 +292,17 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext):
 
         if error:
             await callback.message.edit_text(
-                f"❌ <b>Ошибка создания заявки:</b>\n\n{error}"
+                get_text("user_apt_selection.handlers.request_creation_error", language=lang).format(error=error)
             )
-            await callback.answer("❌ Не удалось создать заявку", show_alert=True)
+            await callback.answer(get_text("user_apt_selection.handlers.error_request_failed", language=lang), show_alert=True)
             return
 
         # Получаем данные для уведомления
         apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
-        full_address = apartment.full_address if hasattr(apartment, 'full_address') else f"Квартира {apartment.apartment_number}"
+        full_address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
 
         await callback.message.edit_text(
-            f"✅ <b>Заявка успешно отправлена!</b>\n\n"
-            f"🏠 <b>Адрес:</b> {full_address}\n\n"
-            f"⏳ Ваша заявка отправлена на рассмотрение администратору.\n"
-            f"Вы получите уведомление после проверки.\n\n"
-            f"А пока продолжим регистрацию..."
+            get_text("user_apt_selection.handlers.request_sent_success", language=lang).format(address=full_address)
         )
 
         logger.info(
@@ -334,20 +332,14 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext):
         # Отправляем новое сообщение о документах
         from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
         await callback.message.answer(
-            "📄 <b>Загрузка документов</b>\n\n"
-            "Для подтверждения личности загрузите один из документов:\n"
-            "• Паспорт\n"
-            "• Водительские права\n"
-            "• Другой документ с фото\n\n"
-            "Выберите тип документа:",
+            get_text("user_apt_selection.handlers.upload_documents_prompt", language=lang),
             reply_markup=get_document_type_keyboard()
         )
 
     except Exception as e:
         logger.error(f"Ошибка при подтверждении заявки на квартиру: {e}")
         await callback.message.edit_text(
-            "❌ <b>Произошла ошибка</b>\n\n"
-            "Не удалось отправить заявку. Попробуйте позже или обратитесь к администратору."
+            get_text("user_apt_selection.handlers.error_sending_request", language=lang)
         )
     finally:
         db.close()
@@ -364,10 +356,9 @@ async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext):
         selected_apartment_id=None
     )
 
+    lang = callback.from_user.language_code or 'ru'
     await callback.message.edit_text(
-        "❌ <b>Выбор квартиры отменен</b>\n\n"
-        "Вы можете выбрать квартиру позже в настройках профиля.\n\n"
-        "Продолжим регистрацию..."
+        get_text("user_apt_selection.handlers.apartment_selection_cancelled", language=lang)
     )
 
     # Переходим к следующему шагу регистрации (документы)
@@ -375,12 +366,7 @@ async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext):
 
     from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
     await callback.message.answer(
-        "📄 <b>Загрузка документов</b>\n\n"
-        "Для подтверждения личности загрузите один из документов:\n"
-        "• Паспорт\n"
-        "• Водительские права\n"
-        "• Другой документ с фото\n\n"
-        "Выберите тип документа:",
+        get_text("user_apt_selection.handlers.upload_documents_prompt", language=lang),
         reply_markup=get_document_type_keyboard()
     )
 
@@ -427,15 +413,12 @@ async def send_apartment_request_notification(
             if not user_name:
                 user_name = f"ID: {user.telegram_id}"
 
-            username = f"@{user.username}" if user.username else "Нет username"
+            username = f"@{user.username}" if user.username else "N/A"
+            lang = user.language if user.language else 'ru'
 
-            notification_text = (
-                f"🔔 <b>Новая заявка на квартиру!</b>\n\n"
-                f"👤 <b>Пользователь:</b> {user_name}\n"
-                f"📱 <b>Username:</b> {username}\n"
-                f"🆔 <b>ID:</b> <code>{user.telegram_id}</code>\n"
-                f"🏠 <b>Квартира:</b> {apartment_address}\n\n"
-                f"📋 Перейдите в раздел <b>Модерация заявок</b> для проверки."
+            notification_text = get_text("user_apt_selection.handlers.admin_new_apartment_request", language='ru').format(
+                user_name=user_name, username=username,
+                telegram_id=user.telegram_id, apartment_address=apartment_address
             )
 
             # Используем бота из текущего контекста
@@ -478,9 +461,9 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
         yards = await AddressService.get_all_yards(db, only_active=True)
 
         if not yards:
+            lang = callback.from_user.language_code or 'ru'
             await callback.message.edit_text(
-                "❌ <b>К сожалению, справочник адресов пуст</b>\n\n"
-                "Обратитесь к администратору для добавления адресов."
+                get_text("user_apt_selection.handlers.address_directory_empty_short", language=lang)
             )
             return
 
@@ -491,14 +474,14 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
             callback_prefix='user_apartment_yard'
         )
 
+        lang = callback.from_user.language_code or 'ru'
         await callback.message.edit_text(
-            "🏘️ <b>Добавление квартиры</b>\n\n"
-            "Шаг 1 из 3: Выберите двор:",
+            get_text("user_apt_selection.handlers.add_apartment_step1", language=lang),
             reply_markup=keyboard
         )
 
     except Exception as e:
         logger.error(f"Ошибка начала выбора квартиры из профиля: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("user_apt_selection.handlers.error_loading_data", language=lang), show_alert=True)
     finally:
         db.close()
