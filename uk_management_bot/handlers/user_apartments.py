@@ -18,6 +18,7 @@ from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.keyboards.address_management import (
     get_user_apartment_selection_keyboard
 )
+from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -31,6 +32,7 @@ router = Router()
 async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
     """Показать список квартир пользователя"""
     await state.clear()
+    lang = callback.from_user.language_code or "ru"
 
     db = next(get_db())
     try:
@@ -43,7 +45,7 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
         ).scalar_one_or_none()
 
         if not user:
-            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            await callback.answer(get_text("user_apartments.user_not_found", language=lang), show_alert=True)
             return
 
         # Получаем все квартиры пользователя (одобренные, ожидающие, отклоненные)
@@ -55,15 +57,13 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
 
         if not user_apartments:
             await callback.message.edit_text(
-                "📭 <b>У вас пока нет квартир</b>\n\n"
-                "Вы можете добавить квартиру, выбрав её из справочника.\n"
-                "После проверки администратором вы сможете создавать заявки на этот адрес.",
-                reply_markup=get_my_apartments_empty_keyboard()
+                get_text("user_apartments.no_apartments", language=lang),
+                reply_markup=get_my_apartments_empty_keyboard(lang)
             )
             return
 
         # Формируем текст со списком квартир
-        text = "🏠 <b>Мои квартиры</b>\n\n"
+        text = get_text("user_apartments.my_apartments_title", language=lang) + "\n\n"
 
         # Группируем по статусам
         approved = [ua for ua in user_apartments if ua.status == 'approved']
@@ -71,17 +71,17 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
         rejected = [ua for ua in user_apartments if ua.status == 'rejected']
 
         if approved:
-            text += "✅ <b>Одобренные:</b>\n"
+            text += get_text("user_apartments.approved_header", language=lang) + "\n"
             for ua in approved:
                 apartment = ua.apartment
                 address = AddressService.format_apartment_address(apartment)
                 primary_mark = " ⭐" if ua.is_primary else ""
-                owner_mark = " (Владелец)" if ua.is_owner else ""
+                owner_mark = " " + get_text("user_apartments.owner_label", language=lang) if ua.is_owner else ""
                 text += f"  • {address}{primary_mark}{owner_mark}\n"
             text += "\n"
 
         if pending:
-            text += "⏳ <b>На рассмотрении:</b>\n"
+            text += get_text("user_apartments.pending_header", language=lang) + "\n"
             for ua in pending:
                 apartment = ua.apartment
                 address = AddressService.format_apartment_address(apartment)
@@ -89,7 +89,7 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
             text += "\n"
 
         if rejected:
-            text += "❌ <b>Отклоненные:</b>\n"
+            text += get_text("user_apartments.rejected_header", language=lang) + "\n"
             for ua in rejected:
                 apartment = ua.apartment
                 address = AddressService.format_apartment_address(apartment)
@@ -97,16 +97,16 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext):
                 text += f"  • {address}{reason}\n"
             text += "\n"
 
-        text += "Выберите действие:"
+        text += get_text("user_apartments.choose_action", language=lang)
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_my_apartments_keyboard(user_apartments)
+            reply_markup=get_my_apartments_keyboard(user_apartments, lang)
         )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке квартир пользователя {callback.from_user.id}: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_loading", language=lang), show_alert=True)
     finally:
         db.close()
 
@@ -132,6 +132,7 @@ async def start_add_apartment(callback: CallbackQuery, state: FSMContext):
 async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
     """Установить квартиру как основную"""
     user_apartment_id = int(callback.data.split(":")[1])
+    lang = callback.from_user.language_code or "ru"
 
     db = next(get_db())
     try:
@@ -144,15 +145,15 @@ async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
         ).scalar_one_or_none()
 
         if not user_apartment:
-            await callback.answer("❌ Квартира не найдена", show_alert=True)
+            await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
             return
 
         if user_apartment.user.telegram_id != callback.from_user.id:
-            await callback.answer("❌ Доступ запрещен", show_alert=True)
+            await callback.answer(get_text("user_apartments.access_denied", language=lang), show_alert=True)
             return
 
         if user_apartment.status != 'approved':
-            await callback.answer("❌ Можно установить основной только одобренную квартиру", show_alert=True)
+            await callback.answer(get_text("user_apartments.only_approved_primary", language=lang), show_alert=True)
             return
 
         # Снимаем флаг is_primary со всех квартир пользователя
@@ -169,7 +170,7 @@ async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
         user_apartment.is_primary = True
         db.commit()
 
-        await callback.answer("✅ Основная квартира изменена", show_alert=True)
+        await callback.answer(get_text("user_apartments.primary_changed", language=lang), show_alert=True)
 
         # Обновляем отображение
         await show_my_apartments(callback, state)
@@ -177,7 +178,7 @@ async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка установки основной квартиры {user_apartment_id}: {e}")
         db.rollback()
-        await callback.answer("❌ Ошибка обновления", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_update", language=lang), show_alert=True)
     finally:
         db.close()
 
@@ -190,6 +191,7 @@ async def set_primary_apartment(callback: CallbackQuery, state: FSMContext):
 async def view_apartment_details(callback: CallbackQuery, state: FSMContext):
     """Показать детальную информацию о квартире"""
     user_apartment_id = int(callback.data.split(":")[1])
+    lang = callback.from_user.language_code or "ru"
 
     db = next(get_db())
     try:
@@ -208,11 +210,11 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext):
         ).scalar_one_or_none()
 
         if not user_apartment:
-            await callback.answer("❌ Квартира не найдена", show_alert=True)
+            await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
             return
 
         if user_apartment.user.telegram_id != callback.from_user.id:
-            await callback.answer("❌ Доступ запрещен", show_alert=True)
+            await callback.answer(get_text("user_apartments.access_denied", language=lang), show_alert=True)
             return
 
         # Формируем детальную информацию
@@ -226,55 +228,62 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext):
         }
 
         status_text = {
-            'approved': 'Одобрена',
-            'pending': 'На рассмотрении',
-            'rejected': 'Отклонена'
+            'approved': get_text("user_apartments.status_approved", language=lang),
+            'pending': get_text("user_apartments.status_pending", language=lang),
+            'rejected': get_text("user_apartments.status_rejected", language=lang)
         }
 
-        text = f"🏠 <b>Детали квартиры</b>\n\n"
-        text += f"<b>Адрес:</b> {address}\n"
-        text += f"<b>Статус:</b> {status_emoji.get(user_apartment.status, '❓')} {status_text.get(user_apartment.status, user_apartment.status)}\n"
+        text = get_text("user_apartments.details_title", language=lang) + "\n\n"
+        text += get_text("user_apartments.address_label", language=lang).format(address=address) + "\n"
+        text += get_text("user_apartments.status_label", language=lang).format(
+            emoji=status_emoji.get(user_apartment.status, '❓'),
+            status=status_text.get(user_apartment.status, user_apartment.status)
+        ) + "\n"
 
         if user_apartment.is_primary:
-            text += f"<b>Основная:</b> Да ⭐\n"
+            text += get_text("user_apartments.is_primary_yes", language=lang) + "\n"
 
         if user_apartment.is_owner:
-            text += f"<b>Владелец:</b> Да\n"
+            text += get_text("user_apartments.is_owner_yes", language=lang) + "\n"
 
         # Детали квартиры
         if apartment.entrance or apartment.floor or apartment.rooms_count or apartment.area:
-            text += f"\n<b>Характеристики:</b>\n"
+            text += "\n" + get_text("user_apartments.characteristics_header", language=lang) + "\n"
             if apartment.entrance:
-                text += f"  • Подъезд: {apartment.entrance}\n"
+                text += get_text("user_apartments.entrance_label", language=lang).format(value=apartment.entrance) + "\n"
             if apartment.floor:
-                text += f"  • Этаж: {apartment.floor}\n"
+                text += get_text("user_apartments.floor_label", language=lang).format(value=apartment.floor) + "\n"
             if apartment.rooms_count:
-                text += f"  • Комнат: {apartment.rooms_count}\n"
+                text += get_text("user_apartments.rooms_label", language=lang).format(value=apartment.rooms_count) + "\n"
             if apartment.area:
-                text += f"  • Площадь: {apartment.area} м²\n"
+                text += get_text("user_apartments.area_label", language=lang).format(value=apartment.area) + "\n"
 
         # История модерации
-        text += f"\n<b>История:</b>\n"
-        text += f"  • Заявка подана: {user_apartment.requested_at.strftime('%d.%m.%Y %H:%M')}\n"
+        text += "\n" + get_text("user_apartments.history_header", language=lang) + "\n"
+        text += get_text("user_apartments.requested_at_label", language=lang).format(
+            date=user_apartment.requested_at.strftime('%d.%m.%Y %H:%M')
+        ) + "\n"
 
         if user_apartment.reviewed_at:
-            text += f"  • Рассмотрена: {user_apartment.reviewed_at.strftime('%d.%m.%Y %H:%M')}\n"
+            text += get_text("user_apartments.reviewed_at_label", language=lang).format(
+                date=user_apartment.reviewed_at.strftime('%d.%m.%Y %H:%M')
+            ) + "\n"
 
         if user_apartment.reviewer:
-            reviewer_name = user_apartment.reviewer.first_name or user_apartment.reviewer.username or "Администратор"
-            text += f"  • Проверил: {reviewer_name}\n"
+            reviewer_name = user_apartment.reviewer.first_name or user_apartment.reviewer.username or get_text("user_apartments.admin_default_name", language=lang)
+            text += get_text("user_apartments.reviewed_by_label", language=lang).format(name=reviewer_name) + "\n"
 
         if user_apartment.admin_comment:
-            text += f"\n<b>Комментарий администратора:</b>\n{user_apartment.admin_comment}\n"
+            text += "\n" + get_text("user_apartments.admin_comment_label", language=lang).format(comment=user_apartment.admin_comment) + "\n"
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_apartment_details_keyboard(user_apartment)
+            reply_markup=get_apartment_details_keyboard(user_apartment, lang)
         )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке деталей квартиры {user_apartment_id}: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_loading", language=lang), show_alert=True)
     finally:
         db.close()
 
@@ -283,18 +292,18 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext):
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КЛАВИАТУР
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_my_apartments_empty_keyboard():
+def get_my_apartments_empty_keyboard(lang: str = "ru"):
     """Клавиатура для пустого списка квартир"""
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
     keyboard = [
-        [InlineKeyboardButton(text="➕ Добавить квартиру", callback_data="add_apartment")],
-        [InlineKeyboardButton(text="🔙 Назад к профилю", callback_data="back_to_profile")]
+        [InlineKeyboardButton(text=get_text("user_apartments.btn_add_apartment", language=lang), callback_data="add_apartment")],
+        [InlineKeyboardButton(text=get_text("user_apartments.btn_back_to_profile", language=lang), callback_data="back_to_profile")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_my_apartments_keyboard(user_apartments):
+def get_my_apartments_keyboard(user_apartments, lang: str = "ru"):
     """Клавиатура для списка квартир"""
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -319,13 +328,13 @@ def get_my_apartments_keyboard(user_apartments):
         ])
 
     # Кнопки действий
-    keyboard.append([InlineKeyboardButton(text="➕ Добавить квартиру", callback_data="add_apartment")])
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад к профилю", callback_data="back_to_profile")])
+    keyboard.append([InlineKeyboardButton(text=get_text("user_apartments.btn_add_apartment", language=lang), callback_data="add_apartment")])
+    keyboard.append([InlineKeyboardButton(text=get_text("user_apartments.btn_back_to_profile", language=lang), callback_data="back_to_profile")])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_apartment_details_keyboard(user_apartment):
+def get_apartment_details_keyboard(user_apartment, lang: str = "ru"):
     """Клавиатура для деталей квартиры"""
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -335,14 +344,14 @@ def get_apartment_details_keyboard(user_apartment):
     if user_apartment.status == 'approved' and not user_apartment.is_primary:
         keyboard.append([
             InlineKeyboardButton(
-                text="⭐ Сделать основной",
+                text=get_text("user_apartments.btn_set_primary", language=lang),
                 callback_data=f"set_primary:{user_apartment.id}"
             )
         ])
 
     # Кнопка возврата
     keyboard.append([
-        InlineKeyboardButton(text="🔙 Назад к списку", callback_data="my_apartments")
+        InlineKeyboardButton(text=get_text("user_apartments.btn_back_to_list", language=lang), callback_data="my_apartments")
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -375,6 +384,7 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext):
 async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContext):
     """Админ: просмотр и управление квартирами пользователя"""
     await state.clear()
+    lang = callback.from_user.language_code or "ru"
 
     try:
         user_telegram_id = int(callback.data.split("_")[-1])
@@ -390,7 +400,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
             ).scalar_one_or_none()
 
             if not user:
-                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                await callback.answer(get_text("user_apartments.user_not_found", language=lang), show_alert=True)
                 return
 
             # Получаем все квартиры пользователя
@@ -401,12 +411,15 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
             )
 
             # Формируем текст
-            text = f"🏠 <b>Управление квартирами пользователя</b>\n\n"
-            text += f"👤 <b>Пользователь:</b> {user.first_name or ''} {user.last_name or ''}\n"
-            text += f"📱 <b>Telegram ID:</b> {user_telegram_id}\n\n"
+            text = get_text("user_apartments.admin_manage_title", language=lang) + "\n\n"
+            text += get_text("user_apartments.admin_user_info", language=lang).format(
+                first_name=user.first_name or '',
+                last_name=user.last_name or ''
+            ) + "\n"
+            text += get_text("user_apartments.admin_telegram_id", language=lang).format(telegram_id=user_telegram_id) + "\n\n"
 
             if not user_apartments:
-                text += "📭 <i>У пользователя пока нет квартир</i>\n\n"
+                text += get_text("user_apartments.admin_no_apartments", language=lang) + "\n\n"
             else:
                 # Группируем по статусам
                 approved = [ua for ua in user_apartments if ua.status == 'approved']
@@ -414,27 +427,27 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
                 rejected = [ua for ua in user_apartments if ua.status == 'rejected']
 
                 if approved:
-                    text += "✅ <b>Одобренные квартиры:</b>\n"
+                    text += get_text("user_apartments.admin_approved_header", language=lang) + "\n"
                     for ua in approved:
                         apartment = ua.apartment
                         address = AddressService.format_apartment_address(apartment)
-                        owner_status = "👤 Владелец" if ua.is_owner else "🏘️ Жилец"
+                        owner_status = get_text("user_apartments.owner_status_owner", language=lang) if ua.is_owner else get_text("user_apartments.owner_status_resident", language=lang)
                         primary_mark = " ⭐" if ua.is_primary else ""
                         text += f"  • {address}\n"
                         text += f"    {owner_status}{primary_mark}\n"
                     text += "\n"
 
                 if pending:
-                    text += "⏳ <b>На рассмотрении:</b>\n"
+                    text += get_text("user_apartments.pending_header", language=lang) + "\n"
                     for ua in pending:
                         apartment = ua.apartment
                         address = AddressService.format_apartment_address(apartment)
-                        owner_status = "👤 Владелец" if ua.is_owner else "🏘️ Жилец"
+                        owner_status = get_text("user_apartments.owner_status_owner", language=lang) if ua.is_owner else get_text("user_apartments.owner_status_resident", language=lang)
                         text += f"  • {address} ({owner_status})\n"
                     text += "\n"
 
                 if rejected:
-                    text += "❌ <b>Отклоненные:</b>\n"
+                    text += get_text("user_apartments.rejected_header", language=lang) + "\n"
                     for ua in rejected:
                         apartment = ua.apartment
                         address = AddressService.format_apartment_address(apartment)
@@ -442,11 +455,11 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
                         text += f"  • {address}{reason}\n"
                     text += "\n"
 
-            text += "Выберите действие:"
+            text += get_text("user_apartments.choose_action", language=lang)
 
             await callback.message.edit_text(
                 text,
-                reply_markup=get_admin_apartments_keyboard(user_apartments, user_telegram_id, user.id),
+                reply_markup=get_admin_apartments_keyboard(user_apartments, user_telegram_id, user.id, lang),
                 parse_mode="HTML"
             )
             await callback.answer()
@@ -458,13 +471,14 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
         logger.error(f"Ошибка при загрузке квартир пользователя {callback.data}: {e}")
         import traceback
         traceback.print_exc()
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_loading", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_apartment_detail_"))
 async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext):
     """Админ: просмотр деталей квартиры"""
     await state.clear()
+    lang = callback.from_user.language_code or "ru"
 
     try:
         parts = callback.data.split("_")
@@ -480,39 +494,48 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext):
             ).scalar_one_or_none()
 
             if not user_apartment:
-                await callback.answer("❌ Квартира не найдена", show_alert=True)
+                await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
                 return
 
             apartment = user_apartment.apartment
             address = AddressService.format_apartment_address(apartment)
 
             # Формируем детальную информацию
-            text = f"🏠 <b>Детали квартиры</b>\n\n"
-            text += f"📍 <b>Адрес:</b> {address}\n"
-            text += f"📊 <b>Статус:</b> "
-            
+            text = get_text("user_apartments.details_title", language=lang) + "\n\n"
+            text += get_text("user_apartments.admin_detail_address", language=lang).format(address=address) + "\n"
+            text += get_text("user_apartments.admin_detail_status_label", language=lang) + " "
+
             if user_apartment.status == 'approved':
-                text += "✅ Одобрено\n"
+                text += get_text("user_apartments.admin_status_approved", language=lang) + "\n"
             elif user_apartment.status == 'pending':
-                text += "⏳ На рассмотрении\n"
+                text += get_text("user_apartments.admin_status_pending", language=lang) + "\n"
             elif user_apartment.status == 'rejected':
-                text += "❌ Отклонено\n"
-            
-            text += f"👤 <b>Тип проживания:</b> {'Владелец' if user_apartment.is_owner else 'Жилец'}\n"
-            text += f"⭐ <b>Основная:</b> {'Да' if user_apartment.is_primary else 'Нет'}\n\n"
+                text += get_text("user_apartments.admin_status_rejected", language=lang) + "\n"
+
+            residence_type = get_text("user_apartments.residence_owner", language=lang) if user_apartment.is_owner else get_text("user_apartments.residence_resident", language=lang)
+            text += get_text("user_apartments.admin_detail_residence", language=lang).format(type=residence_type) + "\n"
+
+            is_primary_text = get_text("user_apartments.yes", language=lang) if user_apartment.is_primary else get_text("user_apartments.no", language=lang)
+            text += get_text("user_apartments.admin_detail_primary", language=lang).format(value=is_primary_text) + "\n\n"
 
             if user_apartment.requested_at:
-                text += f"📅 <b>Запрошено:</b> {user_apartment.requested_at.strftime('%d.%m.%Y %H:%M')}\n"
-            
+                text += get_text("user_apartments.admin_detail_requested", language=lang).format(
+                    date=user_apartment.requested_at.strftime('%d.%m.%Y %H:%M')
+                ) + "\n"
+
             if user_apartment.reviewed_at:
-                text += f"📅 <b>Проверено:</b> {user_apartment.reviewed_at.strftime('%d.%m.%Y %H:%M')}\n"
-            
+                text += get_text("user_apartments.admin_detail_reviewed", language=lang).format(
+                    date=user_apartment.reviewed_at.strftime('%d.%m.%Y %H:%M')
+                ) + "\n"
+
             if user_apartment.admin_comment:
-                text += f"💬 <b>Комментарий:</b> {user_apartment.admin_comment}\n"
+                text += get_text("user_apartments.admin_detail_comment", language=lang).format(
+                    comment=user_apartment.admin_comment
+                ) + "\n"
 
             await callback.message.edit_text(
                 text,
-                reply_markup=get_admin_apartment_detail_keyboard(user_apartment),
+                reply_markup=get_admin_apartment_detail_keyboard(user_apartment, lang),
                 parse_mode="HTML"
             )
             await callback.answer()
@@ -522,12 +545,13 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке деталей квартиры: {e}")
-        await callback.answer("❌ Ошибка загрузки данных", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_loading", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_approve_apartment_"))
 async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
     """Админ: одобрить квартиру"""
+    lang = callback.from_user.language_code or "ru"
     try:
         user_apartment_id = int(callback.data.split("_")[-1])
 
@@ -542,7 +566,7 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
             ).scalar_one_or_none()
 
             if not user_apartment:
-                await callback.answer("❌ Квартира не найдена", show_alert=True)
+                await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
                 return
 
             # Получаем администратора
@@ -551,7 +575,7 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
             ).scalar_one_or_none()
 
             if not admin:
-                await callback.answer("❌ Администратор не найден", show_alert=True)
+                await callback.answer(get_text("user_apartments.admin_not_found", language=lang), show_alert=True)
                 return
 
             # Одобряем квартиру
@@ -562,8 +586,8 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
 
             db.commit()
 
-            await callback.answer("✅ Квартира одобрена", show_alert=True)
-            
+            await callback.answer(get_text("user_apartments.apartment_approved", language=lang), show_alert=True)
+
             # Возвращаемся к деталям
             await admin_apartment_detail(callback, state)
 
@@ -572,12 +596,13 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка одобрения квартиры: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_reject_apartment_"))
 async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
     """Админ: отклонить квартиру"""
+    lang = callback.from_user.language_code or "ru"
     try:
         user_apartment_id = int(callback.data.split("_")[-1])
 
@@ -592,7 +617,7 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
             ).scalar_one_or_none()
 
             if not user_apartment:
-                await callback.answer("❌ Квартира не найдена", show_alert=True)
+                await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
                 return
 
             # Получаем администратора
@@ -601,7 +626,7 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
             ).scalar_one_or_none()
 
             if not admin:
-                await callback.answer("❌ Администратор не найден", show_alert=True)
+                await callback.answer(get_text("user_apartments.admin_not_found", language=lang), show_alert=True)
                 return
 
             # Отклоняем квартиру
@@ -612,8 +637,8 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
 
             db.commit()
 
-            await callback.answer("❌ Квартира отклонена", show_alert=True)
-            
+            await callback.answer(get_text("user_apartments.apartment_rejected", language=lang), show_alert=True)
+
             # Возвращаемся к деталям
             await admin_apartment_detail(callback, state)
 
@@ -622,12 +647,13 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка отклонения квартиры: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_toggle_owner_"))
 async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext):
     """Админ: переключить статус владелец/жилец"""
+    lang = callback.from_user.language_code or "ru"
     try:
         user_apartment_id = int(callback.data.split("_")[-1])
 
@@ -641,16 +667,16 @@ async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext):
             ).scalar_one_or_none()
 
             if not user_apartment:
-                await callback.answer("❌ Квартира не найдена", show_alert=True)
+                await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
                 return
 
             # Переключаем статус
             user_apartment.is_owner = not user_apartment.is_owner
             db.commit()
 
-            new_status = "владельцем" if user_apartment.is_owner else "жильцом"
-            await callback.answer(f"✅ Статус изменен на: {new_status}", show_alert=True)
-            
+            new_status = get_text("user_apartments.toggle_to_owner", language=lang) if user_apartment.is_owner else get_text("user_apartments.toggle_to_resident", language=lang)
+            await callback.answer(get_text("user_apartments.status_changed_to", language=lang).format(status=new_status), show_alert=True)
+
             # Обновляем детали
             await admin_apartment_detail(callback, state)
 
@@ -659,10 +685,10 @@ async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка переключения статуса владельца: {e}")
-        await callback.answer("❌ Ошибка", show_alert=True)
+        await callback.answer(get_text("user_apartments.error_generic", language=lang), show_alert=True)
 
 
-def get_admin_apartments_keyboard(user_apartments, user_telegram_id, user_internal_id=None):
+def get_admin_apartments_keyboard(user_apartments, user_telegram_id, user_internal_id=None, lang: str = "ru"):
     """Клавиатура управления квартирами для админа"""
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -672,10 +698,10 @@ def get_admin_apartments_keyboard(user_apartments, user_telegram_id, user_intern
     for ua in user_apartments[:10]:  # Максимум 10
         apartment = ua.apartment
         address = AddressService.format_apartment_address(apartment)
-        
+
         # Укорачиваем для кнопки
         button_text = address[:35] + "..." if len(address) > 35 else address
-        
+
         # Добавляем иконки статуса
         if ua.status == 'approved':
             button_text = "✅ " + button_text
@@ -693,14 +719,14 @@ def get_admin_apartments_keyboard(user_apartments, user_telegram_id, user_intern
 
     # Кнопка возврата
     keyboard.append([InlineKeyboardButton(
-        text="🔙 Назад к пользователю", 
+        text=get_text("user_apartments.btn_back_to_user", language=lang),
         callback_data=f"user_mgmt_user_{user_internal_id if user_internal_id else user_telegram_id}"
     )])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_admin_apartment_detail_keyboard(user_apartment):
+def get_admin_apartment_detail_keyboard(user_apartment, lang: str = "ru"):
     """Клавиатура деталей квартиры для админа"""
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -710,17 +736,17 @@ def get_admin_apartment_detail_keyboard(user_apartment):
     if user_apartment.status == 'pending':
         keyboard.append([
             InlineKeyboardButton(
-                text="✅ Одобрить",
+                text=get_text("user_apartments.btn_approve", language=lang),
                 callback_data=f"admin_approve_apartment_{user_apartment.id}"
             ),
             InlineKeyboardButton(
-                text="❌ Отклонить",
+                text=get_text("user_apartments.btn_reject", language=lang),
                 callback_data=f"admin_reject_apartment_{user_apartment.id}"
             )
         ])
 
     # Переключение статуса владелец/жилец
-    owner_text = "🏘️ Сделать жильцом" if user_apartment.is_owner else "👤 Сделать владельцем"
+    owner_text = get_text("user_apartments.btn_make_resident", language=lang) if user_apartment.is_owner else get_text("user_apartments.btn_make_owner", language=lang)
     keyboard.append([
         InlineKeyboardButton(
             text=owner_text,
@@ -732,7 +758,7 @@ def get_admin_apartment_detail_keyboard(user_apartment):
     user = user_apartment.user
     keyboard.append([
         InlineKeyboardButton(
-            text="🔙 Назад к списку",
+            text=get_text("user_apartments.btn_back_to_list", language=lang),
             callback_data=f"admin_manage_apartments_{user.telegram_id}"
         )
     ])
