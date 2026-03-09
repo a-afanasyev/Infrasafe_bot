@@ -21,6 +21,7 @@ from uk_management_bot.keyboards.request_status import (
     get_executor_status_actions_keyboard
 )
 from uk_management_bot.utils.helpers import get_text, get_language_from_event
+from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji, STATUS_EMOJI
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.constants import (
     ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,
@@ -77,7 +78,7 @@ async def handle_status_change_start(callback: CallbackQuery, state: FSMContext,
         
         await callback.message.edit_text(
             get_text("request_status_mgmt.handlers.select_status", language=lang).format(
-                current_status=request.status
+                current_status=get_status_display(request.status, language=lang)
             ),
             reply_markup=keyboard
         )
@@ -216,8 +217,8 @@ async def handle_status_confirmation(callback: CallbackQuery, state: FSMContext,
         lang = get_language_from_event(callback, db)
         success_text = get_text("request_status_mgmt.handlers.success", language=lang).format(
             request_number=request_number,
-            old_status=current_status,
-            new_status=new_status
+            old_status=get_status_display(current_status, language=lang),
+            new_status=get_status_display(new_status, language=lang)
         )
         
         await callback.message.edit_text(success_text)
@@ -445,14 +446,11 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
         requests = q.limit(10).all()
         
         if requests:
-            def _icon(s: str) -> str:
-                return {REQUEST_STATUS_IN_PROGRESS: "🔄", REQUEST_STATUS_PURCHASE: "💰", REQUEST_STATUS_CLARIFICATION: "❓"}.get(s, "")
-            
             # Показываем список активных заявок
             text = get_text("request_status_mgmt.handlers.active_requests_header", language=lang)
             for i, r in enumerate(requests, 1):
                 addr = r.address[:40] + ("…" if len(r.address) > 40 else "")
-                text += f"{i}. {_icon(r.status)} #{r.request_number} - {r.category} - {r.status}\n"
+                text += f"{i}. {get_status_with_emoji(r.status, language=lang)} #{r.request_number} - {r.category}\n"
                 text += f"   📍 {addr}\n\n"
             
             from uk_management_bot.keyboards.admin import get_manager_main_keyboard
@@ -712,8 +710,8 @@ async def show_status_confirmation(callback_or_message, state: FSMContext, db: S
         lang = get_language_from_event(callback_or_message, db)
         confirmation_text = get_text("request_status_mgmt.handlers.confirmation", language=lang).format(
             request_number=request_number,
-            current_status=current_status,
-            new_status=new_status,
+            current_status=get_status_display(current_status, language=lang),
+            new_status=get_status_display(new_status, language=lang),
             category=request.category,
             address=request.address
         )

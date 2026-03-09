@@ -43,6 +43,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 import logging
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji, STATUS_EMOJI
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -292,7 +293,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         message_text += get_text("admin.handlers.request_detail_applicant", language=lang).format(user_info=user_info) + "\n"
         message_text += get_text("admin.handlers.request_detail_telegram_id", language=lang).format(telegram_id=request_user.telegram_id if request_user else 'N/A') + "\n"
         message_text += get_text("admin.handlers.request_detail_category", language=lang).format(category=request.category) + "\n"
-        message_text += get_text("admin.handlers.request_detail_status", language=lang).format(status=request.status) + "\n"
+        message_text += get_text("admin.handlers.request_detail_status", language=lang).format(status=get_status_display(request.status, language=lang)) + "\n"
         message_text += get_text("admin.handlers.request_detail_address", language=lang).format(address=request.address) + "\n"
         message_text += get_text("admin.handlers.request_detail_description", language=lang).format(description=request.description) + "\n"
         message_text += get_text("admin.handlers.request_detail_urgency", language=lang).format(urgency=request.urgency) + "\n"
@@ -1197,7 +1198,7 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
             "request_number": r.request_number,
             "category": r.category,
             "address": r.address,
-            "status": "🔄 Возвратная" if r.is_returned else r.status
+            "status": "🔄 " + get_text("admin.handlers.returned_label", language=lang) if r.is_returned else r.status
         }
         items.append(item)
 
@@ -1390,13 +1391,11 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
     if not requests:
         await message.answer(get_text("admin.handlers.archive_empty", language=lang), reply_markup=get_manager_main_keyboard())
         return
-    def _icon(s: str) -> str:
-        return {REQUEST_STATUS_EXECUTED: "✅", REQUEST_STATUS_COMPLETED: "✅", REQUEST_STATUS_APPROVED: "⭐", REQUEST_STATUS_CANCELLED: "❌"}.get(s, "")
     # Каждую заявку отправляем отдельным сообщением
     for r in requests:
         addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
         text = (
-            f"{_icon(r.status)} #{r.request_number} • {r.category} • {r.status}\n"
+            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {r.category}\n"
             + get_text("admin.handlers.archive_address", language=lang).format(address=addr) + "\n"
             + get_text("admin.handlers.archive_created", language=lang).format(created_at=r.created_at.strftime('%d.%m.%Y %H:%M'))
         )
@@ -1437,7 +1436,7 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
     for r in requests:
         addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
         text = (
-            f"💰 #{r.request_number} • {r.category} • {r.status}\n"
+            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {r.category}\n"
             + get_text("admin.handlers.archive_address", language=lang).format(address=addr) + "\n"
             + get_text("admin.handlers.archive_created", language=lang).format(created_at=r.created_at.strftime('%d.%m.%Y %H:%M'))
         )

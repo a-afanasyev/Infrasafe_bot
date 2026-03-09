@@ -50,6 +50,7 @@ from typing import Optional
 
 # Localization imports - TASK 17 Phase 2
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, get_status_with_emoji, STATUS_EMOJI
 from uk_management_bot.utils.language_helpers import (
     get_language_for_user,
     get_language_from_message
@@ -1257,26 +1258,15 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             current_page=current_page,
             total_pages=total_pages
         ) + "\n\n"
-        def _icon(st: str) -> str:
-            mapping = {
-                "В работе": "🛠️",
-                "Закуп": "💰",
-                "Уточнение": "❓",
-                "Исполнено": "✅",
-                "Отменена": "❌",
-                "Выполнена": "✅",
-                "Принято": "✅",
-                "Новая": "🆕",
-            }
-            return mapping.get(st, "")
         # TASK 17 Этап A: Используем resolve_category_key и get_category_display для нормализации категорий
-        # TASK 17 Этап C: Локализуем статусы
-        from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_status_display
+        # TASK 17 Этап C: Локализуем статусы через status_display.py
+        from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
         for i, request in enumerate(page_requests, 1):
             category_key = resolve_category_key(request.category)
             category_display = get_category_display(category_key, language=lang)
-            status_display = get_status_display(request.status, language=lang)
-            message_text += f"{i}. {_icon(request.status)} #{request.request_number} - {category_display} - {status_display}\n"
+            status_display = _sd_get_status_display(request.status, language=lang)
+            icon = STATUS_EMOJI.get(request.status, "📋")
+            message_text += f"{i}. {icon} #{request.request_number} - {category_display} - {status_display}\n"
             # TASK 17 Этап C: Локализованные метки
             address_label = get_text("requests.address_label", language=lang) or "Адрес"
             created_label = get_text("requests.created_label", language=lang) or "Создана"
@@ -2482,28 +2472,17 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         if not page_requests:
             message_text += get_text("requests.handlers.no_requests_hint", language=lang)
         else:
-            def _icon(st: str) -> str:
-                mapping = {
-                    "В работе": "🛠️",
-                    "Закуп": "💰",
-                    "Уточнение": "❓",
-                    "Исполнено": "✅",
-                    "Отменена": "❌",
-                    "Выполнена": "✅",
-                    "Принято": "✅",
-                    "Новая": "🆕",
-                }
-                return mapping.get(st, "")
             for i, request in enumerate(page_requests, 1):
                 address = request.address
                 if len(address) > 60:
                     address = address[:60] + "…"
-                # TASK 17 Этап A и C: Локализуем категорию и статус
-                from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_status_display
+                # TASK 17 Этап A и C: Локализуем категорию и статус через status_display.py
+                from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
                 category_key = resolve_category_key(request.category)
                 category_display = get_category_display(category_key, language=lang)
-                status_display = get_status_display(request.status, language=lang)
-                message_text += f"{i}. {_icon(request.status)} #{request.request_number} - {category_display} - {status_display}\n"
+                status_display = _sd_get_status_display(request.status, language=lang)
+                icon = STATUS_EMOJI.get(request.status, "📋")
+                message_text += f"{i}. {icon} #{request.request_number} - {category_display} - {status_display}\n"
                 # TASK 17 Этап C: Локализованные метки
                 address_label = get_text("requests.address_label", language=lang) or "Адрес"
                 created_label = get_text("requests.created_label", language=lang) or "Создана"

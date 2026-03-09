@@ -852,6 +852,7 @@
       "archive_created": "Создана: {created_at}",
       "archive_cancel_reason": "💬 Причина отказа: {reason}",
       "archive_notes": "💬 Заметки: {notes}",
+      "returned_label": "Возвратная",
       "archive_end": "📦 Конец списка архива",
       "no_procurement_requests": "💰 Заявок в статусе 'Закуп' не найдено",
       "procurement_requested": "📋 Запрошено: {materials}",

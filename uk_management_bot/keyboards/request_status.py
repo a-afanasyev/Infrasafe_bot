@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List
 
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.status_display import get_status_with_emoji
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE,
     REQUEST_STATUS_CLARIFICATION, REQUEST_STATUS_COMPLETED,
@@ -26,18 +27,9 @@ def get_status_selection_keyboard(available_statuses: List[str], language: str =
         InlineKeyboardMarkup: Клавиатура с кнопками статусов
     """
     keyboard = []
-    
-    # Маппинг статусов на отображаемые названия
-    status_display_names = {
-        REQUEST_STATUS_IN_PROGRESS: get_text("request_status.keyboards.status_in_progress", language=language),
-        REQUEST_STATUS_PURCHASE: get_text("request_status.keyboards.status_purchase", language=language),
-        REQUEST_STATUS_CLARIFICATION: get_text("request_status.keyboards.status_clarification", language=language),
-        REQUEST_STATUS_COMPLETED: get_text("request_status.keyboards.status_completed", language=language),
-        REQUEST_STATUS_APPROVED: get_text("request_status.keyboards.status_approved", language=language)
-    }
-    
+
     for status in available_statuses:
-        display_name = status_display_names.get(status, status)
+        display_name = get_status_with_emoji(status, language=language)
         keyboard.append([
             InlineKeyboardButton(
                 text=display_name,

@@ -2,6 +2,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.status_display import STATUS_EMOJI, get_status_with_emoji
 
 
 def get_manager_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
@@ -44,16 +45,8 @@ def get_manager_requests_inline(page: int, total_pages: int, language: str = "ru
 
 
 def _status_icon(status: str) -> str:
-    mapping = {
-        "В работе": "🛠️",
-        "Закуп": "💰",
-        "Уточнение": "❓",
-        "Подтверждена": "⭐",
-        "Отменена": "❌",
-        "Выполнена": "✅",
-        "Новая": "🆕",
-    }
-    return mapping.get(status, "")
+    """Return status emoji from the centralised STATUS_EMOJI mapping."""
+    return STATUS_EMOJI.get(status, "📋")
 
 
 def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: int, language: str = "ru") -> InlineKeyboardMarkup:

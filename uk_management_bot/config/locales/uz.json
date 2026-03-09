@@ -852,6 +852,7 @@
       "archive_created": "Yaratilgan: {created_at}",
       "archive_cancel_reason": "💬 Rad etish sababi: {reason}",
       "archive_notes": "💬 Izohlar: {notes}",
+      "returned_label": "Qaytarilgan",
       "archive_end": "📦 Arxiv ro'yxati oxiri",
       "no_procurement_requests": "💰 'Xarid' holatidagi arizalar topilmadi",
       "procurement_requested": "📋 So'ralgan: {materials}",
