@@ -1,20 +1,23 @@
 import { useEffect, useRef, useCallback } from 'react'
 
 const WS_URL = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+const MAX_RECONNECT_ATTEMPTS = 5
 
-export function useWebSocket(onMessage: (event: { type: string; data: unknown }) => void) {
+export function useWebSocket(
+  endpoint: 'kanban' | 'shifts',
+  onMessage: (event: { type: string; data: unknown }) => void
+) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const attemptsRef = useRef(0)
   const onMessageRef = useRef(onMessage)
-
-  // Keep callback ref up to date to avoid stale closures
   onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
     const token = localStorage.getItem('access_token')
     if (!token) return
 
-    const ws = new WebSocket(`${WS_URL}/ws/v2/kanban?token=${token}`)
+    const ws = new WebSocket(`${WS_URL}/ws/v2/${endpoint}?token=${token}`)
     wsRef.current = ws
 
     ws.onmessage = (e) => {
@@ -24,10 +27,24 @@ export function useWebSocket(onMessage: (event: { type: string; data: unknown })
       } catch { /* ignore parse errors */ }
     }
 
-    ws.onclose = () => {
+    ws.onopen = () => {
+      attemptsRef.current = 0
+    }
+
+    ws.onclose = (event) => {
+      if (event.code === 1008) {
+        // Policy violation — expired token, don't retry
+        return
+      }
+      if (attemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+        console.warn(`WebSocket [${endpoint}] disconnected after ${MAX_RECONNECT_ATTEMPTS} attempts`)
+        return
+      }
+      attemptsRef.current += 1
+      // Read fresh token (may have been refreshed by Axios interceptor)
       reconnectTimer.current = setTimeout(connect, 3000)
     }
-  }, [])
+  }, [endpoint])
 
   useEffect(() => {
     connect()

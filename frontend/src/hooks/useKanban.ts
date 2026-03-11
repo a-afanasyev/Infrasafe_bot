@@ -29,7 +29,7 @@ export function useKanban(filters: Record<string, string | undefined> = {}) {
     staleTime: 30_000,
   })
 
-  useWebSocket((event) => {
+  useWebSocket('kanban', (event) => {
     if (['request.created', 'request.status_changed', 'request.assigned', 'request.updated'].includes(event.type)) {
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
     }
