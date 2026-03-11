@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, Field
 from typing import Optional, Literal
 from datetime import datetime, date as date_type
 import json
@@ -114,20 +114,26 @@ class CreateShiftBody(BaseModel):
     user_id: int
     start_time: datetime
     end_time: datetime
-    shift_type: str = "regular"
+    shift_type: ShiftType = "regular"
     specialization_focus: list[str] = []
-    max_requests: int = 10
-    priority_level: int = 1
+    max_requests: int = Field(default=10, ge=1)
+    priority_level: int = Field(default=1, ge=1, le=5)
     notes: Optional[str] = None
+
+    @model_validator(mode='after')
+    def check_time_order(self):
+        if self.end_time <= self.start_time:
+            raise ValueError('end_time must be after start_time')
+        return self
 
 
 class UpdateShiftBody(BaseModel):
-    status: Optional[str] = None
+    status: Optional[ShiftStatus] = None
     user_id: Optional[int] = None
-    shift_type: Optional[str] = None
+    shift_type: Optional[ShiftType] = None
     end_time: Optional[datetime] = None
     notes: Optional[str] = None
-    max_requests: Optional[int] = None
+    max_requests: Optional[int] = Field(default=None, ge=1)
 
 
 class CreateFromTemplateBody(BaseModel):
@@ -162,33 +168,51 @@ class TemplateBrief(BaseModel):
 
 
 class CreateTemplateBody(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
-    start_hour: int
-    start_minute: int = 0
-    duration_hours: int
+    start_hour: int = Field(ge=0, le=23)
+    start_minute: int = Field(default=0, ge=0, le=59)
+    duration_hours: int = Field(ge=1, le=24)
     required_specializations: list[str] = []
-    min_executors: int = 1
-    max_executors: int = 3
-    default_max_requests: int = 10
-    days_of_week: list[int] = []
+    min_executors: int = Field(default=1, ge=1)
+    max_executors: int = Field(default=3, ge=1)
+    default_max_requests: int = Field(default=10, ge=1)
+    days_of_week: list[int] = Field(default=[])
     auto_create: bool = False
-    default_shift_type: str = "regular"
-    priority_level: int = 1
+    default_shift_type: ShiftType = "regular"
+    priority_level: int = Field(default=1, ge=1, le=5)
+
+    @model_validator(mode='after')
+    def check_executor_range(self):
+        if self.min_executors > self.max_executors:
+            raise ValueError('min_executors cannot exceed max_executors')
+        if any(d < 0 or d > 6 for d in self.days_of_week):
+            raise ValueError('days_of_week values must be 0-6')
+        return self
 
 
 class UpdateTemplateBody(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
-    start_hour: Optional[int] = None
-    start_minute: Optional[int] = None
-    duration_hours: Optional[int] = None
+    start_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    start_minute: Optional[int] = Field(default=None, ge=0, le=59)
+    duration_hours: Optional[int] = Field(default=None, ge=1, le=24)
     required_specializations: Optional[list[str]] = None
-    min_executors: Optional[int] = None
-    max_executors: Optional[int] = None
-    default_max_requests: Optional[int] = None
+    min_executors: Optional[int] = Field(default=None, ge=1)
+    max_executors: Optional[int] = Field(default=None, ge=1)
+    default_max_requests: Optional[int] = Field(default=None, ge=1)
     days_of_week: Optional[list[int]] = None
     auto_create: Optional[bool] = None
-    default_shift_type: Optional[str] = None
-    priority_level: Optional[int] = None
-    is_active: Optional[bool] = None
+    default_shift_type: Optional[ShiftType] = None
+    priority_level: Optional[int] = Field(default=None, ge=1, le=5)
+    # is_active removed: soft-delete must go through the DELETE endpoint
+
+    @model_validator(mode='after')
+    def check_executor_range(self):
+        if self.min_executors is not None and self.max_executors is not None:
+            if self.min_executors > self.max_executors:
+                raise ValueError('min_executors cannot exceed max_executors')
+        if self.days_of_week is not None:
+            if any(d < 0 or d > 6 for d in self.days_of_week):
+                raise ValueError('days_of_week values must be 0-6')
+        return self

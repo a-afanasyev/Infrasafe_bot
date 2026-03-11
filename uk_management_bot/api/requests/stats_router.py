@@ -3,11 +3,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from pydantic import BaseModel
+import logging
 
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -67,6 +71,7 @@ async def get_request_stats(
             days = int(period[:-1])
         except ValueError:
             days = 7
+    days = max(1, min(days, 365))
 
     now_utc = datetime.now(timezone.utc)
     period_start = now_utc - timedelta(days=days)
@@ -164,8 +169,8 @@ async def get_request_stats(
             )
             for uid, avg_h in ah_result.all():
                 avg_hours_map[uid] = float(avg_h) if avg_h is not None else None
-        except Exception:
-            pass  # DB doesn't support epoch extraction (e.g. SQLite)
+        except (OperationalError, ProgrammingError) as e:
+            logger.warning("DB doesn't support epoch extraction: %s", e)
 
     # Batch-load executor users
     exec_user_ids = [row[0] for row in exec_rows]
@@ -245,8 +250,9 @@ async def get_request_stats(
         )
         avg_res_scalar = avg_res_result.scalar()
         avg_resolution_hours = float(avg_res_scalar) if avg_res_scalar is not None else None
-    except Exception:
-        avg_resolution_hours = None  # DB doesn't support epoch extraction (e.g. SQLite)
+    except (OperationalError, ProgrammingError) as e:
+        logger.warning("DB doesn't support epoch extraction: %s", e)
+        avg_resolution_hours = None
 
     return RequestStatsOut(
         by_day=by_day,

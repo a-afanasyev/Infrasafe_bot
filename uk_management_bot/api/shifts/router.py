@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -5,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import aliased
 
-from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles
+from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
 from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     ShiftBrief, ShiftDetail,
@@ -26,6 +27,10 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards % _ \\ to prevent injection."""
+    return re.sub(r'([%_\\])', r'\\\1', value)
 
 def _executor_name(user: Optional[User]) -> Optional[str]:
     if user is None:
@@ -87,7 +92,7 @@ async def list_employees(
     role: Optional[str] = Query(None),
     verification_status: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
@@ -99,10 +104,10 @@ async def list_employees(
     )
 
     if specialization:
-        query = query.where(User.specialization.like(f'%{specialization}%'))
+        query = query.where(User.specialization.like(f'%{_escape_like(specialization)}%'))
 
     if search:
-        search_term = f"%{search}%"
+        search_term = f"%{_escape_like(search)}%"
         query = query.where(
             or_(
                 User.first_name.ilike(search_term),
@@ -113,7 +118,7 @@ async def list_employees(
     if verification_status:
         query = query.where(User.verification_status == verification_status)
     if role:
-        query = query.where(User.roles.like(f'%"{role}"%'))
+        query = query.where(User.roles.like(f'%"{_escape_like(role)}"%'))
 
     if has_active_shift is True:
         active_shift_subq = (
@@ -159,6 +164,10 @@ async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.verification_status == "verified":
+        raise HTTPException(status_code=409, detail="User is already verified")
+    if user.verification_status == "rejected":
+        raise HTTPException(status_code=409, detail="User was rejected and cannot be re-approved this way")
     user.verification_status = "verified"
     await db.commit()
     await db.refresh(user)
@@ -172,6 +181,8 @@ async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.verification_status == "rejected":
+        raise HTTPException(status_code=409, detail="User is already rejected")
     user.verification_status = "rejected"
     await db.commit()
     await db.refresh(user)
@@ -237,10 +248,10 @@ async def list_shifts(
     status: Optional[str] = Query(None),
     shift_type: Optional[str] = Query(None),
     user_id: Optional[int] = Query(None),
-    date_from: Optional[str] = Query(None),
-    date_to: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
     limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
@@ -252,11 +263,9 @@ async def list_shifts(
     if user_id:
         query = query.where(Shift.user_id == user_id)
     if date_from:
-        dt_from = datetime.fromisoformat(date_from)
-        query = query.where(Shift.start_time >= dt_from)
+        query = query.where(Shift.start_time >= date_from)
     if date_to:
-        dt_to = datetime.fromisoformat(date_to)
-        query = query.where(Shift.start_time <= dt_to)
+        query = query.where(Shift.start_time <= date_to)
 
     result = await db.execute(query.order_by(Shift.start_time.desc()).offset(offset).limit(limit))
     shifts = result.scalars().all()
@@ -274,17 +283,14 @@ async def list_shifts(
 
 @router.get("/schedule", response_model=list[ShiftBrief])
 async def get_schedule(
-    date_from: str = Query(...),
-    date_to: str = Query(...),
+    date_from: datetime = Query(...),
+    date_to: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    dt_from = datetime.fromisoformat(date_from)
-    dt_to = datetime.fromisoformat(date_to)
-
     result = await db.execute(
         select(Shift)
-        .where(Shift.start_time >= dt_from, Shift.start_time <= dt_to)
+        .where(Shift.start_time >= date_from, Shift.start_time <= date_to)
         .order_by(Shift.start_time.asc())
     )
     shifts = result.scalars().all()
@@ -312,6 +318,7 @@ async def get_stats(
             days = int(period[:-1])
         except ValueError:
             days = 7
+    days = max(1, min(days, 365))
 
     period_start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -387,7 +394,7 @@ async def get_stats(
 @router.get("/transfers", response_model=list[TransferOut])
 async def list_transfers(
     limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
@@ -424,7 +431,7 @@ async def list_transfers(
 @router.get("/templates", response_model=list[TemplateBrief])
 async def list_templates(
     limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
@@ -608,9 +615,7 @@ async def handle_transfer(
         new_executor = exec_res.scalar_one_or_none()
         if not new_executor:
             raise HTTPException(status_code=404, detail="Executor not found")
-        has_exec_role = (new_executor.role == "executor") or (
-            new_executor.roles and '"executor"' in new_executor.roles
-        )
+        has_exec_role = "executor" in _parse_user_roles(new_executor)
         if not has_exec_role:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -619,6 +624,14 @@ async def handle_transfer(
         transfer.status = "assigned"
         transfer.to_executor_id = body.to_executor_id
         transfer.assigned_at = datetime.now(timezone.utc)
+
+        # Actually reassign the shift to the new executor
+        shift_result = await db.execute(
+            select(Shift).where(Shift.id == transfer.shift_id).with_for_update()
+        )
+        the_shift = shift_result.scalar_one_or_none()
+        if the_shift:
+            the_shift.user_id = body.to_executor_id
 
     elif action == "reject":
         if transfer.status != "assigned":
@@ -695,7 +708,7 @@ async def create_shift(
     if not emp:
         raise HTTPException(status_code=404, detail="User not found")
 
-    has_executor_role = (emp.role == "executor") or bool(emp.roles and '"executor"' in emp.roles)
+    has_executor_role = "executor" in _parse_user_roles(emp)
     if not has_executor_role:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -763,6 +776,14 @@ async def update_shift(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Transition '{shift.status}' → '{body.status}' is not allowed",
             )
+
+    if body.user_id is not None and body.user_id != shift.user_id:
+        u_res = await db.execute(select(User).where(User.id == body.user_id))
+        new_user = u_res.scalar_one_or_none()
+        if not new_user:
+            raise HTTPException(status_code=404, detail="Target user not found")
+        if "executor" not in _parse_user_roles(new_user):
+            raise HTTPException(status_code=422, detail="Target user does not have executor role")
 
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(shift, field, value)

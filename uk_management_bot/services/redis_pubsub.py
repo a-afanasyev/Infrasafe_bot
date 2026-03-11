@@ -39,7 +39,7 @@ async def subscribe_to_requests():
     client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(CHANNEL)
-    return pubsub
+    return pubsub, client
 
 
 SHIFTS_CHANNEL = "shifts:updates"
@@ -61,4 +61,4 @@ async def subscribe_to_shifts():
     client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(SHIFTS_CHANNEL)
-    return pubsub
+    return pubsub, client

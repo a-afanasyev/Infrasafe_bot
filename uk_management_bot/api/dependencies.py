@@ -10,12 +10,17 @@ from typing import AsyncGenerator
 security = HTTPBearer()
 
 
-def _parse_user_roles(user: User) -> list[str]:
+def _parse_user_roles(user) -> list[str]:
     """Parse user roles from JSON or CSV string, falling back to single role field."""
     if user.roles:
         raw = user.roles.strip()
         if raw.startswith("["):
-            return json.loads(raw)
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [str(r) for r in parsed]
+            except (json.JSONDecodeError, TypeError):
+                pass
         return [r.strip() for r in raw.split(",") if r.strip()]
     return [user.role] if user.role else []
 
