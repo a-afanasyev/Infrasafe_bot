@@ -18,7 +18,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.redis_pubsub import publish_request_event  # will add publish_shift_event later
+from uk_management_bot.services.redis_pubsub import publish_shift_event
 
 router = APIRouter()
 
@@ -617,7 +617,7 @@ async def handle_transfer(
         created_at=transfer.created_at,
     )
 
-    await publish_request_event("transfer.updated", transfer_out.model_dump(mode="json"))
+    await publish_shift_event("transfer.updated", transfer_out.model_dump(mode="json"))
     return transfer_out
 
 
@@ -692,7 +692,7 @@ async def create_shift(
     await db.refresh(shift)
 
     detail = _shift_detail(shift, emp)
-    await publish_request_event("shift.created", detail.model_dump(mode="json"))
+    await publish_shift_event("shift.created", detail.model_dump(mode="json"))
     return detail
 
 
@@ -733,7 +733,7 @@ async def update_shift(
         user_obj = u_result.scalar_one_or_none()
 
     detail = _shift_detail(shift, user_obj)
-    await publish_request_event("shift.updated", detail.model_dump(mode="json"))
+    await publish_shift_event("shift.updated", detail.model_dump(mode="json"))
     return detail
 
 
@@ -788,5 +788,5 @@ async def end_shift(
         user_obj = u_result.scalar_one_or_none()
 
     detail = _shift_detail(shift, user_obj)
-    await publish_request_event("shift.ended", detail.model_dump(mode="json"))
+    await publish_shift_event("shift.ended", detail.model_dump(mode="json"))
     return detail

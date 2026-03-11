@@ -39,3 +39,24 @@ async def subscribe_to_requests():
     pubsub = client.pubsub()
     await pubsub.subscribe(CHANNEL)
     return pubsub
+
+
+SHIFTS_CHANNEL = "shifts:updates"
+
+
+async def publish_shift_event(event_type: str, data: dict) -> None:
+    """Publish shift event to Redis Pub/Sub channel."""
+    try:
+        client = await get_pubsub_redis()
+        message = json.dumps({"type": event_type, "data": data})
+        await client.publish(SHIFTS_CHANNEL, message)
+    except Exception:
+        logger.warning("Failed to publish shift event %s", event_type, exc_info=True)
+
+
+async def subscribe_to_shifts():
+    """Returns Redis Pub/Sub subscriber for shifts WebSocket handler."""
+    client = await get_pubsub_redis()
+    pubsub = client.pubsub()
+    await pubsub.subscribe(SHIFTS_CHANNEL)
+    return pubsub
