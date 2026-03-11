@@ -91,7 +91,7 @@ async def list_employees(
     query = select(User).where(
         or_(
             User.role == "executor",
-            User.roles.like('%executor%'),
+            User.roles.like('%"executor"%'),
         )
     )
 
@@ -296,7 +296,7 @@ async def get_stats(
             User.status == "approved",
             or_(
                 User.role == "executor",
-                User.roles.like('%executor%'),
+                User.roles.like('%"executor"%'),
             ),
         )
     )
@@ -495,15 +495,20 @@ async def create_from_template(
     from datetime import timedelta
     end_dt = start_dt + timedelta(hours=tmpl.duration_hours or 8)
 
-    user_ids = body.user_ids or [None]
-    created_shifts = []
-    for uid in user_ids:
-        if uid is not None:
-            user_check = await db.execute(select(User).where(User.id == uid))
-            emp = user_check.scalar_one_or_none()
-            if not emp:
-                raise HTTPException(status_code=404, detail=f"User {uid} not found")
+    user_ids_list = body.user_ids or [None]
+    # Batch-load and validate all users upfront
+    valid_uids = [uid for uid in user_ids_list if uid is not None]
+    users_map: dict[int, User] = {}
+    if valid_uids:
+        u_res = await db.execute(select(User).where(User.id.in_(valid_uids)))
+        for u in u_res.scalars().all():
+            users_map[u.id] = u
+        missing = [uid for uid in valid_uids if uid not in users_map]
+        if missing:
+            raise HTTPException(status_code=404, detail=f"Users not found: {missing}")
 
+    created_shifts = []
+    for uid in user_ids_list:
         shift = Shift(
             user_id=uid,
             start_time=start_dt,
@@ -522,17 +527,10 @@ async def create_from_template(
         created_shifts.append(shift)
 
     await db.commit()
-
-    details = []
     for s in created_shifts:
         await db.refresh(s)
-        user_obj = None
-        if s.user_id:
-            u_res = await db.execute(select(User).where(User.id == s.user_id))
-            user_obj = u_res.scalar_one_or_none()
-        details.append(_shift_detail(s, user_obj))
 
-    return details
+    return [_shift_detail(s, users_map.get(s.user_id) if s.user_id else None) for s in created_shifts]
 
 
 @router.post("/transfers/{transfer_id}/handle", response_model=TransferOut)
@@ -543,7 +541,7 @@ async def handle_transfer(
     _user: User = Depends(require_roles("manager")),
 ):
     result = await db.execute(
-        select(ShiftTransfer).where(ShiftTransfer.id == transfer_id)
+        select(ShiftTransfer).where(ShiftTransfer.id == transfer_id).with_for_update()
     )
     transfer = result.scalar_one_or_none()
     if not transfer:
@@ -561,6 +559,19 @@ async def handle_transfer(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="to_executor_id is required for action 'approve'",
+            )
+        # Validate target executor exists and has executor role
+        exec_res = await db.execute(select(User).where(User.id == body.to_executor_id))
+        new_executor = exec_res.scalar_one_or_none()
+        if not new_executor:
+            raise HTTPException(status_code=404, detail="Executor not found")
+        has_exec_role = (new_executor.role == "executor") or (
+            new_executor.roles and '"executor"' in new_executor.roles
+        )
+        if not has_exec_role:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Target user does not have executor role",
             )
         transfer.status = "assigned"
         transfer.to_executor_id = body.to_executor_id
@@ -641,21 +652,21 @@ async def create_shift(
     if not emp:
         raise HTTPException(status_code=404, detail="User not found")
 
-    has_executor_role = (emp.role == "executor") or (emp.roles and "executor" in emp.roles)
+    has_executor_role = (emp.role == "executor") or bool(emp.roles and '"executor"' in emp.roles)
     if not has_executor_role:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="User does not have executor role",
         )
 
-    # Check for overlapping active shifts
+    # Check for overlapping active or planned shifts
     overlap_result = await db.execute(
         select(Shift).where(
             Shift.user_id == body.user_id,
-            Shift.status == "active",
+            Shift.status.in_(["active", "planned"]),
             Shift.start_time < body.end_time,
             Shift.end_time > body.start_time,
-        )
+        ).with_for_update()
     )
     if overlap_result.scalar_one_or_none():
         raise HTTPException(
@@ -696,6 +707,19 @@ async def update_shift(
     shift = result.scalar_one_or_none()
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
+
+    if body.status is not None:
+        VALID_TRANSITIONS: dict[str, list[str]] = {
+            "planned": ["active", "cancelled"],
+            "active": ["paused", "cancelled"],
+            "paused": ["active", "cancelled"],
+        }
+        allowed = VALID_TRANSITIONS.get(shift.status, [])
+        if body.status not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Transition '{shift.status}' → '{body.status}' is not allowed",
+            )
 
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(shift, field, value)
@@ -745,6 +769,12 @@ async def end_shift(
     shift = result.scalar_one_or_none()
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
+
+    if shift.status not in ("active", "paused"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot end shift with status '{shift.status}'",
+        )
 
     shift.end_time = datetime.now(timezone.utc)
     shift.status = "completed"

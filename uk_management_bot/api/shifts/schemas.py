@@ -21,32 +21,35 @@ class EmployeeBrief(BaseModel):
 
     @model_validator(mode='before')
     @classmethod
-    def parse_specialization(cls, values):
-        # Handle ORM object (has __dict__) or dict
-        if hasattr(values, '__dict__'):
-            raw = getattr(values, 'specialization', None)
-        else:
-            raw = values.get('specialization')
-        # parse raw JSON string -> list
+    def _coerce_from_orm(cls, values):
+        """Convert ORM object to dict before field validation."""
+        if hasattr(values, '__dict__') and not isinstance(values, dict):
+            # Extract all relevant fields from ORM object
+            return {
+                "id": getattr(values, "id", None),
+                "first_name": getattr(values, "first_name", None),
+                "last_name": getattr(values, "last_name", None),
+                "phone": getattr(values, "phone", None),
+                "verification_status": getattr(values, "verification_status", ""),
+                "active_shift_id": getattr(values, "active_shift_id", None),
+                "specialization": getattr(values, "specialization", None),
+            }
+        return values
+
+    @model_validator(mode='after')
+    def parse_specialization(self) -> "EmployeeBrief":
+        """Parse JSON string specialization into list[str]."""
+        raw = self.specialization
         if isinstance(raw, str):
             try:
                 parsed = json.loads(raw)
-                if isinstance(parsed, list):
-                    if hasattr(values, '__dict__'):
-                        values.__dict__['specialization'] = parsed
-                    else:
-                        values['specialization'] = parsed
+                self.specialization = parsed if isinstance(parsed, list) else []
             except (json.JSONDecodeError, TypeError):
-                if hasattr(values, '__dict__'):
-                    values.__dict__['specialization'] = []
-                else:
-                    values['specialization'] = []
+                self.specialization = []
         elif raw is None:
-            if hasattr(values, '__dict__'):
-                values.__dict__['specialization'] = []
-            else:
-                values['specialization'] = []
-        return values
+            self.specialization = []
+        # if already a list, leave as-is
+        return self
 
 
 class ShiftBrief(BaseModel):
