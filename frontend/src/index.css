@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+:root {
+  --bg-root: #060a10;
+  --bg-primary: #0a0f18;
+  --bg-secondary: #0f1520;
+  --bg-card: #131c2b;
+  --bg-card-hover: #182438;
+  --bg-surface: #1a2435;
+  --bg-sidebar: #080c14;
+  --accent: #00d4aa;
+  --accent-dim: rgba(0,212,170,0.12);
+  --accent-glow: rgba(0,212,170,0.25);
+  --blue: #3b82f6;
+  --violet: #8b5cf6;
+  --amber: #f59e0b;
+  --cyan: #06b6d4;
+  --emerald: #10b981;
+  --green: #22c55e;
+  --teal: #14b8a6;
+  --red: #ef4444;
+  --text-primary: #edf2f7;
+  --text-secondary: #8899aa;
+  --text-muted: #5a6a7a;
+  --border: rgba(255,255,255,0.06);
+  --border-active: rgba(0,212,170,0.3);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --sidebar-w: 260px;
+  --topbar-h: 64px;
+}
+
+body.light {
+  --bg-root: #f0f4f8;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-surface: #e8eef5;
+  --bg-sidebar: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border: rgba(0,0,0,0.08);
+  --border-active: rgba(0,212,170,0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+}
