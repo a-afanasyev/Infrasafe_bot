@@ -126,8 +126,6 @@ export default function ShiftsPage() {
         )
       : 0
 
-  // Count unique specializations covered by active shifts
-  const TOTAL_SPECS = 8  // Электрика, Сантехника, Отопление, Уборка, Безопасность, Лифт, Благоустройство, Вентиляция
   // (no specialization data on ShiftBrief, use active_shifts as proxy)
   const specCoverage = stats ? Math.min(100, Math.round((stats.active_executors / Math.max(stats.active_shifts, 1)) * 100)) : 0
 

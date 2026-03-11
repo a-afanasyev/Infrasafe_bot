@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useCreateTemplate, CreateTemplatePayload } from '../../hooks/useTemplates'
+import { useCreateTemplate } from '../../hooks/useTemplates'
+import type { CreateTemplatePayload } from '../../types/api'
 import { SPEC_DISPLAY } from '../../utils/employeeUtils'
 
 interface Props {
@@ -77,12 +78,12 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
         start_minute: Number(startMinute),
         duration_hours: Number(durationHours),
         default_shift_type: shiftType,
-        days_of_week: daysOfWeek.length > 0 ? daysOfWeek : null,
+        days_of_week: daysOfWeek.length > 0 ? daysOfWeek : undefined,
         is_active: true,
         min_executors: Number(minExecutors),
         max_executors: Number(maxExecutors),
         auto_create: autoCreate,
-        required_specializations: selectedSpecs.length > 0 ? selectedSpecs : null,
+        required_specializations: selectedSpecs.length > 0 ? selectedSpecs : undefined,
         default_max_requests: Number(defaultMaxRequests),
         priority_level: Number(priority),
       }
