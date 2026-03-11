@@ -255,9 +255,13 @@ export default function EmployeesPage() {
                 if (e.status === 'blocked') {
                   unblockEmployee.mutate(e.id)
                 } else {
-                  blockEmployee.mutate(e.id)
+                  const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
+                  if (window.confirm(`Заблокировать сотрудника ${empName}?`)) {
+                    blockEmployee.mutate(e.id)
+                  }
                 }
               }}
+              isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
             />
           ))}
         </div>

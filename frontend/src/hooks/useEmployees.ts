@@ -64,6 +64,7 @@ export function useBlockEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/block`).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error('Block employee failed:', error),
   })
 }
 
@@ -73,5 +74,6 @@ export function useUnblockEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/unblock`).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error('Unblock employee failed:', error),
   })
 }

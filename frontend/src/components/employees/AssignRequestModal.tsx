@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import type { KanbanColumn, RequestCard } from '../../hooks/useKanban'
+
+const IN_WORK_STATUS = 'В работе' // matches API status value
 
 interface Props {
   employee: EmployeeBrief
@@ -10,6 +13,7 @@ interface Props {
 
 export default function AssignRequestModal({ employee, onClose }: Props) {
   const queryClient = useQueryClient()
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery<{ columns: KanbanColumn[] }>({
     queryKey: ['kanban', {}],
@@ -17,7 +21,7 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
     staleTime: 30_000,
   })
 
-  const inWorkColumn = data?.columns.find(col => col.status === 'В работе')
+  const inWorkColumn = data?.columns.find(col => col.status === IN_WORK_STATUS)
   const requests: RequestCard[] = inWorkColumn?.requests ?? []
 
   const assignMutation = useMutation({
@@ -30,6 +34,7 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       onClose()
     },
+    onError: () => setAssignError('Не удалось назначить заявку. Попробуйте снова.'),
   })
 
   const employeeName =
@@ -138,6 +143,9 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
                 />
               ))}
             </div>
+          )}
+          {assignError && (
+            <p className="text-sm text-red-600 mt-2">{assignError}</p>
           )}
         </div>
       </div>

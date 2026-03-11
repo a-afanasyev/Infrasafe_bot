@@ -7,9 +7,10 @@ interface Props {
   onAssign?: (employee: EmployeeBrief) => void
   onBlock?: (employee: EmployeeBrief) => void
   onVerify?: (employee: EmployeeBrief) => void
+  isBlockPending?: boolean
 }
 
-export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Props) {
+export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlockPending }: Props) {
   const [hovered, setHovered] = useState(false)
 
   const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
@@ -240,14 +241,16 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
         )}
         <button
           onClick={() => onBlock?.(employee)}
+          disabled={isBlockPending}
           style={{
             background: 'none',
             border: 'none',
-            cursor: 'pointer',
+            cursor: isBlockPending ? 'not-allowed' : 'pointer',
             fontSize: '12px',
             color: isBlocked ? 'var(--amber)' : 'var(--red)',
             padding: '6px 8px',
             fontFamily: 'var(--font-display)',
+            opacity: isBlockPending ? 0.5 : 1,
           }}
         >
           {isBlocked ? 'Разблокировать' : 'Блок'}
