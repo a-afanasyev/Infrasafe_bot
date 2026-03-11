@@ -17,6 +17,17 @@ export const SPEC_COLORS: Record<string, string> = {
   'Вентиляция': 'var(--teal)',
 }
 
+export const SPEC_DISPLAY: Record<string, string> = {
+  'electrician': '⚡ Электрика',
+  'plumber': '🔧 Сантехника',
+  'heating': '🔥 Отопление',
+  'cleaning': '🧹 Уборка',
+  'security': '🔒 Безопасность',
+  'elevator': '🛗 Лифт',
+  'landscaping': '🌳 Благоустройство',
+  'ventilation': '💨 Вентиляция',
+}
+
 export function getInitials(firstName: string | null, lastName: string | null): string {
   const f = firstName ? firstName[0] : ''
   const l = lastName ? lastName[0] : ''

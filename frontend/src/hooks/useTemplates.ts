@@ -19,6 +19,23 @@ export interface TemplateBrief {
   priority_level: number
 }
 
+export interface CreateTemplatePayload {
+  name: string
+  description?: string | null
+  start_hour: number
+  start_minute: number
+  duration_hours: number
+  default_shift_type: string
+  days_of_week?: number[] | null
+  required_specializations?: string[] | null
+  min_executors?: number
+  max_executors?: number
+  default_max_requests?: number
+  auto_create?: boolean
+  priority_level?: number
+  is_active?: boolean
+}
+
 export function useTemplates() {
   return useQuery<TemplateBrief[]>({
     queryKey: ['shift-templates'],
@@ -43,11 +60,12 @@ export function useTemplate(id: number | null) {
 export function useCreateTemplate() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: object) =>
+    mutationFn: (body: CreateTemplatePayload) =>
       apiClient.post('/api/v2/shifts/templates', body).then(r => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
     },
+    onError: (error) => console.error('Create template failed:', error),
   })
 }
 
@@ -56,9 +74,11 @@ export function useUpdateTemplate() {
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Record<string, unknown>) =>
       apiClient.patch(`/api/v2/shifts/templates/${id}`, body).then(r => r.data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-template', variables.id] })
     },
+    onError: (error) => console.error('Update template failed:', error),
   })
 }
 
@@ -67,9 +87,11 @@ export function useDeleteTemplate() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v2/shifts/templates/${id}`).then(r => r.data),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
+      queryClient.removeQueries({ queryKey: ['shift-template', id] })
     },
+    onError: (error) => console.error('Delete template failed:', error),
   })
 }
 
@@ -82,5 +104,6 @@ export function useCreateShiftFromTemplate() {
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
     },
+    onError: (error) => console.error('Create shift from template failed:', error),
   })
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useCreateTemplate } from '../../hooks/useTemplates'
+import { useCreateTemplate, CreateTemplatePayload } from '../../hooks/useTemplates'
+import { SPEC_DISPLAY } from '../../utils/employeeUtils'
 
 interface Props {
   isOpen: boolean
@@ -22,17 +23,6 @@ const PRIORITIES = [
 ]
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-
-const SPEC_DISPLAY: Record<string, string> = {
-  'electrician': '⚡ Электрика',
-  'plumber': '🔧 Сантехника',
-  'heating': '🔥 Отопление',
-  'cleaning': '🧹 Уборка',
-  'security': '🔒 Безопасность',
-  'elevator': '🛗 Лифт',
-  'landscaping': '🌳 Благоустройство',
-  'ventilation': '💨 Вентиляция',
-}
 
 const START_MINUTES = [0, 15, 30, 45]
 
@@ -80,7 +70,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
       return
     }
     try {
-      await createTemplate.mutateAsync({
+      const payload: CreateTemplatePayload = {
         name: name.trim(),
         description: description.trim() || null,
         start_hour: Number(startHour),
@@ -95,7 +85,8 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
         required_specializations: selectedSpecs.length > 0 ? selectedSpecs : null,
         default_max_requests: Number(defaultMaxRequests),
         priority_level: Number(priority),
-      })
+      }
+      await createTemplate.mutateAsync(payload)
       onClose()
       // Reset form
       setName('')

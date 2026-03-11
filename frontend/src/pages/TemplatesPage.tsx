@@ -9,19 +9,7 @@ import {
 import CreateTemplateModal from '../components/templates/CreateTemplateModal'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
-import { SPEC_COLORS } from '../utils/employeeUtils'
-
-// Map English internal spec keys → Russian display names (with emoji)
-const SPEC_DISPLAY: Record<string, string> = {
-  electrician: '⚡ Электрика',
-  plumber: '🔧 Сантехника',
-  heating: '🔥 Отопление',
-  cleaning: '🧹 Уборка',
-  security: '🔒 Безопасность',
-  elevator: '🛗 Лифт',
-  landscaping: '🌳 Благоустройство',
-  ventilation: '💨 Вентиляция',
-}
+import { SPEC_COLORS, SPEC_DISPLAY } from '../utils/employeeUtils'
 
 // Map English spec keys → colors from SPEC_COLORS (keyed by Russian name)
 const SPEC_KEY_TO_COLOR: Record<string, string> = {
@@ -96,7 +84,7 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
         transition: 'all 0.15s',
       }}
     >
-      Удл.
+      Удал.
     </button>
   )
 }
@@ -104,6 +92,7 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
 export default function TemplatesPage() {
   const { setActions, clearActions } = useTopbar()
   const [createOpen, setCreateOpen] = useState(false)
+  const [pendingCreateId, setPendingCreateId] = useState<number | null>(null)
 
   const { data: templates = [], isLoading, isError } = useTemplates()
   const updateTemplate = useUpdateTemplate()
@@ -116,7 +105,7 @@ export default function TemplatesPage() {
         + Создать шаблон
       </button>
     ),
-    [],
+    [setCreateOpen],
   )
 
   useEffect(() => {
@@ -166,8 +155,11 @@ export default function TemplatesPage() {
   }
 
   const handleCreateFromToday = (id: number) => {
-    const today = new Date().toISOString().split('T')[0]
-    createFromTemplate.mutate({ template_id: id, date: today })
+    setPendingCreateId(id)
+    createFromTemplate.mutate(
+      { template_id: id, date: new Date().toISOString().split('T')[0] },
+      { onSettled: () => setPendingCreateId(null) },
+    )
   }
 
   if (isLoading) return <LoadingSpinner />
@@ -343,7 +335,7 @@ export default function TemplatesPage() {
                     onToggleAutoCreate={handleToggleAutoCreate}
                     onDelete={handleDelete}
                     onCreateFromToday={handleCreateFromToday}
-                    createPending={createFromTemplate.isPending}
+                    createPending={pendingCreateId === tmpl.id}
                   />
                 )
               })}
