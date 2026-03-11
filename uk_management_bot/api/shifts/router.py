@@ -164,6 +164,12 @@ async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    target_roles = set(_parse_user_roles(user))
+    if "manager" in target_roles or "admin" in target_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot modify status of a manager or admin user"
+        )
     if user.verification_status == "verified":
         raise HTTPException(status_code=409, detail="User is already verified")
     if user.verification_status == "rejected":
@@ -181,6 +187,12 @@ async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    target_roles = set(_parse_user_roles(user))
+    if "manager" in target_roles or "admin" in target_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot modify status of a manager or admin user"
+        )
     if user.verification_status == "rejected":
         raise HTTPException(status_code=409, detail="User is already rejected")
     user.verification_status = "rejected"
@@ -196,6 +208,12 @@ async def block_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    target_roles = set(_parse_user_roles(user))
+    if "manager" in target_roles or "admin" in target_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot modify status of a manager or admin user"
+        )
     if user.status == "blocked":
         raise HTTPException(status_code=409, detail="User is already blocked")
     user.status = "blocked"
@@ -210,6 +228,12 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    target_roles = set(_parse_user_roles(user))
+    if "manager" in target_roles or "admin" in target_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot modify status of a manager or admin user"
+        )
     if user.status != "blocked":
         raise HTTPException(status_code=409, detail="User is not blocked")
     user.status = "approved"
@@ -316,6 +340,10 @@ async def get_schedule(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
+    if date_to < date_from:
+        raise HTTPException(status_code=422, detail="date_to must be >= date_from")
+    if (date_to - date_from).days > 90:
+        raise HTTPException(status_code=422, detail="Date range cannot exceed 90 days")
     result = await db.execute(
         select(Shift)
         .where(Shift.start_time >= date_from, Shift.start_time <= date_to)
@@ -573,7 +601,10 @@ async def create_from_template(
     from datetime import timedelta
     end_dt = start_dt + timedelta(hours=tmpl.duration_hours or 8)
 
-    user_ids_list = body.user_ids or [None]
+    user_ids = body.user_ids
+    if not user_ids:
+        raise HTTPException(status_code=422, detail="user_ids must not be empty")
+    user_ids_list = user_ids
     # Batch-load and validate all users upfront
     valid_uids = [uid for uid in user_ids_list if uid is not None]
     users_map: dict[int, User] = {}
@@ -668,6 +699,13 @@ async def handle_transfer(
                 detail=f"Cannot reject transfer in status '{transfer.status}' — expected 'assigned'",
             )
         transfer.status = "rejected"
+        # Restore original executor on the shift
+        shift_result = await db.execute(
+            select(Shift).where(Shift.id == transfer.shift_id).with_for_update()
+        )
+        the_shift = shift_result.scalar_one_or_none()
+        if the_shift:
+            the_shift.user_id = transfer.from_executor_id
 
     elif action == "cancel":
         if transfer.status not in ("pending", "assigned"):
