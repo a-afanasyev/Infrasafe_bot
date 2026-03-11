@@ -10,8 +10,17 @@ import {
 } from '@dnd-kit/core'
 import { useKanban, type KanbanColumn as TColumn } from '../../hooks/useKanban'
 import KanbanColumn from './KanbanColumn'
+import TransitionModal, { type TransitionData } from './TransitionModal'
 import { apiClient } from '../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
+
+// Statuses that require a modal before transitioning
+const MODAL_STATUSES = new Set(['В работе', 'Закуп', 'Уточнение', 'Выполнена', 'Исполнено'])
+
+interface PendingTransition {
+  requestNumber: string
+  newStatus: string
+}
 
 interface Props {
   onCardClick: (requestNumber: string) => void
@@ -23,26 +32,21 @@ const KANBAN_STATUSES = new Set([
 ])
 const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])
 
-/** Resolve over.id to a column status (handles both column drops and card drops). */
-function resolveTargetStatus(
-  overId: string,
-  columns: TColumn[],
-): string | null {
+function resolveTargetStatus(overId: string, columns: TColumn[]): string | null {
   if (KANBAN_STATUSES.has(overId)) return overId
   const col = columns.find(c => c.requests.some(r => r.request_number === overId))
   return col?.status ?? null
 }
 
-/** Check whether moving from sourceStatus -> targetStatus is allowed. */
-function isTransitionAllowed(
-  sourceStatus: string | undefined,
-  targetStatus: string,
-): boolean {
+function isTransitionAllowed(sourceStatus: string | undefined, targetStatus: string): boolean {
   if (!sourceStatus) return false
   if (sourceStatus === targetStatus) return false
   if (FROZEN_STATUSES.has(sourceStatus)) return false
   if (FROZEN_STATUSES.has(targetStatus)) return false
   if (targetStatus === 'Новая' && sourceStatus !== 'Новая') return false
+  // Enforce lifecycle: Выполнена can only go to Исполнено, Исполнено can only go to Принято
+  if (sourceStatus === 'Выполнена' && targetStatus !== 'Исполнено') return false
+  if (sourceStatus === 'Исполнено' && targetStatus !== 'Принято') return false
   return true
 }
 
@@ -52,6 +56,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
   const { columns, isLoading } = useKanban()
   const queryClient = useQueryClient()
   const [activeDragStatus, setActiveDragStatus] = useState<string | null>(null)
+  const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -65,10 +70,9 @@ export default function KanbanBoard({ onCardClick }: Props) {
     setActiveDragStatus(sourceCol?.status ?? null)
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     setActiveDragStatus(null)
-
     if (!over || active.id === over.id) return
 
     const requestNumber = String(active.id)
@@ -79,10 +83,16 @@ export default function KanbanBoard({ onCardClick }: Props) {
       col.requests.some(r => r.request_number === requestNumber),
     )
     if (!sourceCol) return
-
-    // Guard: enforce all transition rules — card snaps back if invalid
     if (!isTransitionAllowed(sourceCol.status, newStatus)) return
 
+    if (MODAL_STATUSES.has(newStatus)) {
+      setPendingTransition({ requestNumber, newStatus })
+    } else {
+      commitTransition(requestNumber, { status: newStatus })
+    }
+  }
+
+  const commitTransition = async (requestNumber: string, data: TransitionData) => {
     // Optimistic update
     queryClient.setQueryData(
       ['kanban', {}],
@@ -92,6 +102,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
           .flatMap(c => c.requests)
           .find(r => r.request_number === requestNumber)
         if (!card) return old
+        const newStatus = data.status
         return {
           columns: old.columns.map((col) => ({
             ...col,
@@ -102,7 +113,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
             count:
               col.status === newStatus
                 ? col.count + 1
-                : col.status === sourceCol.status
+                : col.requests.some(r => r.request_number === requestNumber)
                   ? col.count - 1
                   : col.count,
           })),
@@ -111,11 +122,16 @@ export default function KanbanBoard({ onCardClick }: Props) {
     )
 
     try {
-      await apiClient.patch(`/api/v2/requests/${requestNumber}`, {
-        status: newStatus,
-      })
+      await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
     } catch {
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
+    }
+  }
+
+  const handleTransitionConfirm = (data: TransitionData) => {
+    if (pendingTransition) {
+      commitTransition(pendingTransition.requestNumber, data)
+      setPendingTransition(null)
     }
   }
 
@@ -126,22 +142,33 @@ export default function KanbanBoard({ onCardClick }: Props) {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-3 overflow-x-auto pb-4 h-full">
-        {columns.map((col) => (
-          <KanbanColumn
-            key={col.status}
-            column={col}
-            onCardClick={onCardClick}
-            activeDragStatus={activeDragStatus}
-          />
-        ))}
-      </div>
-    </DndContext>
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-3 overflow-x-auto pb-4 h-full">
+          {columns.map((col) => (
+            <KanbanColumn
+              key={col.status}
+              column={col}
+              onCardClick={onCardClick}
+              activeDragStatus={activeDragStatus}
+            />
+          ))}
+        </div>
+      </DndContext>
+
+      {pendingTransition && (
+        <TransitionModal
+          requestNumber={pendingTransition.requestNumber}
+          targetStatus={pendingTransition.newStatus}
+          onConfirm={handleTransitionConfirm}
+          onCancel={() => setPendingTransition(null)}
+        />
+      )}
+    </>
   )
 }
