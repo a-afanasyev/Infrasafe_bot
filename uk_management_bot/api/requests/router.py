@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
 from uk_management_bot.api.requests.schemas import (
@@ -19,10 +20,21 @@ router = APIRouter()
 
 KANBAN_STATUSES = ["Новая", "В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Принято", "Отменена"]
 
+_REQUEST_VALID_TRANSITIONS: dict[str, set[str]] = {
+    "Новая":     {"В работе", "Закуп", "Уточнение", "Отменена"},
+    "В работе":  {"Закуп", "Уточнение", "Выполнена", "Отменена"},
+    "Закуп":     {"В работе", "Уточнение", "Отменена"},
+    "Уточнение": {"В работе", "Отменена"},
+    "Выполнена": {"Исполнено"},
+    "Исполнено": {"Принято", "В работе"},
+    "Принято":   set(),
+    "Отменена":  set(),
+}
+
 
 def _generate_request_number(today_str: str, count: int) -> str:
-    """Generate request number. Format: YYMMDD-NNNN (supports up to 9999 per day)."""
-    return f"{today_str}-{(count + 1):04d}"
+    """Generate request number. Format: YYMMDD-NNN (supports up to 999 per day)."""
+    return f"{today_str}-{(count + 1):03d}"
 
 
 def _format_executor_name(user) -> Optional[str]:
@@ -79,7 +91,12 @@ async def list_requests(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    query = select(Request)
+    from sqlalchemy.orm import aliased
+    ExecutorUser = aliased(User)
+    query = (
+        select(Request, ExecutorUser)
+        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+    )
     if status:
         query = query.filter(Request.status == status)
     if category:
@@ -90,7 +107,7 @@ async def list_requests(
         query = query.filter(Request.source == source)
 
     result = await db.execute(query.order_by(Request.created_at.desc()).offset(offset).limit(limit))
-    return [RequestCard.model_validate(r) for r in result.scalars().all()]
+    return [_make_request_card(r, eu) for r, eu in result.all()]
 
 
 @router.get("/{request_number}", response_model=RequestCard)
@@ -140,8 +157,20 @@ async def create_request(
         source=body.source,
         media_files=body.media_files or [],
     )
-    db.add(req)
-    await db.commit()
+    try:
+        db.add(req)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        count_result = await db.execute(
+            select(func.count(Request.request_number)).where(
+                Request.request_number.like(f"{today}-%")
+            )
+        )
+        count = count_result.scalar() or 0
+        req.request_number = _generate_request_number(today, count)
+        db.add(req)
+        await db.commit()
     await db.refresh(req)
 
     await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))
@@ -160,8 +189,17 @@ async def update_request(
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
+    new_status = body.model_dump(exclude_unset=True).get("status")
+    if new_status and new_status != req.status:
+        allowed = _REQUEST_VALID_TRANSITIONS.get(req.status, set())
+        if new_status not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Transition '{req.status}' → '{new_status}' is not allowed"
+            )
+
     old_status = req.status
-    for field, value in body.model_dump(exclude_none=True).items():
+    for field, value in body.model_dump(exclude_unset=True).items():
         setattr(req, field, value)
 
     await db.commit()
@@ -203,6 +241,10 @@ async def add_comment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    req_check = await db.execute(select(Request).where(Request.request_number == request_number))
+    if not req_check.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Request not found")
+
     # Only managers can create internal comments
     if body.is_internal:
         user_roles = _parse_user_roles(user)
