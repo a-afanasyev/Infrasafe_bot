@@ -18,7 +18,13 @@ const EmployeesPage = lazy(() => import('./pages/EmployeesPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+    },
+  },
+})
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()

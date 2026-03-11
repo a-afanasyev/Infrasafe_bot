@@ -192,10 +192,4 @@ export function useHandleTransfer() {
   })
 }
 
-export function useEmployees() {
-  return useQuery<EmployeeBrief[]>({
-    queryKey: ['shift-employees'],
-    queryFn: () => apiClient.get('/api/v2/shifts/employees').then(r => r.data),
-    staleTime: 60_000,
-  })
-}
+export { useEmployees } from './useEmployees'

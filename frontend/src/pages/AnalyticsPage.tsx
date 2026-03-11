@@ -250,10 +250,10 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<AnalyticsPeriod>('7d')
   const [clockStr, setClockStr] = useState('')
 
-  // Clock — update every minute
+  // Clock — update every minute (Tashkent time)
   useEffect(() => {
     const update = () => {
-      const now = new Date()
+      const now = toZonedTime(new Date(), 'Asia/Tashkent')
       const hh = String(now.getHours()).padStart(2, '0')
       const mm = String(now.getMinutes()).padStart(2, '0')
       setClockStr(`${hh}:${mm}`)

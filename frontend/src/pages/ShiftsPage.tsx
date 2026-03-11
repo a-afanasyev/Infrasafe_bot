@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
   useShiftSchedule,
@@ -14,6 +15,7 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function ShiftsPage() {
+  const navigate = useNavigate()
   const { setActions, clearActions } = useTopbar()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -51,7 +53,7 @@ export default function ShiftsPage() {
     setActions(
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
-          onClick={() => {}}
+          onClick={() => navigate('/dashboard/templates')}
           style={{
             padding: '8px 14px',
             borderRadius: 'var(--radius-sm)',

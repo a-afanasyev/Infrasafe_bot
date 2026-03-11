@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '../../api/client'
 import { useCreateShift } from '../../hooks/useShifts'
-import type { EmployeeBrief } from '../../hooks/useShifts'
+import { useEmployees } from '../../hooks/useEmployees'
+import type { EmployeeBrief } from '../../hooks/useEmployees'
+import { SPEC_DISPLAY } from '../../utils/employeeUtils'
 
 interface Props {
   isOpen: boolean
@@ -37,12 +37,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
   const [specFocus, setSpecFocus] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  const { data: employees = [] } = useQuery<EmployeeBrief[]>({
-    queryKey: ['shift-employees'],
-    queryFn: () => apiClient.get('/api/v2/shifts/employees').then(r => r.data),
-    staleTime: 60_000,
-    enabled: isOpen,
-  })
+  const { data: employees = [] } = useEmployees({}, undefined)
 
   if (!isOpen) return null
 
@@ -229,19 +224,19 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
               Специализации
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {['Электрика','Сантехника','Отопление','Уборка','Безопасность','Лифт','Благоустройство','Вентиляция'].map(spec => (
+              {Object.entries(SPEC_DISPLAY).map(([key, label]) => (
                 <button
-                  key={spec}
+                  key={key}
                   type="button"
-                  onClick={() => toggleSpec(spec)}
+                  onClick={() => toggleSpec(key)}
                   style={{
                     padding: '4px 10px', borderRadius: 20, fontSize: '12px', cursor: 'pointer',
-                    background: specFocus.includes(spec) ? 'var(--accent-dim)' : 'var(--bg-surface)',
-                    color: specFocus.includes(spec) ? 'var(--accent)' : 'var(--text-secondary)',
-                    border: `1px solid ${specFocus.includes(spec) ? 'var(--border-active)' : 'var(--border)'}`,
+                    background: specFocus.includes(key) ? 'var(--accent-dim)' : 'var(--bg-surface)',
+                    color: specFocus.includes(key) ? 'var(--accent)' : 'var(--text-secondary)',
+                    border: `1px solid ${specFocus.includes(key) ? 'var(--border-active)' : 'var(--border)'}`,
                     fontFamily: 'var(--font-body)',
                   }}
-                >{spec}</button>
+                >{label}</button>
               ))}
             </div>
           </div>

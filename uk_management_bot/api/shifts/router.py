@@ -83,6 +83,9 @@ def _shift_detail(shift: Shift, user: Optional[User] = None) -> ShiftDetail:
 async def list_employees(
     specialization: Optional[str] = Query(None),
     has_active_shift: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
+    role: Optional[str] = Query(None),
+    verification_status: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db),
@@ -97,6 +100,20 @@ async def list_employees(
 
     if specialization:
         query = query.where(User.specialization.like(f'%{specialization}%'))
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            or_(
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term),
+                User.phone.ilike(search_term),
+            )
+        )
+    if verification_status:
+        query = query.where(User.verification_status == verification_status)
+    if role:
+        query = query.where(User.roles.like(f'%"{role}"%'))
 
     if has_active_shift is True:
         active_shift_subq = (
@@ -133,6 +150,32 @@ async def list_employees(
         u.__dict__['active_shift_id'] = active_shifts.get(u.id)
         briefs.append(EmployeeBrief.model_validate(u))
     return briefs
+
+
+@router.patch("/employees/{user_id}/approve", dependencies=[Depends(require_roles("manager"))])
+async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Approve a pending user (set verification_status = 'verified')"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.verification_status = "verified"
+    await db.commit()
+    await db.refresh(user)
+    return {"id": user.id, "verification_status": user.verification_status}
+
+
+@router.patch("/employees/{user_id}/reject", dependencies=[Depends(require_roles("manager"))])
+async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Reject a pending user (set verification_status = 'rejected')"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.verification_status = "rejected"
+    await db.commit()
+    await db.refresh(user)
+    return {"id": user.id, "verification_status": user.verification_status}
 
 
 @router.get("/employees/{user_id}", response_model=EmployeeDetail)

@@ -33,9 +33,9 @@ class ExecutorStat(BaseModel):
 
 
 class ActivityItem(BaseModel):
+    event_type: str  # derived from request status: 'created', 'assigned', 'completed', 'cancelled'
     request_number: str
-    category: str
-    status: str
+    executor_name: Optional[str]  # from assigned executor
     created_at: datetime
 
 
@@ -191,20 +191,34 @@ async def get_request_stats(
         ))
 
     # --- recent_actions: last 20 requests, scoped to period ---
-    recent_result = await db.execute(
-        select(Request.request_number, Request.category, Request.status, Request.created_at)
+    STATUS_TO_EVENT = {
+        'new': 'created', 'pending': 'created',
+        'assigned': 'assigned', 'in_progress': 'assigned',
+        'completed': 'completed',
+        'cancelled': 'cancelled', 'rejected': 'cancelled',
+    }
+    recent_q = (
+        select(
+            Request.request_number,
+            Request.status,
+            Request.created_at,
+            User.first_name,
+            User.last_name,
+        )
+        .outerjoin(User, Request.executor_id == User.id)
         .where(Request.created_at >= period_start)
         .order_by(Request.created_at.desc())
         .limit(20)
     )
+    recent_rows = (await db.execute(recent_q)).all()
     recent_actions: list[ActivityItem] = [
         ActivityItem(
-            request_number=row[0],
-            category=row[1],
-            status=row[2],
-            created_at=row[3],
+            event_type=STATUS_TO_EVENT.get(row.status, 'created'),
+            request_number=str(row.request_number),
+            executor_name=f"{row.first_name or ''} {row.last_name or ''}".strip() or None,
+            created_at=row.created_at,
         )
-        for row in recent_result.all()
+        for row in recent_rows
     ]
 
     # --- total_requests ---
