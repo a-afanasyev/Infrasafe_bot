@@ -79,7 +79,6 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
         duration_hours: Number(durationHours),
         default_shift_type: shiftType,
         days_of_week: daysOfWeek.length > 0 ? daysOfWeek : undefined,
-        is_active: true,
         min_executors: Number(minExecutors),
         max_executors: Number(maxExecutors),
         auto_create: autoCreate,

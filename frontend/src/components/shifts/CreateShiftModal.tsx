@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCreateShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
-import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { SPEC_DISPLAY } from '../../utils/employeeUtils'
 
 interface Props {
