@@ -189,6 +189,34 @@ async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"id": user.id, "verification_status": user.verification_status}
 
 
+@router.patch("/employees/{user_id}/block", dependencies=[Depends(require_roles("manager"))])
+async def block_employee(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Block an employee — sets status='blocked', preventing system access."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.status == "blocked":
+        raise HTTPException(status_code=409, detail="User is already blocked")
+    user.status = "blocked"
+    await db.commit()
+    return {"message": "blocked"}
+
+
+@router.patch("/employees/{user_id}/unblock", dependencies=[Depends(require_roles("manager"))])
+async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Unblock an employee — sets status back to 'approved'."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.status != "blocked":
+        raise HTTPException(status_code=409, detail="User is not blocked")
+    user.status = "approved"
+    await db.commit()
+    return {"message": "unblocked"}
+
+
 @router.get("/employees/{user_id}", response_model=EmployeeDetail)
 async def get_employee(
     user_id: int,

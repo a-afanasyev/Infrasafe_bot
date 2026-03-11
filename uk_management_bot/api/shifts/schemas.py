@@ -16,6 +16,7 @@ class EmployeeBrief(BaseModel):
     specialization: list[str]  # parsed from User.specialization (Text JSON like '["electrician"]')
     active_shift_id: Optional[int]
     verification_status: str
+    status: str = "approved"
 
     model_config = {"from_attributes": True}
 
@@ -32,6 +33,7 @@ class EmployeeBrief(BaseModel):
                 "phone": getattr(values, "phone", None),
                 "verification_status": getattr(values, "verification_status", ""),
                 "active_shift_id": getattr(values, "active_shift_id", None),
+                "status": getattr(values, "status", "approved"),
                 "specialization": raw_spec,
             }
         # Parse specialization JSON string → list (works for both ORM and dict paths)
