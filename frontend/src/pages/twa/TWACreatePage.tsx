@@ -77,6 +77,14 @@ export default function TWACreatePage() {
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
 
+          <p className="text-sm font-medium mt-4">Адрес (квартира/подъезд):</p>
+          <input
+            className="w-full border rounded-xl p-3 text-sm"
+            placeholder="Например: кв. 42, подъезд 3"
+            value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+          />
+
           <button
             onClick={() => setStep(3)}
             disabled={!form.description}
@@ -95,6 +103,12 @@ export default function TWACreatePage() {
             <p className="text-sm">{form.urgency}</p>
             <p className="text-xs text-gray-400 mb-1 mt-2">Описание</p>
             <p className="text-sm">{form.description}</p>
+            {form.address && (
+              <>
+                <p className="text-xs text-gray-400 mb-1 mt-2">Адрес</p>
+                <p className="text-sm">{form.address}</p>
+              </>
+            )}
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}

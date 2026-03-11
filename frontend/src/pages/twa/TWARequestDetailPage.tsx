@@ -13,6 +13,8 @@ export default function TWARequestDetailPage() {
   const queryClient = useQueryClient()
   const [message, setMessage] = useState('')
   const [rating, setRating] = useState(0)
+  const [returnReason, setReturnReason] = useState('')
+  const [showReturnForm, setShowReturnForm] = useState(false)
   const [sending, setSending] = useState(false)
 
   const { data: request } = useQuery({
@@ -38,14 +40,21 @@ export default function TWARequestDetailPage() {
   }
 
   const handleAccept = async () => {
-    await apiClient.patch(`/api/v2/requests/${number}`, { status: 'Принято' })
+    const payload: Record<string, unknown> = { status: 'Принято' }
+    if (rating > 0) payload.rating = rating
+    await apiClient.patch(`/api/v2/requests/${number}`, payload)
     queryClient.invalidateQueries({ queryKey: ['request', number] })
     navigate('/twa')
   }
 
   const handleReturn = async () => {
-    await apiClient.patch(`/api/v2/requests/${number}`, { status: 'В работе' })
+    if (!returnReason.trim()) return
+    await apiClient.patch(`/api/v2/requests/${number}`, {
+      status: 'В работе',
+      return_reason: returnReason.trim(),
+    })
     queryClient.invalidateQueries({ queryKey: ['request', number] })
+    navigate('/twa')
   }
 
   if (!request) return <div className="p-4 text-gray-400">Загрузка...</div>
@@ -109,23 +118,62 @@ export default function TWARequestDetailPage() {
       {/* Acceptance block */}
       {showAcceptance && (
         <div className="bg-white border-t p-4">
-          <p className="font-medium mb-2">Оцените работу</p>
-          <div className="flex gap-2 mb-3">
-            {[1,2,3,4,5].map(n => (
-              <button key={n} onClick={() => setRating(n)}
-                className={`text-2xl ${n <= rating ? 'text-yellow-400' : 'text-gray-300'}`}>
-                &#9733;
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleReturn} className="flex-1 border py-2 rounded-xl text-sm">
-              &#8617; Вернуть
-            </button>
-            <button onClick={handleAccept} className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm">
-              &#10003; Принять
-            </button>
-          </div>
+          {!showReturnForm ? (
+            <>
+              <p className="font-medium mb-2">Оцените работу (необязательно)</p>
+              <div className="flex gap-2 mb-3">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setRating(prev => prev === n ? 0 : n)}
+                    className={`text-2xl ${n <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                  >
+                    &#9733;
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowReturnForm(true)}
+                  className="flex-1 border py-2 rounded-xl text-sm"
+                >
+                  &#8617; Вернуть
+                </button>
+                <button
+                  onClick={handleAccept}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm"
+                >
+                  &#10003; Принять
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="font-medium mb-2">Почему возвращаете?</p>
+              <textarea
+                className="w-full border rounded-xl p-3 text-sm min-h-[80px] mb-3 focus:outline-none focus:border-blue-500"
+                placeholder="Опишите что не так..."
+                value={returnReason}
+                onChange={e => setReturnReason(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowReturnForm(false)}
+                  className="flex-1 border py-2 rounded-xl text-sm"
+                >
+                  Назад
+                </button>
+                <button
+                  onClick={handleReturn}
+                  disabled={!returnReason.trim()}
+                  className="flex-1 bg-red-500 text-white py-2 rounded-xl text-sm disabled:opacity-40"
+                >
+                  Отправить
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
