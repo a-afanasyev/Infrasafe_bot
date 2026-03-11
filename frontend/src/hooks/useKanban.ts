@@ -9,8 +9,15 @@ export interface RequestCard {
   urgency: string | null
   source: string | null
   description: string | null
+  address: string | null
   executor_id: number | null
+  executor_name: string | null
+  notes: string | null
+  completion_report: string | null
+  requested_materials: string | null
+  return_reason: string | null
   created_at: string
+  updated_at: string | null
   manager_confirmed: boolean
 }
 

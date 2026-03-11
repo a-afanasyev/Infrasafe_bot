@@ -252,10 +252,12 @@ export default function EmployeesPage() {
               employee={emp}
               onAssign={(e) => setAssignTarget(e)}
               onBlock={(e) => {
+                const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
                 if (e.status === 'blocked') {
-                  unblockEmployee.mutate(e.id)
+                  if (window.confirm(`Разблокировать сотрудника ${empName}?`)) {
+                    unblockEmployee.mutate(e.id)
+                  }
                 } else {
-                  const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
                   if (window.confirm(`Заблокировать сотрудника ${empName}?`)) {
                     blockEmployee.mutate(e.id)
                   }
