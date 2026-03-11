@@ -85,7 +85,7 @@ export default function ShiftsPage() {
       </div>,
     )
     return clearActions
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setActions, clearActions])
 
   if (shiftsLoading) return <LoadingSpinner />
 

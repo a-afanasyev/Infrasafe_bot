@@ -8,26 +8,23 @@ interface Props {
 }
 
 function isShiftActiveInHour(shift: ShiftBrief, hour: number): boolean {
-  const start = toTashkent(shift.start_time)
-  const end = shift.end_time ? toTashkent(shift.end_time) : null
-  if (!end) return false
-  const slotStart = new Date(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate(),
-    hour,
-    0,
-    0,
-  )
-  const slotEnd = new Date(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate(),
-    hour,
-    59,
-    59,
-  )
-  return start <= slotEnd && end >= slotStart
+  const startTZ = toTashkent(shift.start_time)
+  const endTZ = shift.end_time ? toTashkent(shift.end_time) : null
+  if (!endTZ) return false
+
+  const startH = startTZ.getHours()
+  const endH = endTZ.getHours()
+  const endM = endTZ.getMinutes()
+
+  // Effective end hour (if shift ends exactly at HH:00, last active hour is HH-1)
+  const effectiveEnd = endM > 0 ? endH : Math.max(endH - 1, 0)
+
+  if (startH <= effectiveEnd) {
+    // Normal (same-day) shift
+    return hour >= startH && hour <= effectiveEnd
+  }
+  // Overnight shift
+  return hour >= startH || hour <= effectiveEnd
 }
 
 function getCellColor(count: number): string {

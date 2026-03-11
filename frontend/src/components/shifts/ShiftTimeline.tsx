@@ -67,31 +67,36 @@ function computeBlocks(shift: ShiftBrief): ShiftBlock[] {
 
   if (effectiveEndHour >= startHour) {
     // Normal (non-overnight)
+    const colStart = Math.min(startHour + 2, 25)
     const span = Math.max(1, Math.min(effectiveEndHour - startHour + 1, 24 - startHour))
+    const colSpan = Math.max(1, Math.min(span, 26 - colStart))
     return [{
       shift,
-      colStart: startHour + 2,
-      colSpan: span,
+      colStart,
+      colSpan,
       isOvernight: false,
       part: 'full',
     }]
   }
 
   // Overnight: split into two blocks
+  const startColStart = Math.min(startHour + 2, 25)
   const spanStart = Math.max(1, 24 - startHour)
+  const startColSpan = Math.max(1, Math.min(spanStart, 26 - startColStart))
   const spanEnd = Math.max(1, effectiveEndHour + 1)
+  const endColSpan = Math.max(1, Math.min(spanEnd, 26 - 2))
   return [
     {
       shift,
-      colStart: startHour + 2,
-      colSpan: spanStart,
+      colStart: startColStart,
+      colSpan: startColSpan,
       isOvernight: true,
       part: 'start',
     },
     {
       shift,
       colStart: 2,
-      colSpan: spanEnd,
+      colSpan: endColSpan,
       isOvernight: true,
       part: 'end',
     },
@@ -122,7 +127,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
   // Group shifts by executor_name
   const executorMap = new Map<string, ShiftBrief[]>()
   for (const shift of shifts) {
-    const key = shift.executor_name ?? `user_${shift.user_id ?? 'unknown'}`
+    const key = shift.executor_name || (shift.user_id ? `user_${shift.user_id}` : `shift_${shift.id}`)
     if (!executorMap.has(key)) executorMap.set(key, [])
     executorMap.get(key)!.push(shift)
   }

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useWebSocket } from './useWebSocket'
@@ -78,13 +79,14 @@ export interface TemplateBrief {
 
 export function useShifts(filters: Record<string, string | undefined> = {}) {
   const queryClient = useQueryClient()
-  useWebSocket('shifts', (event) => {
+  const onShiftEvent = useCallback((event: { type: string; data: unknown }) => {
     if (typeof event.type === 'string' && event.type.startsWith('shift.')) {
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
       queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
     }
-  })
+  }, [queryClient])
+  useWebSocket('shifts', onShiftEvent)
   return useQuery<ShiftBrief[]>({
     queryKey: ['shifts', filters],
     queryFn: () => apiClient.get('/api/v2/shifts', { params: filters }).then(r => r.data),
@@ -113,11 +115,12 @@ export function useShiftSchedule(dateFrom: string, dateTo: string) {
 
 export function useShiftTransfers() {
   const queryClient = useQueryClient()
-  useWebSocket('shifts', (event) => {
+  const onTransferEvent = useCallback((event: { type: string; data: unknown }) => {
     if (typeof event.type === 'string' && event.type.startsWith('transfer.')) {
       queryClient.invalidateQueries({ queryKey: ['shift-transfers'] })
     }
-  })
+  }, [queryClient])
+  useWebSocket('shifts', onTransferEvent)
   return useQuery<TransferOut[]>({
     queryKey: ['shift-transfers'],
     queryFn: () => apiClient.get('/api/v2/shifts/transfers').then(r => r.data),
