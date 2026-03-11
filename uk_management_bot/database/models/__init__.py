@@ -10,6 +10,7 @@ from .shift_transfer import ShiftTransfer
 from .rating import Rating
 from .audit import AuditLog
 from .notification import Notification
+from .refresh_token import RefreshToken
 from .user_verification import UserDocument, UserVerification, AccessRights, DocumentType, VerificationStatus, AccessLevel
 from .quarterly_plan import QuarterlyPlan, QuarterlyShiftSchedule, PlanningConflict
 
@@ -39,6 +40,7 @@ __all__ = [
     'Rating',
     'AuditLog',
     'Notification',
+    'RefreshToken',
     'UserDocument',
     'UserVerification',
     'AccessRights',

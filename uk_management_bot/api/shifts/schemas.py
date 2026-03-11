@@ -1,6 +1,6 @@
 from pydantic import BaseModel, model_validator
 from typing import Optional, Literal
-from datetime import datetime
+from datetime import datetime, date as date_type
 import json
 
 ShiftStatus = Literal["active", "completed", "cancelled", "planned", "paused"]
@@ -66,13 +66,13 @@ class ShiftBrief(BaseModel):
 
 class ShiftDetail(ShiftBrief):
     notes: Optional[str]
-    specialization_focus: Optional[list]
+    specialization_focus: Optional[list[str]]
     coverage_areas: Optional[list]
     priority_level: int
     completed_requests: int
     efficiency_score: Optional[float]
     quality_rating: Optional[float]
-    shift_template_id: Optional[int]
+    template_id: Optional[int]
     created_at: Optional[datetime]
 
 
@@ -129,7 +129,7 @@ class UpdateShiftBody(BaseModel):
 
 class CreateFromTemplateBody(BaseModel):
     template_id: int
-    date: str  # "YYYY-MM-DD"
+    date: date_type  # validated YYYY-MM-DD
     user_ids: Optional[list[int]] = None
 
 

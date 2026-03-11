@@ -21,6 +21,7 @@ class Request(Base):
     description = Column(Text, nullable=False)
     apartment = Column(String(20), nullable=True)  # Legacy: заменено на apartment_id
     urgency = Column(String(20), default="Обычная", nullable=False)
+    source = Column(String(20), default='bot', nullable=True)
 
     # Новая система адресов: связь с квартирой из справочника
     apartment_id = Column(Integer, ForeignKey("apartments.id"), nullable=True, index=True)

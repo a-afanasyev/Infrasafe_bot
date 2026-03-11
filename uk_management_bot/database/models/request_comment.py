@@ -3,7 +3,7 @@
 Обеспечивает систему комментариев с привязкой к изменениям статуса
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -26,7 +26,9 @@ class RequestComment(Base):
     # Контекст комментария (для изменений статуса)
     previous_status = Column(String(50), nullable=True)
     new_status = Column(String(50), nullable=True)
-    
+    is_internal = Column(Boolean, default=False, nullable=False)
+    media_files = Column(JSON, default=list, nullable=True)
+
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

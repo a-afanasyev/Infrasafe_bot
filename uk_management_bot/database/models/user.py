@@ -46,7 +46,13 @@ class User(Base):
     passport_series = Column(String(10), nullable=True)  # Серия паспорта
     passport_number = Column(String(10), nullable=True)  # Номер паспорта
     birth_date = Column(DateTime(timezone=True), nullable=True)  # Дата рождения
-    
+
+    # Web auth fields
+    password_hash = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True, unique=True, index=True)
+    password_reset_token = Column(String(64), nullable=True)
+    password_reset_expires_at = Column(DateTime(timezone=True), nullable=True)
+
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

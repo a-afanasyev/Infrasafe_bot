@@ -70,7 +70,7 @@ def _shift_detail(shift: Shift, user: Optional[User] = None) -> ShiftDetail:
         completed_requests=shift.completed_requests,
         efficiency_score=shift.efficiency_score,
         quality_rating=shift.quality_rating,
-        shift_template_id=shift.shift_template_id,
+        template_id=shift.shift_template_id,
         created_at=shift.created_at,
     )
 
@@ -485,10 +485,7 @@ async def create_from_template(
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    try:
-        target_date = date_type.fromisoformat(body.date)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid date format — expected YYYY-MM-DD")
+    target_date = body.date
 
     start_dt = datetime(
         target_date.year, target_date.month, target_date.day,

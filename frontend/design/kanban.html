@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Заявки — Канбан | УК Панель</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --bg-root: #060a10;
+  --bg-primary: #0a0f18;
+  --bg-secondary: #0f1520;
+  --bg-card: #131c2b;
+  --bg-card-hover: #182438;
+  --bg-surface: #1a2435;
+  --bg-sidebar: #080c14;
+  --accent: #00d4aa;
+  --accent-dim: rgba(0,212,170,0.12);
+  --accent-glow: rgba(0,212,170,0.25);
+  --blue: #3b82f6;
+  --violet: #8b5cf6;
+  --amber: #f59e0b;
+  --cyan: #06b6d4;
+  --emerald: #10b981;
+  --green: #22c55e;
+  --teal: #14b8a6;
+  --red: #ef4444;
+  --coral: #ff6b6b;
+  --text-primary: #edf2f7;
+  --text-secondary: #8899aa;
+  --text-muted: #5a6a7a;
+  --border: rgba(255,255,255,0.06);
+  --border-active: rgba(0,212,170,0.3);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --sidebar-w: 260px;
+  --topbar-h: 64px;
+}
+
+body.light{--bg-root:#f4f5f7;--bg-primary:#eef0f4;--bg-secondary:#e4e7ed;--bg-card:#ffffff;--bg-card-hover:#f8f9fb;--bg-surface:#f2f3f7;--bg-sidebar:#ffffff;--accent:#0ea37a;--accent-dim:rgba(14,163,122,0.1);--accent-glow:rgba(14,163,122,0.2);--text-primary:#1a1d2e;--text-secondary:#5c6478;--text-muted:#8b93a6;--border:rgba(0,0,0,0.08);--border-active:rgba(14,163,122,0.3)}
+body.light .topbar{background:rgba(255,255,255,0.85)}
+body.light .sidebar::after{background:linear-gradient(180deg,transparent,rgba(14,163,122,0.15),transparent)}
+body.light .column-body{background:rgba(238,240,244,0.5)}
+body.light .hour-slot{background:var(--bg-surface)}
+body.light .kanban-container{background:var(--bg-primary)}
+body.light .request-card:hover{box-shadow:0 8px 24px rgba(0,0,0,0.08)}
+body.light .stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.06)}
+body.light .staff-card:hover{box-shadow:0 12px 40px rgba(0,0,0,0.06)}
+body.light .kpi-card:hover{box-shadow:0 8px 32px rgba(0,0,0,0.06)}
+html { font-size: 14px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-root);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+}
+/* ─── Sidebar ─── */
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  z-index: 100;
+}
+.sidebar::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(180deg, transparent, var(--accent-glow), transparent);
+  opacity: 0.4;
+}
+.sidebar-logo {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.sidebar-logo .logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--accent), var(--blue));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
+  color: #fff;
+  font-family: var(--font-display);
+}
+.sidebar-logo .logo-text {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 1.1rem;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+.sidebar-logo .logo-sub {
+  font-size: 0.7rem; color: var(--text-muted);
+  font-weight: 400; letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+.nav-section { padding: 16px 12px 8px; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); font-weight: 600; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  color: var(--text-secondary); cursor: pointer;
+  transition: all 0.2s; position: relative;
+  text-decoration: none; font-size: 0.9rem; font-weight: 500;
+}
+.nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.nav-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+.nav-item svg { width: 20px; height: 20px; flex-shrink: 0; }
+.nav-item .badge {
+  margin-left: auto;
+  background: var(--red);
+  color: #fff; font-size: 0.65rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
+  font-family: var(--font-mono);
+}
+.sidebar-user {
+  padding: 16px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.sidebar-user .avatar {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--violet), var(--blue));
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.8rem; color: #fff;
+  font-family: var(--font-display);
+}
+.sidebar-user .user-info { flex: 1; }
+.sidebar-user .user-name { font-weight: 600; font-size: 0.85rem; }
+.sidebar-user .user-role { font-size: 0.7rem; color: var(--text-muted); }
+
+/* ─── Topbar ─── */
+.topbar {
+  position: fixed; top: 0; left: var(--sidebar-w); right: 0;
+  height: var(--topbar-h);
+  background: rgba(10,15,24,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 28px; gap: 16px; z-index: 90;
+}
+.topbar-title {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+.topbar-title span { color: var(--text-muted); font-weight: 400; margin-left: 8px; font-size: 0.85rem; }
+.topbar-spacer { flex: 1; }
+.topbar-search {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px; width: 280px;
+  transition: border-color 0.2s;
+}
+.topbar-search:focus-within { border-color: var(--accent); }
+.topbar-search input {
+  background: none; border: none; outline: none;
+  color: var(--text-primary); font-family: var(--font-body);
+  font-size: 0.85rem; width: 100%;
+}
+.topbar-search input::placeholder { color: var(--text-muted); }
+.topbar-search svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.topbar-btn {
+  width: 38px; height: 38px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s; position: relative;
+}
+.topbar-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); border-color: var(--border-active); }
+.topbar-btn .dot {
+  position: absolute; top: 7px; right: 7px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+}
+.topbar-btn svg { width: 18px; height: 18px; }
+
+/* ─── Main Content ─── */
+.main {
+  margin-left: var(--sidebar-w);
+  padding-top: var(--topbar-h);
+  height: 100vh;
+  display: flex; flex-direction: column;
+}
+
+/* ─── Filters Bar ─── */
+.filters-bar {
+  padding: 16px 28px;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-primary);
+}
+.filter-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.8rem; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+  white-space: nowrap;
+}
+.filter-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.filter-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.filter-chip svg { width: 14px; height: 14px; }
+.filter-divider { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.filters-spacer { flex: 1; }
+.btn-primary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 18px; border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #000; font-weight: 600; font-size: 0.85rem;
+  border: none; cursor: pointer; transition: all 0.2s;
+  font-family: var(--font-body);
+}
+.btn-primary:hover { background: #00e6b8; box-shadow: 0 0 20px var(--accent-glow); }
+.btn-primary svg { width: 16px; height: 16px; }
+
+/* ─── Kanban Board ─── */
+.kanban-container {
+  flex: 1; overflow-x: auto; overflow-y: hidden;
+  padding: 20px 28px 20px;
+  display: flex; gap: 14px;
+  scroll-snap-type: x proximity;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 30%, rgba(59,130,246,0.03) 0%, transparent 50%),
+    var(--bg-primary);
+}
+.kanban-container::-webkit-scrollbar { height: 6px; }
+.kanban-container::-webkit-scrollbar-track { background: transparent; }
+.kanban-container::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+
+.kanban-column {
+  min-width: 290px; width: 290px;
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  scroll-snap-align: start;
+  height: calc(100vh - var(--topbar-h) - 120px);
+}
+.column-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  flex-shrink: 0;
+}
+.column-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.column-title {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 0.85rem;
+  flex: 1;
+}
+.column-count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px; border-radius: 10px;
+}
+.column-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(19,28,43,0.5);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.column-body::-webkit-scrollbar { width: 4px; }
+.column-body::-webkit-scrollbar-track { background: transparent; }
+.column-body::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+.column-footer {
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  flex-shrink: 0;
+}
+.column-footer-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 6px; border-radius: var(--radius-xs);
+  background: none; border: 1px dashed var(--border);
+  color: var(--text-muted); font-size: 0.8rem;
+  cursor: pointer; transition: all 0.2s;
+  font-family: var(--font-body);
+}
+.column-footer-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.column-footer-btn svg { width: 14px; height: 14px; }
+
+/* ─── Request Card ─── */
+.request-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  cursor: grab;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.request-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  border-radius: 3px 0 0 3px;
+}
+.request-card:hover {
+  border-color: rgba(255,255,255,0.12);
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.request-card.urgency-high::before { background: var(--red); }
+.request-card.urgency-normal::before { background: var(--amber); }
+.request-card.urgency-low::before { background: var(--emerald); }
+
+.card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.card-number {
+  font-family: var(--font-mono);
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.card-time {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+.card-category {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.7rem; font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.04);
+  padding: 3px 8px; border-radius: 4px;
+  margin-bottom: 8px;
+}
+.card-description {
+  font-size: 0.82rem; line-height: 1.4;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-address {
+  font-size: 0.72rem; color: var(--text-muted);
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 10px;
+}
+.card-address svg { width: 12px; height: 12px; }
+.card-bottom { display: flex; align-items: center; justify-content: space-between; }
+.card-executor {
+  display: flex; align-items: center; gap: 8px;
+}
+.card-executor .mini-avatar {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 700; color: #fff;
+  font-family: var(--font-display);
+}
+.card-executor .executor-name {
+  font-size: 0.72rem; font-weight: 500; color: var(--text-secondary);
+}
+.card-tags { display: flex; gap: 4px; }
+.card-tag {
+  font-size: 0.6rem; padding: 2px 6px;
+  border-radius: 4px; font-weight: 600;
+  font-family: var(--font-mono);
+}
+.card-tag.returned { background: rgba(239,68,68,0.15); color: var(--red); }
+.card-tag.media { background: rgba(59,130,246,0.15); color: var(--blue); }
+.card-tag.comments { background: rgba(139,92,246,0.15); color: var(--violet); }
+
+/* ─── Drag States ─── */
+.request-card.dragging { opacity: 0.5; cursor: grabbing; }
+.kanban-column.drag-over .column-body { background: var(--accent-dim); border-color: var(--accent); }
+
+/* ─── Responsive ─── */
+@media (max-width: 1200px) {
+  .sidebar { width: 72px; }
+  .sidebar .logo-text, .sidebar .logo-sub, .sidebar .nav-section,
+  .sidebar .nav-item span, .sidebar .user-info, .sidebar .nav-item .badge { display: none; }
+  .sidebar .nav-item { justify-content: center; padding: 12px; }
+  .sidebar-logo { justify-content: center; padding: 16px; }
+  .sidebar-user { justify-content: center; }
+  .main { margin-left: 72px; }
+  .topbar { left: 72px; }
+  :root { --sidebar-w: 72px; }
+}
+</style>
+</head>
+<body>
+<script>if(localStorage.getItem("theme")==="light")document.body.classList.add("light")</script>
+
+<!-- ─── Sidebar ─── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">УК</div>
+    <div>
+      <div class="logo-text">УК Панель</div>
+      <div class="logo-sub">management system</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Основное</div>
+    <a class="nav-item" href="analytics.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Дашборд</span>
+    </a>
+    <a class="nav-item active" href="kanban.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+      <span>Заявки</span>
+      <div class="badge">12</div>
+    </a>
+    <a class="nav-item" href="staff.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      <span>Сотрудники</span>
+    </a>
+    <a class="nav-item" href="shifts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Смены</span>
+    </a>
+    <a class="nav-item" href="templates.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+      <span>Шаблоны</span>
+    </a>
+    <div class="nav-section">Внешнее</div>
+    <a class="nav-item" href="resident-board.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+      <span>Табло жителей</span>
+    </a>
+  </nav>
+  <div class="sidebar-user">
+    <div class="avatar">АМ</div>
+    <div class="user-info">
+      <div class="user-name">Алексей М.</div>
+      <div class="user-role">Менеджер</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ─── Topbar ─── -->
+<header class="topbar">
+  <div class="topbar-title">Заявки <span>Канбан-доска</span></div>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input type="text" placeholder="Поиск по номеру, адресу...">
+  </div>
+  <div class="topbar-actions">
+    <button class="topbar-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <div class="dot"></div>
+    </button>
+    <button class="topbar-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </div>
+  <button class="topbar-btn" onclick="document.body.classList.toggle('light');localStorage.setItem('theme',document.body.classList.contains('light')?'light':'dark')" title="Переключить тему">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+  </button>
+</header>
+
+<!-- ─── Main ─── -->
+<main class="main">
+  <!-- Filters -->
+  <div class="filters-bar">
+    <div class="filter-chip active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      Все категории
+    </div>
+    <div class="filter-chip">⚡ Электрика</div>
+    <div class="filter-chip">🔧 Сантехника</div>
+    <div class="filter-chip">🔥 Отопление</div>
+    <div class="filter-chip">🛗 Лифт</div>
+    <div class="filter-chip">🧹 Уборка</div>
+    <div class="filter-divider"></div>
+    <div class="filter-chip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      Исполнитель
+    </div>
+    <div class="filter-chip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Период
+    </div>
+    <div class="filters-spacer"></div>
+    <button class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Новая заявка
+    </button>
+  </div>
+
+  <!-- Kanban -->
+  <div class="kanban-container" id="kanbanBoard">
+
+    <!-- Новая -->
+    <div class="kanban-column" data-status="new">
+      <div class="column-header">
+        <div class="column-dot" style="background:var(--blue)"></div>
+        <div class="column-title">Новая</div>
+        <div class="column-count">5</div>
+      </div>
+      <div class="column-body">
+        <div class="request-card urgency-high" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260311-001</div>
+            <div class="card-time">12 мин</div>
+          </div>
+          <div class="card-category">⚡ Электрика</div>
+          <div class="card-description">Не работает освещение в подъезде, полностью темно на 3-м этаже</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 12, кв. 45
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,var(--red),var(--amber))">!</div>
+              <div class="executor-name" style="color:var(--amber)">Не назначен</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 2</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260311-002</div>
+            <div class="card-time">34 мин</div>
+          </div>
+          <div class="card-category">🔧 Сантехника</div>
+          <div class="card-description">Течь в ванной комнате, капает с потолка от соседей сверху</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Бунёдкор 7, кв. 112
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,var(--red),var(--amber))">!</div>
+              <div class="executor-name" style="color:var(--amber)">Не назначен</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 1</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-low" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260311-003</div>
+            <div class="card-time">1 ч 15 мин</div>
+          </div>
+          <div class="card-category">🧹 Уборка</div>
+          <div class="card-description">Мусор у контейнерной площадки не вывезен второй день</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 14, двор
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,var(--red),var(--amber))">!</div>
+              <div class="executor-name" style="color:var(--amber)">Не назначен</div>
+            </div>
+            <div class="card-tags"></div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260311-004</div>
+            <div class="card-time">2 ч</div>
+          </div>
+          <div class="card-category">🛗 Лифт</div>
+          <div class="card-description">Лифт застревает между 5 и 6 этажом, странные звуки</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Мирзо Улугбек 3, п. 2
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,var(--red),var(--amber))">!</div>
+              <div class="executor-name" style="color:var(--amber)">Не назначен</div>
+            </div>
+            <div class="card-tags"></div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-high" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260311-005</div>
+            <div class="card-time">3 ч</div>
+          </div>
+          <div class="card-category">🔥 Отопление</div>
+          <div class="card-description">Батареи холодные, температура в квартире 14°C</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 12, кв. 78
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,var(--red),var(--amber))">!</div>
+              <div class="executor-name" style="color:var(--amber)">Не назначен</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 3</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer">
+        <button class="column-footer-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Добавить
+        </button>
+      </div>
+    </div>
+
+    <!-- В работе -->
+    <div class="kanban-column" data-status="in_progress">
+      <div class="column-header">
+        <div class="column-dot" style="background:var(--violet)"></div>
+        <div class="column-title">В работе</div>
+        <div class="column-count">3</div>
+      </div>
+      <div class="column-body">
+        <div class="request-card urgency-high" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260310-018</div>
+            <div class="card-time">6 ч</div>
+          </div>
+          <div class="card-category">⚡ Электрика</div>
+          <div class="card-description">Короткое замыкание в щитовой, обесточен весь 2-й подъезд</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Бунёдкор 7, п. 2
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">ИК</div>
+              <div class="executor-name">Иван Козлов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag comments">💬 4</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260310-015</div>
+            <div class="card-time">12 ч</div>
+          </div>
+          <div class="card-category">🔧 Сантехника</div>
+          <div class="card-description">Замена смесителя в кухне, старый прокапывает</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 14, кв. 23
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4)">ДН</div>
+              <div class="executor-name">Дмитрий Наумов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 1</div>
+              <div class="card-tag comments">💬 2</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260310-012</div>
+            <div class="card-time">18 ч</div>
+          </div>
+          <div class="card-category">🌿 Благоустройство</div>
+          <div class="card-description">Сломанная лавочка у детской площадки во дворе</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Мирзо Улугбек 5, двор
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#f97316,#f59e0b)">РА</div>
+              <div class="executor-name">Рустам Ахмедов</div>
+            </div>
+            <div class="card-tags"></div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+    <!-- Закуп -->
+    <div class="kanban-column" data-status="purchase">
+      <div class="column-header">
+        <div class="column-dot" style="background:var(--amber)"></div>
+        <div class="column-title">Закуп</div>
+        <div class="column-count">2</div>
+      </div>
+      <div class="column-body">
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260309-041</div>
+            <div class="card-time">1 д 4 ч</div>
+          </div>
+          <div class="card-category">🔧 Сантехника</div>
+          <div class="card-description">Нужна замена стояка ГВС, требуется труба PPR 32мм</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 12, п. 3
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4)">ДН</div>
+              <div class="executor-name">Дмитрий Наумов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag comments">💬 6</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-high" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260309-038</div>
+            <div class="card-time">1 д 8 ч</div>
+          </div>
+          <div class="card-category">⚡ Электрика</div>
+          <div class="card-description">Нужен автоматический выключатель 25А для распределительного щита</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Бунёдкор 7, п. 1
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">ИК</div>
+              <div class="executor-name">Иван Козлов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 2</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+    <!-- Уточнение -->
+    <div class="kanban-column" data-status="clarification">
+      <div class="column-header">
+        <div class="column-dot" style="background:var(--cyan)"></div>
+        <div class="column-title">Уточнение</div>
+        <div class="column-count">1</div>
+      </div>
+      <div class="column-body">
+        <div class="request-card urgency-low" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260310-008</div>
+            <div class="card-time">22 ч</div>
+          </div>
+          <div class="card-category">📡 Интернет/ТВ</div>
+          <div class="card-description">Не работает кабельное ТВ — нужно уточнить номер договора провайдера</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 14, кв. 67
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">ИК</div>
+              <div class="executor-name">Иван Козлов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag comments">💬 3</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+    <!-- Выполнена -->
+    <div class="kanban-column" data-status="executed">
+      <div class="column-header">
+        <div class="column-dot" style="background:var(--emerald)"></div>
+        <div class="column-title">Выполнена</div>
+        <div class="column-count">2</div>
+      </div>
+      <div class="column-body">
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260309-032</div>
+            <div class="card-time">2 д</div>
+          </div>
+          <div class="card-category">🔧 Сантехника</div>
+          <div class="card-description">Замена прокладки в кране горячей воды</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Мирзо Улугбек 3, кв. 15
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4)">ДН</div>
+              <div class="executor-name">Дмитрий Наумов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 2</div>
+              <div class="card-tag comments">💬 5</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-low" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260309-029</div>
+            <div class="card-time">2 д 6 ч</div>
+          </div>
+          <div class="card-category">🧹 Уборка</div>
+          <div class="card-description">Генеральная уборка подъезда после ремонта</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 12, п. 1
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#f97316,#f59e0b)">РА</div>
+              <div class="executor-name">Рустам Ахмедов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag media">📎 4</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+    <!-- Исполнено -->
+    <div class="kanban-column" data-status="completed">
+      <div class="column-header">
+        <div class="column-dot" style="background:var(--green)"></div>
+        <div class="column-title">Исполнено</div>
+        <div class="column-count">2</div>
+      </div>
+      <div class="column-body">
+        <div class="request-card urgency-normal" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260308-019</div>
+            <div class="card-time">3 д</div>
+          </div>
+          <div class="card-category">🔥 Отопление</div>
+          <div class="card-description">Воздушная пробка в радиаторе, требовалась развоздушка</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Бунёдкор 7, кв. 89
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">ИК</div>
+              <div class="executor-name">Иван Козлов</div>
+            </div>
+            <div class="card-tags">
+              <div class="card-tag comments">💬 7</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="request-card urgency-low" draggable="true">
+          <div class="card-top">
+            <div class="card-number">#260308-016</div>
+            <div class="card-time">3 д 4 ч</div>
+          </div>
+          <div class="card-category">🛡 Безопасность</div>
+          <div class="card-description">Не работает домофон во 2-м подъезде</div>
+          <div class="card-address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ул. Навои 14, п. 2
+          </div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#f97316,#f59e0b)">РА</div>
+              <div class="executor-name">Рустам Ахмедов</div>
+            </div>
+            <div class="card-tags"></div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+    <!-- Принято (frozen) -->
+    <div class="kanban-column" data-status="approved">
+      <div class="column-header" style="opacity:0.6">
+        <div class="column-dot" style="background:var(--teal)"></div>
+        <div class="column-title">Принято ✓</div>
+        <div class="column-count">8</div>
+      </div>
+      <div class="column-body" style="opacity:0.5">
+        <div class="request-card urgency-low" style="cursor:default">
+          <div class="card-top">
+            <div class="card-number">#260307-044</div>
+            <div class="card-time">4 д</div>
+          </div>
+          <div class="card-category">⚡ Электрика</div>
+          <div class="card-description">Замена лампочек в подъезде — выполнено</div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">ИК</div>
+              <div class="executor-name">Иван Козлов</div>
+            </div>
+          </div>
+        </div>
+        <div class="request-card urgency-low" style="cursor:default">
+          <div class="card-top">
+            <div class="card-number">#260307-039</div>
+            <div class="card-time">4 д</div>
+          </div>
+          <div class="card-category">🔧 Сантехника</div>
+          <div class="card-description">Устранение протечки в подвале — выполнено</div>
+          <div class="card-bottom">
+            <div class="card-executor">
+              <div class="mini-avatar" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4)">ДН</div>
+              <div class="executor-name">Дмитрий Наумов</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+    <!-- Отменена (frozen) -->
+    <div class="kanban-column" data-status="cancelled">
+      <div class="column-header" style="opacity:0.6">
+        <div class="column-dot" style="background:var(--red)"></div>
+        <div class="column-title">Отменена ✕</div>
+        <div class="column-count">1</div>
+      </div>
+      <div class="column-body" style="opacity:0.5">
+        <div class="request-card urgency-low" style="cursor:default">
+          <div class="card-top">
+            <div class="card-number">#260308-011</div>
+            <div class="card-time">3 д</div>
+          </div>
+          <div class="card-category">📡 Интернет/ТВ</div>
+          <div class="card-description">Дубликат заявки — отменена заявителем</div>
+          <div class="card-bottom">
+            <div class="card-tags">
+              <div class="card-tag returned">отменена</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column-footer"><button class="column-footer-btn" style="visibility:hidden">_</button></div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// Minimal drag-and-drop demo
+document.querySelectorAll('.request-card[draggable="true"]').forEach(card => {
+  card.addEventListener('dragstart', e => {
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
+});
+
+document.querySelectorAll('.kanban-column').forEach(col => {
+  const body = col.querySelector('.column-body');
+  body.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+  body.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+  body.addEventListener('drop', e => {
+    e.preventDefault();
+    col.classList.remove('drag-over');
+    const dragging = document.querySelector('.dragging');
+    if (dragging) body.appendChild(dragging);
+    // Update counts
+    document.querySelectorAll('.kanban-column').forEach(c => {
+      const count = c.querySelector('.column-body').children.length;
+      c.querySelector('.column-count').textContent = count;
+    });
+  });
+});
+
+// Filter chips toggle
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => chip.classList.toggle('active'));
+});
+</script>
+</body>
+</html>

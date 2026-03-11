@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Информационное табло | УК</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --bg: #f7f5f0;
+  --bg-card: #ffffff;
+  --bg-subtle: #f0ede6;
+  --accent: #1a6b52;
+  --accent-light: #e8f5ef;
+  --accent-glow: rgba(26,107,82,0.15);
+  --blue: #2563eb;
+  --blue-light: #eff3ff;
+  --violet: #7c3aed;
+  --violet-light: #f3f0ff;
+  --amber: #d97706;
+  --amber-light: #fef9e7;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --emerald: #059669;
+  --emerald-light: #ecfdf5;
+  --cyan: #0891b2;
+  --cyan-light: #ecfeff;
+  --text: #1a1a1a;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --border: rgba(0,0,0,0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font-display: 'Sora', sans-serif;
+  --font-body: 'Nunito', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+html { font-size: 16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── Header ─── */
+.board-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 48px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand-logo {
+  width: 52px; height: 52px;
+  background: var(--accent);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800; font-size: 1.3rem; color: #fff;
+  flex-shrink: 0;
+}
+.brand-info { flex: 1; }
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 1.4rem;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.brand-subtitle {
+  font-size: 0.85rem; color: var(--text-muted);
+  margin-top: 2px;
+}
+.header-time {
+  text-align: right;
+}
+.time-display {
+  font-family: var(--font-mono);
+  font-weight: 700; font-size: 2rem;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.date-display {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ─── Main Content ─── */
+.board-content {
+  padding: 32px 48px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* ─── Stats Banner ─── */
+.stats-banner {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.stat-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: transform 0.2s;
+}
+.stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.stat-tile-icon {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+.stat-tile-value {
+  font-family: var(--font-mono);
+  font-weight: 700; font-size: 2rem;
+  letter-spacing: -0.03em; line-height: 1;
+}
+.stat-tile-label {
+  font-size: 0.85rem; color: var(--text-secondary);
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* ─── Active Requests ─── */
+.section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.section-header {
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-subtle);
+}
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 1.1rem;
+  letter-spacing: -0.01em;
+}
+.section-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem; font-weight: 700;
+  padding: 4px 12px; border-radius: 20px;
+}
+.section-body { padding: 20px 28px; }
+
+/* Request list for residents */
+.request-list { display: flex; flex-direction: column; gap: 12px; }
+.request-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 140px 120px;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.request-row:hover { background: var(--bg-subtle); }
+.req-number {
+  font-family: var(--font-mono);
+  font-weight: 700; font-size: 0.9rem;
+  color: var(--accent);
+}
+.req-desc {
+  font-size: 0.95rem; font-weight: 500;
+  color: var(--text);
+}
+.req-category {
+  font-size: 0.78rem; color: var(--text-muted);
+  margin-top: 2px;
+}
+.req-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.82rem; font-weight: 700;
+  padding: 6px 14px; border-radius: 20px;
+}
+.req-time {
+  font-family: var(--font-mono);
+  font-size: 0.82rem; color: var(--text-muted);
+  text-align: right;
+}
+
+/* Status colors */
+.status-new { background: var(--blue-light); color: var(--blue); }
+.status-in-progress { background: var(--violet-light); color: var(--violet); }
+.status-purchase { background: var(--amber-light); color: var(--amber); }
+.status-clarification { background: var(--cyan-light); color: var(--cyan); }
+.status-executed { background: var(--emerald-light); color: var(--emerald); }
+.status-completed { background: #f0fdf4; color: #16a34a; }
+
+/* ─── Status Pipeline Visual ─── */
+.pipeline-visual {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+.pipeline-step {
+  flex: 1;
+  text-align: center;
+  padding: 14px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  position: relative;
+  transition: all 0.2s;
+}
+.pipeline-step .step-count {
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  display: block;
+  margin-bottom: 4px;
+}
+.pipeline-step .step-label {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+.pipeline-arrow {
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+/* ─── Announcements ─── */
+.announcement {
+  display: flex; gap: 16px;
+  padding: 18px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+.announcement:last-child { margin-bottom: 0; }
+.announcement:hover { box-shadow: var(--shadow); }
+.announcement-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.announcement-content { flex: 1; }
+.announcement-title {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+.announcement-text {
+  font-size: 0.85rem; color: var(--text-secondary);
+  line-height: 1.5;
+}
+.announcement-time {
+  font-family: var(--font-mono);
+  font-size: 0.72rem; color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* ─── Satisfaction Meter ─── */
+.satisfaction-meter {
+  text-align: center;
+  padding: 20px;
+}
+.satisfaction-value {
+  font-family: var(--font-mono);
+  font-weight: 800; font-size: 3.5rem;
+  color: var(--accent);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.satisfaction-stars {
+  font-size: 1.5rem;
+  margin: 8px 0;
+  letter-spacing: 4px;
+}
+.satisfaction-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.satisfaction-bar {
+  width: 80%; margin: 16px auto 0;
+  height: 8px;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.satisfaction-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--emerald));
+}
+
+/* ─── Working Hours ─── */
+.hours-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  text-align: center;
+}
+.day-col { }
+.day-label {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.day-label.today { color: var(--accent); }
+.day-hours {
+  font-family: var(--font-mono);
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--text);
+  padding: 8px 4px;
+  background: var(--bg-subtle);
+  border-radius: 8px;
+}
+.day-hours.today {
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+/* ─── Footer ─── */
+.board-footer {
+  padding: 20px 48px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.board-footer .auto-update {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.board-footer .pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--emerald);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(5,150,105,0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(5,150,105,0); }
+}
+
+/* ─── Scroll Animation for big screens ─── */
+@keyframes scroll-up {
+  0%, 45% { transform: translateY(0); }
+  50%, 95% { transform: translateY(-50%); }
+  100% { transform: translateY(0); }
+}
+.auto-scroll {
+  animation: scroll-up 20s ease-in-out infinite;
+}
+
+/* ─── Full-screen mode adjustments ─── */
+@media (min-width: 1920px) {
+  html { font-size: 18px; }
+  .board-content { padding: 40px 64px; gap: 32px; }
+  .board-header { padding: 32px 64px; }
+  .stat-tile { padding: 32px 36px; }
+  .stat-tile-value { font-size: 2.5rem; }
+}
+
+/* ─── Ticker ─── */
+.ticker-bar {
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ticker-content {
+  display: inline-block;
+  animation: ticker 30s linear infinite;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+@keyframes ticker {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+.ticker-separator {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: rgba(255,255,255,0.4);
+  border-radius: 50%;
+  margin: 0 32px;
+  vertical-align: middle;
+}
+</style>
+</head>
+<body>
+
+<!-- Ticker -->
+<div class="ticker-bar">
+  <div class="ticker-content">
+    <span>📋 Новая заявка #260311-005: Отопление — ул. Навои 12, кв. 78</span>
+    <span class="ticker-separator"></span>
+    <span>✅ Заявка #260309-032 выполнена — Сантехника</span>
+    <span class="ticker-separator"></span>
+    <span>🔧 На территории работают 7 специалистов</span>
+    <span class="ticker-separator"></span>
+    <span>⚠️ Плановые работы: промывка отопительной системы — 13 марта, 10:00-14:00</span>
+    <span class="ticker-separator"></span>
+    <span>📞 Диспетчерская: +998 71 123-45-67 (круглосуточно)</span>
+    <span class="ticker-separator"></span>
+    <span>📱 Подайте заявку через Telegram-бот: @uk_management_bot</span>
+    <span class="ticker-separator"></span>
+  </div>
+</div>
+
+<!-- Header -->
+<header class="board-header">
+  <div class="brand-logo">УК</div>
+  <div class="brand-info">
+    <div class="brand-name">Управляющая компания</div>
+    <div class="brand-subtitle">Информационное табло для жителей</div>
+  </div>
+  <div class="header-time">
+    <div class="time-display" id="currentTime">10:42</div>
+    <div class="date-display" id="currentDate">Вторник, 11 марта 2026</div>
+  </div>
+</header>
+
+<div class="board-content">
+  <!-- Stats Banner -->
+  <div class="stats-banner">
+    <div class="stat-tile">
+      <div class="stat-tile-icon" style="background:var(--blue-light)">📋</div>
+      <div>
+        <div class="stat-tile-value" style="color:var(--blue)">13</div>
+        <div class="stat-tile-label">Активных заявок</div>
+      </div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-icon" style="background:var(--emerald-light)">✅</div>
+      <div>
+        <div class="stat-tile-value" style="color:var(--emerald)">218</div>
+        <div class="stat-tile-label">Выполнено за месяц</div>
+      </div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-icon" style="background:var(--amber-light)">⏱</div>
+      <div>
+        <div class="stat-tile-value" style="color:var(--amber)">4.2<span style="font-size:1rem;color:var(--text-muted)">ч</span></div>
+        <div class="stat-tile-label">Среднее время решения</div>
+      </div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-icon" style="background:var(--violet-light)">👥</div>
+      <div>
+        <div class="stat-tile-value" style="color:var(--violet)">7</div>
+        <div class="stat-tile-label">Специалистов на смене</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Requests -->
+  <div class="section-card" style="grid-column:1/-1">
+    <div class="section-header">
+      <div class="section-title">Текущие заявки</div>
+      <div class="section-badge" style="background:var(--blue-light);color:var(--blue)">13 активных</div>
+    </div>
+    <div class="section-body">
+      <!-- Pipeline Visual -->
+      <div class="pipeline-visual" style="margin-bottom:20px">
+        <div class="pipeline-step" style="background:var(--blue-light);color:var(--blue)">
+          <span class="step-count">5</span>
+          <span class="step-label">Новые</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" style="background:var(--violet-light);color:var(--violet)">
+          <span class="step-count">3</span>
+          <span class="step-label">В работе</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" style="background:var(--amber-light);color:var(--amber)">
+          <span class="step-count">2</span>
+          <span class="step-label">Закуп</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" style="background:var(--cyan-light);color:var(--cyan)">
+          <span class="step-count">1</span>
+          <span class="step-label">Уточнение</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" style="background:var(--emerald-light);color:var(--emerald)">
+          <span class="step-count">2</span>
+          <span class="step-label">Выполнена</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" style="background:#f0fdf4;color:#16a34a">
+          <span class="step-count">218</span>
+          <span class="step-label">Принято ✓</span>
+        </div>
+      </div>
+
+      <!-- Request list -->
+      <div class="request-list">
+        <div class="request-row">
+          <div class="req-number">#260311-001</div>
+          <div>
+            <div class="req-desc">Не работает освещение в подъезде</div>
+            <div class="req-category">⚡ Электрика · ул. Навои 12</div>
+          </div>
+          <div class="req-status status-new">● Новая</div>
+          <div class="req-time">12 мин</div>
+        </div>
+        <div class="request-row">
+          <div class="req-number">#260311-002</div>
+          <div>
+            <div class="req-desc">Течь в ванной комнате</div>
+            <div class="req-category">🔧 Сантехника · ул. Бунёдкор 7</div>
+          </div>
+          <div class="req-status status-new">● Новая</div>
+          <div class="req-time">34 мин</div>
+        </div>
+        <div class="request-row">
+          <div class="req-number">#260310-018</div>
+          <div>
+            <div class="req-desc">Короткое замыкание в щитовой</div>
+            <div class="req-category">⚡ Электрика · ул. Бунёдкор 7</div>
+          </div>
+          <div class="req-status status-in-progress">● В работе</div>
+          <div class="req-time">6 ч</div>
+        </div>
+        <div class="request-row">
+          <div class="req-number">#260310-015</div>
+          <div>
+            <div class="req-desc">Замена смесителя в кухне</div>
+            <div class="req-category">🔧 Сантехника · ул. Навои 14</div>
+          </div>
+          <div class="req-status status-in-progress">● В работе</div>
+          <div class="req-time">12 ч</div>
+        </div>
+        <div class="request-row">
+          <div class="req-number">#260309-041</div>
+          <div>
+            <div class="req-desc">Замена стояка ГВС</div>
+            <div class="req-category">🔧 Сантехника · ул. Навои 12</div>
+          </div>
+          <div class="req-status status-purchase">● Закуп</div>
+          <div class="req-time">1 д 4 ч</div>
+        </div>
+        <div class="request-row">
+          <div class="req-number">#260309-032</div>
+          <div>
+            <div class="req-desc">Замена прокладки в кране</div>
+            <div class="req-category">🔧 Сантехника · ул. Мирзо Улугбек 3</div>
+          </div>
+          <div class="req-status status-executed">● Выполнена</div>
+          <div class="req-time">2 д</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Announcements -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-title">Объявления</div>
+      <div class="section-badge" style="background:var(--amber-light);color:var(--amber)">Важное</div>
+    </div>
+    <div class="section-body">
+      <div class="announcement">
+        <div class="announcement-icon" style="background:var(--red-light)">⚠️</div>
+        <div class="announcement-content">
+          <div class="announcement-title">Плановое отключение горячей воды</div>
+          <div class="announcement-text">13-14 марта с 10:00 до 14:00 будет проводиться промывка отопительной системы. Просим подготовить запас воды.</div>
+          <div class="announcement-time">Опубликовано: 10 марта, 09:00</div>
+        </div>
+      </div>
+      <div class="announcement">
+        <div class="announcement-icon" style="background:var(--blue-light)">📢</div>
+        <div class="announcement-content">
+          <div class="announcement-title">Собрание собственников</div>
+          <div class="announcement-text">Ежеквартальное собрание состоится 20 марта в 19:00 в холле дома №12. Повестка: итоги зимнего сезона, план благоустройства.</div>
+          <div class="announcement-time">Опубликовано: 9 марта, 14:30</div>
+        </div>
+      </div>
+      <div class="announcement">
+        <div class="announcement-icon" style="background:var(--emerald-light)">🌿</div>
+        <div class="announcement-content">
+          <div class="announcement-title">Весенняя уборка территории</div>
+          <div class="announcement-text">С 15 марта начинается генеральная уборка дворовой территории и подготовка к весеннему озеленению.</div>
+          <div class="announcement-time">Опубликовано: 8 марта, 11:00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div style="display:flex;flex-direction:column;gap:24px">
+    <!-- Satisfaction -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Оценка жителей</div>
+      </div>
+      <div class="section-body">
+        <div class="satisfaction-meter">
+          <div class="satisfaction-value">4.6</div>
+          <div class="satisfaction-stars">★★★★★</div>
+          <div class="satisfaction-label">Средняя оценка за месяц</div>
+          <div class="satisfaction-bar">
+            <div class="satisfaction-fill" style="width:92%"></div>
+          </div>
+          <div style="margin-top:16px;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:0.72rem">
+            <div style="text-align:center"><div style="font-family:var(--font-mono);font-weight:700;color:var(--red)">2</div><div style="color:var(--text-muted)">★1</div></div>
+            <div style="text-align:center"><div style="font-family:var(--font-mono);font-weight:700;color:var(--amber)">5</div><div style="color:var(--text-muted)">★2</div></div>
+            <div style="text-align:center"><div style="font-family:var(--font-mono);font-weight:700;color:var(--amber)">18</div><div style="color:var(--text-muted)">★3</div></div>
+            <div style="text-align:center"><div style="font-family:var(--font-mono);font-weight:700;color:var(--emerald)">67</div><div style="color:var(--text-muted)">★4</div></div>
+            <div style="text-align:center"><div style="font-family:var(--font-mono);font-weight:700;color:var(--accent)">126</div><div style="color:var(--text-muted)">★5</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Working Hours -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Часы работы</div>
+      </div>
+      <div class="section-body">
+        <div class="hours-grid">
+          <div class="day-col"><div class="day-label">Пн</div><div class="day-hours">08-20</div></div>
+          <div class="day-col"><div class="day-label today">Вт</div><div class="day-hours today">08-20</div></div>
+          <div class="day-col"><div class="day-label">Ср</div><div class="day-hours">08-20</div></div>
+          <div class="day-col"><div class="day-label">Чт</div><div class="day-hours">08-20</div></div>
+          <div class="day-col"><div class="day-label">Пт</div><div class="day-hours">08-20</div></div>
+          <div class="day-col"><div class="day-label">Сб</div><div class="day-hours">09-17</div></div>
+          <div class="day-col"><div class="day-label">Вс</div><div class="day-hours">10-16</div></div>
+        </div>
+        <div style="text-align:center;margin-top:16px;padding:12px;background:var(--red-light);border-radius:var(--radius-sm);font-size:0.85rem;font-weight:600;color:var(--red)">
+          📞 Аварийная служба: круглосуточно
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:0.82rem;color:var(--text-secondary)">
+          📱 Telegram-бот: <strong>@uk_management_bot</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer class="board-footer">
+  <div class="auto-update">
+    <div class="pulse"></div>
+    Обновление в реальном времени · Данные актуальны на <span id="updateTime">10:42:15</span>
+  </div>
+</footer>
+
+<script>
+// Live clock
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  document.getElementById('currentTime').textContent = h + ':' + m;
+  document.getElementById('updateTime').textContent = h + ':' + m + ':' + s;
+
+  const days = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  document.getElementById('currentDate').textContent =
+    days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+}
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>

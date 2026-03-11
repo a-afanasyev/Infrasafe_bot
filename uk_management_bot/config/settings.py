@@ -46,10 +46,15 @@ class Settings:
     
     # Invites
     INVITE_SECRET = os.getenv("INVITE_SECRET")
-    
+
     # Проверка безопасности: INVITE_SECRET обязателен в production
     if not INVITE_SECRET and not DEBUG:
         raise ValueError("INVITE_SECRET must be set in production environment for secure invite tokens")
+
+    # JWT (separate from INVITE_SECRET, but falls back to INVITE_SECRET)
+    JWT_SECRET = os.getenv("JWT_SECRET")
+    if not JWT_SECRET and not INVITE_SECRET and not DEBUG:
+        raise ValueError("JWT_SECRET or INVITE_SECRET must be set in production environment")
     
     # Rate limiting для /join команды
     JOIN_RATE_LIMIT_WINDOW = int(os.getenv("JOIN_RATE_LIMIT_WINDOW", "600"))  # 10 минут
@@ -57,6 +62,8 @@ class Settings:
     
     # Redis для rate limiting в production
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
+    REDIS_PUBSUB_URL: str = os.getenv("REDIS_PUBSUB_URL", "redis://redis:6379/1")
     USE_REDIS_RATE_LIMIT = os.getenv("USE_REDIS_RATE_LIMIT", "False").lower() == "true"
     
     # Notifications

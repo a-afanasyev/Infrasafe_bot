@@ -49,11 +49,42 @@ services:
     
     # Health check для проверки состояния приложения
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # API сервис (FastAPI + uvicorn)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: uk-management-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_PUBSUB_URL=redis://redis:6379/1
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8085:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   # База данных PostgreSQL
   postgres:
@@ -189,11 +220,25 @@ services:
     
     # Health check для проверки состояния веб-сервиса
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Frontend (React + nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: uk-frontend
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    depends_on:
+      - api
+    networks:
+      - uk-network
 
 # Определяем тома для хранения данных
 volumes:

@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+# Install system deps for psycopg2 and healthcheck
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libpq-dev gcc curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd --create-home appuser
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["uvicorn", "uk_management_bot.api.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
