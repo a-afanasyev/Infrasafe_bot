@@ -299,10 +299,6 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                 {blocks.map((block, idx) => {
                   const color =
                     SHIFT_TYPE_COLORS[block.shift.shift_type ?? 'regular'] ?? '#3b82f6'
-                  const leftPct =
-                    ((block.colStart - 2) / 24) * 100
-                  // actual width = (colSpan / 24) * (total - 180px for name)
-                  // We express as a calc for accuracy
                   const label =
                     block.shift.start_time && block.shift.end_time
                       ? `${formatTime(block.shift.start_time)} — ${formatTime(block.shift.end_time)}`
@@ -317,8 +313,8 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                         position: 'absolute',
                         top: '-52px',
                         // left offset: 180px name col + (colStart-2)/24 of remaining
-                        left: `calc(180px + ${leftPct}% * (100% - 180px) / 100)`,
-                        width: `calc(${(block.colSpan / 24) * 100}% * (100% - 180px) / 100)`,
+                        left: `calc(180px + (100% - 180px) * ${block.colStart - 2} / 24)`,
+                        width: `calc((100% - 180px) * ${block.colSpan} / 24)`,
                         height: '36px',
                         marginTop: '8px',
                         background: `${color}22`,

@@ -22,34 +22,30 @@ class EmployeeBrief(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def _coerce_from_orm(cls, values):
-        """Convert ORM object to dict before field validation."""
+        """Convert ORM object to dict before field validation, parsing JSON fields."""
         if hasattr(values, '__dict__') and not isinstance(values, dict):
-            # Extract all relevant fields from ORM object
-            return {
+            raw_spec = getattr(values, "specialization", None)
+            values = {
                 "id": getattr(values, "id", None),
                 "first_name": getattr(values, "first_name", None),
                 "last_name": getattr(values, "last_name", None),
                 "phone": getattr(values, "phone", None),
                 "verification_status": getattr(values, "verification_status", ""),
                 "active_shift_id": getattr(values, "active_shift_id", None),
-                "specialization": getattr(values, "specialization", None),
+                "specialization": raw_spec,
             }
-        return values
-
-    @model_validator(mode='after')
-    def parse_specialization(self) -> "EmployeeBrief":
-        """Parse JSON string specialization into list[str]."""
-        raw = self.specialization
-        if isinstance(raw, str):
+        # Parse specialization JSON string → list (works for both ORM and dict paths)
+        raw_spec = values.get("specialization") if isinstance(values, dict) else None
+        if isinstance(raw_spec, str):
             try:
-                parsed = json.loads(raw)
-                self.specialization = parsed if isinstance(parsed, list) else []
+                parsed = json.loads(raw_spec)
+                values["specialization"] = parsed if isinstance(parsed, list) else []
             except (json.JSONDecodeError, TypeError):
-                self.specialization = []
-        elif raw is None:
-            self.specialization = []
-        # if already a list, leave as-is
-        return self
+                values["specialization"] = []
+        elif raw_spec is None:
+            if isinstance(values, dict):
+                values["specialization"] = []
+        return values
 
 
 class ShiftBrief(BaseModel):

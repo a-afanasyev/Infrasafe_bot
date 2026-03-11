@@ -17,6 +17,7 @@ const ShiftsPage = lazy(() => import('./pages/ShiftsPage'))
 const EmployeesPage = lazy(() => import('./pages/EmployeesPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,9 @@ export default function App() {
               <Route path="employees" element={<EmployeesPage />} />
               <Route path="templates" element={<TemplatesPage />} />
             </Route>
+
+            {/* Resident board - standalone page */}
+            <Route path="/resident-board" element={<ProtectedRoute><ResidentBoardPage /></ProtectedRoute>} />
 
             {/* TWA routes */}
             <Route path="/twa" element={<TWAHomePage />} />

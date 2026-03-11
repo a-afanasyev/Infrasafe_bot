@@ -53,13 +53,13 @@ app.add_middleware(
 
 # Routers
 app.include_router(auth_router, prefix="/api/v2/auth", tags=["auth"])
+app.include_router(requests_stats_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(requests_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(callcenter_router, prefix="/api/v2/callcenter", tags=["callcenter"])
 app.include_router(notifications_router, prefix="/api/v2/notifications", tags=["notifications"])
 app.include_router(profile_router, prefix="/api/v2/profile", tags=["profile"])
 app.include_router(ws_router, prefix="/ws/v2", tags=["websocket"])
 app.include_router(shifts_router, prefix="/api/v2/shifts", tags=["shifts"])
-app.include_router(requests_stats_router, prefix="/api/v2/requests", tags=["requests"])
 
 
 @app.get("/health")
