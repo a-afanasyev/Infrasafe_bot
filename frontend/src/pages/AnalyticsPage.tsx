@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toZonedTime } from 'date-fns-tz'
 import {
   BarChart,
   Bar,
@@ -72,6 +73,24 @@ const PIE_PALETTE = [
   '#06b6d4',
   '#14b8a6',
 ]
+
+// ─── Static styles ────────────────────────────────────────────────────────────
+
+const cardStyle: React.CSSProperties = {
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
+  padding: '20px',
+  overflow: 'hidden',
+}
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontWeight: 600,
+  fontSize: '14px',
+  color: 'var(--text-primary)',
+  marginBottom: '16px',
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -288,24 +307,6 @@ export default function AnalyticsPage() {
 
   const rankLabel = (i: number) => ['🥇', '🥈', '🥉'][i] ?? `${i + 1}`
 
-  // ── card section ─────────────────────────────────────────────────────────────
-
-  const cardStyle: React.CSSProperties = {
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    padding: '20px',
-    overflow: 'hidden',
-  }
-
-  const sectionTitleStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-display)',
-    fontWeight: 600,
-    fontSize: '14px',
-    color: 'var(--text-primary)',
-    marginBottom: '16px',
-  }
-
   return (
     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
@@ -440,7 +441,7 @@ export default function AnalyticsPage() {
                 />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(v: string) => DAY_ABBR[new Date(v).getDay()] ?? v}
+                  tickFormatter={(v: string) => DAY_ABBR[toZonedTime(new Date(v), 'Asia/Tashkent').getDay()] ?? v}
                   tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
@@ -482,9 +483,9 @@ export default function AnalyticsPage() {
                       dataKey="value"
                       strokeWidth={0}
                     >
-                      {byCategoryData.map((_, idx) => (
+                      {byCategoryData.map((entry, idx) => (
                         <Cell
-                          key={idx}
+                          key={entry.name}
                           fill={PIE_PALETTE[idx % PIE_PALETTE.length]}
                         />
                       ))}

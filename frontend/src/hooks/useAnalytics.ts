@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 
 // Note: ShiftStatsOut and useShiftStats are also exported from useShifts.ts.
@@ -53,6 +53,7 @@ export function useShiftStats(period: AnalyticsPeriod = '7d') {
     queryFn: () =>
       apiClient.get('/api/v2/shifts/stats', { params: { period } }).then(r => r.data),
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -62,5 +63,6 @@ export function useRequestStats(period: AnalyticsPeriod) {
     queryFn: () =>
       apiClient.get('/api/v2/requests/stats', { params: { period } }).then(r => r.data),
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   })
 }
