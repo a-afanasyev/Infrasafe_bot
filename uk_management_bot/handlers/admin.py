@@ -604,8 +604,7 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
-            from aiogram import Bot
-            bot = Bot.get_current()
+            bot = callback.bot
             await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_EXECUTED)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
@@ -614,8 +613,7 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
         applicant = request.user
         if applicant and applicant.telegram_id:
             try:
-                from aiogram import Bot
-                bot = Bot.get_current()
+                bot = callback.bot
 
                 notification_text = get_text("admin.handlers.notify_applicant_completed", language=lang).format(
                     request_number=request.format_number_for_display()
@@ -685,8 +683,7 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
-            from aiogram import Bot
-            bot = Bot.get_current()
+            bot = callback.bot
             await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_EXECUTED)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
@@ -695,8 +692,7 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
         applicant = request.user
         if applicant and applicant.telegram_id:
             try:
-                from aiogram import Bot
-                bot = Bot.get_current()
+                bot = callback.bot
 
                 notification_text = get_text("admin.handlers.notify_applicant_reconfirmed", language=lang).format(
                     request_number=request.format_number_for_display()
@@ -761,8 +757,7 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
-            from aiogram import Bot
-            bot = Bot.get_current()
+            bot = callback.bot
             await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_IN_PROGRESS)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
@@ -2760,8 +2755,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
         # Отправляем уведомление исполнителю
         try:
-            from aiogram import Bot
-            bot = Bot.get_current()
+            bot = callback.bot
 
             # Ограничиваем длину текста для предотвращения MESSAGE_TOO_LONG
             # Telegram лимит: 4096 символов

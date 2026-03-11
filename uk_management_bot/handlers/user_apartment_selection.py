@@ -314,7 +314,8 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, 
         await send_apartment_request_notification(
             user_apartment_id=user_apartment.id,
             user_id=user.telegram_id,  # ИСПРАВЛЕНО: используем user.telegram_id для Telegram API
-            apartment_address=full_address
+            apartment_address=full_address,
+            bot=callback.bot
         )
 
         # Очищаем данные выбора квартиры из state
@@ -378,7 +379,8 @@ async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext, l
 async def send_apartment_request_notification(
     user_apartment_id: int,
     user_id: int,
-    apartment_address: str
+    apartment_address: str,
+    bot=None
 ):
     """
     Отправить уведомление администраторам о новой заявке на квартиру
@@ -421,9 +423,7 @@ async def send_apartment_request_notification(
                 telegram_id=user.telegram_id, apartment_address=apartment_address
             )
 
-            # Используем бота из текущего контекста
-            from aiogram import Bot
-            bot = Bot.get_current()
+            # bot передаётся как параметр
 
             for admin_id in settings.ADMIN_USER_IDS:
                 try:

@@ -268,7 +268,8 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
             user_apartment_id=user_apartment_id,
             user_telegram_id=user_telegram_id,
             apartment_address=apartment_address,
-            comment=comment
+            comment=comment,
+            bot=message.bot
         )
 
         comment_text = "\n\n<b>" + get_text("address_moderation.handlers.comment_label", language=lang) + ":</b> " + comment if comment else ""
@@ -393,7 +394,8 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
             user_apartment_id=user_apartment_id,
             user_telegram_id=user_telegram_id,
             apartment_address=apartment_address,
-            comment=comment
+            comment=comment,
+            bot=message.bot
         )
 
         await message.answer(
@@ -438,7 +440,7 @@ async def cancel_moderation_action(callback: CallbackQuery, state: FSMContext, l
 # NOTIFICATION HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def send_approval_notification(user_apartment_id: int, user_telegram_id: int, apartment_address: str, comment: str = None):
+async def send_approval_notification(user_apartment_id: int, user_telegram_id: int, apartment_address: str, comment: str = None, bot=None):
     """
     Отправить уведомление пользователю об одобрении заявки на квартиру
 
@@ -447,12 +449,10 @@ async def send_approval_notification(user_apartment_id: int, user_telegram_id: i
         user_telegram_id: Telegram ID пользователя
         apartment_address: Адрес квартиры
         comment: Комментарий администратора (необязательно)
+        bot: Bot instance
     """
     try:
-        from aiogram import Bot
         from uk_management_bot.config.localization import get_text
-
-        bot = Bot.get_current()
 
         # Получаем язык пользователя
         db = next(get_db())
@@ -489,7 +489,7 @@ async def send_approval_notification(user_apartment_id: int, user_telegram_id: i
         logger.error(f"Ошибка при отправке уведомления об одобрении заявки {user_apartment_id}: {e}")
 
 
-async def send_rejection_notification(user_apartment_id: int, user_telegram_id: int, apartment_address: str, comment: str):
+async def send_rejection_notification(user_apartment_id: int, user_telegram_id: int, apartment_address: str, comment: str, bot=None):
     """
     Отправить уведомление пользователю об отклонении заявки на квартиру
 
@@ -498,12 +498,10 @@ async def send_rejection_notification(user_apartment_id: int, user_telegram_id: 
         user_telegram_id: Telegram ID пользователя
         apartment_address: Адрес квартиры
         comment: Причина отклонения (обязательно)
+        bot: Bot instance
     """
     try:
-        from aiogram import Bot
         from uk_management_bot.config.localization import get_text
-
-        bot = Bot.get_current()
 
         # Получаем язык пользователя
         db = next(get_db())

@@ -363,8 +363,7 @@ async def save_rating(callback: CallbackQuery, db: Session = None, language: str
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
-            from aiogram import Bot
-            bot = Bot.get_current()
+            bot = callback.bot
             await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_APPROVED)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
@@ -555,17 +554,15 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
 
         # Уведомление через сервис (отправит исполнителю и в канал)
         try:
-            from aiogram import Bot
-            bot = Bot.get_current()
+            bot = message_obj.bot
             await async_notify_request_status_changed(bot, db, request, old_status, "Исполнено (возвращена)")
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 
         # Дополнительно уведомляем менеджеров напрямую с деталями
         try:
-            from aiogram import Bot
             import json
-            bot = Bot.get_current()
+            bot = message_obj.bot
 
             # Получаем всех менеджеров из базы
             managers = db.query(User).filter(

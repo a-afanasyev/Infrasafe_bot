@@ -1044,7 +1044,7 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, u
         logger.error(f"Ошибка обработки выбора срочности: {e}", exc_info=True)
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
 
-@router.callback_query(F.data.startswith("confirm_"))
+@router.callback_query(F.data.in_({"confirm_yes", "confirm_no"}))
 async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None):
     """Обработка подтверждения заявки через inline клавиатуру"""
     lang = await _get_user_language(callback=callback)
@@ -2778,7 +2778,7 @@ async def handle_final_executor_assignment(callback: CallbackQuery):
         # Отправляем уведомление исполнителю
         try:
             from aiogram import Bot
-            bot = Bot.get_current()
+            bot = callback.bot
 
             # Get executor's language
             executor_lang = get_user_language(executor.telegram_id, db_session)
@@ -2963,7 +2963,7 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
         # Отправляем уведомление
         from uk_management_bot.services.notification_service import async_notify_request_status_changed
         try:
-            bot = Bot.get_current()
+            bot = message.bot
             await async_notify_request_status_changed(bot, db_session, request, old_status, "Закуп")
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
@@ -3219,7 +3219,7 @@ async def executor_return_to_work(callback: CallbackQuery):
         # Отправляем уведомление
         from uk_management_bot.services.notification_service import async_notify_request_status_changed
         try:
-            bot = Bot.get_current()
+            bot = callback.bot
             await async_notify_request_status_changed(bot, db_session, request, old_status, "В работе")
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
