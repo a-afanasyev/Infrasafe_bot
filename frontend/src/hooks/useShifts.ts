@@ -2,91 +2,25 @@ import { useCallback } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useWebSocket } from './useWebSocket'
+import type {
+  EmployeeBrief,
+  ShiftBrief,
+  ShiftDetail,
+  TransferOut,
+  ShiftStatsOut,
+  TemplateBrief,
+} from '../types/api'
 
-export interface EmployeeBrief {
-  id: number
-  first_name: string | null
-  last_name: string | null
-  phone: string | null
-  specialization: string[]
-  active_shift_id: number | null
-  verification_status: string
-}
-
-export interface ShiftBrief {
-  id: number
-  user_id: number | null
-  executor_name: string | null
-  status: string
-  shift_type: string | null
-  start_time: string  // ISO UTC
-  end_time: string | null
-  max_requests: number
-  current_request_count: number
-  load_percentage: number
-}
-
-export interface ShiftDetail extends ShiftBrief {
-  notes: string | null
-  specialization_focus: string[] | null
-  coverage_areas: string[] | null
-  priority_level: number
-  completed_requests: number
-  efficiency_score: number | null
-  quality_rating: number | null
-  template_id: number | null
-  created_at: string | null
-}
-
-export interface TransferOut {
-  id: number
-  shift_id: number
-  from_executor_name: string | null
-  to_executor_name: string | null
-  status: string
-  reason: string
-  urgency_level: string
-  comment: string | null
-  created_at: string
-}
-
-export interface ShiftStatsOut {
-  active_shifts: number
-  active_executors: number
-  coverage_pct: number
-  avg_efficiency: number | null
-  shifts_today: number
-  pending_transfers: number
-}
-
-export interface TemplateBrief {
-  id: number
-  name: string
-  description: string | null
-  start_hour: number
-  start_minute: number
-  duration_hours: number
-  default_shift_type: string
-  days_of_week: number[] | null
-  is_active: boolean
-  min_executors: number
-  max_executors: number
-  auto_create: boolean
-  required_specializations: string[] | null
-  default_max_requests: number
-  priority_level: number
+export type {
+  EmployeeBrief,
+  ShiftBrief,
+  ShiftDetail,
+  TransferOut,
+  ShiftStatsOut,
+  TemplateBrief,
 }
 
 export function useShifts(filters: Record<string, string | undefined> = {}) {
-  const queryClient = useQueryClient()
-  const onShiftEvent = useCallback((event: { type: string; data: unknown }) => {
-    if (typeof event.type === 'string' && event.type.startsWith('shift.')) {
-      queryClient.invalidateQueries({ queryKey: ['shifts'] })
-      queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
-    }
-  }, [queryClient])
-  useWebSocket('shifts', onShiftEvent)
   return useQuery<ShiftBrief[]>({
     queryKey: ['shifts', filters],
     queryFn: () => apiClient.get('/api/v2/shifts', { params: filters }).then(r => r.data),
@@ -114,13 +48,6 @@ export function useShiftSchedule(dateFrom: string, dateTo: string) {
 }
 
 export function useShiftTransfers() {
-  const queryClient = useQueryClient()
-  const onTransferEvent = useCallback((event: { type: string; data: unknown }) => {
-    if (typeof event.type === 'string' && event.type.startsWith('transfer.')) {
-      queryClient.invalidateQueries({ queryKey: ['shift-transfers'] })
-    }
-  }, [queryClient])
-  useWebSocket('shifts', onTransferEvent)
   return useQuery<TransferOut[]>({
     queryKey: ['shift-transfers'],
     queryFn: () => apiClient.get('/api/v2/shifts/transfers').then(r => r.data),
@@ -190,6 +117,23 @@ export function useHandleTransfer() {
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
     },
   })
+}
+
+export function useShiftsWebSocket() {
+  const queryClient = useQueryClient()
+  const onEvent = useCallback((event: { type: string; data: unknown }) => {
+    if (typeof event.type === 'string') {
+      if (event.type.startsWith('shift.') || event.type === 'shift_created' || event.type === 'shift_updated' || event.type === 'shift_ended') {
+        queryClient.invalidateQueries({ queryKey: ['shifts'] })
+        queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
+      }
+      if (event.type.startsWith('transfer.') || event.type === 'transfer_created' || event.type === 'transfer_updated') {
+        queryClient.invalidateQueries({ queryKey: ['shift-transfers'] })
+      }
+    }
+  }, [queryClient])
+  useWebSocket('shifts', onEvent)
 }
 
 export { useEmployees } from './useEmployees'

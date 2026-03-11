@@ -1,37 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
+import type {
+  VerificationStatus,
+  EmployeeBrief,
+  ShiftBrief,
+  EmployeeDetail,
+} from '../types/api'
 
-export type VerificationStatus = 'verified' | 'rejected' | 'pending'
-
-export interface EmployeeBrief {
-  id: number
-  first_name: string | null
-  last_name: string | null
-  phone: string | null
-  specialization: string[]
-  active_shift_id: number | null
-  verification_status: VerificationStatus
-}
-
-export interface ShiftBrief {
-  id: number
-  user_id: number | null
-  executor_name: string | null
-  status: string
-  shift_type: string | null
-  start_time: string
-  end_time: string | null
-  max_requests: number
-  current_request_count: number
-  load_percentage: number
-}
-
-export interface EmployeeDetail extends EmployeeBrief {
-  active_shift: ShiftBrief | null
-  rating: number | null
-  total_shifts: number
-  total_completed: number
-}
+export type { VerificationStatus, EmployeeBrief, ShiftBrief, EmployeeDetail }
 
 export function useEmployees(
   filters: Record<string, string | boolean | undefined> = {},

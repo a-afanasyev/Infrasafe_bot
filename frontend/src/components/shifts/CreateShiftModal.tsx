@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useCreateShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
@@ -39,6 +39,20 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
 
   const { data: employees = [] } = useEmployees({}, undefined)
 
+  useEffect(() => {
+    if (isOpen) {
+      setExecutorId('')
+      setStartTime('')
+      setEndTime('')
+      setShiftType('regular')
+      setMaxRequests('10')
+      setPriority('3')
+      setNotes('')
+      setSpecFocus([])
+      setError(null)
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const toggleSpec = (spec: string) => {
@@ -49,7 +63,18 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
     e.preventDefault()
     setError(null)
     if (!executorId) { setError('Выберите исполнителя'); return }
-    if (!startTime) { setError('Укажите время начала'); return }
+    if (!startTime) {
+      setError('Укажите время начала смены')
+      return
+    }
+    if (!endTime) {
+      setError('Укажите время окончания смены')
+      return
+    }
+    if (new Date(endTime) <= new Date(startTime)) {
+      setError('Время окончания должно быть позже времени начала')
+      return
+    }
 
     try {
       await createShift.mutateAsync({

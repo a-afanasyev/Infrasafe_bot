@@ -678,7 +678,7 @@ export default function AnalyticsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {topExecutors.map((ex, idx) => {
                 // Split name into first/last for initials
-                const parts = ex.name.trim().split(' ')
+                const parts = (ex.name ?? '').trim().split(' ')
                 const firstName = parts[0] ?? null
                 const lastName = parts[1] ?? null
                 const initials = getInitials(firstName, lastName)
@@ -738,7 +738,7 @@ export default function AnalyticsPage() {
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {ex.name}
+                        {ex.name ?? 'Неизвестно'}
                       </div>
                       <div
                         style={{

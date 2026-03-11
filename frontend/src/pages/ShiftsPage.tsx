@@ -6,6 +6,7 @@ import {
   useShiftStats,
   useShiftTransfers,
   useShiftTemplates,
+  useShiftsWebSocket,
 } from '../hooks/useShifts'
 import ShiftTimeline from '../components/shifts/ShiftTimeline'
 import ShiftCoverageHeatmap from '../components/shifts/ShiftCoverageHeatmap'
@@ -17,6 +18,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 export default function ShiftsPage() {
   const navigate = useNavigate()
   const { setActions, clearActions } = useTopbar()
+  useShiftsWebSocket()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null)

@@ -1,40 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
+import type { TemplateBrief, CreateTemplatePayload } from '../types/api'
 
-export interface TemplateBrief {
-  id: number
-  name: string
-  description: string | null
-  start_hour: number
-  start_minute: number
-  duration_hours: number
-  default_shift_type: string
-  days_of_week: number[] | null  // 0=Mon ... 6=Sun
-  is_active: boolean
-  min_executors: number
-  max_executors: number
-  auto_create: boolean
-  required_specializations: string[] | null
-  default_max_requests: number
-  priority_level: number
-}
-
-export interface CreateTemplatePayload {
-  name: string
-  description?: string | null
-  start_hour: number
-  start_minute: number
-  duration_hours: number
-  default_shift_type: string
-  days_of_week?: number[] | null
-  required_specializations?: string[] | null
-  min_executors?: number
-  max_executors?: number
-  default_max_requests?: number
-  auto_create?: boolean
-  priority_level?: number
-  is_active?: boolean
-}
+export type { TemplateBrief, CreateTemplatePayload }
 
 export function useTemplates() {
   return useQuery<TemplateBrief[]>({
