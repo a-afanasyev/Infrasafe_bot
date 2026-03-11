@@ -94,9 +94,9 @@ async def get_request_stats(
         str(row[0]): row[1] for row in closed_by_day_result.all()
     }
 
-    # Build full day list (one entry per day)
+    # Build full day list (one entry per day, including today)
     by_day: list[DayStats] = []
-    for i in range(days):
+    for i in range(days + 1):
         day = (period_start + timedelta(days=i)).date()
         day_str = str(day)
         by_day.append(DayStats(
@@ -113,22 +113,23 @@ async def get_request_stats(
     )
     by_category: dict[str, int] = {row[0]: row[1] for row in cat_result.all() if row[0]}
 
-    # --- by_status: open requests only (not in CLOSED_STATUSES) ---
+    # --- by_status: open requests only (not in CLOSED_STATUSES), scoped to period ---
     status_result = await db.execute(
         select(Request.status, func.count())
-        .where(Request.status.not_in(CLOSED_STATUSES))
+        .where(
+            Request.status.not_in(CLOSED_STATUSES),
+            Request.created_at >= period_start,
+        )
         .group_by(Request.status)
     )
     by_status: dict[str, int] = {row[0]: row[1] for row in status_result.all() if row[0]}
 
     # --- top_executors ---
+    # First, get top executors by completed count (no epoch extraction here)
     exec_result = await db.execute(
         select(
             Request.executor_id,
             func.count().label("completed"),
-            func.avg(
-                func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
-            ).label("avg_hours"),
         )
         .where(
             Request.status.in_(CLOSED_STATUSES),
@@ -141,6 +142,31 @@ async def get_request_stats(
     )
     exec_rows = exec_result.all()
 
+    # Compute avg_hours per executor separately to isolate epoch extraction
+    exec_ids = [row[0] for row in exec_rows]
+    avg_hours_map: dict[int, Optional[float]] = {}
+    if exec_ids:
+        try:
+            ah_result = await db.execute(
+                select(
+                    Request.executor_id,
+                    func.avg(
+                        func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
+                    ),
+                )
+                .where(
+                    Request.executor_id.in_(exec_ids),
+                    Request.completed_at.isnot(None),
+                    Request.assigned_at.isnot(None),
+                    Request.created_at >= period_start,
+                )
+                .group_by(Request.executor_id)
+            )
+            for uid, avg_h in ah_result.all():
+                avg_hours_map[uid] = float(avg_h) if avg_h is not None else None
+        except Exception:
+            pass  # DB doesn't support epoch extraction (e.g. SQLite)
+
     # Batch-load executor users
     exec_user_ids = [row[0] for row in exec_rows]
     exec_users_map: dict[int, User] = {}
@@ -151,7 +177,7 @@ async def get_request_stats(
 
     top_executors: list[ExecutorStat] = []
     for row in exec_rows:
-        uid, completed, avg_h = row[0], row[1], row[2]
+        uid, completed = row[0], row[1]
         u = exec_users_map.get(uid)
         name = None
         if u:
@@ -160,13 +186,14 @@ async def get_request_stats(
             user_id=uid,
             name=name,
             completed=completed,
-            avg_hours=float(avg_h) if avg_h is not None else None,
+            avg_hours=avg_hours_map.get(uid),
             score=None,
         ))
 
-    # --- recent_actions: last 20 requests ---
+    # --- recent_actions: last 20 requests, scoped to period ---
     recent_result = await db.execute(
         select(Request.request_number, Request.category, Request.status, Request.created_at)
+        .where(Request.created_at >= period_start)
         .order_by(Request.created_at.desc())
         .limit(20)
     )
@@ -182,26 +209,30 @@ async def get_request_stats(
 
     # --- total_requests ---
     total_result = await db.execute(
-        select(func.count()).where(Request.created_at >= period_start)
+        select(func.count(Request.request_number)).where(Request.created_at >= period_start)
     )
     total_requests: int = total_result.scalar() or 0
 
     # --- avg_resolution_hours ---
-    avg_res_result = await db.execute(
-        select(
-            func.avg(
-                func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
+    avg_resolution_hours: Optional[float] = None
+    try:
+        avg_res_result = await db.execute(
+            select(
+                func.avg(
+                    func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
+                )
+            )
+            .where(
+                Request.status.in_(CLOSED_STATUSES),
+                Request.completed_at >= period_start,
+                Request.completed_at.isnot(None),
+                Request.assigned_at.isnot(None),
             )
         )
-        .where(
-            Request.status.in_(CLOSED_STATUSES),
-            Request.completed_at >= period_start,
-            Request.completed_at.isnot(None),
-            Request.assigned_at.isnot(None),
-        )
-    )
-    avg_res_scalar = avg_res_result.scalar()
-    avg_resolution_hours: Optional[float] = float(avg_res_scalar) if avg_res_scalar is not None else None
+        avg_res_scalar = avg_res_result.scalar()
+        avg_resolution_hours = float(avg_res_scalar) if avg_res_scalar is not None else None
+    except Exception:
+        avg_resolution_hours = None  # DB doesn't support epoch extraction (e.g. SQLite)
 
     return RequestStatsOut(
         by_day=by_day,

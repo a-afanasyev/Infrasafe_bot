@@ -34,8 +34,9 @@ async def publish_request_event(event_type: str, data: dict) -> None:
 
 
 async def subscribe_to_requests():
-    """Returns Redis Pub/Sub subscriber for WebSocket handler."""
-    client = await get_pubsub_redis()
+    """Returns a dedicated Redis Pub/Sub subscriber. Each caller gets its own connection."""
+    url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+    client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(CHANNEL)
     return pubsub
@@ -55,8 +56,9 @@ async def publish_shift_event(event_type: str, data: dict) -> None:
 
 
 async def subscribe_to_shifts():
-    """Returns Redis Pub/Sub subscriber for shifts WebSocket handler."""
-    client = await get_pubsub_redis()
+    """Returns a dedicated Redis Pub/Sub subscriber. Each caller gets its own connection."""
+    url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+    client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(SHIFTS_CHANNEL)
     return pubsub
