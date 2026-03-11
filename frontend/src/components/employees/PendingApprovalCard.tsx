@@ -5,10 +5,11 @@ interface Props {
   employee: EmployeeBrief
   onApprove: (id: number) => void
   onReject: (id: number) => void
+  isPending?: boolean
 }
 
-export default function PendingApprovalCard({ employee, onApprove, onReject }: Props) {
-  const gradient = AVATAR_GRADIENTS[employee.id % 5]
+export default function PendingApprovalCard({ employee, onApprove, onReject, isPending }: Props) {
+  const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Без имени'
 
@@ -93,32 +94,36 @@ export default function PendingApprovalCard({ employee, onApprove, onReject }: P
       <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
         <button
           onClick={() => onApprove(employee.id)}
+          disabled={isPending}
           style={{
             background: 'var(--accent)',
             border: 'none',
             borderRadius: 8,
-            cursor: 'pointer',
+            cursor: isPending ? 'not-allowed' : 'pointer',
             fontSize: '12px',
             color: '#fff',
             padding: '7px 14px',
             fontFamily: 'var(--font-display)',
             fontWeight: 600,
+            opacity: isPending ? 0.6 : 1,
           }}
         >
           Одобрить
         </button>
         <button
           onClick={() => onReject(employee.id)}
+          disabled={isPending}
           style={{
             background: 'none',
             border: '1px solid var(--red)',
             borderRadius: 8,
-            cursor: 'pointer',
+            cursor: isPending ? 'not-allowed' : 'pointer',
             fontSize: '12px',
             color: 'var(--red)',
             padding: '7px 14px',
             fontFamily: 'var(--font-display)',
             fontWeight: 600,
+            opacity: isPending ? 0.6 : 1,
           }}
         >
           Отклонить

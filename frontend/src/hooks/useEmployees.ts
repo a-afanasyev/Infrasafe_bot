@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 
+export type VerificationStatus = 'verified' | 'rejected' | 'pending'
+
 export interface EmployeeBrief {
   id: number
   first_name: string | null
@@ -8,7 +10,7 @@ export interface EmployeeBrief {
   phone: string | null
   specialization: string[]
   active_shift_id: number | null
-  verification_status: string
+  verification_status: VerificationStatus
 }
 
 export interface ShiftBrief {
@@ -66,6 +68,7 @@ export function useApproveEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/approve`).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error('Approve employee failed:', error),
   })
 }
 
@@ -75,5 +78,6 @@ export function useRejectEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/reject`).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error('Reject employee failed:', error),
   })
 }

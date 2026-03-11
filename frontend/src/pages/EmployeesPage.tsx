@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTopbar } from '../contexts/TopbarContext'
 import { useEmployees, useApproveEmployee, useRejectEmployee } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
@@ -69,32 +69,34 @@ export default function EmployeesPage() {
   ).length
   const verified = employees.filter(e => e.verification_status === 'verified').length
 
+  const actionsNode = useMemo(() => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <input
+        type="text"
+        placeholder="Поиск сотрудника..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          fontSize: '13px',
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-display)',
+          outline: 'none',
+          width: '200px',
+        }}
+      />
+      <button style={secondaryBtnStyle}>Экспорт</button>
+      <button style={primaryBtnStyle}>+ Добавить</button>
+    </div>
+  ), [search])
+
   useEffect(() => {
-    setActions(
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <input
-          type="text"
-          placeholder="Поиск сотрудника..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '6px 12px',
-            fontSize: '13px',
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-display)',
-            outline: 'none',
-            width: '200px',
-          }}
-        />
-        <button style={secondaryBtnStyle}>Экспорт</button>
-        <button style={primaryBtnStyle}>+ Добавить</button>
-      </div>
-    )
+    setActions(actionsNode)
     return clearActions
-  }, [setActions, clearActions, search])
+  }, [setActions, clearActions, actionsNode])
 
   const STATS = [
     { label: 'Всего сотрудников', value: total, iconBg: 'var(--blue)', icon: '👥' },
@@ -197,6 +199,7 @@ export default function EmployeesPage() {
                 employee={e}
                 onApprove={(id) => approveEmployee.mutate(id)}
                 onReject={(id) => rejectEmployee.mutate(id)}
+                isPending={approveEmployee.isPending || rejectEmployee.isPending}
               />
             ))}
           </div>

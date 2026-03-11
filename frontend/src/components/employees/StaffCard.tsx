@@ -12,7 +12,7 @@ interface Props {
 export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Props) {
   const [hovered, setHovered] = useState(false)
 
-  const gradient = AVATAR_GRADIENTS[employee.id % 5]
+  const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
   const isOnShift = employee.active_shift_id !== null
   const isVerified = employee.verification_status === 'verified'
