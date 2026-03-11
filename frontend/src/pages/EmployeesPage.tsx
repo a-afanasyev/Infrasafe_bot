@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTopbar } from '../contexts/TopbarContext'
-import { useEmployees, useApproveEmployee, useRejectEmployee } from '../hooks/useEmployees'
+import {
+  useEmployees,
+  useApproveEmployee,
+  useRejectEmployee,
+  useBlockEmployee,
+  useUnblockEmployee,
+} from '../hooks/useEmployees'
+import type { EmployeeBrief } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
 import PendingApprovalCard from '../components/employees/PendingApprovalCard'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import AssignRequestModal from '../components/employees/AssignRequestModal'
 
 const primaryBtnStyle: React.CSSProperties = {
   background: 'var(--accent)',
@@ -59,8 +67,12 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
 
+  const [assignTarget, setAssignTarget] = useState<EmployeeBrief | null>(null)
+
   const approveEmployee = useApproveEmployee()
   const rejectEmployee = useRejectEmployee()
+  const blockEmployee = useBlockEmployee()
+  const unblockEmployee = useUnblockEmployee()
 
   const total = employees.length
   const onShift = employees.filter(e => e.active_shift_id !== null).length
@@ -235,9 +247,27 @@ export default function EmployeesPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
           {employees.map(emp => (
-            <StaffCard key={emp.id} employee={emp} />
+            <StaffCard
+              key={emp.id}
+              employee={emp}
+              onAssign={(e) => setAssignTarget(e)}
+              onBlock={(e) => {
+                if (e.status === 'blocked') {
+                  unblockEmployee.mutate(e.id)
+                } else {
+                  blockEmployee.mutate(e.id)
+                }
+              }}
+            />
           ))}
         </div>
+      )}
+
+      {assignTarget && (
+        <AssignRequestModal
+          employee={assignTarget}
+          onClose={() => setAssignTarget(null)}
+        />
       )}
     </div>
   )

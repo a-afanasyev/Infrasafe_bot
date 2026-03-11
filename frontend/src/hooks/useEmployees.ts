@@ -57,3 +57,21 @@ export function useRejectEmployee() {
     onError: (error) => console.error('Reject employee failed:', error),
   })
 }
+
+export function useBlockEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.patch(`/api/v2/shifts/employees/${id}/block`).then(r => r.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+  })
+}
+
+export function useUnblockEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.patch(`/api/v2/shifts/employees/${id}/unblock`).then(r => r.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+  })
+}

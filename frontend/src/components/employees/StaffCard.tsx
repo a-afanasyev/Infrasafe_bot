@@ -16,6 +16,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
   const initials = getInitials(employee.first_name, employee.last_name)
   const isOnShift = employee.active_shift_id !== null
   const isVerified = employee.verification_status === 'verified'
+  const isBlocked = employee.status === 'blocked'
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Без имени'
 
   return (
@@ -105,19 +106,38 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
           )}
         </div>
 
-        {/* Verification badge */}
+        {/* Verification / blocked badge */}
         <div style={{
           position: 'absolute',
           top: 16,
           right: 16,
-          fontSize: '10px',
-          fontWeight: 600,
-          padding: '3px 8px',
-          borderRadius: 10,
-          background: isVerified ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-          color: isVerified ? 'var(--emerald)' : 'var(--amber)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '4px',
         }}>
-          {isVerified ? '✓ Верифицирован' : '⏳ На проверке'}
+          {isBlocked && (
+            <div style={{
+              fontSize: '10px',
+              fontWeight: 600,
+              padding: '3px 8px',
+              borderRadius: 10,
+              background: 'rgba(239,68,68,0.15)',
+              color: 'var(--red)',
+            }}>
+              Заблокирован
+            </div>
+          )}
+          <div style={{
+            fontSize: '10px',
+            fontWeight: 600,
+            padding: '3px 8px',
+            borderRadius: 10,
+            background: isVerified ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+            color: isVerified ? 'var(--emerald)' : 'var(--amber)',
+          }}>
+            {isVerified ? '✓ Верифицирован' : '⏳ На проверке'}
+          </div>
         </div>
       </div>
 
@@ -225,12 +245,12 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
             border: 'none',
             cursor: 'pointer',
             fontSize: '12px',
-            color: 'var(--red)',
+            color: isBlocked ? 'var(--amber)' : 'var(--red)',
             padding: '6px 8px',
             fontFamily: 'var(--font-display)',
           }}
         >
-          Блок
+          {isBlocked ? 'Разблокировать' : 'Блок'}
         </button>
       </div>
     </div>
