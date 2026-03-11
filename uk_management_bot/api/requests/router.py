@@ -25,6 +25,21 @@ def _generate_request_number(today_str: str, count: int) -> str:
     return f"{today_str}-{(count + 1):04d}"
 
 
+def _format_executor_name(user) -> Optional[str]:
+    """Format executor's display name from User ORM object."""
+    if user is None:
+        return None
+    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    return name or None
+
+
+def _make_request_card(req, exec_user=None) -> RequestCard:
+    """Build RequestCard from ORM Request, optionally with executor user."""
+    card = RequestCard.model_validate(req)
+    card.executor_name = _format_executor_name(exec_user)
+    return card
+
+
 @router.get("/kanban", response_model=KanbanResponse)
 async def get_kanban(
     executor_id: Optional[int] = Query(None),
@@ -32,23 +47,24 @@ async def get_kanban(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    query = select(Request)
+    from sqlalchemy.orm import aliased
+    ExecutorUser = aliased(User)
+    query = (
+        select(Request, ExecutorUser)
+        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+    )
     if executor_id:
         query = query.filter(Request.executor_id == executor_id)
     if category:
         query = query.filter(Request.category == category)
 
     result = await db.execute(query.order_by(Request.created_at.desc()).limit(500))
-    requests = result.scalars().all()
+    rows = result.all()
 
     columns = []
     for st in KANBAN_STATUSES:
-        st_requests = [r for r in requests if r.status == st]
-        columns.append(KanbanColumn(
-            status=st,
-            count=len(st_requests),
-            requests=[RequestCard.model_validate(r) for r in st_requests],
-        ))
+        st_cards = [_make_request_card(r, eu) for r, eu in rows if r.status == st]
+        columns.append(KanbanColumn(status=st, count=len(st_cards), requests=st_cards))
     return KanbanResponse(columns=columns)
 
 
@@ -83,11 +99,18 @@ async def get_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Request).where(Request.request_number == request_number))
-    req = result.scalar_one_or_none()
-    if not req:
+    from sqlalchemy.orm import aliased
+    ExecutorUser = aliased(User)
+    result = await db.execute(
+        select(Request, ExecutorUser)
+        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+        .where(Request.request_number == request_number)
+    )
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Request not found")
-    return RequestCard.model_validate(req)
+    req, exec_user = row
+    return _make_request_card(req, exec_user)
 
 
 @router.post("", response_model=RequestCard, status_code=201)
