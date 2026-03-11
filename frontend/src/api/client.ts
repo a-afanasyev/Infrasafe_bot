@@ -27,11 +27,12 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${data.access_token}`
           return apiClient(originalRequest)
         } catch {
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
-          window.location.href = '/login'
+          // refresh failed — clear everything and go to login
         }
       }
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
