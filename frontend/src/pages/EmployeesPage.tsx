@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTopbar } from '../contexts/TopbarContext'
-import { useEmployees } from '../hooks/useEmployees'
+import { useEmployees, useApproveEmployee, useRejectEmployee } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
 import PendingApprovalCard from '../components/employees/PendingApprovalCard'
 import EmptyState from '../components/shared/EmptyState'
@@ -49,6 +49,7 @@ export default function EmployeesPage() {
   const { setActions, clearActions } = useTopbar()
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [search, setSearch] = useState<string>('')
 
   const apiFilters: Record<string, string | boolean | undefined> = {
     ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
@@ -56,30 +57,50 @@ export default function EmployeesPage() {
     ...(statusFilter === 'verified' ? { verification_status: 'verified' } : {}),
   }
 
-  const { data: employees = [], isLoading } = useEmployees(apiFilters)
+  const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
+
+  const approveEmployee = useApproveEmployee()
+  const rejectEmployee = useRejectEmployee()
 
   const total = employees.length
   const onShift = employees.filter(e => e.active_shift_id !== null).length
   const pending = employees.filter(
     e => e.verification_status !== 'verified' && e.verification_status !== 'rejected'
   ).length
-  const avgRating = 4.5 // placeholder — rating not available on EmployeeBrief
+  const verified = employees.filter(e => e.verification_status === 'verified').length
 
   useEffect(() => {
     setActions(
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <input
+          type="text"
+          placeholder="Поиск сотрудника..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '6px 12px',
+            fontSize: '13px',
+            color: 'var(--text-primary)',
+            fontFamily: 'var(--font-display)',
+            outline: 'none',
+            width: '200px',
+          }}
+        />
         <button style={secondaryBtnStyle}>Экспорт</button>
         <button style={primaryBtnStyle}>+ Добавить</button>
       </div>
     )
     return clearActions
-  }, [setActions, clearActions])
+  }, [setActions, clearActions, search])
 
   const STATS = [
     { label: 'Всего сотрудников', value: total, iconBg: 'var(--blue)', icon: '👥' },
     { label: 'На смене сейчас', value: onShift, iconBg: 'var(--emerald)', icon: '🟢' },
     { label: 'Ожидают одобрения', value: pending, iconBg: 'var(--amber)', icon: '⏳' },
-    { label: 'Средний рейтинг', value: `${avgRating}★`, iconBg: 'var(--violet)', icon: '⭐' },
+    { label: 'Верифицированы', value: verified, iconBg: 'var(--violet)', icon: '✓' },
   ]
 
   const pendingEmployees = employees.filter(
@@ -87,6 +108,12 @@ export default function EmployeesPage() {
   )
 
   if (isLoading) return <LoadingSpinner />
+
+  if (isError) return (
+    <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
+      Ошибка загрузки сотрудников
+    </div>
+  )
 
   return (
     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -168,8 +195,8 @@ export default function EmployeesPage() {
               <PendingApprovalCard
                 key={e.id}
                 employee={e}
-                onApprove={(id) => console.log('approve', id)}
-                onReject={(id) => console.log('reject', id)}
+                onApprove={(id) => approveEmployee.mutate(id)}
+                onReject={(id) => rejectEmployee.mutate(id)}
               />
             ))}
           </div>

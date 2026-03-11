@@ -1,53 +1,12 @@
 import { useState } from 'react'
-import type { EmployeeBrief, EmployeeDetail, ShiftBrief } from '../../hooks/useEmployees'
-import { formatTime } from '../../utils/timezone'
+import type { EmployeeBrief } from '../../hooks/useEmployees'
+import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
 
 interface Props {
   employee: EmployeeBrief
   onAssign?: (employee: EmployeeBrief) => void
   onBlock?: (employee: EmployeeBrief) => void
   onVerify?: (employee: EmployeeBrief) => void
-}
-
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #3b82f6, #2563eb)',
-  'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-  'linear-gradient(135deg, #10b981, #059669)',
-  'linear-gradient(135deg, #f59e0b, #d97706)',
-  'linear-gradient(135deg, #00d4aa, #0099aa)',
-]
-
-const SPEC_COLORS: Record<string, string> = {
-  'Электрика': 'var(--amber)',
-  'Сантехника': 'var(--blue)',
-  'Отопление': 'var(--red)',
-  'Уборка': 'var(--emerald)',
-  'Безопасность': 'var(--violet)',
-  'Лифт': 'var(--cyan)',
-  'Благоустройство': 'var(--green)',
-  'Вентиляция': 'var(--teal)',
-}
-
-function getInitials(firstName: string | null, lastName: string | null): string {
-  const f = firstName ? firstName[0] : ''
-  const l = lastName ? lastName[0] : ''
-  return (f + l).toUpperCase() || '?'
-}
-
-function getActiveShift(emp: EmployeeBrief): ShiftBrief | null {
-  return (emp as Partial<EmployeeDetail>).active_shift ?? null
-}
-
-function getRating(emp: EmployeeBrief): number | null {
-  return (emp as Partial<EmployeeDetail>).rating ?? null
-}
-
-function getTotalShifts(emp: EmployeeBrief): number {
-  return (emp as Partial<EmployeeDetail>).total_shifts ?? 0
-}
-
-function getTotalCompleted(emp: EmployeeBrief): number {
-  return (emp as Partial<EmployeeDetail>).total_completed ?? 0
 }
 
 export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Props) {
@@ -57,10 +16,6 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
   const initials = getInitials(employee.first_name, employee.last_name)
   const isOnShift = employee.active_shift_id !== null
   const isVerified = employee.verification_status === 'verified'
-  const activeShift = getActiveShift(employee)
-  const rating = getRating(employee)
-  const totalShifts = getTotalShifts(employee)
-  const totalCompleted = getTotalCompleted(employee)
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Без имени'
 
   return (
@@ -99,7 +54,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
           }}>
             {initials}
           </div>
-          {/* Status dot */}
+          {/* Status dot: green = on shift, gray = off shift */}
           <div style={{
             position: 'absolute',
             bottom: 1,
@@ -166,44 +121,38 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
         </div>
       </div>
 
-      {/* Metrics grid */}
+      {/* Shift status bar */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(2, 1fr)',
         background: 'var(--bg-surface)',
         borderTop: '1px solid var(--border)',
         borderBottom: '1px solid var(--border)',
       }}>
         {[
           {
-            value: totalCompleted,
-            label: 'Выполнено',
-            accent: true,
+            value: isOnShift ? 'На смене' : 'Не на смене',
+            label: 'статус',
+            accent: isOnShift,
           },
           {
-            value: totalShifts,
-            label: 'смен',
+            value: employee.active_shift_id !== null ? `#${employee.active_shift_id}` : '—',
+            label: 'смена',
             accent: false,
-          },
-          {
-            value: rating !== null ? `★ ${rating.toFixed(1)}` : '—',
-            label: 'рейтинг',
-            accent: false,
-            amber: rating !== null,
           },
         ].map((cell, i) => (
           <div key={i} style={{
             padding: '10px',
             textAlign: 'center',
-            borderRight: i < 2 ? '1px solid var(--border)' : 'none',
+            borderRight: i < 1 ? '1px solid var(--border)' : 'none',
           }}>
             <div style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
-              color: cell.accent ? 'var(--accent)' : cell.amber ? 'var(--amber)' : 'var(--text-primary)',
+              color: cell.accent ? 'var(--emerald)' : 'var(--text-primary)',
             }}>
-              {String(cell.value)}
+              {cell.value}
             </div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
               {cell.label}
@@ -212,38 +161,12 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify }: Pro
         ))}
       </div>
 
-      {/* Active shift info bar */}
-      {activeShift && (
-        <div style={{
-          padding: '8px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          borderBottom: '1px solid var(--border)',
-          background: 'rgba(16,185,129,0.05)',
-        }}>
-          <div style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--emerald)',
-            flexShrink: 0,
-          }} />
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>На смене сейчас</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)', marginLeft: 'auto' }}>
-            {formatTime(activeShift.start_time)}
-            {activeShift.end_time ? ` – ${formatTime(activeShift.end_time)}` : ''}
-          </span>
-        </div>
-      )}
-
       {/* Card actions */}
       <div style={{
         padding: '12px 20px',
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        borderTop: activeShift ? 'none' : '1px solid var(--border)',
         marginTop: 'auto',
       }}>
         <button
