@@ -34,6 +34,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
   const [maxRequests, setMaxRequests] = useState('10')
   const [priority, setPriority] = useState('3')
   const [notes, setNotes] = useState('')
+  const [specFocus, setSpecFocus] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const { data: employees = [] } = useQuery<EmployeeBrief[]>({
@@ -44,6 +45,10 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
   })
 
   if (!isOpen) return null
+
+  const toggleSpec = (spec: string) => {
+    setSpecFocus(prev => prev.includes(spec) ? prev.filter(s => s !== spec) : [...prev, spec])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,6 +65,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
         max_requests: Number(maxRequests),
         priority_level: Number(priority),
         notes: notes || undefined,
+        specialization_focus: specFocus,
       })
       onClose()
       // Reset form
@@ -70,6 +76,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
       setMaxRequests('10')
       setPriority('3')
       setNotes('')
+      setSpecFocus([])
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Ошибка при создании смены'
@@ -214,6 +221,29 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+          </div>
+
+          {/* Specializations */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              Специализации
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {['Электрика','Сантехника','Отопление','Уборка','Безопасность','Лифт','Благоустройство','Вентиляция'].map(spec => (
+                <button
+                  key={spec}
+                  type="button"
+                  onClick={() => toggleSpec(spec)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 20, fontSize: '12px', cursor: 'pointer',
+                    background: specFocus.includes(spec) ? 'var(--accent-dim)' : 'var(--bg-surface)',
+                    color: specFocus.includes(spec) ? 'var(--accent)' : 'var(--text-secondary)',
+                    border: `1px solid ${specFocus.includes(spec) ? 'var(--border-active)' : 'var(--border)'}`,
+                    fontFamily: 'var(--font-body)',
+                  }}
+                >{spec}</button>
+              ))}
+            </div>
           </div>
 
           {/* Max requests */}

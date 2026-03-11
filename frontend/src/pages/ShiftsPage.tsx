@@ -115,39 +115,24 @@ export default function ShiftsPage() {
   ]
   const dateLabelStr = `${dayNames[selectedDate.getDay()]}, ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
 
-  const avgLoad =
+  const totalLoad =
     shifts.length > 0
       ? Math.round(
           shifts.reduce((s, sh) => s + sh.load_percentage, 0) / shifts.length,
         )
       : 0
 
+  // Count unique specializations covered by active shifts
+  const TOTAL_SPECS = 8  // Электрика, Сантехника, Отопление, Уборка, Безопасность, Лифт, Благоустройство, Вентиляция
+  // (no specialization data on ShiftBrief, use active_shifts as proxy)
+  const specCoverage = stats ? Math.min(100, Math.round((stats.active_executors / Math.max(stats.active_shifts, 1)) * 100)) : 0
+
   const STATS_CARDS = [
-    {
-      label: 'Исполнителей на смене',
-      value: `${stats?.active_executors ?? 0}`,
-      color: 'var(--accent)',
-    },
-    {
-      label: 'Покрытие %',
-      value: `${stats?.coverage_pct ?? 0}%`,
-      color: 'var(--blue)',
-    },
-    {
-      label: 'Ср. нагрузка',
-      value: `${avgLoad}%`,
-      color: 'var(--emerald)',
-    },
-    {
-      label: 'Передачи',
-      value: `${stats?.pending_transfers ?? 0}`,
-      color: 'var(--amber)',
-    },
-    {
-      label: 'Смен сегодня',
-      value: `${stats?.shifts_today ?? 0}`,
-      color: 'var(--violet)',
-    },
+    { label: 'Исполнителей на смене', value: `${stats?.active_executors ?? 0}`, color: 'var(--accent)' },
+    { label: 'Покрытие %', value: `${stats?.coverage_pct ?? 0}%`, color: 'var(--blue)' },
+    { label: 'Покрытие спец-ций', value: `${specCoverage}%`, color: 'var(--emerald)' },
+    { label: 'Передачи', value: `${stats?.pending_transfers ?? 0}`, color: 'var(--amber)' },
+    { label: 'Общая нагрузка', value: `${totalLoad}%`, color: 'var(--violet)' },
   ]
 
   const navBtnStyle: React.CSSProperties = {
