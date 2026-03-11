@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
 from uk_management_bot.api.requests.schemas import (
@@ -59,7 +60,6 @@ async def get_kanban(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from sqlalchemy.orm import aliased
     ExecutorUser = aliased(User)
     query = (
         select(Request, ExecutorUser)
@@ -91,7 +91,6 @@ async def list_requests(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from sqlalchemy.orm import aliased
     ExecutorUser = aliased(User)
     query = (
         select(Request, ExecutorUser)
@@ -116,7 +115,6 @@ async def get_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from sqlalchemy.orm import aliased
     ExecutorUser = aliased(User)
     result = await db.execute(
         select(Request, ExecutorUser)
@@ -189,7 +187,8 @@ async def update_request(
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    new_status = body.model_dump(exclude_unset=True).get("status")
+    updates = body.model_dump(exclude_unset=True)
+    new_status = updates.get("status")
     if new_status and new_status != req.status:
         allowed = _REQUEST_VALID_TRANSITIONS.get(req.status, set())
         if new_status not in allowed:
@@ -199,7 +198,7 @@ async def update_request(
             )
 
     old_status = req.status
-    for field, value in body.model_dump(exclude_unset=True).items():
+    for field, value in updates.items():
         setattr(req, field, value)
 
     await db.commit()

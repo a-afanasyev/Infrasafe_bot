@@ -19,9 +19,14 @@ class RequestCard(BaseModel):
     address: Optional[str] = None
     apartment_id: Optional[int] = None
     executor_id: Optional[int] = None
+    executor_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     manager_confirmed: bool = False
+    completion_report: Optional[str] = None
+    notes: Optional[str] = None
+    requested_materials: Optional[str] = None
+    return_reason: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -60,6 +65,8 @@ class UpdateRequestBody(BaseModel):
     completion_report: Optional[str] = None
     manager_confirmed: Optional[bool] = None
     manager_confirmation_notes: Optional[str] = None
+    requested_materials: Optional[str] = None
+    return_reason: Optional[str] = None
 
     @field_validator("status")
     @classmethod
