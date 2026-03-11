@@ -2,8 +2,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import RequestCard from './RequestCard'
 import type { KanbanColumn as TColumn } from '../../hooks/useKanban'
-
-const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])
+import { isTransitionAllowed, FROZEN_STATUSES } from './KanbanBoard'
 
 interface Props {
   column: TColumn
@@ -18,18 +17,9 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus }: 
     disabled: frozen,
   })
 
-  // A column is a valid drop target when:
-  // 1. Something is being dragged (activeDragStatus is set)
-  // 2. Source is not frozen
-  // 3. Target is not frozen
-  // 4. Not moving back to "Новая" from another column
-  // 5. Not the same column as source (would be a no-op)
   const isValidTarget =
     activeDragStatus !== null &&
-    !FROZEN_STATUSES.has(activeDragStatus) &&
-    !frozen &&
-    !(column.status === 'Новая' && activeDragStatus !== 'Новая') &&
-    column.status !== activeDragStatus
+    isTransitionAllowed(activeDragStatus, column.status)
 
   const highlightClass =
     isOver && isValidTarget

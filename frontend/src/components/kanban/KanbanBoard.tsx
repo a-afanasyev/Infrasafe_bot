@@ -57,6 +57,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
   const queryClient = useQueryClient()
   const [activeDragStatus, setActiveDragStatus] = useState<string | null>(null)
   const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null)
+  const [transitionError, setTransitionError] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -125,6 +126,8 @@ export default function KanbanBoard({ onCardClick }: Props) {
       await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
     } catch {
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      setTransitionError('Не удалось сохранить изменение. Попробуйте снова.')
+      setTimeout(() => setTransitionError(null), 4000)
     }
   }
 
@@ -143,6 +146,11 @@ export default function KanbanBoard({ onCardClick }: Props) {
 
   return (
     <>
+      {transitionError && (
+        <div className="mb-2 px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+          {transitionError}
+        </div>
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
