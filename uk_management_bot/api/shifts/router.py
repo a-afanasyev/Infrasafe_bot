@@ -1,4 +1,5 @@
 import re
+import logging
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,6 +22,7 @@ from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -604,20 +606,18 @@ async def create_from_template(
     user_ids = body.user_ids
     if not user_ids:
         raise HTTPException(status_code=422, detail="user_ids must not be empty")
-    user_ids_list = user_ids
+
     # Batch-load and validate all users upfront
-    valid_uids = [uid for uid in user_ids_list if uid is not None]
     users_map: dict[int, User] = {}
-    if valid_uids:
-        u_res = await db.execute(select(User).where(User.id.in_(valid_uids)))
-        for u in u_res.scalars().all():
-            users_map[u.id] = u
-        missing = [uid for uid in valid_uids if uid not in users_map]
-        if missing:
-            raise HTTPException(status_code=404, detail=f"Users not found: {missing}")
+    u_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+    for u in u_res.scalars().all():
+        users_map[u.id] = u
+    missing = [uid for uid in user_ids if uid not in users_map]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Users not found: {missing}")
 
     created_shifts = []
-    for uid in user_ids_list:
+    for uid in user_ids:
         shift = Shift(
             user_id=uid,
             start_time=start_dt,
@@ -706,6 +706,11 @@ async def handle_transfer(
         the_shift = shift_result.scalar_one_or_none()
         if the_shift:
             the_shift.user_id = transfer.from_executor_id
+        else:
+            logger.warning(
+                "Shift %s not found when rejecting transfer %s — shift.user_id not restored",
+                transfer.shift_id, transfer.id
+            )
 
     elif action == "cancel":
         if transfer.status not in ("pending", "assigned"):
