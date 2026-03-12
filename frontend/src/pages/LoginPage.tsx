@@ -38,6 +38,24 @@ export default function LoginPage() {
       script.setAttribute('data-size', 'large')
       script.setAttribute('data-onauth', 'onTelegramAuth(user)')
       script.setAttribute('data-request-access', 'write')
+
+      // Hide widget section if Telegram rejects the domain
+      script.onerror = () => {
+        const wrapper = document.getElementById('telegram-section')
+        if (wrapper) wrapper.style.display = 'none'
+      }
+
+      // After script loads, check if widget rendered properly (not an error iframe)
+      script.onload = () => {
+        setTimeout(() => {
+          const iframe = container.querySelector('iframe')
+          if (!iframe || iframe.offsetHeight > 80) {
+            const wrapper = document.getElementById('telegram-section')
+            if (wrapper) wrapper.style.display = 'none'
+          }
+        }, 1500)
+      }
+
       container.appendChild(script)
     }
 
@@ -90,15 +108,17 @@ export default function LoginPage() {
           UK Management
         </h1>
 
-        <div
-          id="telegram-login-widget"
-          style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', minHeight: 48 }}
-        />
+        <div id="telegram-section">
+          <div
+            id="telegram-login-widget"
+            style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', minHeight: 48 }}
+          />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>или</span>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>или</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
         </div>
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
