@@ -1,4 +1,5 @@
 // frontend/src/components/employees/StaffTable.tsx
+import { useState } from 'react'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, SPEC_DISPLAY, getInitials } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
@@ -19,6 +20,7 @@ function specColor(key: string): string {
 }
 
 export default function StaffTable({ employees, onAssign, onBlock, isBlockPending }: Props) {
+  const [hoveredId, setHoveredId] = useState<number | null>(null)
   if (employees.length === 0) {
     return (
       <div style={{
@@ -72,9 +74,14 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
         const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || 'Без имени'
         const isLast = idx === employees.length - 1
 
+        const isHovered = hoveredId === emp.id
+        const dimStyle = isBlocked ? { opacity: 0.6 } : {}
+
         return (
           <div
             key={emp.id}
+            onMouseEnter={() => setHoveredId(emp.id)}
+            onMouseLeave={() => setHoveredId(null)}
             style={{
               display: 'grid',
               gridTemplateColumns: COLS,
@@ -82,11 +89,12 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
               gap: '8px',
               borderBottom: isLast ? 'none' : '1px solid var(--border)',
               alignItems: 'center',
-              opacity: isBlocked ? 0.6 : 1,
+              background: isHovered ? 'var(--bg-surface)' : 'transparent',
+              transition: 'background 0.1s',
             }}
           >
             {/* Сотрудник */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', ...dimStyle }}>
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%', background: gradient,
@@ -120,7 +128,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
             </div>
 
             {/* Специализация */}
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', ...dimStyle }}>
               {emp.specialization.length > 0
                 ? emp.specialization.map(spec => {
                     const label = SPEC_DISPLAY[spec] ?? spec
@@ -139,7 +147,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
             </div>
 
             {/* Верификация */}
-            <div>
+            <div style={dimStyle}>
               <span style={{
                 fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 10,
                 background: isVerified ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
@@ -150,7 +158,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
             </div>
 
             {/* Статус */}
-            <div>
+            <div style={dimStyle}>
               <span style={{
                 color: isOnShift ? 'var(--emerald)' : '#5a6a7a',
                 fontSize: '11px',
@@ -161,7 +169,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
             </div>
 
             {/* Смена */}
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font-mono)', ...dimStyle }}>
               {emp.active_shift_id !== null ? `#${emp.active_shift_id}` : '—'}
             </div>
 
