@@ -1,5 +1,6 @@
 // frontend/src/components/employees/StaffTable.tsx
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, SPEC_DISPLAY, getInitials } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
@@ -21,6 +22,7 @@ function specColor(key: string): string {
 
 export default function StaffTable({ employees, onAssign, onBlock, isBlockPending }: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const navigate = useNavigate()
   if (employees.length === 0) {
     return (
       <div style={{
@@ -80,6 +82,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
         return (
           <div
             key={emp.id}
+            onClick={() => navigate(`/dashboard/employees/${emp.id}`)}
             onMouseEnter={() => setHoveredId(emp.id)}
             onMouseLeave={() => setHoveredId(null)}
             style={{
@@ -91,6 +94,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
               alignItems: 'center',
               background: isHovered ? 'var(--bg-surface)' : 'transparent',
               transition: 'background 0.1s',
+              cursor: 'pointer',
             }}
           >
             {/* Сотрудник */}
@@ -174,7 +178,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
             </div>
 
             {/* Действия */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {isBlocked ? (
                 <>
                   <span style={{
