@@ -47,6 +47,7 @@ export default function TWARequestDetailPage() {
 
   const handleAccept = async () => {
     if (isSubmitting) return
+    setSubmitError('')
     setIsSubmitting(true)
     try {
       const payload: Record<string, unknown> = { status: 'Принято' }
@@ -62,8 +63,9 @@ export default function TWARequestDetailPage() {
   }
 
   const handleReturn = async () => {
-    if (!returnReason.trim()) return
     if (isSubmitting) return
+    if (!returnReason.trim()) return
+    setSubmitError('')
     setIsSubmitting(true)
     try {
       await apiClient.patch(`/api/v2/requests/${number}`, {
@@ -163,9 +165,12 @@ export default function TWARequestDetailPage() {
               {submitError && <div className="text-red-500 text-sm mb-2">{submitError}</div>}
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowReturnForm(true)}
+                  onClick={() => {
+                    setSubmitError('')
+                    setShowReturnForm(true)
+                  }}
                   disabled={isSubmitting}
-                  className="flex-1 border py-2 rounded-xl text-sm"
+                  className="flex-1 border py-2 rounded-xl text-sm disabled:opacity-50"
                 >
                   &#8617; Вернуть
                 </button>
@@ -191,7 +196,10 @@ export default function TWARequestDetailPage() {
               {submitError && <div className="text-red-500 text-sm mb-2">{submitError}</div>}
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowReturnForm(false)}
+                  onClick={() => {
+                    setSubmitError('')
+                    setShowReturnForm(false)
+                  }}
                   className="flex-1 border py-2 rounded-xl text-sm"
                 >
                   Назад

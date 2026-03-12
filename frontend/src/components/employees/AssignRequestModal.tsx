@@ -21,6 +21,7 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
     staleTime: 30_000,
   })
 
+  // Column order from API response determines display order (typically 'Новая' before 'В работе')
   const requests: RequestCard[] = (data?.columns ?? [])
     .filter(col => ASSIGNABLE_STATUSES.has(col.status))
     .flatMap(col => col.requests)
