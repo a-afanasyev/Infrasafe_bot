@@ -15,6 +15,7 @@ const TWARequestDetailPage = lazy(() => import('./pages/twa/TWARequestDetailPage
 // Lazy-load pages not yet implemented
 const ShiftsPage = lazy(() => import('./pages/ShiftsPage'))
 const EmployeesPage = lazy(() => import('./pages/EmployeesPage'))
+const EmployeeDetailPage = lazy(() => import('./pages/EmployeeDetailPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="shifts" element={<ShiftsPage />} />
               <Route path="employees" element={<EmployeesPage />} />
+              <Route path="employees/:id" element={<EmployeeDetailPage />} />
               <Route path="templates" element={<TemplatesPage />} />
             </Route>
 

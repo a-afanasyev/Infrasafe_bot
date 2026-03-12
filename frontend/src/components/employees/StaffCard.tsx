@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
 
@@ -12,6 +13,7 @@ interface Props {
 
 export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlockPending }: Props) {
   const [hovered, setHovered] = useState(false)
+  const navigate = useNavigate()
 
   const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
@@ -96,7 +98,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
                   fontWeight: 600,
                   padding: '2px 7px',
                   borderRadius: 10,
-                  background: (SPEC_COLORS[spec] ?? 'var(--text-muted)') + '22',
+                  background: `color-mix(in srgb, ${SPEC_COLORS[spec] ?? 'var(--text-muted)'} 13%, transparent)`,
                   color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
                   letterSpacing: '0.3px',
                 }}>
@@ -191,6 +193,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
         marginTop: 'auto',
       }}>
         <button
+          onClick={() => navigate(`/dashboard/employees/${employee.id}`)}
           style={{
             background: 'none',
             border: 'none',

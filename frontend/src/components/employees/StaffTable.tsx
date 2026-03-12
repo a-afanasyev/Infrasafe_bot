@@ -136,7 +136,7 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
                     return (
                       <span key={spec} style={{
                         fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 10,
-                        background: color + '22', color,
+                        background: `color-mix(in srgb, ${color} 13%, transparent)`, color,
                       }}>
                         {label}
                       </span>

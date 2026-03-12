@@ -272,8 +272,8 @@ export default function EmployeesPage() {
                 key={key}
                 onClick={() => setSpecFilter(isActive ? 'all' : key)}
                 style={isActive ? {
-                  background: color + '22',
-                  border: `1px solid ${color}55`,
+                  background: `color-mix(in srgb, ${color} 13%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${color} 33%, transparent)`,
                   borderRadius: 20,
                   cursor: 'pointer',
                   fontSize: '12px',
