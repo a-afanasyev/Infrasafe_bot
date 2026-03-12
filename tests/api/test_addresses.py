@@ -328,6 +328,61 @@ class TestApartments:
         assert r.status_code == 409
 
 
+# ═══════════════════════ Apartment Detail ═══════════════════════
+
+
+class TestApartmentDetail:
+
+    async def test_get_apartment_detail(self, client: AsyncClient, db_session: AsyncSession, resident_user):
+        yard = await _create_yard(client, "Detail Yard")
+        bld = await _create_building(client, yard["id"], "Detail Addr 123")
+        apt = await _create_apartment(client, bld["id"], "42", entrance=2, floor=5, rooms_count=3, area=65.5)
+
+        # Add a resident
+        ua = UserApartment(
+            user_id=resident_user.id,
+            apartment_id=apt["id"],
+            status="approved",
+            is_owner=True,
+            is_primary=True,
+        )
+        db_session.add(ua)
+        await db_session.commit()
+
+        r = await client.get(f"{BASE}/apartments/{apt['id']}")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["apartment_number"] == "42"
+        assert data["building_address"] == "Detail Addr 123"
+        assert data["yard_name"] == "Detail Yard"
+        assert data["entrance"] == 2
+        assert data["floor"] == 5
+        assert data["rooms_count"] == 3
+        assert data["area"] == 65.5
+        assert data["is_active"] is True
+        assert len(data["residents"]) == 1
+        res = data["residents"][0]
+        assert res["user_name"] == "Resident User"
+        assert res["user_phone"] == "+79001234567"
+        assert res["username"] == "testresident"
+        assert res["is_owner"] is True
+        assert res["status"] == "approved"
+
+    async def test_get_apartment_detail_not_found(self, client: AsyncClient):
+        r = await client.get(f"{BASE}/apartments/99999")
+        assert r.status_code == 404
+
+    async def test_get_apartment_detail_no_residents(self, client: AsyncClient):
+        yard = await _create_yard(client, "Empty Detail Yard")
+        bld = await _create_building(client, yard["id"], "Empty Detail Addr")
+        apt = await _create_apartment(client, bld["id"], "1")
+
+        r = await client.get(f"{BASE}/apartments/{apt['id']}")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["residents"] == []
+
+
 # ═══════════════════════ Bulk Create ═══════════════════════
 
 

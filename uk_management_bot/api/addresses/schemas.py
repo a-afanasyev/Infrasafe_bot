@@ -107,6 +107,35 @@ class ApartmentUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ResidentOut(BaseModel):
+    id: int                          # UserApartment.id
+    user_id: int
+    user_name: Optional[str] = None  # User.first_name + last_name
+    user_phone: Optional[str] = None  # User.phone
+    username: Optional[str] = None   # User.username
+    is_owner: bool
+    is_primary: bool
+    status: str                      # pending/approved/rejected
+    requested_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+
+
+class ApartmentDetailOut(BaseModel):
+    id: int
+    building_id: int
+    apartment_number: str
+    building_address: Optional[str] = None
+    yard_name: Optional[str] = None
+    entrance: Optional[int] = None
+    floor: Optional[int] = None
+    rooms_count: Optional[int] = None
+    area: Optional[float] = None
+    description: Optional[str] = None
+    is_active: bool
+    created_at: Optional[datetime] = None
+    residents: list[ResidentOut] = []
+
+
 class BulkCreateApartments(BaseModel):
     building_id: int
     apartment_numbers: List[str] = Field(..., min_length=1, max_length=500)

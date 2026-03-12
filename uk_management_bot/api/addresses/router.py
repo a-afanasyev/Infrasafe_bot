@@ -13,6 +13,7 @@ from uk_management_bot.api.addresses.schemas import (
     BulkCreateApartments, BulkCreateResult,
     ModerationItemOut, ModerationAction,
     AddressStatsOut,
+    ResidentOut, ApartmentDetailOut,
 )
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
@@ -692,6 +693,64 @@ async def search_apartments(
         )
         out.append(apt_data)
     return out
+
+
+@router.get("/apartments/{apartment_id}", response_model=ApartmentDetailOut)
+async def get_apartment_detail(
+    apartment_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    # Get apartment with building+yard joins
+    apt_q = await db.execute(
+        select(Apartment, Building.address, Yard.name)
+        .join(Building, Apartment.building_id == Building.id)
+        .join(Yard, Building.yard_id == Yard.id)
+        .where(Apartment.id == apartment_id)
+    )
+    row = apt_q.first()
+    if not row:
+        raise HTTPException(404, "Apartment not found")
+    apt, building_address, yard_name = row
+
+    # Get residents (UserApartment + User joins)
+    res_q = await db.execute(
+        select(UserApartment, User.first_name, User.last_name, User.phone, User.username)
+        .join(User, UserApartment.user_id == User.id)
+        .where(UserApartment.apartment_id == apartment_id)
+        .order_by(UserApartment.requested_at.desc())
+    )
+    residents = []
+    for ua, first_name, last_name, phone, uname in res_q.all():
+        name_parts = [p for p in [first_name, last_name] if p]
+        residents.append(ResidentOut(
+            id=ua.id,
+            user_id=ua.user_id,
+            user_name=" ".join(name_parts) if name_parts else None,
+            user_phone=phone,
+            username=uname,
+            is_owner=ua.is_owner,
+            is_primary=ua.is_primary,
+            status=ua.status,
+            requested_at=ua.requested_at,
+            reviewed_at=ua.reviewed_at,
+        ))
+
+    return ApartmentDetailOut(
+        id=apt.id,
+        building_id=apt.building_id,
+        apartment_number=apt.apartment_number,
+        building_address=building_address,
+        yard_name=yard_name,
+        entrance=apt.entrance,
+        floor=apt.floor,
+        rooms_count=apt.rooms_count,
+        area=apt.area,
+        description=apt.description,
+        is_active=apt.is_active,
+        created_at=apt.created_at,
+        residents=residents,
+    )
 
 
 # ─────────────────────── Moderation ───────────────────────
