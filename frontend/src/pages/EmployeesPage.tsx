@@ -62,8 +62,10 @@ export default function EmployeesPage() {
   const [specFilter, setSpecFilter] = useState<string>('all')
   const [search, setSearch] = useState<string>('')
   const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
-    try { return (localStorage.getItem('employees_view_mode') as 'tile' | 'table') || 'tile' }
-    catch { return 'tile' }
+    try {
+      const stored = localStorage.getItem('employees_view_mode')
+      return (stored === 'tile' || stored === 'table') ? stored : 'tile'
+    } catch { return 'tile' }
   })
 
   useEffect(() => {
