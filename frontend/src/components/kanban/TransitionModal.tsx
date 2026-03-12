@@ -16,7 +16,7 @@ interface Props {
   onCancel: () => void
 }
 
-export default function TransitionModal({ requestNumber, targetStatus, onConfirm, onCancel }: Props) {
+export default function TransitionModal({ requestNumber: _requestNumber, targetStatus, onConfirm, onCancel }: Props) {
   const [executorId, setExecutorId] = useState<number | 'duty' | ''>('')
   const [text, setText] = useState('')
   const { data: employees = [] } = useEmployees({ verification_status: 'verified' })

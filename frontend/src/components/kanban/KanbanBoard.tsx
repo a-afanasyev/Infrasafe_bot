@@ -32,6 +32,18 @@ const KANBAN_STATUSES = new Set([
 ])
 const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])
 
+// Must mirror backend _REQUEST_VALID_TRANSITIONS exactly
+const VALID_TRANSITIONS: Record<string, Set<string>> = {
+  'Новая':     new Set(['В работе', 'Закуп', 'Уточнение', 'Отменена']),
+  'В работе':  new Set(['Закуп', 'Уточнение', 'Выполнена', 'Отменена']),
+  'Закуп':     new Set(['В работе', 'Уточнение', 'Отменена']),
+  'Уточнение': new Set(['В работе', 'Отменена']),
+  'Выполнена': new Set(['Исполнено', 'В работе']),
+  'Исполнено': new Set(['Принято', 'В работе']),
+  'Принято':   new Set(),
+  'Отменена':  new Set(),
+}
+
 function resolveTargetStatus(overId: string, columns: TColumn[]): string | null {
   if (KANBAN_STATUSES.has(overId)) return overId
   const col = columns.find(c => c.requests.some(r => r.request_number === overId))
@@ -41,13 +53,7 @@ function resolveTargetStatus(overId: string, columns: TColumn[]): string | null 
 function isTransitionAllowed(sourceStatus: string | undefined, targetStatus: string): boolean {
   if (!sourceStatus) return false
   if (sourceStatus === targetStatus) return false
-  if (FROZEN_STATUSES.has(sourceStatus)) return false
-  if (FROZEN_STATUSES.has(targetStatus)) return false
-  if (targetStatus === 'Новая' && sourceStatus !== 'Новая') return false
-  // Enforce lifecycle: Выполнена can only go to Исполнено, Исполнено can only go to Принято
-  if (sourceStatus === 'Выполнена' && targetStatus !== 'Исполнено') return false
-  if (sourceStatus === 'Исполнено' && targetStatus !== 'Принято') return false
-  return true
+  return VALID_TRANSITIONS[sourceStatus]?.has(targetStatus) ?? false
 }
 
 export { isTransitionAllowed, FROZEN_STATUSES }
@@ -87,6 +93,14 @@ export default function KanbanBoard({ onCardClick }: Props) {
     if (!isTransitionAllowed(sourceCol.status, newStatus)) return
 
     if (MODAL_STATUSES.has(newStatus)) {
+      // For 'В работе': if card already has an executor, skip modal and transition directly
+      if (newStatus === 'В работе') {
+        const card = columns.flatMap(c => c.requests).find(r => r.request_number === requestNumber)
+        if (card?.executor_id) {
+          commitTransition(requestNumber, { status: newStatus })
+          return
+        }
+      }
       setPendingTransition({ requestNumber, newStatus })
     } else {
       commitTransition(requestNumber, { status: newStatus })
@@ -140,14 +154,25 @@ export default function KanbanBoard({ onCardClick }: Props) {
 
   if (isLoading) {
     return (
-      <div className="p-8 text-center text-gray-400">Загрузка...</div>
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+        Загрузка...
+      </div>
     )
   }
 
   return (
     <>
       {transitionError && (
-        <div className="mb-2 px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+        <div style={{
+          marginBottom: 8,
+          padding: '10px 14px',
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.25)',
+          color: '#f87171',
+          fontSize: 13,
+          borderRadius: 8,
+          fontFamily: 'var(--font-body)',
+        }}>
           {transitionError}
         </div>
       )}
@@ -157,7 +182,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 h-full">
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 16, height: '100%', alignItems: 'flex-start' }}>
           {columns.map((col) => (
             <KanbanColumn
               key={col.status}

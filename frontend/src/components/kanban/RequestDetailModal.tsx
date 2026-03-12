@@ -23,11 +23,15 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
   const [comment, setComment] = useState('')
   const [confirmNote, setConfirmNote] = useState('')
   const [showConfirmSection, setShowConfirmSection] = useState(false)
+  const [showReturnSection, setShowReturnSection] = useState(false)
+  const [returnReason, setReturnReason] = useState('')
 
   useEffect(() => {
     setComment('')
     setConfirmNote('')
     setShowConfirmSection(false)
+    setShowReturnSection(false)
+    setReturnReason('')
   }, [requestNumber])
 
   const { data: request } = useQuery({
@@ -141,17 +145,27 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
                 </div>
               )}
 
-              {/* Manager confirmation (Выполнена → Исполнено) */}
+              {/* Manager actions (Выполнена → Исполнено or В работе) */}
               {request.status === 'Выполнена' && (
-                <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
-                  {!showConfirmSection ? (
-                    <button
-                      onClick={() => setShowConfirmSection(true)}
-                      className="w-full bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
-                    >
-                      ✓ Подтвердить и отправить жителю
-                    </button>
-                  ) : (
+                <div className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-2">
+                  {!showConfirmSection && !showReturnSection && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowConfirmSection(true)}
+                        className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
+                      >
+                        ✓ Подтвердить
+                      </button>
+                      <button
+                        onClick={() => setShowReturnSection(true)}
+                        className="flex-1 border border-orange-400 text-orange-600 py-2 rounded-lg text-sm font-medium hover:bg-orange-50"
+                      >
+                        ↩ Вернуть в работу
+                      </button>
+                    </div>
+                  )}
+
+                  {showConfirmSection && (
                     <div className="space-y-2">
                       <p className="text-xs text-gray-600">Комментарий (необязательно):</p>
                       <textarea
@@ -177,6 +191,37 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
                           className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
                         >
                           {updateRequest.isPending ? 'Сохраняю...' : 'Подтвердить'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {showReturnSection && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-600">Причина возврата:</p>
+                      <textarea
+                        className="w-full border rounded-lg p-2 text-sm min-h-[60px] focus:outline-none focus:border-orange-400"
+                        placeholder="Опишите что нужно доделать"
+                        value={returnReason}
+                        onChange={e => setReturnReason(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowReturnSection(false)}
+                          className="flex-1 border py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          onClick={() => updateRequest.mutate({
+                            status: 'В работе',
+                            return_reason: returnReason.trim(),
+                          })}
+                          disabled={updateRequest.isPending || !returnReason.trim()}
+                          className="flex-1 bg-orange-500 text-white py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
+                        >
+                          {updateRequest.isPending ? 'Сохраняю...' : 'Вернуть'}
                         </button>
                       </div>
                     </div>
