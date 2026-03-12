@@ -63,14 +63,14 @@ export default function RequestCard({ card, onClick }: Props) {
       }}
     >
       {/* Header row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
         <span style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: 'var(--text-muted)',
-          letterSpacing: '0.3px',
+          color: '#8899aa',
+          letterSpacing: '0.5px',
         }}>{card.request_number}</span>
-        <span style={{ fontSize: 12, opacity: 0.7 }}>
+        <span style={{ fontSize: 11 }}>
           {SOURCE_ICON[card.source ?? ''] ?? ''}
         </span>
       </div>
@@ -78,18 +78,18 @@ export default function RequestCard({ card, onClick }: Props) {
       {/* Category */}
       <div style={{
         fontSize: 11,
-        fontWeight: 700,
-        color: 'var(--text-primary)',
+        fontWeight: 600,
+        color: 'var(--accent)',
         fontFamily: 'var(--font-display)',
-        marginBottom: 4,
-        letterSpacing: '0.3px',
-        textTransform: 'uppercase',
+        marginBottom: 3,
+        letterSpacing: '0.2px',
       }}>{card.category}</div>
 
       {/* Description */}
       <div style={{
-        fontSize: 12,
-        color: 'var(--text-primary)',
+        fontSize: 13,
+        fontWeight: 500,
+        color: '#d4dde8',
         lineHeight: 1.45,
         display: '-webkit-box',
         WebkitLineClamp: 2,
@@ -102,13 +102,13 @@ export default function RequestCard({ card, onClick }: Props) {
       {card.executor_name && (
         <div style={{
           fontSize: 11,
-          color: 'var(--text-secondary)',
+          color: '#8899aa',
           marginBottom: 6,
           display: 'flex',
           alignItems: 'center',
           gap: 4,
         }}>
-          <span style={{ opacity: 0.6 }}>👤</span>
+          <span>👤</span>
           <span style={{
             overflow: 'hidden',
             textOverflow: 'ellipsis',
