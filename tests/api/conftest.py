@@ -1,0 +1,117 @@
+"""
+Shared fixtures for API tests.
+
+Uses an in-memory aiosqlite database and overrides FastAPI dependencies
+so that tests run without Docker / PostgreSQL / JWT tokens.
+"""
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
+from uk_management_bot.database.session import Base
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.yard import Yard
+from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.apartment import Apartment
+from uk_management_bot.database.models.user_apartment import UserApartment
+
+from uk_management_bot.api.main import app
+from uk_management_bot.api.dependencies import get_db, get_current_user
+
+# ── In-memory async engine ──────────────────────────────────────────
+
+TEST_DB_URL = "sqlite+aiosqlite://"
+
+_test_manager: User | None = None
+
+
+@pytest_asyncio.fixture
+async def db_engine():
+    engine = create_async_engine(TEST_DB_URL, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db_session_factory(db_engine):
+    factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    return factory
+
+
+@pytest_asyncio.fixture
+async def db_session(db_session_factory):
+    async with db_session_factory() as session:
+        yield session
+
+
+# ── Seed a manager user ─────────────────────────────────────────────
+
+@pytest_asyncio.fixture
+async def manager_user(db_session: AsyncSession):
+    global _test_manager
+    user = User(
+        telegram_id=999999,
+        username="testmanager",
+        first_name="Test",
+        last_name="Manager",
+        role="manager",
+        roles='["manager"]',
+        status="approved",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    _test_manager = user
+    return user
+
+
+# ── Seed a regular user (for moderation tests) ──────────────────────
+
+@pytest_asyncio.fixture
+async def resident_user(db_session: AsyncSession):
+    user = User(
+        telegram_id=888888,
+        username="testresident",
+        first_name="Resident",
+        last_name="User",
+        role="applicant",
+        roles='["applicant"]',
+        status="approved",
+        phone="+79001234567",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+# ── FastAPI test client with dependency overrides ────────────────────
+
+@pytest_asyncio.fixture
+async def client(db_session_factory, manager_user):
+    """HTTP client with overridden DB and auth dependencies."""
+
+    async def override_get_db():
+        async with db_session_factory() as session:
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+
+    async def override_get_current_user():
+        return manager_user
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+    app.dependency_overrides.clear()
