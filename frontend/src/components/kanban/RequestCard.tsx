@@ -78,11 +78,12 @@ export default function RequestCard({ card, onClick }: Props) {
       {/* Category */}
       <div style={{
         fontSize: 11,
-        fontWeight: 600,
-        color: 'var(--accent)',
+        fontWeight: 700,
+        color: 'var(--text-primary)',
         fontFamily: 'var(--font-display)',
         marginBottom: 4,
-        letterSpacing: '0.2px',
+        letterSpacing: '0.3px',
+        textTransform: 'uppercase',
       }}>{card.category}</div>
 
       {/* Description */}
