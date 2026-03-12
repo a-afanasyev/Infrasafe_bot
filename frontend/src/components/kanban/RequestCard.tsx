@@ -5,9 +5,9 @@ import type { RequestCard as TCard } from '../../hooks/useKanban'
 
 const URGENCY: Record<string, { bg: string; color: string }> = {
   'Обычная':    { bg: 'rgba(16,185,129,0.12)',  color: '#10b981' },
-  'Средняя':    { bg: 'rgba(245,158,11,0.12)',  color: '#f59e0b' },
-  'Срочная':    { bg: 'rgba(249,115,22,0.12)',  color: '#f97316' },
-  'Критическая':{ bg: 'rgba(239,68,68,0.12)',   color: '#ef4444' },
+  'Средняя':    { bg: 'rgba(245,158,11,0.12)',  color: '#d97706' },
+  'Срочная':    { bg: 'rgba(249,115,22,0.12)',  color: '#ea580c' },
+  'Критическая':{ bg: 'rgba(239,68,68,0.12)',   color: '#dc2626' },
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -39,13 +39,13 @@ export default function RequestCard({ card, onClick }: Props) {
         transition,
         opacity: isDragging ? 0.4 : frozen ? 0.65 : 1,
         background: 'var(--bg-card)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        border: '1px solid var(--border)',
         borderRadius: 10,
         padding: '10px 12px',
         marginBottom: 6,
         cursor: frozen ? 'default' : 'pointer',
         userSelect: 'none',
-        boxShadow: isDragging ? '0 8px 32px rgba(0,0,0,0.4)' : 'none',
+        boxShadow: isDragging ? '0 8px 32px rgba(0,0,0,0.15)' : 'none',
       }}
       {...attributes}
       {...listeners}
@@ -67,53 +67,49 @@ export default function RequestCard({ card, onClick }: Props) {
         <span style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: '#8899aa',
+          color: 'var(--text-muted)',
           letterSpacing: '0.5px',
         }}>{card.request_number}</span>
-        <span style={{ fontSize: 11 }}>
+        <span style={{ fontSize: 11, opacity: 0.8 }}>
           {SOURCE_ICON[card.source ?? ''] ?? ''}
         </span>
       </div>
 
-      {/* Category */}
+      {/* Category — same style as column header */}
       <div style={{
-        fontSize: 11,
-        fontWeight: 600,
-        color: 'var(--accent)',
         fontFamily: 'var(--font-display)',
+        fontWeight: 700,
+        fontSize: 13,
+        color: 'var(--text-primary)',
         marginBottom: 3,
-        letterSpacing: '0.2px',
       }}>{card.category}</div>
 
       {/* Description */}
       <div style={{
-        fontSize: 13,
-        fontWeight: 500,
-        color: '#d4dde8',
+        fontSize: 12,
+        color: 'var(--text-secondary)',
         lineHeight: 1.45,
         display: '-webkit-box',
         WebkitLineClamp: 2,
         WebkitBoxOrient: 'vertical',
         overflow: 'hidden',
-        marginBottom: card.executor_name ? 6 : 0,
+        marginBottom: card.executor_name ? 5 : 0,
       }}>{card.description}</div>
 
       {/* Executor */}
       {card.executor_name && (
         <div style={{
           fontSize: 11,
-          color: '#8899aa',
-          marginBottom: 6,
+          color: 'var(--text-muted)',
+          marginBottom: 5,
           display: 'flex',
           alignItems: 'center',
           gap: 4,
         }}>
           <span>👤</span>
-          <span style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}>{card.executor_name}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {card.executor_name}
+          </span>
         </div>
       )}
 
@@ -129,7 +125,6 @@ export default function RequestCard({ card, onClick }: Props) {
               background: urgency.bg,
               color: urgency.color,
               fontFamily: 'var(--font-display)',
-              letterSpacing: '0.2px',
             }}>{card.urgency}</span>
           )}
           {card.manager_confirmed && (
@@ -139,7 +134,7 @@ export default function RequestCard({ card, onClick }: Props) {
               padding: '2px 8px',
               borderRadius: 20,
               background: 'rgba(59,130,246,0.12)',
-              color: '#60a5fa',
+              color: '#3b82f6',
               fontFamily: 'var(--font-display)',
             }}>✓ Подтверждено</span>
           )}
