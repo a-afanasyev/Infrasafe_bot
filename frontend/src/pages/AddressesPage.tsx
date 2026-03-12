@@ -20,6 +20,9 @@ import type {
 } from '../types/api'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import YardFormModal from '../components/addresses/YardFormModal'
+import BuildingFormModal from '../components/addresses/BuildingFormModal'
+import ApartmentFormModal from '../components/addresses/ApartmentFormModal'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -186,12 +189,12 @@ export default function AddressesPage() {
   const [showInactive, setShowInactive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Modal states (modals will be implemented in Task 4)
-  const [_editingYard, setEditingYard] = useState<YardBrief | null>(null)
-  const [_editingBuilding, setEditingBuilding] = useState<BuildingBrief | null>(null)
-  const [_editingApartment, setEditingApartment] = useState<ApartmentBrief | null>(null)
-  const [_showCreateModal, setShowCreateModal] = useState(false)
-  const [_showBulkCreate, setShowBulkCreate] = useState(false)
+  // Modal states
+  const [editingYard, setEditingYard] = useState<YardBrief | null>(null)
+  const [editingBuilding, setEditingBuilding] = useState<BuildingBrief | null>(null)
+  const [editingApartment, setEditingApartment] = useState<ApartmentBrief | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showBulkCreate, setShowBulkCreate] = useState(false)
 
   // Queries
   const { data: stats } = useAddressStats()
@@ -755,12 +758,45 @@ export default function AddressesPage() {
         </>
       )}
 
-      {/* Modal placeholders — will be implemented in Task 4 */}
-      {/* {_editingYard && <YardModal yard={_editingYard} onClose={() => setEditingYard(null)} />} */}
-      {/* {_editingBuilding && <BuildingModal building={_editingBuilding} onClose={() => setEditingBuilding(null)} />} */}
-      {/* {_editingApartment && <ApartmentModal apartment={_editingApartment} onClose={() => setEditingApartment(null)} />} */}
-      {/* {_showCreateModal && <CreateModal level={level} onClose={() => setShowCreateModal(false)} />} */}
-      {/* {_showBulkCreate && <BulkCreateModal buildingId={selectedBuilding?.id} onClose={() => setShowBulkCreate(false)} />} */}
+      {/* Yard modals */}
+      {editingYard && (
+        <YardFormModal yard={editingYard} onClose={() => setEditingYard(null)} />
+      )}
+      {showCreateModal && level === 'yards' && (
+        <YardFormModal onClose={() => setShowCreateModal(false)} />
+      )}
+
+      {/* Building modals */}
+      {editingBuilding && selectedYard && (
+        <BuildingFormModal
+          building={editingBuilding}
+          yardId={selectedYard.id}
+          yards={yards}
+          onClose={() => setEditingBuilding(null)}
+        />
+      )}
+      {showCreateModal && level === 'buildings' && selectedYard && (
+        <BuildingFormModal
+          yardId={selectedYard.id}
+          yards={yards}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* Apartment modals */}
+      {editingApartment && selectedBuilding && (
+        <ApartmentFormModal
+          apartment={editingApartment}
+          buildingId={selectedBuilding.id}
+          onClose={() => setEditingApartment(null)}
+        />
+      )}
+      {showCreateModal && level === 'apartments' && selectedBuilding && (
+        <ApartmentFormModal
+          buildingId={selectedBuilding.id}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   )
 }
