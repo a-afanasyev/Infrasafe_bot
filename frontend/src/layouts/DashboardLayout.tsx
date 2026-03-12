@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useTopbar, TopbarProvider } from '../contexts/TopbarContext'
 import { useTheme } from '../hooks/useTheme'
-import { LayoutGrid, ListChecks, Users, Clock, Table2, BookOpen, Sun, Moon } from 'lucide-react'
+import { LayoutGrid, ListChecks, Users, Clock, Table2, MapPin, BookOpen, Sun, Moon } from 'lucide-react'
 
 // Topbar inner component (needs useTopbar inside provider)
 function TopbarInner() {
@@ -55,6 +55,7 @@ const NAV_ITEMS = [
   { to: '/dashboard/employees', label: 'Сотрудники', Icon: Users },
   { to: '/dashboard/shifts', label: 'Смены', Icon: Clock },
   { to: '/dashboard/templates', label: 'Шаблоны', Icon: Table2 },
+  { to: '/dashboard/addresses', label: 'Адреса', Icon: MapPin },
 ]
 
 export default function DashboardLayout() {

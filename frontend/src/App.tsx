@@ -18,6 +18,7 @@ const EmployeesPage = lazy(() => import('./pages/EmployeesPage'))
 const EmployeeDetailPage = lazy(() => import('./pages/EmployeeDetailPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const AddressesPage = lazy(() => import('./pages/AddressesPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 
 const queryClient = new QueryClient({
@@ -49,6 +50,7 @@ export default function App() {
               <Route path="employees" element={<EmployeesPage />} />
               <Route path="employees/:id" element={<EmployeeDetailPage />} />
               <Route path="templates" element={<TemplatesPage />} />
+              <Route path="addresses" element={<AddressesPage />} />
             </Route>
 
             {/* Resident board - standalone page */}
