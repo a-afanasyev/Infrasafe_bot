@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useTopbar, TopbarProvider } from '../contexts/TopbarContext'
 import { useTheme } from '../hooks/useTheme'
@@ -57,8 +58,22 @@ const NAV_ITEMS = [
 ]
 
 export default function DashboardLayout() {
-  const { user } = useAuthStore()
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
   const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
 
   return (
     <TopbarProvider>
@@ -154,35 +169,86 @@ export default function DashboardLayout() {
         </nav>
 
         {/* User block */}
-        <div style={{
-          padding: '16px 20px',
-          borderTop: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-        }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            background: 'linear-gradient(135deg, var(--accent), #0099aa)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 700,
-            fontSize: '14px',
-            color: '#000',
-            flexShrink: 0,
-          }}>{initials}</div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user?.first_name ?? 'Пользователь'}
+        <div ref={menuRef} style={{ position: 'relative', padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            style={{
+              width: '100%',
+              background: menuOpen ? 'var(--bg-surface)' : 'none',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '8px',
+              transition: 'background 0.15s',
+            }}
+          >
+            <div style={{
+              width: '36px', height: '36px', flexShrink: 0,
+              background: 'linear-gradient(135deg, var(--accent), #0099aa)',
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '14px', color: '#000',
+            }}>{initials}</div>
+            <div style={{ overflow: 'hidden', flex: 1, textAlign: 'left' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user?.first_name ?? 'Пользователь'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {user?.roles?.[0] ?? 'manager'}
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              {user?.roles?.[0] ?? 'manager'}
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>
+              {menuOpen ? '▲' : '▼'}
+            </span>
+          </button>
+
+          {menuOpen && (
+            <div style={{
+              position: 'absolute',
+              bottom: 'calc(100% - 4px)',
+              left: 12,
+              right: 12,
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              overflow: 'hidden',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.3)',
+              zIndex: 300,
+            }}>
+              <button
+                onClick={() => { setMenuOpen(false); navigate(`/dashboard/employees/${user?.id}`) }}
+                style={{
+                  width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: '13px', color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-display)',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                <span>👤</span> Профиль
+              </button>
+              <div style={{ height: 1, background: 'var(--border)', margin: '0 12px' }} />
+              <button
+                onClick={async () => { setMenuOpen(false); await logout(); navigate('/login') }}
+                style={{
+                  width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: '13px', color: 'var(--red)',
+                  fontFamily: 'var(--font-display)',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                <span>→</span> Выйти
+              </button>
             </div>
-          </div>
+          )}
         </div>
       </aside>
 
