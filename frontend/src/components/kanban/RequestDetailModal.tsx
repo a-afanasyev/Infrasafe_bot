@@ -2,11 +2,22 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../api/client'
 
-const URGENCY_COLOR: Record<string, string> = {
-  'Обычная': 'bg-green-100 text-green-700',
-  'Средняя': 'bg-yellow-100 text-yellow-700',
-  'Срочная': 'bg-orange-100 text-orange-700',
-  'Критическая': 'bg-red-100 text-red-700',
+const URGENCY: Record<string, { bg: string; color: string }> = {
+  'Обычная':    { bg: 'rgba(16,185,129,0.12)',  color: '#10b981' },
+  'Средняя':    { bg: 'rgba(245,158,11,0.12)',  color: '#d97706' },
+  'Срочная':    { bg: 'rgba(249,115,22,0.12)',  color: '#ea580c' },
+  'Критическая':{ bg: 'rgba(239,68,68,0.12)',   color: '#dc2626' },
+}
+
+const STATUS: Record<string, { bg: string; color: string }> = {
+  'Новая':     { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6'  },
+  'В работе':  { bg: 'rgba(245,158,11,0.12)',  color: '#d97706'  },
+  'Закуп':     { bg: 'rgba(139,92,246,0.12)',  color: '#7c3aed'  },
+  'Уточнение': { bg: 'rgba(6,182,212,0.12)',   color: '#0891b2'  },
+  'Выполнена': { bg: 'rgba(16,185,129,0.12)',  color: '#059669'  },
+  'Исполнено': { bg: 'rgba(0,212,170,0.12)',   color: '#00a884'  },
+  'Принято':   { bg: 'rgba(34,197,94,0.12)',   color: '#16a34a'  },
+  'Отменена':  { bg: 'rgba(239,68,68,0.12)',   color: '#dc2626'  },
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -68,159 +79,199 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
 
   if (!requestNumber) return null
 
+  const statusStyle = STATUS[request?.status ?? ''] ?? { bg: 'rgba(100,116,139,0.12)', color: '#64748b' }
+  const urgencyStyle = request?.urgency ? URGENCY[request.urgency] : null
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: '8px 12px',
+    fontSize: 13,
+    color: 'var(--text-primary)',
+    fontFamily: 'var(--font-body)',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 50,
+        backdropFilter: 'blur(4px)',
+      }}
+      onClick={onClose}
+    >
       <div
-        className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] shadow-xl flex flex-col"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 16,
+          width: '100%',
+          maxWidth: 520,
+          maxHeight: '88vh',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
         onClick={e => e.stopPropagation()}
       >
         {!request ? (
-          <div className="p-6 text-gray-400 text-center">Загрузка...</div>
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+            Загрузка...
+          </div>
         ) : (
           <>
             {/* Header */}
-            <div className="p-4 border-b flex justify-between items-start shrink-0">
+            <div style={{
+              padding: '16px 18px 14px',
+              borderBottom: '1px solid var(--border)',
+              flexShrink: 0,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+            }}>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-gray-500">{request.request_number}</span>
-                  <span className="text-sm">{SOURCE_ICON[request.source ?? ''] ?? ''}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+                    {request.request_number}
+                  </span>
+                  <span style={{ fontSize: 13 }}>{SOURCE_ICON[request.source ?? ''] ?? ''}</span>
                 </div>
-                <h2 className="font-bold mt-1">{request.category}</h2>
+                <div style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 700,
+                  fontSize: 18,
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.2,
+                }}>
+                  {request.category}
+                </div>
               </div>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              <button
+                onClick={onClose}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: 18, lineHeight: 1,
+                  padding: '2px 4px', borderRadius: 4,
+                }}
+              >×</button>
             </div>
 
             {/* Body */}
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+            <div style={{ padding: '16px 18px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
               {/* Badges */}
-              <div className="flex gap-2 flex-wrap">
-                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{request.status}</span>
-                {request.urgency && (
-                  <span className={`text-xs px-2 py-1 rounded-full ${URGENCY_COLOR[request.urgency] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {request.urgency}
-                  </span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+                  background: statusStyle.bg, color: statusStyle.color,
+                  fontFamily: 'var(--font-display)',
+                }}>{request.status}</span>
+                {urgencyStyle && (
+                  <span style={{
+                    fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+                    background: urgencyStyle.bg, color: urgencyStyle.color,
+                    fontFamily: 'var(--font-display)',
+                  }}>{request.urgency}</span>
                 )}
                 {request.manager_confirmed && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">✓ Подтверждено</span>
+                  <span style={{
+                    fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+                    background: 'rgba(16,185,129,0.12)', color: '#059669',
+                    fontFamily: 'var(--font-display)',
+                  }}>✓ Подтверждено</span>
                 )}
               </div>
 
               {/* Description */}
               {request.description && (
-                <p className="text-sm text-gray-700">{request.description}</p>
+                <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.55, margin: 0 }}>
+                  {request.description}
+                </p>
               )}
 
-              {/* Details */}
-              <div className="text-xs text-gray-500 space-y-1">
-                <div>Создана: {new Date(request.created_at).toLocaleString('ru')}</div>
+              {/* Meta */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Создана: {new Date(request.created_at).toLocaleString('ru')}
+                </div>
                 {request.executor_name && (
-                  <div>Исполнитель: <span className="font-medium text-gray-700">{request.executor_name}</span></div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Исполнитель: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{request.executor_name}</span>
+                  </div>
                 )}
-                {request.address && <div>Адрес: {request.address}</div>}
+                {request.address && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Адрес: {request.address}
+                  </div>
+                )}
               </div>
 
-              {/* Contextual info blocks */}
+              {/* Contextual blocks */}
               {request.requested_materials && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-                  <span className="font-semibold text-amber-700">Закуп: </span>
-                  <span className="text-amber-800">{request.requested_materials}</span>
+                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: '#d97706' }}>Закуп: </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{request.requested_materials}</span>
                 </div>
               )}
               {request.notes && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                  <span className="font-semibold text-blue-700">Уточнение: </span>
-                  <span className="text-blue-800">{request.notes}</span>
+                <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: '#3b82f6' }}>Уточнение: </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{request.notes}</span>
                 </div>
               )}
               {request.completion_report && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
-                  <span className="font-semibold text-green-700">Отчёт: </span>
-                  <span className="text-green-800">{request.completion_report}</span>
+                <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: '#059669' }}>Отчёт: </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{request.completion_report}</span>
                 </div>
               )}
               {request.return_reason && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
-                  <span className="font-semibold text-red-700">Возврат: </span>
-                  <span className="text-red-800">{request.return_reason}</span>
+                <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: '#dc2626' }}>Возврат: </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{request.return_reason}</span>
                 </div>
               )}
 
-              {/* Manager actions (Выполнена → Исполнено or В работе) */}
+              {/* Manager actions */}
               {request.status === 'Выполнена' && (
-                <div className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-2">
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {!showConfirmSection && !showReturnSection && (
-                    <div className="flex gap-2">
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         onClick={() => setShowConfirmSection(true)}
-                        className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
-                      >
-                        ✓ Подтвердить
-                      </button>
+                        style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-display)' }}
+                      >✓ Подтвердить</button>
                       <button
                         onClick={() => setShowReturnSection(true)}
-                        className="flex-1 border border-orange-400 text-orange-600 py-2 rounded-lg text-sm font-medium hover:bg-orange-50"
-                      >
-                        ↩ Вернуть в работу
-                      </button>
+                        style={{ flex: 1, background: 'none', border: '1px solid #ea580c', color: '#ea580c', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-display)' }}
+                      >↩ Вернуть в работу</button>
                     </div>
                   )}
-
                   {showConfirmSection && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-gray-600">Комментарий (необязательно):</p>
-                      <textarea
-                        className="w-full border rounded-lg p-2 text-sm min-h-[60px] focus:outline-none focus:border-emerald-500"
-                        placeholder="Всё выполнено качественно"
-                        value={confirmNote}
-                        onChange={e => setConfirmNote(e.target.value)}
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setShowConfirmSection(false)}
-                          className="flex-1 border py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-                        >
-                          Отмена
-                        </button>
-                        <button
-                          onClick={() => updateRequest.mutate({
-                            status: 'Исполнено',
-                            manager_confirmed: true,
-                            ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}),
-                          })}
-                          disabled={updateRequest.isPending}
-                          className="flex-1 bg-emerald-600 text-white py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
-                        >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>Комментарий (необязательно):</p>
+                      <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} placeholder="Всё выполнено качественно" value={confirmNote} onChange={e => setConfirmNote(e.target.value)} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setShowConfirmSection(false)} style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Отмена</button>
+                        <button onClick={() => updateRequest.mutate({ status: 'Исполнено', manager_confirmed: true, ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}) })} disabled={updateRequest.isPending} style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: updateRequest.isPending ? 0.5 : 1 }}>
                           {updateRequest.isPending ? 'Сохраняю...' : 'Подтвердить'}
                         </button>
                       </div>
                     </div>
                   )}
-
                   {showReturnSection && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-gray-600">Причина возврата:</p>
-                      <textarea
-                        className="w-full border rounded-lg p-2 text-sm min-h-[60px] focus:outline-none focus:border-orange-400"
-                        placeholder="Опишите что нужно доделать"
-                        value={returnReason}
-                        onChange={e => setReturnReason(e.target.value)}
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setShowReturnSection(false)}
-                          className="flex-1 border py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-                        >
-                          Отмена
-                        </button>
-                        <button
-                          onClick={() => updateRequest.mutate({
-                            status: 'В работе',
-                            return_reason: returnReason.trim(),
-                          })}
-                          disabled={updateRequest.isPending || !returnReason.trim()}
-                          className="flex-1 bg-orange-500 text-white py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
-                        >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>Причина возврата:</p>
+                      <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} placeholder="Опишите что нужно доделать" value={returnReason} onChange={e => setReturnReason(e.target.value)} autoFocus />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setShowReturnSection(false)} style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Отмена</button>
+                        <button onClick={() => updateRequest.mutate({ status: 'В работе', return_reason: returnReason.trim() })} disabled={updateRequest.isPending || !returnReason.trim()} style={{ flex: 1, background: '#ea580c', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (updateRequest.isPending || !returnReason.trim()) ? 0.5 : 1 }}>
                           {updateRequest.isPending ? 'Сохраняю...' : 'Вернуть'}
                         </button>
                       </div>
@@ -232,22 +283,16 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
               {/* Comments history */}
               {comments && comments.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">История</h3>
-                  <div className="space-y-2">
-                    {comments.map((c: {
-                      id: number
-                      comment_text: string
-                      is_internal: boolean
-                      created_at: string
-                    }) => (
-                      <div
-                        key={c.id}
-                        className={`rounded-xl p-3 border text-sm ${
-                          c.is_internal ? 'bg-amber-50 border-amber-100' : 'bg-gray-50'
-                        }`}
-                      >
-                        <p>{c.comment_text}</p>
-                        <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString('ru')}</span>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'var(--font-display)', marginBottom: 8 }}>История</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {comments.map((c: { id: number; comment_text: string; is_internal: boolean; created_at: string }) => (
+                      <div key={c.id} style={{
+                        borderRadius: 10, padding: '10px 12px', fontSize: 13,
+                        background: c.is_internal ? 'rgba(245,158,11,0.07)' : 'var(--bg-surface)',
+                        border: `1px solid ${c.is_internal ? 'rgba(245,158,11,0.15)' : 'var(--border)'}`,
+                      }}>
+                        <p style={{ margin: '0 0 4px', color: 'var(--text-primary)' }}>{c.comment_text}</p>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(c.created_at).toLocaleString('ru')}</span>
                       </div>
                     ))}
                   </div>
@@ -255,11 +300,11 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
               )}
 
               {/* Add comment */}
-              <div className="space-y-1">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase">Заметка менеджера</h3>
-                <div className="flex gap-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'var(--font-display)' }}>Заметка менеджера</div>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <input
-                    className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    style={{ ...inputStyle, flex: 1 }}
                     placeholder="Добавить заметку..."
                     value={comment}
                     onChange={e => setComment(e.target.value)}
@@ -268,12 +313,17 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
                   <button
                     onClick={() => postComment.mutate(comment)}
                     disabled={!comment.trim() || postComment.isPending}
-                    className="bg-blue-600 text-white px-3 py-2 rounded-xl text-sm disabled:opacity-40"
-                  >
-                    ↑
-                  </button>
+                    style={{
+                      background: 'var(--accent)', color: '#001a14',
+                      border: 'none', borderRadius: 10,
+                      padding: '0 14px', fontSize: 16, cursor: 'pointer',
+                      opacity: (!comment.trim() || postComment.isPending) ? 0.4 : 1,
+                      flexShrink: 0,
+                    }}
+                  >↑</button>
                 </div>
               </div>
+
             </div>
           </>
         )}
