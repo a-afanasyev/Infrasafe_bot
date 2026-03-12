@@ -36,6 +36,9 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
   const [showConfirmSection, setShowConfirmSection] = useState(false)
   const [showReturnSection, setShowReturnSection] = useState(false)
   const [returnReason, setReturnReason] = useState('')
+  const [showForceAcceptSection, setShowForceAcceptSection] = useState(false)
+  const [forceAcceptNote, setForceAcceptNote] = useState('')
+  const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
   useEffect(() => {
     setComment('')
@@ -43,6 +46,9 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
     setShowConfirmSection(false)
     setShowReturnSection(false)
     setReturnReason('')
+    setShowForceAcceptSection(false)
+    setForceAcceptNote('')
+    setRemindStatus('idle')
   }, [requestNumber])
 
   const { data: request } = useQuery({
@@ -67,6 +73,32 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
       setConfirmNote('')
     },
   })
+
+  const forceAccept = useMutation({
+    mutationFn: (note: string) =>
+      apiClient.patch(`/api/v2/requests/${requestNumber}`, {
+        status: 'Принято',
+        manager_confirmation_notes: note,
+      }).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      setShowForceAcceptSection(false)
+      setForceAcceptNote('')
+    },
+  })
+
+  const sendReminder = async () => {
+    setRemindStatus('sending')
+    try {
+      await apiClient.post(`/api/v2/requests/${requestNumber}/remind-applicant`)
+      setRemindStatus('sent')
+      setTimeout(() => setRemindStatus('idle'), 3000)
+    } catch {
+      setRemindStatus('error')
+      setTimeout(() => setRemindStatus('idle'), 3000)
+    }
+  }
 
   const postComment = useMutation({
     mutationFn: (text: string) =>
@@ -273,6 +305,90 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
                         <button onClick={() => setShowReturnSection(false)} style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Отмена</button>
                         <button onClick={() => updateRequest.mutate({ status: 'В работе', return_reason: returnReason.trim() })} disabled={updateRequest.isPending || !returnReason.trim()} style={{ flex: 1, background: '#ea580c', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (updateRequest.isPending || !returnReason.trim()) ? 0.5 : 1 }}>
                           {updateRequest.isPending ? 'Сохраняю...' : 'Вернуть'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Исполнено: manager can remind applicant or force-accept */}
+              {request.status === 'Исполнено' && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
+                    Заявка выполнена. Ожидается приёмка жителем.
+                  </div>
+
+                  {!showForceAcceptSection && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {/* Remind button */}
+                      <button
+                        onClick={sendReminder}
+                        disabled={remindStatus === 'sending' || remindStatus === 'sent'}
+                        style={{
+                          flex: 1,
+                          background: remindStatus === 'sent' ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.1)',
+                          color: remindStatus === 'sent' ? '#059669' : remindStatus === 'error' ? '#dc2626' : '#3b82f6',
+                          border: `1px solid ${remindStatus === 'sent' ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                          borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600,
+                          cursor: remindStatus === 'sending' || remindStatus === 'sent' ? 'default' : 'pointer',
+                          fontFamily: 'var(--font-display)',
+                          opacity: remindStatus === 'sending' ? 0.6 : 1,
+                        }}
+                      >
+                        {remindStatus === 'sending' ? 'Отправка...' : remindStatus === 'sent' ? '✓ Напомнено' : remindStatus === 'error' ? '✗ Ошибка' : '🔔 Напомнить жителю'}
+                      </button>
+
+                      {/* Force accept button */}
+                      <button
+                        onClick={() => setShowForceAcceptSection(true)}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(245,158,11,0.1)',
+                          color: '#d97706',
+                          border: '1px solid rgba(245,158,11,0.3)',
+                          borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-display)',
+                        }}
+                      >
+                        ✓ Принять за жителя
+                      </button>
+                    </div>
+                  )}
+
+                  {showForceAcceptSection && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
+                        Причина приёмки без жителя <span style={{ color: 'var(--red)' }}>*</span>
+                      </p>
+                      <textarea
+                        style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}
+                        placeholder="Минимум 10 символов — например: житель недоступен 3 дня, работы приняты визуально"
+                        value={forceAcceptNote}
+                        onChange={e => setForceAcceptNote(e.target.value)}
+                        autoFocus
+                      />
+                      {forceAcceptNote.length > 0 && forceAcceptNote.length < 10 && (
+                        <div style={{ fontSize: 11, color: 'var(--red)' }}>Минимум 10 символов ({forceAcceptNote.length}/10)</div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => { setShowForceAcceptSection(false); setForceAcceptNote('') }}
+                          style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                        >Отмена</button>
+                        <button
+                          onClick={() => forceAccept.mutate(forceAcceptNote)}
+                          disabled={forceAccept.isPending || forceAcceptNote.trim().length < 10}
+                          style={{
+                            flex: 1, background: '#d97706', color: '#fff', border: 'none',
+                            borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600,
+                            cursor: 'pointer',
+                            opacity: (forceAccept.isPending || forceAcceptNote.trim().length < 10) ? 0.5 : 1,
+                            fontFamily: 'var(--font-display)',
+                          }}
+                        >
+                          {forceAccept.isPending ? 'Сохраняю...' : 'Принять за жителя'}
                         </button>
                       </div>
                     </div>

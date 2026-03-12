@@ -26,7 +26,7 @@ _REQUEST_VALID_TRANSITIONS: dict[str, set[str]] = {
     "В работе":  {"Закуп", "Уточнение", "Выполнена", "Отменена"},
     "Закуп":     {"В работе", "Уточнение", "Отменена"},
     "Уточнение": {"В работе", "Отменена"},
-    "Выполнена": {"Исполнено"},
+    "Выполнена": {"Исполнено", "В работе"},
     "Исполнено": {"Принято", "В работе"},
     "Принято":   set(),
     "Отменена":  set(),
@@ -271,3 +271,39 @@ async def add_comment(
     await db.commit()
     await db.refresh(comment)
     return comment
+
+
+@router.post(
+    "/{request_number}/remind-applicant",
+    dependencies=[Depends(require_roles("manager"))],
+)
+async def remind_applicant(
+    request_number: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a Telegram reminder to the applicant to accept a completed request."""
+    req_result = await db.execute(select(Request).where(Request.request_number == request_number))
+    req = req_result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != "Исполнено":
+        raise HTTPException(status_code=422, detail="Request must be in 'Исполнено' status")
+
+    applicant_result = await db.execute(select(User).where(User.id == req.user_id))
+    applicant = applicant_result.scalar_one_or_none()
+    if not applicant or not getattr(applicant, "telegram_id", None):
+        raise HTTPException(status_code=404, detail="Applicant has no Telegram account")
+
+    try:
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        bot = _get_shared_bot()
+        text = (
+            f"🔔 <b>Напоминание о приёмке</b>\n\n"
+            f"Заявка <code>{req.request_number}</code> — <b>{req.category}</b>\n"
+            f"выполнена и ожидает вашей приёмки.\n\n"
+            f"Пожалуйста, проверьте выполненную работу и подтвердите через приложение."
+        )
+        await bot.send_message(chat_id=applicant.telegram_id, text=text, parse_mode="HTML")
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send reminder: {e}")
