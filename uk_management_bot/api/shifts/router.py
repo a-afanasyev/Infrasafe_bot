@@ -556,7 +556,7 @@ async def update_template(
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    for field, value in body.model_dump(exclude_none=True).items():
+    for field, value in body.model_dump(exclude_unset=True).items():
         setattr(tmpl, field, value)
 
     await db.commit()
@@ -856,7 +856,7 @@ async def update_shift(
         if "executor" not in _parse_user_roles(new_user):
             raise HTTPException(status_code=422, detail="Target user does not have executor role")
 
-    for field, value in body.model_dump(exclude_none=True).items():
+    for field, value in body.model_dump(exclude_unset=True).items():
         setattr(shift, field, value)
 
     await db.commit()

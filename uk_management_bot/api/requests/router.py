@@ -180,12 +180,21 @@ async def update_request(
     request_number: str,
     body: UpdateRequestBody,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_roles("manager", "applicant")),
 ):
     result = await db.execute(select(Request).where(Request.request_number == request_number))
     req = result.scalar_one_or_none()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
+
+    user_roles = set(_parse_user_roles(user))
+    if "applicant" in user_roles and "manager" not in user_roles:
+        if req.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Cannot update another user's request")
+        allowed_fields = {"status", "rating"}
+        unset_fields = set(body.model_dump(exclude_unset=True).keys())
+        if not unset_fields.issubset(allowed_fields):
+            raise HTTPException(status_code=403, detail="Applicants can only update status and rating")
 
     updates = body.model_dump(exclude_unset=True)
     new_status = updates.get("status")

@@ -137,7 +137,7 @@ class UpdateShiftBody(BaseModel):
 class CreateFromTemplateBody(BaseModel):
     template_id: int
     date: date_type  # validated YYYY-MM-DD
-    user_ids: Optional[list[int]] = None
+    user_ids: list[int] = Field(..., min_length=1)
 
 
 class HandleTransferBody(BaseModel):
