@@ -126,6 +126,7 @@ export default function ModerationPanel() {
 
   const [rejectingId, setRejectingId] = useState<number | null>(null)
   const [rejectComment, setRejectComment] = useState('')
+  const [pendingActionId, setPendingActionId] = useState<number | null>(null)
 
   if (isLoading) return <LoadingSpinner />
 
@@ -140,7 +141,8 @@ export default function ModerationPanel() {
   }
 
   const handleApprove = (id: number) => {
-    approve.mutate(id)
+    setPendingActionId(id)
+    approve.mutate(id, { onSettled: () => setPendingActionId(null) })
   }
 
   const handleStartReject = (id: number) => {
@@ -155,9 +157,10 @@ export default function ModerationPanel() {
 
   const handleSubmitReject = (id: number) => {
     if (rejectComment.trim().length < 3) return
+    setPendingActionId(id)
     reject.mutate(
       { id, comment: rejectComment.trim() },
-      { onSuccess: () => handleCancelReject() },
+      { onSuccess: () => handleCancelReject(), onSettled: () => setPendingActionId(null) },
     )
   }
 
@@ -238,14 +241,14 @@ export default function ModerationPanel() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={() => handleApprove(item.id)}
-                disabled={approve.isPending}
+                disabled={pendingActionId !== null}
                 style={{
                   ...approveBtnStyle,
-                  opacity: approve.isPending ? 0.6 : 1,
-                  cursor: approve.isPending ? 'not-allowed' : 'pointer',
+                  opacity: pendingActionId !== null ? 0.6 : 1,
+                  cursor: pendingActionId !== null ? 'not-allowed' : 'pointer',
                 }}
               >
-                Одобрить
+                {pendingActionId === item.id && approve.isPending ? 'Одобрение...' : 'Одобрить'}
               </button>
               <button
                 onClick={() => handleStartReject(item.id)}

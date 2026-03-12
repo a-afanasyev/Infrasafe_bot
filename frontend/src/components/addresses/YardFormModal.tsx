@@ -160,7 +160,7 @@ export default function YardFormModal({ yard, onClose }: Props) {
 
           {mutation.error && (
             <div style={{ color: 'var(--red, #ef4444)', fontSize: 13, fontFamily: 'var(--font-display)' }}>
-              {(mutation.error as Error).message || 'Ошибка при сохранении'}
+              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || 'Ошибка при сохранении'}
             </div>
           )}
         </div>

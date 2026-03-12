@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,21 @@ from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.user import User
 
 router = APIRouter()
+
+
+def _yard_dict(y) -> dict:
+    """Extract column values from Yard ORM object (avoids triggering lazy-loaded @property)."""
+    return {c.key: getattr(y, c.key) for c in y.__table__.columns}
+
+
+def _building_dict(b) -> dict:
+    """Extract column values from Building ORM object."""
+    return {c.key: getattr(b, c.key) for c in b.__table__.columns}
+
+
+def _apartment_dict(a) -> dict:
+    """Extract column values from Apartment ORM object."""
+    return {c.key: getattr(a, c.key) for c in a.__table__.columns}
 
 
 # ───────────────────────── Stats ─────────────────────────
@@ -88,8 +104,7 @@ async def list_yards(
 
     out = []
     for y in yards:
-        yard_data = YardOut.model_validate(y)
-        yard_data.buildings_count = buildings_map.get(y.id, 0)
+        yard_data = YardOut(**_yard_dict(y), buildings_count=buildings_map.get(y.id, 0))
         out.append(yard_data)
     return out
 
@@ -119,9 +134,7 @@ async def create_yard(
     await db.commit()
     await db.refresh(yard)
 
-    out = YardOut.model_validate(yard)
-    out.buildings_count = 0
-    return out
+    return YardOut(**_yard_dict(yard), buildings_count=0)
 
 
 @router.patch("/yards/{yard_id}", response_model=YardOut)
@@ -137,6 +150,19 @@ async def update_yard(
         raise HTTPException(status_code=404, detail="Yard not found")
 
     updates = body.model_dump(exclude_unset=True)
+
+    # Block deactivation if active buildings exist
+    if "is_active" in updates and updates["is_active"] is False and yard.is_active:
+        active_buildings = (await db.execute(
+            select(func.count(Building.id)).where(
+                and_(Building.yard_id == yard_id, Building.is_active == True)  # noqa: E712
+            )
+        )).scalar() or 0
+        if active_buildings > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate yard: {active_buildings} active building(s) exist",
+            )
 
     # Re-check uniqueness only if name changed
     if "name" in updates and updates["name"] != yard.name:
@@ -159,9 +185,7 @@ async def update_yard(
         select(func.count(Building.id)).where(Building.yard_id == yard_id)
     )).scalar() or 0
 
-    out = YardOut.model_validate(yard)
-    out.buildings_count = buildings_count
-    return out
+    return YardOut(**_yard_dict(yard), buildings_count=buildings_count)
 
 
 @router.delete("/yards/{yard_id}", status_code=200)
@@ -225,9 +249,7 @@ async def list_buildings(
 
     out = []
     for b in buildings:
-        bld_data = BuildingOut.model_validate(b)
-        bld_data.yard_name = yard.name
-        bld_data.apartments_count = apt_map.get(b.id, 0)
+        bld_data = BuildingOut(**_building_dict(b), yard_name=yard.name, apartments_count=apt_map.get(b.id, 0))
         out.append(bld_data)
     return out
 
@@ -263,10 +285,7 @@ async def create_building(
     await db.commit()
     await db.refresh(building)
 
-    out = BuildingOut.model_validate(building)
-    out.yard_name = yard.name
-    out.apartments_count = 0
-    return out
+    return BuildingOut(**_building_dict(building), yard_name=yard.name, apartments_count=0)
 
 
 @router.patch("/buildings/{building_id}", response_model=BuildingOut)
@@ -282,6 +301,19 @@ async def update_building(
         raise HTTPException(status_code=404, detail="Building not found")
 
     updates = body.model_dump(exclude_unset=True)
+
+    # Block deactivation if active apartments exist
+    if "is_active" in updates and updates["is_active"] is False and building.is_active:
+        active_apartments = (await db.execute(
+            select(func.count(Apartment.id)).where(
+                and_(Apartment.building_id == building_id, Apartment.is_active == True)  # noqa: E712
+            )
+        )).scalar() or 0
+        if active_apartments > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate building: {active_apartments} active apartment(s) exist",
+            )
 
     # If changing yard_id, verify new yard exists and is active
     if "yard_id" in updates and updates["yard_id"] != building.yard_id:
@@ -310,10 +342,7 @@ async def update_building(
         select(func.count(Apartment.id)).where(Apartment.building_id == building_id)
     )).scalar() or 0
 
-    out = BuildingOut.model_validate(building)
-    out.yard_name = yard_name
-    out.apartments_count = apt_count
-    return out
+    return BuildingOut(**_building_dict(building), yard_name=yard_name, apartments_count=apt_count)
 
 
 @router.delete("/buildings/{building_id}", status_code=200)
@@ -388,10 +417,12 @@ async def list_apartments(
 
     out = []
     for a in apartments:
-        apt_data = ApartmentOut.model_validate(a)
-        apt_data.building_address = building.address
-        apt_data.yard_name = yard_name
-        apt_data.residents_count = residents_map.get(a.id, 0)
+        apt_data = ApartmentOut(
+            **_apartment_dict(a),
+            building_address=building.address,
+            yard_name=yard_name,
+            residents_count=residents_map.get(a.id, 0),
+        )
         out.append(apt_data)
     return out
 
@@ -445,11 +476,7 @@ async def create_apartment(
     await db.commit()
     await db.refresh(apartment)
 
-    out = ApartmentOut.model_validate(apartment)
-    out.building_address = building.address
-    out.yard_name = yard_name
-    out.residents_count = 0
-    return out
+    return ApartmentOut(**_apartment_dict(apartment), building_address=building.address, yard_name=yard_name, residents_count=0)
 
 
 @router.post("/apartments/bulk", response_model=BulkCreateResult, status_code=201)
@@ -482,7 +509,10 @@ async def bulk_create(
     for num in body.apartment_numbers:
         num_stripped = num.strip()
         if not num_stripped:
-            errors.append(f"Empty apartment number skipped")
+            errors.append("Empty apartment number skipped")
+            continue
+        if len(num_stripped) > 20:
+            errors.append(f"Apartment number '{num_stripped}' too long (max 20 chars)")
             continue
         if num_stripped in existing_numbers:
             skipped += 1
@@ -522,6 +552,20 @@ async def update_apartment(
 
     updates = body.model_dump(exclude_unset=True)
 
+    # Block deactivation if approved residents exist
+    if "is_active" in updates and updates["is_active"] is False and apartment.is_active:
+        approved_residents = (await db.execute(
+            select(func.count(UserApartment.id)).where(and_(
+                UserApartment.apartment_id == apartment_id,
+                UserApartment.status == "approved",
+            ))
+        )).scalar() or 0
+        if approved_residents > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate apartment: {approved_residents} approved resident(s) exist",
+            )
+
     # If apartment_number changed, check uniqueness
     if "apartment_number" in updates and updates["apartment_number"] != apartment.apartment_number:
         existing = await db.execute(
@@ -559,12 +603,12 @@ async def update_apartment(
         ))
     )).scalar() or 0
 
-    out = ApartmentOut.model_validate(apartment)
-    if bld_row:
-        out.building_address = bld_row[0]
-        out.yard_name = bld_row[1]
-    out.residents_count = residents_count
-    return out
+    return ApartmentOut(
+        **_apartment_dict(apartment),
+        building_address=bld_row[0] if bld_row else None,
+        yard_name=bld_row[1] if bld_row else None,
+        residents_count=residents_count,
+    )
 
 
 @router.delete("/apartments/{apartment_id}", status_code=200)
@@ -602,7 +646,8 @@ async def search_apartments(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    search_term = f"%{q}%"
+    escaped_q = re.sub(r'([%_\\])', r'\\\1', q)
+    search_term = f"%{escaped_q}%"
     query = (
         select(Apartment, Building.address, Yard.name)
         .join(Building, Apartment.building_id == Building.id)
@@ -639,10 +684,12 @@ async def search_apartments(
 
     out = []
     for apt, bld_address, yard_name in rows:
-        apt_data = ApartmentOut.model_validate(apt)
-        apt_data.building_address = bld_address
-        apt_data.yard_name = yard_name
-        apt_data.residents_count = residents_map.get(apt.id, 0)
+        apt_data = ApartmentOut(
+            **_apartment_dict(apt),
+            building_address=bld_address,
+            yard_name=yard_name,
+            residents_count=residents_map.get(apt.id, 0),
+        )
         out.append(apt_data)
     return out
 
@@ -700,7 +747,7 @@ async def list_pending(
 @router.post("/moderation/{item_id}/approve", response_model=ModerationItemOut)
 async def approve_request(
     item_id: int,
-    body: ModerationAction,
+    body: ModerationAction = ModerationAction(),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):

@@ -68,16 +68,16 @@ function parseApartmentRange(input: string): string[] {
   const parts = input.split(',').map(s => s.trim()).filter(Boolean)
   const numbers = new Set<string>()
   for (const part of parts) {
-    if (part.includes('-')) {
-      const [startStr, endStr] = part.split('-').map(s => s.trim())
-      const start = parseInt(startStr, 10)
-      const end = parseInt(endStr, 10)
-      if (!isNaN(start) && !isNaN(end) && start <= end && end - start < 500) {
+    const rangeMatch = part.match(/^(\d+)\s*-\s*(\d+)$/)
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10)
+      const end = parseInt(rangeMatch[2], 10)
+      if (start <= end && end - start < 500) {
         for (let i = start; i <= end; i++) {
           numbers.add(String(i))
         }
       }
-    } else {
+    } else if (part) {
       numbers.add(part)
     }
   }
@@ -184,7 +184,7 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
 
               {bulkCreate.error && (
                 <div style={{ color: 'var(--red, #ef4444)', fontSize: 13, fontFamily: 'var(--font-display)' }}>
-                  {(bulkCreate.error as Error).message || 'Ошибка при создании'}
+                  {(bulkCreate.error as any)?.response?.data?.detail || (bulkCreate.error as Error).message || 'Ошибка при создании'}
                 </div>
               )}
             </>

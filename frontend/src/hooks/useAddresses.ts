@@ -194,7 +194,7 @@ export function useDeleteApartment() {
 
 export function useBulkCreateApartments() {
   const queryClient = useQueryClient()
-  return useMutation<BulkCreateResult, Error, { building_id: number; apartments: Omit<ApartmentBrief, 'id' | 'created_at' | 'residents_count' | 'building_address' | 'yard_name' | 'building_id'>[] }>({
+  return useMutation<BulkCreateResult, Error, { building_id: number; apartment_numbers: string[] }>({
     mutationFn: (body) =>
       apiClient.post('/api/v2/addresses/apartments/bulk', body).then(r => r.data),
     onSuccess: () => {
