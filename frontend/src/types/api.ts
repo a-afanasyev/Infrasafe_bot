@@ -135,3 +135,78 @@ export interface CreateTemplatePayload {
   auto_create?: boolean
   priority_level?: number
 }
+
+// Address management
+export interface YardBrief {
+  id: number
+  name: string
+  description: string | null
+  gps_latitude: number | null
+  gps_longitude: number | null
+  is_active: boolean
+  created_at: string | null
+  buildings_count: number
+}
+
+export interface BuildingBrief {
+  id: number
+  address: string
+  yard_id: number
+  yard_name: string | null
+  entrance_count: number
+  floor_count: number
+  description: string | null
+  gps_latitude: number | null
+  gps_longitude: number | null
+  is_active: boolean
+  created_at: string | null
+  apartments_count: number
+}
+
+export interface ApartmentBrief {
+  id: number
+  building_id: number
+  apartment_number: string
+  building_address: string | null
+  yard_name: string | null
+  entrance: number | null
+  floor: number | null
+  rooms_count: number | null
+  area: number | null
+  description: string | null
+  is_active: boolean
+  created_at: string | null
+  residents_count: number
+}
+
+export interface ModerationItem {
+  id: number
+  user_id: number
+  user_name: string | null
+  user_phone: string | null
+  apartment_id: number
+  apartment_number: string
+  building_address: string | null
+  yard_name: string | null
+  status: string
+  is_owner: boolean
+  is_primary: boolean
+  requested_at: string | null
+}
+
+export interface AddressStats {
+  yards_total: number
+  yards_active: number
+  buildings_total: number
+  buildings_active: number
+  apartments_total: number
+  apartments_active: number
+  residents_approved: number
+  residents_pending: number
+}
+
+export interface BulkCreateResult {
+  created: number
+  skipped: number
+  errors: string[]
+}
