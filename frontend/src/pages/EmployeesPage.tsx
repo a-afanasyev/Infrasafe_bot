@@ -9,10 +9,12 @@ import {
 } from '../hooks/useEmployees'
 import type { EmployeeBrief } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
+import StaffTable from '../components/employees/StaffTable'
 import PendingApprovalCard from '../components/employees/PendingApprovalCard'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AssignRequestModal from '../components/employees/AssignRequestModal'
+import { SPEC_DISPLAY, SPEC_COLORS } from '../utils/employeeUtils'
 
 const primaryBtnStyle: React.CSSProperties = {
   background: 'var(--accent)',
@@ -57,12 +59,22 @@ export default function EmployeesPage() {
   const { setActions, clearActions } = useTopbar()
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [specFilter, setSpecFilter] = useState<string>('all')
   const [search, setSearch] = useState<string>('')
+  const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
+    try { return (localStorage.getItem('employees_view_mode') as 'tile' | 'table') || 'tile' }
+    catch { return 'tile' }
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem('employees_view_mode', viewMode) } catch {}
+  }, [viewMode])
 
   const apiFilters: Record<string, string | boolean | undefined> = {
     ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
     ...(statusFilter === 'on_shift' ? { has_active_shift: true } : {}),
     ...(statusFilter === 'verified' ? { verification_status: 'verified' } : {}),
+    ...(specFilter !== 'all' ? { specialization: specFilter } : {}),
   }
 
   const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
@@ -218,31 +230,115 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        {[
-          { key: 'all', label: 'Все' },
-          { key: 'executor', label: 'Исполнители' },
-          { key: 'manager', label: 'Менеджеры' },
-        ].map(f => (
-          <button key={f.key} onClick={() => setRoleFilter(f.key)} style={chipStyle(roleFilter === f.key)}>
-            {f.label}
+      {/* Filters + view toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {/* Role */}
+          {[
+            { key: 'all', label: 'Все' },
+            { key: 'executor', label: 'Исполнители' },
+            { key: 'manager', label: 'Менеджеры' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setRoleFilter(f.key)} style={chipStyle(roleFilter === f.key)}>
+              {f.label}
+            </button>
+          ))}
+          <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 2px' }} />
+          {/* Status */}
+          {[
+            { key: 'all', label: 'Все статусы' },
+            { key: 'on_shift', label: 'На смене' },
+            { key: 'verified', label: 'Верифицированы' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setStatusFilter(f.key)} style={chipStyle(statusFilter === f.key)}>
+              {f.label}
+            </button>
+          ))}
+          <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 2px' }} />
+          {/* Specialization — single select */}
+          <button
+            onClick={() => setSpecFilter('all')}
+            style={chipStyle(specFilter === 'all')}
+          >
+            Все спец.
           </button>
-        ))}
-        <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 4px' }} />
-        {[
-          { key: 'all', label: 'Все статусы' },
-          { key: 'on_shift', label: 'На смене' },
-          { key: 'verified', label: 'Верифицированы' },
-        ].map(f => (
-          <button key={f.key} onClick={() => setStatusFilter(f.key)} style={chipStyle(statusFilter === f.key)}>
-            {f.label}
-          </button>
-        ))}
+          {Object.entries(SPEC_DISPLAY).map(([key, label]) => {
+            const isActive = specFilter === key
+            const color = SPEC_COLORS[label.replace(/^\S+\s/, '')] ?? 'var(--text-muted)'
+            return (
+              <button
+                key={key}
+                onClick={() => setSpecFilter(isActive ? 'all' : key)}
+                style={isActive ? {
+                  background: color + '22',
+                  border: `1px solid ${color}55`,
+                  borderRadius: 20,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  color,
+                  padding: '5px 12px',
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 600,
+                  transition: 'all 0.15s',
+                } : chipStyle(false)}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+        {/* View toggle */}
+        <div style={{
+          display: 'flex',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}>
+          {(['tile', 'table'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              title={mode === 'tile' ? 'Плитки' : 'Таблица'}
+              style={{
+                padding: '6px 12px',
+                background: viewMode === mode ? 'var(--accent)' : 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: viewMode === mode ? '#fff' : 'var(--text-muted)',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'all 0.15s',
+              }}
+            >
+              {mode === 'tile' ? '⊞' : '☰'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Staff grid */}
-      {employees.length === 0 ? (
+      {/* Staff — tile or table */}
+      {viewMode === 'table' ? (
+        <StaffTable
+          employees={employees}
+          onAssign={(e) => setAssignTarget(e)}
+          onBlock={(e) => {
+            const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
+            if (e.status === 'blocked') {
+              if (window.confirm(`Разблокировать сотрудника ${empName}?`)) {
+                unblockEmployee.mutate(e.id)
+              }
+            } else {
+              if (window.confirm(`Заблокировать сотрудника ${empName}?`)) {
+                blockEmployee.mutate(e.id)
+              }
+            }
+          }}
+          isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
+        />
+      ) : employees.length === 0 ? (
         <EmptyState icon="👥" title="Сотрудники не найдены" subtitle="Попробуйте другой фильтр" />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
