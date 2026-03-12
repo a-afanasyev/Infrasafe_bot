@@ -7,7 +7,7 @@ import { useTWAAuth } from '../../hooks/useTWAAuth'
 const STATUS_ORDER = ['Новая', 'В работе', 'Закуп', 'Уточнение', 'Выполнена', 'Исполнено', 'Принято']
 
 export default function TWARequestDetailPage() {
-  useTWAAuth()
+  const { isAuthenticated } = useTWAAuth()
   const { number } = useParams<{ number: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -20,11 +20,13 @@ export default function TWARequestDetailPage() {
   const { data: request } = useQuery({
     queryKey: ['request', number],
     queryFn: () => apiClient.get(`/api/v2/requests/${number}`).then(r => r.data),
+    enabled: isAuthenticated && !!number,
   })
 
   const { data: comments } = useQuery({
     queryKey: ['comments', number],
     queryFn: () => apiClient.get(`/api/v2/requests/${number}/comments`).then(r => r.data),
+    enabled: isAuthenticated && !!number,
   })
 
   const sendMessage = async () => {
@@ -56,6 +58,8 @@ export default function TWARequestDetailPage() {
     queryClient.invalidateQueries({ queryKey: ['request', number] })
     navigate('/twa')
   }
+
+  if (!number) return <div className="p-4 text-red-500">Заявка не найдена</div>
 
   if (!request) return <div className="p-4 text-gray-400">Загрузка...</div>
 
