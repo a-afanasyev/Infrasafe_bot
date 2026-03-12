@@ -23,6 +23,8 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import YardFormModal from '../components/addresses/YardFormModal'
 import BuildingFormModal from '../components/addresses/BuildingFormModal'
 import ApartmentFormModal from '../components/addresses/ApartmentFormModal'
+import BulkCreateModal from '../components/addresses/BulkCreateModal'
+import ModerationPanel from '../components/addresses/ModerationPanel'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -403,11 +405,7 @@ export default function AddressesPage() {
 
       {/* Content area */}
       {view === 'moderation' ? (
-        <EmptyState
-          icon="&#10003;"
-          title="Модерация"
-          subtitle="Будет реализована в задаче 5"
-        />
+        <ModerationPanel />
       ) : (
         <>
           {/* Breadcrumb */}
@@ -795,6 +793,14 @@ export default function AddressesPage() {
         <ApartmentFormModal
           buildingId={selectedBuilding.id}
           onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {showBulkCreate && selectedBuilding && (
+        <BulkCreateModal
+          buildingId={selectedBuilding.id}
+          buildingAddress={selectedBuilding.address}
+          onClose={() => setShowBulkCreate(false)}
         />
       )}
     </div>
