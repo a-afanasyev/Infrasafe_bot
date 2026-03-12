@@ -29,6 +29,8 @@ export default function TWARequestDetailPage() {
     enabled: isAuthenticated && !!number,
   })
 
+  if (!number) return <div className="p-4 text-red-500">Заявка не найдена</div>
+
   const sendMessage = async () => {
     if (!message.trim()) return
     setSending(true)
@@ -58,8 +60,6 @@ export default function TWARequestDetailPage() {
     queryClient.invalidateQueries({ queryKey: ['request', number] })
     navigate('/twa')
   }
-
-  if (!number) return <div className="p-4 text-red-500">Заявка не найдена</div>
 
   if (!request) return <div className="p-4 text-gray-400">Загрузка...</div>
 

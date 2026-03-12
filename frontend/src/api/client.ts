@@ -41,8 +41,8 @@ apiClient.interceptors.response.use(
           const newToken = await refreshPromise
           originalRequest.headers.Authorization = `Bearer ${newToken}`
           return apiClient(originalRequest)
-        } catch {
-          return Promise.reject(error)
+        } catch (refreshError) {
+          return Promise.reject(refreshError)
         }
       }
       localStorage.removeItem('access_token')
