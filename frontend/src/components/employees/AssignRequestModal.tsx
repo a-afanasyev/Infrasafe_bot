@@ -4,7 +4,7 @@ import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import type { KanbanColumn, RequestCard } from '../../hooks/useKanban'
 
-const IN_WORK_STATUS = 'В работе' // matches API status value
+const ASSIGNABLE_STATUSES = new Set(['Новая', 'В работе'])
 
 interface Props {
   employee: EmployeeBrief
@@ -21,8 +21,9 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
     staleTime: 30_000,
   })
 
-  const inWorkColumn = data?.columns.find(col => col.status === IN_WORK_STATUS)
-  const requests: RequestCard[] = inWorkColumn?.requests ?? []
+  const requests: RequestCard[] = (data?.columns ?? [])
+    .filter(col => ASSIGNABLE_STATUSES.has(col.status))
+    .flatMap(col => col.requests)
 
   const assignMutation = useMutation({
     mutationFn: (requestNumber: string) =>
@@ -130,7 +131,7 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
                 fontSize: '14px',
               }}
             >
-              Нет заявок в работе
+              Нет заявок для назначения
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

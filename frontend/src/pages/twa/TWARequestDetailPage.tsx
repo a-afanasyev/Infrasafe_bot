@@ -16,6 +16,8 @@ export default function TWARequestDetailPage() {
   const [returnReason, setReturnReason] = useState('')
   const [showReturnForm, setShowReturnForm] = useState(false)
   const [sending, setSending] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const { data: request } = useQuery({
     queryKey: ['request', number],
@@ -44,21 +46,37 @@ export default function TWARequestDetailPage() {
   }
 
   const handleAccept = async () => {
-    const payload: Record<string, unknown> = { status: 'Принято' }
-    if (rating > 0) payload.rating = rating
-    await apiClient.patch(`/api/v2/requests/${number}`, payload)
-    queryClient.invalidateQueries({ queryKey: ['request', number] })
-    navigate('/twa')
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      const payload: Record<string, unknown> = { status: 'Принято' }
+      if (rating > 0) payload.rating = rating
+      await apiClient.patch(`/api/v2/requests/${number}`, payload)
+      queryClient.invalidateQueries({ queryKey: ['request', number] })
+      navigate('/twa')
+    } catch {
+      setSubmitError('Не удалось сохранить. Попробуйте снова.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleReturn = async () => {
     if (!returnReason.trim()) return
-    await apiClient.patch(`/api/v2/requests/${number}`, {
-      status: 'В работе',
-      return_reason: returnReason.trim(),
-    })
-    queryClient.invalidateQueries({ queryKey: ['request', number] })
-    navigate('/twa')
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      await apiClient.patch(`/api/v2/requests/${number}`, {
+        status: 'В работе',
+        return_reason: returnReason.trim(),
+      })
+      queryClient.invalidateQueries({ queryKey: ['request', number] })
+      navigate('/twa')
+    } catch {
+      setSubmitError('Не удалось сохранить. Попробуйте снова.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (!request) return <div className="p-4 text-gray-400">Загрузка...</div>
@@ -83,13 +101,19 @@ export default function TWARequestDetailPage() {
 
       {/* Status timeline */}
       <div className="bg-white border-b p-4 overflow-x-auto">
-        <div className="flex gap-1 min-w-max">
-          {STATUS_ORDER.map((s, i) => (
-            <div key={s} className={`text-xs px-2 py-1 rounded ${i <= currentIdx ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-              {s}
-            </div>
-          ))}
-        </div>
+        {request.status === 'Отменена' ? (
+          <div className="flex gap-2 items-center text-sm text-red-500">
+            <span>🚫</span><span>Заявка отменена</span>
+          </div>
+        ) : (
+          <div className="flex gap-1 min-w-max">
+            {STATUS_ORDER.map((s, i) => (
+              <div key={s} className={`text-xs px-2 py-1 rounded ${i <= currentIdx ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Comments */}
@@ -136,16 +160,19 @@ export default function TWARequestDetailPage() {
                   </button>
                 ))}
               </div>
+              {submitError && <div className="text-red-500 text-sm mb-2">{submitError}</div>}
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowReturnForm(true)}
+                  disabled={isSubmitting}
                   className="flex-1 border py-2 rounded-xl text-sm"
                 >
                   &#8617; Вернуть
                 </button>
                 <button
                   onClick={handleAccept}
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm disabled:opacity-50"
                 >
                   &#10003; Принять
                 </button>
@@ -161,6 +188,7 @@ export default function TWARequestDetailPage() {
                 onChange={e => setReturnReason(e.target.value)}
                 autoFocus
               />
+              {submitError && <div className="text-red-500 text-sm mb-2">{submitError}</div>}
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowReturnForm(false)}
@@ -170,7 +198,7 @@ export default function TWARequestDetailPage() {
                 </button>
                 <button
                   onClick={handleReturn}
-                  disabled={!returnReason.trim()}
+                  disabled={!returnReason.trim() || isSubmitting}
                   className="flex-1 bg-red-500 text-white py-2 rounded-xl text-sm disabled:opacity-40"
                 >
                   Отправить

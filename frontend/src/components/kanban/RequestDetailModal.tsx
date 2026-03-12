@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../api/client'
 
@@ -23,6 +23,12 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
   const [comment, setComment] = useState('')
   const [confirmNote, setConfirmNote] = useState('')
   const [showConfirmSection, setShowConfirmSection] = useState(false)
+
+  useEffect(() => {
+    setComment('')
+    setConfirmNote('')
+    setShowConfirmSection(false)
+  }, [requestNumber])
 
   const { data: request } = useQuery({
     queryKey: ['request', requestNumber],
