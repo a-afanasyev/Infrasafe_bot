@@ -5,6 +5,7 @@ import type {
   YardBrief,
   BuildingBrief,
   ApartmentBrief,
+  ApartmentDetail,
   ModerationItem,
   BulkCreateResult,
 } from '../types/api'
@@ -71,6 +72,15 @@ export function useSearchApartments(query: string) {
         .then(r => r.data),
     enabled: query.length >= 2,
     staleTime: 30_000,
+  })
+}
+
+export function useApartmentDetail(apartmentId: number | null) {
+  return useQuery<ApartmentDetail>({
+    queryKey: ['apartment-detail', apartmentId],
+    queryFn: () =>
+      apiClient.get(`/api/v2/addresses/apartments/${apartmentId}`).then(r => r.data),
+    enabled: apartmentId !== null,
   })
 }
 

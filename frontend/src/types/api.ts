@@ -179,6 +179,35 @@ export interface ApartmentBrief {
   residents_count: number
 }
 
+export interface ResidentBrief {
+  id: number
+  user_id: number
+  user_name: string | null
+  user_phone: string | null
+  username: string | null
+  is_owner: boolean
+  is_primary: boolean
+  status: string
+  requested_at: string | null
+  reviewed_at: string | null
+}
+
+export interface ApartmentDetail {
+  id: number
+  building_id: number
+  apartment_number: string
+  building_address: string | null
+  yard_name: string | null
+  entrance: number | null
+  floor: number | null
+  rooms_count: number | null
+  area: number | null
+  description: string | null
+  is_active: boolean
+  created_at: string | null
+  residents: ResidentBrief[]
+}
+
 export interface ModerationItem {
   id: number
   user_id: number
