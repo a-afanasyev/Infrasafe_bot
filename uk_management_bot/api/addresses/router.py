@@ -641,6 +641,8 @@ async def delete_apartment(
     return {"ok": True, "detail": "Apartment deactivated"}
 
 
+# NOTE: /apartments/search MUST be registered before /apartments/{apartment_id}
+# because FastAPI matches routes in declaration order.
 @router.get("/apartments/search", response_model=list[ApartmentOut])
 async def search_apartments(
     q: str = Query(..., min_length=1),

@@ -118,6 +118,7 @@ class ResidentOut(BaseModel):
     status: str                      # pending/approved/rejected
     requested_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
+    model_config = {"from_attributes": True}
 
 
 class ApartmentDetailOut(BaseModel):
@@ -134,6 +135,7 @@ class ApartmentDetailOut(BaseModel):
     is_active: bool
     created_at: Optional[datetime] = None
     residents: list[ResidentOut] = []
+    model_config = {"from_attributes": True}
 
 
 class BulkCreateApartments(BaseModel):
