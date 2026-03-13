@@ -25,6 +25,8 @@ import BuildingFormModal from '../components/addresses/BuildingFormModal'
 import ApartmentFormModal from '../components/addresses/ApartmentFormModal'
 import BulkCreateModal from '../components/addresses/BulkCreateModal'
 import ModerationPanel from '../components/addresses/ModerationPanel'
+import ApartmentProfileModal from '../components/addresses/ApartmentProfileModal'
+import AddressTable from '../components/addresses/AddressTable'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -121,6 +123,17 @@ const badgeStyle = (color: string): React.CSSProperties => ({
   fontFamily: 'var(--font-mono)',
 })
 
+const toggleBtnStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: '16px',
+  padding: '4px 10px',
+  lineHeight: 1,
+  transition: 'all 0.15s',
+}
+
 const dotStyle = (active: boolean): React.CSSProperties => ({
   width: 8,
   height: 8,
@@ -197,6 +210,17 @@ export default function AddressesPage() {
   const [editingApartment, setEditingApartment] = useState<ApartmentBrief | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showBulkCreate, setShowBulkCreate] = useState(false)
+  const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
+    try {
+      const stored = localStorage.getItem('addresses_view_mode')
+      return (stored === 'tile' || stored === 'table') ? stored : 'tile'
+    } catch { return 'tile' }
+  })
+  const [profileApartmentId, setProfileApartmentId] = useState<number | null>(null)
+
+  useEffect(() => {
+    try { localStorage.setItem('addresses_view_mode', viewMode) } catch {}
+  }, [viewMode])
 
   // Queries
   const { data: stats } = useAddressStats()
@@ -291,24 +315,28 @@ export default function AddressesPage() {
       value: stats ? `${stats.yards_active}/${stats.yards_total}` : '-',
       iconBg: 'var(--blue)',
       icon: '\u{1F3D8}',
+      onClick: () => { setView('directory'); goToYards() },
     },
     {
       label: 'Здания',
       value: stats?.buildings_total ?? '-',
       iconBg: 'var(--emerald)',
       icon: '\u{1F3E2}',
+      onClick: () => { setView('directory'); goToYards() },
     },
     {
       label: 'Квартиры',
       value: stats?.apartments_total ?? '-',
       iconBg: 'var(--amber)',
       icon: '\u{1F3E0}',
+      onClick: () => { setView('directory'); goToYards() },
     },
     {
       label: 'Жители',
       value: stats ? `${stats.residents_approved}+${stats.residents_pending}` : '-',
       iconBg: 'var(--violet)',
       icon: '\u{1F465}',
+      onClick: () => { setView('moderation') },
     },
   ]
 
@@ -330,6 +358,7 @@ export default function AddressesPage() {
         {STATS.map(card => (
           <div
             key={card.label}
+            onClick={card.onClick}
             style={{
               background: 'var(--bg-card)',
               border: '1px solid var(--border)',
@@ -338,7 +367,11 @@ export default function AddressesPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '14px',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s',
             }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
           >
             <div style={{
               width: 48,
@@ -380,6 +413,32 @@ export default function AddressesPage() {
         </button>
 
         <div style={{ flex: 1 }} />
+
+        {/* View toggle */}
+        {view === 'directory' && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={() => setViewMode('tile')}
+              style={{
+                ...toggleBtnStyle,
+                background: viewMode === 'tile' ? 'var(--accent)' : 'transparent',
+                border: viewMode === 'tile' ? '1px solid var(--accent)' : '1px solid var(--border)',
+                color: viewMode === 'tile' ? '#fff' : 'var(--text-muted)',
+              }}
+              title="Плитка"
+            >{'\u229E'}</button>
+            <button
+              onClick={() => setViewMode('table')}
+              style={{
+                ...toggleBtnStyle,
+                background: viewMode === 'table' ? 'var(--accent)' : 'transparent',
+                border: viewMode === 'table' ? '1px solid var(--accent)' : '1px solid var(--border)',
+                color: viewMode === 'table' ? '#fff' : 'var(--text-muted)',
+              }}
+              title="Таблица"
+            >{'\u2630'}</button>
+          </div>
+        )}
 
         {/* Show inactive toggle */}
         {view === 'directory' && (
@@ -455,202 +514,317 @@ export default function AddressesPage() {
             <LoadingSpinner />
           ) : (
             <>
-              {/* Yards grid */}
-              {level === 'yards' && (
-                filteredYards.length === 0 ? (
-                  <EmptyState icon="\u{1F3D8}" title="Дворы не найдены" subtitle="Добавьте первый двор" />
-                ) : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                    gap: '16px',
-                  }}>
-                    {filteredYards.map(yard => (
-                      <div
-                        key={yard.id}
-                        onClick={() => handleYardClick(yard)}
-                        style={cardBaseStyle}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.borderColor = 'var(--accent)'
-                          e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.borderColor = 'var(--border)'
-                          e.currentTarget.style.boxShadow = 'none'
-                        }}
-                      >
-                        {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                            <div style={dotStyle(yard.is_active)} />
-                            <div style={{
-                              fontFamily: 'var(--font-display)',
-                              fontWeight: 600,
-                              fontSize: '15px',
-                              color: 'var(--text-primary)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {yard.name}
-                            </div>
-                          </div>
-                          <ActionMenu>
-                            {(close) => (
-                              <>
-                                <MenuItem label="Редактировать" onClick={() => { close(); setEditingYard(yard) }} />
-                                <MenuItem
-                                  label={yard.is_active ? 'Деактивировать' : 'Активировать'}
-                                  onClick={() => {
-                                    close()
-                                    updateYard.mutate({ id: yard.id, is_active: !yard.is_active })
-                                  }}
-                                />
-                                <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
-                                <MenuItem
-                                  label="Удалить"
-                                  danger
-                                  onClick={() => {
-                                    close()
-                                    if (window.confirm(`Удалить двор "${yard.name}"?`)) {
-                                      deleteYard.mutate(yard.id)
-                                    }
-                                  }}
-                                />
-                              </>
-                            )}
-                          </ActionMenu>
-                        </div>
-
-                        {/* Description */}
-                        {yard.description && (
-                          <div style={{
-                            fontSize: '13px',
-                            color: 'var(--text-secondary)',
-                            marginBottom: 10,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            lineHeight: '1.4',
-                          }}>
-                            {yard.description}
-                          </div>
-                        )}
-
-                        {/* Footer */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                          <span style={badgeStyle('var(--blue)')}>
-                            {yard.buildings_count} {pluralize(yard.buildings_count, 'здание', 'здания', 'зданий')}
-                          </span>
-                          {!yard.is_active && (
-                            <span style={badgeStyle('var(--text-muted)')}>неактивен</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-
-              {/* Buildings grid */}
-              {level === 'buildings' && (
-                filteredBuildings.length === 0 ? (
-                  <EmptyState icon="\u{1F3E2}" title="Здания не найдены" subtitle="Добавьте первое здание" />
-                ) : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                    gap: '16px',
-                  }}>
-                    {filteredBuildings.map(building => (
-                      <div
-                        key={building.id}
-                        onClick={() => handleBuildingClick(building)}
-                        style={cardBaseStyle}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.borderColor = 'var(--accent)'
-                          e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.borderColor = 'var(--border)'
-                          e.currentTarget.style.boxShadow = 'none'
-                        }}
-                      >
-                        {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                            <div style={dotStyle(building.is_active)} />
-                            <div style={{
-                              fontFamily: 'var(--font-display)',
-                              fontWeight: 600,
-                              fontSize: '15px',
-                              color: 'var(--text-primary)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {building.address}
-                            </div>
-                          </div>
-                          <ActionMenu>
-                            {(close) => (
-                              <>
-                                <MenuItem label="Редактировать" onClick={() => { close(); setEditingBuilding(building) }} />
-                                <MenuItem
-                                  label={building.is_active ? 'Деактивировать' : 'Активировать'}
-                                  onClick={() => {
-                                    close()
-                                    updateBuilding.mutate({ id: building.id, is_active: !building.is_active })
-                                  }}
-                                />
-                                <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
-                                <MenuItem
-                                  label="Удалить"
-                                  danger
-                                  onClick={() => {
-                                    close()
-                                    if (window.confirm(`Удалить здание "${building.address}"?`)) {
-                                      deleteBuilding.mutate(building.id)
-                                    }
-                                  }}
-                                />
-                              </>
-                            )}
-                          </ActionMenu>
-                        </div>
-
-                        {/* Details */}
-                        <div style={{
-                          fontSize: '13px',
-                          color: 'var(--text-secondary)',
-                          marginBottom: 10,
-                          display: 'flex',
-                          gap: 12,
-                        }}>
-                          <span>{building.entrance_count} {pluralize(building.entrance_count, 'подъезд', 'подъезда', 'подъездов')}</span>
-                          <span>{building.floor_count} {pluralize(building.floor_count, 'этаж', 'этажа', 'этажей')}</span>
-                        </div>
-
-                        {/* Footer */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                          <span style={badgeStyle('var(--amber)')}>
-                            {building.apartments_count} {pluralize(building.apartments_count, 'квартира', 'квартиры', 'квартир')}
-                          </span>
-                          {!building.is_active && (
-                            <span style={badgeStyle('var(--text-muted)')}>неактивно</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-
-              {/* Apartments grid */}
-              {level === 'apartments' && (
+              {viewMode === 'tile' ? (
                 <>
-                  {/* Bulk create button */}
+                  {/* Yards grid */}
+                  {level === 'yards' && (
+                    filteredYards.length === 0 ? (
+                      <EmptyState icon="\u{1F3D8}" title="Дворы не найдены" subtitle="Добавьте первый двор" />
+                    ) : (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                        gap: '16px',
+                      }}>
+                        {filteredYards.map(yard => (
+                          <div
+                            key={yard.id}
+                            onClick={() => handleYardClick(yard)}
+                            style={cardBaseStyle}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.borderColor = 'var(--accent)'
+                              e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.borderColor = 'var(--border)'
+                              e.currentTarget.style.boxShadow = 'none'
+                            }}
+                          >
+                            {/* Header */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                <div style={dotStyle(yard.is_active)} />
+                                <div style={{
+                                  fontFamily: 'var(--font-display)',
+                                  fontWeight: 600,
+                                  fontSize: '15px',
+                                  color: 'var(--text-primary)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {yard.name}
+                                </div>
+                              </div>
+                              <ActionMenu>
+                                {(close) => (
+                                  <>
+                                    <MenuItem label="Редактировать" onClick={() => { close(); setEditingYard(yard) }} />
+                                    <MenuItem
+                                      label={yard.is_active ? 'Деактивировать' : 'Активировать'}
+                                      onClick={() => {
+                                        close()
+                                        updateYard.mutate({ id: yard.id, is_active: !yard.is_active })
+                                      }}
+                                    />
+                                    <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
+                                    <MenuItem
+                                      label="Удалить"
+                                      danger
+                                      onClick={() => {
+                                        close()
+                                        if (window.confirm(`Удалить двор "${yard.name}"?`)) {
+                                          deleteYard.mutate(yard.id)
+                                        }
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </ActionMenu>
+                            </div>
+
+                            {/* Description */}
+                            {yard.description && (
+                              <div style={{
+                                fontSize: '13px',
+                                color: 'var(--text-secondary)',
+                                marginBottom: 10,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                lineHeight: '1.4',
+                              }}>
+                                {yard.description}
+                              </div>
+                            )}
+
+                            {/* Footer */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <span style={badgeStyle('var(--blue)')}>
+                                {yard.buildings_count} {pluralize(yard.buildings_count, 'здание', 'здания', 'зданий')}
+                              </span>
+                              {!yard.is_active && (
+                                <span style={badgeStyle('var(--text-muted)')}>неактивен</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+
+                  {/* Buildings grid */}
+                  {level === 'buildings' && (
+                    filteredBuildings.length === 0 ? (
+                      <EmptyState icon="\u{1F3E2}" title="Здания не найдены" subtitle="Добавьте первое здание" />
+                    ) : (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                        gap: '16px',
+                      }}>
+                        {filteredBuildings.map(building => (
+                          <div
+                            key={building.id}
+                            onClick={() => handleBuildingClick(building)}
+                            style={cardBaseStyle}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.borderColor = 'var(--accent)'
+                              e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.borderColor = 'var(--border)'
+                              e.currentTarget.style.boxShadow = 'none'
+                            }}
+                          >
+                            {/* Header */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                <div style={dotStyle(building.is_active)} />
+                                <div style={{
+                                  fontFamily: 'var(--font-display)',
+                                  fontWeight: 600,
+                                  fontSize: '15px',
+                                  color: 'var(--text-primary)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {building.address}
+                                </div>
+                              </div>
+                              <ActionMenu>
+                                {(close) => (
+                                  <>
+                                    <MenuItem label="Редактировать" onClick={() => { close(); setEditingBuilding(building) }} />
+                                    <MenuItem
+                                      label={building.is_active ? 'Деактивировать' : 'Активировать'}
+                                      onClick={() => {
+                                        close()
+                                        updateBuilding.mutate({ id: building.id, is_active: !building.is_active })
+                                      }}
+                                    />
+                                    <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
+                                    <MenuItem
+                                      label="Удалить"
+                                      danger
+                                      onClick={() => {
+                                        close()
+                                        if (window.confirm(`Удалить здание "${building.address}"?`)) {
+                                          deleteBuilding.mutate(building.id)
+                                        }
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </ActionMenu>
+                            </div>
+
+                            {/* Details */}
+                            <div style={{
+                              fontSize: '13px',
+                              color: 'var(--text-secondary)',
+                              marginBottom: 10,
+                              display: 'flex',
+                              gap: 12,
+                            }}>
+                              <span>{building.entrance_count} {pluralize(building.entrance_count, 'подъезд', 'подъезда', 'подъездов')}</span>
+                              <span>{building.floor_count} {pluralize(building.floor_count, 'этаж', 'этажа', 'этажей')}</span>
+                            </div>
+
+                            {/* Footer */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <span style={badgeStyle('var(--amber)')}>
+                                {building.apartments_count} {pluralize(building.apartments_count, 'квартира', 'квартиры', 'квартир')}
+                              </span>
+                              {!building.is_active && (
+                                <span style={badgeStyle('var(--text-muted)')}>неактивно</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+
+                  {/* Apartments grid */}
+                  {level === 'apartments' && (
+                    <>
+                      {/* Bulk create button */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => setShowBulkCreate(true)}
+                          style={{
+                            ...primaryBtnStyle,
+                            background: 'var(--bg-card)',
+                            color: 'var(--accent)',
+                            border: '1px solid var(--accent)',
+                          }}
+                        >
+                          Автозаполнение
+                        </button>
+                      </div>
+
+                      {filteredApartments.length === 0 ? (
+                        <EmptyState icon="\u{1F3E0}" title="Квартиры не найдены" subtitle="Добавьте квартиры вручную или используйте автозаполнение" />
+                      ) : (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                          gap: '16px',
+                        }}>
+                          {filteredApartments.map(apt => (
+                            <div
+                              key={apt.id}
+                              style={{ ...cardBaseStyle, cursor: 'pointer' }}
+                              onClick={() => setProfileApartmentId(apt.id)}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = 'var(--accent)'
+                                e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = 'var(--border)'
+                                e.currentTarget.style.boxShadow = 'none'
+                              }}
+                            >
+                              {/* Header */}
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={dotStyle(apt.is_active)} />
+                                  <div style={{
+                                    fontFamily: 'var(--font-mono)',
+                                    fontWeight: 700,
+                                    fontSize: '20px',
+                                    color: 'var(--text-primary)',
+                                  }}>
+                                    {apt.apartment_number}
+                                  </div>
+                                </div>
+                                <ActionMenu>
+                                  {(close) => (
+                                    <>
+                                      <MenuItem label="Редактировать" onClick={() => { close(); setEditingApartment(apt) }} />
+                                      <MenuItem
+                                        label={apt.is_active ? 'Деактивировать' : 'Активировать'}
+                                        onClick={() => {
+                                          close()
+                                          updateApartment.mutate({ id: apt.id, is_active: !apt.is_active })
+                                        }}
+                                      />
+                                      <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
+                                      <MenuItem
+                                        label="Удалить"
+                                        danger
+                                        onClick={() => {
+                                          close()
+                                          if (window.confirm(`Удалить квартиру ${apt.apartment_number}?`)) {
+                                            deleteApartment.mutate(apt.id)
+                                          }
+                                        }}
+                                      />
+                                    </>
+                                  )}
+                                </ActionMenu>
+                              </div>
+
+                              {/* Details */}
+                              <div style={{
+                                fontSize: '12px',
+                                color: 'var(--text-secondary)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 3,
+                              }}>
+                                {apt.building_address && (
+                                  <div style={{ color: 'var(--text-muted)' }}>{apt.building_address}</div>
+                                )}
+                                <div style={{ display: 'flex', gap: 12 }}>
+                                  {apt.floor != null && <span>Этаж: {apt.floor}</span>}
+                                  {apt.entrance != null && <span>Подъезд: {apt.entrance}</span>}
+                                  {apt.area != null && <span>{apt.area} м&sup2;</span>}
+                                </div>
+                              </div>
+
+                              {/* Footer */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                                <span style={badgeStyle('var(--violet)')}>
+                                  {apt.residents_count} {pluralize(apt.residents_count, 'житель', 'жителя', 'жителей')}
+                                </span>
+                                {!apt.is_active && (
+                                  <span style={badgeStyle('var(--text-muted)')}>неактивна</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                {level === 'apartments' && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <button
                       onClick={() => setShowBulkCreate(true)}
@@ -664,91 +838,25 @@ export default function AddressesPage() {
                       Автозаполнение
                     </button>
                   </div>
-
-                  {filteredApartments.length === 0 ? (
-                    <EmptyState icon="\u{1F3E0}" title="Квартиры не найдены" subtitle="Добавьте квартиры вручную или используйте автозаполнение" />
-                  ) : (
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                      gap: '16px',
-                    }}>
-                      {filteredApartments.map(apt => (
-                        <div
-                          key={apt.id}
-                          style={{ ...cardBaseStyle, cursor: 'default' }}
-                        >
-                          {/* Header */}
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={dotStyle(apt.is_active)} />
-                              <div style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontWeight: 700,
-                                fontSize: '20px',
-                                color: 'var(--text-primary)',
-                              }}>
-                                {apt.apartment_number}
-                              </div>
-                            </div>
-                            <ActionMenu>
-                              {(close) => (
-                                <>
-                                  <MenuItem label="Редактировать" onClick={() => { close(); setEditingApartment(apt) }} />
-                                  <MenuItem
-                                    label={apt.is_active ? 'Деактивировать' : 'Активировать'}
-                                    onClick={() => {
-                                      close()
-                                      updateApartment.mutate({ id: apt.id, is_active: !apt.is_active })
-                                    }}
-                                  />
-                                  <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
-                                  <MenuItem
-                                    label="Удалить"
-                                    danger
-                                    onClick={() => {
-                                      close()
-                                      if (window.confirm(`Удалить квартиру ${apt.apartment_number}?`)) {
-                                        deleteApartment.mutate(apt.id)
-                                      }
-                                    }}
-                                  />
-                                </>
-                              )}
-                            </ActionMenu>
-                          </div>
-
-                          {/* Details */}
-                          <div style={{
-                            fontSize: '12px',
-                            color: 'var(--text-secondary)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 3,
-                          }}>
-                            {apt.building_address && (
-                              <div style={{ color: 'var(--text-muted)' }}>{apt.building_address}</div>
-                            )}
-                            <div style={{ display: 'flex', gap: 12 }}>
-                              {apt.floor != null && <span>Этаж: {apt.floor}</span>}
-                              {apt.entrance != null && <span>Подъезд: {apt.entrance}</span>}
-                              {apt.area != null && <span>{apt.area} м&sup2;</span>}
-                            </div>
-                          </div>
-
-                          {/* Footer */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                            <span style={badgeStyle('var(--violet)')}>
-                              {apt.residents_count} {pluralize(apt.residents_count, 'житель', 'жителя', 'жителей')}
-                            </span>
-                            {!apt.is_active && (
-                              <span style={badgeStyle('var(--text-muted)')}>неактивна</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                )}
+                <AddressTable
+                  level={level}
+                  yards={level === 'yards' ? filteredYards : undefined}
+                  buildings={level === 'buildings' ? filteredBuildings : undefined}
+                  apartments={level === 'apartments' ? filteredApartments : undefined}
+                  onYardClick={handleYardClick}
+                  onBuildingClick={handleBuildingClick}
+                  onApartmentClick={(apt) => setProfileApartmentId(apt.id)}
+                  onEditYard={(yard) => setEditingYard(yard)}
+                  onEditBuilding={(building) => setEditingBuilding(building)}
+                  onEditApartment={(apt) => setEditingApartment(apt)}
+                  onToggleYard={(id, active) => updateYard.mutate({ id, is_active: active })}
+                  onToggleBuilding={(id, active) => updateBuilding.mutate({ id, is_active: active })}
+                  onToggleApartment={(id, active) => updateApartment.mutate({ id, is_active: active })}
+                  onDeleteYard={(id) => deleteYard.mutate(id)}
+                  onDeleteBuilding={(id) => deleteBuilding.mutate(id)}
+                  onDeleteApartment={(id) => deleteApartment.mutate(id)}
+                />
                 </>
               )}
             </>
@@ -801,6 +909,20 @@ export default function AddressesPage() {
           buildingId={selectedBuilding.id}
           buildingAddress={selectedBuilding.address}
           onClose={() => setShowBulkCreate(false)}
+        />
+      )}
+
+      {profileApartmentId !== null && (
+        <ApartmentProfileModal
+          apartmentId={profileApartmentId}
+          onClose={() => setProfileApartmentId(null)}
+          onEdit={() => {
+            const apt = apartments?.find(a => a.id === profileApartmentId)
+            if (apt) {
+              setProfileApartmentId(null)
+              setEditingApartment(apt)
+            }
+          }}
         />
       )}
     </div>

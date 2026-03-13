@@ -81,6 +81,7 @@ export function useApartmentDetail(apartmentId: number | null) {
     queryFn: () =>
       apiClient.get(`/api/v2/addresses/apartments/${apartmentId}`).then(r => r.data),
     enabled: apartmentId !== null,
+    staleTime: 30_000,
   })
 }
 
