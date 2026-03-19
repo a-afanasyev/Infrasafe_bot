@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import type { KanbanColumn, RequestCard } from '../../hooks/useKanban'
@@ -32,11 +33,15 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
         .patch(`/api/v2/requests/${requestNumber}`, { executor_id: employee.id })
         .then(r => r.data),
     onSuccess: () => {
+      toast.success('Исполнитель назначен')
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       onClose()
     },
-    onError: () => setAssignError('Не удалось назначить заявку. Попробуйте снова.'),
+    onError: () => {
+      toast.error('Не удалось назначить заявку')
+      setAssignError('Не удалось назначить заявку. Попробуйте снова.')
+    },
   })
 
   const employeeName =

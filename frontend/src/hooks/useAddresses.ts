@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import type {
   AddressStats,
@@ -102,8 +103,14 @@ export function useCreateYard() {
   return useMutation({
     mutationFn: (body: Omit<YardBrief, 'id' | 'created_at' | 'buildings_count'>) =>
       apiClient.post('/api/v2/addresses/yards', body).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['yards'] }),
-    onError: (error) => console.error('Create yard failed:', error),
+    onSuccess: () => {
+      toast.success('Двор создан')
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+    },
+    onError: (error: Error) => {
+      console.error('Create yard failed:', error)
+      toast.error('Не удалось создать двор', { description: error.message })
+    },
   })
 }
 
@@ -112,8 +119,14 @@ export function useUpdateYard() {
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Partial<YardBrief>) =>
       apiClient.patch(`/api/v2/addresses/yards/${id}`, body).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['yards'] }),
-    onError: (error) => console.error('Update yard failed:', error),
+    onSuccess: () => {
+      toast.success('Данные двора обновлены')
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+    },
+    onError: (error: Error) => {
+      console.error('Update yard failed:', error)
+      toast.error('Не удалось обновить двор', { description: error.message })
+    },
   })
 }
 
@@ -122,8 +135,14 @@ export function useDeleteYard() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v2/addresses/yards/${id}`).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['yards'] }),
-    onError: (error) => console.error('Delete yard failed:', error),
+    onSuccess: () => {
+      toast.success('Двор удалён')
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+    },
+    onError: (error: Error) => {
+      console.error('Delete yard failed:', error)
+      toast.error('Не удалось удалить двор', { description: error.message })
+    },
   })
 }
 
@@ -135,10 +154,14 @@ export function useCreateBuilding() {
     mutationFn: (body: Omit<BuildingBrief, 'id' | 'created_at' | 'apartments_count' | 'yard_name'>) =>
       apiClient.post('/api/v2/addresses/buildings', body).then(r => r.data),
     onSuccess: () => {
+      toast.success('Здание создано')
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['yards'] })
     },
-    onError: (error) => console.error('Create building failed:', error),
+    onError: (error: Error) => {
+      console.error('Create building failed:', error)
+      toast.error('Не удалось создать здание', { description: error.message })
+    },
   })
 }
 
@@ -147,8 +170,14 @@ export function useUpdateBuilding() {
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Partial<BuildingBrief>) =>
       apiClient.patch(`/api/v2/addresses/buildings/${id}`, body).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['buildings'] }),
-    onError: (error) => console.error('Update building failed:', error),
+    onSuccess: () => {
+      toast.success('Данные здания обновлены')
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+    },
+    onError: (error: Error) => {
+      console.error('Update building failed:', error)
+      toast.error('Не удалось обновить здание', { description: error.message })
+    },
   })
 }
 
@@ -158,10 +187,14 @@ export function useDeleteBuilding() {
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v2/addresses/buildings/${id}`).then(r => r.data),
     onSuccess: () => {
+      toast.success('Здание удалено')
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['yards'] })
     },
-    onError: (error) => console.error('Delete building failed:', error),
+    onError: (error: Error) => {
+      console.error('Delete building failed:', error)
+      toast.error('Не удалось удалить здание', { description: error.message })
+    },
   })
 }
 
@@ -173,10 +206,14 @@ export function useCreateApartment() {
     mutationFn: (body: Omit<ApartmentBrief, 'id' | 'created_at' | 'residents_count' | 'building_address' | 'yard_name'>) =>
       apiClient.post('/api/v2/addresses/apartments', body).then(r => r.data),
     onSuccess: () => {
+      toast.success('Квартира создана')
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
     },
-    onError: (error) => console.error('Create apartment failed:', error),
+    onError: (error: Error) => {
+      console.error('Create apartment failed:', error)
+      toast.error('Не удалось создать квартиру', { description: error.message })
+    },
   })
 }
 
@@ -185,8 +222,14 @@ export function useUpdateApartment() {
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Partial<ApartmentBrief>) =>
       apiClient.patch(`/api/v2/addresses/apartments/${id}`, body).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['apartments'] }),
-    onError: (error) => console.error('Update apartment failed:', error),
+    onSuccess: () => {
+      toast.success('Данные квартиры обновлены')
+      queryClient.invalidateQueries({ queryKey: ['apartments'] })
+    },
+    onError: (error: Error) => {
+      console.error('Update apartment failed:', error)
+      toast.error('Не удалось обновить квартиру', { description: error.message })
+    },
   })
 }
 
@@ -196,10 +239,14 @@ export function useDeleteApartment() {
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v2/addresses/apartments/${id}`).then(r => r.data),
     onSuccess: () => {
+      toast.success('Квартира удалена')
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
     },
-    onError: (error) => console.error('Delete apartment failed:', error),
+    onError: (error: Error) => {
+      console.error('Delete apartment failed:', error)
+      toast.error('Не удалось удалить квартиру', { description: error.message })
+    },
   })
 }
 
@@ -209,10 +256,14 @@ export function useBulkCreateApartments() {
     mutationFn: (body) =>
       apiClient.post('/api/v2/addresses/apartments/bulk', body).then(r => r.data),
     onSuccess: () => {
+      toast.success('Квартиры созданы')
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
     },
-    onError: (error) => console.error('Bulk create apartments failed:', error),
+    onError: (error: Error) => {
+      console.error('Bulk create apartments failed:', error)
+      toast.error('Не удалось создать квартиры', { description: error.message })
+    },
   })
 }
 
@@ -224,10 +275,14 @@ export function useApproveModeration() {
     mutationFn: (id: number) =>
       apiClient.post(`/api/v2/addresses/moderation/${id}/approve`).then(r => r.data),
     onSuccess: () => {
+      toast.success('Адрес одобрен')
       queryClient.invalidateQueries({ queryKey: ['moderation'] })
       queryClient.invalidateQueries({ queryKey: ['address-stats'] })
     },
-    onError: (error) => console.error('Approve moderation failed:', error),
+    onError: (error: Error) => {
+      console.error('Approve moderation failed:', error)
+      toast.error('Не удалось одобрить адрес', { description: error.message })
+    },
   })
 }
 
@@ -237,9 +292,13 @@ export function useRejectModeration() {
     mutationFn: ({ id, comment }: { id: number; comment: string }) =>
       apiClient.post(`/api/v2/addresses/moderation/${id}/reject`, { comment }).then(r => r.data),
     onSuccess: () => {
+      toast.success('Адрес отклонён')
       queryClient.invalidateQueries({ queryKey: ['moderation'] })
       queryClient.invalidateQueries({ queryKey: ['address-stats'] })
     },
-    onError: (error) => console.error('Reject moderation failed:', error),
+    onError: (error: Error) => {
+      console.error('Reject moderation failed:', error)
+      toast.error('Не удалось отклонить адрес', { description: error.message })
+    },
   })
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../stores/authStore'
 
@@ -24,6 +25,7 @@ export default function LoginPage() {
         navigate('/dashboard')
       } catch {
         setError('Аккаунт не найден или не одобрен')
+        toast.error('Ошибка входа', { description: 'Аккаунт не найден или не одобрен' })
       } finally {
         setLoading(false)
       }
@@ -72,6 +74,7 @@ export default function LoginPage() {
       navigate('/dashboard')
     } catch {
       setError('Неверные учётные данные')
+      toast.error('Ошибка входа', { description: 'Неверные учётные данные' })
     } finally {
       setLoading(false)
     }

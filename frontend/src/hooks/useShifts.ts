@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import { useWebSocket } from './useWebSocket'
 import type {
@@ -78,9 +79,13 @@ export function useCreateShift() {
     mutationFn: (body: object) =>
       apiClient.post('/api/v2/shifts', body).then(r => r.data),
     onSuccess: () => {
+      toast.success('Смена создана')
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+    },
+    onError: (error: Error) => {
+      toast.error('Не удалось создать смену', { description: error.message })
     },
   })
 }
@@ -91,8 +96,12 @@ export function useEndShift() {
     mutationFn: (id: number) =>
       apiClient.post(`/api/v2/shifts/${id}/end`).then(r => r.data),
     onSuccess: () => {
+      toast.success('Смена завершена')
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+    },
+    onError: (error: Error) => {
+      toast.error('Не удалось завершить смену', { description: error.message })
     },
   })
 }
@@ -113,8 +122,12 @@ export function useHandleTransfer() {
         .post(`/api/v2/shifts/transfers/${id}/handle`, { action, to_executor_id })
         .then(r => r.data),
     onSuccess: () => {
+      toast.success('Запрос на передачу обработан')
       queryClient.invalidateQueries({ queryKey: ['shift-transfers'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+    },
+    onError: (error: Error) => {
+      toast.error('Не удалось обработать запрос на передачу', { description: error.message })
     },
   })
 }

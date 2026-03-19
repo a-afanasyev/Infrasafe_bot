@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { apiClient } from '../../api/client'
 
 const URGENCY: Record<string, { bg: string; color: string }> = {
@@ -67,10 +68,14 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
     mutationFn: (data: Record<string, unknown>) =>
       apiClient.patch(`/api/v2/requests/${requestNumber}`, data).then(r => r.data),
     onSuccess: () => {
+      toast.success('Заявка обновлена')
       queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
       setShowConfirmSection(false)
       setConfirmNote('')
+    },
+    onError: (error: Error) => {
+      toast.error('Не удалось обновить заявку', { description: error.message })
     },
   })
 
@@ -81,10 +86,14 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
         manager_confirmation_notes: note,
       }).then(r => r.data),
     onSuccess: () => {
+      toast.success('Заявка принята за жителя')
       queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
       setShowForceAcceptSection(false)
       setForceAcceptNote('')
+    },
+    onError: (error: Error) => {
+      toast.error('Не удалось принять заявку', { description: error.message })
     },
   })
 
@@ -92,9 +101,11 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
     setRemindStatus('sending')
     try {
       await apiClient.post(`/api/v2/requests/${requestNumber}/remind-applicant`)
+      toast.success('Напоминание отправлено жителю')
       setRemindStatus('sent')
       setTimeout(() => setRemindStatus('idle'), 3000)
     } catch {
+      toast.error('Не удалось отправить напоминание')
       setRemindStatus('error')
       setTimeout(() => setRemindStatus('idle'), 3000)
     }
@@ -104,8 +115,12 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
     mutationFn: (text: string) =>
       apiClient.post(`/api/v2/requests/${requestNumber}/comments`, { text, is_internal: true }).then(r => r.data),
     onSuccess: () => {
+      toast.success('Заметка добавлена')
       queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
       setComment('')
+    },
+    onError: (error: Error) => {
+      toast.error('Не удалось добавить заметку', { description: error.message })
     },
   })
 

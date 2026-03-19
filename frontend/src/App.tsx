@@ -9,6 +9,7 @@ import { lazy, Suspense } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
 import PageErrorBoundary from './components/shared/PageErrorBoundary'
+import { Toaster } from './components/ui/sonner'
 
 const TWAHomePage = lazy(() => import('./pages/twa/TWAHomePage'))
 const TWACreatePage = lazy(() => import('./pages/twa/TWACreatePage'))
@@ -40,6 +41,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <Toaster position="bottom-right" richColors />
       <GlobalErrorBoundary>
         <BrowserRouter>
           <Suspense fallback={<LoadingSpinner />}>

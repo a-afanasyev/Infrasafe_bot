@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import type {
   VerificationStatus,
@@ -43,8 +44,14 @@ export function useApproveEmployee() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/approve`).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
-    onError: (error) => console.error('Approve employee failed:', error),
+    onSuccess: () => {
+      toast.success('Сотрудник одобрен')
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: Error) => {
+      console.error('Approve employee failed:', error)
+      toast.error('Не удалось одобрить сотрудника', { description: error.message })
+    },
   })
 }
 
@@ -53,8 +60,14 @@ export function useRejectEmployee() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/reject`).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
-    onError: (error) => console.error('Reject employee failed:', error),
+    onSuccess: () => {
+      toast.success('Сотрудник отклонён')
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: Error) => {
+      console.error('Reject employee failed:', error)
+      toast.error('Не удалось отклонить сотрудника', { description: error.message })
+    },
   })
 }
 
@@ -63,8 +76,14 @@ export function useBlockEmployee() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/block`).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
-    onError: (error) => console.error('Block employee failed:', error),
+    onSuccess: () => {
+      toast.success('Сотрудник заблокирован')
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: Error) => {
+      console.error('Block employee failed:', error)
+      toast.error('Не удалось заблокировать сотрудника', { description: error.message })
+    },
   })
 }
 
@@ -73,7 +92,13 @@ export function useUnblockEmployee() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/unblock`).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
-    onError: (error) => console.error('Unblock employee failed:', error),
+    onSuccess: () => {
+      toast.success('Сотрудник разблокирован')
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: Error) => {
+      console.error('Unblock employee failed:', error)
+      toast.error('Не удалось разблокировать сотрудника', { description: error.message })
+    },
   })
 }
