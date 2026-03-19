@@ -1,5 +1,44 @@
 @import "tailwindcss";
 
+@theme {
+  /* ── Background colors ── */
+  --color-bg-root: var(--bg-root);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-card: var(--bg-card);
+  --color-bg-card-hover: var(--bg-card-hover);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-sidebar: var(--bg-sidebar);
+
+  /* ── Text colors ── */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  /* ── Accent colors ── */
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-glow: var(--accent-glow);
+
+  /* ── Border colors ── */
+  --color-border-default: var(--border);
+  --color-border-active: var(--border-active);
+
+  /* ── Extended palette ── */
+  --color-blue: var(--blue);
+  --color-red: var(--red);
+  --color-amber: var(--amber);
+  --color-violet: var(--violet);
+  --color-cyan: var(--cyan);
+  --color-emerald: var(--emerald);
+  --color-green: var(--green);
+  --color-teal: var(--teal);
+
+  /* ── Border radius ── */
+  --radius-default: var(--radius);
+  --radius-sm: var(--radius-sm);
+}
+
 :root {
   --bg-root: #060a10;
   --bg-primary: #0a0f18;
