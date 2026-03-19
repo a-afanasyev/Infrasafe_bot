@@ -27,6 +27,7 @@ import BulkCreateModal from '../components/addresses/BulkCreateModal'
 import ModerationPanel from '../components/addresses/ModerationPanel'
 import ApartmentProfileModal from '../components/addresses/ApartmentProfileModal'
 import AddressTable from '../components/addresses/AddressTable'
+import ConfirmDialog from '../components/shared/ConfirmDialog'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -217,6 +218,12 @@ export default function AddressesPage() {
     } catch { return 'tile' }
   })
   const [profileApartmentId, setProfileApartmentId] = useState<number | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+  }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
   useEffect(() => {
     try { localStorage.setItem('addresses_view_mode', viewMode) } catch {}
@@ -573,9 +580,12 @@ export default function AddressesPage() {
                                       danger
                                       onClick={() => {
                                         close()
-                                        if (window.confirm(`Удалить двор "${yard.name}"?`)) {
-                                          deleteYard.mutate(yard.id)
-                                        }
+                                        setConfirmState({
+                                          open: true,
+                                          title: 'Удалить двор',
+                                          description: `Удалить двор "${yard.name}"? Это действие нельзя отменить.`,
+                                          onConfirm: () => deleteYard.mutate(yard.id),
+                                        })
                                       }}
                                     />
                                   </>
@@ -671,9 +681,12 @@ export default function AddressesPage() {
                                       danger
                                       onClick={() => {
                                         close()
-                                        if (window.confirm(`Удалить здание "${building.address}"?`)) {
-                                          deleteBuilding.mutate(building.id)
-                                        }
+                                        setConfirmState({
+                                          open: true,
+                                          title: 'Удалить здание',
+                                          description: `Удалить здание "${building.address}"? Это действие нельзя отменить.`,
+                                          onConfirm: () => deleteBuilding.mutate(building.id),
+                                        })
                                       }}
                                     />
                                   </>
@@ -778,9 +791,12 @@ export default function AddressesPage() {
                                         danger
                                         onClick={() => {
                                           close()
-                                          if (window.confirm(`Удалить квартиру ${apt.apartment_number}?`)) {
-                                            deleteApartment.mutate(apt.id)
-                                          }
+                                          setConfirmState({
+                                            open: true,
+                                            title: 'Удалить квартиру',
+                                            description: `Удалить квартиру ${apt.apartment_number}? Это действие нельзя отменить.`,
+                                            onConfirm: () => deleteApartment.mutate(apt.id),
+                                          })
                                         }}
                                       />
                                     </>
@@ -925,6 +941,16 @@ export default function AddressesPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={(open) => setConfirmState(prev => ({ ...prev, open }))}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmLabel="Удалить"
+        onConfirm={confirmState.onConfirm}
+        variant="danger"
+      />
     </div>
   )
 }

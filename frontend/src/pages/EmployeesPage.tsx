@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
   useEmployees,
@@ -15,6 +15,7 @@ import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AssignRequestModal from '../components/employees/AssignRequestModal'
 import { SPEC_DISPLAY, SPEC_COLORS } from '../utils/employeeUtils'
+import ConfirmDialog from '../components/shared/ConfirmDialog'
 
 const primaryBtnStyle: React.CSSProperties = {
   background: 'var(--accent)',
@@ -82,11 +83,36 @@ export default function EmployeesPage() {
   const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
 
   const [assignTarget, setAssignTarget] = useState<EmployeeBrief | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+  }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
   const approveEmployee = useApproveEmployee()
   const rejectEmployee = useRejectEmployee()
   const blockEmployee = useBlockEmployee()
   const unblockEmployee = useUnblockEmployee()
+
+  const handleBlockToggle = useCallback((e: EmployeeBrief) => {
+    const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
+    const isBlocked = e.status === 'blocked'
+    setConfirmState({
+      open: true,
+      title: isBlocked ? 'Разблокировать сотрудника' : 'Заблокировать сотрудника',
+      description: isBlocked
+        ? `Разблокировать сотрудника ${empName}?`
+        : `Заблокировать сотрудника ${empName}?`,
+      onConfirm: () => {
+        if (isBlocked) {
+          unblockEmployee.mutate(e.id)
+        } else {
+          blockEmployee.mutate(e.id)
+        }
+      },
+    })
+  }, [blockEmployee, unblockEmployee])
 
   const total = employees.length
   const onShift = employees.filter(e => e.active_shift_id !== null).length
@@ -326,18 +352,7 @@ export default function EmployeesPage() {
         <StaffTable
           employees={employees}
           onAssign={(e) => setAssignTarget(e)}
-          onBlock={(e) => {
-            const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
-            if (e.status === 'blocked') {
-              if (window.confirm(`Разблокировать сотрудника ${empName}?`)) {
-                unblockEmployee.mutate(e.id)
-              }
-            } else {
-              if (window.confirm(`Заблокировать сотрудника ${empName}?`)) {
-                blockEmployee.mutate(e.id)
-              }
-            }
-          }}
+          onBlock={handleBlockToggle}
           isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
         />
       ) : employees.length === 0 ? (
@@ -349,18 +364,7 @@ export default function EmployeesPage() {
               key={emp.id}
               employee={emp}
               onAssign={(e) => setAssignTarget(e)}
-              onBlock={(e) => {
-                const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
-                if (e.status === 'blocked') {
-                  if (window.confirm(`Разблокировать сотрудника ${empName}?`)) {
-                    unblockEmployee.mutate(e.id)
-                  }
-                } else {
-                  if (window.confirm(`Заблокировать сотрудника ${empName}?`)) {
-                    blockEmployee.mutate(e.id)
-                  }
-                }
-              }}
+              onBlock={handleBlockToggle}
               isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
             />
           ))}
@@ -373,6 +377,17 @@ export default function EmployeesPage() {
           onClose={() => setAssignTarget(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={(open) => setConfirmState(prev => ({ ...prev, open }))}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmLabel="Подтвердить"
+        onConfirm={confirmState.onConfirm}
+        variant="warning"
+        loading={blockEmployee.isPending || unblockEmployee.isPending}
+      />
     </div>
   )
 }

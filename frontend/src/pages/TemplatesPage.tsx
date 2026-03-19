@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
   useTemplates,
@@ -10,6 +10,7 @@ import CreateTemplateModal from '../components/templates/CreateTemplateModal'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { SPEC_COLORS, SPEC_DISPLAY } from '../utils/employeeUtils'
+import ConfirmDialog from '../components/shared/ConfirmDialog'
 
 // Map English spec keys → colors from SPEC_COLORS (keyed by Russian name)
 const SPEC_KEY_TO_COLOR: Record<string, string> = {
@@ -144,15 +145,18 @@ export default function TemplatesPage() {
     },
   ]
 
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean
+    templateId: number | null
+  }>({ open: false, templateId: null })
+
   const handleToggleAutoCreate = (id: number, newValue: boolean) => {
     updateTemplate.mutate({ id, auto_create: newValue })
   }
 
-  const handleDelete = (id: number) => {
-    if (window.confirm('Удалить шаблон? Это действие нельзя отменить.')) {
-      deleteTemplate.mutate(id)
-    }
-  }
+  const handleDelete = useCallback((id: number) => {
+    setConfirmState({ open: true, templateId: id })
+  }, [])
 
   const handleCreateFromToday = (id: number) => {
     setPendingCreateId(id)
@@ -348,6 +352,21 @@ export default function TemplatesPage() {
       <CreateTemplateModal
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={(open) => setConfirmState(prev => ({ ...prev, open }))}
+        title="Удалить шаблон"
+        description="Удалить шаблон? Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        onConfirm={() => {
+          if (confirmState.templateId !== null) {
+            deleteTemplate.mutate(confirmState.templateId)
+          }
+        }}
+        variant="danger"
+        loading={deleteTemplate.isPending}
       />
     </div>
   )
@@ -613,18 +632,20 @@ function TemplateRow({
             </button>
           )}
           <button
-            onClick={() => window.alert('Редактирование в разработке')}
+            disabled
+            title="Редактирование в разработке"
             style={{
               padding: '5px 10px',
               borderRadius: 6,
               fontSize: '12px',
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: 'not-allowed',
               fontFamily: 'var(--font-body)',
               background: 'var(--bg-surface)',
-              color: 'var(--text-secondary)',
+              color: 'var(--text-muted)',
               border: '1px solid var(--border)',
               whiteSpace: 'nowrap',
+              opacity: 0.6,
             }}
           >
             Ред.

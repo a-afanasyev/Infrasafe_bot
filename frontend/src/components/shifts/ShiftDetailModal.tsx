@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useShift, useEndShift } from '../../hooks/useShifts'
 import { formatTime, formatDateTime } from '../../utils/timezone'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ConfirmDialog from '../shared/ConfirmDialog'
 
 interface Props {
   shiftId: number | null
@@ -31,11 +33,11 @@ const STATUS_COLORS: Record<string, string> = {
 export default function ShiftDetailModal({ shiftId, onClose }: Props) {
   const { data: shift, isLoading } = useShift(shiftId)
   const endShift = useEndShift()
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false)
 
   if (shiftId === null) return null
 
   const handleEndShift = async () => {
-    if (!window.confirm('Завершить смену? Это действие нельзя отменить.')) return
     try {
       await endShift.mutateAsync(shiftId)
       onClose()
@@ -282,7 +284,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               {shift.status === 'active' && (
                 <button
-                  onClick={handleEndShift}
+                  onClick={() => setConfirmEndOpen(true)}
                   disabled={endShift.isPending}
                   style={{
                     padding: '10px 20px',
@@ -324,6 +326,17 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmEndOpen}
+        onOpenChange={setConfirmEndOpen}
+        title="Завершить смену"
+        description="Завершить смену? Это действие нельзя отменить."
+        confirmLabel="Завершить"
+        onConfirm={handleEndShift}
+        variant="warning"
+        loading={endShift.isPending}
+      />
     </div>
   )
 }

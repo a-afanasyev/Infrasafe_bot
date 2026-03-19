@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { YardBrief, BuildingBrief, ApartmentBrief } from '../../types/api'
 import EmptyState from '../shared/EmptyState'
+import ConfirmDialog from '../shared/ConfirmDialog'
 
 // -- Table configs --------------------------------------------------------
 
@@ -111,6 +112,7 @@ function YardsTable({
   onDeleteYard,
 }: AddressTableProps) {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
   const items = yards ?? []
 
   if (items.length === 0) {
@@ -168,7 +170,7 @@ function YardsTable({
                 {yard.is_active ? 'Деактивировать' : 'Активировать'}
               </button>
               <button
-                onClick={() => { if (window.confirm('Удалить двор?')) onDeleteYard?.(yard.id) }}
+                onClick={() => setConfirmDelete({ open: true, id: yard.id })}
                 style={{ ...actionBtnBase, color: 'var(--red)' }}
               >
                 Удалить
@@ -177,6 +179,18 @@ function YardsTable({
           </div>
         )
       })}
+
+      <ConfirmDialog
+        open={confirmDelete.open}
+        onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
+        title="Удалить двор"
+        description="Удалить двор? Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        onConfirm={() => {
+          if (confirmDelete.id !== null) onDeleteYard?.(confirmDelete.id)
+        }}
+        variant="danger"
+      />
     </div>
   )
 }
@@ -191,6 +205,7 @@ function BuildingsTable({
   onDeleteBuilding,
 }: AddressTableProps) {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
   const items = buildings ?? []
 
   if (items.length === 0) {
@@ -244,7 +259,7 @@ function BuildingsTable({
                 {bld.is_active ? 'Деактивировать' : 'Активировать'}
               </button>
               <button
-                onClick={() => { if (window.confirm('Удалить здание?')) onDeleteBuilding?.(bld.id) }}
+                onClick={() => setConfirmDelete({ open: true, id: bld.id })}
                 style={{ ...actionBtnBase, color: 'var(--red)' }}
               >
                 Удалить
@@ -253,6 +268,18 @@ function BuildingsTable({
           </div>
         )
       })}
+
+      <ConfirmDialog
+        open={confirmDelete.open}
+        onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
+        title="Удалить здание"
+        description="Удалить здание? Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        onConfirm={() => {
+          if (confirmDelete.id !== null) onDeleteBuilding?.(confirmDelete.id)
+        }}
+        variant="danger"
+      />
     </div>
   )
 }
@@ -267,6 +294,7 @@ function ApartmentsTable({
   onDeleteApartment,
 }: AddressTableProps) {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
   const items = apartments ?? []
 
   if (items.length === 0) {
@@ -322,7 +350,7 @@ function ApartmentsTable({
                 {apt.is_active ? 'Деактивировать' : 'Активировать'}
               </button>
               <button
-                onClick={() => { if (window.confirm('Удалить квартиру?')) onDeleteApartment?.(apt.id) }}
+                onClick={() => setConfirmDelete({ open: true, id: apt.id })}
                 style={{ ...actionBtnBase, color: 'var(--red)' }}
               >
                 Удалить
@@ -331,6 +359,18 @@ function ApartmentsTable({
           </div>
         )
       })}
+
+      <ConfirmDialog
+        open={confirmDelete.open}
+        onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
+        title="Удалить квартиру"
+        description="Удалить квартиру? Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        onConfirm={() => {
+          if (confirmDelete.id !== null) onDeleteApartment?.(confirmDelete.id)
+        }}
+        variant="danger"
+      />
     </div>
   )
 }
