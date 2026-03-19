@@ -20,9 +20,10 @@ const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])
 interface Props {
   card: TCard
   onClick: () => void
+  isOverlay?: boolean
 }
 
-export default function RequestCard({ card, onClick }: Props) {
+export default function RequestCard({ card, onClick, isOverlay }: Props) {
   const urgency = URGENCY[card.urgency ?? '']
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
   const frozen = FROZEN_STATUSES.has(card.status)
@@ -31,6 +32,15 @@ export default function RequestCard({ card, onClick }: Props) {
     id: card.request_number,
     disabled: frozen ? { draggable: true, droppable: true } : false,
   })
+
+  // Overlay card (floating under cursor)
+  if (isOverlay) {
+    return (
+      <div className="bg-bg-card border border-accent/30 rounded-[10px] px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.3),0_0_0_1px_rgba(0,212,170,0.15)]">
+        <CardContent card={card} urgency={urgency} />
+      </div>
+    )
+  }
 
   return (
     <div
@@ -41,7 +51,7 @@ export default function RequestCard({ card, onClick }: Props) {
       }}
       className={cn(
         'bg-bg-card border border-border-default rounded-[10px] px-3 py-2.5 mb-1.5 select-none',
-        isDragging && 'opacity-40 shadow-[0_8px_32px_rgba(0,0,0,0.15)]',
+        isDragging && 'opacity-0 h-0 !mb-0 !py-0 !px-0 overflow-hidden border-0',
         frozen ? 'opacity-65 cursor-default' : 'cursor-pointer',
       )}
       {...attributes}
@@ -59,6 +69,14 @@ export default function RequestCard({ card, onClick }: Props) {
         }
       }}
     >
+      <CardContent card={card} urgency={urgency} />
+    </div>
+  )
+}
+
+function CardContent({ card, urgency }: { card: TCard; urgency: { bg: string; text: string } | undefined }) {
+  return (
+    <>
       {/* Header row */}
       <div className="flex justify-between items-center mb-[5px]">
         <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted tracking-wide">
@@ -110,6 +128,6 @@ export default function RequestCard({ card, onClick }: Props) {
           )}
         </div>
       )}
-    </div>
+    </>
   )
 }

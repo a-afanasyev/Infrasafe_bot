@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import {
   DndContext,
+  DragOverlay,
   type DragEndEvent,
   type DragStartEvent,
+  type DragOverEvent,
   closestCenter,
   PointerSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { useKanban, type KanbanColumn as TColumn } from '../../hooks/useKanban'
+import { useKanban, type KanbanColumn as TColumn, type RequestCard as TCard } from '../../hooks/useKanban'
 import KanbanColumn from './KanbanColumn'
+import RequestCard from './RequestCard'
 import TransitionModal, { type TransitionData } from './TransitionModal'
 import { apiClient } from '../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -62,6 +65,8 @@ export default function KanbanBoard({ onCardClick }: Props) {
   const { columns, isLoading } = useKanban()
   const queryClient = useQueryClient()
   const [activeDragStatus, setActiveDragStatus] = useState<string | null>(null)
+  const [activeCard, setActiveCard] = useState<TCard | null>(null)
+  const [overColumnId, setOverColumnId] = useState<string | null>(null)
   const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null)
   const [transitionError, setTransitionError] = useState<string | null>(null)
 
@@ -75,11 +80,25 @@ export default function KanbanBoard({ onCardClick }: Props) {
       col.requests.some(r => r.request_number === requestNumber),
     )
     setActiveDragStatus(sourceCol?.status ?? null)
+    const card = sourceCol?.requests.find(r => r.request_number === requestNumber) ?? null
+    setActiveCard(card)
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event
+    if (!over) {
+      setOverColumnId(null)
+      return
+    }
+    const targetStatus = resolveTargetStatus(String(over.id), columns)
+    setOverColumnId(targetStatus)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     setActiveDragStatus(null)
+    setActiveCard(null)
+    setOverColumnId(null)
     if (!over || active.id === over.id) return
 
     const requestNumber = String(active.id)
@@ -171,6 +190,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-2.5 overflow-x-auto pb-4 h-full items-start">
@@ -180,9 +200,18 @@ export default function KanbanBoard({ onCardClick }: Props) {
               column={col}
               onCardClick={onCardClick}
               activeDragStatus={activeDragStatus}
+              overColumnId={overColumnId}
             />
           ))}
         </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeCard ? (
+            <div className="w-[236px] rotate-[2deg] scale-105 opacity-90">
+              <RequestCard card={activeCard} onClick={() => {}} isOverlay />
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {pendingTransition && (

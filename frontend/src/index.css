@@ -72,9 +72,6 @@ body.light {
   --text-primary: #1e293b;
   --text-muted: #64748b;
   --text-secondary: #64748b;
-}
-
-body.light {
   --color-bg-root: #f0f4f8;
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f8fafc;
@@ -111,3 +108,4 @@ body {
   margin: 0;
   padding: 0;
 }
+
