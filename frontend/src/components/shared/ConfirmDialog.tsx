@@ -53,7 +53,6 @@ export default function ConfirmDialog({
           <AlertDialogAction
             onClick={() => {
               onConfirm()
-              onOpenChange(false)
             }}
             disabled={loading}
             className={cn(variantStyles[variant], loading && "opacity-70")}

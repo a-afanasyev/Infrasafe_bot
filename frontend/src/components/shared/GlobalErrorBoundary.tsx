@@ -34,8 +34,8 @@ export default class GlobalErrorBoundary extends Component<Props, State> {
             justifyContent: 'center',
             minHeight: '100vh',
             gap: '16px',
-            background: 'var(--bg-root)',
-            color: 'var(--text-primary)',
+            background: 'var(--color-bg-root)',
+            color: 'var(--color-text-primary)',
             padding: '24px',
             textAlign: 'center',
           }}
@@ -44,7 +44,7 @@ export default class GlobalErrorBoundary extends Component<Props, State> {
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>
             Что-то пошло не так
           </h1>
-          <p style={{ margin: 0, color: 'var(--text-secondary)', maxWidth: '420px' }}>
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)', maxWidth: '420px' }}>
             Произошла непредвиденная ошибка. Попробуйте обновить страницу.
           </p>
           <button
