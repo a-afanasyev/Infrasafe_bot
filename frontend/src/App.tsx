@@ -7,6 +7,8 @@ import KanbanPage from './pages/KanbanPage'
 import { isTWA } from './utils/isTWA'
 import { lazy, Suspense } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
+import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
+import PageErrorBoundary from './components/shared/PageErrorBoundary'
 
 const TWAHomePage = lazy(() => import('./pages/twa/TWAHomePage'))
 const TWACreatePage = lazy(() => import('./pages/twa/TWACreatePage'))
@@ -38,34 +40,36 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
+      <GlobalErrorBoundary>
+        <BrowserRouter>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
 
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-              <Route index element={<KanbanPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="shifts" element={<ShiftsPage />} />
-              <Route path="employees" element={<EmployeesPage />} />
-              <Route path="employees/:id" element={<EmployeeDetailPage />} />
-              <Route path="templates" element={<TemplatesPage />} />
-              <Route path="addresses" element={<AddressesPage />} />
-            </Route>
+              <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><KanbanPage /></PageErrorBoundary>} />
+                <Route path="analytics" element={<PageErrorBoundary><AnalyticsPage /></PageErrorBoundary>} />
+                <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
+                <Route path="employees" element={<PageErrorBoundary><EmployeesPage /></PageErrorBoundary>} />
+                <Route path="employees/:id" element={<PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary>} />
+                <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
+                <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
+              </Route>
 
-            {/* Resident board - standalone page */}
-            <Route path="/resident-board" element={<ProtectedRoute><ResidentBoardPage /></ProtectedRoute>} />
+              {/* Resident board - standalone page */}
+              <Route path="/resident-board" element={<ProtectedRoute><PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary></ProtectedRoute>} />
 
-            {/* TWA routes */}
-            <Route path="/twa" element={<TWAHomePage />} />
-            <Route path="/twa/create" element={<TWACreatePage />} />
-            <Route path="/twa/requests/:number" element={<TWARequestDetailPage />} />
+              {/* TWA routes */}
+              <Route path="/twa" element={<PageErrorBoundary><TWAHomePage /></PageErrorBoundary>} />
+              <Route path="/twa/create" element={<PageErrorBoundary><TWACreatePage /></PageErrorBoundary>} />
+              <Route path="/twa/requests/:number" element={<PageErrorBoundary><TWARequestDetailPage /></PageErrorBoundary>} />
 
-            <Route path="/" element={<Navigate to={isTWA() ? '/twa' : '/dashboard'} replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
+              <Route path="/" element={<Navigate to={isTWA() ? '/twa' : '/dashboard'} replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </GlobalErrorBoundary>
     </QueryClientProvider>
   )
 }
