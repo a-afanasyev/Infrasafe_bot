@@ -69,6 +69,7 @@
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
   --sidebar-w: 260px;
+  --sidebar-w-collapsed: 64px;
   --topbar-h: 64px;
 }
 

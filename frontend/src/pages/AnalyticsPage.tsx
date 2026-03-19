@@ -14,6 +14,7 @@ import {
   Cell,
 } from 'recharts'
 import { useShiftStats, useRequestStats, type AnalyticsPeriod } from '../hooks/useAnalytics'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
 import { formatDateTime } from '../utils/timezone'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
@@ -247,6 +248,7 @@ function PieTooltip({ active, payload }: {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  usePageTitle('Аналитика')
   const [period, setPeriod] = useState<AnalyticsPeriod>('7d')
   const [clockStr, setClockStr] = useState('')
 

@@ -2,11 +2,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useEmployee } from '../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, SPEC_DISPLAY, getInitials } from '../utils/employeeUtils'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: emp, isLoading, isError } = useEmployee(id ? Number(id) : null)
+  const empName = emp ? [emp.first_name, emp.last_name].filter(Boolean).join(' ') || 'Сотрудник' : 'Сотрудник'
+  usePageTitle(empName)
 
   if (isLoading) return <LoadingSpinner />
   if (isError || !emp) return (

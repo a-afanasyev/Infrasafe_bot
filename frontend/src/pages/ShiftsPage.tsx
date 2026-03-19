@@ -14,8 +14,10 @@ import CreateShiftModal from '../components/shifts/CreateShiftModal'
 import ShiftDetailModal from '../components/shifts/ShiftDetailModal'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 export default function ShiftsPage() {
+  usePageTitle('Смены')
   const navigate = useNavigate()
   const { setActions, clearActions } = useTopbar()
   useShiftsWebSocket()

@@ -154,7 +154,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+      <div className="p-8 text-center text-text-muted font-[family-name:var(--font-body)]">
         Загрузка...
       </div>
     )
@@ -163,16 +163,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
   return (
     <>
       {transitionError && (
-        <div style={{
-          marginBottom: 8,
-          padding: '10px 14px',
-          background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.25)',
-          color: '#f87171',
-          fontSize: 13,
-          borderRadius: 8,
-          fontFamily: 'var(--font-body)',
-        }}>
+        <div className="mb-2 px-3.5 py-2.5 bg-red/10 border border-red/25 text-red text-[13px] rounded-sm font-[family-name:var(--font-body)]">
           {transitionError}
         </div>
       )}
@@ -182,7 +173,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 16, height: '100%', alignItems: 'flex-start' }}>
+        <div className="flex gap-2.5 overflow-x-auto pb-4 h-full items-start">
           {columns.map((col) => (
             <KanbanColumn
               key={col.status}

@@ -4,40 +4,30 @@ import KanbanBoard from '../components/kanban/KanbanBoard'
 import CallCenterModal from '../components/callcenter/CallCenterModal'
 import RequestDetailModal from '../components/kanban/RequestDetailModal'
 import { useTopbar } from '../contexts/TopbarContext'
+import { usePageTitle } from '../hooks/usePageTitle'
+import { Button } from '@/components/ui/button'
 
 export default function KanbanPage() {
+  usePageTitle('Заявки')
   const [callCenterOpen, setCallCenterOpen] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
   const { setActions, clearActions } = useTopbar()
 
   useEffect(() => {
     setActions(
-      <button
+      <Button
         onClick={() => setCallCenterOpen(true)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'var(--accent)',
-          color: '#000',
-          border: 'none',
-          borderRadius: 'var(--radius-sm)',
-          padding: '8px 14px',
-          fontSize: '13px',
-          fontWeight: 600,
-          cursor: 'pointer',
-          fontFamily: 'var(--font-body)',
-        }}
+        size="sm"
       >
         <Phone size={14} />
         Создать по звонку
-      </button>
+      </Button>
     )
     return clearActions
   }, [])
 
   return (
-    <div style={{ padding: '24px', height: '100%' }}>
+    <div className="p-6 h-full">
       <KanbanBoard onCardClick={setSelectedRequest} />
       <CallCenterModal isOpen={callCenterOpen} onClose={() => setCallCenterOpen(false)} />
       <RequestDetailModal requestNumber={selectedRequest} onClose={() => setSelectedRequest(null)} />

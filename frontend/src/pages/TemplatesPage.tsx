@@ -11,6 +11,7 @@ import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { SPEC_COLORS, SPEC_DISPLAY } from '../utils/employeeUtils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 // Map English spec keys → colors from SPEC_COLORS (keyed by Russian name)
 const SPEC_KEY_TO_COLOR: Record<string, string> = {
@@ -91,6 +92,7 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
 }
 
 export default function TemplatesPage() {
+  usePageTitle('Шаблоны')
   const { setActions, clearActions } = useTopbar()
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingCreateId, setPendingCreateId] = useState<number | null>(null)

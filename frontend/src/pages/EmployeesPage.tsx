@@ -16,6 +16,7 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AssignRequestModal from '../components/employees/AssignRequestModal'
 import { SPEC_DISPLAY, SPEC_COLORS } from '../utils/employeeUtils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 const primaryBtnStyle: React.CSSProperties = {
   background: 'var(--accent)',
@@ -57,6 +58,7 @@ function chipStyle(active: boolean): React.CSSProperties {
 }
 
 export default function EmployeesPage() {
+  usePageTitle('Сотрудники')
   const { setActions, clearActions } = useTopbar()
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')

@@ -32,9 +32,17 @@ const queryClient = new QueryClient({
   },
 })
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+interface ProtectedRouteProps {
+  children: React.ReactNode
+  allowedRoles?: string[]
+}
+
+function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (allowedRoles && !user?.roles?.some((r: string) => allowedRoles.includes(r))) {
+    return <Navigate to="/dashboard" replace />
+  }
   return <>{children}</>
 }
 

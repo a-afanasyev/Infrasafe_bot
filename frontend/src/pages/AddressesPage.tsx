@@ -28,6 +28,7 @@ import ModerationPanel from '../components/addresses/ModerationPanel'
 import ApartmentProfileModal from '../components/addresses/ApartmentProfileModal'
 import AddressTable from '../components/addresses/AddressTable'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ function MenuItem({ label, onClick, danger }: { label: string; onClick: () => vo
 // ── Main component ──────────────────────────────────────────────────
 
 export default function AddressesPage() {
+  usePageTitle('Адреса')
   const { setActions, clearActions } = useTopbar()
 
   // State

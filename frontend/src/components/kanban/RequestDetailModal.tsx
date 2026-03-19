@@ -2,23 +2,34 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '../../api/client'
+import { cn } from '@/lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 
-const URGENCY: Record<string, { bg: string; color: string }> = {
-  'Обычная':    { bg: 'rgba(16,185,129,0.12)',  color: '#10b981' },
-  'Средняя':    { bg: 'rgba(245,158,11,0.12)',  color: '#d97706' },
-  'Срочная':    { bg: 'rgba(249,115,22,0.12)',  color: '#ea580c' },
-  'Критическая':{ bg: 'rgba(239,68,68,0.12)',   color: '#dc2626' },
+const URGENCY: Record<string, { bg: string; text: string }> = {
+  'Обычная':    { bg: 'bg-emerald/12',  text: 'text-emerald' },
+  'Средняя':    { bg: 'bg-amber/12',    text: 'text-amber' },
+  'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
+  'Критическая':{ bg: 'bg-red/12',      text: 'text-red' },
 }
 
-const STATUS: Record<string, { bg: string; color: string }> = {
-  'Новая':     { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6'  },
-  'В работе':  { bg: 'rgba(245,158,11,0.12)',  color: '#d97706'  },
-  'Закуп':     { bg: 'rgba(139,92,246,0.12)',  color: '#7c3aed'  },
-  'Уточнение': { bg: 'rgba(6,182,212,0.12)',   color: '#0891b2'  },
-  'Выполнена': { bg: 'rgba(16,185,129,0.12)',  color: '#059669'  },
-  'Исполнено': { bg: 'rgba(0,212,170,0.12)',   color: '#00a884'  },
-  'Принято':   { bg: 'rgba(34,197,94,0.12)',   color: '#16a34a'  },
-  'Отменена':  { bg: 'rgba(239,68,68,0.12)',   color: '#dc2626'  },
+const STATUS: Record<string, { bg: string; text: string }> = {
+  'Новая':     { bg: 'bg-blue/12',     text: 'text-blue' },
+  'В работе':  { bg: 'bg-amber/12',    text: 'text-[#d97706]' },
+  'Закуп':     { bg: 'bg-violet/12',   text: 'text-violet' },
+  'Уточнение': { bg: 'bg-cyan/12',     text: 'text-cyan' },
+  'Выполнена': { bg: 'bg-emerald/12',  text: 'text-emerald' },
+  'Исполнено': { bg: 'bg-accent/12',   text: 'text-accent' },
+  'Принято':   { bg: 'bg-green/12',    text: 'text-green' },
+  'Отменена':  { bg: 'bg-red/12',      text: 'text-red' },
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -126,134 +137,72 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
 
   if (!requestNumber) return null
 
-  const statusStyle = STATUS[request?.status ?? ''] ?? { bg: 'rgba(100,116,139,0.12)', color: '#64748b' }
+  const statusStyle = STATUS[request?.status ?? ''] ?? { bg: 'bg-bg-surface', text: 'text-text-muted' }
   const urgencyStyle = request?.urgency ? URGENCY[request.urgency] : null
 
-  const inputStyle: React.CSSProperties = {
-    background: 'var(--bg-surface)',
-    border: '1px solid var(--border)',
-    borderRadius: 10,
-    padding: '8px 12px',
-    fontSize: 13,
-    color: 'var(--text-primary)',
-    fontFamily: 'var(--font-body)',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box',
-  }
-
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 50,
-        backdropFilter: 'blur(4px)',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 16,
-          width: '100%',
-          maxWidth: 520,
-          maxHeight: '88vh',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-[520px] max-h-[88vh] p-0 gap-0 flex flex-col">
         {!request ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+          <div className="p-6 text-center text-text-muted font-[family-name:var(--font-body)]">
             Загрузка...
           </div>
         ) : (
           <>
             {/* Header */}
-            <div style={{
-              padding: '16px 18px 14px',
-              borderBottom: '1px solid var(--border)',
-              flexShrink: 0,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-                    {request.request_number}
-                  </span>
-                  <span style={{ fontSize: 13 }}>{SOURCE_ICON[request.source ?? ''] ?? ''}</span>
-                </div>
-                <div style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 700,
-                  fontSize: 18,
-                  color: 'var(--text-primary)',
-                  lineHeight: 1.2,
-                }}>
-                  {request.category}
-                </div>
+            <DialogHeader className="px-[18px] pt-4 pb-3.5 border-b border-border-default shrink-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
+                  {request.request_number}
+                </span>
+                <span className="text-[13px]">{SOURCE_ICON[request.source ?? ''] ?? ''}</span>
               </div>
-              <button
-                onClick={onClose}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--text-muted)', fontSize: 18, lineHeight: 1,
-                  padding: '2px 4px', borderRadius: 4,
-                }}
-              >×</button>
-            </div>
+              <DialogTitle className="font-[family-name:var(--font-display)] text-lg">
+                {request.category}
+              </DialogTitle>
+            </DialogHeader>
 
             {/* Body */}
-            <div style={{ padding: '16px 18px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="px-[18px] py-4 overflow-y-auto flex-1 flex flex-col gap-3.5">
 
               {/* Badges */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{
-                  fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
-                  background: statusStyle.bg, color: statusStyle.color,
-                  fontFamily: 'var(--font-display)',
-                }}>{request.status}</span>
+              <div className="flex gap-1.5 flex-wrap">
+                <span className={cn(
+                  'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
+                  statusStyle.bg, statusStyle.text
+                )}>{request.status}</span>
                 {urgencyStyle && (
-                  <span style={{
-                    fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
-                    background: urgencyStyle.bg, color: urgencyStyle.color,
-                    fontFamily: 'var(--font-display)',
-                  }}>{request.urgency}</span>
+                  <span className={cn(
+                    'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
+                    urgencyStyle.bg, urgencyStyle.text
+                  )}>{request.urgency}</span>
                 )}
                 {request.manager_confirmed && (
-                  <span style={{
-                    fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
-                    background: 'rgba(16,185,129,0.12)', color: '#059669',
-                    fontFamily: 'var(--font-display)',
-                  }}>✓ Подтверждено</span>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald/12 text-emerald font-[family-name:var(--font-display)]">
+                    ✓ Подтверждено
+                  </span>
                 )}
               </div>
 
               {/* Description */}
               {request.description && (
-                <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.55, margin: 0 }}>
+                <p className="text-sm text-text-primary leading-relaxed m-0">
                   {request.description}
                 </p>
               )}
 
               {/* Meta */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              <div className="flex flex-col gap-1">
+                <div className="text-xs text-text-secondary">
                   Создана: {new Date(request.created_at).toLocaleString('ru')}
                 </div>
                 {request.executor_name && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    Исполнитель: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{request.executor_name}</span>
+                  <div className="text-xs text-text-secondary">
+                    Исполнитель: <span className="font-semibold text-text-primary">{request.executor_name}</span>
                   </div>
                 )}
                 {request.address && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <div className="text-xs text-text-secondary">
                     Адрес: {request.address}
                   </div>
                 )}
@@ -261,150 +210,161 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
 
               {/* Contextual blocks */}
               {request.requested_materials && (
-                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, color: '#d97706' }}>Закуп: </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{request.requested_materials}</span>
+                <div className="bg-amber/8 border border-amber/20 rounded-[10px] px-3 py-2.5 text-[13px]">
+                  <span className="font-semibold text-[#d97706]">Закуп: </span>
+                  <span className="text-text-primary">{request.requested_materials}</span>
                 </div>
               )}
               {request.notes && (
-                <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, color: '#3b82f6' }}>Уточнение: </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{request.notes}</span>
+                <div className="bg-blue/8 border border-blue/20 rounded-[10px] px-3 py-2.5 text-[13px]">
+                  <span className="font-semibold text-blue">Уточнение: </span>
+                  <span className="text-text-primary">{request.notes}</span>
                 </div>
               )}
               {request.completion_report && (
-                <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, color: '#059669' }}>Отчёт: </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{request.completion_report}</span>
+                <div className="bg-emerald/8 border border-emerald/20 rounded-[10px] px-3 py-2.5 text-[13px]">
+                  <span className="font-semibold text-emerald">Отчёт: </span>
+                  <span className="text-text-primary">{request.completion_report}</span>
                 </div>
               )}
               {request.return_reason && (
-                <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, color: '#dc2626' }}>Возврат: </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{request.return_reason}</span>
+                <div className="bg-red/8 border border-red/20 rounded-[10px] px-3 py-2.5 text-[13px]">
+                  <span className="font-semibold text-red">Возврат: </span>
+                  <span className="text-text-primary">{request.return_reason}</span>
                 </div>
               )}
 
-              {/* Manager actions */}
+              {/* Manager actions — status: Выполнена */}
               {request.status === 'Выполнена' && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="border border-border-default rounded-default p-3 bg-bg-surface flex flex-col gap-2">
                   {!showConfirmSection && !showReturnSection && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
+                    <div className="flex gap-2">
+                      <Button
                         onClick={() => setShowConfirmSection(true)}
-                        style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-display)' }}
-                      >✓ Подтвердить</button>
-                      <button
+                        className="flex-1 bg-emerald hover:bg-emerald/90 text-white"
+                      >✓ Подтвердить</Button>
+                      <Button
+                        variant="outline"
                         onClick={() => setShowReturnSection(true)}
-                        style={{ flex: 1, background: 'none', border: '1px solid #ea580c', color: '#ea580c', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-display)' }}
-                      >↩ Вернуть в работу</button>
+                        className="flex-1 border-[#ea580c] text-[#ea580c] hover:bg-[#ea580c]/10"
+                      >↩ Вернуть в работу</Button>
                     </div>
                   )}
                   {showConfirmSection && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>Комментарий (необязательно):</p>
-                      <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} placeholder="Всё выполнено качественно" value={confirmNote} onChange={e => setConfirmNote(e.target.value)} />
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setShowConfirmSection(false)} style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Отмена</button>
-                        <button onClick={() => updateRequest.mutate({ status: 'Исполнено', manager_confirmed: true, ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}) })} disabled={updateRequest.isPending} style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: updateRequest.isPending ? 0.5 : 1 }}>
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-text-secondary text-xs">Комментарий (необязательно):</Label>
+                      <Textarea
+                        className="min-h-[60px] resize-y"
+                        placeholder="Всё выполнено качественно"
+                        value={confirmNote}
+                        onChange={e => setConfirmNote(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex-1" onClick={() => setShowConfirmSection(false)}>
+                          Отмена
+                        </Button>
+                        <Button
+                          onClick={() => updateRequest.mutate({ status: 'Исполнено', manager_confirmed: true, ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}) })}
+                          disabled={updateRequest.isPending}
+                          className="flex-1 bg-emerald hover:bg-emerald/90 text-white"
+                        >
                           {updateRequest.isPending ? 'Сохраняю...' : 'Подтвердить'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
                   {showReturnSection && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>Причина возврата:</p>
-                      <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} placeholder="Опишите что нужно доделать" value={returnReason} onChange={e => setReturnReason(e.target.value)} autoFocus />
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setShowReturnSection(false)} style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Отмена</button>
-                        <button onClick={() => updateRequest.mutate({ status: 'В работе', return_reason: returnReason.trim() })} disabled={updateRequest.isPending || !returnReason.trim()} style={{ flex: 1, background: '#ea580c', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (updateRequest.isPending || !returnReason.trim()) ? 0.5 : 1 }}>
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-text-secondary text-xs">Причина возврата:</Label>
+                      <Textarea
+                        className="min-h-[60px] resize-y"
+                        placeholder="Опишите что нужно доделать"
+                        value={returnReason}
+                        onChange={e => setReturnReason(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex-1" onClick={() => setShowReturnSection(false)}>
+                          Отмена
+                        </Button>
+                        <Button
+                          onClick={() => updateRequest.mutate({ status: 'В работе', return_reason: returnReason.trim() })}
+                          disabled={updateRequest.isPending || !returnReason.trim()}
+                          className="flex-1 bg-[#ea580c] hover:bg-[#ea580c]/90 text-white"
+                        >
                           {updateRequest.isPending ? 'Сохраняю...' : 'Вернуть'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Исполнено: manager can remind applicant or force-accept */}
+              {/* Manager actions — status: Исполнено (remind applicant or force-accept) */}
               {request.status === 'Исполнено' && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
+                <div className="border border-border-default rounded-default p-3 bg-bg-surface flex flex-col gap-2">
+                  <div className="text-xs text-text-secondary font-[family-name:var(--font-body)]">
                     Заявка выполнена. Ожидается приёмка жителем.
                   </div>
 
                   {!showForceAcceptSection && (
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="flex gap-2">
                       {/* Remind button */}
-                      <button
+                      <Button
+                        variant="outline"
                         onClick={sendReminder}
                         disabled={remindStatus === 'sending' || remindStatus === 'sent'}
-                        style={{
-                          flex: 1,
-                          background: remindStatus === 'sent' ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.1)',
-                          color: remindStatus === 'sent' ? '#059669' : remindStatus === 'error' ? '#dc2626' : '#3b82f6',
-                          border: `1px solid ${remindStatus === 'sent' ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
-                          borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600,
-                          cursor: remindStatus === 'sending' || remindStatus === 'sent' ? 'default' : 'pointer',
-                          fontFamily: 'var(--font-display)',
-                          opacity: remindStatus === 'sending' ? 0.6 : 1,
-                        }}
+                        className={cn(
+                          'flex-1 font-semibold font-[family-name:var(--font-display)]',
+                          remindStatus === 'sent'
+                            ? 'bg-emerald/12 text-emerald border-emerald/30'
+                            : remindStatus === 'error'
+                            ? 'text-red'
+                            : 'bg-blue/10 text-blue border-blue/30'
+                        )}
                       >
                         {remindStatus === 'sending' ? 'Отправка...' : remindStatus === 'sent' ? '✓ Напомнено' : remindStatus === 'error' ? '✗ Ошибка' : '🔔 Напомнить жителю'}
-                      </button>
+                      </Button>
 
                       {/* Force accept button */}
-                      <button
+                      <Button
+                        variant="outline"
                         onClick={() => setShowForceAcceptSection(true)}
-                        style={{
-                          flex: 1,
-                          background: 'rgba(245,158,11,0.1)',
-                          color: '#d97706',
-                          border: '1px solid rgba(245,158,11,0.3)',
-                          borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 600,
-                          cursor: 'pointer',
-                          fontFamily: 'var(--font-display)',
-                        }}
+                        className="flex-1 bg-amber/10 text-[#d97706] border-amber/30 font-semibold font-[family-name:var(--font-display)]"
                       >
                         ✓ Принять за жителя
-                      </button>
+                      </Button>
                     </div>
                   )}
 
                   {showForceAcceptSection && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
-                        Причина приёмки без жителя <span style={{ color: 'var(--red)' }}>*</span>
-                      </p>
-                      <textarea
-                        style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-text-secondary text-xs">
+                        Причина приёмки без жителя <span className="text-red">*</span>
+                      </Label>
+                      <Textarea
+                        className="min-h-[72px] resize-y"
                         placeholder="Минимум 10 символов — например: житель недоступен 3 дня, работы приняты визуально"
                         value={forceAcceptNote}
                         onChange={e => setForceAcceptNote(e.target.value)}
                         autoFocus
                       />
                       {forceAcceptNote.length > 0 && forceAcceptNote.length < 10 && (
-                        <div style={{ fontSize: 11, color: 'var(--red)' }}>Минимум 10 символов ({forceAcceptNote.length}/10)</div>
+                        <div className="text-[11px] text-red">Минимум 10 символов ({forceAcceptNote.length}/10)</div>
                       )}
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
                           onClick={() => { setShowForceAcceptSection(false); setForceAcceptNote('') }}
-                          style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}
-                        >Отмена</button>
-                        <button
+                        >Отмена</Button>
+                        <Button
                           onClick={() => forceAccept.mutate(forceAcceptNote)}
                           disabled={forceAccept.isPending || forceAcceptNote.trim().length < 10}
-                          style={{
-                            flex: 1, background: '#d97706', color: '#fff', border: 'none',
-                            borderRadius: 8, padding: '6px 0', fontSize: 13, fontWeight: 600,
-                            cursor: 'pointer',
-                            opacity: (forceAccept.isPending || forceAcceptNote.trim().length < 10) ? 0.5 : 1,
-                            fontFamily: 'var(--font-display)',
-                          }}
+                          className="flex-1 bg-[#d97706] hover:bg-[#d97706]/90 text-white font-[family-name:var(--font-display)]"
                         >
                           {forceAccept.isPending ? 'Сохраняю...' : 'Принять за жителя'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -414,16 +374,19 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
               {/* Comments history */}
               {comments && comments.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'var(--font-display)', marginBottom: 8 }}>История</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
+                    История
+                  </div>
+                  <div className="flex flex-col gap-1.5">
                     {comments.map((c: { id: number; comment_text: string; is_internal: boolean; created_at: string }) => (
-                      <div key={c.id} style={{
-                        borderRadius: 10, padding: '10px 12px', fontSize: 13,
-                        background: c.is_internal ? 'rgba(245,158,11,0.07)' : 'var(--bg-surface)',
-                        border: `1px solid ${c.is_internal ? 'rgba(245,158,11,0.15)' : 'var(--border)'}`,
-                      }}>
-                        <p style={{ margin: '0 0 4px', color: 'var(--text-primary)' }}>{c.comment_text}</p>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(c.created_at).toLocaleString('ru')}</span>
+                      <div key={c.id} className={cn(
+                        'rounded-[10px] px-3 py-2.5 text-[13px] border',
+                        c.is_internal
+                          ? 'bg-amber/[0.07] border-amber/15'
+                          : 'bg-bg-surface border-border-default'
+                      )}>
+                        <p className="m-0 mb-1 text-text-primary">{c.comment_text}</p>
+                        <span className="text-[11px] text-text-muted">{new Date(c.created_at).toLocaleString('ru')}</span>
                       </div>
                     ))}
                   </div>
@@ -431,34 +394,31 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
               )}
 
               {/* Add comment */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'var(--font-display)' }}>Заметка менеджера</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    style={{ ...inputStyle, flex: 1 }}
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)]">
+                  Заметка менеджера
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    className="flex-1"
                     placeholder="Добавить заметку..."
                     value={comment}
                     onChange={e => setComment(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && comment.trim() && postComment.mutate(comment)}
                   />
-                  <button
+                  <Button
+                    size="icon"
                     onClick={() => postComment.mutate(comment)}
                     disabled={!comment.trim() || postComment.isPending}
-                    style={{
-                      background: 'var(--accent)', color: '#001a14',
-                      border: 'none', borderRadius: 10,
-                      padding: '0 14px', fontSize: 16, cursor: 'pointer',
-                      opacity: (!comment.trim() || postComment.isPending) ? 0.4 : 1,
-                      flexShrink: 0,
-                    }}
-                  >↑</button>
+                    className="shrink-0"
+                  >↑</Button>
                 </div>
               </div>
 
             </div>
           </>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

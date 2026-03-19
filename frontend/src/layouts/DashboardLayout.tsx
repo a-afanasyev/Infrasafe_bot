@@ -1,56 +1,45 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useTopbar, TopbarProvider } from '../contexts/TopbarContext'
 import { useTheme } from '../hooks/useTheme'
-import { LayoutGrid, ListChecks, Users, Clock, Table2, MapPin, BookOpen, Sun, Moon } from 'lucide-react'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import {
+  LayoutGrid,
+  ListChecks,
+  Users,
+  Clock,
+  Table2,
+  MapPin,
+  BookOpen,
+  Sun,
+  Moon,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  User,
+  LogOut,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react'
 
-// Topbar inner component (needs useTopbar inside provider)
-function TopbarInner() {
-  const { actions } = useTopbar()
-  const { isDark, toggle } = useTheme()
-  return (
-    <header style={{
-      position: 'fixed',
-      top: 0,
-      left: 'var(--sidebar-w)',
-      right: 0,
-      height: 'var(--topbar-h)',
-      background: 'rgba(10,15,24,0.8)',
-      backdropFilter: 'blur(20px)',
-      borderBottom: '1px solid var(--border)',
-      display: 'flex',
-      alignItems: 'center',
-      padding: '0 24px',
-      gap: '12px',
-      zIndex: 100,
-    }}>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {actions}
-        <button
-          onClick={toggle}
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px',
-            cursor: 'pointer',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-          title={isDark ? 'Светлая тема' : 'Тёмная тема'}
-        >
-          {isDark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-      </div>
-    </header>
-  )
+// ─── Types ──────────────────────────────────────────────────────────────────────
+
+type SidebarState = 'expanded' | 'collapsed' | 'hidden'
+
+interface NavItem {
+  to: string
+  label: string
+  Icon: React.ComponentType<{ size?: number }>
+  end?: boolean
 }
 
-const NAV_ITEMS = [
-  { to: '/dashboard/analytics', label: 'Дашборд', Icon: LayoutGrid },
+// ─── Navigation items ───────────────────────────────────────────────────────────
+
+const NAV_ITEMS: NavItem[] = [
+  { to: '/dashboard/analytics', label: 'Аналитика', Icon: LayoutGrid },
   { to: '/dashboard', label: 'Заявки', Icon: ListChecks, end: true },
   { to: '/dashboard/employees', label: 'Сотрудники', Icon: Users },
   { to: '/dashboard/shifts', label: 'Смены', Icon: Clock },
@@ -58,212 +47,418 @@ const NAV_ITEMS = [
   { to: '/dashboard/addresses', label: 'Адреса', Icon: MapPin },
 ]
 
-export default function DashboardLayout() {
+// ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────
+
+function NavTooltip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="group relative">
+      {children}
+      <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 rounded-sm bg-bg-card px-2.5 py-1.5 text-xs font-medium text-text-primary opacity-0 shadow-lg ring-1 ring-border-default transition-opacity group-hover:opacity-100">
+        {label}
+      </div>
+    </div>
+  )
+}
+
+// ─── Topbar inner component (needs useTopbar inside provider) ───────────────────
+
+function TopbarInner({
+  sidebarState,
+  onToggleMobile,
+}: {
+  sidebarState: SidebarState
+  onToggleMobile: () => void
+}) {
+  const { actions } = useTopbar()
+  const { isDark, toggle } = useTheme()
+
+  return (
+    <header
+      className={cn(
+        'fixed top-0 right-0 z-[100] flex h-[var(--topbar-h)] items-center gap-3 border-b border-border-default px-6 backdrop-blur-[20px]',
+        'bg-bg-sidebar/80',
+        sidebarState === 'expanded' && 'left-[var(--sidebar-w)]',
+        sidebarState === 'collapsed' && 'left-[var(--sidebar-w-collapsed)]',
+        sidebarState === 'hidden' && 'left-0',
+      )}
+    >
+      {/* Hamburger for hidden sidebar */}
+      {sidebarState === 'hidden' && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleMobile}
+          aria-label="Открыть меню"
+        >
+          <Menu size={20} />
+        </Button>
+      )}
+
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-2">
+        {actions}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggle}
+          aria-label={isDark ? 'Светлая тема' : 'Тёмная тема'}
+          title={isDark ? 'Светлая тема' : 'Тёмная тема'}
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+        </Button>
+      </div>
+    </header>
+  )
+}
+
+// ─── User dropdown menu ─────────────────────────────────────────────────────────
+
+function UserDropdown({ collapsed }: { collapsed: boolean }) {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
-  const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
 
+  // Close on click outside
   useEffect(() => {
-    if (!menuOpen) return
+    if (!open) return
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
+        setOpen(false)
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [menuOpen])
+  }, [open])
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open])
 
   return (
-    <TopbarProvider>
-      {/* Sidebar */}
-      <aside style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: 'var(--sidebar-w)',
-        height: '100vh',
-        background: 'var(--bg-sidebar)',
-        borderRight: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 200,
-      }}>
-        {/* Logo */}
-        <div style={{ padding: '20px 20px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              background: 'linear-gradient(135deg, var(--accent), #0099aa)',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 700,
-              fontSize: '16px',
-              color: '#000',
-            }}>УК</div>
-            <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>УК Панель</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>management system</div>
-            </div>
-          </div>
+    <div ref={menuRef} className="relative border-t border-border-default px-3 py-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        className={cn(
+          'flex w-full items-center gap-2.5 rounded-sm p-2 transition-colors',
+          open ? 'bg-bg-surface' : 'hover:bg-bg-surface',
+          collapsed && 'justify-center',
+        )}
+      >
+        {/* Avatar */}
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-sm font-bold text-black"
+          style={{ background: 'linear-gradient(135deg, var(--accent), #0099aa)' }}
+        >
+          {initials}
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: '8px 12px', overflowY: 'auto' }}>
-          <div style={{ marginBottom: '4px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        {/* Name + role (only when expanded) */}
+        {!collapsed && (
+          <>
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate text-[13px] font-semibold text-text-primary">
+                {user?.first_name ?? 'Пользователь'}
+              </div>
+              <div className="text-[11px] text-text-muted">
+                {user?.roles?.[0] ?? 'manager'}
+              </div>
+            </div>
+            <span className="shrink-0 text-text-muted">
+              {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+          </>
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div
+          className="absolute bottom-[calc(100%-4px)] left-3 right-3 z-[300] overflow-hidden rounded-default border border-border-default bg-bg-card shadow-[0_-8px_24px_rgba(0,0,0,0.3)]"
+          role="menu"
+          aria-label="Меню пользователя"
+        >
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              navigate(`/dashboard/employees/${user?.id}`)
+            }}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-primary font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
+          >
+            <User size={14} />
+            Профиль
+          </button>
+          <div className="mx-3 h-px bg-border-default" />
+          <button
+            role="menuitem"
+            onClick={async () => {
+              setOpen(false)
+              await logout()
+              navigate('/login')
+            }}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
+          >
+            <LogOut size={14} />
+            Выйти
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Sidebar content (shared between desktop and mobile overlay) ────────────────
+
+function SidebarContent({
+  collapsed,
+  onNavClick,
+}: {
+  collapsed: boolean
+  onNavClick?: () => void
+}) {
+  return (
+    <>
+      {/* Logo */}
+      <div className={cn('px-5 pt-5 pb-4', collapsed && 'flex justify-center px-3')}>
+        <div className={cn('flex items-center gap-3', collapsed && 'flex-col gap-0')}>
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] font-[family-name:var(--font-display)] text-base font-bold text-black"
+            style={{ background: 'linear-gradient(135deg, var(--accent), #0099aa)' }}
+          >
+            УК
+          </div>
+          {!collapsed && (
+            <div>
+              <div className="font-[family-name:var(--font-display)] text-[15px] font-bold text-text-primary">
+                УК Панель
+              </div>
+              <div className="text-[11px] text-text-muted">management system</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className={cn('flex-1 overflow-y-auto', collapsed ? 'px-2 py-2' : 'px-3 py-2')}>
+        {!collapsed && (
+          <div className="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
             Основное
           </div>
-          {NAV_ITEMS.map(({ to, label, Icon, end }) => (
+        )}
+        {NAV_ITEMS.map(({ to, label, Icon, end }) =>
+          collapsed ? (
+            <NavTooltip key={to} label={label}>
+              <NavLink
+                to={to}
+                end={end}
+                onClick={onNavClick}
+                className={({ isActive }) =>
+                  cn(
+                    'mb-0.5 flex items-center justify-center rounded-sm p-2.5 text-sm transition-all',
+                    isActive
+                      ? 'bg-accent-dim text-accent font-semibold'
+                      : 'text-text-secondary hover:bg-bg-surface',
+                  )
+                }
+              >
+                <Icon size={18} />
+              </NavLink>
+            </NavTooltip>
+          ) : (
             <NavLink
               key={to}
               to={to}
               end={end}
-              style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '9px 12px',
-                borderRadius: 'var(--radius-sm)',
-                marginBottom: '2px',
-                textDecoration: 'none',
-                fontSize: '14px',
-                fontWeight: isActive ? 600 : 400,
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                background: isActive ? 'var(--accent-dim)' : 'transparent',
-                borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
-                transition: 'all 0.15s',
-              })}
+              onClick={onNavClick}
+              className={({ isActive }) =>
+                cn(
+                  'mb-0.5 flex items-center gap-2.5 rounded-sm border-l-[3px] px-3 py-[9px] text-sm no-underline transition-all',
+                  isActive
+                    ? 'border-accent bg-accent-dim font-semibold text-accent'
+                    : 'border-transparent text-text-secondary hover:bg-bg-surface',
+                )
+              }
             >
               <Icon size={16} />
               {label}
             </NavLink>
-          ))}
+          ),
+        )}
 
-          <div style={{ margin: '12px 0 4px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        {/* External section */}
+        {!collapsed && (
+          <div className="mt-3 mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
             Внешнее
           </div>
+        )}
+        {collapsed ? (
+          <NavTooltip label="Табло жителей">
+            <NavLink
+              to="/resident-board"
+              onClick={onNavClick}
+              className={({ isActive }) =>
+                cn(
+                  'mt-2 flex items-center justify-center rounded-sm p-2.5 text-sm transition-all',
+                  isActive
+                    ? 'bg-accent-dim text-accent font-semibold'
+                    : 'text-text-secondary hover:bg-bg-surface',
+                )
+              }
+            >
+              <BookOpen size={18} />
+            </NavLink>
+          </NavTooltip>
+        ) : (
           <NavLink
             to="/resident-board"
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '9px 12px',
-              borderRadius: 'var(--radius-sm)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-              background: isActive ? 'var(--accent-dim)' : 'transparent',
-              borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
-            })}
+            onClick={onNavClick}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 rounded-sm border-l-[3px] px-3 py-[9px] text-sm no-underline transition-all',
+                isActive
+                  ? 'border-accent bg-accent-dim font-semibold text-accent'
+                  : 'border-transparent text-text-secondary hover:bg-bg-surface',
+              )
+            }
           >
             <BookOpen size={16} />
             Табло жителей
           </NavLink>
-        </nav>
+        )}
+      </nav>
 
-        {/* User block */}
-        <div ref={menuRef} style={{ position: 'relative', padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
-          <button
-            onClick={() => setMenuOpen(o => !o)}
-            style={{
-              width: '100%',
-              background: menuOpen ? 'var(--bg-surface)' : 'none',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '8px',
-              transition: 'background 0.15s',
-            }}
-          >
-            <div style={{
-              width: '36px', height: '36px', flexShrink: 0,
-              background: 'linear-gradient(135deg, var(--accent), #0099aa)',
-              borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '14px', color: '#000',
-            }}>{initials}</div>
-            <div style={{ overflow: 'hidden', flex: 1, textAlign: 'left' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.first_name ?? 'Пользователь'}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {user?.roles?.[0] ?? 'manager'}
-              </div>
-            </div>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>
-              {menuOpen ? '▲' : '▼'}
-            </span>
-          </button>
+      {/* User block */}
+      <UserDropdown collapsed={collapsed} />
+    </>
+  )
+}
 
-          {menuOpen && (
-            <div style={{
-              position: 'absolute',
-              bottom: 'calc(100% - 4px)',
-              left: 12,
-              right: 12,
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              overflow: 'hidden',
-              boxShadow: '0 -8px 24px rgba(0,0,0,0.3)',
-              zIndex: 300,
-            }}>
-              <button
-                onClick={() => { setMenuOpen(false); navigate(`/dashboard/employees/${user?.id}`) }}
-                style={{
-                  width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                  padding: '10px 16px', textAlign: 'left',
-                  fontSize: '13px', color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-display)',
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                <span>👤</span> Профиль
-              </button>
-              <div style={{ height: 1, background: 'var(--border)', margin: '0 12px' }} />
-              <button
-                onClick={async () => { setMenuOpen(false); await logout(); navigate('/login') }}
-                style={{
-                  width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                  padding: '10px 16px', textAlign: 'left',
-                  fontSize: '13px', color: 'var(--red)',
-                  fontFamily: 'var(--font-display)',
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                <span>→</span> Выйти
-              </button>
-            </div>
+// ─── Main DashboardLayout ───────────────────────────────────────────────────────
+
+export default function DashboardLayout() {
+  const isDesktop = useMediaQuery('(min-width: 1280px)')
+  const isTablet = useMediaQuery('(min-width: 1024px)')
+  const isMobile = !isTablet
+
+  // Manual toggle override: user can force collapsed/expanded
+  const [manualToggle, setManualToggle] = useState<'expanded' | 'collapsed' | null>(null)
+  // Mobile overlay
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Compute sidebar state
+  const sidebarState: SidebarState = (() => {
+    if (isMobile) return 'hidden'
+    if (manualToggle) return manualToggle
+    if (isDesktop) return 'expanded'
+    return 'collapsed'
+  })()
+
+  // Reset manual toggle when crossing breakpoints
+  useEffect(() => {
+    setManualToggle(null)
+  }, [isDesktop, isTablet])
+
+  // Close mobile overlay on navigation
+  const closeMobileMenu = useCallback(() => setMobileOpen(false), [])
+
+  // Close mobile menu on Escape
+  useEffect(() => {
+    if (!mobileOpen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [mobileOpen])
+
+  // Toggle between expanded/collapsed
+  const toggleSidebar = () => {
+    if (sidebarState === 'expanded') {
+      setManualToggle('collapsed')
+    } else {
+      setManualToggle('expanded')
+    }
+  }
+
+  return (
+    <TopbarProvider>
+      {/* ── Desktop/Tablet Sidebar ── */}
+      {sidebarState !== 'hidden' && (
+        <aside
+          className={cn(
+            'fixed top-0 left-0 z-[200] flex h-screen flex-col border-r border-border-default bg-bg-sidebar transition-[width] duration-200',
+            sidebarState === 'expanded' ? 'w-[var(--sidebar-w)]' : 'w-[var(--sidebar-w-collapsed)]',
           )}
-        </div>
-      </aside>
+        >
+          <SidebarContent collapsed={sidebarState === 'collapsed'} />
 
-      {/* Topbar */}
-      <TopbarInner />
+          {/* Toggle button */}
+          <div className={cn('border-t border-border-default px-3 py-2', sidebarState === 'collapsed' && 'flex justify-center')}>
+            <Button
+              variant="ghost"
+              size={sidebarState === 'collapsed' ? 'icon' : 'sm'}
+              onClick={toggleSidebar}
+              aria-label={sidebarState === 'expanded' ? 'Свернуть меню' : 'Развернуть меню'}
+              className={cn(
+                'text-text-muted hover:text-text-primary',
+                sidebarState === 'expanded' && 'w-full justify-start gap-2',
+              )}
+            >
+              {sidebarState === 'expanded' ? (
+                <>
+                  <PanelLeftClose size={16} />
+                  <span className="text-xs">Свернуть</span>
+                </>
+              ) : (
+                <PanelLeftOpen size={16} />
+              )}
+            </Button>
+          </div>
+        </aside>
+      )}
 
-      {/* Main content */}
-      <main style={{
-        marginLeft: 'var(--sidebar-w)',
-        marginTop: 'var(--topbar-h)',
-        minHeight: 'calc(100vh - var(--topbar-h))',
-        background: 'var(--bg-root)',
-        overflowY: 'auto',
-      }}>
+      {/* ── Mobile Sidebar Overlay ── */}
+      {isMobile && mobileOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-sm transition-opacity"
+            onClick={closeMobileMenu}
+            aria-hidden="true"
+          />
+          {/* Sidebar panel */}
+          <aside className="fixed top-0 left-0 z-[260] flex h-screen w-[280px] flex-col border-r border-border-default bg-bg-sidebar shadow-2xl">
+            <SidebarContent collapsed={false} onNavClick={closeMobileMenu} />
+          </aside>
+        </>
+      )}
+
+      {/* ── Topbar ── */}
+      <TopbarInner
+        sidebarState={sidebarState}
+        onToggleMobile={() => setMobileOpen(o => !o)}
+      />
+
+      {/* ── Main content ── */}
+      <main
+        className={cn(
+          'mt-[var(--topbar-h)] min-h-[calc(100vh-var(--topbar-h))] bg-bg-root overflow-y-auto',
+          sidebarState === 'expanded' && 'ml-[var(--sidebar-w)]',
+          sidebarState === 'collapsed' && 'ml-[var(--sidebar-w-collapsed)]',
+          sidebarState === 'hidden' && 'ml-0',
+        )}
+      >
         <Outlet />
       </main>
     </TopbarProvider>

@@ -2,12 +2,13 @@ import { useRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { RequestCard as TCard } from '../../hooks/useKanban'
+import { cn } from '@/lib/utils'
 
-const URGENCY: Record<string, { bg: string; color: string }> = {
-  'Обычная':    { bg: 'rgba(16,185,129,0.12)',  color: '#10b981' },
-  'Средняя':    { bg: 'rgba(245,158,11,0.12)',  color: '#d97706' },
-  'Срочная':    { bg: 'rgba(249,115,22,0.12)',  color: '#ea580c' },
-  'Критическая':{ bg: 'rgba(239,68,68,0.12)',   color: '#dc2626' },
+const URGENCY: Record<string, { bg: string; text: string }> = {
+  'Обычная':    { bg: 'bg-emerald/12',   text: 'text-emerald' },
+  'Средняя':    { bg: 'bg-amber/12',     text: 'text-[#d97706]' },
+  'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
+  'Критическая':{ bg: 'bg-red/12',       text: 'text-red' },
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -37,16 +38,12 @@ export default function RequestCard({ card, onClick }: Props) {
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.4 : frozen ? 0.65 : 1,
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 10,
-        padding: '10px 12px',
-        marginBottom: 6,
-        cursor: frozen ? 'default' : 'pointer',
-        userSelect: 'none',
-        boxShadow: isDragging ? '0 8px 32px rgba(0,0,0,0.15)' : 'none',
       }}
+      className={cn(
+        'bg-bg-card border border-border-default rounded-[10px] px-3 py-2.5 mb-1.5 select-none',
+        isDragging && 'opacity-40 shadow-[0_8px_32px_rgba(0,0,0,0.15)]',
+        frozen ? 'opacity-65 cursor-default' : 'cursor-pointer',
+      )}
       {...attributes}
       {...listeners}
       onPointerDown={(e) => {
@@ -63,51 +60,33 @@ export default function RequestCard({ card, onClick }: Props) {
       }}
     >
       {/* Header row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-muted)',
-          letterSpacing: '0.5px',
-        }}>{card.request_number}</span>
-        <span style={{ fontSize: 11, opacity: 0.8 }}>
+      <div className="flex justify-between items-center mb-[5px]">
+        <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted tracking-wide">
+          {card.request_number}
+        </span>
+        <span className="text-[11px] opacity-80">
           {SOURCE_ICON[card.source ?? ''] ?? ''}
         </span>
       </div>
 
-      {/* Category — same style as column header */}
-      <div style={{
-        fontFamily: 'var(--font-display)',
-        fontWeight: 700,
-        fontSize: 13,
-        color: 'var(--text-primary)',
-        marginBottom: 3,
-      }}>{card.category}</div>
+      {/* Category */}
+      <div className="font-[family-name:var(--font-display)] font-bold text-[13px] text-text-primary mb-[3px]">
+        {card.category}
+      </div>
 
       {/* Description */}
-      <div style={{
-        fontSize: 12,
-        color: 'var(--text-secondary)',
-        lineHeight: 1.45,
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
-        marginBottom: card.executor_name ? 5 : 0,
-      }}>{card.description}</div>
+      <div className={cn(
+        'text-xs text-text-secondary leading-[1.45] line-clamp-2',
+        card.executor_name ? 'mb-[5px]' : 'mb-0'
+      )}>
+        {card.description}
+      </div>
 
       {/* Executor */}
       {card.executor_name && (
-        <div style={{
-          fontSize: 11,
-          color: 'var(--text-muted)',
-          marginBottom: 5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-        }}>
+        <div className="text-[11px] text-text-muted mb-[5px] flex items-center gap-1">
           <span>👤</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
             {card.executor_name}
           </span>
         </div>
@@ -115,28 +94,19 @@ export default function RequestCard({ card, onClick }: Props) {
 
       {/* Badges */}
       {(card.urgency || card.manager_confirmed) && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+        <div className="flex gap-1 flex-wrap mt-1">
           {urgency && (
-            <span style={{
-              fontSize: 10,
-              fontWeight: 700,
-              padding: '2px 8px',
-              borderRadius: 20,
-              background: urgency.bg,
-              color: urgency.color,
-              fontFamily: 'var(--font-display)',
-            }}>{card.urgency}</span>
+            <span className={cn(
+              'text-[10px] font-bold px-2 py-0.5 rounded-full font-[family-name:var(--font-display)]',
+              urgency.bg, urgency.text
+            )}>
+              {card.urgency}
+            </span>
           )}
           {card.manager_confirmed && (
-            <span style={{
-              fontSize: 10,
-              fontWeight: 700,
-              padding: '2px 8px',
-              borderRadius: 20,
-              background: 'rgba(59,130,246,0.12)',
-              color: '#3b82f6',
-              fontFamily: 'var(--font-display)',
-            }}>✓ Подтверждено</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue/12 text-blue font-[family-name:var(--font-display)]">
+              ✓ Подтверждено
+            </span>
           )}
         </div>
       )}
