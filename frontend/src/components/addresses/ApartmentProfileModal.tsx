@@ -1,87 +1,15 @@
 import { useApartmentDetail } from '../../hooks/useAddresses'
 import type { ResidentBrief } from '../../types/api'
-
-// -- Styles ---------------------------------------------------------------
-
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 1000,
-  background: 'rgba(0,0,0,0.5)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-}
-
-const panelStyle: React.CSSProperties = {
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  width: '600px', maxWidth: '90vw', maxHeight: '85vh',
-  overflow: 'auto',
-  padding: '24px',
-}
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  marginBottom: 20,
-}
-
-const closeBtnStyle: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer',
-  color: 'var(--text-muted)', fontSize: 18, padding: '4px',
-}
-
-const infoGridStyle: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px',
-  marginBottom: 24,
-}
-
-const infoLabelStyle: React.CSSProperties = {
-  fontSize: 12, color: 'var(--text-muted)', marginBottom: 2,
-  fontFamily: 'var(--font-display)',
-}
-
-const infoValueStyle: React.CSSProperties = {
-  fontSize: 13, color: 'var(--text-primary)',
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15,
-  color: 'var(--text-primary)', marginBottom: 12,
-}
-
-const residentCardStyle: React.CSSProperties = {
-  padding: '12px 0',
-  borderBottom: '1px solid var(--border)',
-}
-
-const badgeBase: React.CSSProperties = {
-  fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 10,
-  display: 'inline-block',
-}
-
-const footerStyle: React.CSSProperties = {
-  display: 'flex', justifyContent: 'flex-end', gap: 8,
-  marginTop: 24, paddingTop: 16,
-  borderTop: '1px solid var(--border)',
-}
-
-const primaryBtnStyle: React.CSSProperties = {
-  background: 'var(--accent)', border: 'none', borderRadius: 8,
-  cursor: 'pointer', fontSize: 13, color: '#fff', padding: '7px 14px',
-  fontFamily: 'var(--font-display)', fontWeight: 600,
-}
-
-const secondaryBtnStyle: React.CSSProperties = {
-  background: 'var(--bg-card)', border: '1px solid var(--border)',
-  borderRadius: 8, cursor: 'pointer', fontSize: 13,
-  color: 'var(--text-secondary)', padding: '7px 14px',
-  fontFamily: 'var(--font-display)', fontWeight: 500,
-}
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 // -- Helpers --------------------------------------------------------------
 
-function statusBadge(status: string): React.CSSProperties {
-  if (status === 'approved') return { ...badgeBase, background: 'rgba(16,185,129,0.15)', color: 'var(--emerald)' }
-  if (status === 'rejected') return { ...badgeBase, background: 'rgba(239,68,68,0.15)', color: 'var(--red)' }
-  return { ...badgeBase, background: 'rgba(245,158,11,0.15)', color: 'var(--amber)' }
+function statusBadgeClass(status: string): string {
+  if (status === 'approved') return 'bg-emerald/15 text-emerald'
+  if (status === 'rejected') return 'bg-red/15 text-red'
+  return 'bg-amber/15 text-amber'
 }
 
 function statusLabel(status: string): string {
@@ -108,89 +36,86 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
 
   if (isLoading) {
     return (
-      <div style={overlayStyle} onClick={onClose}>
-        <div style={panelStyle} onClick={e => e.stopPropagation()}>
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>
+      <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+        <DialogContent className="max-w-[600px]">
+          <div className="text-center py-10 text-text-muted text-sm">
             Загрузка...
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     )
   }
 
   if (isError || !apartment) {
     return (
-      <div style={overlayStyle} onClick={onClose}>
-        <div style={panelStyle} onClick={e => e.stopPropagation()}>
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--red)', fontSize: 14 }}>
+      <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+        <DialogContent className="max-w-[600px]">
+          <div className="text-center py-10 text-red text-sm">
             Ошибка загрузки
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     )
   }
 
   const residents: ResidentBrief[] = apartment.residents ?? []
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={panelStyle} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div style={headerStyle}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--text-primary)' }}>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle className="text-lg">
             Квартира {apartment.apartment_number}
-          </span>
-          <button onClick={onClose} style={closeBtnStyle}>&#10005;</button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
         {/* Info section */}
-        <div style={infoGridStyle}>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-6">
           <div>
-            <div style={infoLabelStyle}>Адрес</div>
-            <div style={infoValueStyle}>{apartment.building_address ?? '—'}</div>
+            <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Адрес</div>
+            <div className="text-[13px] text-text-primary">{apartment.building_address ?? '—'}</div>
           </div>
           <div>
-            <div style={infoLabelStyle}>Двор</div>
-            <div style={infoValueStyle}>{apartment.yard_name ?? '—'}</div>
+            <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Двор</div>
+            <div className="text-[13px] text-text-primary">{apartment.yard_name ?? '—'}</div>
           </div>
           {apartment.entrance != null && (
             <div>
-              <div style={infoLabelStyle}>Подъезд</div>
-              <div style={infoValueStyle}>{apartment.entrance}</div>
+              <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Подъезд</div>
+              <div className="text-[13px] text-text-primary">{apartment.entrance}</div>
             </div>
           )}
           {apartment.floor != null && (
             <div>
-              <div style={infoLabelStyle}>Этаж</div>
-              <div style={infoValueStyle}>{apartment.floor}</div>
+              <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Этаж</div>
+              <div className="text-[13px] text-text-primary">{apartment.floor}</div>
             </div>
           )}
           {apartment.rooms_count != null && (
             <div>
-              <div style={infoLabelStyle}>Комнаты</div>
-              <div style={infoValueStyle}>{apartment.rooms_count}</div>
+              <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Комнаты</div>
+              <div className="text-[13px] text-text-primary">{apartment.rooms_count}</div>
             </div>
           )}
           {apartment.area != null && (
             <div>
-              <div style={infoLabelStyle}>Площадь</div>
-              <div style={infoValueStyle}>{apartment.area} м&sup2;</div>
+              <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Площадь</div>
+              <div className="text-[13px] text-text-primary">{apartment.area} м&sup2;</div>
             </div>
           )}
           {apartment.description && (
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={infoLabelStyle}>Описание</div>
-              <div style={infoValueStyle}>{apartment.description}</div>
+            <div className="col-span-2">
+              <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Описание</div>
+              <div className="text-[13px] text-text-primary">{apartment.description}</div>
             </div>
           )}
           <div>
-            <div style={infoLabelStyle}>Статус</div>
+            <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">Статус</div>
             <div>
-              <span style={{
-                ...badgeBase,
-                background: apartment.is_active ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                color: apartment.is_active ? 'var(--emerald)' : 'var(--red)',
-              }}>
+              <span className={cn(
+                'text-[10px] font-semibold px-[7px] py-0.5 rounded-[10px] inline-block',
+                apartment.is_active ? 'bg-emerald/15 text-emerald' : 'bg-red/15 text-red'
+              )}>
                 {apartment.is_active ? 'Активна' : 'Неактивна'}
               </span>
             </div>
@@ -198,12 +123,12 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
         </div>
 
         {/* Residents section */}
-        <div style={sectionTitleStyle}>
+        <div className="font-[family-name:var(--font-display)] font-bold text-[15px] text-text-primary mb-3">
           Жители ({residents.length})
         </div>
 
         {residents.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>
+          <div className="text-text-muted text-[13px] py-3">
             Нет привязанных жителей
           </div>
         ) : (
@@ -211,45 +136,47 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
             {residents.map((r, idx) => (
               <div
                 key={r.id}
-                style={{
-                  ...residentCardStyle,
-                  borderBottom: idx === residents.length - 1 ? 'none' : '1px solid var(--border)',
-                }}
+                className={cn(
+                  'py-3',
+                  idx !== residents.length - 1 && 'border-b border-border-default'
+                )}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-[13px] text-text-primary">
                     {r.user_name ?? 'Без имени'}
                   </span>
                   {r.username && (
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span className="text-xs text-text-muted">
                       @{r.username}
                     </span>
                   )}
                 </div>
 
                 {r.user_phone && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+                  <div className="text-xs text-text-secondary font-[family-name:var(--font-mono)] mb-1.5">
                     {r.user_phone}
                   </div>
                 )}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {/* Role badge */}
-                  <span style={{
-                    ...badgeBase,
-                    background: r.is_owner ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
-                    color: r.is_owner ? 'var(--emerald)' : 'var(--blue)',
-                  }}>
+                  <span className={cn(
+                    'text-[10px] font-semibold px-[7px] py-0.5 rounded-[10px] inline-block',
+                    r.is_owner ? 'bg-emerald/15 text-emerald' : 'bg-blue/15 text-blue'
+                  )}>
                     {r.is_owner ? 'Собственник' : 'Жилец'}
                   </span>
 
                   {/* Status badge */}
-                  <span style={statusBadge(r.status)}>
+                  <span className={cn(
+                    'text-[10px] font-semibold px-[7px] py-0.5 rounded-[10px] inline-block',
+                    statusBadgeClass(r.status)
+                  )}>
                     {statusLabel(r.status)}
                   </span>
 
                   {/* Dates */}
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                  <span className="text-[11px] text-text-muted ml-auto">
                     Заявка: {formatDate(r.requested_at)}
                     {r.reviewed_at && <> | Рассмотрена: {formatDate(r.reviewed_at)}</>}
                   </span>
@@ -259,12 +186,11 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
           </div>
         )}
 
-        {/* Footer */}
-        <div style={footerStyle}>
-          <button onClick={onEdit} style={primaryBtnStyle}>Редактировать</button>
-          <button onClick={onClose} style={secondaryBtnStyle}>Закрыть</button>
-        </div>
-      </div>
-    </div>
+        <DialogFooter>
+          <Button onClick={onEdit}>Редактировать</Button>
+          <Button variant="outline" onClick={onClose}>Закрыть</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

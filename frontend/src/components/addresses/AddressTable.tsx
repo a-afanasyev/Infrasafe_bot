@@ -2,61 +2,13 @@ import { useState } from 'react'
 import type { YardBrief, BuildingBrief, ApartmentBrief } from '../../types/api'
 import EmptyState from '../shared/EmptyState'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import { cn } from '@/lib/utils'
 
 // -- Table configs --------------------------------------------------------
 
-const YARD_HEADERS = ['Название', 'Описание', 'Зданий', 'Статус', 'Действия']
 const YARD_COLS = '2fr 2.5fr 0.8fr 0.8fr 1fr'
-
-const BUILDING_HEADERS = ['Адрес', 'Подъезды', 'Этажи', 'Квартир', 'Статус', 'Действия']
 const BUILDING_COLS = '2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr'
-
-const APT_HEADERS = ['Номер', 'Подъезд', 'Этаж', 'Комнат', 'Площадь', 'Жителей', 'Статус', 'Действия']
 const APT_COLS = '0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr'
-
-// -- Styles ---------------------------------------------------------------
-
-const containerStyle: React.CSSProperties = {
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  overflow: 'hidden',
-}
-
-const headerRowStyle: React.CSSProperties = {
-  display: 'grid',
-  background: 'var(--bg-surface)',
-  borderBottom: '1px solid var(--border)',
-  padding: '10px 16px',
-  gap: '8px',
-}
-
-const headerCellStyle: React.CSSProperties = {
-  color: 'var(--text-muted)',
-  fontSize: '10px',
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  fontFamily: 'var(--font-display)',
-}
-
-const cellTextStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: 'var(--text-primary)',
-}
-
-const mutedCellStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: 'var(--text-muted)',
-}
-
-const actionBtnBase: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 11,
-  fontFamily: 'var(--font-display)',
-}
 
 // -- Component ------------------------------------------------------------
 
@@ -81,16 +33,26 @@ interface AddressTableProps {
 
 function StatusDot({ active }: { active: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{
-        display: 'inline-block',
-        width: 8, height: 8, borderRadius: '50%',
-        background: active ? 'var(--emerald)' : 'var(--text-muted)',
-      }} />
-      <span style={{ fontSize: 11, color: active ? 'var(--emerald)' : 'var(--text-muted)' }}>
+    <div className="flex items-center gap-1.5">
+      <span className={cn(
+        'inline-block w-2 h-2 rounded-full shrink-0',
+        active ? 'bg-emerald' : 'bg-text-muted'
+      )} />
+      <span className={cn(
+        'text-[11px]',
+        active ? 'text-emerald' : 'text-text-muted'
+      )}>
         {active ? 'Активен' : 'Неактивен'}
       </span>
     </div>
+  )
+}
+
+function HeaderCell({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-text-muted text-[10px] font-bold uppercase tracking-wide font-[family-name:var(--font-display)]">
+      {children}
+    </span>
   )
 }
 
@@ -117,17 +79,20 @@ function YardsTable({
 
   if (items.length === 0) {
     return (
-      <div style={containerStyle}>
+      <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
         <EmptyState icon="🏘️" title="Нет дворов" subtitle="Создайте первый двор" />
       </div>
     )
   }
 
   return (
-    <div style={containerStyle}>
-      <div style={{ ...headerRowStyle, gridTemplateColumns: YARD_COLS }}>
-        {YARD_HEADERS.map(h => (
-          <span key={h} style={headerCellStyle}>{h}</span>
+    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+      <div
+        className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
+        style={{ gridTemplateColumns: YARD_COLS }}
+      >
+        {['Название', 'Описание', 'Зданий', 'Статус', 'Действия'].map(h => (
+          <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
 
@@ -141,37 +106,29 @@ function YardsTable({
             onClick={() => onYardClick?.(yard)}
             onMouseEnter={() => setHoveredId(yard.id)}
             onMouseLeave={() => setHoveredId(null)}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: YARD_COLS,
-              padding: '10px 16px',
-              gap: '8px',
-              borderBottom: isLast ? 'none' : '1px solid var(--border)',
-              alignItems: 'center',
-              background: isHovered ? 'var(--bg-surface)' : 'transparent',
-              transition: 'background 0.1s',
-              cursor: 'pointer',
-            }}
+            className={cn(
+              'grid px-4 py-2.5 gap-2 items-center cursor-pointer transition-colors duration-100',
+              !isLast && 'border-b border-border-default',
+              isHovered ? 'bg-bg-surface' : 'bg-transparent'
+            )}
+            style={{ gridTemplateColumns: YARD_COLS }}
           >
-            <span style={{ ...cellTextStyle, fontWeight: 600 }}>{yard.name}</span>
-            <span style={{
-              ...mutedCellStyle,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
+            <span className="text-xs text-text-primary font-semibold">{yard.name}</span>
+            <span className="text-xs text-text-muted truncate">
               {yard.description ?? '—'}
             </span>
-            <span style={cellTextStyle}>{yard.buildings_count}</span>
+            <span className="text-xs text-text-primary">{yard.buildings_count}</span>
             <StatusDot active={yard.is_active} />
-            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={() => onEditYard?.(yard)} style={{ ...actionBtnBase, color: 'var(--accent)' }}>
+            <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
+              <button onClick={() => onEditYard?.(yard)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
                 Редактировать
               </button>
-              <button onClick={() => onToggleYard?.(yard.id, !yard.is_active)} style={{ ...actionBtnBase, color: 'var(--amber)' }}>
+              <button onClick={() => onToggleYard?.(yard.id, !yard.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
                 {yard.is_active ? 'Деактивировать' : 'Активировать'}
               </button>
               <button
                 onClick={() => setConfirmDelete({ open: true, id: yard.id })}
-                style={{ ...actionBtnBase, color: 'var(--red)' }}
+                className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
               >
                 Удалить
               </button>
@@ -210,17 +167,20 @@ function BuildingsTable({
 
   if (items.length === 0) {
     return (
-      <div style={containerStyle}>
+      <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
         <EmptyState icon="🏢" title="Нет зданий" subtitle="Создайте первое здание" />
       </div>
     )
   }
 
   return (
-    <div style={containerStyle}>
-      <div style={{ ...headerRowStyle, gridTemplateColumns: BUILDING_COLS }}>
-        {BUILDING_HEADERS.map(h => (
-          <span key={h} style={headerCellStyle}>{h}</span>
+    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+      <div
+        className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
+        style={{ gridTemplateColumns: BUILDING_COLS }}
+      >
+        {['Адрес', 'Подъезды', 'Этажи', 'Квартир', 'Статус', 'Действия'].map(h => (
+          <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
 
@@ -234,33 +194,28 @@ function BuildingsTable({
             onClick={() => onBuildingClick?.(bld)}
             onMouseEnter={() => setHoveredId(bld.id)}
             onMouseLeave={() => setHoveredId(null)}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: BUILDING_COLS,
-              padding: '10px 16px',
-              gap: '8px',
-              borderBottom: isLast ? 'none' : '1px solid var(--border)',
-              alignItems: 'center',
-              background: isHovered ? 'var(--bg-surface)' : 'transparent',
-              transition: 'background 0.1s',
-              cursor: 'pointer',
-            }}
+            className={cn(
+              'grid px-4 py-2.5 gap-2 items-center cursor-pointer transition-colors duration-100',
+              !isLast && 'border-b border-border-default',
+              isHovered ? 'bg-bg-surface' : 'bg-transparent'
+            )}
+            style={{ gridTemplateColumns: BUILDING_COLS }}
           >
-            <span style={{ ...cellTextStyle, fontWeight: 600 }}>{bld.address}</span>
-            <span style={cellTextStyle}>{bld.entrance_count}</span>
-            <span style={cellTextStyle}>{bld.floor_count}</span>
-            <span style={cellTextStyle}>{bld.apartments_count}</span>
+            <span className="text-xs text-text-primary font-semibold">{bld.address}</span>
+            <span className="text-xs text-text-primary">{bld.entrance_count}</span>
+            <span className="text-xs text-text-primary">{bld.floor_count}</span>
+            <span className="text-xs text-text-primary">{bld.apartments_count}</span>
             <StatusDot active={bld.is_active} />
-            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={() => onEditBuilding?.(bld)} style={{ ...actionBtnBase, color: 'var(--accent)' }}>
+            <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
+              <button onClick={() => onEditBuilding?.(bld)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
                 Редактировать
               </button>
-              <button onClick={() => onToggleBuilding?.(bld.id, !bld.is_active)} style={{ ...actionBtnBase, color: 'var(--amber)' }}>
+              <button onClick={() => onToggleBuilding?.(bld.id, !bld.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
                 {bld.is_active ? 'Деактивировать' : 'Активировать'}
               </button>
               <button
                 onClick={() => setConfirmDelete({ open: true, id: bld.id })}
-                style={{ ...actionBtnBase, color: 'var(--red)' }}
+                className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
               >
                 Удалить
               </button>
@@ -299,17 +254,20 @@ function ApartmentsTable({
 
   if (items.length === 0) {
     return (
-      <div style={containerStyle}>
+      <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
         <EmptyState icon="🚪" title="Нет квартир" subtitle="Создайте первую квартиру" />
       </div>
     )
   }
 
   return (
-    <div style={containerStyle}>
-      <div style={{ ...headerRowStyle, gridTemplateColumns: APT_COLS }}>
-        {APT_HEADERS.map(h => (
-          <span key={h} style={headerCellStyle}>{h}</span>
+    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+      <div
+        className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
+        style={{ gridTemplateColumns: APT_COLS }}
+      >
+        {['Номер', 'Подъезд', 'Этаж', 'Комнат', 'Площадь', 'Жителей', 'Статус', 'Действия'].map(h => (
+          <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
 
@@ -323,35 +281,30 @@ function ApartmentsTable({
             onClick={() => onApartmentClick?.(apt)}
             onMouseEnter={() => setHoveredId(apt.id)}
             onMouseLeave={() => setHoveredId(null)}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: APT_COLS,
-              padding: '10px 16px',
-              gap: '8px',
-              borderBottom: isLast ? 'none' : '1px solid var(--border)',
-              alignItems: 'center',
-              background: isHovered ? 'var(--bg-surface)' : 'transparent',
-              transition: 'background 0.1s',
-              cursor: 'pointer',
-            }}
+            className={cn(
+              'grid px-4 py-2.5 gap-2 items-center cursor-pointer transition-colors duration-100',
+              !isLast && 'border-b border-border-default',
+              isHovered ? 'bg-bg-surface' : 'bg-transparent'
+            )}
+            style={{ gridTemplateColumns: APT_COLS }}
           >
-            <span style={{ ...cellTextStyle, fontWeight: 600 }}>{apt.apartment_number}</span>
-            <span style={mutedCellStyle}>{apt.entrance ?? '—'}</span>
-            <span style={mutedCellStyle}>{apt.floor ?? '—'}</span>
-            <span style={mutedCellStyle}>{apt.rooms_count ?? '—'}</span>
-            <span style={mutedCellStyle}>{apt.area ? `${apt.area} м²` : '—'}</span>
-            <span style={cellTextStyle}>{apt.residents_count}</span>
+            <span className="text-xs text-text-primary font-semibold">{apt.apartment_number}</span>
+            <span className="text-xs text-text-muted">{apt.entrance ?? '—'}</span>
+            <span className="text-xs text-text-muted">{apt.floor ?? '—'}</span>
+            <span className="text-xs text-text-muted">{apt.rooms_count ?? '—'}</span>
+            <span className="text-xs text-text-muted">{apt.area ? `${apt.area} м²` : '—'}</span>
+            <span className="text-xs text-text-primary">{apt.residents_count}</span>
             <StatusDot active={apt.is_active} />
-            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={() => onEditApartment?.(apt)} style={{ ...actionBtnBase, color: 'var(--accent)' }}>
+            <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
+              <button onClick={() => onEditApartment?.(apt)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
                 Редактировать
               </button>
-              <button onClick={() => onToggleApartment?.(apt.id, !apt.is_active)} style={{ ...actionBtnBase, color: 'var(--amber)' }}>
+              <button onClick={() => onToggleApartment?.(apt.id, !apt.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
                 {apt.is_active ? 'Деактивировать' : 'Активировать'}
               </button>
               <button
                 onClick={() => setConfirmDelete({ open: true, id: apt.id })}
-                style={{ ...actionBtnBase, color: 'var(--red)' }}
+                className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
               >
                 Удалить
               </button>

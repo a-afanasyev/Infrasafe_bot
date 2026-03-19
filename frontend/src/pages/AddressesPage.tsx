@@ -29,120 +29,14 @@ import ApartmentProfileModal from '../components/addresses/ApartmentProfileModal
 import AddressTable from '../components/addresses/AddressTable'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 // ── Types ───────────────────────────────────────────────────────────
 
 type View = 'directory' | 'moderation'
 type Level = 'yards' | 'buildings' | 'apartments'
-
-// ── Shared styles ───────────────────────────────────────────────────
-
-const primaryBtnStyle: React.CSSProperties = {
-  background: 'var(--accent)',
-  border: 'none',
-  borderRadius: 8,
-  cursor: 'pointer',
-  fontSize: '13px',
-  color: '#fff',
-  padding: '7px 14px',
-  fontFamily: 'var(--font-display)',
-  fontWeight: 600,
-}
-
-const tabStyle = (active: boolean): React.CSSProperties => ({
-  background: active ? 'var(--accent)' : 'var(--bg-card)',
-  border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-  borderRadius: 20,
-  cursor: 'pointer',
-  fontSize: '13px',
-  color: active ? '#fff' : 'var(--text-secondary)',
-  padding: '6px 16px',
-  fontFamily: 'var(--font-display)',
-  fontWeight: active ? 600 : 400,
-  transition: 'all 0.15s',
-})
-
-const cardBaseStyle: React.CSSProperties = {
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  padding: '16px',
-  cursor: 'pointer',
-  transition: 'border-color 0.15s, box-shadow 0.15s',
-  position: 'relative',
-}
-
-const menuBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  color: 'var(--text-muted)',
-  fontSize: '18px',
-  padding: '2px 6px',
-  lineHeight: 1,
-  borderRadius: 'var(--radius-sm)',
-}
-
-const menuDropdownStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  right: 0,
-  marginTop: 4,
-  background: 'var(--bg-surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-  zIndex: 10,
-  minWidth: 160,
-  overflow: 'hidden',
-}
-
-const menuItemStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  padding: '8px 14px',
-  textAlign: 'left',
-  fontSize: '13px',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-display)',
-  display: 'block',
-}
-
-const menuItemDangerStyle: React.CSSProperties = {
-  ...menuItemStyle,
-  color: 'var(--red, #ef4444)',
-}
-
-const badgeStyle = (color: string): React.CSSProperties => ({
-  background: color + '22',
-  color,
-  borderRadius: 12,
-  padding: '2px 8px',
-  fontSize: '11px',
-  fontWeight: 600,
-  fontFamily: 'var(--font-mono)',
-})
-
-const toggleBtnStyle: React.CSSProperties = {
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: '16px',
-  padding: '4px 10px',
-  lineHeight: 1,
-  transition: 'all 0.15s',
-}
-
-const dotStyle = (active: boolean): React.CSSProperties => ({
-  width: 8,
-  height: 8,
-  borderRadius: '50%',
-  background: active ? 'var(--emerald, #10b981)' : 'var(--text-muted)',
-  flexShrink: 0,
-})
 
 // ── Action Menu (dropdown with click-outside) ───────────────────────
 
@@ -162,17 +56,15 @@ function ActionMenu({ children }: { children: (close: () => void) => React.React
   }, [open])
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} className="relative">
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(o => !o) }}
-        style={menuBtnStyle}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+        className="bg-transparent border-none cursor-pointer text-text-muted text-lg px-1.5 py-0.5 leading-none rounded-sm hover:bg-bg-surface"
       >
         ...
       </button>
       {open && (
-        <div style={menuDropdownStyle}>
+        <div className="absolute top-full right-0 mt-1 bg-bg-surface border border-border-default rounded-default shadow-[0_8px_24px_rgba(0,0,0,0.25)] z-10 min-w-[160px] overflow-hidden">
           {children(() => setOpen(false))}
         </div>
       )}
@@ -184,9 +76,10 @@ function MenuItem({ label, onClick, danger }: { label: string; onClick: () => vo
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick() }}
-      style={danger ? menuItemDangerStyle : menuItemStyle}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+      className={cn(
+        'w-full bg-transparent border-none cursor-pointer py-2 px-3.5 text-left text-[13px] font-[family-name:var(--font-display)] block hover:bg-bg-card',
+        danger ? 'text-red' : 'text-text-primary'
+      )}
     >
       {label}
     </button>
@@ -285,30 +178,17 @@ export default function AddressesPage() {
   const addLabel = level === 'yards' ? 'двор' : level === 'buildings' ? 'здание' : 'квартиру'
 
   const actionsNode = useMemo(() => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <input
+    <div className="flex items-center gap-2">
+      <Input
         type="text"
         placeholder="Поиск..."
         value={searchQuery}
         onChange={e => setSearchQuery(e.target.value)}
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '6px 12px',
-          fontSize: '13px',
-          color: 'var(--text-primary)',
-          fontFamily: 'var(--font-display)',
-          outline: 'none',
-          width: '200px',
-        }}
+        className="w-[200px]"
       />
-      <button
-        onClick={() => setShowCreateModal(true)}
-        style={primaryBtnStyle}
-      >
+      <Button onClick={() => setShowCreateModal(true)}>
         + Добавить {addLabel}
-      </button>
+      </Button>
     </div>
   ), [searchQuery, addLabel])
 
@@ -361,50 +241,26 @@ export default function AddressesPage() {
   const filteredApartments = apartments.filter(a => filterBySearch(a.apartment_number))
 
   return (
-    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="p-5 px-6 flex flex-col gap-5">
       {/* Stats bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+      <div className="grid grid-cols-4 gap-3">
         {STATS.map(card => (
           <div
             key={card.label}
             onClick={card.onClick}
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              padding: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '14px',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+            className="bg-bg-card border border-border-default rounded-default p-4 flex items-center gap-3.5 cursor-pointer transition-colors hover:border-accent"
           >
-            <div style={{
-              width: 48,
-              height: 48,
-              borderRadius: 12,
-              background: card.iconBg + '22',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '22px',
-              flexShrink: 0,
-            }}>
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center text-[22px] shrink-0"
+              style={{ background: card.iconBg + '22' }}
+            >
               {card.icon}
             </div>
             <div>
-              <div style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '22px',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-              }}>
+              <div className="font-[family-name:var(--font-mono)] text-[22px] font-semibold text-text-primary">
                 {card.value}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>
+              <div className="text-[11px] text-text-muted mt-0.5">
                 {card.label}
               </div>
             </div>
@@ -413,37 +269,53 @@ export default function AddressesPage() {
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <button onClick={() => setView('directory')} style={tabStyle(view === 'directory')}>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setView('directory')}
+          className={cn(
+            'rounded-full cursor-pointer text-[13px] px-4 py-1.5 font-[family-name:var(--font-display)] transition-all border',
+            view === 'directory'
+              ? 'bg-accent border-accent text-white font-semibold'
+              : 'bg-bg-card border-border-default text-text-secondary font-normal'
+          )}
+        >
           Справочник
         </button>
-        <button onClick={() => setView('moderation')} style={tabStyle(view === 'moderation')}>
+        <button
+          onClick={() => setView('moderation')}
+          className={cn(
+            'rounded-full cursor-pointer text-[13px] px-4 py-1.5 font-[family-name:var(--font-display)] transition-all border',
+            view === 'moderation'
+              ? 'bg-accent border-accent text-white font-semibold'
+              : 'bg-bg-card border-border-default text-text-secondary font-normal'
+          )}
+        >
           Модерация{moderationItems.length > 0 ? ` (${moderationItems.length})` : ''}
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="flex-1" />
 
         {/* View toggle */}
         {view === 'directory' && (
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div className="flex gap-1">
             <button
               onClick={() => setViewMode('tile')}
-              style={{
-                ...toggleBtnStyle,
-                background: viewMode === 'tile' ? 'var(--accent)' : 'transparent',
-                border: viewMode === 'tile' ? '1px solid var(--accent)' : '1px solid var(--border)',
-                color: viewMode === 'tile' ? '#fff' : 'var(--text-muted)',
-              }}
+              className={cn(
+                'border rounded-md cursor-pointer text-base px-2.5 py-1 leading-none transition-all',
+                viewMode === 'tile'
+                  ? 'bg-accent border-accent text-white'
+                  : 'bg-transparent border-border-default text-text-muted'
+              )}
               title="Плитка"
             >{'\u229E'}</button>
             <button
               onClick={() => setViewMode('table')}
-              style={{
-                ...toggleBtnStyle,
-                background: viewMode === 'table' ? 'var(--accent)' : 'transparent',
-                border: viewMode === 'table' ? '1px solid var(--accent)' : '1px solid var(--border)',
-                color: viewMode === 'table' ? '#fff' : 'var(--text-muted)',
-              }}
+              className={cn(
+                'border rounded-md cursor-pointer text-base px-2.5 py-1 leading-none transition-all',
+                viewMode === 'table'
+                  ? 'bg-accent border-accent text-white'
+                  : 'bg-transparent border-border-default text-text-muted'
+              )}
               title="Таблица"
             >{'\u2630'}</button>
           </div>
@@ -451,20 +323,12 @@ export default function AddressesPage() {
 
         {/* Show inactive toggle */}
         {view === 'directory' && (
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-display)',
-          }}>
+          <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer font-[family-name:var(--font-display)]">
             <input
               type="checkbox"
               checked={showInactive}
               onChange={e => setShowInactive(e.target.checked)}
-              style={{ accentColor: 'var(--accent)' }}
+              className="accent-accent"
             />
             Показать неактивные
           </label>
@@ -477,33 +341,24 @@ export default function AddressesPage() {
       ) : (
         <>
           {/* Breadcrumb */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 13,
-            fontFamily: 'var(--font-display)',
-          }}>
+          <div className="flex items-center gap-1.5 text-[13px] font-[family-name:var(--font-display)]">
             <span
               onClick={goToYards}
-              style={{
-                cursor: 'pointer',
-                color: level === 'yards' ? 'var(--text-primary)' : 'var(--accent)',
-                fontWeight: level === 'yards' ? 600 : 400,
-              }}
+              className={cn(
+                'cursor-pointer',
+                level === 'yards' ? 'text-text-primary font-semibold' : 'text-accent'
+              )}
             >
               Дворы
             </span>
             {selectedYard && (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>&rsaquo;</span>
+                <span className="text-text-muted">&rsaquo;</span>
                 <span
                   onClick={goToBuildings}
-                  style={{
-                    cursor: level === 'buildings' ? 'default' : 'pointer',
-                    color: level === 'buildings' ? 'var(--text-primary)' : 'var(--accent)',
-                    fontWeight: level === 'buildings' ? 600 : 400,
-                  }}
+                  className={cn(
+                    level === 'buildings' ? 'text-text-primary font-semibold cursor-default' : 'text-accent cursor-pointer'
+                  )}
                 >
                   {selectedYard.name}
                 </span>
@@ -511,8 +366,8 @@ export default function AddressesPage() {
             )}
             {selectedBuilding && (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>&rsaquo;</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                <span className="text-text-muted">&rsaquo;</span>
+                <span className="text-text-primary font-semibold">
                   {selectedBuilding.address}
                 </span>
               </>
@@ -530,38 +385,18 @@ export default function AddressesPage() {
                     filteredYards.length === 0 ? (
                       <EmptyState icon="\u{1F3D8}" title="Дворы не найдены" subtitle="Добавьте первый двор" />
                     ) : (
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                        gap: '16px',
-                      }}>
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                         {filteredYards.map(yard => (
                           <div
                             key={yard.id}
                             onClick={() => handleYardClick(yard)}
-                            style={cardBaseStyle}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.borderColor = 'var(--accent)'
-                              e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.borderColor = 'var(--border)'
-                              e.currentTarget.style.boxShadow = 'none'
-                            }}
+                            className="bg-bg-card border border-border-default rounded-default p-4 cursor-pointer transition-all relative hover:border-accent hover:shadow-[0_0_0_1px_var(--accent)]"
                           >
                             {/* Header */}
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                <div style={dotStyle(yard.is_active)} />
-                                <div style={{
-                                  fontFamily: 'var(--font-display)',
-                                  fontWeight: 600,
-                                  fontSize: '15px',
-                                  color: 'var(--text-primary)',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}>
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className={cn('w-2 h-2 rounded-full shrink-0', yard.is_active ? 'bg-emerald' : 'bg-text-muted')} />
+                                <div className="font-[family-name:var(--font-display)] font-semibold text-[15px] text-text-primary truncate">
                                   {yard.name}
                                 </div>
                               </div>
@@ -576,7 +411,7 @@ export default function AddressesPage() {
                                         updateYard.mutate({ id: yard.id, is_active: !yard.is_active })
                                       }}
                                     />
-                                    <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
+                                    <div className="h-px bg-border-default mx-2" />
                                     <MenuItem
                                       label="Удалить"
                                       danger
@@ -597,27 +432,18 @@ export default function AddressesPage() {
 
                             {/* Description */}
                             {yard.description && (
-                              <div style={{
-                                fontSize: '13px',
-                                color: 'var(--text-secondary)',
-                                marginBottom: 10,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                lineHeight: '1.4',
-                              }}>
+                              <div className="text-[13px] text-text-secondary mb-2.5 line-clamp-2 leading-snug">
                                 {yard.description}
                               </div>
                             )}
 
                             {/* Footer */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                              <span style={badgeStyle('var(--blue)')}>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="bg-blue/[.13] text-blue rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
                                 {yard.buildings_count} {pluralize(yard.buildings_count, 'здание', 'здания', 'зданий')}
                               </span>
                               {!yard.is_active && (
-                                <span style={badgeStyle('var(--text-muted)')}>неактивен</span>
+                                <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">неактивен</span>
                               )}
                             </div>
                           </div>
@@ -631,38 +457,18 @@ export default function AddressesPage() {
                     filteredBuildings.length === 0 ? (
                       <EmptyState icon="\u{1F3E2}" title="Здания не найдены" subtitle="Добавьте первое здание" />
                     ) : (
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                        gap: '16px',
-                      }}>
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                         {filteredBuildings.map(building => (
                           <div
                             key={building.id}
                             onClick={() => handleBuildingClick(building)}
-                            style={cardBaseStyle}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.borderColor = 'var(--accent)'
-                              e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.borderColor = 'var(--border)'
-                              e.currentTarget.style.boxShadow = 'none'
-                            }}
+                            className="bg-bg-card border border-border-default rounded-default p-4 cursor-pointer transition-all relative hover:border-accent hover:shadow-[0_0_0_1px_var(--accent)]"
                           >
                             {/* Header */}
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                <div style={dotStyle(building.is_active)} />
-                                <div style={{
-                                  fontFamily: 'var(--font-display)',
-                                  fontWeight: 600,
-                                  fontSize: '15px',
-                                  color: 'var(--text-primary)',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}>
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className={cn('w-2 h-2 rounded-full shrink-0', building.is_active ? 'bg-emerald' : 'bg-text-muted')} />
+                                <div className="font-[family-name:var(--font-display)] font-semibold text-[15px] text-text-primary truncate">
                                   {building.address}
                                 </div>
                               </div>
@@ -677,7 +483,7 @@ export default function AddressesPage() {
                                         updateBuilding.mutate({ id: building.id, is_active: !building.is_active })
                                       }}
                                     />
-                                    <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
+                                    <div className="h-px bg-border-default mx-2" />
                                     <MenuItem
                                       label="Удалить"
                                       danger
@@ -697,24 +503,18 @@ export default function AddressesPage() {
                             </div>
 
                             {/* Details */}
-                            <div style={{
-                              fontSize: '13px',
-                              color: 'var(--text-secondary)',
-                              marginBottom: 10,
-                              display: 'flex',
-                              gap: 12,
-                            }}>
+                            <div className="text-[13px] text-text-secondary mb-2.5 flex gap-3">
                               <span>{building.entrance_count} {pluralize(building.entrance_count, 'подъезд', 'подъезда', 'подъездов')}</span>
                               <span>{building.floor_count} {pluralize(building.floor_count, 'этаж', 'этажа', 'этажей')}</span>
                             </div>
 
                             {/* Footer */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                              <span style={badgeStyle('var(--amber)')}>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="bg-amber/[.13] text-amber rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
                                 {building.apartments_count} {pluralize(building.apartments_count, 'квартира', 'квартиры', 'квартир')}
                               </span>
                               {!building.is_active && (
-                                <span style={badgeStyle('var(--text-muted)')}>неактивно</span>
+                                <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">неактивно</span>
                               )}
                             </div>
                           </div>
@@ -727,52 +527,27 @@ export default function AddressesPage() {
                   {level === 'apartments' && (
                     <>
                       {/* Bulk create button */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => setShowBulkCreate(true)}
-                          style={{
-                            ...primaryBtnStyle,
-                            background: 'var(--bg-card)',
-                            color: 'var(--accent)',
-                            border: '1px solid var(--accent)',
-                          }}
-                        >
+                      <div className="flex justify-end">
+                        <Button variant="outline" onClick={() => setShowBulkCreate(true)}>
                           Автозаполнение
-                        </button>
+                        </Button>
                       </div>
 
                       {filteredApartments.length === 0 ? (
                         <EmptyState icon="\u{1F3E0}" title="Квартиры не найдены" subtitle="Добавьте квартиры вручную или используйте автозаполнение" />
                       ) : (
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                          gap: '16px',
-                        }}>
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
                           {filteredApartments.map(apt => (
                             <div
                               key={apt.id}
-                              style={{ ...cardBaseStyle, cursor: 'pointer' }}
+                              className="bg-bg-card border border-border-default rounded-default p-4 cursor-pointer transition-all relative hover:border-accent hover:shadow-[0_0_0_1px_var(--accent)]"
                               onClick={() => setProfileApartmentId(apt.id)}
-                              onMouseEnter={e => {
-                                e.currentTarget.style.borderColor = 'var(--accent)'
-                                e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                              }}
-                              onMouseLeave={e => {
-                                e.currentTarget.style.borderColor = 'var(--border)'
-                                e.currentTarget.style.boxShadow = 'none'
-                              }}
                             >
                               {/* Header */}
-                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <div style={dotStyle(apt.is_active)} />
-                                  <div style={{
-                                    fontFamily: 'var(--font-mono)',
-                                    fontWeight: 700,
-                                    fontSize: '20px',
-                                    color: 'var(--text-primary)',
-                                  }}>
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className={cn('w-2 h-2 rounded-full shrink-0', apt.is_active ? 'bg-emerald' : 'bg-text-muted')} />
+                                  <div className="font-[family-name:var(--font-mono)] font-bold text-xl text-text-primary">
                                     {apt.apartment_number}
                                   </div>
                                 </div>
@@ -787,7 +562,7 @@ export default function AddressesPage() {
                                           updateApartment.mutate({ id: apt.id, is_active: !apt.is_active })
                                         }}
                                       />
-                                      <div style={{ height: 1, background: 'var(--border)', margin: '0 8px' }} />
+                                      <div className="h-px bg-border-default mx-2" />
                                       <MenuItem
                                         label="Удалить"
                                         danger
@@ -807,17 +582,11 @@ export default function AddressesPage() {
                               </div>
 
                               {/* Details */}
-                              <div style={{
-                                fontSize: '12px',
-                                color: 'var(--text-secondary)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 3,
-                              }}>
+                              <div className="text-xs text-text-secondary flex flex-col gap-0.5">
                                 {apt.building_address && (
-                                  <div style={{ color: 'var(--text-muted)' }}>{apt.building_address}</div>
+                                  <div className="text-text-muted">{apt.building_address}</div>
                                 )}
-                                <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="flex gap-3">
                                   {apt.floor != null && <span>Этаж: {apt.floor}</span>}
                                   {apt.entrance != null && <span>Подъезд: {apt.entrance}</span>}
                                   {apt.area != null && <span>{apt.area} м&sup2;</span>}
@@ -825,12 +594,12 @@ export default function AddressesPage() {
                               </div>
 
                               {/* Footer */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                                <span style={badgeStyle('var(--violet)')}>
+                              <div className="flex items-center gap-2 mt-2.5">
+                                <span className="bg-violet/[.13] text-violet rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
                                   {apt.residents_count} {pluralize(apt.residents_count, 'житель', 'жителя', 'жителей')}
                                 </span>
                                 {!apt.is_active && (
-                                  <span style={badgeStyle('var(--text-muted)')}>неактивна</span>
+                                  <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">неактивна</span>
                                 )}
                               </div>
                             </div>
@@ -843,18 +612,10 @@ export default function AddressesPage() {
               ) : (
                 <>
                 {level === 'apartments' && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button
-                      onClick={() => setShowBulkCreate(true)}
-                      style={{
-                        ...primaryBtnStyle,
-                        background: 'var(--bg-card)',
-                        color: 'var(--accent)',
-                        border: '1px solid var(--accent)',
-                      }}
-                    >
+                  <div className="flex justify-end">
+                    <Button variant="outline" onClick={() => setShowBulkCreate(true)}>
                       Автозаполнение
-                    </button>
+                    </Button>
                   </div>
                 )}
                 <AddressTable

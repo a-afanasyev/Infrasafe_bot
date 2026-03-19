@@ -3,6 +3,7 @@ import { useEmployee } from '../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, SPEC_DISPLAY, getInitials } from '../utils/employeeUtils'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { Button } from '@/components/ui/button'
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -13,7 +14,7 @@ export default function EmployeeDetailPage() {
 
   if (isLoading) return <LoadingSpinner />
   if (isError || !emp) return (
-    <div style={{ padding: '40px 24px', color: 'var(--text-muted)', textAlign: 'center' }}>
+    <div className="py-10 px-6 text-text-muted text-center">
       Сотрудник не найден
     </div>
   )
@@ -26,103 +27,87 @@ export default function EmployeeDetailPage() {
   const isBlocked = emp.status === 'blocked'
 
   return (
-    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: 720 }}>
+    <div className="p-5 px-6 flex flex-col gap-5 max-w-[720px]">
       {/* Back */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => navigate(-1)}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--text-muted)', fontSize: '13px',
-          display: 'flex', alignItems: 'center', gap: '6px',
-          fontFamily: 'var(--font-display)', alignSelf: 'flex-start',
-          padding: 0,
-        }}
+        className="self-start px-0 text-text-muted"
       >
         ← Назад
-      </button>
+      </Button>
 
       {/* Header card */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        padding: '24px',
-        display: 'flex',
-        gap: '20px',
-        alignItems: 'flex-start',
-      }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%', background: gradient,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: '20px', fontWeight: 700,
-            fontFamily: 'var(--font-display)',
-            opacity: isBlocked ? 0.5 : 1,
-          }}>
+      <div className="bg-bg-card border border-border-default rounded-default p-6 flex gap-5 items-start">
+        <div className="relative shrink-0">
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold font-[family-name:var(--font-display)]"
+            style={{ background: gradient, opacity: isBlocked ? 0.5 : 1 }}
+          >
             {initials}
           </div>
-          <div style={{
-            position: 'absolute', bottom: 2, right: 2,
-            width: 14, height: 14, borderRadius: '50%',
-            background: isOnShift ? 'var(--emerald)' : '#5a6a7a',
-            border: '2px solid var(--bg-card)',
-          }} />
+          <div
+            className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full border-2 border-bg-card"
+            style={{ background: isOnShift ? 'var(--emerald)' : '#5a6a7a' }}
+          />
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontFamily: 'var(--font-display)', fontWeight: 700,
-            fontSize: '18px', color: 'var(--text-primary)', marginBottom: 4,
-          }}>
+        <div className="flex-1 min-w-0">
+          <div className="font-[family-name:var(--font-display)] font-bold text-lg text-text-primary mb-1">
             {name}
             {isBlocked && (
-              <span style={{
-                marginLeft: 10, fontSize: '11px', fontWeight: 600, padding: '2px 8px',
-                borderRadius: 10, background: 'rgba(239,68,68,0.15)', color: 'var(--red)',
-                verticalAlign: 'middle',
-              }}>
+              <span className="ml-2.5 text-[11px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red align-middle">
                 Заблокирован
               </span>
             )}
           </div>
 
           {emp.phone && (
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: 12 }}>
+            <div className="text-[13px] text-text-muted font-[family-name:var(--font-mono)] mb-3">
               {emp.phone}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: 12 }}>
+          <div className="flex gap-1.5 flex-wrap mb-3">
             {emp.specialization.length > 0
               ? emp.specialization.map(spec => {
                   const label = SPEC_DISPLAY[spec] ?? spec
                   const color = SPEC_COLORS[label.replace(/^\S+\s/, '')] ?? 'var(--text-muted)'
                   return (
-                    <span key={spec} style={{
-                      fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                      background: `color-mix(in srgb, ${color} 13%, transparent)`, color,
-                    }}>
+                    <span
+                      key={spec}
+                      className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                      style={{
+                        background: `color-mix(in srgb, ${color} 13%, transparent)`,
+                        color,
+                      }}
+                    >
                       {label}
                     </span>
                   )
                 })
-              : <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Нет специализации</span>
+              : <span className="text-text-muted text-xs">Нет специализации</span>
             }
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{
-              fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-              background: isVerified ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-              color: isVerified ? 'var(--emerald)' : 'var(--amber)',
-            }}>
+          <div className="flex gap-2 flex-wrap">
+            <span
+              className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+              style={{
+                background: isVerified ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                color: isVerified ? 'var(--emerald)' : 'var(--amber)',
+              }}
+            >
               {isVerified ? '✓ Верифицирован' : '⏳ На проверке'}
             </span>
-            <span style={{
-              fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-              background: isOnShift ? 'rgba(16,185,129,0.1)' : 'rgba(90,106,122,0.1)',
-              color: isOnShift ? 'var(--emerald)' : '#5a6a7a',
-            }}>
+            <span
+              className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+              style={{
+                background: isOnShift ? 'rgba(16,185,129,0.1)' : 'rgba(90,106,122,0.1)',
+                color: isOnShift ? 'var(--emerald)' : '#5a6a7a',
+              }}
+            >
               ● {isOnShift ? 'На смене' : 'Не на смене'}
             </span>
           </div>
@@ -130,22 +115,17 @@ export default function EmployeeDetailPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+      <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Смен всего', value: emp.total_shifts },
           { label: 'Выполнено', value: emp.total_completed },
           { label: 'Рейтинг', value: emp.rating != null ? emp.rating.toFixed(1) : '—' },
         ].map(s => (
-          <div key={s.label} style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: '16px 20px',
-          }}>
-            <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+          <div key={s.label} className="bg-bg-card border border-border-default rounded-default p-4 px-5">
+            <div className="text-[22px] font-bold font-[family-name:var(--font-mono)] text-text-primary">
               {s.value}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+            <div className="text-[11px] text-text-muted mt-1">
               {s.label}
             </div>
           </div>
@@ -154,33 +134,31 @@ export default function EmployeeDetailPage() {
 
       {/* Active shift */}
       {emp.active_shift && (
-        <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          padding: '20px',
-        }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+        <div className="bg-bg-card border border-border-default rounded-default p-5">
+          <div className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">
             Текущая смена
           </div>
-          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+          <div className="flex gap-6 flex-wrap">
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ID</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)' }}>#{emp.active_shift.id}</div>
+              <div className="text-[11px] text-text-muted">ID</div>
+              <div className="font-[family-name:var(--font-mono)] text-[13px] text-text-primary">#{emp.active_shift.id}</div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Тип</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{emp.active_shift.shift_type ?? '—'}</div>
+              <div className="text-[11px] text-text-muted">Тип</div>
+              <div className="text-[13px] text-text-primary">{emp.active_shift.shift_type ?? '—'}</div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Заявок</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+              <div className="text-[11px] text-text-muted">Заявок</div>
+              <div className="text-[13px] text-text-primary">
                 {emp.active_shift.current_request_count} / {emp.active_shift.max_requests}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Нагрузка</div>
-              <div style={{ fontSize: '13px', color: emp.active_shift.load_percentage > 80 ? 'var(--red)' : 'var(--emerald)' }}>
+              <div className="text-[11px] text-text-muted">Нагрузка</div>
+              <div
+                className="text-[13px]"
+                style={{ color: emp.active_shift.load_percentage > 80 ? 'var(--red)' : 'var(--emerald)' }}
+              >
                 {emp.active_shift.load_percentage.toFixed(0)}%
               </div>
             </div>

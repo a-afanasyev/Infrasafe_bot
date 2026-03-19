@@ -4,6 +4,8 @@ import { toast } from 'sonner'
 import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import type { KanbanColumn, RequestCard } from '../../hooks/useKanban'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 const ASSIGNABLE_STATUSES = new Set(['Новая', 'В работе'])
 
@@ -48,99 +50,25 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
     [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Сотрудник'
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          width: '100%',
-          maxWidth: 480,
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          boxShadow: '0 24px 60px rgba(0,0,0,0.35)',
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: '20px 24px 16px',
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontWeight: 700,
-                fontSize: '16px',
-                color: '#111827',
-                fontFamily: 'var(--font-display)',
-              }}
-            >
-              Назначить заявку
-            </div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: 2 }}>
-              {employeeName}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '20px',
-              color: '#9ca3af',
-              lineHeight: 1,
-              padding: '4px',
-            }}
-          >
-            ×
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-[480px] max-h-[80vh] flex flex-col overflow-hidden p-0">
+        <DialogHeader className="p-5 px-6 pb-4 border-b border-border-default">
+          <DialogTitle>Назначить заявку</DialogTitle>
+          <p className="text-[13px] text-text-muted mt-0.5">{employeeName}</p>
+        </DialogHeader>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        <div className="flex-1 overflow-y-auto p-3 px-4">
           {isLoading ? (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '40px 0',
-                color: '#9ca3af',
-                fontSize: '14px',
-              }}
-            >
+            <div className="text-center py-10 text-text-muted text-sm">
               Загрузка заявок...
             </div>
           ) : requests.length === 0 ? (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '40px 0',
-                color: '#9ca3af',
-                fontSize: '14px',
-              }}
-            >
+            <div className="text-center py-10 text-text-muted text-sm">
               Нет заявок для назначения
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div className="flex flex-col gap-1.5">
               {requests.map(req => (
                 <RequestRow
                   key={req.request_number}
@@ -152,11 +80,11 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
             </div>
           )}
           {assignError && (
-            <p className="text-sm text-red-600 mt-2">{assignError}</p>
+            <p className="text-sm text-red mt-2">{assignError}</p>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -171,81 +99,24 @@ function RequestRow({ request, isPending, onSelect }: RowProps) {
     <button
       disabled={isPending}
       onClick={onSelect}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: '4px',
-        width: '100%',
-        textAlign: 'left',
-        background: 'none',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
-        padding: '12px 14px',
-        cursor: isPending ? 'not-allowed' : 'pointer',
-        opacity: isPending ? 0.6 : 1,
-        transition: 'background 0.15s, border-color 0.15s',
-      }}
-      onMouseEnter={e => {
-        if (!isPending) {
-          ;(e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'
-          ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'
-        }
-      }}
-      onMouseLeave={e => {
-        ;(e.currentTarget as HTMLButtonElement).style.background = 'none'
-        ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
-      }}
+      className={cn(
+        'flex flex-col items-start gap-1 w-full text-left bg-transparent border border-border-default rounded-lg p-3 px-3.5 transition-colors',
+        isPending ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-bg-surface hover:border-border-active'
+      )}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '12px',
-            color: '#6b7280',
-            flexShrink: 0,
-          }}
-        >
+      <div className="flex items-center gap-2.5 w-full">
+        <span className="font-[family-name:var(--font-mono)] text-xs text-text-muted shrink-0">
           #{request.request_number}
         </span>
-        <span
-          style={{
-            fontWeight: 700,
-            fontSize: '13px',
-            color: '#111827',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
+        <span className="font-bold text-[13px] text-text-primary truncate">
           {request.category}
         </span>
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontSize: '11px',
-            fontWeight: 600,
-            padding: '2px 8px',
-            borderRadius: 10,
-            background: 'rgba(59,130,246,0.12)',
-            color: '#3b82f6',
-            flexShrink: 0,
-          }}
-        >
+        <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-[10px] bg-blue/[.12] text-blue shrink-0">
           Назначить
         </span>
       </div>
       {(request.description) && (
-        <span
-          style={{
-            fontSize: '12px',
-            color: '#9ca3af',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            maxWidth: '100%',
-          }}
-        >
+        <span className="text-xs text-text-muted truncate max-w-full">
           {request.description}
         </span>
       )}

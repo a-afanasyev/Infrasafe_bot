@@ -1,66 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useBulkCreateApartments } from '../../hooks/useAddresses'
 import type { BulkCreateResult } from '../../types/api'
-
-// ── Styles ───────────────────────────────────────────────────────────
-
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-}
-
-const panelStyle: React.CSSProperties = {
-  background: 'var(--bg-card)', border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)', width: 480, maxHeight: '85vh',
-  display: 'flex', flexDirection: 'column',
-}
-
-const headerStyle: React.CSSProperties = {
-  padding: '16px 20px', borderBottom: '1px solid var(--border)',
-  fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15,
-  color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-}
-
-const closeBtnStyle: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-  fontSize: 18, padding: '4px',
-}
-
-const bodyStyle: React.CSSProperties = {
-  padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16,
-}
-
-const footerStyle: React.CSSProperties = {
-  padding: '16px 20px', borderTop: '1px solid var(--border)',
-  display: 'flex', justifyContent: 'flex-end', gap: 8,
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block',
-  fontFamily: 'var(--font-display)',
-}
-
-const textareaStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 12px', background: 'var(--bg-surface)',
-  border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
-  color: 'var(--text-primary)', fontSize: 13, outline: 'none',
-  fontFamily: 'var(--font-display)', boxSizing: 'border-box',
-  resize: 'vertical', minHeight: 80,
-}
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: 'var(--bg-card)', border: '1px solid var(--border)',
-  borderRadius: 8, cursor: 'pointer', fontSize: 13,
-  color: 'var(--text-secondary)', padding: '7px 14px',
-  fontFamily: 'var(--font-display)', fontWeight: 500,
-}
-
-const submitBtnStyle: React.CSSProperties = {
-  background: 'var(--accent)', border: 'none',
-  borderRadius: 8, cursor: 'pointer', fontSize: 13,
-  color: '#fff', padding: '7px 14px',
-  fontFamily: 'var(--font-display)', fontWeight: 600,
-}
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 // ── Parsing ──────────────────────────────────────────────────────────
 
@@ -117,64 +61,44 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
   }
 
   return (
-    <div onClick={onClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={panelStyle}>
-        {/* Header */}
-        <div style={headerStyle}>
-          <span>Массовое создание квартир</span>
-          <button onClick={onClose} style={closeBtnStyle}>&#10005;</button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Массовое создание квартир</DialogTitle>
+        </DialogHeader>
 
-        {/* Body */}
-        <div style={bodyStyle}>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-display)' }}>
+        <div className="flex flex-col gap-4">
+          <div className="text-[13px] text-text-secondary font-[family-name:var(--font-display)]">
             {buildingAddress}
           </div>
 
           {result ? (
             /* Result summary */
-            <>
-              <div style={{
-                padding: 16,
-                background: 'var(--bg-surface)',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-                fontFamily: 'var(--font-display)',
-                fontSize: 14,
-                color: 'var(--text-primary)',
-              }}>
-                <div>Создано: {result.created}</div>
-                <div>Пропущено (дубли): {result.skipped}</div>
-                {result.errors.length > 0 && (
-                  <div style={{ color: 'var(--red, #ef4444)' }}>
-                    Ошибки: {result.errors.join(', ')}
-                  </div>
-                )}
-              </div>
-            </>
+            <div className="p-4 bg-bg-surface rounded-sm border border-border-default flex flex-col gap-1.5 font-[family-name:var(--font-display)] text-sm text-text-primary">
+              <div>Создано: {result.created}</div>
+              <div>Пропущено (дубли): {result.skipped}</div>
+              {result.errors.length > 0 && (
+                <div className="text-red">
+                  Ошибки: {result.errors.join(', ')}
+                </div>
+              )}
+            </div>
           ) : (
             /* Input form */
             <>
               <div>
-                <label style={labelStyle}>Номера квартир</label>
-                <textarea
+                <Label className="mb-1 block text-xs text-text-muted">Номера квартир</Label>
+                <Textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   placeholder="Например: 1-50 или 1, 5, 10, 15-20"
-                  style={textareaStyle}
+                  className="min-h-[80px]"
                   autoFocus
                 />
               </div>
 
               {input.trim() && (
-                <div style={{
-                  fontSize: 13,
-                  fontFamily: 'var(--font-display)',
-                  color: tooMany ? 'var(--red, #ef4444)' : 'var(--text-secondary)',
-                }}>
+                <div className={`text-[13px] font-[family-name:var(--font-display)] ${tooMany ? 'text-red' : 'text-text-secondary'}`}>
                   {tooMany
                     ? 'Максимум 500 квартир за раз'
                     : `Будет создано: ${parsed.length} квартир`
@@ -183,7 +107,7 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
               )}
 
               {bulkCreate.error && (
-                <div style={{ color: 'var(--red, #ef4444)', fontSize: 13, fontFamily: 'var(--font-display)' }}>
+                <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
                   {(bulkCreate.error as any)?.response?.data?.detail || (bulkCreate.error as Error).message || 'Ошибка при создании'}
                 </div>
               )}
@@ -191,30 +115,22 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
           )}
         </div>
 
-        {/* Footer */}
-        <div style={footerStyle}>
+        <DialogFooter>
           {result ? (
-            <button onClick={onClose} style={submitBtnStyle}>
-              OK
-            </button>
+            <Button onClick={onClose}>OK</Button>
           ) : (
             <>
-              <button onClick={onClose} style={cancelBtnStyle}>Отмена</button>
-              <button
+              <Button variant="outline" onClick={onClose}>Отмена</Button>
+              <Button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                style={{
-                  ...submitBtnStyle,
-                  opacity: canSubmit ? 1 : 0.6,
-                  cursor: canSubmit ? 'pointer' : 'not-allowed',
-                }}
               >
                 {bulkCreate.isPending ? 'Создание...' : 'Создать'}
-              </button>
+              </Button>
             </>
           )}
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

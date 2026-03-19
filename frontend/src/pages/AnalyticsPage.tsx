@@ -19,6 +19,8 @@ import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
 import { formatDateTime } from '../utils/timezone'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import EmptyState from '../components/shared/EmptyState'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -75,24 +77,6 @@ const PIE_PALETTE = [
   '#14b8a6',
 ]
 
-// ─── Static styles ────────────────────────────────────────────────────────────
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  padding: '20px',
-  overflow: 'hidden',
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: 'var(--font-display)',
-  fontWeight: 600,
-  fontSize: '14px',
-  color: 'var(--text-primary)',
-  marginBottom: '16px',
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface KpiCardProps {
@@ -105,70 +89,29 @@ interface KpiCardProps {
 }
 
 function KpiCard({ label, value, valueColor, topGradient, change, changeColor }: KpiCardProps) {
-  const [hovered, setHovered] = useState(false)
-
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        borderRadius: 'var(--radius)',
-        background: 'var(--bg-card)',
-        border: `1px solid ${hovered ? 'var(--border-active)' : 'var(--border)'}`,
-        padding: '20px 24px',
-        position: 'relative',
-        overflow: 'hidden',
-        cursor: 'default',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow: hovered
-          ? '0 8px 24px rgba(0,0,0,0.3)'
-          : '0 1px 4px rgba(0,0,0,0.15)',
-        transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
-      }}
-    >
+    <div className="rounded-default bg-bg-card border border-border-default p-5 px-6 relative overflow-hidden cursor-default transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.3)] hover:border-border-active">
       {/* Top gradient strip */}
       <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          background: topGradient,
-        }}
+        className="absolute top-0 left-0 right-0 h-[3px]"
+        style={{ background: topGradient }}
       />
 
       <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '1.75rem',
-          fontWeight: 700,
-          color: valueColor,
-          lineHeight: 1,
-          marginTop: 4,
-        }}
+        className="font-[family-name:var(--font-mono)] text-[1.75rem] font-bold leading-none mt-1"
+        style={{ color: valueColor }}
       >
         {value}
       </div>
 
-      <div
-        style={{
-          fontSize: '0.875rem',
-          color: 'var(--text-secondary)',
-          marginTop: 6,
-        }}
-      >
+      <div className="text-sm text-text-secondary mt-1.5">
         {label}
       </div>
 
       {change !== undefined && (
         <div
-          style={{
-            marginTop: 8,
-            fontSize: '12px',
-            fontWeight: 600,
-            color: changeColor ?? 'var(--text-muted)',
-          }}
+          className="mt-2 text-xs font-semibold"
+          style={{ color: changeColor ?? 'var(--text-muted)' }}
         >
           {change}
         </div>
@@ -186,33 +129,18 @@ function BarTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload || payload.length === 0) return null
   return (
-    <div
-      style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '10px 14px',
-        fontSize: '13px',
-        fontFamily: 'var(--font-body)',
-      }}
-    >
-      <div style={{ color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600 }}>
+    <div className="bg-bg-surface border border-border-default rounded-sm p-2.5 px-3.5 text-[13px] font-[family-name:var(--font-body)]">
+      <div className="text-text-secondary mb-1.5 font-semibold">
         {label}
       </div>
       {payload.map(p => (
-        <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+        <div key={p.name} className="flex items-center gap-2 mb-0.5">
           <span
-            style={{
-              display: 'inline-block',
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: p.fill,
-              flexShrink: 0,
-            }}
+            className="inline-block w-2.5 h-2.5 rounded-[2px] shrink-0"
+            style={{ background: p.fill }}
           />
-          <span style={{ color: 'var(--text-secondary)' }}>{p.name}:</span>
-          <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+          <span className="text-text-secondary">{p.name}:</span>
+          <span className="text-text-primary font-[family-name:var(--font-mono)] font-semibold">
             {p.value}
           </span>
         </div>
@@ -228,17 +156,9 @@ function PieTooltip({ active, payload }: {
   if (!active || !payload || payload.length === 0) return null
   const item = payload[0]
   return (
-    <div
-      style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '8px 12px',
-        fontSize: '13px',
-      }}
-    >
-      <span style={{ color: 'var(--text-secondary)' }}>{item.name}: </span>
-      <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+    <div className="bg-bg-surface border border-border-default rounded-sm p-2 px-3 text-[13px]">
+      <span className="text-text-secondary">{item.name}: </span>
+      <span className="text-text-primary font-[family-name:var(--font-mono)] font-semibold">
         {item.value}
       </span>
     </div>
@@ -310,78 +230,38 @@ export default function AnalyticsPage() {
   const rankLabel = (i: number) => ['🥇', '🥈', '🥉'][i] ?? `${i + 1}`
 
   return (
-    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="p-5 px-6 flex flex-col gap-4">
 
       {/* ── Period selector bar ── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '10px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '8px' }}>
+      <div className="flex items-center justify-between flex-wrap gap-2.5">
+        <div className="flex gap-2">
           {PERIOD_OPTIONS.map(opt => (
-            <button
+            <Button
               key={opt.value}
+              variant={period === opt.value ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setPeriod(opt.value)}
-              style={{
-                padding: '6px 16px',
-                borderRadius: 20,
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'var(--font-body)',
-                transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-                background: period === opt.value ? 'var(--accent)' : 'var(--bg-surface)',
-                color: period === opt.value ? '#000' : 'var(--text-secondary)',
-                border: period === opt.value
-                  ? '1px solid transparent'
-                  : '1px solid var(--border)',
-              }}
+              className="rounded-full"
             >
               {opt.label}
-            </button>
+            </Button>
           ))}
         </div>
 
-        <div
-          style={{
-            fontSize: '12px',
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
+        <div className="text-xs text-text-muted font-[family-name:var(--font-mono)]">
           Обновлено: {clockStr}
         </div>
       </div>
 
       {/* ── Inline error banner ── */}
       {hasError && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            color: 'var(--red)',
-            fontSize: '13px',
-          }}
-        >
+        <div className="p-3 px-4 rounded-sm bg-red/10 border border-red/30 text-red text-[13px]">
           Не удалось загрузить данные аналитики. Проверьте соединение.
         </div>
       )}
 
       {/* ── KPI grid ── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '16px',
-        }}
-      >
+      <div className="grid grid-cols-4 gap-4">
         <KpiCard
           label="Всего заявок"
           value={requestStats?.total_requests ?? '—'}
@@ -417,16 +297,10 @@ export default function AnalyticsPage() {
       </div>
 
       {/* ── Charts row ── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '2fr 1fr',
-          gap: '16px',
-        }}
-      >
-        {/* Bar chart — заявки по дням */}
-        <div style={cardStyle}>
-          <div style={sectionTitleStyle}>Заявки по дням</div>
+      <div className="grid grid-cols-[2fr_1fr] gap-4">
+        {/* Bar chart */}
+        <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">Заявки по дням</div>
           {byDayData.length === 0 ? (
             <EmptyState icon="📊" title="Нет данных" subtitle="Данные за выбранный период отсутствуют" />
           ) : (
@@ -465,15 +339,15 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Pie chart — по категориям */}
-        <div style={{ ...cardStyle, position: 'relative' }}>
-          <div style={sectionTitleStyle}>По категориям</div>
+        {/* Pie chart */}
+        <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden relative">
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">По категориям</div>
           {byCategoryData.length === 0 ? (
             <EmptyState icon="🥧" title="Нет данных" subtitle="Категории за период отсутствуют" />
           ) : (
             <>
               {/* Chart + center label */}
-              <div style={{ position: 'relative' }}>
+              <div className="relative">
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
@@ -497,82 +371,28 @@ export default function AnalyticsPage() {
                 </ResponsiveContainer>
 
                 {/* Center label */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    textAlign: 'center',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '20px',
-                      fontWeight: 700,
-                      color: 'var(--text-primary)',
-                      lineHeight: 1,
-                    }}
-                  >
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                  <div className="font-[family-name:var(--font-mono)] text-xl font-bold text-text-primary leading-none">
                     {byCategoryData.reduce((s, d) => s + d.value, 0)}
                   </div>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      marginTop: 3,
-                    }}
-                  >
+                  <div className="text-[11px] text-text-muted mt-0.5">
                     заявок
                   </div>
                 </div>
               </div>
 
               {/* Legend */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  marginTop: '10px',
-                }}
-              >
+              <div className="flex flex-col gap-1.5 mt-2.5">
                 {byCategoryData.map((d, idx) => (
-                  <div
-                    key={d.name}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                  >
+                  <div key={d.name} className="flex items-center gap-2">
                     <span
-                      style={{
-                        display: 'inline-block',
-                        width: 10,
-                        height: 10,
-                        borderRadius: 2,
-                        background: PIE_PALETTE[idx % PIE_PALETTE.length],
-                        flexShrink: 0,
-                      }}
+                      className="inline-block w-2.5 h-2.5 rounded-[2px] shrink-0"
+                      style={{ background: PIE_PALETTE[idx % PIE_PALETTE.length] }}
                     />
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        color: 'var(--text-secondary)',
-                        flex: 1,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                    <span className="text-xs text-text-secondary flex-1 truncate">
                       {d.name}
                     </span>
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--text-primary)',
-                      }}
-                    >
+                    <span className="text-xs font-[family-name:var(--font-mono)] text-text-primary">
                       {d.value}
                     </span>
                   </div>
@@ -584,84 +404,36 @@ export default function AnalyticsPage() {
       </div>
 
       {/* ── Bottom grid ── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          gap: '16px',
-        }}
-      >
+      <div className="grid grid-cols-3 gap-4">
         {/* Col 1 — По статусам */}
-        <div style={cardStyle}>
-          <div style={sectionTitleStyle}>По статусам</div>
+        <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">По статусам</div>
           {byStatusEntries.length === 0 ? (
             <EmptyState icon="📋" title="Нет данных" />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="flex flex-col gap-2.5">
               {byStatusEntries.map(([status, count]) => {
                 const pct = statusTotal > 0 ? Math.round((count / statusTotal) * 100) : 0
                 const color = STATUS_COLORS[status] ?? 'var(--text-muted)'
                 return (
                   <div key={status}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      {/* Colored dot */}
+                    <div className="flex items-center gap-2 mb-1">
                       <span
-                        style={{
-                          display: 'inline-block',
-                          width: 12,
-                          height: 12,
-                          borderRadius: 3,
-                          background: color,
-                          flexShrink: 0,
-                        }}
+                        className="inline-block w-3 h-3 rounded-[3px] shrink-0"
+                        style={{ background: color }}
                       />
-                      <span
-                        style={{
-                          flex: 1,
-                          fontSize: '13px',
-                          color: 'var(--text-secondary)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
+                      <span className="flex-1 text-[13px] text-text-secondary truncate">
                         {STATUS_LABELS[status] ?? status}
                       </span>
-                      <span
-                        style={{
-                          fontSize: '13px',
-                          fontFamily: 'var(--font-mono)',
-                          color: 'var(--text-primary)',
-                          fontWeight: 600,
-                        }}
-                      >
+                      <span className="text-[13px] font-[family-name:var(--font-mono)] text-text-primary font-semibold">
                         {count}
                       </span>
                     </div>
                     {/* Progress bar */}
-                    <div
-                      style={{
-                        height: 8,
-                        borderRadius: 4,
-                        background: 'var(--bg-surface)',
-                        overflow: 'hidden',
-                      }}
-                    >
+                    <div className="h-2 rounded bg-bg-surface overflow-hidden">
                       <div
-                        style={{
-                          height: '100%',
-                          width: `${pct}%`,
-                          borderRadius: 4,
-                          background: color,
-                          transition: 'width 0.4s ease',
-                        }}
+                        className="h-full rounded transition-[width] duration-400 ease-out"
+                        style={{ width: `${pct}%`, background: color }}
                       />
                     </div>
                   </div>
@@ -672,14 +444,13 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Col 2 — Топ исполнителей */}
-        <div style={cardStyle}>
-          <div style={sectionTitleStyle}>Топ исполнителей</div>
+        <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">Топ исполнителей</div>
           {topExecutors.length === 0 ? (
             <EmptyState icon="🏆" title="Нет данных" />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="flex flex-col gap-3">
               {topExecutors.map((ex, idx) => {
-                // Split name into first/last for initials
                 const parts = (ex.name ?? '').trim().split(' ')
                 const firstName = parts[0] ?? null
                 const lastName = parts[1] ?? null
@@ -687,23 +458,13 @@ export default function AnalyticsPage() {
                 const gradient = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]
 
                 return (
-                  <div
-                    key={ex.user_id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                    }}
-                  >
+                  <div key={ex.user_id} className="flex items-center gap-2.5">
                     {/* Rank */}
                     <div
+                      className="w-[22px] text-center font-[family-name:var(--font-mono)] shrink-0"
                       style={{
-                        width: 22,
-                        textAlign: 'center',
                         fontSize: idx < 3 ? '16px' : '13px',
-                        fontFamily: 'var(--font-mono)',
                         color: rankColor(idx),
-                        flexShrink: 0,
                       }}
                     >
                       {rankLabel(idx)}
@@ -711,58 +472,24 @@ export default function AnalyticsPage() {
 
                     {/* Avatar */}
                     <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: '50%',
-                        background: gradient,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: '#fff',
-                        flexShrink: 0,
-                      }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold text-white shrink-0"
+                      style={{ background: gradient }}
                     >
                       {initials}
                     </div>
 
                     {/* Info */}
-                    <div style={{ flex: 1, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
+                    <div className="flex-1 overflow-hidden">
+                      <div className="text-[13px] font-semibold text-text-primary truncate">
                         {ex.name ?? 'Неизвестно'}
                       </div>
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--text-muted)',
-                          marginTop: 2,
-                        }}
-                      >
+                      <div className="text-[11px] text-text-muted mt-0.5">
                         {ex.completed} заявки · {ex.avg_hours?.toFixed(1) ?? '?'}ч
                       </div>
                     </div>
 
                     {/* Score */}
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--accent)',
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
+                    <div className="text-[13px] font-[family-name:var(--font-mono)] text-accent font-bold shrink-0">
                       {ex.score}
                     </div>
                   </div>
@@ -773,68 +500,39 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Col 3 — Последние действия */}
-        <div style={cardStyle}>
-          <div style={sectionTitleStyle}>Последние действия</div>
+        <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">Последние действия</div>
           {recentActions.length === 0 ? (
             <EmptyState icon="📜" title="Нет действий" />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="flex flex-col">
               {recentActions.map((item, idx) => (
                 <div
                   key={`${item.event_type}-${item.request_number}-${idx}`}
-                  style={{
-                    padding: '9px 0',
-                    borderBottom:
-                      idx < recentActions.length - 1 ? '1px solid var(--border)' : 'none',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                  }}
+                  className={cn(
+                    'py-2.5 flex items-start gap-2.5',
+                    idx < recentActions.length - 1 && 'border-b border-border-default'
+                  )}
                 >
                   {/* Event dot */}
                   <span
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: EVENT_COLORS[item.event_type] ?? 'var(--text-muted)',
-                      marginTop: 4,
-                      flexShrink: 0,
-                    }}
+                    className="inline-block w-2 h-2 rounded-full mt-1 shrink-0"
+                    style={{ background: EVENT_COLORS[item.event_type] ?? 'var(--text-muted)' }}
                   />
 
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        color: 'var(--text-secondary)',
-                        lineHeight: '1.35',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                  <div className="flex-1 overflow-hidden">
+                    <div className="text-[13px] text-text-secondary leading-snug truncate">
                       {EVENT_LABELS[item.event_type] ?? item.event_type}{' '}
-                      <span
-                        style={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                      >
+                      <span className="text-text-primary font-semibold">
                         #{item.request_number}
                       </span>
                       {item.executor_name && (
-                        <span style={{ color: 'var(--text-muted)' }}>
+                        <span className="text-text-muted">
                           {' · '}{item.executor_name}
                         </span>
                       )}
                     </div>
-                    <div
-                      style={{
-                        fontSize: '11px',
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--text-muted)',
-                        marginTop: 2,
-                      }}
-                    >
+                    <div className="text-[11px] font-[family-name:var(--font-mono)] text-text-muted mt-0.5">
                       {formatDateTime(item.created_at)}
                     </div>
                   </div>

@@ -6,19 +6,10 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '12px',
-      padding: '48px 24px',
-      color: 'var(--text-secondary)',
-      textAlign: 'center',
-    }}>
-      <span style={{ fontSize: '48px', lineHeight: 1 }}>{icon}</span>
-      <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{title}</p>
-      {subtitle && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>{subtitle}</p>}
+    <div className="flex flex-col items-center justify-center gap-3 py-12 px-6 text-text-secondary text-center">
+      <span className="text-5xl leading-none">{icon}</span>
+      <p className="m-0 font-[family-name:var(--font-display)] text-base font-semibold text-text-primary">{title}</p>
+      {subtitle && <p className="m-0 text-sm text-text-muted">{subtitle}</p>}
     </div>
   )
 }

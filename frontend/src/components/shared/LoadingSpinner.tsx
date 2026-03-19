@@ -1,20 +1,7 @@
 export default function LoadingSpinner() {
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '48px',
-    }}>
-      <div style={{
-        width: '36px',
-        height: '36px',
-        border: '3px solid var(--border)',
-        borderTopColor: 'var(--accent)',
-        borderRadius: '50%',
-        animation: 'spin 0.8s linear infinite',
-      }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div className="flex items-center justify-center p-12">
+      <div className="h-9 w-9 rounded-full border-3 border-border-default border-t-accent animate-spin" />
     </div>
   )
 }

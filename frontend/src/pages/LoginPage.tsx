@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../stores/authStore'
+import { cn } from '@/lib/utils'
 
 const BOT_USERNAME = 'infrasafebot'
 
@@ -80,122 +81,72 @@ export default function LoginPage() {
     }
   }
 
-  const inputStyle = (field: string): React.CSSProperties => ({
-    width: '100%',
-    background: focusedField === field ? 'rgba(0,212,170,0.04)' : 'var(--bg-root)',
-    border: `1.5px solid ${focusedField === field ? 'var(--accent)' : 'rgba(255,255,255,0.1)'}`,
-    borderRadius: 10,
-    padding: '11px 14px',
-    fontSize: '14px',
-    color: 'var(--text-primary)',
-    fontFamily: 'var(--font-body)',
-    outline: 'none',
-    transition: 'border-color 0.2s, background 0.2s',
-    boxSizing: 'border-box',
-  })
-
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg-root)',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
+    <div className="min-h-screen flex items-center justify-center bg-bg-root relative overflow-hidden">
       {/* Background grid */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        backgroundImage: `
-          linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '48px 48px',
-        pointerEvents: 'none',
-      }} />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px)
+          `,
+          backgroundSize: '48px 48px',
+        }}
+      />
 
       {/* Accent glow */}
-      <div style={{
-        position: 'absolute',
-        top: '20%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 600,
-        height: 300,
-        background: 'radial-gradient(ellipse, rgba(0,212,170,0.07) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          top: '20%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 600,
+          height: 300,
+          background: 'radial-gradient(ellipse, rgba(0,212,170,0.07) 0%, transparent 70%)',
+        }}
+      />
 
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 16px', position: 'relative' }}>
+      <div className="w-full max-w-[400px] px-4 relative">
         {/* Logo mark */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 28 }}>
-          <div style={{
-            width: 52,
-            height: 52,
-            background: 'linear-gradient(135deg, var(--accent), #0099aa)',
-            borderRadius: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 800,
-            fontSize: 20,
-            color: '#001a14',
-            marginBottom: 12,
-            boxShadow: '0 0 32px rgba(0,212,170,0.3)',
-          }}>УК</div>
-          <div style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 700,
-            fontSize: 22,
-            color: 'var(--text-primary)',
-            letterSpacing: '-0.3px',
-          }}>UK Management</div>
-          <div style={{
-            fontSize: 12,
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-body)',
-            marginTop: 4,
-          }}>Система управления объектами</div>
+        <div className="flex flex-col items-center mb-7">
+          <div className="w-[52px] h-[52px] rounded-[14px] flex items-center justify-center font-[family-name:var(--font-display)] font-extrabold text-xl text-[#001a14] mb-3 shadow-[0_0_32px_rgba(0,212,170,0.3)]"
+            style={{ background: 'linear-gradient(135deg, var(--accent), #0099aa)' }}
+          >
+            УК
+          </div>
+          <div className="font-[family-name:var(--font-display)] font-bold text-[22px] text-text-primary tracking-tight">
+            UK Management
+          </div>
+          <div className="text-xs text-text-muted font-[family-name:var(--font-body)] mt-1">
+            Система управления объектами
+          </div>
         </div>
 
         {/* Card */}
-        <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 16,
-          padding: '32px 28px',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,170,0.05)',
-        }}>
+        <div className="bg-bg-card border border-white/[.08] rounded-2xl p-8 px-7 shadow-[0_32px_80px_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,212,170,0.05)]">
 
           {/* Telegram widget */}
           <div id="telegram-section">
             <div
               id="telegram-login-widget"
-              style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, minHeight: 48 }}
+              className="flex justify-center mb-5 min-h-[48px]"
             />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>или</span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+            <div className="flex items-center gap-3 mb-5">
+              <div className="flex-1 h-px bg-white/[.07]" />
+              <span className="text-[11px] text-text-muted font-[family-name:var(--font-body)] tracking-wider uppercase">или</span>
+              <div className="flex-1 h-px bg-white/[.07]" />
             </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
 
             <div>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: 6,
-                fontFamily: 'var(--font-display)',
-                letterSpacing: '0.3px',
-              }}>Email</label>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
+                Email
+              </label>
               <input
                 type="email"
                 placeholder="admin@example.com"
@@ -203,21 +154,20 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 onFocus={() => setFocusedField('email')}
                 onBlur={() => setFocusedField(null)}
-                style={inputStyle('email')}
+                className={cn(
+                  'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
+                  focusedField === 'email'
+                    ? 'bg-accent/[.04] border-[1.5px] border-accent'
+                    : 'bg-bg-root border-[1.5px] border-white/10'
+                )}
                 autoComplete="email"
               />
             </div>
 
             <div>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: 6,
-                fontFamily: 'var(--font-display)',
-                letterSpacing: '0.3px',
-              }}>Пароль</label>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
+                Пароль
+              </label>
               <input
                 type="password"
                 placeholder="••••••••"
@@ -225,45 +175,32 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setFocusedField('password')}
                 onBlur={() => setFocusedField(null)}
-                style={inputStyle('password')}
+                className={cn(
+                  'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
+                  focusedField === 'password'
+                    ? 'bg-accent/[.04] border-[1.5px] border-accent'
+                    : 'bg-bg-root border-[1.5px] border-white/10'
+                )}
                 autoComplete="current-password"
               />
             </div>
 
             {error && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 12px',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.2)',
-                borderRadius: 8,
-              }}>
-                <span style={{ fontSize: 13 }}>⚠</span>
-                <span style={{ fontSize: 13, color: '#f87171', fontFamily: 'var(--font-body)' }}>{error}</span>
+              <div className="flex items-center gap-2 p-2.5 px-3 bg-red/10 border border-red/20 rounded-lg">
+                <span className="text-[13px]">⚠</span>
+                <span className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">{error}</span>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              style={{
-                background: loading ? 'rgba(0,212,170,0.5)' : 'var(--accent)',
-                border: 'none',
-                borderRadius: 10,
-                padding: '12px',
-                fontSize: '14px',
-                fontWeight: 700,
-                color: '#001a14',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--font-display)',
-                letterSpacing: '0.3px',
-                transition: 'background 0.2s, transform 0.1s',
-                marginTop: 4,
-              }}
-              onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#00f0c0' }}
-              onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)' }}
+              className={cn(
+                'rounded-[10px] p-3 text-sm font-bold text-[#001a14] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
+                loading
+                  ? 'bg-accent/50 cursor-not-allowed'
+                  : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
+              )}
             >
               {loading ? 'Вход...' : 'Войти'}
             </button>
