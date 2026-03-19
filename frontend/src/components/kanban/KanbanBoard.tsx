@@ -67,6 +67,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
   const [activeDragStatus, setActiveDragStatus] = useState<string | null>(null)
   const [activeCard, setActiveCard] = useState<TCard | null>(null)
   const [overColumnId, setOverColumnId] = useState<string | null>(null)
+  const [overItemId, setOverItemId] = useState<string | null>(null)
   const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null)
   const [transitionError, setTransitionError] = useState<string | null>(null)
 
@@ -88,10 +89,14 @@ export default function KanbanBoard({ onCardClick }: Props) {
     const { over } = event
     if (!over) {
       setOverColumnId(null)
+      setOverItemId(null)
       return
     }
-    const targetStatus = resolveTargetStatus(String(over.id), columns)
+    const overId = String(over.id)
+    const targetStatus = resolveTargetStatus(overId, columns)
     setOverColumnId(targetStatus)
+    // If hovering over a specific card (not a column droppable), track it
+    setOverItemId(KANBAN_STATUSES.has(overId) ? null : overId)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -99,6 +104,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
     setActiveDragStatus(null)
     setActiveCard(null)
     setOverColumnId(null)
+    setOverItemId(null)
     if (!over || active.id === over.id) return
 
     const requestNumber = String(active.id)
@@ -201,6 +207,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
               onCardClick={onCardClick}
               activeDragStatus={activeDragStatus}
               overColumnId={overColumnId}
+              overItemId={overItemId}
             />
           ))}
         </div>

@@ -10,6 +10,7 @@ interface Props {
   onCardClick: (number: string) => void
   activeDragStatus: string | null
   overColumnId: string | null
+  overItemId: string | null
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -67,7 +68,24 @@ const PLACEHOLDER_BG: Record<string, string> = {
   'Отменена':  'bg-[#f87171]/[0.04]',
 }
 
-export default function KanbanColumn({ column, onCardClick, activeDragStatus, overColumnId }: Props) {
+function DropPlaceholder({ status, visible }: { status: string; visible: boolean }) {
+  return (
+    <div
+      className={cn(
+        'rounded-[10px] border-2 border-dashed overflow-hidden transition-all duration-200 ease-out',
+        visible
+          ? cn(
+              'h-[76px] mb-1.5 opacity-100',
+              PLACEHOLDER_BORDER[status] ?? 'border-accent/25',
+              PLACEHOLDER_BG[status] ?? 'bg-accent/[0.04]',
+            )
+          : 'h-0 mb-0 opacity-0 border-transparent',
+      )}
+    />
+  )
+}
+
+export default function KanbanColumn({ column, onCardClick, activeDragStatus, overColumnId, overItemId }: Props) {
   const frozen = FROZEN_STATUSES.has(column.status)
   const { setNodeRef } = useDroppable({ id: column.status, disabled: frozen })
   const dotClass = STATUS_DOT[column.status] ?? 'bg-text-muted'
@@ -77,6 +95,15 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
   const isInvalidTarget = isDragging && !isValidTarget && activeDragStatus !== column.status
   const isHoveredValid = overColumnId === column.status && isValidTarget
   const isSource = activeDragStatus === column.status
+
+  // Find insertion index for the placeholder
+  const overCardIndex = overItemId
+    ? column.requests.findIndex(r => r.request_number === overItemId)
+    : -1
+  // If hovering over a card in this column, insert before it; otherwise at end
+  const placeholderIndex = isHoveredValid
+    ? (overCardIndex >= 0 ? overCardIndex : column.requests.length)
+    : -1
 
   return (
     <div className={cn(
@@ -111,36 +138,30 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
       {/* Cards area */}
       <div
         ref={setNodeRef}
-        className={cn(
-          'flex-1 min-h-[120px] p-2 pb-1 overflow-y-auto transition-all duration-200',
-          isHoveredValid && 'pt-0',
-        )}
+        className="flex-1 min-h-[120px] p-2 pb-1 overflow-y-auto"
       >
-        {/* Drop placeholder — pushes cards down */}
-        <div
-          className={cn(
-            'rounded-[10px] border-2 border-dashed overflow-hidden transition-all duration-200 ease-out',
-            isHoveredValid
-              ? cn(
-                  'h-[76px] mb-1.5 opacity-100',
-                  PLACEHOLDER_BORDER[column.status] ?? 'border-accent/25',
-                  PLACEHOLDER_BG[column.status] ?? 'bg-accent/[0.04]',
-                )
-              : 'h-0 mb-0 opacity-0 border-transparent',
-          )}
-        />
-
         <SortableContext
           items={column.requests.map((r) => r.request_number)}
           strategy={verticalListSortingStrategy}
         >
-          {column.requests.map((card) => (
-            <RequestCard
-              key={card.request_number}
-              card={card}
-              onClick={() => onCardClick(card.request_number)}
-            />
+          {column.requests.map((card, index) => (
+            <div key={card.request_number}>
+              {/* Placeholder before this card */}
+              <DropPlaceholder
+                status={column.status}
+                visible={placeholderIndex === index}
+              />
+              <RequestCard
+                card={card}
+                onClick={() => onCardClick(card.request_number)}
+              />
+            </div>
           ))}
+          {/* Placeholder at end (when hovering column itself or after last card) */}
+          <DropPlaceholder
+            status={column.status}
+            visible={placeholderIndex === column.requests.length}
+          />
         </SortableContext>
       </div>
     </div>
