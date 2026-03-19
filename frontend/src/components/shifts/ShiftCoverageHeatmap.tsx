@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toTashkent } from '../../utils/timezone'
+import { cn } from '@/lib/utils'
 
 interface Props {
   shifts: ShiftBrief[]
@@ -36,8 +37,8 @@ function getCellColor(count: number): string {
 
 const LEGEND = [
   { label: '0', color: 'rgba(239,68,68,0.3)' },
-  { label: '1–2', color: 'rgba(245,158,11,0.4)' },
-  { label: '3–4', color: 'rgba(0,212,170,0.35)' },
+  { label: '1-2', color: 'rgba(245,158,11,0.4)' },
+  { label: '3-4', color: 'rgba(0,212,170,0.35)' },
   { label: '5+', color: 'rgba(0,212,170,0.65)' },
 ]
 
@@ -51,60 +52,28 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
   return (
     <div>
       {/* Heatmap grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(24, 1fr)',
-          gap: '3px',
-          marginBottom: '6px',
-        }}
-      >
+      <div className="grid grid-cols-[repeat(24,1fr)] gap-[3px] mb-1.5">
         {counts.map((count, h) => (
           <div
             key={h}
-            style={{
-              height: '40px',
-              background: getCellColor(count),
-              borderRadius: '4px',
-              cursor: 'default',
-              position: 'relative',
-              transition: 'opacity 0.15s',
-              opacity: hoveredHour === null || hoveredHour === h ? 1 : 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            className={cn(
+              'h-10 rounded cursor-default relative transition-opacity duration-150 flex items-center justify-center',
+              hoveredHour !== null && hoveredHour !== h && 'opacity-50'
+            )}
+            style={{ background: getCellColor(count) }}
             onMouseEnter={() => setHoveredHour(h)}
             onMouseLeave={() => setHoveredHour(null)}
           >
             {/* Tooltip */}
             {hoveredHour === h && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: 'calc(100% + 6px)',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: 'var(--bg-overlay, #1a1a2e)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '4px 8px',
-                  fontSize: '11px',
-                  color: 'var(--text-primary)',
-                  whiteSpace: 'nowrap',
-                  zIndex: 10,
-                  pointerEvents: 'none',
-                }}
-              >
+              <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 bg-[var(--bg-overlay,#1a1a2e)] border border-border-default rounded-[6px] px-2 py-1 text-[11px] text-text-primary whitespace-nowrap z-10 pointer-events-none">
                 {String(h).padStart(2, '0')}:00 — {count} исп.
               </div>
             )}
             <span
+              className="text-[10px] font-[var(--font-mono)] font-semibold"
               style={{
-                fontSize: '10px',
-                fontFamily: 'var(--font-mono)',
                 color: count > 0 ? 'rgba(255,255,255,0.8)' : 'rgba(239,68,68,0.8)',
-                fontWeight: 600,
               }}
             >
               {count}
@@ -113,24 +82,12 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
         ))}
       </div>
 
-      {/* Hour labels — only at 00, 06, 12, 18 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(24, 1fr)',
-          gap: '3px',
-          marginBottom: '16px',
-        }}
-      >
+      {/* Hour labels -- only at 00, 06, 12, 18 */}
+      <div className="grid grid-cols-[repeat(24,1fr)] gap-[3px] mb-4">
         {Array.from({ length: 24 }, (_, h) => (
           <div
             key={h}
-            style={{
-              textAlign: 'center',
-              fontSize: '10px',
-              color: 'var(--text-muted)',
-              fontFamily: 'var(--font-mono)',
-            }}
+            className="text-center text-[10px] text-text-muted font-[var(--font-mono)]"
           >
             {h % 6 === 0 ? String(h).padStart(2, '0') : ''}
           </div>
@@ -138,26 +95,22 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div className="flex gap-3 items-center">
         {LEGEND.map(item => (
           <div
             key={item.label}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            className="flex items-center gap-1.5"
           >
             <div
-              style={{
-                width: 14,
-                height: 14,
-                background: item.color,
-                borderRadius: '3px',
-              }}
+              className="w-3.5 h-3.5 rounded-[3px]"
+              style={{ background: item.color }}
             />
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            <span className="text-[11px] text-text-muted">
               {item.label}
             </span>
           </div>
         ))}
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>
+        <span className="text-[11px] text-text-muted ml-1">
           исполнителей
         </span>
       </div>

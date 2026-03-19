@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface Props {
   employee: EmployeeBrief
@@ -26,82 +28,52 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow: hovered ? '0 12px 40px rgba(0,0,0,0.3)' : 'none',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
+      className={cn(
+        'bg-bg-card border border-border-default rounded-default overflow-hidden flex flex-col transition-all duration-200',
+        hovered && 'shadow-[0_12px_40px_rgba(0,0,0,0.3)] -translate-y-0.5'
+      )}
     >
       {/* Card header */}
-      <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'flex-start', gap: '14px', position: 'relative' }}>
+      <div className="p-5 pb-4 flex items-start gap-3.5 relative">
         {/* Avatar */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <div style={{
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            background: gradient,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 700,
-            fontSize: '20px',
-            color: '#fff',
-            letterSpacing: '0.5px',
-          }}>
+        <div className="relative shrink-0">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center font-[var(--font-display)] font-bold text-xl text-white tracking-wide"
+            style={{ background: gradient }}
+          >
             {initials}
           </div>
-          {/* Status dot: green = on shift, gray = off shift */}
-          <div style={{
-            position: 'absolute',
-            bottom: 1,
-            right: 1,
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
-            background: isOnShift ? 'var(--emerald)' : '#5a6a7a',
-            border: '2px solid var(--bg-card)',
-          }} />
+          {/* Status dot */}
+          <div
+            className={cn(
+              'absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full border-2 border-bg-card',
+              isOnShift ? 'bg-emerald' : 'bg-[#5a6a7a]'
+            )}
+          />
         </div>
 
         {/* Name + phone */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: '15px',
-            color: 'var(--text-primary)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
+        <div className="flex-1 min-w-0">
+          <div className="font-[var(--font-display)] font-semibold text-[15px] text-text-primary truncate">
             {name}
           </div>
           {employee.phone && (
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+            <div className="text-xs text-text-muted mt-0.5 font-[var(--font-mono)]">
               {employee.phone}
             </div>
           )}
           {/* Spec tags */}
           {employee.specialization.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+            <div className="flex flex-wrap gap-1 mt-2">
               {employee.specialization.map(spec => (
-                <span key={spec} style={{
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  padding: '2px 7px',
-                  borderRadius: 10,
-                  background: `color-mix(in srgb, ${SPEC_COLORS[spec] ?? 'var(--text-muted)'} 13%, transparent)`,
-                  color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
-                  letterSpacing: '0.3px',
-                }}>
+                <span
+                  key={spec}
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] tracking-wide"
+                  style={{
+                    background: `color-mix(in srgb, ${SPEC_COLORS[spec] ?? 'var(--text-muted)'} 13%, transparent)`,
+                    color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
+                  }}
+                >
                   {spec}
                 </span>
               ))}
@@ -110,48 +82,27 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
         </div>
 
         {/* Verification / blocked badge */}
-        <div style={{
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: '4px',
-        }}>
+        <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
           {isBlocked && (
-            <div style={{
-              fontSize: '10px',
-              fontWeight: 600,
-              padding: '3px 8px',
-              borderRadius: 10,
-              background: 'rgba(239,68,68,0.15)',
-              color: 'var(--red)',
-            }}>
+            <div className="text-[10px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red">
               Заблокирован
             </div>
           )}
-          <div style={{
-            fontSize: '10px',
-            fontWeight: 600,
-            padding: '3px 8px',
-            borderRadius: 10,
-            background: isVerified ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-            color: isVerified ? 'var(--emerald)' : 'var(--amber)',
-          }}>
+          <div
+            className={cn(
+              'text-[10px] font-semibold px-2 py-0.5 rounded-[10px]',
+              isVerified
+                ? 'bg-emerald/15 text-emerald'
+                : 'bg-amber/15 text-amber'
+            )}
+          >
             {isVerified ? '✓ Верифицирован' : '⏳ На проверке'}
           </div>
         </div>
       </div>
 
       {/* Shift status bar */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        background: 'var(--bg-surface)',
-        borderTop: '1px solid var(--border)',
-        borderBottom: '1px solid var(--border)',
-      }}>
+      <div className="grid grid-cols-2 bg-bg-surface border-t border-b border-border-default">
         {[
           {
             value: isOnShift ? 'На смене' : 'Не на смене',
@@ -164,20 +115,22 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
             accent: false,
           },
         ].map((cell, i) => (
-          <div key={i} style={{
-            padding: '10px',
-            textAlign: 'center',
-            borderRight: i < 1 ? '1px solid var(--border)' : 'none',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: cell.accent ? 'var(--emerald)' : 'var(--text-primary)',
-            }}>
+          <div
+            key={i}
+            className={cn(
+              'p-2.5 text-center',
+              i < 1 && 'border-r border-border-default'
+            )}
+          >
+            <div
+              className={cn(
+                'font-[var(--font-mono)] text-[13px] font-semibold',
+                cell.accent ? 'text-emerald' : 'text-text-primary'
+              )}
+            >
               {cell.value}
             </div>
-            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
+            <div className="text-[10px] text-text-muted mt-0.5">
               {cell.label}
             </div>
           </div>
@@ -185,79 +138,45 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
       </div>
 
       {/* Card actions */}
-      <div style={{
-        padding: '12px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginTop: 'auto',
-      }}>
-        <button
+      <div className="px-5 py-3 flex items-center gap-2 mt-auto">
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => navigate(`/dashboard/employees/${employee.id}`)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '12px',
-            color: 'var(--text-secondary)',
-            padding: '6px 0',
-            fontFamily: 'var(--font-display)',
-          }}
+          className="px-0 text-xs text-text-secondary"
         >
           Профиль
-        </button>
-        <div style={{ flex: 1 }} />
+        </Button>
+        <div className="flex-1" />
         {!isVerified ? (
-          <button
+          <Button
+            size="sm"
             onClick={() => onVerify?.(employee)}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: '#fff',
-              padding: '6px 12px',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-            }}
+            className="text-xs"
           >
             Верифицировать
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            size="sm"
             onClick={() => onAssign?.(employee)}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: '#fff',
-              padding: '6px 12px',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-            }}
+            className="text-xs"
           >
             Назначить
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onBlock?.(employee)}
           disabled={isBlockPending}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: isBlockPending ? 'not-allowed' : 'pointer',
-            fontSize: '12px',
-            color: isBlocked ? 'var(--amber)' : 'var(--red)',
-            padding: '6px 8px',
-            fontFamily: 'var(--font-display)',
-            opacity: isBlockPending ? 0.5 : 1,
-          }}
+          className={cn(
+            'text-xs px-2',
+            isBlocked ? 'text-amber' : 'text-red'
+          )}
         >
           {isBlocked ? 'Разблокировать' : 'Блок'}
-        </button>
+        </Button>
       </div>
     </div>
   )

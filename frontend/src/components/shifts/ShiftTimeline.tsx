@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toTashkent, formatTime } from '../../utils/timezone'
 import EmptyState from '../shared/EmptyState'
+import { cn } from '@/lib/utils'
 
 interface Props {
   shifts: ShiftBrief[]
@@ -138,71 +139,32 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
     date.getMonth() === new Date().getMonth() &&
     date.getDate() === new Date().getDate()
 
-  const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '180px repeat(24, minmax(44px, 1fr))',
-    minWidth: '1200px',
-  }
-
   return (
     <div
       ref={scrollRef}
-      style={{ overflowX: 'auto', overflowY: 'visible', position: 'relative' }}
+      className="overflow-x-auto overflow-y-visible relative"
     >
-      <div style={gridStyle}>
+      {/* Grid uses dynamic gridTemplateColumns -- must remain inline */}
+      <div style={{ display: 'grid', gridTemplateColumns: '180px repeat(24, minmax(44px, 1fr))', minWidth: '1200px' }}>
         {/* Header row */}
-        <div
-          style={{
-            position: 'sticky',
-            left: 0,
-            zIndex: 3,
-            background: 'var(--bg-card)',
-            borderBottom: '1px solid var(--border)',
-            borderRight: '1px solid var(--border)',
-            padding: '10px 12px',
-            fontSize: '11px',
-            fontWeight: 700,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
+        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center">
           Исполнитель
         </div>
         {hours.map(h => (
           <div
             key={h}
-            style={{
-              borderBottom: '1px solid var(--border)',
-              borderRight: h < 23 ? '1px solid var(--border-subtle, var(--border))' : undefined,
-              padding: '10px 0',
-              textAlign: 'center',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: isToday && h === currentHour ? 'var(--accent)' : 'var(--text-muted)',
-              background:
-                isToday && h === currentHour
-                  ? 'var(--accent-dim)'
-                  : 'transparent',
-              position: 'relative',
-            }}
+            className={cn(
+              'border-b border-border-default py-2.5 text-center text-[11px] font-semibold relative',
+              h < 23 && 'border-r border-r-[var(--border-subtle,var(--border))]',
+              isToday && h === currentHour
+                ? 'text-accent bg-accent-dim'
+                : 'text-text-muted'
+            )}
           >
             {String(h).padStart(2, '0')}
             {/* Current time indicator */}
             {isToday && h === currentHour && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  width: '2px',
-                  background: 'var(--accent)',
-                  opacity: 0.8,
-                }}
-              />
+              <div className="absolute top-0 bottom-0 left-0 w-0.5 bg-accent opacity-80" />
             )}
           </div>
         ))}
@@ -215,52 +177,17 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
           return (
             <div
               key={executorKey}
-              style={{ display: 'contents' }}
+              className="contents"
             >
               {/* Executor name cell */}
-              <div
-                style={{
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 2,
-                  background: 'var(--bg-card)',
-                  borderBottom: '1px solid var(--border)',
-                  borderRight: '1px solid var(--border)',
-                  padding: '8px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  minHeight: '52px',
-                }}
-              >
+              <div className="sticky left-0 z-[2] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2 flex items-center gap-2 min-h-[52px]">
                 <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    background: getGradient(displayName),
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#fff',
-                    flexShrink: 0,
-                  }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                  style={{ background: getGradient(displayName) }}
                 >
                   {getInitials(displayName)}
                 </div>
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--text-primary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    flex: 1,
-                  }}
-                >
+                <span className="text-xs font-semibold text-text-primary truncate flex-1">
                   {displayName}
                 </span>
               </div>
@@ -269,32 +196,18 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
               {hours.map(h => (
                 <div
                   key={h}
-                  style={{
-                    borderBottom: '1px solid var(--border)',
-                    borderRight:
-                      h < 23
-                        ? '1px solid var(--border-subtle, rgba(255,255,255,0.04))'
-                        : undefined,
-                    position: 'relative',
-                    minHeight: '52px',
-                    background:
-                      isToday && h === currentHour
-                        ? 'var(--accent-dim)'
-                        : 'transparent',
-                  }}
+                  className={cn(
+                    'border-b border-border-default relative min-h-[52px]',
+                    h < 23 && 'border-r border-r-[rgba(255,255,255,0.04)]',
+                    isToday && h === currentHour && 'bg-accent-dim'
+                  )}
                 />
               ))}
 
-              {/* Shift blocks — absolutely position over the row using CSS grid overlay trick */}
-              {/* We use a second "overlay" row that spans all 25 columns */}
+              {/* Shift blocks overlay row */}
               <div
-                style={{
-                  gridColumn: '1 / -1',
-                  position: 'relative',
-                  height: 0,
-                  overflow: 'visible',
-                  zIndex: 1,
-                }}
+                className="relative h-0 overflow-visible z-[1]"
+                style={{ gridColumn: '1 / -1' }}
               >
                 {blocks.map((block, idx) => {
                   const color =
@@ -304,30 +217,21 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                       ? `${formatTime(block.shift.start_time)} — ${formatTime(block.shift.end_time)}`
                       : formatTime(block.shift.start_time)
 
+                  // Dynamic positioning must remain inline
                   return (
                     <div
                       key={`${block.shift.id}-${idx}`}
                       onClick={() => onShiftClick(block.shift)}
                       title={`${displayName} · ${label} · ${block.shift.status}`}
+                      className="absolute cursor-pointer rounded-[6px] px-1.5 py-1 overflow-hidden flex flex-col justify-center gap-px transition-colors duration-150"
                       style={{
-                        position: 'absolute',
                         top: '-52px',
-                        // left offset: 180px name col + (colStart-2)/24 of remaining
                         left: `calc(180px + (100% - 180px) * ${block.colStart - 2} / 24)`,
                         width: `calc((100% - 180px) * ${block.colSpan} / 24)`,
                         height: '36px',
                         marginTop: '8px',
                         background: `${color}22`,
                         border: `1px solid ${color}66`,
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        padding: '4px 6px',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        gap: '1px',
-                        transition: 'background 0.15s',
                       }}
                       onMouseEnter={e => {
                         ;(e.currentTarget as HTMLDivElement).style.background =
@@ -339,25 +243,12 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                       }}
                     >
                       <span
-                        style={{
-                          fontSize: '10px',
-                          color,
-                          fontWeight: 600,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
+                        className="text-[10px] font-semibold truncate"
+                        style={{ color }}
                       >
                         {label} · {block.shift.status}
                       </span>
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          color: 'var(--text-muted)',
-                          fontFamily: 'var(--font-mono)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
+                      <span className="text-[10px] text-text-muted font-[var(--font-mono)] whitespace-nowrap">
                         {block.shift.current_request_count}/{block.shift.max_requests}
                       </span>
                     </div>

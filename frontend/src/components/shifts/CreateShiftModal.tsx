@@ -2,6 +2,19 @@ import { useState, useEffect } from 'react'
 import { useCreateShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
 import { SPEC_DISPLAY } from '../../utils/employeeUtils'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 
 interface Props {
   isOpen: boolean
@@ -52,8 +65,6 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
     }
   }, [isOpen])
 
-  if (!isOpen) return null
-
   const toggleSpec = (spec: string) => {
     setSpecFocus(prev => prev.includes(spec) ? prev.filter(s => s !== spec) : [...prev, spec])
   }
@@ -103,98 +114,23 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '10px 12px',
-    background: 'var(--bg-surface)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-sm)',
-    color: 'var(--text-primary)',
-    fontSize: '14px',
-    fontFamily: 'var(--font-body)',
-    outline: 'none',
-    boxSizing: 'border-box',
-  }
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: '12px',
-    fontWeight: 600,
-    color: 'var(--text-secondary)',
-    marginBottom: '6px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  }
-
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        style={{
-          width: '520px',
-          maxWidth: '100vw',
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: '16px',
-          padding: '28px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: 'var(--font-display)',
-              fontSize: '18px',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-            }}
-          >
-            Создать смену
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: '20px',
-              lineHeight: 1,
-              padding: '4px',
-            }}
-          >
-            ×
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-[520px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Создать смену</DialogTitle>
+        </DialogHeader>
 
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          className="flex flex-col gap-4"
         >
           {/* Executor */}
-          <div>
-            <label style={labelStyle}>Исполнитель</label>
-            <select
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Исполнитель</Label>
+            <Select
               value={executorId}
               onChange={e => setExecutorId(e.target.value)}
-              style={inputStyle}
             >
               <option value="">— Выберите исполнителя —</option>
               {employees.map(emp => (
@@ -203,162 +139,123 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
                   {emp.phone ? ` · ${emp.phone}` : ''}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Start time */}
-          <div>
-            <label style={labelStyle}>Начало смены</label>
-            <input
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Начало смены</Label>
+            <Input
               type="datetime-local"
               value={startTime}
               onChange={e => setStartTime(e.target.value)}
-              style={inputStyle}
             />
           </div>
 
           {/* End time */}
-          <div>
-            <label style={labelStyle}>Конец смены</label>
-            <input
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Конец смены</Label>
+            <Input
               type="datetime-local"
               value={endTime}
               onChange={e => setEndTime(e.target.value)}
-              style={inputStyle}
             />
           </div>
 
           {/* Shift type */}
-          <div>
-            <label style={labelStyle}>Тип смены</label>
-            <select
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Тип смены</Label>
+            <Select
               value={shiftType}
               onChange={e => setShiftType(e.target.value)}
-              style={inputStyle}
             >
               {SHIFT_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Specializations */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Специализации
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Специализации</Label>
+            <div className="flex flex-wrap gap-1.5">
               {Object.entries(SPEC_DISPLAY).map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => toggleSpec(key)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 20, fontSize: '12px', cursor: 'pointer',
-                    background: specFocus.includes(key) ? 'var(--accent-dim)' : 'var(--bg-surface)',
-                    color: specFocus.includes(key) ? 'var(--accent)' : 'var(--text-secondary)',
-                    border: `1px solid ${specFocus.includes(key) ? 'var(--border-active)' : 'var(--border)'}`,
-                    fontFamily: 'var(--font-body)',
-                  }}
+                  className={cn(
+                    'px-2.5 py-1 rounded-full text-xs cursor-pointer border transition-colors',
+                    specFocus.includes(key)
+                      ? 'bg-accent-dim text-accent border-border-active'
+                      : 'bg-bg-surface text-text-secondary border-border-default'
+                  )}
                 >{label}</button>
               ))}
             </div>
           </div>
 
           {/* Max requests */}
-          <div>
-            <label style={labelStyle}>Макс. заявок</label>
-            <input
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Макс. заявок</Label>
+            <Input
               type="number"
               min={1}
               value={maxRequests}
               onChange={e => setMaxRequests(e.target.value)}
-              style={inputStyle}
             />
           </div>
 
           {/* Priority */}
-          <div>
-            <label style={labelStyle}>Приоритет</label>
-            <select
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Приоритет</Label>
+            <Select
               value={priority}
               onChange={e => setPriority(e.target.value)}
-              style={inputStyle}
             >
               {PRIORITIES.map(p => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Notes */}
-          <div>
-            <label style={labelStyle}>Заметки</label>
-            <textarea
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">Заметки</Label>
+            <Textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
               placeholder="Дополнительная информация..."
-              style={{ ...inputStyle, resize: 'vertical' }}
+              className="resize-y"
             />
           </div>
 
           {/* Error */}
           {error && (
-            <div
-              style={{
-                fontSize: '13px',
-                color: 'var(--red, #ef4444)',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '10px 12px',
-              }}
-            >
+            <div className="text-[13px] text-red bg-red/10 border border-red/30 rounded-sm px-3 py-2.5">
               {error}
             </div>
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <button
+          <DialogFooter>
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-secondary)',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'var(--font-body)',
-              }}
             >
               Отмена
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={createShift.isPending}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--accent)',
-                border: 'none',
-                color: '#000',
-                fontSize: '14px',
-                fontWeight: 700,
-                cursor: createShift.isPending ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--font-body)',
-                opacity: createShift.isPending ? 0.7 : 1,
-              }}
             >
               {createShift.isPending ? 'Создание...' : 'Создать'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

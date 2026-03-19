@@ -15,6 +15,8 @@ import ShiftDetailModal from '../components/shifts/ShiftDetailModal'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export default function ShiftsPage() {
   usePageTitle('Смены')
@@ -55,39 +57,20 @@ export default function ShiftsPage() {
   // Topbar actions
   useEffect(() => {
     setActions(
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => navigate('/dashboard/templates')}
-          style={{
-            padding: '8px 14px',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'var(--font-body)',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-secondary)',
-          }}
         >
           Шаблоны
-        </button>
-        <button
+        </Button>
+        <Button
+          size="sm"
           onClick={() => setCreateModalOpen(true)}
-          style={{
-            padding: '8px 14px',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'var(--font-body)',
-            background: 'var(--accent)',
-            color: '#000',
-            border: 'none',
-          }}
         >
           + Создать смену
-        </button>
+        </Button>
       </div>,
     )
     return clearActions
@@ -139,131 +122,64 @@ export default function ShiftsPage() {
     { label: 'Общая нагрузка', value: `${totalLoad}%`, color: 'var(--violet)' },
   ]
 
-  const navBtnStyle: React.CSSProperties = {
-    width: 36,
-    height: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'var(--bg-surface)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-sm)',
-    cursor: 'pointer',
-    color: 'var(--text-secondary)',
-  }
-
   return (
-    <div
-      style={{
-        padding: '20px 24px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-      }}
-    >
+    <div className="p-5 px-6 flex flex-col gap-5">
       {/* Date navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button onClick={goPrev} style={navBtnStyle}>
-          <ChevronLeft size={16} />
-        </button>
-        <button onClick={goNext} style={navBtnStyle}>
-          <ChevronRight size={16} />
-        </button>
-        <span
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: '16px',
-            color: 'var(--text-primary)',
-          }}
+      <div className="flex items-center gap-3">
+        <Button
+          variant="outline"
+          size="icon"
+          className="w-9 h-9"
+          onClick={goPrev}
         >
+          <ChevronLeft size={16} />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="w-9 h-9"
+          onClick={goNext}
+        >
+          <ChevronRight size={16} />
+        </Button>
+        <span className="font-[var(--font-display)] font-semibold text-base text-text-primary">
           {dateLabelStr}
         </span>
         <button
           onClick={goToday}
-          style={{
-            padding: '4px 12px',
-            borderRadius: 20,
-            background: 'var(--accent-dim)',
-            color: 'var(--accent)',
-            border: '1px solid var(--border-active)',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
+          className="px-3 py-1 rounded-full bg-accent-dim text-accent border border-border-active text-xs font-semibold cursor-pointer"
         >
           Сегодня
         </button>
       </div>
 
       {/* Stats cards */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '12px',
-        }}
-      >
+      <div className="grid grid-cols-5 gap-3">
         {STATS_CARDS.map(card => (
           <div
             key={card.label}
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              padding: '16px',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
+            className="bg-bg-card border border-border-default rounded-default p-4 relative overflow-hidden"
           >
             <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '24px',
-                fontWeight: 600,
-                color: card.color,
-                marginBottom: '4px',
-              }}
+              className="font-[var(--font-mono)] text-2xl font-semibold mb-1"
+              style={{ color: card.color }}
             >
               {card.value}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            <div className="text-[11px] text-text-muted">
               {card.label}
             </div>
             <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '3px',
-                background: card.color,
-                opacity: 0.4,
-              }}
+              className="absolute bottom-0 left-0 right-0 h-[3px] opacity-40"
+              style={{ background: card.color }}
             />
           </div>
         ))}
       </div>
 
       {/* Timeline */}
-      <div
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '16px 20px 12px',
-            borderBottom: '1px solid var(--border)',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: '14px',
-            color: 'var(--text-primary)',
-          }}
-        >
+      <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+        <div className="px-5 pt-4 pb-3 border-b border-border-default font-[var(--font-display)] font-semibold text-sm text-text-primary">
           Расписание смен
         </div>
         <ShiftTimeline
@@ -274,135 +190,54 @@ export default function ShiftsPage() {
       </div>
 
       {/* Bottom panels */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 380px',
-          gap: '20px',
-        }}
-      >
+      <div className="grid grid-cols-[1fr_380px] gap-5">
         {/* Heatmap */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: '14px',
-              color: 'var(--text-primary)',
-              marginBottom: '16px',
-            }}
-          >
+        <div className="bg-bg-card border border-border-default rounded-default p-5">
+          <div className="font-[var(--font-display)] font-semibold text-sm text-text-primary mb-4">
             Тепловая карта покрытия
           </div>
           <ShiftCoverageHeatmap shifts={shifts} date={selectedDate} />
         </div>
 
         {/* Transfers + Templates */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-          }}
-        >
+        <div className="bg-bg-card border border-border-default rounded-default p-5 flex flex-col gap-4">
           {/* Transfers */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: '14px',
-                color: 'var(--text-primary)',
-              }}
-            >
+          <div className="flex items-center gap-2">
+            <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">
               Запросы на передачу
             </span>
             {transfers.length > 0 && (
-              <span
-                style={{
-                  background: 'rgba(245,158,11,0.2)',
-                  color: 'var(--amber)',
-                  borderRadius: 20,
-                  padding: '2px 8px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                }}
-              >
+              <span className="bg-amber/20 text-amber rounded-full px-2 py-0.5 text-[11px] font-semibold">
                 {transfers.length}
               </span>
             )}
           </div>
 
           {transfers.length === 0 ? (
-            <div
-              style={{
-                fontSize: '13px',
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-                padding: '12px 0',
-              }}
-            >
+            <div className="text-[13px] text-text-muted text-center py-3">
               Нет запросов на передачу
             </div>
           ) : (
             transfers.slice(0, 3).map(t => (
               <div
                 key={t.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '8px',
-                  padding: '10px',
-                  background: 'var(--bg-surface)',
-                  borderRadius: 'var(--radius-sm)',
-                }}
+                className="flex items-start gap-2 p-2.5 bg-bg-surface rounded-sm"
               >
                 <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background:
-                      t.urgency_level === 'critical'
-                        ? 'var(--red)'
-                        : t.urgency_level === 'high'
-                          ? 'var(--amber)'
-                          : 'var(--blue)',
-                    marginTop: 4,
-                    flexShrink: 0,
-                  }}
+                  className={cn(
+                    'w-2 h-2 rounded-full mt-1 shrink-0',
+                    t.urgency_level === 'critical'
+                      ? 'bg-red'
+                      : t.urgency_level === 'high'
+                        ? 'bg-amber'
+                        : 'bg-blue'
+                  )}
                 />
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      color: 'var(--text-primary)',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-xs text-text-primary font-semibold truncate">
                     {t.from_executor_name} → {t.to_executor_name ?? '?'}
                   </div>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      marginTop: 2,
-                    }}
-                  >
+                  <div className="text-[11px] text-text-muted mt-0.5">
                     {t.reason}
                   </div>
                 </div>
@@ -411,65 +246,30 @@ export default function ShiftsPage() {
           )}
 
           {/* Templates */}
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 600,
-                fontSize: '13px',
-                color: 'var(--text-primary)',
-                marginBottom: '10px',
-              }}
-            >
+          <div className="border-t border-border-default pt-3">
+            <div className="font-[var(--font-display)] font-semibold text-[13px] text-text-primary mb-2.5">
               Шаблоны смен
             </div>
             {templates.slice(0, 3).map(tmpl => (
               <div
                 key={tmpl.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '8px 0',
-                  borderBottom: '1px solid var(--border)',
-                }}
+                className="flex items-center gap-2.5 py-2 border-b border-border-default"
               >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    background: 'var(--accent-dim)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '16px',
-                    flexShrink: 0,
-                  }}
-                >
+                <div className="w-8 h-8 rounded-sm bg-accent-dim flex items-center justify-center text-base shrink-0">
                   📋
                 </div>
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-xs font-semibold text-text-primary truncate">
                     {tmpl.name}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <div className="text-[11px] text-text-muted">
                     {`${tmpl.start_hour}:${String(tmpl.start_minute).padStart(2, '0')} · ${tmpl.duration_hours}ч`}
                   </div>
                 </div>
               </div>
             ))}
             {templates.length === 0 && (
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              <div className="text-xs text-text-muted">
                 Нет шаблонов
               </div>
             )}

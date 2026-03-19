@@ -1,5 +1,6 @@
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   employee: EmployeeBrief
@@ -14,63 +15,36 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Без имени'
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: '14px',
-      background: 'var(--bg-card)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      padding: '16px',
-    }}>
+    <div className="flex flex-row items-center gap-3.5 bg-bg-card border border-border-default rounded-default p-4">
       {/* Avatar 48px */}
-      <div style={{
-        width: 48,
-        height: 48,
-        borderRadius: '50%',
-        background: gradient,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'var(--font-display)',
-        fontWeight: 700,
-        fontSize: '16px',
-        color: '#fff',
-        flexShrink: 0,
-      }}>
+      <div
+        className="w-12 h-12 rounded-full flex items-center justify-center font-[var(--font-display)] font-bold text-base text-white shrink-0"
+        style={{ background: gradient }}
+      >
         {initials}
       </div>
 
       {/* Info column */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: '14px',
-          color: 'var(--text-primary)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
+      <div className="flex-1 min-w-0">
+        <div className="font-[var(--font-display)] font-semibold text-sm text-text-primary truncate">
           {name}
         </div>
         {employee.phone && (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 2 }}>
+          <div className="text-xs text-text-muted mt-0.5">
             {employee.phone}
           </div>
         )}
         {employee.specialization.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+          <div className="flex flex-wrap gap-1 mt-1.5">
             {employee.specialization.map(spec => (
-              <span key={spec} style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                padding: '2px 7px',
-                borderRadius: 10,
-                background: (SPEC_COLORS[spec] ?? 'var(--text-muted)') + '22',
-                color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
-              }}>
+              <span
+                key={spec}
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px]"
+                style={{
+                  background: (SPEC_COLORS[spec] ?? 'var(--text-muted)') + '22',
+                  color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
+                }}
+              >
                 {spec}
               </span>
             ))}
@@ -79,55 +53,28 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
       </div>
 
       {/* Time-ago label */}
-      <div style={{
-        fontSize: '11px',
-        color: 'var(--amber)',
-        fontWeight: 500,
-        flexShrink: 0,
-        textAlign: 'right',
-        marginRight: '4px',
-      }}>
+      <div className="text-[11px] text-amber font-medium shrink-0 text-right mr-1">
         Ожидает одобрения
       </div>
 
       {/* Button group */}
-      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-        <button
+      <div className="flex gap-2 shrink-0">
+        <Button
           onClick={() => onApprove(employee.id)}
           disabled={isPending}
-          style={{
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 8,
-            cursor: isPending ? 'not-allowed' : 'pointer',
-            fontSize: '12px',
-            color: '#fff',
-            padding: '7px 14px',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            opacity: isPending ? 0.6 : 1,
-          }}
+          size="sm"
         >
           Одобрить
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => onReject(employee.id)}
           disabled={isPending}
-          style={{
-            background: 'none',
-            border: '1px solid var(--red)',
-            borderRadius: 8,
-            cursor: isPending ? 'not-allowed' : 'pointer',
-            fontSize: '12px',
-            color: 'var(--red)',
-            padding: '7px 14px',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            opacity: isPending ? 0.6 : 1,
-          }}
+          variant="outline"
+          size="sm"
+          className="border-red text-red hover:bg-red/10"
         >
           Отклонить
-        </button>
+        </Button>
       </div>
     </div>
   )

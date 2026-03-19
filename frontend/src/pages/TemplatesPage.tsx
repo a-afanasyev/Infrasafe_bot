@@ -12,8 +12,10 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { SPEC_COLORS, SPEC_DISPLAY } from '../utils/employeeUtils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
-// Map English spec keys → colors from SPEC_COLORS (keyed by Russian name)
+// Map English spec keys -> colors from SPEC_COLORS (keyed by Russian name)
 const SPEC_KEY_TO_COLOR: Record<string, string> = {
   electrician: SPEC_COLORS['Электрика'] ?? 'var(--text-secondary)',
   plumber: SPEC_COLORS['Сантехника'] ?? 'var(--text-secondary)',
@@ -41,18 +43,6 @@ const SHIFT_TYPE_LABEL: Record<string, string> = {
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
-const primaryBtnStyle: React.CSSProperties = {
-  padding: '8px 14px',
-  borderRadius: 'var(--radius-sm)',
-  fontSize: '13px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'var(--font-body)',
-  background: 'var(--accent)',
-  color: '#000',
-  border: 'none',
-}
-
 function formatTime(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
@@ -66,28 +56,15 @@ function computeEndTime(hour: number, minute: number, duration: number): string 
 
 // Subcomponent to isolate hover state for delete button
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
-  const [hovered, setHovered] = useState(false)
   return (
-    <button
+    <Button
+      variant="outline"
+      size="sm"
       onClick={onDelete}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        padding: '5px 10px',
-        borderRadius: 6,
-        fontSize: '12px',
-        fontWeight: 600,
-        cursor: 'pointer',
-        fontFamily: 'var(--font-body)',
-        background: hovered ? 'rgba(239,68,68,0.1)' : 'var(--bg-surface)',
-        color: hovered ? 'var(--red, #ef4444)' : 'var(--text-secondary)',
-        border: `1px solid ${hovered ? 'rgba(239,68,68,0.4)' : 'var(--border)'}`,
-        whiteSpace: 'nowrap',
-        transition: 'all 0.15s',
-      }}
+      className="text-xs hover:bg-red/10 hover:text-red hover:border-red/40"
     >
       Удал.
-    </button>
+    </Button>
   )
 }
 
@@ -104,9 +81,9 @@ export default function TemplatesPage() {
 
   const actionsNode = useMemo(
     () => (
-      <button onClick={() => setCreateOpen(true)} style={primaryBtnStyle}>
+      <Button onClick={() => setCreateOpen(true)} size="sm">
         + Создать шаблон
-      </button>
+      </Button>
     ),
     [setCreateOpen],
   )
@@ -172,99 +149,35 @@ export default function TemplatesPage() {
 
   if (isError) {
     return (
-      <div
-        style={{
-          padding: '20px 24px',
-          color: 'var(--red, #ef4444)',
-          fontSize: '14px',
-        }}
-      >
+      <div className="p-5 px-6 text-red text-sm">
         Ошибка загрузки шаблонов. Проверьте соединение и попробуйте снова.
       </div>
     )
   }
 
-  const thStyle: React.CSSProperties = {
-    padding: '10px 14px',
-    textAlign: 'left',
-    fontSize: '0.65rem',
-    fontWeight: 600,
-    color: 'var(--text-muted)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    whiteSpace: 'nowrap',
-  }
-
-  const tdStyle: React.CSSProperties = {
-    padding: '12px 14px',
-    verticalAlign: 'middle',
-    borderTop: '1px solid var(--border)',
-  }
-
   return (
-    <div
-      style={{
-        padding: '20px 24px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-      }}
-    >
+    <div className="p-5 px-6 flex flex-col gap-5">
       {/* Stats bar */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '16px',
-        }}
-      >
+      <div className="grid grid-cols-3 gap-4">
         {STATS.map(card => (
           <div
             key={card.label}
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-            }}
+            className="bg-bg-card border border-border-default rounded-[12px] p-5 flex items-center gap-4"
           >
             <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: card.bgGrad,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px',
-                flexShrink: 0,
-              }}
+              className="w-12 h-12 rounded-[12px] flex items-center justify-center text-[22px] shrink-0"
+              style={{ background: card.bgGrad }}
             >
               {card.emoji}
             </div>
             <div>
               <div
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '1.5rem',
-                  fontWeight: 600,
-                  color: card.color,
-                  lineHeight: 1,
-                }}
+                className="font-[var(--font-mono)] text-2xl font-semibold leading-none"
+                style={{ color: card.color }}
               >
                 {card.value}
               </div>
-              <div
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--text-muted)',
-                  marginTop: '4px',
-                }}
-              >
+              <div className="text-[11px] text-text-muted mt-1">
                 {card.label}
               </div>
             </div>
@@ -273,14 +186,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Data table */}
-      <div
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: '12px',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="bg-bg-card border border-border-default rounded-[12px] overflow-hidden">
         {templates.length === 0 ? (
           <EmptyState
             icon="📋"
@@ -288,23 +194,17 @@ export default function TemplatesPage() {
             subtitle="Создайте первый шаблон смены"
           />
         ) : (
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'separate',
-              borderSpacing: 0,
-            }}
-          >
+          <table className="w-full border-collapse border-spacing-0">
             <thead>
-              <tr style={{ background: 'var(--bg-surface)' }}>
-                <th style={thStyle}>Название</th>
-                <th style={thStyle}>Время</th>
-                <th style={thStyle}>Тип</th>
-                <th style={thStyle}>Дни недели</th>
-                <th style={thStyle}>Специализации</th>
-                <th style={thStyle}>Исполнители</th>
-                <th style={thStyle}>Авто</th>
-                <th style={thStyle}>Действия</th>
+              <tr className="bg-bg-surface">
+                {['Название', 'Время', 'Тип', 'Дни недели', 'Специализации', 'Исполнители', 'Авто', 'Действия'].map(h => (
+                  <th
+                    key={h}
+                    className="px-3.5 py-2.5 text-left text-[0.65rem] font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -331,7 +231,6 @@ export default function TemplatesPage() {
                 return (
                   <TemplateRow
                     key={tmpl.id}
-                    tdStyle={tdStyle}
                     tmpl={tmpl}
                     startStr={startStr}
                     endStr={endStr}
@@ -375,7 +274,6 @@ export default function TemplatesPage() {
 }
 
 interface TemplateRowProps {
-  tdStyle: React.CSSProperties
   tmpl: import('../hooks/useTemplates').TemplateBrief
   startStr: string
   endStr: string
@@ -389,7 +287,6 @@ interface TemplateRowProps {
 }
 
 function TemplateRow({
-  tdStyle,
   tmpl,
   startStr,
   endStr,
@@ -405,68 +302,43 @@ function TemplateRow({
 
   return (
     <tr
-      style={{
-        opacity: tmpl.is_active ? 1 : 0.5,
-        background: rowHovered
-          ? 'var(--bg-card-hover, rgba(255,255,255,0.03))'
-          : 'transparent',
-      }}
+      className={cn(
+        'transition-colors',
+        !tmpl.is_active && 'opacity-50',
+        rowHovered ? 'bg-bg-card-hover' : 'bg-transparent'
+      )}
       onMouseEnter={() => setRowHovered(true)}
       onMouseLeave={() => setRowHovered(false)}
     >
       {/* Название */}
-      <td style={tdStyle}>
-        <strong
-          style={{
-            fontSize: '13px',
-            color: 'var(--text-primary)',
-            display: 'block',
-          }}
-        >
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
+        <strong className="text-[13px] text-text-primary block">
           {tmpl.name}
         </strong>
         {tmpl.description && (
-          <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+          <small className="text-text-muted text-[11px]">
             {tmpl.description}
           </small>
         )}
       </td>
 
       {/* Время */}
-      <td style={tdStyle}>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '13px',
-            color: 'var(--text-primary)',
-            whiteSpace: 'nowrap',
-          }}
-        >
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
+        <div className="font-[var(--font-mono)] text-[13px] text-text-primary whitespace-nowrap">
           {startStr} — {endStr}
         </div>
-        <div
-          style={{
-            fontSize: '11px',
-            color: 'var(--text-muted)',
-            marginTop: '2px',
-          }}
-        >
+        <div className="text-[11px] text-text-muted mt-0.5">
           {tmpl.duration_hours} часов
         </div>
       </td>
 
       {/* Тип */}
-      <td style={tdStyle}>
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <span
+          className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
           style={{
-            display: 'inline-block',
-            padding: '3px 8px',
-            borderRadius: 20,
-            fontSize: '11px',
-            fontWeight: 600,
             color: typeColor,
             background: typeColor + '22',
-            whiteSpace: 'nowrap',
           }}
         >
           {typeLabel}
@@ -474,27 +346,19 @@ function TemplateRow({
       </td>
 
       {/* Дни недели */}
-      <td style={tdStyle}>
-        <div style={{ display: 'flex', gap: '3px' }}>
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
+        <div className="flex gap-[3px]">
           {DAY_LABELS.map((label, dayIdx) => {
             const active = tmpl.days_of_week?.includes(dayIdx) ?? false
             return (
               <div
                 key={dayIdx}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  flexShrink: 0,
-                  background: active ? 'var(--accent-dim)' : 'var(--bg-surface)',
-                  color: active ? 'var(--accent)' : 'var(--text-muted)',
-                  border: `1px solid ${active ? 'var(--border-active)' : 'var(--border)'}`,
-                }}
+                className={cn(
+                  'w-7 h-7 rounded-[6px] flex items-center justify-center text-[11px] font-semibold shrink-0 border',
+                  active
+                    ? 'bg-accent-dim text-accent border-border-active'
+                    : 'bg-bg-surface text-text-muted border-border-default'
+                )}
               >
                 {label}
               </div>
@@ -504,31 +368,19 @@ function TemplateRow({
       </td>
 
       {/* Специализации */}
-      <td style={tdStyle}>
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
         {tmpl.required_specializations && tmpl.required_specializations.length > 0 ? (
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '4px',
-              maxWidth: '160px',
-            }}
-          >
+          <div className="flex flex-wrap gap-1 max-w-[160px]">
             {tmpl.required_specializations.map(spec => {
               const color = SPEC_KEY_TO_COLOR[spec] ?? 'var(--text-secondary)'
               const label = SPEC_DISPLAY[spec] ?? spec
               return (
                 <span
                   key={spec}
+                  className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
                   style={{
-                    display: 'inline-block',
-                    padding: '2px 6px',
-                    borderRadius: 20,
-                    fontSize: '10px',
-                    fontWeight: 600,
                     color,
                     background: color + '22',
-                    whiteSpace: 'nowrap',
                   }}
                 >
                   {label}
@@ -537,121 +389,64 @@ function TemplateRow({
             })}
           </div>
         ) : (
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>—</span>
+          <span className="text-xs text-text-muted">—</span>
         )}
       </td>
 
       {/* Исполнители */}
-      <td style={tdStyle}>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '13px',
-            color: 'var(--text-primary)',
-            whiteSpace: 'nowrap',
-          }}
-        >
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
+        <div className="font-[var(--font-mono)] text-[13px] text-text-primary whitespace-nowrap">
           {tmpl.min_executors}—{tmpl.max_executors}
         </div>
-        <div
-          style={{
-            marginTop: '4px',
-            width: 60,
-            height: 4,
-            borderRadius: 2,
-            background: 'var(--border)',
-            overflow: 'hidden',
-          }}
-        >
+        <div className="mt-1 w-[60px] h-1 rounded-sm bg-border-default overflow-hidden">
           <div
-            style={{
-              height: '100%',
-              width: `${executorProgress}%`,
-              background: 'var(--accent)',
-              borderRadius: 2,
-            }}
+            className="h-full bg-accent rounded-sm"
+            style={{ width: `${executorProgress}%` }}
           />
         </div>
       </td>
 
       {/* Авто toggle */}
-      <td style={tdStyle}>
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div
           onClick={() => onToggleAutoCreate(tmpl.id, !tmpl.auto_create)}
           title={
             tmpl.auto_create ? 'Авто-создание включено' : 'Авто-создание выключено'
           }
-          style={{
-            width: 40,
-            height: 22,
-            borderRadius: 11,
-            background: tmpl.auto_create ? 'var(--accent)' : 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            position: 'relative',
-            cursor: 'pointer',
-            transition: 'background 0.2s',
-            flexShrink: 0,
-          }}
+          className={cn(
+            'w-10 h-[22px] rounded-full border border-border-default relative cursor-pointer transition-colors duration-200 shrink-0',
+            tmpl.auto_create ? 'bg-accent' : 'bg-bg-surface'
+          )}
         >
           <div
-            style={{
-              position: 'absolute',
-              top: 2,
-              left: tmpl.auto_create ? 20 : 2,
-              width: 16,
-              height: 16,
-              borderRadius: '50%',
-              background: '#fff',
-              transition: 'left 0.2s',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-            }}
+            className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-[left] duration-200"
+            style={{ left: tmpl.auto_create ? 20 : 2 }}
           />
         </div>
       </td>
 
       {/* Действия */}
-      <td style={tdStyle}>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'nowrap' }}>
+      <td className="px-3.5 py-3 align-middle border-t border-border-default">
+        <div className="flex gap-1.5 flex-nowrap">
           {tmpl.is_active && (
-            <button
+            <Button
+              size="sm"
               onClick={() => onCreateFromToday(tmpl.id)}
               disabled={createPending}
-              style={{
-                padding: '5px 10px',
-                borderRadius: 6,
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: createPending ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--font-body)',
-                background: 'var(--accent)',
-                color: '#000',
-                border: 'none',
-                whiteSpace: 'nowrap',
-                opacity: createPending ? 0.7 : 1,
-              }}
+              className="text-xs"
             >
               Создать
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             disabled
             title="Редактирование в разработке"
-            style={{
-              padding: '5px 10px',
-              borderRadius: 6,
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'not-allowed',
-              fontFamily: 'var(--font-body)',
-              background: 'var(--bg-surface)',
-              color: 'var(--text-muted)',
-              border: '1px solid var(--border)',
-              whiteSpace: 'nowrap',
-              opacity: 0.6,
-            }}
+            className="text-xs opacity-60"
           >
             Ред.
-          </button>
+          </Button>
           <DeleteButton onDelete={() => onDelete(tmpl.id)} />
         </div>
       </td>
