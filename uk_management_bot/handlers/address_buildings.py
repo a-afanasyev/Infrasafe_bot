@@ -10,6 +10,7 @@
 - Фильтрация зданий по двору
 """
 import logging
+from typing import Optional
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -45,9 +46,10 @@ CANCEL_TEXTS = get_cancel_texts()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_buildings_list")
-async def show_buildings_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def show_buildings_list(callback: CallbackQuery, state: Optional[FSMContext] = None, language: str = "ru"):
     """Показать список всех зданий"""
-    await state.clear()
+    if state is not None:
+        await state.clear()
 
     db = next(get_db())
     try:
@@ -71,7 +73,10 @@ async def show_buildings_list(callback: CallbackQuery, state: FSMContext, langua
             return
 
         lang = language
-        text = get_text("address_buildings.handlers.buildings_list_title", language=lang).format(count=len(buildings))
+        active_count = sum(1 for b in buildings if b.is_active)
+        text = get_text("address_buildings.handlers.buildings_list_title", language=lang).format(
+            total=len(buildings), active=active_count
+        )
 
         await callback.message.edit_text(
             text,
@@ -104,7 +109,7 @@ async def show_buildings_page(callback: CallbackQuery, language: str = "ru"):
         buildings = result.scalars().all()
 
         lang = language
-        text = get_text("address_buildings.handlers.buildings_list_page", language=lang).format(page=page + 1, count=len(buildings))
+        text = get_text("address_buildings.handlers.buildings_list_page", language=lang).format(page=page + 1, total=len(buildings))
 
         await callback.message.edit_text(
             text,

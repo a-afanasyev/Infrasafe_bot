@@ -15,6 +15,7 @@ erDiagram
     User ||--o{ AccessRights : "имеет"
     User ||--o{ ShiftTransfer : "передаёт (from)"
     User ||--o{ ShiftTransfer : "принимает (to)"
+    User ||--o{ RefreshToken : "имеет токены"
 
     Request ||--o{ Rating : "оценивается"
     Request ||--o{ RequestComment : "комментируется"
@@ -113,6 +114,7 @@ stateDiagram-v2
 | `requested_materials` | Text | Запрошенные исполнителем материалы |
 | `manager_materials_comment` | Text | Комментарий менеджера к материалам |
 | `purchase_history` | Text | История закупок |
+| `source` | String(20) | Источник заявки: bot / web / callcenter / twa |
 | `is_returned` | Boolean | Флаг возвращённой заявки |
 | `return_reason` | Text | Причина возврата |
 | `return_media` | JSON | Медиа при возврате |
@@ -188,6 +190,11 @@ stateDiagram-v2
 | Уборка | cleaning |
 | Безопасность | security |
 | Техобслуживание | maintenance |
+| Вентиляция | hvac |
+| Лифт | maintenance |
+| Благоустройство | cleaning |
+| Интернет/ТВ | electric |
+| Другое | universal |
 
 ## 2.4. Сущность: Shift (Смена)
 
@@ -276,13 +283,32 @@ graph TD
     U -.->|UserYard\nдополнительный доступ| Y
 ```
 
-**Yard (Двор):** name, description, GPS-координаты, is_active.
+**Yard (Двор):** name, description, gps_latitude, gps_longitude, is_active, created_at, created_by.
 
-**Building (Здание):** address, yard_id, GPS-координаты, entrance_count, floor_count.
+**Building (Здание):** address, yard_id, gps_latitude, gps_longitude, entrance_count, floor_count, description, is_active, created_at, created_by.
 
-**Apartment (Квартира):** building_id, apartment_number, entrance, floor, rooms_count, area.
+**Apartment (Квартира):** building_id, apartment_number, entrance, floor, rooms_count, area, description, is_active, created_at, created_by, updated_at. Уникальность: `(building_id, apartment_number)`.
 
 ## 2.7. Сущность: UserApartment (Привязка к квартире)
+
+**Таблица:** `user_apartments`
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | Integer PK | ID записи |
+| `user_id` | Integer FK | Пользователь |
+| `apartment_id` | Integer FK | Квартира |
+| `status` | String(20) | pending / approved / rejected |
+| `requested_at` | DateTime | Дата заявки |
+| `reviewed_at` | DateTime | Дата рассмотрения |
+| `reviewed_by` | Integer FK | Кто рассмотрел |
+| `admin_comment` | Text | Комментарий администратора |
+| `is_owner` | Boolean | Является ли владельцем (или только проживающим) |
+| `is_primary` | Boolean | Основная квартира (для пользователей с несколькими) |
+| `created_at` | DateTime | Дата создания |
+| `updated_at` | DateTime | Дата обновления |
+
+Уникальность: `(user_id, apartment_id)`. Модель содержит методы `approve(reviewer_id, comment)` и `reject(reviewer_id, comment)`.
 
 ### Диаграмма состояний привязки
 
@@ -364,3 +390,21 @@ stateDiagram-v2
 | `rating` | Оценка 1-5 |
 | `comment` | Текстовый комментарий |
 | `created_at` | Дата оценки |
+
+## 2.12. RefreshToken (Токен обновления)
+
+**Таблица:** `refresh_tokens`
+
+Используется для JWT-аутентификации в Management API (frontend dashboard).
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | Integer PK | ID токена |
+| `user_id` | Integer FK | Пользователь (CASCADE delete) |
+| `token_hash` | String(64) UNIQUE | SHA-256 хеш токена |
+| `expires_at` | DateTime | Время истечения |
+| `created_at` | DateTime | Время создания |
+| `revoked_at` | DateTime | Время отзыва (null если активен) |
+| `device_info` | Text | Информация об устройстве |
+
+Свойство `is_valid` проверяет: `revoked_at is None AND expires_at > now()`.

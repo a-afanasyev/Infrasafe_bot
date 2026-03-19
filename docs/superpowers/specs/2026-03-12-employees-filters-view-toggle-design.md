@@ -21,18 +21,31 @@ Three chip groups separated by vertical dividers, view toggle pinned to the righ
 **Status group** — existing, unchanged: `all` / `on_shift` / `verified`
 
 **Specialization group** — new, single-select:
-- First chip: «Все спец.» (value `all`) — always shown, resets spec filter
+- First chip: «Все спец.» (value `'all'`) — always shown, resets spec filter
 - Then one chip per entry in `SPEC_DISPLAY` from `employeeUtils.ts` (8 specs)
-- Active chip: highlighted with spec's accent color (from `SPEC_COLORS`), matching existing chip style
-- When a spec is active, `specialization` query param is passed to `useEmployees`
+- Chip label: Russian display name from `SPEC_DISPLAY` (e.g. `'⚡ Электрика'`)
+- Chip value (filter key): English backend key from `SPEC_DISPLAY` (e.g. `'electrician'`)
+- Backend accepts `?specialization=electrician` and does `LIKE '%electrician%'` on the JSON array column
+- When active, chip uses its spec color from `SPEC_COLORS` (e.g. Электрика → `var(--amber)`) as background tint + border, with matching text color — NOT `var(--accent)`. Example active style: `background: SPEC_COLORS[label]+'22', border: SPEC_COLORS[label]+'55', color: SPEC_COLORS[label]`
+- Inactive chips use the standard `chipStyle(false)` from EmployeesPage
+- When spec is active, `{ specialization: specKey }` is merged into `apiFilters`
 - No "show more" collapse needed — 8 chips + «Все спец.» fit on one line at normal viewport
 
 **View toggle** — new, right-aligned:
 - Two icon buttons in a segmented control: ⊞ (tile) and ☰ (table)
 - Active button: `var(--accent)` background, white icon
 - Inactive button: transparent background, muted icon
-- State: `viewMode: 'tile' | 'table'`, `useState`, default `'tile'`
-- Persisted in `localStorage` key `employees_view_mode` so preference survives page reload
+- State: `viewMode: 'tile' | 'table'`, initialized from localStorage with try/catch fallback:
+  ```typescript
+  const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
+    try { return (localStorage.getItem('employees_view_mode') as 'tile' | 'table') || 'tile' }
+    catch { return 'tile' }
+  })
+  // persist on change:
+  useEffect(() => {
+    try { localStorage.setItem('employees_view_mode', viewMode) } catch {}
+  }, [viewMode])
+  ```
 
 ---
 
@@ -50,19 +63,20 @@ New component: `frontend/src/components/employees/StaffTable.tsx`
 
 | # | Header | Content |
 |---|--------|---------|
-| 1 | Сотрудник | Avatar (32px) + status dot + Name + phone (mono) |
+| 1 | Сотрудник | Avatar (32px, gradient) + status dot (10px, absolute bottom-right, emerald if on shift else `#5a6a7a`, 2px card-bg border — mirrors StaffCard:60-69) + Name + phone (mono) |
 | 2 | Специализация | Spec chips (same style as StaffCard) |
 | 3 | Верификация | Badge: «✓ Верифицирован» (emerald) or «⏳ На проверке» (amber) |
 | 4 | Статус | «● На смене» (emerald) or «● Не на смене» (muted) |
 | 5 | Смена | Shift ID mono (`#142`) or «—» |
-| 6 | Действия | «Назначить» (blue link) + «Блок»/«Разблок» (red/amber link) |
+| 6 | Действия | If verified: «Назначить» (blue link, calls `onAssign`). If blocked: show «Заблокирован» badge (red tint) + «Разблок» (amber text, calls `onBlock`). If not blocked: «Блок» (red text, calls `onBlock`). Matches StaffCard action logic exactly. |
 
 **Visual:**
 - Full-width table inside a `bg-card` rounded container
 - Header row: `bg-surface`, 10px uppercase muted labels
 - Rows: alternating hover, 1px border-bottom separator
 - Blocked employees: row at 60% opacity with "Заблокирован" badge in actions cell
-- Empty state: same `<EmptyState>` component as tile view
+- Empty state: `<EmptyState>` centered inside the full-width table container (same props as tile view)
+- Blocked row: entire row at `opacity: 0.6`, actions cell maintains full opacity for clickability
 
 **Props:**
 ```typescript

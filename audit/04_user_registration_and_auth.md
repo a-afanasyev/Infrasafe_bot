@@ -2,7 +2,13 @@
 
 ## 4.1. Общая схема авторизации
 
-Система использует **Telegram ID** в качестве основного идентификатора. JWT-токены описаны в openapi.yaml (BearerAuth) — для Web API. Аутентификация в боте работает через Telegram ID + middleware-цепочку.
+Система использует **Telegram ID** в качестве основного идентификатора. Существуют три метода аутентификации:
+
+| Метод | Интерфейс | Механизм |
+|-------|-----------|----------|
+| Telegram ID + Middleware | Telegram бот | Цепочка middleware (db -> auth -> role_mode -> localization) |
+| JWT Bearer Token | Dashboard (SPA) | Логин через API `/api/v2/auth/login`, refresh через `/api/v2/auth/refresh`. Токены хранятся в `RefreshToken` (БД) |
+| Telegram initData | TWA | Хук `useTWAAuth()` -- валидация `window.Telegram.WebApp.initData` |
 
 ### Цепочка авторизации (Middleware)
 

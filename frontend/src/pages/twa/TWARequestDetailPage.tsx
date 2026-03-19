@@ -83,7 +83,7 @@ export default function TWARequestDetailPage() {
 
   if (!request) return <div className="p-4 text-gray-400">Загрузка...</div>
 
-  const showAcceptance = request.status === 'Исполнено' || (request.status === 'Выполнена' && request.manager_confirmed)
+  const showAcceptance = request.status === 'Исполнено'
   const currentIdx = STATUS_ORDER.indexOf(request.status)
 
   return (

@@ -20,11 +20,11 @@ from uk_management_bot.database.session import get_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.keyboards.address_management import (
     get_apartments_list_keyboard,
     get_apartment_details_keyboard,
     get_apartment_edit_keyboard,
+    get_apartments_menu,
     get_confirmation_keyboard,
     get_skip_or_cancel_keyboard,
     get_cancel_keyboard_inline,
@@ -44,10 +44,10 @@ router = Router()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_apartments_list")
-async def show_apartments_list(callback: CallbackQuery, state: FSMContext):
+async def show_apartments_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Показать выбор здания для просмотра квартир"""
     await state.clear()
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -67,7 +67,7 @@ async def show_apartments_list(callback: CallbackQuery, state: FSMContext):
         if not buildings:
             await callback.message.edit_text(
                 get_text("address_apartments.handlers.no_buildings", language=lang),
-                reply_markup=get_apartments_menu()
+                reply_markup=get_apartments_menu(language=lang)
             )
             return
 
@@ -134,10 +134,10 @@ async def show_apartments_list(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("addr_apartments_by_building:"))
-async def show_apartments_by_building(callback: CallbackQuery):
+async def show_apartments_by_building(callback: CallbackQuery, language: str = "ru"):
     """Показать квартиры конкретного здания"""
     building_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -169,12 +169,12 @@ async def show_apartments_by_building(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_apartments_by_building_page:"))
-async def paginate_apartments_by_building(callback: CallbackQuery):
+async def paginate_apartments_by_building(callback: CallbackQuery, language: str = "ru"):
     """Пагинация квартир конкретного здания"""
     parts = callback.data.split(":")
     building_id = int(parts[1])
     page = int(parts[2])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -210,10 +210,10 @@ async def paginate_apartments_by_building(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_apartment_search")
-async def start_apartment_search(callback: CallbackQuery, state: FSMContext):
+async def start_apartment_search(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать поиск квартиры"""
     # TASK 17: Localize apartment search prompt
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     await state.set_state(ApartmentManagementStates.waiting_for_apartment_search)
 
@@ -230,10 +230,10 @@ async def start_apartment_search(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_apartment_search))
-async def process_apartment_search(message: Message, state: FSMContext):
+async def process_apartment_search(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка поискового запроса"""
     # TASK 17: Localize search results
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     query = message.text.strip()
 
     if len(query) < 1:
@@ -285,10 +285,10 @@ async def process_apartment_search(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_apartment_view:"))
-async def show_apartment_details(callback: CallbackQuery):
+async def show_apartment_details(callback: CallbackQuery, language: str = "ru"):
     """Показать детальную информацию о квартире"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -348,10 +348,10 @@ async def show_apartment_details(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_apartment_residents:"))
-async def show_apartment_residents(callback: CallbackQuery):
+async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"):
     """Показать список жителей квартиры"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -415,10 +415,10 @@ async def show_apartment_residents(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_apartment_create")
-async def start_apartment_creation(callback: CallbackQuery, state: FSMContext):
+async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать создание новой квартиры - выбор здания"""
     await state.clear()
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -455,10 +455,10 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("apartment_create_building:"))
-async def process_apartment_building_selection(callback: CallbackQuery, state: FSMContext):
+async def process_apartment_building_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка выбора здания для новой квартиры"""
     building_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     await state.update_data(building_id=building_id)
     await state.set_state(ApartmentManagementStates.waiting_for_apartment_number)
@@ -477,9 +477,9 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_apartment_number))
-async def process_apartment_number(message: Message, state: FSMContext):
+async def process_apartment_number(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка номера квартиры"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     number = message.text.strip()
 
     if len(number) < 1 or len(number) > 20:
@@ -498,9 +498,9 @@ async def process_apartment_number(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_entrance_number))
-async def process_apartment_entrance(message: Message, state: FSMContext):
+async def process_apartment_entrance(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка номера подъезда"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -534,9 +534,9 @@ async def process_apartment_entrance(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_floor_number))
-async def process_apartment_floor(message: Message, state: FSMContext):
+async def process_apartment_floor(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка номера этажа"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -570,9 +570,9 @@ async def process_apartment_floor(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_rooms_count))
-async def process_apartment_rooms(message: Message, state: FSMContext):
+async def process_apartment_rooms(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка количества комнат и переход к вводу площади"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -606,9 +606,9 @@ async def process_apartment_rooms(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_area))
-async def process_apartment_area(message: Message, state: FSMContext):
+async def process_apartment_area(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка площади квартиры и создание квартиры"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -704,10 +704,10 @@ async def process_apartment_area(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_apartment_edit:"))
-async def show_apartment_edit_menu(callback: CallbackQuery):
+async def show_apartment_edit_menu(callback: CallbackQuery, language: str = "ru"):
     """Показать меню редактирования квартиры"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     await callback.message.edit_text(
         get_text("address_apartments.handlers.edit_menu", language=lang),
@@ -716,10 +716,10 @@ async def show_apartment_edit_menu(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_apartment_toggle:"))
-async def toggle_apartment_status(callback: CallbackQuery):
+async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru"):
     """Переключить активность квартиры"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -757,10 +757,10 @@ async def toggle_apartment_status(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_apartment_delete:"))
-async def confirm_apartment_deletion(callback: CallbackQuery):
+async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "ru"):
     """Подтверждение удаления квартиры"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -795,10 +795,10 @@ async def confirm_apartment_deletion(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("addr_apartment_delete_confirm:"))
-async def delete_apartment(callback: CallbackQuery):
+async def delete_apartment(callback: CallbackQuery, language: str = "ru"):
     """Удаление квартиры"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -829,10 +829,10 @@ async def delete_apartment(callback: CallbackQuery):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_apartment_edit_area:"))
-async def start_edit_apartment_area(callback: CallbackQuery, state: FSMContext):
+async def start_edit_apartment_area(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать редактирование площади квартиры"""
     apartment_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     await state.update_data(editing_apartment_id=apartment_id)
     await state.set_state(ApartmentManagementStates.waiting_for_new_area)
@@ -845,9 +845,9 @@ async def start_edit_apartment_area(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_new_area))
-async def process_new_apartment_area(message: Message, state: FSMContext):
+async def process_new_apartment_area(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка новой площади квартиры"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     cancel_text = get_text("buttons.cancel", language=lang)
     if message.text == cancel_text:
         data = await state.get_data()
@@ -920,10 +920,10 @@ async def process_new_apartment_area(message: Message, state: FSMContext):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_autofill:"))
-async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext):
+async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать процесс автозаполнения квартир для здания"""
     building_id = int(callback.data.split(":")[1])
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     db = next(get_db())
     try:
@@ -956,9 +956,9 @@ async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_autofill_range))
-async def process_autofill_range(message: Message, state: FSMContext):
+async def process_autofill_range(message: Message, state: FSMContext, language: str = "ru"):
     """Обработать ввод диапазона номеров квартир"""
-    lang = await get_language_for_user(message.from_user.id)
+    lang = language
     range_text = message.text.strip()
 
     cancel_text = get_text("address.keyboards.cancel", language=lang)
@@ -1017,13 +1017,13 @@ async def process_autofill_range(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "addr_autofill_confirm")
-async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext):
+async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Подтвердить и выполнить автозаполнение"""
     data = await state.get_data()
     building_id = data.get("autofill_building_id")
     apartment_numbers = data.get("apartment_numbers", [])
 
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
 
     if not building_id or not apartment_numbers:
         await callback.answer(get_text("address_apartments.handlers.autofill_data_not_found", language=lang), show_alert=True)
@@ -1092,9 +1092,9 @@ async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext
 
 
 @router.callback_query(F.data == "addr_autofill_cancel")
-async def cancel_autofill_apartments(callback: CallbackQuery, state: FSMContext):
+async def cancel_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отменить автозаполнение"""
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
     await state.clear()
     await callback.message.edit_text(
         get_text("address_apartments.handlers.autofill_cancelled_confirm", language=lang),
@@ -1182,9 +1182,9 @@ def format_numbers_preview(numbers: list[str], max_show: int = 10, language: str
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "cancel_apartment_selection")
-async def cancel_apartment_action(callback: CallbackQuery, state: FSMContext):
+async def cancel_apartment_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена выбора квартиры или создания"""
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
     await state.clear()
     await callback.message.edit_text(get_text("address_apartments.handlers.action_cancelled", language=lang))
 
@@ -1195,9 +1195,9 @@ async def cancel_apartment_action(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "cancel_action")
-async def cancel_generic_action(callback: CallbackQuery, state: FSMContext):
+async def cancel_generic_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена текущего действия (универсальный обработчик)"""
-    lang = await get_language_for_user(callback.from_user.id)
+    lang = language
     await state.clear()
     await callback.message.edit_text(get_text("address_apartments.handlers.action_cancelled", language=lang))
 

@@ -2,15 +2,17 @@
 
 ## 1.1. Стек технологий
 
+### Backend
+
 | Компонент | Технология | Версия |
 |-----------|-----------|--------|
 | Язык | Python | 3.11 |
 | Telegram Bot Framework | aiogram | >= 3.0.0 |
 | ORM | SQLAlchemy | >= 2.0.0 |
 | СУБД (production) | PostgreSQL | 15-alpine |
-| СУБД (development) | SQLite | — |
+| СУБД (development) | SQLite | -- |
 | Кэш / Rate Limiting / FSM Storage | Redis | 7-alpine |
-| Web Framework (регистрация) | FastAPI | >= 0.104.0 |
+| Web Framework (API + регистрация) | FastAPI | >= 0.104.0 |
 | ASGI Server | Uvicorn | >= 0.24.0 |
 | Task Scheduler | APScheduler | >= 3.10.0 |
 | HTTP Client (Media Service) | httpx | >= 0.25.0 |
@@ -18,6 +20,23 @@
 | Миграции БД | Alembic | >= 1.12.0 |
 | Async PostgreSQL | asyncpg | >= 0.29.0 |
 | Шаблонизатор | Jinja2 | >= 3.1.0 |
+| Rate Limiting (API) | slowapi | >= 0.1.0 |
+| Redis Pub/Sub (real-time) | redis[async] (aioredis) | >= 5.0.0 |
+
+### Frontend
+
+| Компонент | Технология | Версия |
+|-----------|-----------|--------|
+| Фреймворк | React | 18.x |
+| Язык | TypeScript | 5.x |
+| Сборщик | Vite | 5.x |
+| Роутинг | React Router | 6.x |
+| State Management (серверный) | TanStack React Query | 5.x |
+| State Management (клиентский) | Zustand | 4.x |
+| Drag-and-Drop (Kanban) | @dnd-kit/core | -- |
+| HTTP Client | Axios | -- |
+| Иконки | Lucide React | -- |
+| CSS | Tailwind CSS + CSS Variables | -- |
 
 ## 1.2. Компоненты системы
 
@@ -36,10 +55,17 @@ graph TB
             SCHED[Shift Scheduler\nAPScheduler]
         end
         subgraph "web container"
-            WEB[FastAPI Web App\n:8000]
+            API[FastAPI Management API\n/api/v2/]
+            WS[WebSocket\n/ws/v2/kanban\n/ws/v2/shifts]
+            WEB[Web Registration\nJinja2 Templates]
         end
         PG[(PostgreSQL 15\n:5432)]
         RD[(Redis 7\n:6379)]
+    end
+
+    subgraph "Frontend SPA"
+        DASH[Dashboard\nReact + TypeScript]
+        TWA[Telegram Web App\nReact]
     end
 
     TG[Telegram Bot API]
@@ -52,8 +78,16 @@ graph TB
     BOT --> PG
     BOT --> RD
     BOT <-->|HTTP/httpx| MEDIA
+    API --> PG
+    API <-->|Pub/Sub| RD
+    WS <-->|Pub/Sub| RD
     WEB --> PG
     SCHED --> PG
+    DASH <-->|REST + WS| API
+    DASH <-->|WebSocket| WS
+    TWA <-->|REST| API
+    MG -->|браузер| DASH
+    AP -->|TWA| TWA
 ```
 
 ## 1.3. Слои приложения (Bot)
@@ -61,7 +95,7 @@ graph TB
 ```mermaid
 graph LR
     subgraph "Presentation Layer"
-        H[Handlers\n25+ роутеров]
+        H[Handlers\n28 роутеров]
         K[Keyboards\nReply + Inline]
         S[States/FSM\n12+ StatesGroup]
     end
@@ -85,10 +119,11 @@ graph LR
         SVC7[AssignmentService]
         SVC8[ShiftTransferService]
         SVC9[VerificationService]
+        SVC10[RedisPubSubService]
     end
 
     subgraph "Data Layer"
-        DB[SQLAlchemy Models\n20+ моделей]
+        DB[SQLAlchemy Models\n24 моделей]
         SESS[Session / AsyncSession]
     end
 
@@ -96,6 +131,44 @@ graph LR
     H --> SVC2
     M1 --> SESS
     SESS --> DB
+```
+
+## 1.3.1. Слои приложения (API)
+
+```mermaid
+graph LR
+    subgraph "API Layer (FastAPI)"
+        R1[requests router]
+        R2[auth router]
+        R3[shifts router]
+        R4[addresses router]
+        R5[callcenter router]
+        R6[notifications router]
+        R7[profile router]
+        R8[stats router]
+        R9[ws router]
+    end
+
+    subgraph "Middleware (API)"
+        CORS[CORSMiddleware]
+        RL[slowapi RateLimiter]
+        JWT[JWT Auth\nBearerAuth]
+    end
+
+    subgraph "Service Layer"
+        PS[Redis Pub/Sub]
+    end
+
+    subgraph "Data Layer"
+        DB2[SQLAlchemy Models]
+        ASYNC[AsyncSession]
+    end
+
+    R1 --> PS
+    R3 --> PS
+    R9 --> PS
+    R1 --> ASYNC
+    ASYNC --> DB2
 ```
 
 ## 1.4. Цепочка Middleware
@@ -151,9 +224,9 @@ Middleware выполняются последовательно при кажд
 | Сервис | Образ | Порт | Назначение |
 |--------|-------|------|------------|
 | `app` | Custom (Dockerfile) | 8000 (health) | Telegram бот + планировщик |
-| `web` | Custom (Dockerfile) | 8000 | Web-регистрация по приглашениям |
+| `web` | Custom (Dockerfile) | 8000 | Management API (/api/v2/) + WebSocket (/ws/v2/) + Web-регистрация |
 | `postgres` | postgres:15-alpine | 5432 | База данных |
-| `redis` | redis:7-alpine | 6379 | FSM, кэш, rate limiting |
+| `redis` | redis:7-alpine | 6379 | FSM, кэш, rate limiting, Pub/Sub (real-time) |
 
 **Production ограничения:**
 - app: 1 CPU, 1GB RAM
@@ -162,3 +235,35 @@ Middleware выполняются последовательно при кажд
 - SQLite запрещен (проверка в settings.py)
 - ADMIN_PASSWORD минимум 8 символов
 - INVITE_SECRET обязателен
+
+## 1.7. Frontend-приложение (React SPA)
+
+Frontend представляет собой единое React-приложение с двумя режимами работы:
+
+### Dashboard (для менеджеров)
+
+Доступен по `/dashboard/*`. Требует JWT-аутентификации. Включает:
+
+| Страница | Путь | Описание |
+|----------|------|----------|
+| Заявки (Kanban) | `/dashboard` | Kanban-доска с drag-and-drop |
+| Дашборд | `/dashboard/analytics` | Аналитика и статистика |
+| Сотрудники | `/dashboard/employees` | Список сотрудников, фильтры, одобрение/блокировка |
+| Детали сотрудника | `/dashboard/employees/:id` | Профиль сотрудника, смены, рейтинг |
+| Смены | `/dashboard/shifts` | Управление сменами, создание, Timeline, Heatmap |
+| Шаблоны | `/dashboard/templates` | Шаблоны смен |
+| Адреса | `/dashboard/addresses` | Справочник адресов (дворы/здания/квартиры) + модерация |
+
+### TWA (для жителей-заявителей)
+
+Telegram Web App, доступен по `/twa/*`. Аутентификация через Telegram `initData`.
+
+| Страница | Путь | Описание |
+|----------|------|----------|
+| Главная | `/twa` | Список заявок жителя |
+| Создание | `/twa/create` | Создание новой заявки |
+| Детали | `/twa/requests/:number` | Детали заявки, комментарии, приёмка |
+
+### Resident Board
+
+Отдельная страница `/resident-board` -- информационная доска для жителей.
