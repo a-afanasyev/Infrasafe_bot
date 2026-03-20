@@ -62,6 +62,39 @@ export function useApartments(buildingId: number | null, includeInactive?: boole
   })
 }
 
+export function useAllBuildings(yardId?: number | null, includeInactive?: boolean) {
+  return useQuery<BuildingBrief[]>({
+    queryKey: ['all-buildings', yardId, includeInactive],
+    queryFn: () =>
+      apiClient
+        .get('/api/v2/addresses/buildings', {
+          params: {
+            ...(yardId ? { yard_id: yardId } : {}),
+            include_inactive: includeInactive,
+          },
+        })
+        .then(r => r.data),
+    staleTime: 30_000,
+  })
+}
+
+export function useAllApartments(yardId?: number | null, buildingId?: number | null, includeInactive?: boolean) {
+  return useQuery<ApartmentBrief[]>({
+    queryKey: ['all-apartments', yardId, buildingId, includeInactive],
+    queryFn: () =>
+      apiClient
+        .get('/api/v2/addresses/apartments/all', {
+          params: {
+            ...(yardId ? { yard_id: yardId } : {}),
+            ...(buildingId ? { building_id: buildingId } : {}),
+            include_inactive: includeInactive,
+          },
+        })
+        .then(r => r.data),
+    staleTime: 30_000,
+  })
+}
+
 export function useSearchApartments(query: string) {
   return useQuery<ApartmentBrief[]>({
     queryKey: ['apartments', 'search', query],

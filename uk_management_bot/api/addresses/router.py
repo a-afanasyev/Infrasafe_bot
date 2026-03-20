@@ -219,6 +219,42 @@ async def delete_yard(
 
 # ────────────────────── Buildings ──────────────────────
 
+@router.get("/buildings", response_model=list[BuildingOut])
+async def list_all_buildings(
+    yard_id: Optional[int] = Query(None),
+    include_inactive: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    query = (
+        select(Building, Yard.name)
+        .join(Yard, Building.yard_id == Yard.id)
+    )
+    if yard_id is not None:
+        query = query.where(Building.yard_id == yard_id)
+    if not include_inactive:
+        query = query.where(Building.is_active == True)  # noqa: E712
+    query = query.order_by(Yard.name, Building.address)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    bld_ids = [b.id for b, _ in rows]
+    apt_map: dict[int, int] = {}
+    if bld_ids:
+        apt_counts = await db.execute(
+            select(Apartment.building_id, func.count(Apartment.id))
+            .where(Apartment.building_id.in_(bld_ids))
+            .group_by(Apartment.building_id)
+        )
+        apt_map = dict(apt_counts.all())
+
+    out = []
+    for b, yard_name in rows:
+        out.append(BuildingOut(**_building_dict(b), yard_name=yard_name, apartments_count=apt_map.get(b.id, 0)))
+    return out
+
+
 @router.get("/yards/{yard_id}/buildings", response_model=list[BuildingOut])
 async def list_buildings(
     yard_id: int,
@@ -639,6 +675,54 @@ async def delete_apartment(
     apartment.is_active = False
     await db.commit()
     return {"ok": True, "detail": "Apartment deactivated"}
+
+
+@router.get("/apartments/all", response_model=list[ApartmentOut])
+async def list_all_apartments(
+    yard_id: Optional[int] = Query(None),
+    building_id: Optional[int] = Query(None),
+    include_inactive: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    query = (
+        select(Apartment, Building.address, Yard.name)
+        .join(Building, Apartment.building_id == Building.id)
+        .join(Yard, Building.yard_id == Yard.id)
+    )
+    if yard_id is not None:
+        query = query.where(Building.yard_id == yard_id)
+    if building_id is not None:
+        query = query.where(Apartment.building_id == building_id)
+    if not include_inactive:
+        query = query.where(Apartment.is_active == True)  # noqa: E712
+    query = query.order_by(Building.address, Apartment.apartment_number)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    apt_ids = [a.id for a, _, _ in rows]
+    residents_map: dict[int, int] = {}
+    if apt_ids:
+        res_counts = await db.execute(
+            select(UserApartment.apartment_id, func.count(UserApartment.id))
+            .where(and_(
+                UserApartment.apartment_id.in_(apt_ids),
+                UserApartment.status == "approved",
+            ))
+            .group_by(UserApartment.apartment_id)
+        )
+        residents_map = dict(res_counts.all())
+
+    out = []
+    for apt, bld_address, yard_name in rows:
+        out.append(ApartmentOut(
+            **_apartment_dict(apt),
+            building_address=bld_address,
+            yard_name=yard_name,
+            residents_count=residents_map.get(apt.id, 0),
+        ))
+    return out
 
 
 # NOTE: /apartments/search MUST be registered before /apartments/{apartment_id}

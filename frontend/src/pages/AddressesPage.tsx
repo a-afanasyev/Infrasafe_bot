@@ -5,6 +5,8 @@ import {
   useYards,
   useBuildings,
   useApartments,
+  useAllBuildings,
+  useAllApartments,
   usePendingModeration,
   useDeleteYard,
   useDeleteBuilding,
@@ -23,6 +25,7 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import YardFormModal from '../components/addresses/YardFormModal'
 import BuildingFormModal from '../components/addresses/BuildingFormModal'
 import ApartmentFormModal from '../components/addresses/ApartmentFormModal'
+import AddObjectModal from '../components/addresses/AddObjectModal'
 import BulkCreateModal from '../components/addresses/BulkCreateModal'
 import ModerationPanel from '../components/addresses/ModerationPanel'
 import ApartmentProfileModal from '../components/addresses/ApartmentProfileModal'
@@ -32,11 +35,12 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 
 // ── Types ───────────────────────────────────────────────────────────
 
 type View = 'directory' | 'moderation'
-type Level = 'yards' | 'buildings' | 'apartments'
+type Level = 'yards' | 'buildings' | 'apartments' | 'all-buildings' | 'all-apartments'
 
 // ── Action Menu (dropdown with click-outside) ───────────────────────
 
@@ -105,6 +109,7 @@ export default function AddressesPage() {
   const [editingBuilding, setEditingBuilding] = useState<BuildingBrief | null>(null)
   const [editingApartment, setEditingApartment] = useState<ApartmentBrief | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [addObjectOpen, setAddObjectOpen] = useState(false)
   const [showBulkCreate, setShowBulkCreate] = useState(false)
   const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
     try {
@@ -137,6 +142,24 @@ export default function AddressesPage() {
   )
   const { data: moderationItems = [] } = usePendingModeration()
 
+  // Flat view filters
+  const [filterYardId, setFilterYardId] = useState<number | null>(null)
+  const [filterBuildingId, setFilterBuildingId] = useState<number | null>(null)
+  const { data: allBuildings = [], isLoading: allBuildingsLoading } = useAllBuildings(
+    level === 'all-buildings' ? filterYardId : undefined,
+    level === 'all-buildings' ? showInactive : undefined,
+  )
+  const { data: allApartments = [], isLoading: allApartmentsLoading } = useAllApartments(
+    level === 'all-apartments' ? filterYardId : undefined,
+    level === 'all-apartments' ? filterBuildingId : undefined,
+    level === 'all-apartments' ? showInactive : undefined,
+  )
+  // Buildings for the apartment filter dropdown (scoped by filterYardId)
+  const { data: filterBuildings = [] } = useAllBuildings(
+    level === 'all-apartments' ? filterYardId : undefined,
+    false,
+  )
+
   // Mutations
   const deleteYard = useDeleteYard()
   const deleteBuilding = useDeleteBuilding()
@@ -164,9 +187,14 @@ export default function AddressesPage() {
   }, [])
 
   const handleBuildingClick = useCallback((building: BuildingBrief) => {
+    // When navigating from flat buildings view, set the yard context too
+    if (!selectedYard || selectedYard.id !== building.yard_id) {
+      const yard = yards.find(y => y.id === building.yard_id)
+      if (yard) setSelectedYard(yard)
+    }
     setLevel('apartments')
     setSelectedBuilding(building)
-  }, [])
+  }, [selectedYard, yards])
 
   // Search filter
   const filterBySearch = useCallback((name: string) => {
@@ -175,8 +203,6 @@ export default function AddressesPage() {
   }, [searchQuery])
 
   // Topbar actions
-  const addLabel = level === 'yards' ? 'двор' : level === 'buildings' ? 'здание' : 'квартиру'
-
   const actionsNode = useMemo(() => (
     <div className="flex items-center gap-2">
       <Input
@@ -186,11 +212,17 @@ export default function AddressesPage() {
         onChange={e => setSearchQuery(e.target.value)}
         className="w-[200px]"
       />
-      <Button onClick={() => setShowCreateModal(true)}>
-        + Добавить {addLabel}
-      </Button>
+      {level === 'apartments' ? (
+        <Button onClick={() => setShowCreateModal(true)}>
+          + Добавить квартиру
+        </Button>
+      ) : (
+        <Button onClick={() => setAddObjectOpen(true)}>
+          + Добавить объект
+        </Button>
+      )}
     </div>
-  ), [searchQuery, addLabel])
+  ), [searchQuery, level])
 
   useEffect(() => {
     setActions(actionsNode)
@@ -211,14 +243,14 @@ export default function AddressesPage() {
       value: stats?.buildings_total ?? '-',
       iconBg: 'var(--emerald)',
       icon: '\u{1F3E2}',
-      onClick: () => { setView('directory'); goToYards() },
+      onClick: () => { setView('directory'); setLevel('all-buildings'); setFilterYardId(null); setSelectedYard(null); setSelectedBuilding(null) },
     },
     {
       label: 'Квартиры',
       value: stats?.apartments_total ?? '-',
       iconBg: 'var(--amber)',
       icon: '\u{1F3E0}',
-      onClick: () => { setView('directory'); goToYards() },
+      onClick: () => { setView('directory'); setLevel('all-apartments'); setFilterYardId(null); setFilterBuildingId(null); setSelectedYard(null); setSelectedBuilding(null) },
     },
     {
       label: 'Жители',
@@ -233,7 +265,9 @@ export default function AddressesPage() {
   const isLoading =
     (level === 'yards' && yardsLoading) ||
     (level === 'buildings' && buildingsLoading) ||
-    (level === 'apartments' && apartmentsLoading)
+    (level === 'apartments' && apartmentsLoading) ||
+    (level === 'all-buildings' && allBuildingsLoading) ||
+    (level === 'all-apartments' && allApartmentsLoading)
 
   // Filtered data
   const filteredYards = yards.filter(y => filterBySearch(y.name))
@@ -340,42 +374,94 @@ export default function AddressesPage() {
         <ModerationPanel />
       ) : (
         <>
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-[13px] font-[family-name:var(--font-display)]">
-            <span
-              onClick={goToYards}
-              className={cn(
-                'cursor-pointer',
-                level === 'yards' ? 'text-text-primary font-semibold' : 'text-accent'
+          {/* Breadcrumb / Title */}
+          {level === 'all-buildings' ? (
+            <div className="flex items-center gap-3 text-[13px] font-[family-name:var(--font-display)]">
+              <span className="text-text-primary font-semibold">Все здания</span>
+              <Select
+                value={filterYardId ?? ''}
+                onChange={e => setFilterYardId(e.target.value ? Number(e.target.value) : null)}
+                className="w-[250px] text-xs"
+              >
+                <option value="">Все дворы</option>
+                {yards.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
+              </Select>
+            </div>
+          ) : level === 'all-apartments' ? (
+            <div className="flex items-center gap-3 text-[13px] font-[family-name:var(--font-display)]">
+              <span className="text-text-primary font-semibold">Все квартиры</span>
+              <Select
+                value={filterYardId ?? ''}
+                onChange={e => { setFilterYardId(e.target.value ? Number(e.target.value) : null); setFilterBuildingId(null) }}
+                className="w-[250px] text-xs"
+              >
+                <option value="">Все дворы</option>
+                {yards.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
+              </Select>
+              <Select
+                value={filterBuildingId ?? ''}
+                onChange={e => setFilterBuildingId(e.target.value ? Number(e.target.value) : null)}
+                className="w-[250px] text-xs"
+              >
+                <option value="">Все здания</option>
+                {filterBuildings.map(b => <option key={b.id} value={b.id}>{b.address}</option>)}
+              </Select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[13px] font-[family-name:var(--font-display)]">
+              <span
+                onClick={goToYards}
+                className={cn(
+                  'cursor-pointer',
+                  level === 'yards' ? 'text-text-primary font-semibold' : 'text-accent'
+                )}
+              >
+                Дворы
+              </span>
+              {selectedYard && (
+                <>
+                  <span className="text-text-muted">&rsaquo;</span>
+                  <span
+                    onClick={goToBuildings}
+                    className={cn(
+                      level === 'buildings' ? 'text-text-primary font-semibold cursor-default' : 'text-accent cursor-pointer'
+                    )}
+                  >
+                    {selectedYard.name}
+                  </span>
+                </>
               )}
-            >
-              Дворы
-            </span>
-            {selectedYard && (
-              <>
-                <span className="text-text-muted">&rsaquo;</span>
-                <span
-                  onClick={goToBuildings}
-                  className={cn(
-                    level === 'buildings' ? 'text-text-primary font-semibold cursor-default' : 'text-accent cursor-pointer'
-                  )}
-                >
-                  {selectedYard.name}
-                </span>
-              </>
-            )}
-            {selectedBuilding && (
-              <>
-                <span className="text-text-muted">&rsaquo;</span>
-                <span className="text-text-primary font-semibold">
-                  {selectedBuilding.address}
-                </span>
-              </>
-            )}
-          </div>
+              {selectedBuilding && (
+                <>
+                  <span className="text-text-muted">&rsaquo;</span>
+                  <span className="text-text-primary font-semibold">
+                    {selectedBuilding.address}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           {isLoading ? (
             <LoadingSpinner />
+          ) : level === 'all-buildings' ? (
+            <AddressTable
+              level="buildings"
+              buildings={allBuildings.filter(b => filterBySearch(b.address))}
+              onBuildingClick={handleBuildingClick}
+              onEditBuilding={(building) => setEditingBuilding(building)}
+              onToggleBuilding={(id, active) => updateBuilding.mutate({ id, is_active: active })}
+              onDeleteBuilding={(id) => deleteBuilding.mutate(id)}
+            />
+          ) : level === 'all-apartments' ? (
+            <AddressTable
+              level="apartments"
+              apartments={allApartments.filter(a => filterBySearch(a.apartment_number))}
+              onApartmentClick={(apt) => setProfileApartmentId(apt.id)}
+              onEditApartment={(apt) => setEditingApartment(apt)}
+              onToggleApartment={(id, active) => updateApartment.mutate({ id, is_active: active })}
+              onDeleteApartment={(id) => deleteApartment.mutate(id)}
+            />
           ) : (
             <>
               {viewMode === 'tile' ? (
@@ -643,36 +729,34 @@ export default function AddressesPage() {
         </>
       )}
 
-      {/* Yard modals */}
+      {/* Yard edit modal */}
       {editingYard && (
         <YardFormModal yard={editingYard} onClose={() => setEditingYard(null)} />
       )}
-      {showCreateModal && level === 'yards' && (
-        <YardFormModal onClose={() => setShowCreateModal(false)} />
-      )}
 
-      {/* Building modals */}
-      {editingBuilding && selectedYard && (
+      {/* Building edit modal */}
+      {editingBuilding && (
         <BuildingFormModal
           building={editingBuilding}
-          yardId={selectedYard.id}
+          yardId={editingBuilding.yard_id}
           yards={yards}
           onClose={() => setEditingBuilding(null)}
         />
       )}
-      {showCreateModal && level === 'buildings' && selectedYard && (
-        <BuildingFormModal
-          yardId={selectedYard.id}
-          yards={yards}
-          onClose={() => setShowCreateModal(false)}
-        />
-      )}
+
+      {/* Unified create object modal */}
+      <AddObjectModal
+        open={addObjectOpen}
+        onClose={() => setAddObjectOpen(false)}
+        yards={yards}
+        preselectedYardId={level === 'buildings' ? selectedYard?.id : undefined}
+      />
 
       {/* Apartment modals */}
-      {editingApartment && selectedBuilding && (
+      {editingApartment && (
         <ApartmentFormModal
           apartment={editingApartment}
-          buildingId={selectedBuilding.id}
+          buildingId={editingApartment.building_id}
           onClose={() => setEditingApartment(null)}
         />
       )}
