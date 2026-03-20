@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -52,6 +52,11 @@ class User(Base):
     email = Column(String(255), nullable=True, unique=True, index=True)
     password_reset_token = Column(String(64), nullable=True)
     password_reset_expires_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Soft-delete
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    deletion_reason = Column(Text, nullable=True)
 
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())

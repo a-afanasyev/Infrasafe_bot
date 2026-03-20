@@ -189,6 +189,36 @@ class CreateTemplateBody(BaseModel):
         return self
 
 
+class DeleteEmployeeRequest(BaseModel):
+    reason: str = Field(min_length=1)
+    reassign_to: Optional[int] = None
+
+
+class ActiveRequestsCount(BaseModel):
+    count: int
+
+
+class CreateInviteRequest(BaseModel):
+    role: Literal["executor", "manager"]
+    specializations: list[str] = []
+    hours: int = Field(default=24, ge=1, le=168)
+
+
+class CreateInviteResponse(BaseModel):
+    token: str
+    bot_link: str
+    expires_at: datetime
+
+
+class CreateEmployeeRequest(BaseModel):
+    first_name: str = Field(min_length=1)
+    last_name: str = Field(min_length=1)
+    phone: str = Field(min_length=10)
+    role: Literal["executor", "manager"]
+    specializations: list[str] = []
+    status: Literal["approved", "pending"] = "approved"
+
+
 class UpdateTemplateBody(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None

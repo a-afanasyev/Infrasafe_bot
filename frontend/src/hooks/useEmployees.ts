@@ -102,3 +102,72 @@ export function useUnblockEmployee() {
     },
   })
 }
+
+export function useActiveRequestsCount(userId: number | null) {
+  return useQuery<{ count: number }>({
+    queryKey: ['active-requests-count', userId],
+    queryFn: () =>
+      apiClient
+        .get(`/api/v2/shifts/employees/${userId}/active-requests-count`)
+        .then(r => r.data),
+    enabled: userId !== null,
+  })
+}
+
+export function useCreateEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      first_name: string
+      last_name: string
+      phone: string
+      role: string
+      specializations: string[]
+      status: string
+    }) =>
+      apiClient.post('/api/v2/shifts/employees', data).then(r => r.data),
+    onSuccess: () => {
+      toast.success('Сотрудник создан')
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: Error) => {
+      console.error('Create employee failed:', error)
+      toast.error('Не удалось создать сотрудника', { description: error.message })
+    },
+  })
+}
+
+export function useCreateInvite() {
+  return useMutation({
+    mutationFn: (data: {
+      role: string
+      specializations: string[]
+      hours: number
+    }) =>
+      apiClient
+        .post('/api/v2/shifts/employees/invite', data)
+        .then(r => r.data as { token: string; bot_link: string; expires_at: string }),
+    onError: (error: Error) => {
+      console.error('Create invite failed:', error)
+      toast.error('Не удалось создать приглашение', { description: error.message })
+    },
+  })
+}
+
+export function useDeleteEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason, reassign_to }: { id: number; reason: string; reassign_to?: number }) =>
+      apiClient
+        .patch(`/api/v2/shifts/employees/${id}/delete`, { reason, reassign_to })
+        .then(r => r.data),
+    onSuccess: () => {
+      toast.success('Сотрудник удалён')
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: Error) => {
+      console.error('Delete employee failed:', error)
+      toast.error('Не удалось удалить сотрудника', { description: error.message })
+    },
+  })
+}

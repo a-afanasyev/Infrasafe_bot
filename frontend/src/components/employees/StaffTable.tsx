@@ -10,6 +10,7 @@ interface Props {
   employees: EmployeeBrief[]
   onAssign: (e: EmployeeBrief) => void
   onBlock: (e: EmployeeBrief) => void
+  onDelete: (e: EmployeeBrief) => void
   isBlockPending: boolean
 }
 
@@ -20,7 +21,7 @@ function specColor(key: string): string {
   return SPEC_COLORS[label] ?? 'var(--text-muted)'
 }
 
-export default function StaffTable({ employees, onAssign, onBlock, isBlockPending }: Props) {
+export default function StaffTable({ employees, onAssign, onBlock, onDelete, isBlockPending }: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const navigate = useNavigate()
   if (employees.length === 0) {
@@ -197,6 +198,12 @@ export default function StaffTable({ employees, onAssign, onBlock, isBlockPendin
                         </button>
                       </>
                     )}
+                    <button
+                      onClick={() => onDelete(emp)}
+                      className="bg-transparent border-none cursor-pointer text-[11px] text-text-muted hover:text-red font-[var(--font-display)] transition-colors"
+                    >
+                      Удалить
+                    </button>
                   </div>
                 </td>
               </tr>

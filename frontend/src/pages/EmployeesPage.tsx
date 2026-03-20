@@ -10,6 +10,8 @@ import {
 import type { EmployeeBrief } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
 import StaffTable from '../components/employees/StaffTable'
+import DeleteEmployeeModal from '../components/employees/DeleteEmployeeModal'
+import AddEmployeeModal from '../components/employees/AddEmployeeModal'
 import PendingApprovalCard from '../components/employees/PendingApprovalCard'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
@@ -48,7 +50,9 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
 
+  const [addModalOpen, setAddModalOpen] = useState(false)
   const [assignTarget, setAssignTarget] = useState<EmployeeBrief | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeBrief | null>(null)
   const [confirmState, setConfirmState] = useState<{
     open: boolean
     title: string
@@ -97,7 +101,7 @@ export default function EmployeesPage() {
         className="w-[200px]"
       />
       <Button variant="outline" size="sm">Экспорт</Button>
-      <Button size="sm">+ Добавить</Button>
+      <Button size="sm" onClick={() => setAddModalOpen(true)}>+ Добавить</Button>
     </div>
   ), [search])
 
@@ -178,8 +182,9 @@ export default function EmployeesPage() {
       )}
 
       {/* Filters + view toggle */}
-      <div className="grid grid-cols-[1fr_auto] gap-2 items-start">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex flex-col gap-2">
+        {/* Row 1: Role + Status + View toggle */}
+        <div className="flex items-center gap-1.5">
           {/* Role */}
           {[
             { key: 'all', label: 'Все' },
@@ -219,8 +224,28 @@ export default function EmployeesPage() {
               {f.label}
             </button>
           ))}
-          <div className="w-px h-6 bg-border-default mx-0.5" />
-          {/* Specialization -- single select */}
+          <div className="flex-1" />
+          {/* View toggle */}
+          <div className="flex bg-bg-card border border-border-default rounded-sm overflow-hidden shrink-0">
+            {(['tile', 'table'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                title={mode === 'tile' ? 'Плитки' : 'Таблица'}
+                className={cn(
+                  'px-3 py-1.5 border-none cursor-pointer text-base flex items-center transition-all duration-150',
+                  viewMode === mode
+                    ? 'bg-accent text-white'
+                    : 'bg-transparent text-text-muted'
+                )}
+              >
+                {mode === 'tile' ? '⊞' : '☰'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Row 2: Specialization */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
             onClick={() => setSpecFilter('all')}
             className={cn(
@@ -255,24 +280,6 @@ export default function EmployeesPage() {
             )
           })}
         </div>
-        {/* View toggle */}
-        <div className="flex bg-bg-card border border-border-default rounded-sm overflow-hidden shrink-0">
-          {(['tile', 'table'] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              title={mode === 'tile' ? 'Плитки' : 'Таблица'}
-              className={cn(
-                'px-3 py-1.5 border-none cursor-pointer text-base flex items-center transition-all duration-150',
-                viewMode === mode
-                  ? 'bg-accent text-white'
-                  : 'bg-transparent text-text-muted'
-              )}
-            >
-              {mode === 'tile' ? '⊞' : '☰'}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Staff -- tile or table */}
@@ -281,6 +288,7 @@ export default function EmployeesPage() {
           employees={employees}
           onAssign={(e) => setAssignTarget(e)}
           onBlock={handleBlockToggle}
+          onDelete={(e) => setDeleteTarget(e)}
           isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
         />
       ) : employees.length === 0 ? (
@@ -293,11 +301,14 @@ export default function EmployeesPage() {
               employee={emp}
               onAssign={(e) => setAssignTarget(e)}
               onBlock={handleBlockToggle}
+              onDelete={(e) => setDeleteTarget(e)}
               isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
             />
           ))}
         </div>
       )}
+
+      <AddEmployeeModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
 
       {assignTarget && (
         <AssignRequestModal
@@ -316,6 +327,13 @@ export default function EmployeesPage() {
         variant="warning"
         loading={blockEmployee.isPending || unblockEmployee.isPending}
       />
+
+      {deleteTarget && (
+        <DeleteEmployeeModal
+          employee={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   )
 }

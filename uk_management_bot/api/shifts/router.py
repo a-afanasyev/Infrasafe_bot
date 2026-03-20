@@ -15,7 +15,10 @@ from uk_management_bot.api.shifts.schemas import (
     CreateShiftBody, UpdateShiftBody,
     CreateFromTemplateBody, HandleTransferBody,
     TemplateBrief, CreateTemplateBody, UpdateTemplateBody,
+    DeleteEmployeeRequest, ActiveRequestsCount,
+    CreateInviteRequest, CreateInviteResponse, CreateEmployeeRequest,
 )
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
@@ -102,7 +105,8 @@ async def list_employees(
         or_(
             User.role == "executor",
             User.roles.like('%"executor"%'),
-        )
+        ),
+        User.deleted_at.is_(None),
     )
 
     if specialization:
@@ -157,6 +161,82 @@ async def list_employees(
         u.__dict__['active_shift_id'] = active_shifts.get(u.id)
         briefs.append(EmployeeBrief.model_validate(u))
     return briefs
+
+
+@router.post("/employees", response_model=EmployeeBrief, status_code=201)
+async def create_employee(
+    body: CreateEmployeeRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("manager")),
+):
+    """Create an employee directly from the web dashboard."""
+    import time as _time
+    import json as _json
+
+    # Generate a negative placeholder telegram_id (real Telegram IDs are always positive)
+    placeholder_tid = -abs(int(_time.time() * 1000))
+
+    roles_list = [body.role]
+    user = User(
+        telegram_id=placeholder_tid,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        phone=body.phone,
+        role=body.role,
+        roles=_json.dumps(roles_list),
+        active_role=body.role,
+        specialization=_json.dumps(body.specializations) if body.specializations else None,
+        status=body.status,
+        verification_status="verified" if body.status == "approved" else "pending",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    user.__dict__['active_shift_id'] = None
+    return EmployeeBrief.model_validate(user)
+
+
+@router.post("/employees/invite", response_model=CreateInviteResponse, status_code=201)
+async def create_invite(
+    body: CreateInviteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("manager")),
+):
+    """Generate an invite token for a new employee to join via the Telegram bot."""
+    import asyncio
+    from uk_management_bot.database.session import SessionLocal
+    from uk_management_bot.services.invite_service import InviteService
+    from uk_management_bot.config.settings import settings as app_settings
+    from datetime import timedelta
+
+    spec_str = ",".join(body.specializations) if body.specializations else None
+
+    def _generate():
+        sync_db = SessionLocal()
+        try:
+            svc = InviteService(sync_db)
+            token = svc.generate_invite(
+                role=body.role,
+                created_by=current_user.telegram_id,
+                specialization=spec_str,
+                hours=body.hours,
+            )
+            return token
+        finally:
+            sync_db.close()
+
+    loop = asyncio.get_running_loop()
+    token = await loop.run_in_executor(None, _generate)
+
+    bot_username = getattr(app_settings, 'BOT_USERNAME', 'infrasafebot')
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=body.hours)
+
+    return CreateInviteResponse(
+        token=token,
+        bot_link=f"https://t.me/{bot_username}",
+        expires_at=expires_at,
+    )
 
 
 @router.patch("/employees/{user_id}/approve", dependencies=[Depends(require_roles("manager"))])
@@ -241,6 +321,100 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     user.status = "approved"
     await db.commit()
     return {"message": "unblocked"}
+
+
+ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено"}
+
+
+@router.get("/employees/{user_id}/active-requests-count", response_model=ActiveRequestsCount)
+async def get_active_requests_count(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("manager")),
+):
+    """Return number of active requests assigned to this employee."""
+    result = await db.execute(
+        select(func.count()).select_from(Request).where(
+            Request.executor_id == user_id,
+            Request.status.in_(ACTIVE_REQUEST_STATUSES),
+        )
+    )
+    return ActiveRequestsCount(count=result.scalar() or 0)
+
+
+@router.patch("/employees/{user_id}/delete")
+async def delete_employee(
+    user_id: int,
+    body: DeleteEmployeeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("manager")),
+):
+    """Soft-delete an employee, optionally reassigning their active requests."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    target_roles = set(_parse_user_roles(user))
+    if "manager" in target_roles or "admin" in target_roles:
+        raise HTTPException(status_code=403, detail="Cannot delete a manager or admin user")
+
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="User is already deleted")
+
+    # Count active requests
+    count_result = await db.execute(
+        select(func.count()).select_from(Request).where(
+            Request.executor_id == user_id,
+            Request.status.in_(ACTIVE_REQUEST_STATUSES),
+        )
+    )
+    active_count = count_result.scalar() or 0
+
+    if active_count > 0 and body.reassign_to is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Employee has active requests that must be reassigned",
+                "active_requests_count": active_count,
+            },
+        )
+
+    # Reassign active requests
+    if body.reassign_to is not None and active_count > 0:
+        target_result = await db.execute(select(User).where(User.id == body.reassign_to))
+        target_user = target_result.scalar_one_or_none()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Target employee not found")
+        if target_user.deleted_at is not None:
+            raise HTTPException(status_code=422, detail="Cannot reassign to a deleted employee")
+
+        # Bulk update executor_id on active requests
+        active_requests_result = await db.execute(
+            select(Request).where(
+                Request.executor_id == user_id,
+                Request.status.in_(ACTIVE_REQUEST_STATUSES),
+            )
+        )
+        for req in active_requests_result.scalars().all():
+            req.executor_id = body.reassign_to
+
+    # Soft-delete the user
+    user.deleted_at = datetime.now(timezone.utc)
+    user.deleted_by = current_user.id
+    user.deletion_reason = body.reason
+    user.status = "deleted"
+
+    # End any active shift
+    active_shifts_result = await db.execute(
+        select(Shift).where(Shift.user_id == user_id, Shift.status.in_(["active", "paused"]))
+    )
+    for shift in active_shifts_result.scalars().all():
+        shift.status = "completed"
+        shift.end_time = datetime.now(timezone.utc)
+
+    await db.commit()
+    return {"message": "deleted", "reassigned_requests": active_count if body.reassign_to else 0}
 
 
 @router.get("/employees/{user_id}", response_model=EmployeeDetail)

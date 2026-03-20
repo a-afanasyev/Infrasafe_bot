@@ -9,11 +9,12 @@ interface Props {
   employee: EmployeeBrief
   onAssign?: (employee: EmployeeBrief) => void
   onBlock?: (employee: EmployeeBrief) => void
+  onDelete?: (employee: EmployeeBrief) => void
   onVerify?: (employee: EmployeeBrief) => void
   isBlockPending?: boolean
 }
 
-export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlockPending }: Props) {
+export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVerify, isBlockPending }: Props) {
   const [hovered, setHovered] = useState(false)
   const navigate = useNavigate()
 
@@ -176,6 +177,14 @@ export default function StaffCard({ employee, onAssign, onBlock, onVerify, isBlo
           )}
         >
           {isBlocked ? 'Разблокировать' : 'Блок'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onDelete?.(employee)}
+          className="text-xs px-2 text-text-muted hover:text-red"
+        >
+          Удалить
         </Button>
       </div>
     </div>
