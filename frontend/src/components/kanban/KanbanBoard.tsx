@@ -59,7 +59,7 @@ function isTransitionAllowed(sourceStatus: string | undefined, targetStatus: str
   return VALID_TRANSITIONS[sourceStatus]?.has(targetStatus) ?? false
 }
 
-export { isTransitionAllowed, FROZEN_STATUSES }
+export { isTransitionAllowed, FROZEN_STATUSES, VALID_TRANSITIONS, MODAL_STATUSES }
 
 export default function KanbanBoard({ onCardClick }: Props) {
   const { columns, isLoading } = useKanban()

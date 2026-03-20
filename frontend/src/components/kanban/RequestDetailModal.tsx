@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { ChevronDown } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { cn } from '@/lib/utils'
 import {
@@ -9,10 +10,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import TransitionModal, { type TransitionData } from './TransitionModal'
+import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES } from './KanbanBoard'
 
 const URGENCY: Record<string, { bg: string; text: string }> = {
   'Обычная':    { bg: 'bg-emerald/12',  text: 'text-emerald' },
@@ -30,6 +40,17 @@ const STATUS: Record<string, { bg: string; text: string }> = {
   'Исполнено': { bg: 'bg-accent/12',   text: 'text-accent' },
   'Принято':   { bg: 'bg-green/12',    text: 'text-green' },
   'Отменена':  { bg: 'bg-red/12',      text: 'text-red' },
+}
+
+const STATUS_DOT: Record<string, string> = {
+  'Новая':     'bg-[#60a5fa]',
+  'В работе':  'bg-[#fbbf24]',
+  'Закуп':     'bg-[#a78bfa]',
+  'Уточнение': 'bg-[#22d3ee]',
+  'Выполнена': 'bg-[#34d399]',
+  'Исполнено': 'bg-accent',
+  'Принято':   'bg-[#4ade80]',
+  'Отменена':  'bg-[#f87171]',
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -51,6 +72,7 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
   const [showForceAcceptSection, setShowForceAcceptSection] = useState(false)
   const [forceAcceptNote, setForceAcceptNote] = useState('')
   const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null)
 
   useEffect(() => {
     setComment('')
@@ -61,6 +83,7 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
     setShowForceAcceptSection(false)
     setForceAcceptNote('')
     setRemindStatus('idle')
+    setPendingTargetStatus(null)
   }, [requestNumber])
 
   const { data: request } = useQuery({
@@ -135,14 +158,29 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
     },
   })
 
+  const handleTransitionConfirm = (data: TransitionData) => {
+    updateRequest.mutate(data as unknown as Record<string, unknown>)
+    setPendingTargetStatus(null)
+  }
+
   if (!requestNumber) return null
 
   const statusStyle = STATUS[request?.status ?? ''] ?? { bg: 'bg-bg-surface', text: 'text-text-muted' }
   const urgencyStyle = request?.urgency ? URGENCY[request.urgency] : null
 
   return (
+    <>
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-[520px] max-h-[88vh] p-0 gap-0 flex flex-col">
+      <DialogContent
+        className="max-w-[520px] max-h-[88vh] p-0 gap-0 flex flex-col"
+        onPointerDownOutside={(e) => {
+          // Prevent dialog close when clicking dropdown menu items (rendered in portal)
+          const target = e.target as HTMLElement
+          if (target.closest('[data-slot="dropdown-menu-content"]')) {
+            e.preventDefault()
+          }
+        }}
+      >
         {!request ? (
           <div className="p-6 text-center text-text-muted font-[family-name:var(--font-body)]">
             Загрузка...
@@ -166,11 +204,23 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
             <div className="px-[18px] py-4 overflow-y-auto flex-1 flex flex-col gap-3.5">
 
               {/* Badges */}
-              <div className="flex gap-1.5 flex-wrap">
-                <span className={cn(
-                  'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
-                  statusStyle.bg, statusStyle.text
-                )}>{request.status}</span>
+              <div className="flex gap-1.5 flex-wrap items-center">
+                <StatusDropdown
+                  status={request.status}
+                  statusStyle={statusStyle}
+                  onSelect={(targetStatus) => {
+                    if (MODAL_STATUSES.has(targetStatus)) {
+                      // For 'В работе': skip modal if already has executor
+                      if (targetStatus === 'В работе' && request.executor_id) {
+                        updateRequest.mutate({ status: targetStatus })
+                        return
+                      }
+                      setPendingTargetStatus(targetStatus)
+                    } else {
+                      updateRequest.mutate({ status: targetStatus })
+                    }
+                  }}
+                />
                 {urgencyStyle && (
                   <span className={cn(
                     'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
@@ -420,5 +470,87 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
         )}
       </DialogContent>
     </Dialog>
+
+    {pendingTargetStatus && (
+      <TransitionModal
+        requestNumber={requestNumber}
+        targetStatus={pendingTargetStatus}
+        onConfirm={handleTransitionConfirm}
+        onCancel={() => setPendingTargetStatus(null)}
+      />
+    )}
+    </>
+  )
+}
+
+function StatusDropdown({
+  status,
+  statusStyle,
+  onSelect,
+}: {
+  status: string
+  statusStyle: { bg: string; text: string }
+  onSelect: (targetStatus: string) => void
+}) {
+  const frozen = FROZEN_STATUSES.has(status)
+  const transitions = VALID_TRANSITIONS[status]
+  const hasTransitions = transitions && transitions.size > 0
+
+  // Frozen or no transitions — static badge
+  if (frozen || !hasTransitions) {
+    return (
+      <span className={cn(
+        'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
+        statusStyle.bg, statusStyle.text
+      )}>
+        {status}
+      </span>
+    )
+  }
+
+  const items = Array.from(transitions)
+  const cancelIdx = items.indexOf('Отменена')
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className={cn(
+          'inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)] transition-colors cursor-pointer',
+          'hover:ring-2 hover:ring-offset-1 hover:ring-offset-bg-card',
+          statusStyle.bg, statusStyle.text,
+          // ring color matches status
+          status === 'Новая' && 'hover:ring-[#60a5fa]/40',
+          status === 'В работе' && 'hover:ring-[#fbbf24]/40',
+          status === 'Закуп' && 'hover:ring-[#a78bfa]/40',
+          status === 'Уточнение' && 'hover:ring-[#22d3ee]/40',
+          status === 'Выполнена' && 'hover:ring-[#34d399]/40',
+          status === 'Исполнено' && 'hover:ring-accent/40',
+        )}>
+          {status}
+          <ChevronDown className="w-3 h-3 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={6} className="min-w-[180px]">
+        {items.map((targetStatus) => (
+          <span key={targetStatus}>
+            {/* Separator before Отменена */}
+            {targetStatus === 'Отменена' && cancelIdx > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onClick={() => onSelect(targetStatus)}
+              variant={targetStatus === 'Отменена' ? 'destructive' : 'default'}
+              className="gap-2.5 py-2 px-2.5"
+            >
+              <span className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                STATUS_DOT[targetStatus] ?? 'bg-text-muted'
+              )} />
+              <span className="font-[family-name:var(--font-display)] font-semibold text-[13px]">
+                {targetStatus}
+              </span>
+            </DropdownMenuItem>
+          </span>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
