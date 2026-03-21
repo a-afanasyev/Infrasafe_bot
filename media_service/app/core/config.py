@@ -3,7 +3,7 @@
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Optional
 import os
 
@@ -39,8 +39,15 @@ class Settings(BaseSettings):
     # === SECURITY ===
     secret_key: str = "dev_secret_key_change_in_production"
     access_token_expire_minutes: int = 30
-    api_keys: List[str] = Field(default=[], validation_alias="MEDIA_API_KEYS")
+    api_keys: str = Field(default="", validation_alias="MEDIA_API_KEYS")
     allowed_origins: str = "*"
+
+    @property
+    def api_keys_list(self) -> List[str]:
+        """Parse comma-separated API keys string into list."""
+        if not self.api_keys or not self.api_keys.strip():
+            return []
+        return [k.strip() for k in self.api_keys.split(",") if k.strip()]
 
     # === FILE LIMITS ===
     max_file_size: int = 50 * 1024 * 1024  # 50MB

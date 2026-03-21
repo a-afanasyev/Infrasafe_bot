@@ -28,7 +28,6 @@ export const useAuthStore = create<AuthState>()(
         // Targeted removal — don't wipe unrelated keys (theme, language, etc.)
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
-        localStorage.removeItem('auth-store')
         set({ user: null, isAuthenticated: false })
       },
     }),

@@ -111,7 +111,7 @@ _AUTH_EXEMPT_PATHS = {"/api/v1/health", "/api/v1/health/live", "/", "/version", 
 @app.middleware("http")
 async def api_key_auth(request: Request, call_next):
     # Skip auth if no API keys configured (grace mode for migration)
-    if not settings.api_keys:
+    if not settings.api_keys_list:
         return await call_next(request)
 
     path = request.url.path.rstrip("/")
@@ -122,7 +122,7 @@ async def api_key_auth(request: Request, call_next):
 
     # Check API key
     api_key = request.headers.get("X-API-Key")
-    if not api_key or api_key not in settings.api_keys:
+    if not api_key or api_key not in settings.api_keys_list:
         return JSONResponse(
             status_code=401,
             content={"error": "unauthorized", "message": "Invalid or missing API key"},

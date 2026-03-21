@@ -41,7 +41,7 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (allowedRoles && !user?.roles?.some((r: string) => allowedRoles.includes(r))) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/resident-board" replace />
   }
   return <>{children}</>
 }

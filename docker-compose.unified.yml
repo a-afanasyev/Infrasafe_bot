@@ -67,6 +67,7 @@ services:
       - ALLOWED_EXTENSIONS=${ALLOWED_EXTENSIONS:-jpg,jpeg,png,gif,mp4,mov,avi,pdf,doc,docx,xls,xlsx}
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - DEBUG=true
       - MEDIA_API_KEYS=${MEDIA_API_KEYS:-}
     volumes:
       # Монтируем код для hot-reload
