@@ -2,7 +2,7 @@
 Конфигурация MediaService
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import List, Optional
 import os
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # === SECURITY ===
     secret_key: str = "dev_secret_key_change_in_production"
     access_token_expire_minutes: int = 30
-    api_keys: List[str] = []
+    api_keys: List[str] = Field(default=[], validation_alias="MEDIA_API_KEYS")
     allowed_origins: str = "*"
 
     # === FILE LIMITS ===
@@ -63,13 +63,15 @@ class Settings(BaseSettings):
     # === TESTING ===
     test_mode: bool = False  # Режим тестирования без Telegram
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
 
 # Глобальный экземпляр настроек
 settings = Settings()
+
+# Fail-fast: reject insecure default secret_key in production
+if not settings.debug and settings.secret_key == "dev_secret_key_change_in_production":
+    raise RuntimeError("SECRET_KEY must be changed from default value in production")
 
 
 class TelegramChannels:

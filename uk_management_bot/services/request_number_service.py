@@ -40,15 +40,15 @@ class RequestNumberService:
             return f"{date_prefix}-001"
         
         try:
-            # Находим максимальный номер за этот день
-            # Используем raw SQL для лучшей производительности
+            # Atomic: SELECT FOR UPDATE to prevent race conditions
             result = db.execute(
                 text("""
-                    SELECT request_number 
-                    FROM requests 
-                    WHERE request_number LIKE :pattern 
-                    ORDER BY request_number DESC 
+                    SELECT request_number
+                    FROM requests
+                    WHERE request_number LIKE :pattern
+                    ORDER BY request_number DESC
                     LIMIT 1
+                    FOR UPDATE
                 """),
                 {"pattern": f"{date_prefix}-%"}
             ).fetchone()
@@ -135,8 +135,8 @@ class RequestNumberService:
         if not isinstance(request_number, str):
             return False
         
-        # Регулярное выражение для формата YYMMDD-NNN
-        pattern = r'^\d{6}-\d{3}$'
+        # Format: YYMMDD-NNN (3+ digits — supports >999 requests/day)
+        pattern = r'^\d{6}-\d{3,}$'
         
         if not re.match(pattern, request_number):
             return False

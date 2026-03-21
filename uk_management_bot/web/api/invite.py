@@ -3,6 +3,7 @@ API эндпоинты для работы с приглашениями
 """
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
+from uk_management_bot.web.limiter import web_limiter
 from typing import Optional
 import os
 import sys
@@ -60,13 +61,16 @@ async def validate_invite_token(token: str, db: Session = Depends(get_db)):
         )
         
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Token validation error: {e}")
         return TokenValidationResponse(
             valid=False,
-            message=f"Ошибка валидации: {str(e)}"
+            message="Ошибка валидации"
         )
 
 @router.post("/register")
-async def register_via_invite(data: RegistrationData, db: Session = Depends(get_db)):
+@web_limiter.limit("3/minute")
+async def register_via_invite(request: Request, data: RegistrationData, db: Session = Depends(get_db)):
     """Регистрация по приглашению"""
     try:
         invite_service = InviteService(db)
@@ -80,48 +84,35 @@ async def register_via_invite(data: RegistrationData, db: Session = Depends(get_
         
         invite_data = validation_result.get("invite_data", {})
         
+        nonce = invite_data.get("nonce")
+
         # Проверяем, что пользователь не зарегистрирован уже
         if data.telegram_id:
             existing_user = db.query(User).filter(User.telegram_id == data.telegram_id).first()
             if existing_user:
-                # Если пользователь уже одобрен, запрещаем повторную регистрацию
+                # Security: blocked users CANNOT re-register
+                if existing_user.status == "blocked":
+                    raise HTTPException(status_code=403, detail="Пользователь заблокирован")
+
+                # If already approved, reject
                 if existing_user.status == "approved":
                     raise HTTPException(status_code=400, detail="Пользователь уже зарегистрирован и одобрен")
-                # Если пользователь в статусе pending, разрешаем повторную регистрацию
-                elif existing_user.status == "pending":
-                    # Обновляем существующего пользователя вместо создания нового
-                    existing_user.first_name = data.full_name.split()[0] if data.full_name else ""
-                    existing_user.last_name = " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else ""
-                    existing_user.role = invite_data.get("role")
-                    existing_user.specialization = data.specialization if invite_data.get("role") == "executor" else None
-                    existing_user.roles = [invite_data.get("role")]
-                    existing_user.active_role = invite_data.get("role")
-                    
-                    db.commit()
-                    
-                    return {
-                        "success": True,
-                        "message": "Данные пользователя обновлены",
-                        "user_id": existing_user.id
-                    }
-                # Для других статусов (blocked и т.д.) также разрешаем повторную регистрацию
-                else:
-                    # Обновляем существующего пользователя
-                    existing_user.first_name = data.full_name.split()[0] if data.full_name else ""
-                    existing_user.last_name = " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else ""
-                    existing_user.role = invite_data.get("role")
-                    existing_user.specialization = data.specialization if invite_data.get("role") == "executor" else None
-                    existing_user.roles = [invite_data.get("role")]
-                    existing_user.active_role = invite_data.get("role")
-                    existing_user.status = "pending"  # Сбрасываем статус на pending
-                    
-                    db.commit()
-                    
-                    return {
-                        "success": True,
-                        "message": "Данные пользователя обновлены",
-                        "user_id": existing_user.id
-                    }
+
+                # Pending users can update their info (but NOT role from invite — keep existing)
+                existing_user.first_name = data.full_name.split()[0] if data.full_name else ""
+                existing_user.last_name = " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else ""
+                existing_user.specialization = data.specialization if existing_user.role == "executor" else None
+
+                # Consume nonce so invite link can't be reused
+                invite_service.mark_nonce_used(nonce, existing_user.id, invite_data)
+
+                db.commit()
+
+                return {
+                    "success": True,
+                    "message": "Данные пользователя обновлены",
+                    "user_id": existing_user.id
+                }
         
         # Создаем пользователя через веб-регистрацию
         user_data = {
@@ -154,7 +145,9 @@ async def register_via_invite(data: RegistrationData, db: Session = Depends(get_
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера: {str(e)}")
+        import logging
+        logging.getLogger(__name__).error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 @router.get("/specializations")
 async def get_specializations():

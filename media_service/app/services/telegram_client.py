@@ -3,7 +3,8 @@ Telegram клиент для работы с каналами
 """
 
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
+import httpx
 from aiogram import Bot
 from aiogram.types import InputFile, BufferedInputFile, Message
 from aiogram.exceptions import TelegramAPIError
@@ -139,6 +140,22 @@ class TelegramClientService:
         except Exception as e:
             logger.error(f"Failed to get file URL for {file_id}: {e}")
             return None
+
+    async def download_file(self, file_id: str) -> Tuple[bytes, str]:
+        """
+        Download file bytes from Telegram by file_id.
+        Returns (file_bytes, content_type).
+        Token stays server-side — never exposed to clients.
+        """
+        file_info = await self.get_file(file_id)
+        url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+
+        content_type = resp.headers.get("content-type", "application/octet-stream")
+        return resp.content, content_type
 
     async def delete_message(
         self,

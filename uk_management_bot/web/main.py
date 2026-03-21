@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 import os
 import sys
 
@@ -13,16 +15,28 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from uk_management_bot.web.api.invite import router as invite_router
+from uk_management_bot.web.limiter import web_limiter
+from uk_management_bot.config.settings import settings
 
 app = FastAPI(title="UK Management Bot - Web Registration", version="1.0.0")
 
-# Настройка CORS
+# Rate limiting (shared instance from limiter.py)
+app.state.limiter = web_limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS — restrict to known origins
+_web_origins = ["https://web.telegram.org"]
+if settings.DEBUG:
+    _web_origins.extend(["http://localhost:3000", "http://localhost:5173"])
+if settings.FRONTEND_URL:
+    _web_origins.append(settings.FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшене указать конкретные домены
+    allow_origins=_web_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Middleware для заголовков Telegram Web App

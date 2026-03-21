@@ -12,20 +12,14 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
       - USE_REDIS_RATE_LIMIT=${USE_REDIS_RATE_LIMIT:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DEBUG=${DEBUG:-false}
       - PYTHONUNBUFFERED=1
       - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
-    volumes:
-      # Монтируем код для hot-reload
-      - ./uk_management_bot:/app/uk_management_bot
-      - ./requirements.txt:/app/requirements.txt
-      - ./.env:/app/.env
-      - ./scripts:/app/scripts
-      - ./tests:/app/tests
-      - ./uk_management.db:/app/uk_management.db
+      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY}
+    # Production: no source code mounts — code is baked into the image
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,7 +48,7 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${MEDIA_REDIS_URL:-redis://redis:6379/1}
+      - REDIS_URL=${MEDIA_REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/1}
       - TELEGRAM_BOT_TOKEN=${MEDIA_BOT_TOKEN}
       - CHANNEL_REQUESTS=${CHANNEL_REQUESTS:--1003091883002}
       - CHANNEL_REPORTS=${CHANNEL_REPORTS:--1002969942316}
@@ -66,14 +60,11 @@ services:
       - ALLOWED_EXTENSIONS=${ALLOWED_EXTENSIONS:-jpg,jpeg,png,gif,mp4,mov,avi,pdf,doc,docx,xls,xlsx}
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MEDIA_API_KEYS=${MEDIA_API_KEYS}
     volumes:
-      # Монтируем код для hot-reload
-      - ./media_service/app:/app/app
-      - ./media_service/client:/app/client
-      - ./media_service/requirements.txt:/app/requirements.txt
-      # Данные и загрузки
+      # Production: only data volumes — code is baked into the image
       - media_uploads:/app/data/uploads
-      - ./media_service/channels.json:/app/data/channels.json
+      - ./media_service/channels.json:/app/data/channels.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,8 +72,7 @@ services:
         condition: service_healthy
     networks:
       - uk-network
-    ports:
-      - "8009:8000"  # Media Service API должен быть доступен для внешних запросов
+    # Security: no external port — bot uses internal http://media-service:8000
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=5)"]
       interval: 30s
@@ -118,7 +108,7 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-uk_management}
       - POSTGRES_USER=${POSTGRES_USER:-uk_bot}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-uk_bot_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -141,13 +131,15 @@ services:
     image: redis:7-alpine
     container_name: uk-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory ${REDIS_MAX_MEMORY:-512mb} --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAX_MEMORY:-512mb} --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
       - uk-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$REDIS_PASSWORD redis-cli ping 2>/dev/null | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5

@@ -108,6 +108,7 @@ class Settings:
     MEDIA_SERVICE_URL = os.getenv("MEDIA_SERVICE_URL", "http://localhost:8001")
     MEDIA_SERVICE_TIMEOUT = int(os.getenv("MEDIA_SERVICE_TIMEOUT", "30"))
     MEDIA_SERVICE_ENABLED = os.getenv("MEDIA_SERVICE_ENABLED", "True").lower() == "true"
+    MEDIA_SERVICE_API_KEY = os.getenv("MEDIA_SERVICE_API_KEY", "")
 
     # Startup validation (production-only checks)
     if not DEBUG:

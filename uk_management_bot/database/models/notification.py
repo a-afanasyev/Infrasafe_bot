@@ -35,7 +35,7 @@ class Notification(Base):
     
     # Дополнительные данные
     meta_data = Column(JSON, default=dict)
-    request_number_fk = Column(String(10), ForeignKey('requests.request_number'), nullable=True)
+    request_number_fk = Column(String(15), ForeignKey('requests.request_number'), nullable=True)
 
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())

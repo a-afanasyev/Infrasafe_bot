@@ -18,7 +18,7 @@ class ShiftAssignment(Base):
     shift_id = Column(Integer, ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Заявка, которая назначена на смену
-    request_number = Column(String(10), ForeignKey("requests.request_number", ondelete="CASCADE"), nullable=False, index=True)
+    request_number = Column(String(15), ForeignKey("requests.request_number", ondelete="CASCADE"), nullable=False, index=True)
     
     # ========== ПРИОРИТИЗАЦИЯ И ПЛАНИРОВАНИЕ ==========
     # Приоритет назначения (1-5, где 5 - высший приоритет)

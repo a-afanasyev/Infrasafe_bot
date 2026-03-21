@@ -51,7 +51,7 @@ async def detailed_health_check():
             if not db_status:
                 overall_status = "degraded"
         except Exception as e:
-            dependencies["database"] = f"error: {str(e)}"
+            dependencies["database"] = "error"
             overall_status = "degraded"
 
         # Проверка Telegram API
@@ -62,7 +62,7 @@ async def detailed_health_check():
             dependencies["telegram"] = "ok" if bot_info else "error"
             await telegram.close()
         except Exception as e:
-            dependencies["telegram"] = f"error: {str(e)}"
+            dependencies["telegram"] = "error"
             overall_status = "degraded"
 
         # Проверка конфигурации
@@ -76,7 +76,7 @@ async def detailed_health_check():
             if not config_status:
                 overall_status = "degraded"
         except Exception as e:
-            dependencies["configuration"] = f"error: {str(e)}"
+            dependencies["configuration"] = "error"
             overall_status = "degraded"
 
         return HealthResponse(
@@ -89,7 +89,7 @@ async def detailed_health_check():
 
     except Exception as e:
         logger.error(f"Detailed health check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Health check error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Health check error")
 
 
 @router.get("/database")
@@ -107,7 +107,7 @@ async def database_health():
 
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Database error")
 
 
 @router.get("/telegram")
@@ -127,8 +127,6 @@ async def telegram_health():
             return {
                 "status": "ok",
                 "telegram": "connected",
-                "bot_username": bot_info.username,
-                "bot_id": bot_info.id,
                 "timestamp": datetime.now()
             }
         else:
@@ -136,7 +134,7 @@ async def telegram_health():
 
     except Exception as e:
         logger.error(f"Telegram health check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Telegram API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Telegram API error")
 
 
 @router.get("/ready")
@@ -159,7 +157,7 @@ async def readiness_check():
         raise
     except Exception as e:
         logger.error(f"Readiness check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
+        raise HTTPException(status_code=503, detail="Service not ready")
 
 
 @router.get("/live")
@@ -173,4 +171,4 @@ async def liveness_check():
 
     except Exception as e:
         logger.error(f"Liveness check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Service not alive: {str(e)}")
+        raise HTTPException(status_code=503, detail="Service not alive")

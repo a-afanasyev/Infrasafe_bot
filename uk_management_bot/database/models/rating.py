@@ -9,7 +9,7 @@ class Rating(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Связь с заявкой
-    request_number = Column(String(10), ForeignKey("requests.request_number"), nullable=False)
+    request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
     request = relationship("Request", back_populates="ratings")
     
     # Пользователь, оставивший оценку

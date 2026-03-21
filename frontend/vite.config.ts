@@ -3,8 +3,16 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
+  build: {
+    sourcemap: false,
+  },
+  ...(mode === 'production' && {
+    esbuild: {
+      drop: ['console', 'debugger'],
+    },
+  }),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -22,4 +30,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

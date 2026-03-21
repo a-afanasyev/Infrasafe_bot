@@ -97,7 +97,8 @@ async def login_password(request: Request, data: PasswordLogin, db: AsyncSession
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def refresh_token(request: Request, data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     token_hash = hash_token(data.refresh_token)
     result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
     rt = result.scalar_one_or_none()
@@ -109,6 +110,9 @@ async def refresh_token(data: RefreshRequest, db: AsyncSession = Depends(get_db)
     rt.revoked_at = datetime.now(timezone.utc)
     user_result = await db.execute(select(User).where(User.id == rt.user_id))
     user = user_result.scalar_one()
+
+    if user.status != "approved":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])

@@ -25,10 +25,19 @@ export const useAuthStore = create<AuthState>()(
         if (refresh_token) {
           await apiClient.post('/api/v2/auth/logout', { refresh_token }).catch(() => {})
         }
-        localStorage.clear()
+        // Targeted removal — don't wipe unrelated keys (theme, language, etc.)
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('auth-store')
         set({ user: null, isAuthenticated: false })
       },
     }),
-    { name: 'auth-store' }
+    {
+      name: 'auth-store',
+      partialize: (state) => ({
+        user: state.user ? { id: state.user.id, first_name: state.user.first_name, roles: state.user.roles } : null,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
   )
 )

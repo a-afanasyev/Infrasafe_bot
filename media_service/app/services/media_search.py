@@ -15,6 +15,11 @@ from app.db.database import get_db_context
 logger = logging.getLogger(__name__)
 
 
+def _escape_like(value: str) -> str:
+    """Escape special LIKE/ILIKE characters to prevent wildcard injection."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class MediaSearchService:
     """Сервис для поиска и фильтрации медиа-файлов"""
 
@@ -42,14 +47,15 @@ class MediaSearchService:
             # Базовый запрос
             query_obj = db.query(MediaFile).filter(MediaFile.status == status)
 
-            # Фильтр по текстовому запросу
+            # Фильтр по текстовому запросу (escape LIKE wildcards)
             if query:
+                escaped = _escape_like(query)
                 query_obj = query_obj.filter(
                     or_(
-                        MediaFile.description.ilike(f"%{query}%"),
-                        MediaFile.caption.ilike(f"%{query}%"),
-                        MediaFile.title.ilike(f"%{query}%"),
-                        MediaFile.original_filename.ilike(f"%{query}%")
+                        MediaFile.description.ilike(f"%{escaped}%"),
+                        MediaFile.caption.ilike(f"%{escaped}%"),
+                        MediaFile.title.ilike(f"%{escaped}%"),
+                        MediaFile.original_filename.ilike(f"%{escaped}%")
                     )
                 )
 

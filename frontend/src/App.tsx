@@ -41,7 +41,7 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (allowedRoles && !user?.roles?.some((r: string) => allowedRoles.includes(r))) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/" replace />
   }
   return <>{children}</>
 }
@@ -56,7 +56,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
 
-              <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><KanbanPage /></PageErrorBoundary>} />
                 <Route path="analytics" element={<PageErrorBoundary><AnalyticsPage /></PageErrorBoundary>} />
                 <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />

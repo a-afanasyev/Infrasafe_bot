@@ -8,7 +8,7 @@ class Request(Base):
     __tablename__ = "requests"
     
     # НОВЫЙ PRIMARY KEY - номер заявки в формате YYMMDD-NNN
-    request_number = Column(String(10), primary_key=True, index=True)
+    request_number = Column(String(15), primary_key=True, index=True)
     
     # Связь с пользователем (заявителем)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

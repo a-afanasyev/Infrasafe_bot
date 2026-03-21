@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 import time
 
+from starlette.responses import Response as StarletteResponse
+
 from app.core.config import settings
 from app.db.database import init_db, check_db_connection
 from app.api.v1.router import api_router
@@ -66,13 +68,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Настройка CORS
+# CORS — internal service, restrict to known origins
+_media_origins = []
+if settings.allowed_origins and settings.allowed_origins != "*":
+    _media_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.allowed_origins == "*" else [settings.allowed_origins],
+    allow_origins=_media_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 # Добавляем сжатие
@@ -95,6 +101,34 @@ async def log_requests(request: Request, call_next):
     logger.info(f"Response: {response.status_code} - {process_time:.3f}s")
 
     return response
+
+
+# API-key authentication middleware
+# Exempt paths that don't require auth (basic health checks only)
+_AUTH_EXEMPT_PATHS = {"/api/v1/health", "/api/v1/health/live", "/", "/version", "/docs", "/redoc", "/openapi.json"}
+
+
+@app.middleware("http")
+async def api_key_auth(request: Request, call_next):
+    # Skip auth if no API keys configured (grace mode for migration)
+    if not settings.api_keys:
+        return await call_next(request)
+
+    path = request.url.path.rstrip("/")
+
+    # Exempt paths
+    if path in _AUTH_EXEMPT_PATHS:
+        return await call_next(request)
+
+    # Check API key
+    api_key = request.headers.get("X-API-Key")
+    if not api_key or api_key not in settings.api_keys:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "unauthorized", "message": "Invalid or missing API key"},
+        )
+
+    return await call_next(request)
 
 
 # Обработчики ошибок
@@ -178,8 +212,6 @@ async def version():
     return {
         "service": "UK Media Service",
         "version": "1.0.0",
-        "build": "production",
-        "debug": settings.debug
     }
 
 

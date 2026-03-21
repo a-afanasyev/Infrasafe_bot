@@ -18,6 +18,7 @@ services:
       - DEBUG=${DEBUG:-true}
       - PYTHONUNBUFFERED=1
       - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
+      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
     volumes:
       # Монтируем код для hot-reload
       - ./uk_management_bot:/app/uk_management_bot
@@ -66,6 +67,7 @@ services:
       - ALLOWED_EXTENSIONS=${ALLOWED_EXTENSIONS:-jpg,jpeg,png,gif,mp4,mov,avi,pdf,doc,docx,xls,xlsx}
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - MEDIA_API_KEYS=${MEDIA_API_KEYS:-}
     volumes:
       # Монтируем код для hot-reload
       - ./media_service/app:/app/app

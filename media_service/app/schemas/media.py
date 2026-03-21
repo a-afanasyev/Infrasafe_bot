@@ -8,6 +8,11 @@ from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 
+class StrictSchema(BaseModel):
+    """Base class that rejects unexpected fields (defense-in-depth)."""
+    model_config = ConfigDict(extra="forbid")
+
+
 class FileTypeEnum(str, Enum):
     PHOTO = "photo"
     VIDEO = "video"
@@ -31,7 +36,7 @@ class MediaStatusEnum(str, Enum):
 
 
 # Request schemas
-class MediaUploadRequest(BaseModel):
+class MediaUploadRequest(StrictSchema):
     request_number: str = Field(..., description="Номер заявки")
     category: MediaCategoryEnum = Field(default=MediaCategoryEnum.REQUEST_PHOTO, description="Категория файла")
     description: Optional[str] = Field(None, max_length=500, description="Описание файла")
@@ -39,7 +44,7 @@ class MediaUploadRequest(BaseModel):
     uploaded_by: Optional[int] = Field(None, description="ID пользователя, загрузившего файл")
 
 
-class MediaSearchRequest(BaseModel):
+class MediaSearchRequest(StrictSchema):
     query: Optional[str] = Field(None, description="Текстовый поиск")
     request_numbers: Optional[List[str]] = Field(None, description="Номера заявок")
     tags: Optional[List[str]] = Field(None, description="Теги для фильтрации")
@@ -54,16 +59,16 @@ class MediaSearchRequest(BaseModel):
     offset: int = Field(default=0, ge=0, description="Смещение для пагинации")
 
 
-class MediaUpdateTagsRequest(BaseModel):
+class MediaUpdateTagsRequest(StrictSchema):
     tags: List[str] = Field(..., description="Новые теги")
     replace: bool = Field(default=False, description="Заменить все теги или добавить к существующим")
 
 
-class MediaArchiveRequest(BaseModel):
+class MediaArchiveRequest(StrictSchema):
     archive_reason: Optional[str] = Field(None, max_length=255, description="Причина архивации")
 
 
-class MediaDateRangeRequest(BaseModel):
+class MediaDateRangeRequest(StrictSchema):
     date_from: datetime = Field(..., description="Дата начала")
     date_to: datetime = Field(..., description="Дата окончания")
     group_by: str = Field(default="day", pattern="^(day|week|month)$", description="Группировка")

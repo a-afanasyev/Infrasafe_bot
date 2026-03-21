@@ -16,7 +16,7 @@ class RequestAssignment(Base):
     
     # Основные поля
     id = Column(Integer, primary_key=True, index=True)
-    request_number = Column(String(10), ForeignKey("requests.request_number"), nullable=False)
+    request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
     
     # Тип назначения
     assignment_type = Column(String(20), nullable=False)  # 'group' или 'individual'

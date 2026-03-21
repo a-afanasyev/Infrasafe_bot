@@ -4,12 +4,13 @@ import { useTWAAuth } from '../../hooks/useTWAAuth'
 import { useNavigate } from 'react-router-dom'
 
 export default function TWAHomePage() {
-  useTWAAuth()
+  const { isAuthenticated } = useTWAAuth()
   const navigate = useNavigate()
 
   const { data: requests } = useQuery({
     queryKey: ['my-requests'],
     queryFn: () => apiClient.get('/api/v2/requests?limit=10').then(r => r.data),
+    enabled: isAuthenticated,
   })
 
   const activeRequests = (requests ?? []).filter((r: { status: string }) =>

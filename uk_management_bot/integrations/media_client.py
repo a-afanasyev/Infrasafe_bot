@@ -17,19 +17,24 @@ class MediaServiceClient:
     Клиент для взаимодействия с Media Service API
     """
 
-    def __init__(self, base_url: str, timeout: int = 30):
+    def __init__(self, base_url: str, timeout: int = 30, api_key: str = ""):
         """
         Инициализация клиента
 
         Args:
             base_url: Базовый URL Media Service (например, http://media-service:8000)
             timeout: Таймаут запросов в секундах
+            api_key: API-ключ для аутентификации в Media Service
         """
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
+        headers = {}
+        if api_key:
+            headers["X-API-Key"] = api_key
         self.client = httpx.AsyncClient(
             timeout=timeout,
-            base_url=f"{self.base_url}/api/v1"
+            base_url=f"{self.base_url}/api/v1",
+            headers=headers,
         )
 
     async def upload_request_media(
@@ -88,7 +93,10 @@ class MediaServiceClient:
             if tags:
                 data["tags"] = ",".join(tags)
 
+            # Security: uploaded_by must be a server-derived user ID, never client input
             if uploaded_by is not None:
+                if not isinstance(uploaded_by, int) or uploaded_by <= 0:
+                    raise ValueError("uploaded_by must be a positive integer (server-derived user ID)")
                 data["uploaded_by"] = str(uploaded_by)
 
             # Отправка запроса
@@ -165,7 +173,10 @@ class MediaServiceClient:
             if tags:
                 data["tags"] = ",".join(tags)
 
+            # Security: uploaded_by must be a server-derived user ID, never client input
             if uploaded_by is not None:
+                if not isinstance(uploaded_by, int) or uploaded_by <= 0:
+                    raise ValueError("uploaded_by must be a positive integer (server-derived user ID)")
                 data["uploaded_by"] = str(uploaded_by)
 
             response = await self.client.post(

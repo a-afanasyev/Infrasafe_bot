@@ -28,7 +28,8 @@ def get_media_client() -> Optional[MediaServiceClient]:
         try:
             _media_client = MediaServiceClient(
                 base_url=settings.MEDIA_SERVICE_URL,
-                timeout=settings.MEDIA_SERVICE_TIMEOUT
+                timeout=settings.MEDIA_SERVICE_TIMEOUT,
+                api_key=settings.MEDIA_SERVICE_API_KEY,
             )
             logger.info(f"Media Service клиент инициализирован: {settings.MEDIA_SERVICE_URL}")
         except Exception as e:

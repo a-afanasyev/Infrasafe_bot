@@ -6,8 +6,9 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 from sqlalchemy.orm import Session
+import io
 
 from app.db.database import get_db
 from app.services import MediaStorageService, MediaSearchService
@@ -20,6 +21,7 @@ from app.schemas import (
     MediaStatusEnum, MediaTelegramLookupResponse
 )
 from app.core.config import settings
+from aiogram.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -79,14 +81,11 @@ async def upload_media(
             uploaded_by=uploaded_by
         )
 
-        # Получаем URL файла
-        file_url = await storage_service.get_media_file_url(media_file)
-
         logger.info(f"Media uploaded successfully: {media_file.id} for request {request_number}")
 
         return MediaUploadResponse(
             media_file=MediaFileResponse.model_validate(media_file),
-            file_url=file_url,
+            file_url=f"/api/v1/media/{media_file.id}/file",
             message="Файл успешно загружен"
         )
 
@@ -94,7 +93,7 @@ async def upload_media(
         raise
     except Exception as e:
         logger.error(f"Failed to upload media: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки файла: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки файла")
 
 
 @router.post("/upload-report", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -131,19 +130,17 @@ async def upload_report_media(
             uploaded_by=uploaded_by
         )
 
-        file_url = await storage_service.get_media_file_url(media_file)
-
         logger.info(f"Report media uploaded successfully: {media_file.id}")
 
         return MediaUploadResponse(
             media_file=MediaFileResponse.model_validate(media_file),
-            file_url=file_url,
+            file_url=f"/api/v1/media/{media_file.id}/file",
             message="Файл отчета успешно загружен"
         )
 
     except Exception as e:
         logger.error(f"Failed to upload report media: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки файла отчета: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки файла отчета")
 
 
 @router.get("/search", response_model=MediaSearchResponse)
@@ -213,7 +210,7 @@ async def search_media(
 
     except Exception as e:
         logger.error(f"Search failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка поиска: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка поиска")
 
 
 @router.get("/statistics", response_model=MediaStatisticsResponse)
@@ -229,7 +226,7 @@ async def get_media_statistics(
 
     except Exception as e:
         logger.error(f"Failed to get media statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения статистики: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения статистики")
 
 
 @router.get("/tags/popular", response_model=List[MediaTagResponse])
@@ -246,34 +243,39 @@ async def get_popular_tags(
 
     except Exception as e:
         logger.error(f"Failed to get popular tags: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения популярных тегов: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения популярных тегов")
 
 
 @router.get("/{media_id}/file")
-async def get_media_file_redirect(
+async def get_media_file_stream(
     media_id: int,
     storage_service: MediaStorageService = Depends(get_storage_service),
     db: Session = Depends(get_db)
 ):
     """
-    Редирект на прямую ссылку медиа-файла
+    Stream media file bytes (token stays server-side)
     """
     try:
         from app.models.media import MediaFile
-        from fastapi.responses import RedirectResponse
 
         media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
         if not media_file:
             raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 
-        file_url = await storage_service.get_media_file_url(media_file)
-        return RedirectResponse(url=file_url)
+        file_bytes, content_type = await storage_service.telegram.download_file(
+            media_file.telegram_file_id
+        )
+        return Response(
+            content=file_bytes,
+            media_type=content_type,
+            headers={"Content-Disposition": f'inline; filename="{media_file.original_filename or "file"}"'},
+        )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to redirect to media file {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения файла: {str(e)}")
+        logger.error(f"Failed to stream media file {media_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения файла")
 
 
 @router.get("/telegram/{telegram_file_id}", response_model=MediaTelegramLookupResponse)
@@ -290,21 +292,19 @@ async def get_media_by_telegram_file_id(
         media_file = db.query(MediaFile).filter(MediaFile.telegram_file_id == telegram_file_id).first()
 
         if media_file:
-            file_url = await storage_service.get_media_file_url(media_file)
             return MediaTelegramLookupResponse(
                 source="database",
                 telegram_file_id=media_file.telegram_file_id,
                 telegram_file_unique_id=media_file.telegram_file_unique_id,
                 file_size=media_file.file_size,
                 file_path=None,
-                file_url=file_url,
+                file_url=f"/api/v1/media/{media_file.id}/file",
                 media_file=MediaFileResponse.model_validate(media_file)
             )
 
-        # Фallback к Telegram API, если в базе не найдено
+        # Fallback to Telegram API — file not in our DB
         try:
             file_info = await storage_service.telegram.get_file(telegram_file_id)
-            file_url = await storage_service.telegram.get_file_url(telegram_file_id)
         except Exception:
             logger.warning(f"Telegram file {telegram_file_id} not found via API")
             raise HTTPException(status_code=404, detail="Файл в Telegram не найден или недоступен")
@@ -315,7 +315,7 @@ async def get_media_by_telegram_file_id(
             telegram_file_unique_id=getattr(file_info, "file_unique_id", None),
             file_size=getattr(file_info, "file_size", None),
             file_path=getattr(file_info, "file_path", None),
-            file_url=file_url,
+            file_url=f"/api/v1/media/telegram/{telegram_file_id}/file",
             media_file=None
         )
 
@@ -323,7 +323,33 @@ async def get_media_by_telegram_file_id(
         raise
     except Exception as e:
         logger.error(f"Failed to get media by telegram file_id {telegram_file_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения медиа-файла: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения медиа-файла")
+
+
+@router.get("/telegram/{telegram_file_id}/file")
+async def stream_telegram_file(
+    telegram_file_id: str,
+    storage_service: MediaStorageService = Depends(get_storage_service),
+):
+    """
+    Stream file bytes by telegram_file_id (for files not in DB).
+    Token stays server-side.
+    """
+    try:
+        file_bytes, content_type = await storage_service.telegram.download_file(
+            telegram_file_id
+        )
+        return Response(
+            content=file_bytes,
+            media_type=content_type,
+            headers={"Content-Disposition": 'inline; filename="file"'},
+        )
+
+    except TelegramAPIError:
+        raise HTTPException(status_code=404, detail="Файл в Telegram не найден или недоступен")
+    except Exception as e:
+        logger.error(f"Failed to stream telegram file {telegram_file_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения файла")
 
 
 @router.get("/{media_id}", response_model=MediaFileResponse)
@@ -347,7 +373,7 @@ async def get_media(
         raise
     except Exception as e:
         logger.error(f"Failed to get media {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения медиа-файла: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения медиа-файла")
 
 
 @router.get("/{media_id}/url", response_model=MediaFileUrlResponse)
@@ -366,19 +392,17 @@ async def get_media_url(
         if not media_file:
             raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 
-        file_url = await storage_service.get_media_file_url(media_file)
-
         return MediaFileUrlResponse(
             media_file_id=media_id,
-            file_url=file_url,
-            expires_at=None  # Telegram URLs не имеют явного времени истечения
+            file_url=f"/api/v1/media/{media_id}/file",
+            expires_at=None
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get media URL {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения URL: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения URL")
 
 
 @router.put("/{media_id}/tags", response_model=MediaFileResponse)
@@ -406,7 +430,7 @@ async def update_media_tags(
         raise
     except Exception as e:
         logger.error(f"Failed to update tags for media {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка обновления тегов: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка обновления тегов")
 
 
 @router.post("/{media_id}/archive")
@@ -433,7 +457,7 @@ async def archive_media(
         raise
     except Exception as e:
         logger.error(f"Failed to archive media {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка архивации: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка архивации")
 
 
 @router.delete("/{media_id}")
@@ -456,7 +480,7 @@ async def delete_media(
         raise
     except Exception as e:
         logger.error(f"Failed to delete media {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка удаления: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка удаления")
 
 
 @router.get("/request/{request_number}", response_model=List[MediaFileResponse])
@@ -480,7 +504,7 @@ async def get_request_media(
 
     except Exception as e:
         logger.error(f"Failed to get media for request {request_number}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения медиа для заявки: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения медиа для заявки")
 
 
 @router.get("/request/{request_number}/timeline", response_model=MediaTimelineResponse)
@@ -502,7 +526,7 @@ async def get_request_timeline(
 
     except Exception as e:
         logger.error(f"Failed to get timeline for request {request_number}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка получения временной линии: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка получения временной линии")
 
 
 
@@ -530,7 +554,7 @@ async def search_by_date_range(
 
     except Exception as e:
         logger.error(f"Failed to search by date range: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка поиска по дате: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка поиска по дате")
 
 
 @router.get("/{media_id}/similar", response_model=List[MediaFileResponse])
@@ -554,4 +578,4 @@ async def find_similar_media(
 
     except Exception as e:
         logger.error(f"Failed to find similar media for {media_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка поиска похожих файлов: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка поиска похожих файлов")

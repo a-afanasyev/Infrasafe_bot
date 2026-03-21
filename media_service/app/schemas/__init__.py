@@ -1,4 +1,5 @@
 from .media import (
+    StrictSchema,
     MediaUploadRequest,
     MediaSearchRequest,
     MediaUpdateTagsRequest,
