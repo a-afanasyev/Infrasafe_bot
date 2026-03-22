@@ -1,3 +1,10 @@
+"""
+Operational shift menu ("🔄 Смена") — quick actions for shift start/stop.
+
+Uses: Shift.start_time, Shift.end_time (actual times)
+Related: my_shifts.py handles the detailed shift interface ("📋 Мои смены")
+"""
+
 import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -477,7 +484,7 @@ async def my_shift(message: Message, db=None):
             await message.answer(get_text("shifts.no_active", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
             return
         await message.answer(
-            get_text("shifts.active_shift_since", language=lang).replace("{...}", active.start_time.strftime('%d.%m.%Y %H:%M')),
+            get_text("shifts.active_shift_since", language=lang).format(start_time=active.start_time.strftime('%H:%M')),
             reply_markup=get_shifts_main_keyboard(language=lang),
         )
     finally:

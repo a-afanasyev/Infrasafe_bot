@@ -5,7 +5,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.session import engine, Base, SessionLocal
-from uk_management_bot.handlers.base import router as base_router
+from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.shifts import router as shifts_router
 from uk_management_bot.handlers.admin import router as admin_router
@@ -258,6 +258,7 @@ async def main():
     dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
 
     # Регистрируем роутеры
+    dp.include_router(start_router)  # /start FIRST — catches /start from any FSM state
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
     dp.include_router(auth_router)
     

@@ -2432,24 +2432,4 @@ async def open_user_management(message: Message, db: Session, roles: list = None
         )
 
 
-@router.callback_query(F.data == "admin_panel")
-async def back_to_admin_panel(callback: CallbackQuery, language: str = "ru"):
-    """Вернуться в админ панель"""
-    lang = language
-    
-    try:
-        from uk_management_bot.keyboards.admin import get_manager_main_keyboard
-        
-        await callback.message.answer(
-            get_text('user_mgmt.handlers.manager_panel', language=lang),
-            reply_markup=get_manager_main_keyboard(language=lang)
-        )
-
-        await callback.answer()
-        
-    except Exception as e:
-        logger.error(f"Ошибка возврата в админ панель: {e}")
-        await callback.answer(
-            get_text('errors.unknown_error', language=lang),
-            show_alert=True
-        )
+# admin_panel callback handler is in employee_management.py (uses edit_text)

@@ -19,6 +19,7 @@ from uk_management_bot.keyboards.admin import (
     get_executors_by_category_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard, get_user_contextual_keyboard
+from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.invite_service import InviteService
@@ -44,6 +45,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji, STATUS_EMOJI
+from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -113,17 +115,7 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
 
         logger.info(f"[AUTO_ASSIGN] Начало автоматического назначения для заявки {request.request_number}, категория: {request.category}")
 
-        # Маппинг категорий заявок на специализации
-        category_to_specialization = {
-            "Сантехника": "plumber",
-            "Электрика": "electrician",
-            "Благоустройство": "landscaping",
-            "Уборка": "cleaning",
-            "Безопасность": "security",
-            "Отопление": "hvac",
-            "Лифт": "maintenance",
-            "Интернет/ТВ": "electrician",
-        }
+        category_to_specialization = CATEGORY_TO_SPECIALIZATION
 
         # Определяем специализацию по категории заявки
         specialization = category_to_specialization.get(request.category)
@@ -259,9 +251,9 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
                     notification_text = get_text("admin.handlers.new_request_for_duty", language="ru").format(
                         specialization=specialization,
                         request_number=request.request_number,
-                        category=request.category,
+                        category=get_category_display(resolve_category_key(request.category), language="ru"),
                         address=request.address,
-                        urgency=request.urgency,
+                        urgency=get_urgency_display(request.urgency, language="ru") if request.urgency else "",
                         description=request.description
                     )
                     await bot.send_message(
@@ -317,11 +309,13 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         message_text = get_text("admin.handlers.request_detail_header", language=lang).format(request_number=request.request_number) + "\n\n"
         message_text += get_text("admin.handlers.request_detail_applicant", language=lang).format(user_info=user_info) + "\n"
         message_text += get_text("admin.handlers.request_detail_telegram_id", language=lang).format(telegram_id=request_user.telegram_id if request_user else 'N/A') + "\n"
-        message_text += get_text("admin.handlers.request_detail_category", language=lang).format(category=request.category) + "\n"
+        category_display = get_category_display(resolve_category_key(request.category), language=lang)
+        urgency_display = get_urgency_display(request.urgency, language=lang) if request.urgency else ""
+        message_text += get_text("admin.handlers.request_detail_category", language=lang).format(category=category_display) + "\n"
         message_text += get_text("admin.handlers.request_detail_status", language=lang).format(status=get_status_display(request.status, language=lang)) + "\n"
         message_text += get_text("admin.handlers.request_detail_address", language=lang).format(address=request.address) + "\n"
         message_text += get_text("admin.handlers.request_detail_description", language=lang).format(description=request.description) + "\n"
-        message_text += get_text("admin.handlers.request_detail_urgency", language=lang).format(urgency=request.urgency) + "\n"
+        message_text += get_text("admin.handlers.request_detail_urgency", language=lang).format(urgency=urgency_display) + "\n"
         if request.apartment:
             message_text += get_text("admin.handlers.request_detail_apartment", language=lang).format(apartment=request.apartment) + "\n"
         message_text += get_text("admin.handlers.request_detail_created", language=lang).format(created_at=request.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
@@ -405,7 +399,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             rows = list(actions_kb.inline_keyboard)
             if has_media:
                 rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{request.request_number}")])
-            rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data="mreq_back_to_list")])
+            rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=f"mreq_back_{request.request_number}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         else:
             # Для обычных заявок - стандартная клавиатура
@@ -413,7 +407,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
             # Добавляем кнопку "Назад к списку"
             rows = list(actions_kb.inline_keyboard)
-            rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data="mreq_back_to_list")])
+            rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=f"mreq_back_{request.request_number}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
         await callback.message.edit_text(message_text, reply_markup=keyboard)
@@ -821,7 +815,7 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
             await callback.answer(get_text("admin.handlers.no_requests_on_page", language=lang), show_alert=True)
             return
         
-        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+        items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
         
         # Обновляем сообщение с новой страницей
         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
@@ -836,7 +830,7 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.callback_query(F.data == "mreq_back_to_list")
+@router.callback_query(F.data.startswith("mreq_back_"))
 async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Возврат из деталей заявки к списку для менеджеров"""
     try:
@@ -847,97 +841,56 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
         if not has_admin_access(roles=roles, user=user):
             await callback.answer(get_text("admin.handlers.no_access_view_requests", language=lang), show_alert=True)
             return
-        
-        # Определяем, из какого списка мы пришли, по статусу заявки
-        # Получаем текущую заявку из сообщения
-        message_text = callback.message.text
-        if "Заявка #" in message_text:
-            # Извлекаем номер заявки из текста сообщения
-            import re
-            match = re.search(r'Заявка #(\d{6}-\d{3})', message_text)
-            if match:
-                request_number = match.group(1)
-                request = db.query(Request).filter(Request.request_number == request_number).first()
-                if request:
-                    # Определяем тип списка по статусу заявки
-                    if request.status == REQUEST_STATUS_NEW:
-                        # Возвращаемся к новым заявкам
-                        q = (
-                            db.query(Request)
-                            .filter(Request.status == REQUEST_STATUS_NEW)
-                            .order_by(Request.created_at.desc())
-                        )
-                        requests = q.limit(10).all()
-                        
-                        if not requests:
-                            await callback.message.edit_text(get_text("admin.handlers.no_new_requests", language=lang))
-                            return
 
-                        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+        # Получаем номер заявки из callback_data (mreq_back_{request_number})
+        request_number = callback.data.split("mreq_back_")[1]
+        request = db.query(Request).filter(Request.request_number == request_number).first() if request_number else None
 
-                        from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-                        keyboard = get_manager_request_list_kb(items, 1, 1)
+        if request:
+            from uk_management_bot.keyboards.admin import get_manager_request_list_kb
 
-                        await callback.message.edit_text(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=keyboard)
-                        return
-                    elif request.status == REQUEST_STATUS_EXECUTED:
-                        # Возвращаемся к исполненным заявкам
-                        q = (
-                            db.query(Request)
-                            .filter(Request.status == REQUEST_STATUS_EXECUTED)
-                            .order_by(
-                                Request.is_returned.desc(),  # Возвратные заявки показываем первыми
-                                Request.updated_at.desc().nullslast(),
-                                Request.created_at.desc()
-                            )
-                        )
-                        requests = q.limit(10).all()
+            if request.status == REQUEST_STATUS_NEW:
+                q = db.query(Request).filter(Request.status == REQUEST_STATUS_NEW).order_by(Request.created_at.desc())
+                requests = q.limit(10).all()
+                if not requests:
+                    await callback.message.edit_text(get_text("admin.handlers.no_new_requests", language=lang))
+                    return
+                items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
+                keyboard = get_manager_request_list_kb(items, 1, 1)
+                await callback.message.edit_text(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=keyboard)
+                return
 
-                        if not requests:
-                            await callback.message.edit_text(get_text("admin.handlers.no_completed_requests", language=lang))
-                            return
+            elif request.status == REQUEST_STATUS_EXECUTED:
+                q = db.query(Request).filter(Request.status == REQUEST_STATUS_EXECUTED).order_by(
+                    Request.is_returned.desc(), Request.updated_at.desc().nullslast(), Request.created_at.desc()
+                )
+                requests = q.limit(10).all()
+                if not requests:
+                    await callback.message.edit_text(get_text("admin.handlers.no_completed_requests", language=lang))
+                    return
+                items = []
+                for r in requests:
+                    item = {"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status}
+                    if r.is_returned:
+                        item["suffix"] = " 🔄"
+                    items.append(item)
+                keyboard = get_manager_request_list_kb(items, 1, 1)
+                await callback.message.edit_text(get_text("admin.handlers.completed_requests_title", language=lang), reply_markup=keyboard)
+                return
 
-                        # Добавляем пометку "возвратная" для возвратных заявок
-                        items = []
-                        for r in requests:
-                            item = {
-                                "request_number": r.request_number,
-                                "category": r.category,
-                                "address": r.address,
-                                "status": r.status
-                            }
-                            if r.is_returned:
-                                item["suffix"] = " 🔄"
-                            items.append(item)
+            elif request.status in [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]:
+                active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
+                q = db.query(Request).filter(Request.status.in_(active_statuses)).order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
+                requests = q.limit(10).all()
+                if not requests:
+                    await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
+                    return
+                items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
+                keyboard = get_manager_request_list_kb(items, 1, 1)
+                await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
+                return
 
-                        from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-                        keyboard = get_manager_request_list_kb(items, 1, 1)
-
-                        await callback.message.edit_text(get_text("admin.handlers.completed_requests_title", language=lang), reply_markup=keyboard)
-                        return
-                    elif request.status in [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]:
-                        # Возвращаемся к активным заявкам
-                        active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-                        q = (
-                            db.query(Request)
-                            .filter(Request.status.in_(active_statuses))
-                            .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-                        )
-                        requests = q.limit(10).all()
-
-                        if not requests:
-                            await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
-                            return
-
-                        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
-
-                        from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-                        keyboard = get_manager_request_list_kb(items, 1, 1)
-
-                        await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
-                        return
-
-        # Если не удалось определить тип списка, показываем активные заявки по умолчанию
+        # Fallback: показываем активные заявки по умолчанию
         active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
         q = (
             db.query(Request)
@@ -950,7 +903,7 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
             await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
             return
 
-        items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+        items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
 
         from uk_management_bot.keyboards.admin import get_manager_request_list_kb
         keyboard = get_manager_request_list_kb(items, 1, 1)
@@ -1101,7 +1054,7 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
         await message.answer(get_text("admin.handlers.no_new_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
 
-    items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+    items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
     await message.answer(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
@@ -1130,7 +1083,7 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
         await message.answer(get_text("admin.handlers.no_active_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
 
-    items = [{"request_number": r.request_number, "category": r.category, "address": r.address, "status": r.status} for r in requests]
+    items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
     await message.answer(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
 
 
@@ -1216,7 +1169,7 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
     for r in requests:
         item = {
             "request_number": r.request_number,
-            "category": r.category,
+            "category": get_category_display(resolve_category_key(r.category), language=lang),
             "address": r.address,
             "status": "🔄 " + get_text("admin.handlers.returned_label", language=lang) if r.is_returned else r.status
         }
@@ -1270,7 +1223,7 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
 
         item = {
             "request_number": r.request_number,
-            "category": r.category,
+            "category": get_category_display(resolve_category_key(r.category), language=lang),
             "address": r.address,
             "status": f"🔄 Возврат{return_info}"
         }
@@ -1350,7 +1303,7 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
 
         item = {
             "request_number": r.request_number,
-            "category": r.category,
+            "category": get_category_display(resolve_category_key(r.category), language=lang),
             "address": r.address or get_text("admin.handlers.address_not_specified", language=lang),
             "status": f"⏳ {time_str}"
         }
@@ -1753,7 +1706,7 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
         await callback.message.edit_text(
             get_text("admin.handlers.request_accepted_choose_assignment", language=lang).format(
                 request_number=request_number,
-                category=request.category,
+                category=get_category_display(resolve_category_key(request.category), language=lang),
                 address=request.address
             ),
             reply_markup=get_assignment_type_keyboard(request_number),
@@ -1791,7 +1744,7 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
         await callback.message.edit_text(
             get_text("admin.handlers.deny_request_prompt", language=lang).format(
                 request_number=request_number,
-                category=request.category,
+                category=get_category_display(resolve_category_key(request.category), language=lang),
                 address=request.address
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1844,7 +1797,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
         await callback.message.edit_text(
             get_text("admin.handlers.clarify_prompt", language=lang).format(
                 request_number=request_number,
-                category=request.category,
+                category=get_category_display(resolve_category_key(request.category), language=lang),
                 address=request.address
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -2160,7 +2113,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
             if user_obj and user_obj.telegram_id:
                 notification_text = get_text("admin.handlers.notify_user_clarification", language=lang).format(
                     request_number=request.request_number,
-                    category=request.category,
+                    category=get_category_display(resolve_category_key(request.category), language=lang),
                     address=request.address,
                     clarification_text=clarification_text
                 )
@@ -2611,20 +2564,7 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
             return
 
         # Получаем исполнителей с нужной специализацией
-        category_to_spec = {
-            "Сантехника": "plumber",
-            "Электрика": "electrician",
-            "Благоустройство": "landscaping",
-            "Уборка": "cleaning",
-            "Безопасность": "security",
-            "Охрана": "security",  # Дубликат для совместимости
-            "Ремонт": "repair",
-            "Установка": "installation",
-            "Обслуживание": "maintenance",
-            "HVAC": "hvac",
-            "Отопление": "hvac",
-            "Вентиляция": "hvac"
-        }
+        category_to_spec = CATEGORY_TO_SPECIALIZATION
 
         spec = category_to_spec.get(request.category, "other")
 
@@ -2668,7 +2608,7 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
         await callback.message.edit_text(
             get_text("admin.handlers.choose_executor", language=lang).format(
                 request_number=request_number,
-                category=request.category,
+                category=get_category_display(resolve_category_key(request.category), language=lang),
                 spec=spec,
                 executors_text=executors_text
             ),
@@ -2738,7 +2678,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
         success_message = get_text("admin.handlers.executor_assigned_success", language=lang).format(
             request_number=request_number,
             executor_name=executor_name,
-            category=request.category,
+            category=get_category_display(resolve_category_key(request.category), language=lang),
             address=address_display
         )
 
@@ -2768,7 +2708,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
             notification_text = get_text("admin.handlers.notify_executor_assigned", language=lang).format(
                 request_number=request.format_number_for_display(),
-                category=request.category,
+                category=get_category_display(resolve_category_key(request.category), language=lang),
                 address=address,
                 description=description
             )
@@ -2808,7 +2748,7 @@ async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Sess
         await callback.message.edit_text(
             get_text("admin.handlers.request_accepted_choose_assignment", language=lang).format(
                 request_number=request_number,
-                category=request.category,
+                category=get_category_display(resolve_category_key(request.category), language=lang),
                 address=request.address
             ),
             reply_markup=get_assignment_type_keyboard(request_number),

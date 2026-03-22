@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional, List
+import inspect
 import json
 import logging
 from functools import wraps
@@ -227,6 +228,9 @@ def require_role(required_roles: List[str]):
             # Если права есть, выполняем хэндлер
             return await func(*args, **kwargs)
         
+        # Defensive: explicitly copy __signature__ so aiogram DI sees
+        # the original parameter names even if __wrapped__ handling changes.
+        wrapper.__signature__ = inspect.signature(func)
         return wrapper
     return decorator
 

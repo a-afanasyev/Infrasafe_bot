@@ -26,6 +26,7 @@ from uk_management_bot.keyboards.requests import (
     get_inline_confirmation_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
+from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
 from uk_management_bot.keyboards.requests import (
     get_status_filter_inline_keyboard,
     get_category_filter_inline_keyboard,
@@ -224,29 +225,7 @@ async def auto_assign_request_by_category(request_number: str, db_session: Sessi
             logger.error(f"Менеджер {manager_telegram_id} не найден")
             return
         
-        # Маппинг internal category keys на специализации
-        # Now request.category stores internal keys like "plumbing", "electricity", etc.
-        category_to_specialization = {
-            "plumbing": "plumber",
-            "electricity": "electrician",
-            "landscaping": "landscaping",
-            "cleaning": "cleaning",
-            "security": "security",
-            "repair": "repair",
-            "installation": "installation",
-            "maintenance": "maintenance",
-            "hvac": "hvac",
-            # Fallback for old format (Russian names)
-            "Сантехника": "plumber",
-            "Электрика": "electrician",
-            "Благоустройство": "landscaping",
-            "Уборка": "cleaning",
-            "Безопасность": "security",
-            "Ремонт": "repair",
-            "Установка": "installation",
-            "Обслуживание": "maintenance",
-            "HVAC": "hvac"
-        }
+        category_to_specialization = CATEGORY_TO_SPECIALIZATION
 
         # Определяем специализацию по категории заявки
         specialization = category_to_specialization.get(request.category)
@@ -344,6 +323,9 @@ class RequestStates(StatesGroup):
     media = State()             # Медиафайлы
     confirm = State()           # Подтверждение
     waiting_clarify_reply = State()  # Ответ на уточнение
+
+# BUG-3 FIX: /start FSM reset now handled globally by start_router in base.py
+# (registered first in dispatcher, catches /start from ANY FSM state)
 
 # Начало создания заявки
 # Использует единый источник правды для поддержки всех языков из SUPPORTED_LANGUAGES
@@ -772,9 +754,9 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
         data = await state.get_data()
 
         # Сохраняем заявку в базу данных
-        success = await save_request(data, message.from_user.id, db, message.bot)
+        request_number = await save_request(data, message.from_user.id, db, message.bot)
 
-        if success:
+        if request_number:
             await state.clear()
             await message.answer(
                 get_text("requests.request_created_success", language=lang),
@@ -874,10 +856,10 @@ async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -
         db.add(request)
         db.commit()
         logger.info(f"[SAVE_REQUEST] ✅ Заявка {request_number} успешно сохранена")
-        return True
+        return request_number
     except Exception as e:
         logger.error(f"[SAVE_REQUEST] ❌ Ошибка сохранения заявки: {e}", exc_info=True)
-        return False
+        return None
 
 # =====================================
 # ОБРАБОТЧИКИ CALLBACK_QUERY ДЛЯ INLINE КЛАВИАТУР
@@ -1062,9 +1044,9 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 
             # Создаем заявку в базе данных
             db_session = next(get_db())
-            success = await save_request(data, callback.from_user.id, db_session, callback.bot)
+            request_number = await save_request(data, callback.from_user.id, db_session, callback.bot)
 
-            if success:
+            if request_number:
                 # Get localized display values for category and urgency
                 from uk_management_bot.keyboards.requests import CATEGORY_KEYS, URGENCY_KEYS
 
@@ -1085,6 +1067,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                     get_text(
                         "requests.request_created_details",
                         language=lang,
+                        request_number=request_number,
                         category=category_display,
                         address=data.get('address', get_text("common.not_specified", language=lang)),
                         urgency=urgency_display
@@ -1125,8 +1108,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 def _get_executor_requests_query(db_session: Session, user: User):
     """
     Вспомогательная функция для получения заявок исполнителя.
-    Использует ТОЛЬКО новую систему назначений через RequestAssignment.
-    Старые назначения должны быть мигрированы перед использованием.
+    Использует RequestAssignment + fallback на Request.executor_id для совместимости.
 
     Args:
         db_session: Сессия базы данных
@@ -1164,32 +1146,43 @@ def _get_executor_requests_query(db_session: Session, user: User):
     if active_shift:
         logger.info(f"  Смена ID {active_shift.id}: {active_shift.start_time} - {active_shift.end_time}, статус={active_shift.status}")
 
-    # Запрос через новую систему назначений (RequestAssignment)
-    assignment_conditions = []
+    # Запрос через RequestAssignment (LEFT JOIN для fallback)
+    from sqlalchemy.orm import aliased
+    assignment_alias = aliased(RequestAssignment)
 
-    query = db_session.query(Request).join(RequestAssignment).filter(
-        RequestAssignment.status == "active"
+    query = db_session.query(Request).outerjoin(
+        assignment_alias, Request.request_number == assignment_alias.request_number
     )
 
-    # 1. Индивидуальные назначения этому исполнителю (ВСЕГДА показываем)
-    assignment_conditions.append(RequestAssignment.executor_id == user.id)
+    # Условия: RequestAssignment ИЛИ прямое назначение через executor_id
+    conditions = []
+
+    # 1. Индивидуальные назначения через RequestAssignment
+    conditions.append(
+        (assignment_alias.status == "active") & (assignment_alias.executor_id == user.id)
+    )
 
     # 2. Групповые назначения по специализациям (ТОЛЬКО если в активной смене)
     if has_active_shift and executor_specializations:
         logger.info(f"  Добавляем групповые назначения для специализаций: {executor_specializations}")
         for spec in executor_specializations:
-            assignment_conditions.append(
-                (RequestAssignment.assignment_type == "group") &
-                (RequestAssignment.group_specialization == spec)
+            conditions.append(
+                (assignment_alias.status == "active") &
+                (assignment_alias.assignment_type == "group") &
+                (assignment_alias.group_specialization == spec)
             )
-    else:
-        logger.warning(f"  Групповые назначения НЕ добавлены: has_active_shift={has_active_shift}, specs={executor_specializations}")
 
-    # Применяем условия
-    if assignment_conditions:
-        query = query.filter(or_(*assignment_conditions))
-    else:
-        query = query.filter(RequestAssignment.executor_id == user.id)
+    # 3. Fallback: Request.executor_id == user.id (для заявок без RequestAssignment)
+    conditions.append(Request.executor_id == user.id)
+
+    query = query.filter(or_(*conditions))
+
+    # Дедупликация: подзапрос по request_number, т.к. DISTINCT на всех колонках
+    # не работает с JSON полями в PostgreSQL
+    request_numbers_subq = query.with_entities(Request.request_number).distinct().subquery()
+    query = db_session.query(Request).filter(
+        Request.request_number.in_(db_session.query(request_numbers_subq.c.request_number))
+    )
 
     return query
 
@@ -1270,12 +1263,12 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             # TASK 17 Этап C: Локализованные метки
             address_label = get_text("requests.address_label", language=lang) or "Адрес"
             created_label = get_text("requests.created_label", language=lang) or "Создана"
-            message_text += f"   {address_label}: {request.address}\n"
-            message_text += f"   {created_label}: {request.created_at.strftime('%d.%m.%Y')}\n"
+            message_text += f"   {address_label} {request.address}\n"
+            message_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
             if request.status == "Отменена" and request.notes:
                 # TASK 17 Этап C: Локализованная метка
                 reason_label = get_text("requests.cancellation_reason_label", language=lang) or "Причина отказа"
-                message_text += f"   {reason_label}: {request.notes}\n"
+                message_text += f"   {reason_label} {request.notes}\n"
             elif request.status == "Уточнение" and request.notes:
                 # Показываем последние сообщения из диалога уточнения
                 # TASK 17 Этап C: Локализованная метка
@@ -2293,11 +2286,11 @@ async def show_my_requests(message: Message, state: FSMContext):
                 # Кнопка "Подтвердить" убрана - для этого есть отдельное меню "Ожидают приёмки"
         else:
             # Для исполнителей добавляем кнопки заявок
-            select_prompt = get_text('requests.select_request_prompt', language=lang) or "Выберите заявку для просмотра деталей:"
-            message_text += f"{select_prompt}\n\n"
             for i, r in enumerate(page_requests, 1):
                 icon = get_status_icon(r.status)
-                button_text = f"{icon} #{r.request_number} - {r.category}"
+                from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
+                cat_display = get_category_display(resolve_category_key(r.category), language=lang)
+                button_text = f"{icon} #{r.request_number} - {cat_display}"
                 rows.append([InlineKeyboardButton(
                     text=button_text,
                     callback_data=f"view_request_{r.request_number}"
@@ -2486,12 +2479,12 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                 # TASK 17 Этап C: Локализованные метки
                 address_label = get_text("requests.address_label", language=lang) or "Адрес"
                 created_label = get_text("requests.created_label", language=lang) or "Создана"
-                message_text += f"   {address_label}: {address}\n"
-                message_text += f"   {created_label}: {request.created_at.strftime('%d.%m.%Y')}\n"
+                message_text += f"   {address_label} {address}\n"
+                message_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
                 if choice == "archive" and request.status == "Отменена" and request.notes:
                     # TASK 17 Этап C: Локализованная метка
                     reason_label = get_text("requests.cancellation_reason_label", language=lang) or "Причина отказа"
-                    message_text += f"   {reason_label}: {request.notes}\n"
+                    message_text += f"   {reason_label} {request.notes}\n"
                 elif request.status == "Уточнение" and request.notes:
                     # TASK 17 Этап C: Локализованная метка
                     clarification_label = get_text("requests.clarification_label", language=lang) or "Уточнение"
@@ -2670,14 +2663,7 @@ async def handle_assign_specific_executor(callback: CallbackQuery):
             await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
-        # Получаем исполнителей с нужной специализацией
-        # Определяем специализацию на основе категории
-        category_to_spec = {
-            "Электрика": "electrician",
-            "Сантехника": "plumber",
-            "Охрана": "security",
-            "Уборка": "cleaner",
-        }
+        category_to_spec = CATEGORY_TO_SPECIALIZATION
 
         spec = category_to_spec.get(request.category, "other")
 

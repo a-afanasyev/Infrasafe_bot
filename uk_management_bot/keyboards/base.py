@@ -133,6 +133,11 @@ def get_main_keyboard_for_role(
     if len(unique_roles) > 1:
         builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))
 
+    # NOTE: Manager intentionally inherits applicant buttons (create request,
+    # my requests, acceptance) so managers in small teams can also submit
+    # maintenance requests. If role separation is needed later, remove these
+    # buttons from the manager keyboard and create a separate "submit as manager" flow.
+
     # Кнопки менеджера (только для активных ролей admin/manager)
     if active_role in ["admin", "manager"]:
         builder.add(KeyboardButton(text=get_text("main_menu.admin_panel", language=language)))

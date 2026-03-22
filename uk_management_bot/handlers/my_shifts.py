@@ -1,5 +1,8 @@
 """
-Обработчики для исполнителей - интерфейс "Мои смены"
+Detailed shift interface ("📋 Мои смены") — schedule, stats, time tracking.
+
+Uses: Shift.planned_start_time, Shift.planned_end_time (planned times)
+Related: shifts.py handles the operational menu ("🔄 Смена")
 """
 
 from datetime import datetime, date, timedelta
@@ -28,6 +31,7 @@ from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, format_datetime, get_text
 from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import get_my_shifts_texts
 import logging
@@ -40,7 +44,6 @@ MY_SHIFTS_TEXTS = get_my_shifts_texts()
 
 
 @router.message(Command("my_shifts"))
-@require_role(['executor'])
 async def cmd_my_shifts(message: Message, state: FSMContext, language: str = "ru", db=None):
     """Главное меню моих смен"""
     try:
@@ -65,7 +68,6 @@ async def cmd_my_shifts(message: Message, state: FSMContext, language: str = "ru
 
 
 @router.message(F.text.in_(MY_SHIFTS_TEXTS))
-@require_role(['executor'])
 async def handle_my_shifts_button(message: Message, state: FSMContext, language: str = "ru"):
     """Обработчик кнопки 'Мои смены'"""
     await cmd_my_shifts(message, state, language=language)

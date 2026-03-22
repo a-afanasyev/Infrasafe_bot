@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+# Dedicated router for /start — registered FIRST in main.py to catch /start from any FSM state.
+# This ensures /start always works, even when the user is stuck in a FSM state
+# owned by another router (e.g., RequestStates, ManagerStates, ShiftManagementStates).
+start_router = Router(name="start")
+
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import (
     get_profile_texts,
@@ -53,7 +58,7 @@ class AdminPasswordStates(StatesGroup):
     """Состояния для ввода пароля администратора"""
     waiting_for_password = State()
 
-@router.message(Command("start"))
+@start_router.message(Command("start"))
 async def cmd_start(message: Message, db: Session, state: FSMContext = None, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Обработчик команды /start"""
     logger.info(f"Получена команда /start от пользователя {message.from_user.id}. Текст: '{message.text}'")
@@ -356,8 +361,6 @@ async def show_help(message: Message, db: Session = None, language: str = "ru"):
     """Показывает справку по использованию бота."""
     lang = get_user_language(message.from_user.id, db)
     help_text = get_text("help.usage_help", language=lang)
-    if "." in help_text:
-        help_text = get_text("base.handlers.help_text", language=lang)
     await message.answer(help_text)
 
 
