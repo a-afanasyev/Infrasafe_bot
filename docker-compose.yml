@@ -26,10 +26,10 @@ services:
     # Переменные окружения для подключения к сервисам
     environment:
       # Подключение к PostgreSQL
-      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
       
       # Подключение к Redis
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       
       # Настройки логирования
       - LOG_LEVEL=INFO
@@ -65,11 +65,15 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - REDIS_PUBSUB_URL=redis://redis:6379/1
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - FRONTEND_URL=http://localhost:3002
+      - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
+      - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
+      - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
     ports:
       - "8085:8080"
     depends_on:
@@ -99,14 +103,9 @@ services:
     
     # Переменные окружения для настройки БД
     environment:
-      # Имя базы данных
-      - POSTGRES_DB=uk_management
-      
-      # Имя пользователя
-      - POSTGRES_USER=uk_bot
-      
-      # Пароль пользователя
-      - POSTGRES_PASSWORD=uk_bot_password
+      - POSTGRES_DB=${POSTGRES_DB:-uk_management}
+      - POSTGRES_USER=${POSTGRES_USER:-uk_bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       
       # Настройки производительности
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
@@ -150,7 +149,7 @@ services:
     restart: unless-stopped
     
     # Конфигурация Redis
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     
     # Тома для хранения данных Redis
     volumes:
@@ -193,10 +192,10 @@ services:
     # Переменные окружения для подключения к сервисам
     environment:
       # Подключение к PostgreSQL
-      - DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
       
       # Подключение к Redis
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       
       # Настройки веб-сервиса
       - WEB_BASE_URL=http://localhost:8000

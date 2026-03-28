@@ -1,8 +1,10 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { useTranslation } from 'react-i18next'
 import RequestCard from './RequestCard'
 import type { KanbanColumn as TColumn } from '../../hooks/useKanban'
 import { isTransitionAllowed, FROZEN_STATUSES } from './KanbanBoard'
+import { tStatus } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -86,6 +88,7 @@ function DropPlaceholder({ status, visible }: { status: string; visible: boolean
 }
 
 export default function KanbanColumn({ column, onCardClick, activeDragStatus, overColumnId, overItemId }: Props) {
+  const { t } = useTranslation()
   const frozen = FROZEN_STATUSES.has(column.status)
   const { setNodeRef } = useDroppable({ id: column.status, disabled: frozen })
   const dotClass = STATUS_DOT[column.status] ?? 'bg-text-muted'
@@ -127,7 +130,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
         <div className="flex items-center gap-[7px]">
           <span className={cn('w-[7px] h-[7px] rounded-full shrink-0', dotClass)} />
           <span className="font-[family-name:var(--font-display)] font-bold text-[13px] text-text-primary">
-            {column.status}
+            {tStatus(column.status, t)}
           </span>
         </div>
         <span className="bg-bg-card text-text-secondary border border-border-default text-[11px] font-bold rounded-full px-2 py-px font-[family-name:var(--font-display)]">

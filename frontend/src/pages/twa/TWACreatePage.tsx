@@ -1,18 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { apiClient } from '../../api/client'
 import { useTWAAuth } from '../../hooks/useTWAAuth'
+import { tCategory, tUrgency } from '../../i18n/apiMaps'
 
-const CATEGORIES = ['Электрика', 'Сантехника', 'Отопление', 'Вентиляция', 'Лифт', 'Уборка', 'Благоустройство', 'Безопасность', 'Интернет/ТВ', 'Другое']
-const URGENCIES = ['Обычная', 'Средняя', 'Срочная', 'Критическая']
+import { CATEGORIES, URGENCIES } from '../../constants'
 
 export default function TWACreatePage() {
+  const { t } = useTranslation()
   const { isAuthenticated } = useTWAAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
     category: '',
-    urgency: 'Обычная',
+    urgency: '\u041E\u0431\u044B\u0447\u043D\u0430\u044F',
     description: '',
     address: '',
   })
@@ -30,7 +32,7 @@ export default function TWACreatePage() {
       })
       navigate('/twa')
     } catch {
-      setError('Ошибка при создании заявки')
+      setError(t('errors.createRequest'))
     } finally {
       setLoading(false)
     }
@@ -40,19 +42,19 @@ export default function TWACreatePage() {
     <div className="p-4 bg-gray-50 min-h-screen">
       <div className="flex items-center gap-2 mb-4">
         <button onClick={() => step > 1 ? setStep(step - 1) : navigate('/twa')} className="text-blue-600 text-sm">
-          &larr; Назад
+          &larr; {t('common.back')}
         </button>
-        <h1 className="text-lg font-bold">Новая заявка</h1>
-        <span className="ml-auto text-xs text-gray-400">Шаг {step}/3</span>
+        <h1 className="text-lg font-bold">{t('twa.newRequest')}</h1>
+        <span className="ml-auto text-xs text-gray-400">{t('twa.step', { current: step, total: 3 })}</span>
       </div>
 
       {step === 1 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium mb-2">Выберите категорию:</p>
+          <p className="text-sm font-medium mb-2">{t('twa.selectCategory')}</p>
           {CATEGORIES.map(c => (
             <button key={c} onClick={() => { setForm({ ...form, category: c }); setStep(2) }}
               className={`w-full text-left border rounded-xl p-3 text-sm ${form.category === c ? 'border-blue-500 bg-blue-50' : 'bg-white'}`}>
-              {c}
+              {tCategory(c, t)}
             </button>
           ))}
         </div>
@@ -60,28 +62,28 @@ export default function TWACreatePage() {
 
       {step === 2 && (
         <div className="space-y-3">
-          <p className="text-sm font-medium">Срочность:</p>
+          <p className="text-sm font-medium">{t('twa.urgencyLabel')}</p>
           <div className="flex gap-2 flex-wrap">
             {URGENCIES.map(u => (
               <button key={u} onClick={() => setForm({ ...form, urgency: u })}
                 className={`px-3 py-1.5 rounded-full text-sm border ${form.urgency === u ? 'border-blue-500 bg-blue-50 text-blue-700' : 'bg-white'}`}>
-                {u}
+                {tUrgency(u, t)}
               </button>
             ))}
           </div>
 
-          <p className="text-sm font-medium mt-4">Описание проблемы:</p>
+          <p className="text-sm font-medium mt-4">{t('twa.descriptionLabel')}</p>
           <textarea
             className="w-full border rounded-xl p-3 text-sm min-h-[120px]"
-            placeholder="Опишите проблему подробно..."
+            placeholder={t('twa.descriptionPlaceholder')}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
 
-          <p className="text-sm font-medium mt-4">Адрес (квартира/подъезд):</p>
+          <p className="text-sm font-medium mt-4">{t('twa.addressLabel')}</p>
           <input
             className="w-full border rounded-xl p-3 text-sm"
-            placeholder="Например: кв. 42, подъезд 3"
+            placeholder={t('twa.addressPlaceholder')}
             value={form.address}
             onChange={(e) => setForm({ ...form, address: e.target.value })}
           />
@@ -90,7 +92,7 @@ export default function TWACreatePage() {
             onClick={() => setStep(3)}
             disabled={!form.description}
             className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium disabled:opacity-50">
-            Далее
+            {t('common.next')}
           </button>
         </div>
       )}
@@ -98,15 +100,15 @@ export default function TWACreatePage() {
       {step === 3 && (
         <div className="space-y-3">
           <div className="bg-white rounded-xl p-4 border">
-            <p className="text-xs text-gray-400 mb-1">Категория</p>
-            <p className="text-sm font-medium">{form.category}</p>
-            <p className="text-xs text-gray-400 mb-1 mt-2">Срочность</p>
-            <p className="text-sm">{form.urgency}</p>
-            <p className="text-xs text-gray-400 mb-1 mt-2">Описание</p>
+            <p className="text-xs text-gray-400 mb-1">{t('twa.summaryCategory')}</p>
+            <p className="text-sm font-medium">{tCategory(form.category, t)}</p>
+            <p className="text-xs text-gray-400 mb-1 mt-2">{t('twa.summaryUrgency')}</p>
+            <p className="text-sm">{tUrgency(form.urgency, t)}</p>
+            <p className="text-xs text-gray-400 mb-1 mt-2">{t('twa.summaryDescription')}</p>
             <p className="text-sm">{form.description}</p>
             {form.address && (
               <>
-                <p className="text-xs text-gray-400 mb-1 mt-2">Адрес</p>
+                <p className="text-xs text-gray-400 mb-1 mt-2">{t('twa.summaryAddress')}</p>
                 <p className="text-sm">{form.address}</p>
               </>
             )}
@@ -118,7 +120,7 @@ export default function TWACreatePage() {
             onClick={submit}
             disabled={loading}
             className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium disabled:opacity-50">
-            {loading ? 'Отправка...' : 'Отправить заявку'}
+            {loading ? t('common.sending') : t('twa.submit')}
           </button>
         </div>
       )}

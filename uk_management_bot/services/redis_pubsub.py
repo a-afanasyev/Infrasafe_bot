@@ -62,3 +62,29 @@ async def subscribe_to_shifts():
     pubsub = client.pubsub()
     await pubsub.subscribe(SHIFTS_CHANNEL)
     return pubsub, client
+
+
+BUILDINGS_CHANNEL = "buildings:updates"
+
+
+async def publish_building_event(event_type: str, data: dict) -> None:
+    """Publish building event to Redis Pub/Sub for real-time frontend updates.
+
+    NOTE: This is for frontend WebSocket push only, NOT for webhook delivery
+    (webhooks use PostgreSQL outbox — see webhook_sender.py).
+    """
+    try:
+        client = await get_pubsub_redis()
+        message = json.dumps({"type": event_type, "data": data})
+        await client.publish(BUILDINGS_CHANNEL, message)
+    except Exception:
+        logger.warning("Failed to publish building event %s", event_type, exc_info=True)
+
+
+async def subscribe_to_buildings():
+    """Returns a dedicated Redis Pub/Sub subscriber for building events."""
+    url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+    client = aioredis.from_url(url, decode_responses=True)
+    pubsub = client.pubsub()
+    await pubsub.subscribe(BUILDINGS_CHANNEL)
+    return pubsub, client

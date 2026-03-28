@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
   useAddressStats,
@@ -93,7 +94,8 @@ function MenuItem({ label, onClick, danger }: { label: string; onClick: () => vo
 // ── Main component ──────────────────────────────────────────────────
 
 export default function AddressesPage() {
-  usePageTitle('Адреса')
+  const { t } = useTranslation()
+  usePageTitle(t('nav.addresses'))
   const { setActions, clearActions } = useTopbar()
 
   // State
@@ -207,18 +209,18 @@ export default function AddressesPage() {
     <div className="flex items-center gap-2">
       <Input
         type="text"
-        placeholder="Поиск..."
+        placeholder={t('common.search')}
         value={searchQuery}
         onChange={e => setSearchQuery(e.target.value)}
         className="w-[200px]"
       />
       {level === 'apartments' ? (
         <Button onClick={() => setShowCreateModal(true)}>
-          + Добавить квартиру
+          + {t('addressModals.addApartment')}
         </Button>
       ) : (
         <Button onClick={() => setAddObjectOpen(true)}>
-          + Добавить объект
+          + {t('addresses.addObject')}
         </Button>
       )}
     </div>
@@ -232,28 +234,28 @@ export default function AddressesPage() {
   // Stats
   const STATS = [
     {
-      label: 'Дворы',
+      label: t('addresses.stats.yards'),
       value: stats ? `${stats.yards_active}/${stats.yards_total}` : '-',
       iconBg: 'var(--blue)',
       icon: '\u{1F3D8}',
       onClick: () => { setView('directory'); goToYards() },
     },
     {
-      label: 'Здания',
+      label: t('addresses.stats.buildings'),
       value: stats?.buildings_total ?? '-',
       iconBg: 'var(--emerald)',
       icon: '\u{1F3E2}',
       onClick: () => { setView('directory'); setLevel('all-buildings'); setFilterYardId(null); setSelectedYard(null); setSelectedBuilding(null) },
     },
     {
-      label: 'Квартиры',
+      label: t('addresses.stats.apartments'),
       value: stats?.apartments_total ?? '-',
       iconBg: 'var(--amber)',
       icon: '\u{1F3E0}',
       onClick: () => { setView('directory'); setLevel('all-apartments'); setFilterYardId(null); setFilterBuildingId(null); setSelectedYard(null); setSelectedBuilding(null) },
     },
     {
-      label: 'Жители',
+      label: t('addresses.stats.residents'),
       value: stats ? `${stats.residents_approved}+${stats.residents_pending}` : '-',
       iconBg: 'var(--violet)',
       icon: '\u{1F465}',
@@ -313,7 +315,7 @@ export default function AddressesPage() {
               : 'bg-bg-card border-border-default text-text-secondary font-normal'
           )}
         >
-          Справочник
+          {t('addresses.directory')}
         </button>
         <button
           onClick={() => setView('moderation')}
@@ -324,7 +326,7 @@ export default function AddressesPage() {
               : 'bg-bg-card border-border-default text-text-secondary font-normal'
           )}
         >
-          Модерация{moderationItems.length > 0 ? ` (${moderationItems.length})` : ''}
+          {t('addresses.moderation')}{moderationItems.length > 0 ? ` (${moderationItems.length})` : ''}
         </button>
 
         <div className="flex-1" />
@@ -340,7 +342,7 @@ export default function AddressesPage() {
                   ? 'bg-accent border-accent text-white'
                   : 'bg-transparent border-border-default text-text-muted'
               )}
-              title="Плитка"
+              title={t('employees.viewTile')}
             >{'\u229E'}</button>
             <button
               onClick={() => setViewMode('table')}
@@ -350,7 +352,7 @@ export default function AddressesPage() {
                   ? 'bg-accent border-accent text-white'
                   : 'bg-transparent border-border-default text-text-muted'
               )}
-              title="Таблица"
+              title={t('employees.viewTable')}
             >{'\u2630'}</button>
           </div>
         )}
@@ -364,7 +366,7 @@ export default function AddressesPage() {
               onChange={e => setShowInactive(e.target.checked)}
               className="accent-accent"
             />
-            Показать неактивные
+            {t('addresses.showInactive')}
           </label>
         )}
       </div>
@@ -377,25 +379,25 @@ export default function AddressesPage() {
           {/* Breadcrumb / Title */}
           {level === 'all-buildings' ? (
             <div className="flex items-center gap-3 text-[13px] font-[family-name:var(--font-display)]">
-              <span className="text-text-primary font-semibold">Все здания</span>
+              <span className="text-text-primary font-semibold">{t('addresses.allBuildings')}</span>
               <Select
                 value={filterYardId ?? ''}
                 onChange={e => setFilterYardId(e.target.value ? Number(e.target.value) : null)}
                 className="w-[250px] text-xs"
               >
-                <option value="">Все дворы</option>
+                <option value="">{t('addresses.allYards')}</option>
                 {yards.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
               </Select>
             </div>
           ) : level === 'all-apartments' ? (
             <div className="flex items-center gap-3 text-[13px] font-[family-name:var(--font-display)]">
-              <span className="text-text-primary font-semibold">Все квартиры</span>
+              <span className="text-text-primary font-semibold">{t('addresses.allApartments')}</span>
               <Select
                 value={filterYardId ?? ''}
                 onChange={e => { setFilterYardId(e.target.value ? Number(e.target.value) : null); setFilterBuildingId(null) }}
                 className="w-[250px] text-xs"
               >
-                <option value="">Все дворы</option>
+                <option value="">{t('addresses.allYards')}</option>
                 {yards.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
               </Select>
               <Select
@@ -403,7 +405,7 @@ export default function AddressesPage() {
                 onChange={e => setFilterBuildingId(e.target.value ? Number(e.target.value) : null)}
                 className="w-[250px] text-xs"
               >
-                <option value="">Все здания</option>
+                <option value="">{t('addresses.allBuildings')}</option>
                 {filterBuildings.map(b => <option key={b.id} value={b.id}>{b.address}</option>)}
               </Select>
             </div>
@@ -416,7 +418,7 @@ export default function AddressesPage() {
                   level === 'yards' ? 'text-text-primary font-semibold' : 'text-accent'
                 )}
               >
-                Дворы
+                {t('addresses.stats.yards')}
               </span>
               {selectedYard && (
                 <>
@@ -469,7 +471,7 @@ export default function AddressesPage() {
                   {/* Yards grid */}
                   {level === 'yards' && (
                     filteredYards.length === 0 ? (
-                      <EmptyState icon="\u{1F3D8}" title="Дворы не найдены" subtitle="Добавьте первый двор" />
+                      <EmptyState icon="\u{1F3D8}" title={t('addresses.noAddresses')} subtitle={t('addresses.noAddressesDesc')} />
                     ) : (
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                         {filteredYards.map(yard => (
@@ -489,9 +491,9 @@ export default function AddressesPage() {
                               <ActionMenu>
                                 {(close) => (
                                   <>
-                                    <MenuItem label="Редактировать" onClick={() => { close(); setEditingYard(yard) }} />
+                                    <MenuItem label={t('common.edit')} onClick={() => { close(); setEditingYard(yard) }} />
                                     <MenuItem
-                                      label={yard.is_active ? 'Деактивировать' : 'Активировать'}
+                                      label={yard.is_active ? t('addresses.deactivate') : t('addresses.activate')}
                                       onClick={() => {
                                         close()
                                         updateYard.mutate({ id: yard.id, is_active: !yard.is_active })
@@ -499,14 +501,14 @@ export default function AddressesPage() {
                                     />
                                     <div className="h-px bg-border-default mx-2" />
                                     <MenuItem
-                                      label="Удалить"
+                                      label={t('common.delete')}
                                       danger
                                       onClick={() => {
                                         close()
                                         setConfirmState({
                                           open: true,
-                                          title: 'Удалить двор',
-                                          description: `Удалить двор "${yard.name}"? Это действие нельзя отменить.`,
+                                          title: t('addressModals.confirmDeleteYard', { name: yard.name }),
+                                          description: t('addressModals.confirmDeleteYard', { name: yard.name }),
                                           onConfirm: () => deleteYard.mutate(yard.id),
                                         })
                                       }}
@@ -526,10 +528,10 @@ export default function AddressesPage() {
                             {/* Footer */}
                             <div className="flex items-center gap-2 mt-1">
                               <span className="bg-blue/[.13] text-blue rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
-                                {yard.buildings_count} {pluralize(yard.buildings_count, 'здание', 'здания', 'зданий')}
+                                {t('addresses.building', { count: yard.buildings_count })}
                               </span>
                               {!yard.is_active && (
-                                <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">неактивен</span>
+                                <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">{t('addresses.inactive')}</span>
                               )}
                             </div>
                           </div>
@@ -541,7 +543,7 @@ export default function AddressesPage() {
                   {/* Buildings grid */}
                   {level === 'buildings' && (
                     filteredBuildings.length === 0 ? (
-                      <EmptyState icon="\u{1F3E2}" title="Здания не найдены" subtitle="Добавьте первое здание" />
+                      <EmptyState icon="\u{1F3E2}" title={t('addresses.noBuildingsFound')} subtitle={t('addresses.noBuildingsFoundDesc')} />
                     ) : (
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                         {filteredBuildings.map(building => (
@@ -561,9 +563,9 @@ export default function AddressesPage() {
                               <ActionMenu>
                                 {(close) => (
                                   <>
-                                    <MenuItem label="Редактировать" onClick={() => { close(); setEditingBuilding(building) }} />
+                                    <MenuItem label={t('common.edit')} onClick={() => { close(); setEditingBuilding(building) }} />
                                     <MenuItem
-                                      label={building.is_active ? 'Деактивировать' : 'Активировать'}
+                                      label={building.is_active ? t('addresses.deactivate') : t('addresses.activate')}
                                       onClick={() => {
                                         close()
                                         updateBuilding.mutate({ id: building.id, is_active: !building.is_active })
@@ -571,14 +573,14 @@ export default function AddressesPage() {
                                     />
                                     <div className="h-px bg-border-default mx-2" />
                                     <MenuItem
-                                      label="Удалить"
+                                      label={t('common.delete')}
                                       danger
                                       onClick={() => {
                                         close()
                                         setConfirmState({
                                           open: true,
-                                          title: 'Удалить здание',
-                                          description: `Удалить здание "${building.address}"? Это действие нельзя отменить.`,
+                                          title: t('addressModals.confirmDeleteBuilding', { name: building.address }),
+                                          description: t('addressModals.confirmDeleteBuilding', { name: building.address }),
                                           onConfirm: () => deleteBuilding.mutate(building.id),
                                         })
                                       }}
@@ -590,17 +592,17 @@ export default function AddressesPage() {
 
                             {/* Details */}
                             <div className="text-[13px] text-text-secondary mb-2.5 flex gap-3">
-                              <span>{building.entrance_count} {pluralize(building.entrance_count, 'подъезд', 'подъезда', 'подъездов')}</span>
-                              <span>{building.floor_count} {pluralize(building.floor_count, 'этаж', 'этажа', 'этажей')}</span>
+                              <span>{t('addresses.entrance', { count: building.entrance_count })}</span>
+                              <span>{t('addresses.floor', { count: building.floor_count })}</span>
                             </div>
 
                             {/* Footer */}
                             <div className="flex items-center gap-2 mt-1">
                               <span className="bg-amber/[.13] text-amber rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
-                                {building.apartments_count} {pluralize(building.apartments_count, 'квартира', 'квартиры', 'квартир')}
+                                {t('addresses.apartment', { count: building.apartments_count })}
                               </span>
                               {!building.is_active && (
-                                <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">неактивно</span>
+                                <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">{t('addresses.inactive')}</span>
                               )}
                             </div>
                           </div>
@@ -615,12 +617,12 @@ export default function AddressesPage() {
                       {/* Bulk create button */}
                       <div className="flex justify-end">
                         <Button variant="outline" onClick={() => setShowBulkCreate(true)}>
-                          Автозаполнение
+                          {t('addresses.bulkCreate')}
                         </Button>
                       </div>
 
                       {filteredApartments.length === 0 ? (
-                        <EmptyState icon="\u{1F3E0}" title="Квартиры не найдены" subtitle="Добавьте квартиры вручную или используйте автозаполнение" />
+                        <EmptyState icon="\u{1F3E0}" title={t('addresses.noApartmentsFound')} subtitle={t('addresses.noApartmentsFoundDesc')} />
                       ) : (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
                           {filteredApartments.map(apt => (
@@ -640,9 +642,9 @@ export default function AddressesPage() {
                                 <ActionMenu>
                                   {(close) => (
                                     <>
-                                      <MenuItem label="Редактировать" onClick={() => { close(); setEditingApartment(apt) }} />
+                                      <MenuItem label={t('common.edit')} onClick={() => { close(); setEditingApartment(apt) }} />
                                       <MenuItem
-                                        label={apt.is_active ? 'Деактивировать' : 'Активировать'}
+                                        label={apt.is_active ? t('addresses.deactivate') : t('addresses.activate')}
                                         onClick={() => {
                                           close()
                                           updateApartment.mutate({ id: apt.id, is_active: !apt.is_active })
@@ -650,14 +652,14 @@ export default function AddressesPage() {
                                       />
                                       <div className="h-px bg-border-default mx-2" />
                                       <MenuItem
-                                        label="Удалить"
+                                        label={t('common.delete')}
                                         danger
                                         onClick={() => {
                                           close()
                                           setConfirmState({
                                             open: true,
-                                            title: 'Удалить квартиру',
-                                            description: `Удалить квартиру ${apt.apartment_number}? Это действие нельзя отменить.`,
+                                            title: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
+                                            description: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
                                             onConfirm: () => deleteApartment.mutate(apt.id),
                                           })
                                         }}
@@ -673,8 +675,8 @@ export default function AddressesPage() {
                                   <div className="text-text-muted">{apt.building_address}</div>
                                 )}
                                 <div className="flex gap-3">
-                                  {apt.floor != null && <span>Этаж: {apt.floor}</span>}
-                                  {apt.entrance != null && <span>Подъезд: {apt.entrance}</span>}
+                                  {apt.floor != null && <span>{t('addresses.floor')}: {apt.floor}</span>}
+                                  {apt.entrance != null && <span>{t('addresses.entrance')}: {apt.entrance}</span>}
                                   {apt.area != null && <span>{apt.area} м&sup2;</span>}
                                 </div>
                               </div>
@@ -682,10 +684,10 @@ export default function AddressesPage() {
                               {/* Footer */}
                               <div className="flex items-center gap-2 mt-2.5">
                                 <span className="bg-violet/[.13] text-violet rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
-                                  {apt.residents_count} {pluralize(apt.residents_count, 'житель', 'жителя', 'жителей')}
+                                  {t('addresses.resident', { count: apt.residents_count })}
                                 </span>
                                 {!apt.is_active && (
-                                  <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">неактивна</span>
+                                  <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">{t('addresses.inactive')}</span>
                                 )}
                               </div>
                             </div>
@@ -700,7 +702,7 @@ export default function AddressesPage() {
                 {level === 'apartments' && (
                   <div className="flex justify-end">
                     <Button variant="outline" onClick={() => setShowBulkCreate(true)}>
-                      Автозаполнение
+                      {t('addresses.bulkCreate')}
                     </Button>
                   </div>
                 )}
@@ -794,7 +796,7 @@ export default function AddressesPage() {
         onOpenChange={(open) => setConfirmState(prev => ({ ...prev, open }))}
         title={confirmState.title}
         description={confirmState.description}
-        confirmLabel="Удалить"
+        confirmLabel={t('common.delete')}
         onConfirm={confirmState.onConfirm}
         variant="danger"
       />
@@ -803,12 +805,3 @@ export default function AddressesPage() {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function pluralize(n: number, one: string, few: string, many: string): string {
-  const abs = Math.abs(n) % 100
-  const lastDigit = abs % 10
-  if (abs > 10 && abs < 20) return many
-  if (lastDigit > 1 && lastDigit < 5) return few
-  if (lastDigit === 1) return one
-  return many
-}

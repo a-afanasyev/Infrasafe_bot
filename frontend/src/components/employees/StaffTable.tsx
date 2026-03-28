@@ -1,8 +1,9 @@
 // frontend/src/components/employees/StaffTable.tsx
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
-import { AVATAR_GRADIENTS, SPEC_COLORS, SPEC_DISPLAY, getInitials } from '../../utils/employeeUtils'
+import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
 
@@ -14,20 +15,28 @@ interface Props {
   isBlockPending: boolean
 }
 
-const HEADERS = ['Сотрудник', 'Специализация', 'Верификация', 'Статус', 'Смена', 'Действия']
-
 function specColor(key: string): string {
-  const label = (SPEC_DISPLAY[key] ?? key).replace(/^\S+\s/, '') // strip emoji prefix
-  return SPEC_COLORS[label] ?? 'var(--text-muted)'
+  return SPEC_COLORS[key] ?? 'var(--text-muted)'
 }
 
 export default function StaffTable({ employees, onAssign, onBlock, onDelete, isBlockPending }: Props) {
+  const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const navigate = useNavigate()
+
+  const HEADERS = [
+    t('employees.headerEmployee'),
+    t('employees.headerSpec'),
+    t('employees.headerVerification'),
+    t('employees.headerStatus'),
+    t('employees.headerShift'),
+    t('employees.headerActions'),
+  ]
+
   if (employees.length === 0) {
     return (
       <div className="bg-bg-card border border-border-default rounded-default p-10">
-        <EmptyState icon="👥" title="Сотрудники не найдены" subtitle="Попробуйте другой фильтр" />
+        <EmptyState icon="👥" title={t('employees.notFound')} subtitle={t('employees.notFoundDesc')} />
       </div>
     )
   }
@@ -54,7 +63,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
             const isOnShift = emp.active_shift_id !== null
             const isVerified = emp.verification_status === 'verified'
             const isBlocked = emp.status === 'blocked'
-            const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || 'Без имени'
+            const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName')
             const isLast = idx === employees.length - 1
             const isHovered = hoveredId === emp.id
 
@@ -106,7 +115,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                   <div className="flex gap-1 flex-wrap">
                     {emp.specialization.length > 0
                       ? emp.specialization.map(spec => {
-                          const label = SPEC_DISPLAY[spec] ?? spec
+                          const label = getSpecDisplay(spec, t)
                           const color = specColor(spec)
                           return (
                             <span
@@ -136,7 +145,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                         : 'bg-amber/15 text-amber'
                     )}
                   >
-                    {isVerified ? '✓ Верифицирован' : '⏳ На проверке'}
+                    {isVerified ? `✓ ${t('employees.verified')}` : `⏳ ${t('employees.pendingVerification')}`}
                   </span>
                 </td>
 
@@ -148,7 +157,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                       isOnShift ? 'text-emerald font-semibold' : 'text-[#5a6a7a] font-normal'
                     )}
                   >
-                    ● {isOnShift ? 'На смене' : 'Не на смене'}
+                    ● {isOnShift ? t('employees.activeShift') : t('employees.offShift')}
                   </span>
                 </td>
 
@@ -163,7 +172,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                     {isBlocked ? (
                       <>
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-red/15 text-red">
-                          Заблокирован
+                          {t('employees.blocked')}
                         </span>
                         <button
                           onClick={() => onBlock(emp)}
@@ -173,7 +182,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                             isBlockPending && 'opacity-50 cursor-not-allowed'
                           )}
                         >
-                          Разблок
+                          {t('employees.unblockShort')}
                         </button>
                       </>
                     ) : (
@@ -183,7 +192,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                             onClick={() => onAssign(emp)}
                             className="bg-transparent border-none cursor-pointer text-[11px] text-accent font-[var(--font-display)] font-semibold"
                           >
-                            Назначить
+                            {t('employees.assign')}
                           </button>
                         )}
                         <button
@@ -194,7 +203,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                             isBlockPending && 'opacity-50 cursor-not-allowed'
                           )}
                         >
-                          Блок
+                          {t('employees.blockShort')}
                         </button>
                       </>
                     )}
@@ -202,7 +211,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                       onClick={() => onDelete(emp)}
                       className="bg-transparent border-none cursor-pointer text-[11px] text-text-muted hover:text-red font-[var(--font-display)] transition-colors"
                     >
-                      Удалить
+                      {t('common.delete')}
                     </button>
                   </div>
                 </td>

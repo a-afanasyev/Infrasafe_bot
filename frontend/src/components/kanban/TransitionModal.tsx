@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useEmployees } from '../../hooks/useEmployees'
+import { tStatus } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -28,6 +30,7 @@ interface Props {
 }
 
 export default function TransitionModal({ requestNumber: _requestNumber, targetStatus, onConfirm, onCancel }: Props) {
+  const { t } = useTranslation()
   const [executorId, setExecutorId] = useState<number | 'duty' | ''>('')
   const [text, setText] = useState('')
   const { data: employees = [] } = useEmployees({ verification_status: 'verified' })
@@ -57,11 +60,11 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
   }
 
   const TITLES: Record<string, string> = {
-    'В работе': 'Назначить исполнителя',
-    'Закуп': 'Что необходимо купить?',
-    'Уточнение': 'Вопрос к жителю',
-    'Выполнена': 'Отчёт о выполнении',
-    'Исполнено': 'Подтвердить выполнение',
+    'В работе': t('kanban.assignExecutor'),
+    'Закуп': t('kanban.whatToBuy'),
+    'Уточнение': t('kanban.questionToResident'),
+    'Выполнена': t('kanban.completionReport'),
+    'Исполнено': t('kanban.confirmCompletion'),
   }
 
   return (
@@ -69,13 +72,13 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {TITLES[targetStatus] ?? `Перевод в "${targetStatus}"`}
+            {TITLES[targetStatus] ?? t('kanban.transitionTo', { status: tStatus(targetStatus, t) })}
           </DialogTitle>
         </DialogHeader>
 
         {targetStatus === 'В работе' && (
           <div className="space-y-2">
-            <Label className="text-text-secondary">Выберите исполнителя:</Label>
+            <Label className="text-text-secondary">{t('kanban.selectExecutorLabel')}</Label>
             <button
               onClick={() => setExecutorId('duty')}
               className={cn(
@@ -85,10 +88,10 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
                   : 'border-border-default hover:bg-bg-surface text-text-primary'
               )}
             >
-              <span className="font-medium">Дежурный</span>
-              <span className="text-text-muted text-xs ml-2">— назначить дежурному</span>
+              <span className="font-medium">{t('kanban.dutyOfficer')}</span>
+              <span className="text-text-muted text-xs ml-2">{t('kanban.assignToDuty')}</span>
             </button>
-            <div className="text-xs text-text-muted text-center py-1">или конкретный специалист:</div>
+            <div className="text-xs text-text-muted text-center py-1">{t('kanban.orSpecificSpecialist')}</div>
             <div className="max-h-48 overflow-y-auto space-y-1">
               {employees.map(emp => {
                 const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || `#${emp.id}`
@@ -105,7 +108,7 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
                   >
                     <span className="font-medium">{name}</span>
                     {emp.active_shift_id !== null && (
-                      <span className="ml-2 text-xs text-emerald">● На смене</span>
+                      <span className="ml-2 text-xs text-emerald">● {t('kanban.onShift')}</span>
                     )}
                   </button>
                 )
@@ -116,10 +119,10 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
 
         {targetStatus === 'Закуп' && (
           <div className="space-y-1.5">
-            <Label className="text-text-secondary">Опишите что нужно купить:</Label>
+            <Label className="text-text-secondary">{t('kanban.describePurchase')}</Label>
             <Textarea
               className="min-h-[100px]"
-              placeholder="Например: труба ПВХ 50мм, 2 шт; кран шаровый ½"
+              placeholder={t('kanban.purchasePlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
               autoFocus
@@ -129,10 +132,10 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
 
         {targetStatus === 'Уточнение' && (
           <div className="space-y-1.5">
-            <Label className="text-text-secondary">Введите вопрос для жителя:</Label>
+            <Label className="text-text-secondary">{t('kanban.enterQuestion')}</Label>
             <Textarea
               className="min-h-[100px]"
-              placeholder="Например: Укажите точный адрес и этаж"
+              placeholder={t('kanban.questionPlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
               autoFocus
@@ -142,10 +145,10 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
 
         {targetStatus === 'Выполнена' && (
           <div className="space-y-1.5">
-            <Label className="text-text-secondary">Опишите что было сделано:</Label>
+            <Label className="text-text-secondary">{t('kanban.describeWork')}</Label>
             <Textarea
               className="min-h-[120px]"
-              placeholder="Например: Заменён смеситель на кухне, протечка устранена"
+              placeholder={t('kanban.workPlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
               autoFocus
@@ -155,19 +158,19 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
 
         {targetStatus === 'Исполнено' && (
           <p className="text-sm text-text-secondary">
-            Подтвердить перевод заявки в статус "Исполнено"? Житель получит уведомление для приёмки.
+            {t('kanban.confirmExecutedMessage')}
           </p>
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={!isValid()}
           >
-            Подтвердить
+            {t('common.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

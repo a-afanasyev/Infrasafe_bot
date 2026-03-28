@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCreateYard, useUpdateYard } from '../../hooks/useAddresses'
 import type { YardBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function YardFormModal({ yard, onClose }: Props) {
+  const { t } = useTranslation()
   const [name, setName] = useState(yard?.name ?? '')
   const [description, setDescription] = useState(yard?.description ?? '')
   const [gpsLat, setGpsLat] = useState<string>(yard?.gps_latitude != null ? String(yard.gps_latitude) : '')
@@ -48,12 +50,12 @@ export default function YardFormModal({ yard, onClose }: Props) {
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{yard ? 'Редактировать двор' : 'Новый двор'}</DialogTitle>
+          <DialogTitle>{yard ? t('addressForms.editYard') : t('addressForms.newYard')}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Название *</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.nameLabel')}</Label>
             <Input
               value={name}
               onChange={e => setName(e.target.value)}
@@ -62,7 +64,7 @@ export default function YardFormModal({ yard, onClose }: Props) {
           </div>
 
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Описание</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.descriptionLabel')}</Label>
             <Textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -71,7 +73,7 @@ export default function YardFormModal({ yard, onClose }: Props) {
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">GPS Широта</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
               <Input
                 type="number"
                 value={gpsLat}
@@ -80,7 +82,7 @@ export default function YardFormModal({ yard, onClose }: Props) {
               />
             </div>
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">GPS Долгота</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
               <Input
                 type="number"
                 value={gpsLon}
@@ -92,18 +94,18 @@ export default function YardFormModal({ yard, onClose }: Props) {
 
           {mutation.error && (
             <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || 'Ошибка при сохранении'}
+              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || t('addressForms.saveError')}
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={handleSubmit}
             disabled={mutation.isPending || !name.trim()}
           >
-            {mutation.isPending ? 'Сохранение...' : yard ? 'Сохранить' : 'Создать'}
+            {mutation.isPending ? t('common.saving') : yard ? t('common.save') : t('common.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

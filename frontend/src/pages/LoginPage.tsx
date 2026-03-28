@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
+import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 
 const BOT_USERNAME = 'infrasafebot'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,8 +28,8 @@ export default function LoginPage() {
         await login(data.access_token, data.refresh_token)
         navigate('/dashboard')
       } catch {
-        setError('Аккаунт не найден или не одобрен')
-        toast.error('Ошибка входа', { description: 'Аккаунт не найден или не одобрен' })
+        setError(t('login.telegramError'))
+        toast.error(t('login.loginError'), { description: t('login.telegramError') })
       } finally {
         setLoading(false)
       }
@@ -74,8 +77,8 @@ export default function LoginPage() {
       await login(data.access_token, data.refresh_token)
       navigate('/dashboard')
     } catch {
-      setError('Неверные учётные данные')
-      toast.error('Ошибка входа', { description: 'Неверные учётные данные' })
+      setError(t('login.error'))
+      toast.error(t('login.loginError'), { description: t('login.error') })
     } finally {
       setLoading(false)
     }
@@ -83,6 +86,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-root relative overflow-hidden">
+      {/* Language switcher */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageSwitcher />
+      </div>
       {/* Background grid */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -120,7 +127,7 @@ export default function LoginPage() {
             UK Management
           </div>
           <div className="text-xs text-text-muted font-[family-name:var(--font-body)] mt-1">
-            Система управления объектами
+            {t('login.subtitle')}
           </div>
         </div>
 
@@ -135,7 +142,7 @@ export default function LoginPage() {
             />
             <div className="flex items-center gap-3 mb-5">
               <div className="flex-1 h-px bg-white/[.07]" />
-              <span className="text-[11px] text-text-muted font-[family-name:var(--font-body)] tracking-wider uppercase">или</span>
+              <span className="text-[11px] text-text-muted font-[family-name:var(--font-body)] tracking-wider uppercase">{t('login.or')}</span>
               <div className="flex-1 h-px bg-white/[.07]" />
             </div>
           </div>
@@ -166,7 +173,7 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
-                Пароль
+                {t('login.password')}
               </label>
               <input
                 type="password"
@@ -202,7 +209,7 @@ export default function LoginPage() {
                   : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
               )}
             >
-              {loading ? 'Вход...' : 'Войти'}
+              {loading ? t('login.submitting') : t('login.submit')}
             </button>
           </form>
         </div>

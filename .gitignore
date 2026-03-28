@@ -103,6 +103,7 @@ celerybeat.pid
 
 # Environments
 .env
+!.env.production.template
 .venv
 env/
 venv/
@@ -153,3 +154,16 @@ Thumbs.db
 *.temp 
 # Worktrees
 .worktrees/
+
+# MCP / Playwright screenshots
+.mcp.json
+.playwright-mcp/
+*.png
+
+# Claude agent memory (local)
+.claude/agent-memory/
+frontend/.claude/
+.superpowers/
+
+# Seed data scripts (dev only)
+seed_data.py

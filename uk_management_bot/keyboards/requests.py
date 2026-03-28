@@ -170,50 +170,6 @@ def get_urgency_display(urgency_key: str, language: str = "ru") -> str:
     return urgency_key
 
 
-# TASK 17 Этап C: Status mapping - статусы заявок
-# Маппинг русских статусов (из БД) на ключи локализации
-STATUS_KEYS = {
-    "Новая": "requests.status_new",
-    "В работе": "requests.status_in_progress",
-    "Закуп": "requests.status_purchase",
-    "Уточнение": "requests.status_clarification",
-    "Выполнена": "requests.status_executed",
-    "Исполнено": "requests.status_completed",
-    "Принято": "requests.status_approved",
-    "Отменена": "requests.status_cancelled",
-}
-
-
-# TASK 17 Этап C: Helper функция для получения локализованного статуса
-def get_status_display(status: str, language: str = "ru") -> str:
-    """
-    Получить локализованное отображаемое название статуса заявки.
-    
-    Args:
-        status: Статус из БД (например, "Новая", "В работе")
-        language: Язык интерфейса (ru/uz)
-        
-    Returns:
-        Локализованное название статуса или оригинальный статус, если не найден
-        
-    Example:
-        get_status_display("Новая", "ru") -> "Новая"
-        get_status_display("Новая", "uz") -> "Yangi"
-    """
-    if status in STATUS_KEYS:
-        locale_key = STATUS_KEYS[status]
-        localized = get_text(locale_key, language=language)
-        # Если ключ не найден, get_text вернёт сам ключ - используем fallback
-        if localized == locale_key:
-            logger.warning(f"Locale key '{locale_key}' not found for status '{status}', using original")
-            return status
-        return localized
-    
-    # Fallback: если статус не найден в маппинге, возвращаем оригинал
-    logger.warning(f"Unknown status: {status}, returning as-is")
-    return status
-
-
 def get_localized_categories(language: str = "ru") -> list:
     """Get list of localized category names
 

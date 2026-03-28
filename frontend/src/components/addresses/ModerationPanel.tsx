@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   usePendingModeration,
   useApproveModeration,
@@ -10,8 +11,10 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { formatDate as fmtDate } from '../../i18n/formatters'
 
 export default function ModerationPanel() {
+  const { t } = useTranslation()
   const { data: items = [], isLoading } = usePendingModeration()
   const approve = useApproveModeration()
   const reject = useRejectModeration()
@@ -26,8 +29,8 @@ export default function ModerationPanel() {
     return (
       <EmptyState
         icon="&#10003;"
-        title="Нет заявок на модерацию"
-        subtitle="Все заявки рассмотрены"
+        title={t('moderationPanel.noPending')}
+        subtitle={t('moderationPanel.allReviewed')}
       />
     )
   }
@@ -56,16 +59,16 @@ export default function ModerationPanel() {
     )
   }
 
-  const formatDate = (dateStr: string | null) => {
+  const localFormatDate = (dateStr: string | null) => {
     if (!dateStr) return null
-    return new Date(dateStr).toLocaleDateString('ru-RU')
+    return fmtDate(dateStr, { dateStyle: 'short' })
   }
 
   const buildAddress = (item: ModerationItem) => {
     const parts: string[] = []
     if (item.yard_name) parts.push(item.yard_name)
     if (item.building_address) parts.push(item.building_address)
-    parts.push(`кв. ${item.apartment_number}`)
+    parts.push(`${t('moderationPanel.aptShort')} ${item.apartment_number}`)
     return parts.join(' / ')
   }
 
@@ -76,7 +79,7 @@ export default function ModerationPanel() {
           {/* Top row: name + badge */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-[family-name:var(--font-display)] font-semibold text-[15px] text-text-primary">
-              {item.user_name || 'Без имени'}
+              {item.user_name || t('moderationPanel.noName')}
             </span>
             {item.user_phone && (
               <span className="text-[13px] text-text-muted font-[family-name:var(--font-mono)]">
@@ -89,7 +92,7 @@ export default function ModerationPanel() {
                 ? 'bg-emerald/[.13] text-emerald'
                 : 'bg-blue/[.13] text-blue'
             )}>
-              {item.is_owner ? 'Собственник' : 'Жилец'}
+              {item.is_owner ? t('moderationPanel.owner') : t('moderationPanel.tenant')}
             </span>
           </div>
 
@@ -101,7 +104,7 @@ export default function ModerationPanel() {
           {/* Date */}
           {item.requested_at && (
             <div className="text-xs text-text-muted font-[family-name:var(--font-display)]">
-              Заявка от {formatDate(item.requested_at)}
+              {t('moderationPanel.requestFrom', { date: localFormatDate(item.requested_at) })}
             </div>
           )}
 
@@ -112,7 +115,7 @@ export default function ModerationPanel() {
               <Textarea
                 value={rejectComment}
                 onChange={e => setRejectComment(e.target.value)}
-                placeholder="Причина отклонения (мин. 3 символа)"
+                placeholder={t('moderationPanel.rejectReason')}
                 autoFocus
               />
               <div className="flex items-center gap-2.5">
@@ -122,13 +125,13 @@ export default function ModerationPanel() {
                   onClick={() => handleSubmitReject(item.id)}
                   disabled={rejectComment.trim().length < 3 || reject.isPending}
                 >
-                  {reject.isPending ? 'Отправка...' : 'Отправить'}
+                  {reject.isPending ? t('moderationPanel.submitting') : t('moderationPanel.submit')}
                 </Button>
                 <button
                   onClick={handleCancelReject}
                   className="bg-transparent border-none cursor-pointer text-[13px] text-text-muted font-[family-name:var(--font-display)] underline p-0"
                 >
-                  Отмена
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -140,14 +143,14 @@ export default function ModerationPanel() {
                 disabled={pendingActionId !== null}
                 size="sm"
               >
-                {pendingActionId === item.id && approve.isPending ? 'Одобрение...' : 'Одобрить'}
+                {pendingActionId === item.id && approve.isPending ? t('moderationPanel.approving') : t('moderationPanel.approve')}
               </Button>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={() => handleStartReject(item.id)}
               >
-                Отклонить
+                {t('moderationPanel.reject')}
               </Button>
             </div>
           )}

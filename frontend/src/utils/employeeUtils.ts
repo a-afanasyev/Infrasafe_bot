@@ -7,25 +7,34 @@ export const AVATAR_GRADIENTS = [
 ]
 
 export const SPEC_COLORS: Record<string, string> = {
-  'Электрика': 'var(--amber)',
-  'Сантехника': 'var(--blue)',
-  'Отопление': 'var(--red)',
-  'Уборка': 'var(--emerald)',
-  'Безопасность': 'var(--violet)',
-  'Лифт': 'var(--cyan)',
-  'Благоустройство': 'var(--green)',
-  'Вентиляция': 'var(--teal)',
+  'electrician': 'var(--amber)',
+  'plumber': 'var(--blue)',
+  'heating': 'var(--red)',
+  'cleaning': 'var(--emerald)',
+  'security': 'var(--violet)',
+  'elevator': 'var(--cyan)',
+  'landscaping': 'var(--green)',
+  'ventilation': 'var(--teal)',
 }
 
-export const SPEC_DISPLAY: Record<string, string> = {
-  'electrician': '⚡ Электрика',
-  'plumber': '🔧 Сантехника',
-  'heating': '🔥 Отопление',
-  'cleaning': '🧹 Уборка',
-  'security': '🔒 Безопасность',
-  'elevator': '🛗 Лифт',
-  'landscaping': '🌳 Благоустройство',
-  'ventilation': '💨 Вентиляция',
+const SPEC_EMOJI: Record<string, string> = {
+  'electrician': '⚡',
+  'plumber': '🔧',
+  'heating': '🔥',
+  'cleaning': '🧹',
+  'security': '🔒',
+  'elevator': '🛗',
+  'landscaping': '🌳',
+  'ventilation': '💨',
+}
+
+import type { TFunction } from 'i18next'
+import { tSpecialization } from '../i18n/apiMaps'
+
+export function getSpecDisplay(key: string, t: TFunction): string {
+  const emoji = SPEC_EMOJI[key] ?? ''
+  const label = tSpecialization(key, t)
+  return emoji ? `${emoji} ${label}` : label
 }
 
 export function getInitials(firstName: string | null, lastName: string | null): string {

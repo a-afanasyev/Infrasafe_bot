@@ -1,12 +1,24 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { apiClient } from '../../api/client'
 import { useTWAAuth } from '../../hooks/useTWAAuth'
+import { tStatus, tCategory } from '../../i18n/apiMaps'
+import { formatDate } from '../../i18n/formatters'
 
-const STATUS_ORDER = ['Новая', 'В работе', 'Закуп', 'Уточнение', 'Выполнена', 'Исполнено', 'Принято']
+const STATUS_ORDER = [
+  '\u041D\u043E\u0432\u0430\u044F',
+  '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435',
+  '\u0417\u0430\u043A\u0443\u043F',
+  '\u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435',
+  '\u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430',
+  '\u0418\u0441\u043F\u043E\u043B\u043D\u0435\u043D\u043E',
+  '\u041F\u0440\u0438\u043D\u044F\u0442\u043E',
+]
 
 export default function TWARequestDetailPage() {
+  const { t } = useTranslation()
   const { isAuthenticated } = useTWAAuth()
   const { number } = useParams<{ number: string }>()
   const navigate = useNavigate()
@@ -31,7 +43,7 @@ export default function TWARequestDetailPage() {
     enabled: isAuthenticated && !!number,
   })
 
-  if (!number) return <div className="p-4 text-red-500">Заявка не найдена</div>
+  if (!number) return <div className="p-4 text-red-500">{t('errors.requestNotFound')}</div>
 
   const sendMessage = async () => {
     if (!message.trim()) return
@@ -50,13 +62,13 @@ export default function TWARequestDetailPage() {
     setSubmitError('')
     setIsSubmitting(true)
     try {
-      const payload: Record<string, unknown> = { status: 'Принято' }
+      const payload: Record<string, unknown> = { status: '\u041F\u0440\u0438\u043D\u044F\u0442\u043E' }
       if (rating > 0) payload.rating = rating
       await apiClient.patch(`/api/v2/requests/${number}`, payload)
       queryClient.invalidateQueries({ queryKey: ['request', number] })
       navigate('/twa')
     } catch {
-      setSubmitError('Не удалось сохранить. Попробуйте снова.')
+      setSubmitError(t('errors.saveFailed'))
     } finally {
       setIsSubmitting(false)
     }
@@ -69,49 +81,49 @@ export default function TWARequestDetailPage() {
     setIsSubmitting(true)
     try {
       await apiClient.patch(`/api/v2/requests/${number}`, {
-        status: 'В работе',
+        status: '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435',
         return_reason: returnReason.trim(),
       })
       queryClient.invalidateQueries({ queryKey: ['request', number] })
       navigate('/twa')
     } catch {
-      setSubmitError('Не удалось сохранить. Попробуйте снова.')
+      setSubmitError(t('errors.saveFailed'))
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (!request) return <div className="p-4 text-gray-400">Загрузка...</div>
+  if (!request) return <div className="p-4 text-gray-400">{t('common.loading')}</div>
 
-  const showAcceptance = request.status === 'Исполнено'
+  const showAcceptance = request.status === '\u0418\u0441\u043F\u043E\u043B\u043D\u0435\u043D\u043E'
   const currentIdx = STATUS_ORDER.indexOf(request.status)
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b p-4">
-        <button onClick={() => navigate('/twa')} className="text-blue-600 text-sm mb-2">&larr; Назад</button>
+        <button onClick={() => navigate('/twa')} className="text-blue-600 text-sm mb-2">&larr; {t('common.back')}</button>
         <div className="flex justify-between items-start">
           <div>
             <span className="font-mono text-xs text-gray-500">{request.request_number}</span>
-            <h2 className="font-bold">{request.category}</h2>
+            <h2 className="font-bold">{tCategory(request.category, t)}</h2>
           </div>
-          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{request.status}</span>
+          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{tStatus(request.status, t)}</span>
         </div>
         <p className="text-sm text-gray-600 mt-2">{request.description}</p>
       </div>
 
       {/* Status timeline */}
       <div className="bg-white border-b p-4 overflow-x-auto">
-        {request.status === 'Отменена' ? (
+        {request.status === '\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u0430' ? (
           <div className="flex gap-2 items-center text-sm text-red-500">
-            <span>🚫</span><span>Заявка отменена</span>
+            <span>{'\u{1F6AB}'}</span><span>{t('twa.requestCancelled')}</span>
           </div>
         ) : (
           <div className="flex gap-1 min-w-max">
             {STATUS_ORDER.map((s, i) => (
               <div key={s} className={`text-xs px-2 py-1 rounded ${i <= currentIdx ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                {s}
+                {tStatus(s, t)}
               </div>
             ))}
           </div>
@@ -123,7 +135,7 @@ export default function TWARequestDetailPage() {
         {(comments ?? []).map((c: { id: number; comment_text: string; comment_type: string; created_at: string }) => (
           <div key={c.id} className="bg-white rounded-xl p-3 border">
             <p className="text-sm">{c.comment_text}</p>
-            <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString('ru')}</span>
+            <span className="text-xs text-gray-400">{formatDate(c.created_at)}</span>
           </div>
         ))}
       </div>
@@ -133,7 +145,7 @@ export default function TWARequestDetailPage() {
         <div className="bg-white border-t p-3 flex gap-2">
           <input
             className="flex-1 border rounded-xl px-3 py-2 text-sm"
-            placeholder="Написать сообщение..."
+            placeholder={t('twa.messagePlaceholder')}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
@@ -150,7 +162,7 @@ export default function TWARequestDetailPage() {
         <div className="bg-white border-t p-4">
           {!showReturnForm ? (
             <>
-              <p className="font-medium mb-2">Оцените работу (необязательно)</p>
+              <p className="font-medium mb-2">{t('twa.rateWork')}</p>
               <div className="flex gap-2 mb-3">
                 {[1, 2, 3, 4, 5].map(n => (
                   <button
@@ -172,23 +184,23 @@ export default function TWARequestDetailPage() {
                   disabled={isSubmitting}
                   className="flex-1 border py-2 rounded-xl text-sm disabled:opacity-50"
                 >
-                  &#8617; Вернуть
+                  &#8617; {t('twa.returnBtn')}
                 </button>
                 <button
                   onClick={handleAccept}
                   disabled={isSubmitting}
                   className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm disabled:opacity-50"
                 >
-                  &#10003; Принять
+                  &#10003; {t('twa.acceptBtn')}
                 </button>
               </div>
             </>
           ) : (
             <>
-              <p className="font-medium mb-2">Почему возвращаете?</p>
+              <p className="font-medium mb-2">{t('twa.whyReturn')}</p>
               <textarea
                 className="w-full border rounded-xl p-3 text-sm min-h-[80px] mb-3 focus:outline-none focus:border-blue-500"
-                placeholder="Опишите что не так..."
+                placeholder={t('twa.describeProblem')}
                 value={returnReason}
                 onChange={e => setReturnReason(e.target.value)}
                 autoFocus
@@ -202,14 +214,14 @@ export default function TWARequestDetailPage() {
                   }}
                   className="flex-1 border py-2 rounded-xl text-sm"
                 >
-                  Назад
+                  {t('common.back')}
                 </button>
                 <button
                   onClick={handleReturn}
                   disabled={!returnReason.trim() || isSubmitting}
                   className="flex-1 bg-red-500 text-white py-2 rounded-xl text-sm disabled:opacity-40"
                 >
-                  Отправить
+                  {t('common.send')}
                 </button>
               </div>
             </>

@@ -1,0 +1,42 @@
+# UK Management — Caddy reverse proxy
+# Replace YOUR_DOMAIN with actual domain
+# Caddy automatically obtains and renews Let's Encrypt certificates
+
+{$DOMAIN:localhost} {
+	# Frontend SPA
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	# API
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# WebSocket
+	handle /ws/* {
+		reverse_proxy api:8080
+	}
+
+	# Health check
+	handle /health {
+		reverse_proxy api:8080
+	}
+
+	# Security headers
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Logging
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+	}
+}

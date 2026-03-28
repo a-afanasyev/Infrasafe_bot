@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { YardBrief, BuildingBrief, ApartmentBrief } from '../../types/api'
 import EmptyState from '../shared/EmptyState'
 import ConfirmDialog from '../shared/ConfirmDialog'
@@ -32,6 +33,7 @@ interface AddressTableProps {
 }
 
 function StatusDot({ active }: { active: boolean }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center gap-1.5">
       <span className={cn(
@@ -42,7 +44,7 @@ function StatusDot({ active }: { active: boolean }) {
         'text-[11px]',
         active ? 'text-emerald' : 'text-text-muted'
       )}>
-        {active ? 'Активен' : 'Неактивен'}
+        {active ? t('addresses.active') : t('addresses.inactive')}
       </span>
     </div>
   )
@@ -73,6 +75,7 @@ function YardsTable({
   onToggleYard,
   onDeleteYard,
 }: AddressTableProps) {
+  const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
   const items = yards ?? []
@@ -80,7 +83,7 @@ function YardsTable({
   if (items.length === 0) {
     return (
       <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
-        <EmptyState icon="🏘️" title="Нет дворов" subtitle="Создайте первый двор" />
+        <EmptyState icon="🏘️" title={t('addresses.noAddresses')} subtitle={t('addresses.noAddressesDesc')} />
       </div>
     )
   }
@@ -91,7 +94,7 @@ function YardsTable({
         className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
         style={{ gridTemplateColumns: YARD_COLS }}
       >
-        {['Название', 'Описание', 'Зданий', 'Статус', 'Действия'].map(h => (
+        {[t('addresses.yardName'), t('addresses.description'), t('addresses.stats.buildings'), t('addresses.status'), t('common.actions')].map(h => (
           <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
@@ -121,16 +124,16 @@ function YardsTable({
             <StatusDot active={yard.is_active} />
             <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
               <button onClick={() => onEditYard?.(yard)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
-                Редактировать
+                {t('common.edit')}
               </button>
               <button onClick={() => onToggleYard?.(yard.id, !yard.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
-                {yard.is_active ? 'Деактивировать' : 'Активировать'}
+                {yard.is_active ? t('addresses.deactivate') : t('addresses.activate')}
               </button>
               <button
                 onClick={() => setConfirmDelete({ open: true, id: yard.id })}
                 className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
               >
-                Удалить
+                {t('common.delete')}
               </button>
             </div>
           </div>
@@ -140,9 +143,9 @@ function YardsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title="Удалить двор"
-        description="Удалить двор? Это действие нельзя отменить."
-        confirmLabel="Удалить"
+        title={t('addressModals.confirmDeleteYard', { name: '' })}
+        description={t('addressModals.confirmDeleteYard', { name: '' })}
+        confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteYard?.(confirmDelete.id)
         }}
@@ -161,6 +164,7 @@ function BuildingsTable({
   onToggleBuilding,
   onDeleteBuilding,
 }: AddressTableProps) {
+  const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
   const items = buildings ?? []
@@ -168,7 +172,7 @@ function BuildingsTable({
   if (items.length === 0) {
     return (
       <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
-        <EmptyState icon="🏢" title="Нет зданий" subtitle="Создайте первое здание" />
+        <EmptyState icon="🏢" title={t('addresses.noBuildingsFound')} subtitle={t('addresses.noBuildingsFoundDesc')} />
       </div>
     )
   }
@@ -179,7 +183,7 @@ function BuildingsTable({
         className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
         style={{ gridTemplateColumns: BUILDING_COLS }}
       >
-        {['Адрес', 'Подъезды', 'Этажи', 'Квартир', 'Статус', 'Действия'].map(h => (
+        {[t('addresses.buildingAddress'), t('addresses.entrances'), t('addresses.floors'), t('addresses.stats.apartments'), t('addresses.status'), t('common.actions')].map(h => (
           <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
@@ -208,16 +212,16 @@ function BuildingsTable({
             <StatusDot active={bld.is_active} />
             <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
               <button onClick={() => onEditBuilding?.(bld)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
-                Редактировать
+                {t('common.edit')}
               </button>
               <button onClick={() => onToggleBuilding?.(bld.id, !bld.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
-                {bld.is_active ? 'Деактивировать' : 'Активировать'}
+                {bld.is_active ? t('addresses.deactivate') : t('addresses.activate')}
               </button>
               <button
                 onClick={() => setConfirmDelete({ open: true, id: bld.id })}
                 className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
               >
-                Удалить
+                {t('common.delete')}
               </button>
             </div>
           </div>
@@ -227,9 +231,9 @@ function BuildingsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title="Удалить здание"
-        description="Удалить здание? Это действие нельзя отменить."
-        confirmLabel="Удалить"
+        title={t('addressModals.confirmDeleteBuilding', { name: '' })}
+        description={t('addressModals.confirmDeleteBuilding', { name: '' })}
+        confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteBuilding?.(confirmDelete.id)
         }}
@@ -248,6 +252,7 @@ function ApartmentsTable({
   onToggleApartment,
   onDeleteApartment,
 }: AddressTableProps) {
+  const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
   const items = apartments ?? []
@@ -255,7 +260,7 @@ function ApartmentsTable({
   if (items.length === 0) {
     return (
       <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
-        <EmptyState icon="🚪" title="Нет квартир" subtitle="Создайте первую квартиру" />
+        <EmptyState icon="🚪" title={t('addresses.noApartmentsFound')} subtitle={t('addresses.noApartmentsFoundDesc')} />
       </div>
     )
   }
@@ -266,7 +271,7 @@ function ApartmentsTable({
         className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
         style={{ gridTemplateColumns: APT_COLS }}
       >
-        {['Номер', 'Подъезд', 'Этаж', 'Комнат', 'Площадь', 'Жителей', 'Статус', 'Действия'].map(h => (
+        {[t('addresses.apartmentNumber'), t('addresses.entrance'), t('addresses.floor'), t('addresses.rooms'), t('addresses.area'), t('addresses.residentsCount'), t('addresses.status'), t('common.actions')].map(h => (
           <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
@@ -297,16 +302,16 @@ function ApartmentsTable({
             <StatusDot active={apt.is_active} />
             <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
               <button onClick={() => onEditApartment?.(apt)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
-                Редактировать
+                {t('common.edit')}
               </button>
               <button onClick={() => onToggleApartment?.(apt.id, !apt.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
-                {apt.is_active ? 'Деактивировать' : 'Активировать'}
+                {apt.is_active ? t('addresses.deactivate') : t('addresses.activate')}
               </button>
               <button
                 onClick={() => setConfirmDelete({ open: true, id: apt.id })}
                 className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
               >
-                Удалить
+                {t('common.delete')}
               </button>
             </div>
           </div>
@@ -316,9 +321,9 @@ function ApartmentsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title="Удалить квартиру"
-        description="Удалить квартиру? Это действие нельзя отменить."
-        confirmLabel="Удалить"
+        title={t('addressModals.confirmDeleteApartment', { name: '' })}
+        description={t('addressModals.confirmDeleteApartment', { name: '' })}
+        confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteApartment?.(confirmDelete.id)
         }}

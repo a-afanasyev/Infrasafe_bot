@@ -21,6 +21,9 @@ from .apartment import Apartment
 from .user_apartment import UserApartment
 from .user_yard import UserYard
 
+# Webhook integration
+from .webhook_outbox import WebhookOutbox
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -54,7 +57,8 @@ __all__ = [
     'Building',
     'Apartment',
     'UserApartment',
-    'UserYard'
+    'UserYard',
+    'WebhookOutbox'
 ]
 
 # Добавляем модели заявок, если они доступны

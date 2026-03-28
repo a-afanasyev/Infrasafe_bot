@@ -62,7 +62,7 @@ def get_profile_edit_keyboard(language: str = "ru", user=None) -> InlineKeyboard
 
         # Кнопка отмены
         builder.add(InlineKeyboardButton(
-            text=f"❌ {cancel_text}",
+            text=cancel_text,
             callback_data="cancel_profile_edit"
         ))
 
@@ -96,7 +96,7 @@ def get_language_choice_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         
         # Кнопка отмены на узбекском
         builder.add(InlineKeyboardButton(
-            text=f"❌ {get_text('buttons.cancel', language=language)}",
+            text=get_text('buttons.cancel', language=language),
             callback_data="cancel_language_choice"
         ))
     else:
@@ -109,10 +109,10 @@ def get_language_choice_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             text=get_text("profile.keyboards.lang_uzbek", language=language),
             callback_data="set_language_uz"
         ))
-        
+
         # Кнопка отмены на русском
         builder.add(InlineKeyboardButton(
-            text=f"❌ {get_text('buttons.cancel', language=language)}",
+            text=get_text('buttons.cancel', language=language),
             callback_data="cancel_language_choice"
         ))
     
@@ -142,7 +142,7 @@ def get_address_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     
     # Кнопка отмены
     builder.add(InlineKeyboardButton(
-        text=f"❌ {get_text('buttons.cancel', language=language)}",
+        text=get_text('buttons.cancel', language=language),
         callback_data="cancel_address_type"
     ))
     
@@ -155,7 +155,7 @@ def get_cancel_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     
     builder.add(InlineKeyboardButton(
-        text=f"❌ {get_text('buttons.cancel', language=language)}",
+        text=get_text('buttons.cancel', language=language),
         callback_data="cancel_input"
     ))
     

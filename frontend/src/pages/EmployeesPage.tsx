@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
   useEmployees,
@@ -16,7 +17,7 @@ import PendingApprovalCard from '../components/employees/PendingApprovalCard'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AssignRequestModal from '../components/employees/AssignRequestModal'
-import { SPEC_DISPLAY, SPEC_COLORS } from '../utils/employeeUtils'
+import { SPEC_COLORS, getSpecDisplay } from '../utils/employeeUtils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
@@ -24,7 +25,8 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 export default function EmployeesPage() {
-  usePageTitle('Сотрудники')
+  const { t } = useTranslation()
+  usePageTitle(t('nav.employees'))
   const { setActions, clearActions } = useTopbar()
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -70,10 +72,10 @@ export default function EmployeesPage() {
     const isBlocked = e.status === 'blocked'
     setConfirmState({
       open: true,
-      title: isBlocked ? 'Разблокировать сотрудника' : 'Заблокировать сотрудника',
+      title: isBlocked ? t('employees.unblockConfirm') : t('employees.blockConfirm'),
       description: isBlocked
-        ? `Разблокировать сотрудника ${empName}?`
-        : `Заблокировать сотрудника ${empName}?`,
+        ? t('employees.unblockConfirmDesc', { name: empName })
+        : t('employees.blockConfirmDesc', { name: empName }),
       onConfirm: () => {
         if (isBlocked) {
           unblockEmployee.mutate(e.id)
@@ -95,13 +97,13 @@ export default function EmployeesPage() {
     <div className="flex items-center gap-2">
       <Input
         type="text"
-        placeholder="Поиск сотрудника..."
+        placeholder={t('employees.searchPlaceholder')}
         value={search}
         onChange={e => setSearch(e.target.value)}
         className="w-[200px]"
       />
-      <Button variant="outline" size="sm">Экспорт</Button>
-      <Button size="sm" onClick={() => setAddModalOpen(true)}>+ Добавить</Button>
+      <Button variant="outline" size="sm">{t('employees.export')}</Button>
+      <Button size="sm" onClick={() => setAddModalOpen(true)}>{t('employees.add')}</Button>
     </div>
   ), [search])
 
@@ -111,10 +113,10 @@ export default function EmployeesPage() {
   }, [setActions, clearActions, actionsNode])
 
   const STATS = [
-    { label: 'Всего сотрудников', value: total, iconBg: 'var(--blue)', icon: '👥' },
-    { label: 'На смене сейчас', value: onShift, iconBg: 'var(--emerald)', icon: '🟢' },
-    { label: 'Ожидают одобрения', value: pending, iconBg: 'var(--amber)', icon: '⏳' },
-    { label: 'Верифицированы', value: verified, iconBg: 'var(--violet)', icon: '✓' },
+    { label: t('employees.statsTotal'), value: total, iconBg: 'var(--blue)', icon: '👥' },
+    { label: t('employees.statsOnShift'), value: onShift, iconBg: 'var(--emerald)', icon: '🟢' },
+    { label: t('employees.statsPending'), value: pending, iconBg: 'var(--amber)', icon: '⏳' },
+    { label: t('employees.statsVerified'), value: verified, iconBg: 'var(--violet)', icon: '✓' },
   ]
 
   const pendingEmployees = employees.filter(
@@ -125,7 +127,7 @@ export default function EmployeesPage() {
 
   if (isError) return (
     <div className="flex-1 flex items-center justify-center text-text-muted">
-      Ошибка загрузки сотрудников
+      {t('common.error')}
     </div>
   )
 
@@ -161,7 +163,7 @@ export default function EmployeesPage() {
         <div className="bg-bg-card border border-border-default rounded-default p-5">
           <div className="flex items-center gap-2 mb-4">
             <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">
-              Ожидают одобрения
+              {t('employees.pendingApproval')}
             </span>
             <span className="bg-amber/20 text-amber rounded-full px-2 py-0.5 text-[11px] font-semibold">
               {pendingEmployees.length}
@@ -187,9 +189,9 @@ export default function EmployeesPage() {
         <div className="flex items-center gap-1.5">
           {/* Role */}
           {[
-            { key: 'all', label: 'Все' },
-            { key: 'executor', label: 'Исполнители' },
-            { key: 'manager', label: 'Менеджеры' },
+            { key: 'all', label: t('employees.filterRole') },
+            { key: 'executor', label: t('role.executor') },
+            { key: 'manager', label: t('role.manager') },
           ].map(f => (
             <button
               key={f.key}
@@ -207,9 +209,9 @@ export default function EmployeesPage() {
           <div className="w-px h-6 bg-border-default mx-0.5" />
           {/* Status */}
           {[
-            { key: 'all', label: 'Все статусы' },
-            { key: 'on_shift', label: 'На смене' },
-            { key: 'verified', label: 'Верифицированы' },
+            { key: 'all', label: t('employees.filterStatus') },
+            { key: 'on_shift', label: t('employees.activeShift') },
+            { key: 'verified', label: t('employees.statsVerified') },
           ].map(f => (
             <button
               key={f.key}
@@ -231,7 +233,7 @@ export default function EmployeesPage() {
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                title={mode === 'tile' ? 'Плитки' : 'Таблица'}
+                title={mode === 'tile' ? t('employees.viewTile') : t('employees.viewTable')}
                 className={cn(
                   'px-3 py-1.5 border-none cursor-pointer text-base flex items-center transition-all duration-150',
                   viewMode === mode
@@ -255,11 +257,11 @@ export default function EmployeesPage() {
                 : 'bg-bg-card border-border-default text-text-secondary font-normal'
             )}
           >
-            Все спец.
+            {t('employees.filterSpec')}
           </button>
-          {Object.entries(SPEC_DISPLAY).map(([key, label]) => {
+          {Object.keys(SPEC_COLORS).map((key) => {
             const isActive = specFilter === key
-            const color = SPEC_COLORS[label.replace(/^\S+\s/, '')] ?? 'var(--text-muted)'
+            const color = SPEC_COLORS[key] ?? 'var(--text-muted)'
             return (
               <button
                 key={key}
@@ -275,7 +277,7 @@ export default function EmployeesPage() {
                   fontWeight: 600,
                 } : undefined}
               >
-                {label}
+                {getSpecDisplay(key, t)}
               </button>
             )
           })}
@@ -292,7 +294,7 @@ export default function EmployeesPage() {
           isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
         />
       ) : employees.length === 0 ? (
-        <EmptyState icon="👥" title="Сотрудники не найдены" subtitle="Попробуйте другой фильтр" />
+        <EmptyState icon="👥" title={t('employees.notFound')} subtitle={t('employees.notFoundDesc')} />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
           {employees.map(emp => (
@@ -322,7 +324,7 @@ export default function EmployeesPage() {
         onOpenChange={(open) => setConfirmState(prev => ({ ...prev, open }))}
         title={confirmState.title}
         description={confirmState.description}
-        confirmLabel="Подтвердить"
+        confirmLabel={t('common.confirm')}
         onConfirm={confirmState.onConfirm}
         variant="warning"
         loading={blockEmployee.isPending || unblockEmployee.isPending}

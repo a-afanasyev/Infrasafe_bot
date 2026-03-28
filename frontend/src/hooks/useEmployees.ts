@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import i18n from '../i18n'
 import { apiClient } from '../api/client'
 import type {
   VerificationStatus,
@@ -45,12 +46,12 @@ export function useApproveEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/approve`).then(r => r.data),
     onSuccess: () => {
-      toast.success('Сотрудник одобрен')
+      toast.success(i18n.t('toast.employeeApproved'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: Error) => {
       console.error('Approve employee failed:', error)
-      toast.error('Не удалось одобрить сотрудника', { description: error.message })
+      toast.error(i18n.t('toast.employeeApproveFailed'), { description: error.message })
     },
   })
 }
@@ -61,12 +62,12 @@ export function useRejectEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/reject`).then(r => r.data),
     onSuccess: () => {
-      toast.success('Сотрудник отклонён')
+      toast.success(i18n.t('toast.employeeRejected'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: Error) => {
       console.error('Reject employee failed:', error)
-      toast.error('Не удалось отклонить сотрудника', { description: error.message })
+      toast.error(i18n.t('toast.employeeRejectFailed'), { description: error.message })
     },
   })
 }
@@ -77,12 +78,12 @@ export function useBlockEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/block`).then(r => r.data),
     onSuccess: () => {
-      toast.success('Сотрудник заблокирован')
+      toast.success(i18n.t('toast.employeeBlocked'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: Error) => {
       console.error('Block employee failed:', error)
-      toast.error('Не удалось заблокировать сотрудника', { description: error.message })
+      toast.error(i18n.t('toast.employeeBlockFailed'), { description: error.message })
     },
   })
 }
@@ -93,12 +94,12 @@ export function useUnblockEmployee() {
     mutationFn: (id: number) =>
       apiClient.patch(`/api/v2/shifts/employees/${id}/unblock`).then(r => r.data),
     onSuccess: () => {
-      toast.success('Сотрудник разблокирован')
+      toast.success(i18n.t('toast.employeeUnblocked'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: Error) => {
       console.error('Unblock employee failed:', error)
-      toast.error('Не удалось разблокировать сотрудника', { description: error.message })
+      toast.error(i18n.t('toast.employeeUnblockFailed'), { description: error.message })
     },
   })
 }
@@ -127,12 +128,12 @@ export function useCreateEmployee() {
     }) =>
       apiClient.post('/api/v2/shifts/employees', data).then(r => r.data),
     onSuccess: () => {
-      toast.success('Сотрудник создан')
+      toast.success(i18n.t('toast.employeeCreated'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: Error) => {
       console.error('Create employee failed:', error)
-      toast.error('Не удалось создать сотрудника', { description: error.message })
+      toast.error(i18n.t('toast.employeeCreateFailed'), { description: error.message })
     },
   })
 }
@@ -149,7 +150,7 @@ export function useCreateInvite() {
         .then(r => r.data as { token: string; bot_link: string; expires_at: string }),
     onError: (error: Error) => {
       console.error('Create invite failed:', error)
-      toast.error('Не удалось создать приглашение', { description: error.message })
+      toast.error(i18n.t('toast.inviteCreateFailed'), { description: error.message })
     },
   })
 }
@@ -162,12 +163,12 @@ export function useDeleteEmployee() {
         .patch(`/api/v2/shifts/employees/${id}/delete`, { reason, reassign_to })
         .then(r => r.data),
     onSuccess: () => {
-      toast.success('Сотрудник удалён')
+      toast.success(i18n.t('toast.employeeDeleted'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: Error) => {
       console.error('Delete employee failed:', error)
-      toast.error('Не удалось удалить сотрудника', { description: error.message })
+      toast.error(i18n.t('toast.employeeDeleteFailed'), { description: error.message })
     },
   })
 }

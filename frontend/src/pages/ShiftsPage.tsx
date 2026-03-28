@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
@@ -19,7 +20,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export default function ShiftsPage() {
-  usePageTitle('Смены')
+  const { t } = useTranslation()
+  usePageTitle(t('nav.shifts'))
   const navigate = useNavigate()
   const { setActions, clearActions } = useTopbar()
   useShiftsWebSocket()
@@ -63,46 +65,25 @@ export default function ShiftsPage() {
           size="sm"
           onClick={() => navigate('/dashboard/templates')}
         >
-          Шаблоны
+          {t('nav.templates')}
         </Button>
         <Button
           size="sm"
           onClick={() => setCreateModalOpen(true)}
         >
-          + Создать смену
+          {t('shifts.createShift')}
         </Button>
       </div>,
     )
     return clearActions
-  }, [setActions, clearActions])
+  }, [setActions, clearActions, t])
 
   if (shiftsLoading) return <LoadingSpinner />
 
-  // Date label in Russian
-  const dayNames = [
-    'Воскресенье',
-    'Понедельник',
-    'Вторник',
-    'Среда',
-    'Четверг',
-    'Пятница',
-    'Суббота',
-  ]
-  const monthNames = [
-    'января',
-    'февраля',
-    'марта',
-    'апреля',
-    'мая',
-    'июня',
-    'июля',
-    'августа',
-    'сентября',
-    'октября',
-    'ноября',
-    'декабря',
-  ]
-  const dateLabelStr = `${dayNames[selectedDate.getDay()]}, ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+  // Date label
+  const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+  const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
+  const dateLabelStr = `${t(`days.full.${dayKeys[selectedDate.getDay()]}`)}, ${selectedDate.getDate()} ${t(`months.${monthKeys[selectedDate.getMonth()]}`)} ${selectedDate.getFullYear()}`
 
   const totalLoad =
     shifts.length > 0
@@ -115,11 +96,11 @@ export default function ShiftsPage() {
   const specCoverage = stats ? Math.min(100, Math.round((stats.active_executors / Math.max(stats.active_shifts, 1)) * 100)) : 0
 
   const STATS_CARDS = [
-    { label: 'Исполнителей на смене', value: `${stats?.active_executors ?? 0}`, color: 'var(--accent)' },
-    { label: 'Покрытие %', value: `${stats?.coverage_pct ?? 0}%`, color: 'var(--blue)' },
-    { label: 'Покрытие спец-ций', value: `${specCoverage}%`, color: 'var(--emerald)' },
-    { label: 'Передачи', value: `${stats?.pending_transfers ?? 0}`, color: 'var(--amber)' },
-    { label: 'Общая нагрузка', value: `${totalLoad}%`, color: 'var(--violet)' },
+    { label: t('analytics.executorsOnShift'), value: `${stats?.active_executors ?? 0}`, color: 'var(--accent)' },
+    { label: t('analytics.coveragePct'), value: `${stats?.coverage_pct ?? 0}%`, color: 'var(--blue)' },
+    { label: t('analytics.specCoverage'), value: `${specCoverage}%`, color: 'var(--emerald)' },
+    { label: t('shifts.transfers'), value: `${stats?.pending_transfers ?? 0}`, color: 'var(--amber)' },
+    { label: t('analytics.totalLoad'), value: `${totalLoad}%`, color: 'var(--violet)' },
   ]
 
   return (
@@ -149,7 +130,7 @@ export default function ShiftsPage() {
           onClick={goToday}
           className="px-3 py-1 rounded-full bg-accent-dim text-accent border border-border-active text-xs font-semibold cursor-pointer"
         >
-          Сегодня
+          {t('shifts.today')}
         </button>
       </div>
 
@@ -180,7 +161,7 @@ export default function ShiftsPage() {
       {/* Timeline */}
       <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
         <div className="px-5 pt-4 pb-3 border-b border-border-default font-[var(--font-display)] font-semibold text-sm text-text-primary">
-          Расписание смен
+          {t('shifts.shiftSchedule')}
         </div>
         <ShiftTimeline
           shifts={shifts}
@@ -194,7 +175,7 @@ export default function ShiftsPage() {
         {/* Heatmap */}
         <div className="bg-bg-card border border-border-default rounded-default p-5">
           <div className="font-[var(--font-display)] font-semibold text-sm text-text-primary mb-4">
-            Тепловая карта покрытия
+            {t('shifts.coverageHeatmap')}
           </div>
           <ShiftCoverageHeatmap shifts={shifts} date={selectedDate} />
         </div>
@@ -204,7 +185,7 @@ export default function ShiftsPage() {
           {/* Transfers */}
           <div className="flex items-center gap-2">
             <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">
-              Запросы на передачу
+              {t('shifts.transferRequests')}
             </span>
             {transfers.length > 0 && (
               <span className="bg-amber/20 text-amber rounded-full px-2 py-0.5 text-[11px] font-semibold">
@@ -215,30 +196,30 @@ export default function ShiftsPage() {
 
           {transfers.length === 0 ? (
             <div className="text-[13px] text-text-muted text-center py-3">
-              Нет запросов на передачу
+              {t('shifts.noTransfers')}
             </div>
           ) : (
-            transfers.slice(0, 3).map(t => (
+            transfers.slice(0, 3).map(tr => (
               <div
-                key={t.id}
+                key={tr.id}
                 className="flex items-start gap-2 p-2.5 bg-bg-surface rounded-sm"
               >
                 <div
                   className={cn(
                     'w-2 h-2 rounded-full mt-1 shrink-0',
-                    t.urgency_level === 'critical'
+                    tr.urgency_level === 'critical'
                       ? 'bg-red'
-                      : t.urgency_level === 'high'
+                      : tr.urgency_level === 'high'
                         ? 'bg-amber'
                         : 'bg-blue'
                   )}
                 />
                 <div className="flex-1 overflow-hidden">
                   <div className="text-xs text-text-primary font-semibold truncate">
-                    {t.from_executor_name} → {t.to_executor_name ?? '?'}
+                    {tr.from_executor_name} → {tr.to_executor_name ?? '?'}
                   </div>
                   <div className="text-[11px] text-text-muted mt-0.5">
-                    {t.reason}
+                    {t(`transferReason.${tr.reason}`, tr.reason)}
                   </div>
                 </div>
               </div>
@@ -248,7 +229,7 @@ export default function ShiftsPage() {
           {/* Templates */}
           <div className="border-t border-border-default pt-3">
             <div className="font-[var(--font-display)] font-semibold text-[13px] text-text-primary mb-2.5">
-              Шаблоны смен
+              {t('shifts.shiftTemplates')}
             </div>
             {templates.slice(0, 3).map(tmpl => (
               <div
@@ -256,21 +237,21 @@ export default function ShiftsPage() {
                 className="flex items-center gap-2.5 py-2 border-b border-border-default"
               >
                 <div className="w-8 h-8 rounded-sm bg-accent-dim flex items-center justify-center text-base shrink-0">
-                  📋
+                  {'\u{1F4CB}'}
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <div className="text-xs font-semibold text-text-primary truncate">
                     {tmpl.name}
                   </div>
                   <div className="text-[11px] text-text-muted">
-                    {`${tmpl.start_hour}:${String(tmpl.start_minute).padStart(2, '0')} · ${tmpl.duration_hours}ч`}
+                    {`${tmpl.start_hour}:${String(tmpl.start_minute).padStart(2, '0')} \u00B7 ${tmpl.duration_hours}${t('analytics.h')}`}
                   </div>
                 </div>
               </div>
             ))}
             {templates.length === 0 && (
               <div className="text-xs text-text-muted">
-                Нет шаблонов
+                {t('shifts.noTemplates')}
               </div>
             )}
           </div>

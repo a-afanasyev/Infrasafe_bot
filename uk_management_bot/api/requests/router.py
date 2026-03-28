@@ -182,7 +182,9 @@ async def update_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager", "applicant")),
 ):
-    result = await db.execute(select(Request).where(Request.request_number == request_number))
+    result = await db.execute(
+        select(Request).where(Request.request_number == request_number).with_for_update()
+    )
     req = result.scalar_one_or_none()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")

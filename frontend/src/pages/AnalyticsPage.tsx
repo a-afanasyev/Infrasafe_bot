@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toZonedTime } from 'date-fns-tz'
 import {
   BarChart,
@@ -17,46 +18,24 @@ import { useShiftStats, useRequestStats, type AnalyticsPeriod } from '../hooks/u
 import { usePageTitle } from '../hooks/usePageTitle'
 import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
 import { formatDateTime } from '../utils/timezone'
+import { tCategory, tStatus } from '../i18n/apiMaps'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import EmptyState from '../components/shared/EmptyState'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const PERIOD_OPTIONS: { label: string; value: AnalyticsPeriod }[] = [
-  { label: '7 дней', value: '7d' },
-  { label: '30 дней', value: '30d' },
-  { label: '90 дней', value: '90d' },
-]
-
-const DAY_ABBR = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  new: 'var(--blue)',
-  pending: 'var(--amber)',
-  in_progress: 'var(--accent)',
-  assigned: 'var(--cyan)',
-  completed: 'var(--emerald)',
-  cancelled: 'var(--text-muted)',
+  'Новая': 'var(--blue)',
+  'Уточнение': 'var(--amber)',
+  'В работе': 'var(--accent)',
+  'Закуп': 'var(--cyan)',
+  'Выполнена': 'var(--emerald)',
+  'Исполнено': 'var(--emerald)',
+  'Принято': 'var(--emerald)',
+  'Отменена': 'var(--text-muted)',
   rejected: 'var(--red)',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  new: 'Новые',
-  pending: 'В ожидании',
-  in_progress: 'В работе',
-  assigned: 'Назначены',
-  completed: 'Завершены',
-  cancelled: 'Отменены',
-  rejected: 'Отклонены',
-}
-
-const EVENT_LABELS: Record<string, string> = {
-  created: 'Создана',
-  assigned: 'Назначена',
-  completed: 'Завершена',
-  cancelled: 'Отменена',
 }
 
 const EVENT_COLORS: Record<string, string> = {
@@ -77,7 +56,7 @@ const PIE_PALETTE = [
   '#14b8a6',
 ]
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ── Sub-components ───────────────────────────────────────────────────────────
 
 interface KpiCardProps {
   label: string
@@ -120,7 +99,7 @@ function KpiCard({ label, value, valueColor, topGradient, change, changeColor }:
   )
 }
 
-// ─── Custom recharts Tooltip ──────────────────────────────────────────────────
+// ── Custom recharts Tooltip ──────────────────────────────────────────────────
 
 function BarTooltip({ active, payload, label }: {
   active?: boolean
@@ -165,12 +144,24 @@ function PieTooltip({ active, payload }: {
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ── Main page ────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
-  usePageTitle('Аналитика')
+  const { t } = useTranslation()
+  usePageTitle(t('nav.analytics'))
   const [period, setPeriod] = useState<AnalyticsPeriod>('7d')
   const [clockStr, setClockStr] = useState('')
+
+  const DAY_ABBR_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+
+  const periodOptions: { label: string; value: AnalyticsPeriod }[] = [
+    { label: t('analytics.period7d'), value: '7d' },
+    { label: t('analytics.period30d'), value: '30d' },
+    { label: t('analytics.period90d'), value: '90d' },
+  ]
+
+  const createdLabel = t('analytics.created')
+  const closedLabel = t('analytics.closed')
 
   // Clock — update every minute (Tashkent time)
   useEffect(() => {
@@ -206,12 +197,12 @@ export default function AnalyticsPage() {
 
   const byDayData = (requestStats?.by_day ?? []).map(d => ({
     date: d.date,
-    Создано: d.created,
-    Закрыто: d.closed,
+    [createdLabel]: d.created,
+    [closedLabel]: d.closed,
   }))
 
   const byCategoryData = Object.entries(requestStats?.by_category ?? {}).map(
-    ([name, value]) => ({ name, value }),
+    ([name, value]) => ({ name: tCategory(name, t), value }),
   )
 
   const byStatusEntries = Object.entries(requestStats?.by_status ?? {})
@@ -227,7 +218,7 @@ export default function AnalyticsPage() {
     return 'var(--text-muted)'
   }
 
-  const rankLabel = (i: number) => ['🥇', '🥈', '🥉'][i] ?? `${i + 1}`
+  const rankLabel = (i: number) => ['\u{1F947}', '\u{1F948}', '\u{1F949}'][i] ?? `${i + 1}`
 
   return (
     <div className="p-5 px-6 flex flex-col gap-4">
@@ -235,7 +226,7 @@ export default function AnalyticsPage() {
       {/* ── Period selector bar ── */}
       <div className="flex items-center justify-between flex-wrap gap-2.5">
         <div className="flex gap-2">
-          {PERIOD_OPTIONS.map(opt => (
+          {periodOptions.map(opt => (
             <Button
               key={opt.value}
               variant={period === opt.value ? 'default' : 'outline'}
@@ -249,21 +240,21 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="text-xs text-text-muted font-[family-name:var(--font-mono)]">
-          Обновлено: {clockStr}
+          {t('analytics.updated')} {clockStr}
         </div>
       </div>
 
       {/* ── Inline error banner ── */}
       {hasError && (
         <div className="p-3 px-4 rounded-sm bg-red/10 border border-red/30 text-red text-[13px]">
-          Не удалось загрузить данные аналитики. Проверьте соединение.
+          {t('analytics.loadError')}
         </div>
       )}
 
       {/* ── KPI grid ── */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard
-          label="Всего заявок"
+          label={t('analytics.totalRequests')}
           value={requestStats?.total_requests ?? '—'}
           valueColor="var(--accent)"
           topGradient="linear-gradient(90deg, #00d4aa, #3b82f6)"
@@ -271,7 +262,7 @@ export default function AnalyticsPage() {
           changeColor="var(--text-muted)"
         />
         <KpiCard
-          label="Среднее время (ч)"
+          label={t('analytics.avgResolution')}
           value={requestStats?.avg_resolution_hours?.toFixed(1) ?? '—'}
           valueColor="var(--amber)"
           topGradient="linear-gradient(90deg, #f59e0b, #ef4444)"
@@ -279,7 +270,7 @@ export default function AnalyticsPage() {
           changeColor="var(--text-muted)"
         />
         <KpiCard
-          label="Удовлетворённость"
+          label={t('analytics.satisfaction')}
           value={requestStats?.avg_satisfaction?.toFixed(1) ?? '—'}
           valueColor="var(--violet)"
           topGradient="linear-gradient(90deg, #8b5cf6, #3b82f6)"
@@ -287,7 +278,7 @@ export default function AnalyticsPage() {
           changeColor="var(--text-muted)"
         />
         <KpiCard
-          label="На смене сейчас"
+          label={t('analytics.onShiftNow')}
           value={shiftStats?.active_executors ?? '—'}
           valueColor="var(--emerald)"
           topGradient="linear-gradient(90deg, #10b981, #14b8a6)"
@@ -300,9 +291,9 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-[2fr_1fr] gap-4">
         {/* Bar chart */}
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
-          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">Заявки по дням</div>
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.requestsByDay')}</div>
           {byDayData.length === 0 ? (
-            <EmptyState icon="📊" title="Нет данных" subtitle="Данные за выбранный период отсутствуют" />
+            <EmptyState icon="\u{1F4CA}" title={t('analytics.noData')} subtitle={t('analytics.noDataPeriod')} />
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart
@@ -317,7 +308,7 @@ export default function AnalyticsPage() {
                 />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(v: string) => DAY_ABBR[toZonedTime(new Date(v), 'Asia/Tashkent').getDay()] ?? v}
+                  tickFormatter={(v: string) => t(`days.short.${DAY_ABBR_KEYS[toZonedTime(new Date(v), 'Asia/Tashkent').getDay()]}`)}
                   tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
@@ -332,8 +323,8 @@ export default function AnalyticsPage() {
                 <Legend
                   wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)', paddingTop: 12 }}
                 />
-                <Bar dataKey="Создано" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="Закрыто" fill="var(--blue)" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                <Bar dataKey={createdLabel} fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                <Bar dataKey={closedLabel} fill="var(--blue)" radius={[3, 3, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -341,9 +332,9 @@ export default function AnalyticsPage() {
 
         {/* Pie chart */}
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden relative">
-          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">По категориям</div>
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.categoryBreakdown')}</div>
           {byCategoryData.length === 0 ? (
-            <EmptyState icon="🥧" title="Нет данных" subtitle="Категории за период отсутствуют" />
+            <EmptyState icon="\u{1F967}" title={t('analytics.noData')} subtitle={t('analytics.noDataCategories')} />
           ) : (
             <>
               {/* Chart + center label */}
@@ -376,7 +367,7 @@ export default function AnalyticsPage() {
                     {byCategoryData.reduce((s, d) => s + d.value, 0)}
                   </div>
                   <div className="text-[11px] text-text-muted mt-0.5">
-                    заявок
+                    {t('analytics.requests')}
                   </div>
                 </div>
               </div>
@@ -407,9 +398,9 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-3 gap-4">
         {/* Col 1 — По статусам */}
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
-          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">По статусам</div>
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.statusDistribution')}</div>
           {byStatusEntries.length === 0 ? (
-            <EmptyState icon="📋" title="Нет данных" />
+            <EmptyState icon="\u{1F4CB}" title={t('analytics.noData')} />
           ) : (
             <div className="flex flex-col gap-2.5">
               {byStatusEntries.map(([status, count]) => {
@@ -423,7 +414,7 @@ export default function AnalyticsPage() {
                         style={{ background: color }}
                       />
                       <span className="flex-1 text-[13px] text-text-secondary truncate">
-                        {STATUS_LABELS[status] ?? status}
+                        {tStatus(status, t)}
                       </span>
                       <span className="text-[13px] font-[family-name:var(--font-mono)] text-text-primary font-semibold">
                         {count}
@@ -445,9 +436,9 @@ export default function AnalyticsPage() {
 
         {/* Col 2 — Топ исполнителей */}
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
-          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">Топ исполнителей</div>
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.topExecutors')}</div>
           {topExecutors.length === 0 ? (
-            <EmptyState icon="🏆" title="Нет данных" />
+            <EmptyState icon="\u{1F3C6}" title={t('analytics.noData')} />
           ) : (
             <div className="flex flex-col gap-3">
               {topExecutors.map((ex, idx) => {
@@ -481,10 +472,10 @@ export default function AnalyticsPage() {
                     {/* Info */}
                     <div className="flex-1 overflow-hidden">
                       <div className="text-[13px] font-semibold text-text-primary truncate">
-                        {ex.name ?? 'Неизвестно'}
+                        {ex.name ?? t('analytics.unknown')}
                       </div>
                       <div className="text-[11px] text-text-muted mt-0.5">
-                        {ex.completed} заявки · {ex.avg_hours?.toFixed(1) ?? '?'}ч
+                        {ex.completed} {t('analytics.requests')} · {ex.avg_hours?.toFixed(1) ?? '?'}{t('analytics.h')}
                       </div>
                     </div>
 
@@ -501,9 +492,9 @@ export default function AnalyticsPage() {
 
         {/* Col 3 — Последние действия */}
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
-          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">Последние действия</div>
+          <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.recentActions')}</div>
           {recentActions.length === 0 ? (
-            <EmptyState icon="📜" title="Нет действий" />
+            <EmptyState icon="\u{1F4DC}" title={t('analytics.noActions')} />
           ) : (
             <div className="flex flex-col">
               {recentActions.map((item, idx) => (
@@ -522,13 +513,13 @@ export default function AnalyticsPage() {
 
                   <div className="flex-1 overflow-hidden">
                     <div className="text-[13px] text-text-secondary leading-snug truncate">
-                      {EVENT_LABELS[item.event_type] ?? item.event_type}{' '}
+                      {t(`analyticsEvent.${item.event_type}`, item.event_type)}{' '}
                       <span className="text-text-primary font-semibold">
                         #{item.request_number}
                       </span>
                       {item.executor_name && (
                         <span className="text-text-muted">
-                          {' · '}{item.executor_name}
+                          {' \u00B7 '}{item.executor_name}
                         </span>
                       )}
                     </div>

@@ -1,5 +1,7 @@
+import { useTranslation } from 'react-i18next'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
+import { tSpecialization } from '../../i18n/apiMaps'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -10,9 +12,10 @@ interface Props {
 }
 
 export default function PendingApprovalCard({ employee, onApprove, onReject, isPending }: Props) {
+  const { t } = useTranslation()
   const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
-  const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Без имени'
+  const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
 
   return (
     <div className="flex flex-row items-center gap-3.5 bg-bg-card border border-border-default rounded-default p-4">
@@ -45,7 +48,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
                   color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
                 }}
               >
-                {spec}
+                {tSpecialization(spec, t)}
               </span>
             ))}
           </div>
@@ -54,7 +57,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
 
       {/* Time-ago label */}
       <div className="text-[11px] text-amber font-medium shrink-0 text-right mr-1">
-        Ожидает одобрения
+        {t('employees.pendingApproval')}
       </div>
 
       {/* Button group */}
@@ -64,7 +67,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
           disabled={isPending}
           size="sm"
         >
-          Одобрить
+          {t('employees.approve')}
         </Button>
         <Button
           onClick={() => onReject(employee.id)}
@@ -73,7 +76,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
           size="sm"
           className="border-red text-red hover:bg-red/10"
         >
-          Отклонить
+          {t('employees.reject')}
         </Button>
       </div>
     </div>

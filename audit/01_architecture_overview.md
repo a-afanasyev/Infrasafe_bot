@@ -36,7 +36,11 @@
 | Drag-and-Drop (Kanban) | @dnd-kit/core | -- |
 | HTTP Client | Axios | -- |
 | Иконки | Lucide React | -- |
-| CSS | Tailwind CSS + CSS Variables | -- |
+| CSS | Tailwind CSS + shadcn/ui | -- |
+| UI компоненты | shadcn/ui (Dialog, Toast/Sonner, ConfirmDialog) | -- |
+| i18n | i18next + react-i18next | -- |
+| Уведомления | Sonner (toast) | -- |
+| Тема | dark/light через CSS variables | -- |
 
 ## 1.2. Компоненты системы
 
@@ -48,28 +52,33 @@ graph TB
         MG[Менеджер]
     end
 
-    subgraph "UK Management Bot (Docker Compose)"
-        subgraph "app container"
+    subgraph "UK Management (Docker Compose)"
+        subgraph "app container (uk-management-bot)"
             BOT[Telegram Bot\naiogram 3.x]
             HEALTH[Health Server\n:8000]
             SCHED[Shift Scheduler\nAPScheduler]
         end
-        subgraph "web container"
+        subgraph "api container (uk-management-api)"
             API[FastAPI Management API\n/api/v2/]
             WS[WebSocket\n/ws/v2/kanban\n/ws/v2/shifts]
+            OUTBOX[Webhook Outbox\nProcessor 10s poll]
+        end
+        subgraph "web container (uk-web-registration)"
             WEB[Web Registration\nJinja2 Templates]
+        end
+        subgraph "frontend container (uk-frontend)"
+            DASH[Dashboard SPA\nReact + TypeScript\nnginx :80]
+            TWA[Telegram Web App\nReact]
         end
         PG[(PostgreSQL 15\n:5432)]
         RD[(Redis 7\n:6379)]
     end
 
-    subgraph "Frontend SPA"
-        DASH[Dashboard\nReact + TypeScript]
-        TWA[Telegram Web App\nReact]
+    subgraph "External"
+        TG[Telegram Bot API]
+        MEDIA[Media Service\n:8001]
+        INFRA[InfraSafe\n:3000]
     end
-
-    TG[Telegram Bot API]
-    MEDIA[Media Service\n:8001]
 
     AP -->|сообщения| TG
     EX -->|сообщения| TG
@@ -83,8 +92,8 @@ graph TB
     WS <-->|Pub/Sub| RD
     WEB --> PG
     SCHED --> PG
-    DASH <-->|REST + WS| API
-    DASH <-->|WebSocket| WS
+    OUTBOX -->|HMAC-SHA256 webhooks| INFRA
+    DASH <-->|REST + WS via nginx| API
     TWA <-->|REST| API
     MG -->|браузер| DASH
     AP -->|TWA| TWA

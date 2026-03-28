@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCreateApartment, useUpdateApartment } from '../../hooks/useAddresses'
 import type { ApartmentBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function ApartmentFormModal({ apartment, buildingId, onClose }: Props) {
+  const { t } = useTranslation()
   const [apartmentNumber, setApartmentNumber] = useState(apartment?.apartment_number ?? '')
   const [entrance, setEntrance] = useState<string>(apartment?.entrance != null ? String(apartment.entrance) : '')
   const [floor, setFloor] = useState<string>(apartment?.floor != null ? String(apartment.floor) : '')
@@ -55,12 +57,12 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{apartment ? 'Редактировать квартиру' : 'Новая квартира'}</DialogTitle>
+          <DialogTitle>{apartment ? t('addressForms.editApartment') : t('addressForms.newApartment')}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Номер квартиры *</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.aptNumberLabel')}</Label>
             <Input
               value={apartmentNumber}
               onChange={e => setApartmentNumber(e.target.value)}
@@ -70,7 +72,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">Подъезд</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.entranceLabel')}</Label>
               <Input
                 type="number"
                 value={entrance}
@@ -78,7 +80,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
               />
             </div>
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">Этаж</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.floorLabel')}</Label>
               <Input
                 type="number"
                 value={floor}
@@ -89,7 +91,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">Комнаты</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.roomsLabel')}</Label>
               <Input
                 type="number"
                 value={roomsCount}
@@ -97,7 +99,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
               />
             </div>
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">Площадь м&sup2;</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.areaLabel')}</Label>
               <Input
                 type="number"
                 value={area}
@@ -108,7 +110,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
           </div>
 
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Описание</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.descriptionLabel')}</Label>
             <Textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -117,18 +119,18 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
 
           {mutation.error && (
             <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || 'Ошибка при сохранении'}
+              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || t('addressForms.saveError')}
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={handleSubmit}
             disabled={mutation.isPending || !apartmentNumber.trim()}
           >
-            {mutation.isPending ? 'Сохранение...' : apartment ? 'Сохранить' : 'Создать'}
+            {mutation.isPending ? t('common.saving') : apartment ? t('common.save') : t('common.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

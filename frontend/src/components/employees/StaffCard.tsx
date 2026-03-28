@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
+import { tSpecialization } from '../../i18n/apiMaps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVerify, isBlockPending }: Props) {
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   const navigate = useNavigate()
 
@@ -23,7 +26,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
   const isOnShift = employee.active_shift_id !== null
   const isVerified = employee.verification_status === 'verified'
   const isBlocked = employee.status === 'blocked'
-  const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || 'Без имени'
+  const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
 
   return (
     <div
@@ -75,7 +78,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
                     color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
                   }}
                 >
-                  {spec}
+                  {tSpecialization(spec, t)}
                 </span>
               ))}
             </div>
@@ -86,7 +89,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
         <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
           {isBlocked && (
             <div className="text-[10px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red">
-              Заблокирован
+              {t('employees.blocked')}
             </div>
           )}
           <div
@@ -97,7 +100,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
                 : 'bg-amber/15 text-amber'
             )}
           >
-            {isVerified ? '✓ Верифицирован' : '⏳ На проверке'}
+            {isVerified ? `✓ ${t('employees.verified')}` : `⏳ ${t('employees.pendingVerification')}`}
           </div>
         </div>
       </div>
@@ -106,13 +109,13 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
       <div className="grid grid-cols-2 bg-bg-surface border-t border-b border-border-default">
         {[
           {
-            value: isOnShift ? 'На смене' : 'Не на смене',
-            label: 'статус',
+            value: isOnShift ? t('employees.activeShift') : t('employees.offShift'),
+            label: t('employees.statusLabel'),
             accent: isOnShift,
           },
           {
             value: employee.active_shift_id !== null ? `#${employee.active_shift_id}` : '—',
-            label: 'смена',
+            label: t('employees.shiftLabel'),
             accent: false,
           },
         ].map((cell, i) => (
@@ -146,7 +149,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
           onClick={() => navigate(`/dashboard/employees/${employee.id}`)}
           className="px-0 text-xs text-text-secondary"
         >
-          Профиль
+          {t('employees.profile')}
         </Button>
         <div className="flex-1" />
         {!isVerified ? (
@@ -155,7 +158,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
             onClick={() => onVerify?.(employee)}
             className="text-xs"
           >
-            Верифицировать
+            {t('employees.verify')}
           </Button>
         ) : (
           <Button
@@ -163,7 +166,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
             onClick={() => onAssign?.(employee)}
             className="text-xs"
           >
-            Назначить
+            {t('employees.assign')}
           </Button>
         )}
         <Button
@@ -176,7 +179,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
             isBlocked ? 'text-amber' : 'text-red'
           )}
         >
-          {isBlocked ? 'Разблокировать' : 'Блок'}
+          {isBlocked ? t('employees.unblock') : t('employees.blockShort')}
         </Button>
         <Button
           variant="ghost"
@@ -184,7 +187,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
           onClick={() => onDelete?.(employee)}
           className="text-xs px-2 text-text-muted hover:text-red"
         >
-          Удалить
+          {t('common.delete')}
         </Button>
       </div>
     </div>

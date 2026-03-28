@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import traceback
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ErrorEvent
 from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.session import engine, Base, SessionLocal
@@ -257,6 +259,41 @@ async def main():
     from uk_management_bot.middlewares.throttling import ThrottlingMiddleware
     dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
 
+    # Глобальный обработчик ошибок
+    from uk_management_bot.utils.helpers import get_text, get_user_language
+
+    async def global_error_handler(event: ErrorEvent) -> bool:
+        logger.error(
+            f"Unhandled exception: {event.exception!r}\n"
+            + traceback.format_exc()
+        )
+        try:
+            update = event.update
+            # Определяем chat_id и user_id из апдейта
+            chat_id: int | None = None
+            user_id: int | None = None
+            if update.message:
+                chat_id = update.message.chat.id
+                user_id = update.message.from_user.id if update.message.from_user else None
+            elif update.callback_query:
+                chat_id = update.callback_query.message.chat.id if update.callback_query.message else None
+                user_id = update.callback_query.from_user.id
+            elif update.inline_query:
+                user_id = update.inline_query.from_user.id
+            if chat_id and user_id:
+                db = SessionLocal()
+                try:
+                    lang = get_user_language(user_id, db)
+                finally:
+                    db.close()
+                error_text = get_text("errors.unexpected", language=lang)
+                await bot.send_message(chat_id, error_text)
+        except Exception as notify_err:
+            logger.warning(f"Не удалось отправить сообщение об ошибке пользователю: {notify_err}")
+        return True
+
+    dp.errors.register(global_error_handler)
+
     # Регистрируем роутеры
     dp.include_router(start_router)  # /start FIRST — catches /start from any FSM state
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
@@ -348,6 +385,16 @@ async def main():
         # Останавливаем health сервер
         stop_health_server()
         await bot.session.close()
+
+        # Закрываем DB-пулы (engine уже импортирован на уровне модуля)
+        try:
+            from uk_management_bot.database.session import async_engine
+            engine.dispose()
+            if async_engine:
+                await async_engine.dispose()
+            logger.info("DB connection pools disposed")
+        except Exception as e:
+            logger.error(f"Ошибка закрытия DB-пулов: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())

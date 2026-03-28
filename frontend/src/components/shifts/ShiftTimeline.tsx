@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toTashkent, formatTime } from '../../utils/timezone'
 import EmptyState from '../shared/EmptyState'
@@ -105,6 +106,7 @@ function computeBlocks(shift: ShiftBrief): ShiftBlock[] {
 }
 
 export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
+  const { t } = useTranslation()
   const [currentHour, setCurrentHour] = useState(new Date().getHours())
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -118,9 +120,9 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
   if (shifts.length === 0) {
     return (
       <EmptyState
-        icon="🕐"
-        title="Нет смен"
-        subtitle="Создайте смену для этого дня"
+        icon={'\u{1F550}'}
+        title={t('shifts.noShifts')}
+        subtitle={t('shifts.noShiftsDesc')}
       />
     )
   }
@@ -148,7 +150,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: '180px repeat(24, minmax(44px, 1fr))', minWidth: '1200px' }}>
         {/* Header row */}
         <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center">
-          Исполнитель
+          {t('shifts.executorLabel')}
         </div>
         {hours.map(h => (
           <div
@@ -222,7 +224,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                     <div
                       key={`${block.shift.id}-${idx}`}
                       onClick={() => onShiftClick(block.shift)}
-                      title={`${displayName} · ${label} · ${block.shift.status}`}
+                      title={`${displayName} \u00B7 ${label} \u00B7 ${t(`shiftStatus.${block.shift.status}`, block.shift.status)}`}
                       className="absolute cursor-pointer rounded-[6px] px-1.5 py-1 overflow-hidden flex flex-col justify-center gap-px transition-colors duration-150"
                       style={{
                         top: '-52px',
@@ -246,7 +248,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                         className="text-[10px] font-semibold truncate"
                         style={{ color }}
                       >
-                        {label} · {block.shift.status}
+                        {label} · {t(`shiftStatus.${block.shift.status}`, block.shift.status)}
                       </span>
                       <span className="text-[10px] text-text-muted font-[var(--font-mono)] whitespace-nowrap">
                         {block.shift.current_request_count}/{block.shift.max_requests}

@@ -142,12 +142,12 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
                 return
     
     # Если нет токена, продолжаем обычную обработку /start
-    await handle_regular_start(message, db, roles, active_role, user_status)
+    await handle_regular_start(message, db, roles, active_role, user_status, language=language)
 
 async def handle_regular_start(message: Message, db: Session, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru"):
     """Обработка обычного /start без токена"""
     auth_service = AuthService(db)
-    
+
     # Получаем или создаем пользователя
     user = await auth_service.get_or_create_user(
         telegram_id=message.from_user.id,
@@ -155,14 +155,7 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
         first_name=message.from_user.first_name,
         last_name=message.from_user.last_name
     )
-    
-    # Обновляем язык пользователя
-    if message.from_user.language_code:
-        await auth_service.update_user_language(
-            message.from_user.id, 
-            message.from_user.language_code
-        )
-    
+
     # Проверяем, нужен ли онбординг
     lang = language
     
@@ -234,7 +227,7 @@ async def cmd_menu(message: Message, state: FSMContext, db: Session, roles: list
     logger.info(f"[CMD_MENU] Очищено состояние FSM для пользователя {message.from_user.id}")
     
     # Показываем главное меню
-    await handle_regular_start(message, db, roles, active_role, user_status)
+    await handle_regular_start(message, db, roles, active_role, user_status, language=language)
 
 # Удаляем этот обработчик, так как он не нужен
 # Telegram автоматически обрабатывает кнопку "Начать" и отправляет /start
@@ -251,13 +244,6 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
             lang = language
             await callback.answer(get_text("base.handlers.error_user_not_found", language=lang), show_alert=True)
             return
-        
-        # Обновляем язык пользователя
-        if callback.from_user.language_code:
-            await auth_service.update_user_language(
-                callback.from_user.id, 
-                callback.from_user.language_code
-            )
         
         lang = language
         welcome_text = get_text("bot.restarted", language=lang)

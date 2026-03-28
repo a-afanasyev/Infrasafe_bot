@@ -1,7 +1,9 @@
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { RequestCard as TCard } from '../../hooks/useKanban'
+import { tUrgency, tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 
 const URGENCY: Record<string, { bg: string; text: string }> = {
@@ -15,7 +17,7 @@ const SOURCE_ICON: Record<string, string> = {
   bot: '🤖', twa: '📱', web: '🌐', call_center: '📞',
 }
 
-const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])
+import { FROZEN_STATUSES } from '../../constants'
 
 interface Props {
   card: TCard
@@ -75,6 +77,7 @@ export default function RequestCard({ card, onClick, isOverlay }: Props) {
 }
 
 function CardContent({ card, urgency }: { card: TCard; urgency: { bg: string; text: string } | undefined }) {
+  const { t } = useTranslation()
   return (
     <>
       {/* Header row */}
@@ -89,7 +92,7 @@ function CardContent({ card, urgency }: { card: TCard; urgency: { bg: string; te
 
       {/* Category */}
       <div className="font-[family-name:var(--font-display)] font-bold text-[13px] text-text-primary mb-[3px]">
-        {card.category}
+        {tCategory(card.category, t)}
       </div>
 
       {/* Description */}
@@ -118,12 +121,12 @@ function CardContent({ card, urgency }: { card: TCard; urgency: { bg: string; te
               'text-[10px] font-bold px-2 py-0.5 rounded-full font-[family-name:var(--font-display)]',
               urgency.bg, urgency.text
             )}>
-              {card.urgency}
+              {tUrgency(card.urgency!, t)}
             </span>
           )}
           {card.manager_confirmed && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue/12 text-blue font-[family-name:var(--font-display)]">
-              ✓ Подтверждено
+              ✓ {t('kanban.confirmed')}
             </span>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateEmployee, useCreateInvite } from '@/hooks/useEmployees'
-import { SPEC_DISPLAY } from '@/utils/employeeUtils'
+import { getSpecDisplay } from '@/utils/employeeUtils'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -19,15 +20,16 @@ interface Props {
   onClose: () => void
 }
 
-const SPEC_KEYS = Object.keys(SPEC_DISPLAY)
-
-const EXPIRY_OPTIONS = [
-  { value: 1, label: '1 час' },
-  { value: 24, label: '24 часа' },
-  { value: 168, label: '7 дней' },
-]
+const SPEC_KEYS = ['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation']
 
 export default function AddEmployeeModal({ open, onClose }: Props) {
+  const { t } = useTranslation()
+
+  const EXPIRY_OPTIONS = [
+    { value: 1, label: t('employeeModal.expiry1h', '1 час') },
+    { value: 24, label: t('employeeModal.expiry24h', '24 часа') },
+    { value: 168, label: t('employeeModal.expiry7d', '7 дней') },
+  ]
   // Form state
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -97,7 +99,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
               },
               onError: () => {
                 // Employee created but invite failed — still show success, just no link
-                toast.info('Сотрудник создан, но не удалось сгенерировать приглашение')
+                toast.info(t('employeeModal.createdNoInvite'))
               },
             },
           )
@@ -109,9 +111,9 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
   async function copyToClipboard(text: string) {
     try {
       await navigator.clipboard.writeText(text)
-      toast.success('Скопировано')
+      toast.success(t('employeeModal.inviteCopied'))
     } catch {
-      toast.error('Не удалось скопировать')
+      toast.error(t('employeeModal.copyFailed'))
     }
   }
 
@@ -123,11 +125,11 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Добавить сотрудника</DialogTitle>
+          <DialogTitle>{t('employeeModal.titleCreate')}</DialogTitle>
           <DialogDescription>
             {inviteResult
-              ? 'Сотрудник создан. Отправьте приглашение для подключения к боту.'
-              : 'Заполните данные — сотрудник будет создан и получит ссылку-приглашение'}
+              ? t('employeeModal.createdDesc')
+              : t('employeeModal.formDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -136,26 +138,26 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Имя</Label>
-                <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Иван" />
+                <Label>{t('employeeModal.firstName')}</Label>
+                <Input value={firstName} onChange={e => setFirstName(e.target.value)} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Фамилия</Label>
-                <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Петров" />
+                <Label>{t('employeeModal.lastName')}</Label>
+                <Input value={lastName} onChange={e => setLastName(e.target.value)} />
               </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Телефон</Label>
+              <Label>{t('employeeModal.phone')}</Label>
               <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+998901234567" />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Роль</Label>
+              <Label>{t('employeeModal.role')}</Label>
               <div className="flex gap-2">
                 {([
-                  { value: 'executor' as const, label: 'Исполнитель' },
-                  { value: 'manager' as const, label: 'Менеджер' },
+                  { value: 'executor' as const, label: t('role.executor') },
+                  { value: 'manager' as const, label: t('role.manager') },
                 ]).map(r => (
                   <button
                     key={r.value}
@@ -175,7 +177,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
 
             {role === 'executor' && (
               <div className="flex flex-col gap-1.5">
-                <Label>Специализации</Label>
+                <Label>{t('employeeModal.specializations')}</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {SPEC_KEYS.map(key => (
                     <button
@@ -188,7 +190,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
                           : 'bg-bg-card border-border-default text-text-secondary',
                       )}
                     >
-                      {SPEC_DISPLAY[key]}
+                      {getSpecDisplay(key, t)}
                     </button>
                   ))}
                 </div>
@@ -196,11 +198,11 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
             )}
 
             <div className="flex flex-col gap-1.5">
-              <Label>Статус</Label>
+              <Label>{t('employees.statusLabel')}</Label>
               <div className="flex gap-2">
                 {([
-                  { value: 'approved' as const, label: 'Одобрен' },
-                  { value: 'pending' as const, label: 'Ожидает одобрения' },
+                  { value: 'approved' as const, label: t('approvalStatus.approved') },
+                  { value: 'pending' as const, label: t('approvalStatus.pending') },
                 ]).map(s => (
                   <button
                     key={s.value}
@@ -219,7 +221,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Срок действия приглашения</Label>
+              <Label>{t('employeeModal.inviteHours')}</Label>
               <div className="flex gap-2">
                 {EXPIRY_OPTIONS.map(o => (
                   <button
@@ -239,7 +241,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
             </div>
 
             <Button onClick={handleCreate} disabled={isCreateDisabled} className="mt-1">
-              {isPending ? 'Создание...' : 'Создать и получить ссылку'}
+              {isPending ? t('common.creating') : t('employeeModal.createAction')}
             </Button>
           </div>
         )}
@@ -248,11 +250,11 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
         {inviteResult && (
           <div className="flex flex-col gap-3">
             <div className="bg-emerald/10 border border-emerald/20 rounded-default p-3 text-sm text-emerald">
-              Сотрудник {firstName} {lastName} успешно создан
+              {t('employeeModal.createdSuccess', { name: `${firstName} ${lastName}` })}
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Токен приглашения</Label>
+              <Label>{t('employeeModal.inviteToken')}</Label>
               <div className="flex gap-2">
                 <Input
                   readOnly
@@ -264,13 +266,13 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
                   size="sm"
                   onClick={() => copyToClipboard(inviteResult.token)}
                 >
-                  Копировать
+                  {t('employeeModal.copyLink')}
                 </Button>
               </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Ссылка на бота</Label>
+              <Label>{t('employeeModal.inviteLink')}</Label>
               <div className="flex gap-2">
                 <Input
                   readOnly
@@ -282,22 +284,21 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
                   size="sm"
                   onClick={() => copyToClipboard(inviteResult.bot_link)}
                 >
-                  Копировать
+                  {t('employeeModal.copyLink')}
                 </Button>
               </div>
             </div>
 
             <p className="text-xs text-text-muted">
-              Отправьте сотруднику ссылку на бота и токен. В боте нужно использовать команду{' '}
-              <code className="bg-bg-surface px-1 py-0.5 rounded text-[11px]">/join {'<токен>'}</code>
+              {t('employeeModal.inviteInstruction')}
             </p>
 
             <div className="flex gap-2 mt-1">
               <Button variant="outline" className="flex-1" onClick={() => reset()}>
-                Добавить ещё
+                {t('employeeModal.addAnother')}
               </Button>
               <Button className="flex-1" onClick={handleClose}>
-                Готово
+                {t('employeeModal.done')}
               </Button>
             </div>
           </div>

@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -19,11 +22,42 @@ from uk_management_bot.config.settings import settings
 limiter = Limiter(key_func=get_remote_address)
 
 
+_logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
+    # startup — launch outbox processor if enabled
+    from uk_management_bot.services.webhook_sender import process_outbox
+
+    async def _outbox_loop():
+        while True:
+            try:
+                await process_outbox()
+            except Exception:
+                _logger.exception("Outbox processor error")
+            await asyncio.sleep(10)
+
+    task = None
+    if settings.INFRASAFE_WEBHOOK_ENABLED:
+        task = asyncio.create_task(_outbox_loop())
+        _logger.info("Webhook outbox processor started (10s interval)")
     yield
     # shutdown
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    # Dispose DB connection pools
+    try:
+        from uk_management_bot.database.session import async_engine
+        if async_engine:
+            await async_engine.dispose()
+            _logger.info("API DB pool disposed")
+    except Exception:
+        _logger.exception("Error disposing DB pool")
 
 
 app = FastAPI(
@@ -40,8 +74,8 @@ allowed_origins = [
     "https://web.telegram.org",
 ]
 if settings.DEBUG:
-    allowed_origins.extend(["http://localhost:3000", "http://localhost:5173"])
-elif settings.FRONTEND_URL:
+    allowed_origins.extend(["http://localhost:3000", "http://localhost:3002", "http://localhost:5173"])
+if settings.FRONTEND_URL and settings.FRONTEND_URL not in allowed_origins:
     allowed_origins.append(settings.FRONTEND_URL)
 
 app.add_middleware(

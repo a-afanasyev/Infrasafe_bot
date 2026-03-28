@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiClient } from '../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
+import { tCategory, tUrgency } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -17,16 +19,12 @@ import { Textarea } from '@/components/ui/textarea'
 
 interface Props { isOpen: boolean; onClose: () => void }
 
-// Synced with TWACreatePage.tsx — 10 categories
-const CATEGORIES = [
-  'Электрика', 'Сантехника', 'Отопление', 'Вентиляция',
-  'Лифт', 'Уборка', 'Благоустройство', 'Безопасность',
-  'Интернет/ТВ', 'Другое',
-]
+import { CATEGORIES, URGENCIES } from '../../constants'
 
 const INITIAL_FORM = { category: '', urgency: 'Обычная', description: '', address: '' }
 
 export default function CallCenterModal({ isOpen, onClose }: Props) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [residents, setResidents] = useState<Array<{ id: number; full_name: string; phone: string }>>([])
   const [selected, setSelected] = useState<number | null>(null)
@@ -50,13 +48,13 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
       const { data } = await apiClient.get('/api/v2/callcenter/search-resident', { params: { q: query } })
       setResidents(data)
     } catch {
-      setError('Ошибка поиска жителя')
+      setError(t('errors.searchResident'))
     }
   }
 
   const submit = async () => {
     if (!form.address.trim()) {
-      setError('Укажите адрес')
+      setError(t('errors.specifyAddress'))
       return
     }
     setLoading(true)
@@ -70,7 +68,7 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
       onClose()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(msg ?? 'Ошибка при создании заявки')
+      setError(msg ?? t('errors.createRequest'))
     } finally {
       setLoading(false)
     }
@@ -80,19 +78,19 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Создание заявки по звонку</DialogTitle>
+          <DialogTitle>{t('callcenter.title')}</DialogTitle>
         </DialogHeader>
 
         {/* Resident search */}
         <div className="flex gap-2">
           <Input
             className="flex-1"
-            placeholder="Телефон или ФИО жителя"
+            placeholder={t('callcenter.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && search()}
           />
-          <Button onClick={search}>Найти</Button>
+          <Button onClick={search}>{t('callcenter.find')}</Button>
         </div>
 
         {residents.length > 0 && (
@@ -117,36 +115,36 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
 
         {/* Category */}
         <div className="space-y-1.5">
-          <Label htmlFor="cc-category">Категория</Label>
+          <Label htmlFor="cc-category">{t('callcenter.categoryLabel')}</Label>
           <Select
             id="cc-category"
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
           >
-            <option value="">Категория...</option>
-            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            <option value="">{t('callcenter.categoryPlaceholder')}</option>
+            {CATEGORIES.map(c => <option key={c} value={c}>{tCategory(c, t)}</option>)}
           </Select>
         </div>
 
         {/* Urgency */}
         <div className="space-y-1.5">
-          <Label htmlFor="cc-urgency">Срочность</Label>
+          <Label htmlFor="cc-urgency">{t('callcenter.urgencyLabel')}</Label>
           <Select
             id="cc-urgency"
             value={form.urgency}
             onChange={(e) => setForm({ ...form, urgency: e.target.value })}
           >
-            {['Обычная', 'Средняя', 'Срочная', 'Критическая'].map(u => <option key={u}>{u}</option>)}
+            {URGENCIES.map(u => <option key={u} value={u}>{tUrgency(u, t)}</option>)}
           </Select>
         </div>
 
         {/* Description */}
         <div className="space-y-1.5">
-          <Label htmlFor="cc-desc">Описание проблемы</Label>
+          <Label htmlFor="cc-desc">{t('callcenter.descriptionLabel')}</Label>
           <Textarea
             id="cc-desc"
             rows={3}
-            placeholder="Описание проблемы"
+            placeholder={t('callcenter.descriptionPlaceholder')}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
@@ -154,10 +152,10 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
 
         {/* Address (required) */}
         <div className="space-y-1.5">
-          <Label htmlFor="cc-address">Адрес / квартира *</Label>
+          <Label htmlFor="cc-address">{t('callcenter.addressLabel')}</Label>
           <Input
             id="cc-address"
-            placeholder="Адрес / квартира *"
+            placeholder={t('callcenter.addressPlaceholder')}
             value={form.address}
             onChange={(e) => setForm({ ...form, address: e.target.value })}
           />
@@ -166,12 +164,12 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
         {error && <p className="text-red text-sm">{error}</p>}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={submit}
             disabled={loading || !form.category || !form.description || !form.address.trim()}
           >
-            {loading ? 'Создаю...' : 'Создать заявку'}
+            {loading ? t('callcenter.submitLoading') : t('callcenter.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>
