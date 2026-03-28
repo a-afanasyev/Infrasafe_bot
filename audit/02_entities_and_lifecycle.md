@@ -28,6 +28,15 @@ erDiagram
     Building ||--o{ Apartment : "содержит"
     Apartment ||--o{ UserApartment : "привязана к"
 
+    WebhookOutbox {
+        int id PK
+        string event_id UK
+        string event
+        string endpoint
+        json payload
+        string status
+    }
+
     Shift ||--o{ ShiftAssignment : "содержит"
     Shift ||--o{ ShiftTransfer : "передаётся"
     Shift }o--|| ShiftTemplate : "создана по"
@@ -408,3 +417,27 @@ stateDiagram-v2
 | `device_info` | Text | Информация об устройстве |
 
 Свойство `is_valid` проверяет: `revoked_at is None AND expires_at > now()`.
+
+## 2.13. WebhookOutbox (Webhook Outbox) — добавлено 2026-03-28
+
+**Таблица:** `webhook_outbox`
+
+Transactional Outbox для надёжной доставки webhook-уведомлений в InfraSafe.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | Integer PK | ID записи |
+| `event_id` | String(36) UNIQUE | UUID события (для идемпотентности) |
+| `event` | String(50) | Тип события (`building.created`, `building.updated`, `building.deleted`) |
+| `endpoint` | String(200) | Путь API InfraSafe (`/api/webhooks/uk/building`) |
+| `payload` | JSON | Полный payload для отправки |
+| `status` | String(20) | `pending` → `sent` / `failed` |
+| `attempts` | Integer | Количество попыток отправки |
+| `last_error` | Text | Последняя ошибка (null при успехе) |
+| `retry_after` | DateTime | Время следующей попытки (exponential backoff) |
+| `created_at` | DateTime | Время создания записи |
+| `sent_at` | DateTime | Время успешной доставки |
+
+**Индексы:** `ix_webhook_outbox_status_created` (status, created_at) — для эффективного polling.
+
+**Lifecycle:** `pending` → processor poll → send_webhook() → `sent` (или retry → `failed` после 3 попыток).
