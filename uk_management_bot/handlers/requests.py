@@ -1394,9 +1394,18 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                     if assignment.group_specialization in executor_specializations:
                         has_access = True
         else:
-            # Для заявителей и других ролей: проверяем владение заявкой
+            # Для заявителей и других ролей: проверяем владение заявкой или квартиры
             if request.user_id == user.id:
                 has_access = True
+            elif request.apartment_id:
+                from uk_management_bot.database.models.user_apartment import UserApartment
+                is_resident = db_session.query(UserApartment).filter(
+                    UserApartment.user_id == user.id,
+                    UserApartment.apartment_id == request.apartment_id,
+                    UserApartment.status == "approved",
+                ).first()
+                if is_resident:
+                    has_access = True
 
         if not has_access:
             await callback.answer(get_text("requests.no_access_to_request", language=lang), show_alert=True)

@@ -62,13 +62,28 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
             await message.answer(get_text("common.user_not_found", language=lang))
             return
 
-        # Получаем заявки пользователя со статусом "Выполнена" (подтверждено менеджером, ждёт приёмки)
+        # Получаем заявки, ожидающие приёмки:
+        # 1. Свои заявки (user_id == user.id)
+        # 2. Заявки соседей по квартире (apartment_id в квартирах пользователя)
+        from sqlalchemy import or_
+        from uk_management_bot.database.models.user_apartment import UserApartment
+
+        user_apartment_ids = [
+            ua.apartment_id for ua in
+            db.query(UserApartment.apartment_id)
+            .filter(UserApartment.user_id == user.id, UserApartment.status == "approved")
+            .all()
+        ]
+
+        ownership_filter = [Request.user_id == user.id]
+        if user_apartment_ids:
+            ownership_filter.append(Request.apartment_id.in_(user_apartment_ids))
+
         requests = (
             db.query(Request)
             .filter(
-                Request.user_id == user.id,
-                Request.status == REQUEST_STATUS_EXECUTED,
-                Request.manager_confirmed == True,
+                or_(*ownership_filter),
+                Request.status == REQUEST_STATUS_COMPLETED,
             )
             .order_by(Request.updated_at.desc())
             .limit(10)
