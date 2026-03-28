@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Phone } from 'lucide-react'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import CallCenterModal from '../components/callcenter/CallCenterModal'
@@ -8,7 +9,8 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 
 export default function KanbanPage() {
-  usePageTitle('Заявки')
+  const { t } = useTranslation()
+  usePageTitle(t('nav.requests'))
   const [callCenterOpen, setCallCenterOpen] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
   const { setActions, clearActions } = useTopbar()
@@ -20,7 +22,7 @@ export default function KanbanPage() {
         size="sm"
       >
         <Phone size={14} />
-        Создать по звонку
+        {t('kanban.createByCall')}
       </Button>
     )
     return clearActions

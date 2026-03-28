@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useShift, useEndShift } from '../../hooks/useShifts'
 import { formatTime, formatDateTime } from '../../utils/timezone'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -17,13 +18,6 @@ interface Props {
   onClose: () => void
 }
 
-const SHIFT_TYPE_LABELS: Record<string, string> = {
-  regular: 'Обычная',
-  emergency: 'Экстренная',
-  overtime: 'Сверхурочная',
-  maintenance: 'Обслуживание',
-}
-
 const SHIFT_TYPE_COLORS: Record<string, string> = {
   regular: '#3b82f6',
   emergency: '#ef4444',
@@ -39,6 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function ShiftDetailModal({ shiftId, onClose }: Props) {
+  const { t } = useTranslation()
   const { data: shift, isLoading } = useShift(shiftId)
   const endShift = useEndShift()
   const [confirmEndOpen, setConfirmEndOpen] = useState(false)
@@ -62,7 +57,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
       <Dialog open={shiftId !== null} onOpenChange={(open) => { if (!open) onClose() }}>
         <DialogContent className="max-w-[480px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Детали смены #{shiftId}</DialogTitle>
+            <DialogTitle>{t('shifts.shiftDetail', { id: shiftId })}</DialogTitle>
           </DialogHeader>
 
           {isLoading ? (
@@ -73,7 +68,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="font-[var(--font-display)] text-base font-semibold text-text-primary">
-                    {shift.executor_name ?? `Исполнитель #${shift.user_id}`}
+                    {shift.executor_name ?? t('shifts.executorFallback', { id: shift.user_id })}
                   </span>
                   <span
                     className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
@@ -83,7 +78,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
                       border: `1px solid ${typeColor}66`,
                     }}
                   >
-                    {SHIFT_TYPE_LABELS[shift.shift_type ?? 'regular'] ?? shift.shift_type}
+                    {t(`shiftType.${shift.shift_type ?? 'regular'}`)}
                   </span>
                   <span
                     className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
@@ -93,14 +88,14 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
                       border: `1px solid ${statusColor}66`,
                     }}
                   >
-                    {shift.status}
+                    {t(`shiftStatus.${shift.status}`, shift.status)}
                   </span>
                 </div>
 
                 {/* Time range */}
                 <div className="text-sm text-text-secondary font-[var(--font-mono)]">
                   {formatDateTime(shift.start_time)}
-                  {shift.end_time ? ` — ${formatTime(shift.end_time)}` : ' — в процессе'}
+                  {shift.end_time ? ` — ${formatTime(shift.end_time)}` : ` ${t('shifts.inProgress')}`}
                 </div>
               </div>
 
@@ -108,27 +103,27 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   {
-                    label: 'Нагрузка',
+                    label: t('shifts.loadPercent'),
                     value: `${shift.load_percentage}%`,
                     color: shift.load_percentage > 80 ? 'var(--red,#ef4444)' : 'var(--accent)',
                   },
                   {
-                    label: 'Приоритет',
+                    label: t('shifts.priorityOf5'),
                     value: `${shift.priority_level} / 5`,
                     color: 'var(--amber,#f59e0b)',
                   },
                   {
-                    label: 'Завершено заявок',
+                    label: t('shifts.completedRequestsLabel'),
                     value: `${shift.completed_requests}`,
                     color: 'var(--blue,#3b82f6)',
                   },
                   {
-                    label: 'Заявок (тек./макс.)',
+                    label: t('shifts.currentMax'),
                     value: `${shift.current_request_count} / ${shift.max_requests}`,
                     color: 'var(--text-secondary)',
                   },
                   {
-                    label: 'Эффективность',
+                    label: t('shifts.efficiencyLabel'),
                     value:
                       shift.efficiency_score !== null
                         ? `${Math.round(shift.efficiency_score * 100) / 100}`
@@ -136,7 +131,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
                     color: 'var(--emerald,#10b981)',
                   },
                   {
-                    label: 'Рейтинг качества',
+                    label: t('shifts.qualityRating'),
                     value:
                       shift.quality_rating !== null
                         ? `${shift.quality_rating}`
@@ -165,7 +160,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
               {shift.notes && (
                 <div className="bg-bg-surface border border-border-default rounded-sm p-3">
                   <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">
-                    Заметки
+                    {t('shifts.notes')}
                   </div>
                   <p className="m-0 text-[13px] text-text-secondary">
                     {shift.notes}
@@ -176,7 +171,7 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
               {/* Error from end shift */}
               {endShift.isError && (
                 <div className="text-[13px] text-red bg-red/10 border border-red/30 rounded-sm px-3 py-2.5">
-                  Ошибка при завершении смены
+                  {t('errors.endShift')}
                 </div>
               )}
 
@@ -188,20 +183,20 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
                     onClick={() => setConfirmEndOpen(true)}
                     disabled={endShift.isPending}
                   >
-                    {endShift.isPending ? 'Завершение...' : 'Завершить смену'}
+                    {endShift.isPending ? t('shifts.endingShift') : t('shifts.endShift')}
                   </Button>
                 )}
                 <Button
                   variant="outline"
                   onClick={onClose}
                 >
-                  Закрыть
+                  {t('common.close')}
                 </Button>
               </DialogFooter>
             </div>
           ) : (
             <div className="text-sm text-text-muted">
-              Смена не найдена
+              {t('errors.shiftNotFound')}
             </div>
           )}
         </DialogContent>
@@ -210,9 +205,9 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
       <ConfirmDialog
         open={confirmEndOpen}
         onOpenChange={setConfirmEndOpen}
-        title="Завершить смену"
-        description="Завершить смену? Это действие нельзя отменить."
-        confirmLabel="Завершить"
+        title={t('shifts.confirmEndShift')}
+        description={t('shifts.confirmEndShiftDesc')}
+        confirmLabel={t('shifts.confirmEnd')}
         onConfirm={handleEndShift}
         variant="warning"
         loading={endShift.isPending}

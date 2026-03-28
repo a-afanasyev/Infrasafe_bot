@@ -1,11 +1,13 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { useTopbar, TopbarProvider } from '../contexts/TopbarContext'
 import { useTheme } from '../hooks/useTheme'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import LanguageSwitcher from '@/components/shared/LanguageSwitcher'
 import {
   LayoutGrid,
   ListChecks,
@@ -31,7 +33,7 @@ type SidebarState = 'expanded' | 'collapsed' | 'hidden'
 
 interface NavItem {
   to: string
-  label: string
+  labelKey: string
   Icon: React.ComponentType<{ size?: number }>
   end?: boolean
 }
@@ -39,12 +41,12 @@ interface NavItem {
 // ─── Navigation items ───────────────────────────────────────────────────────────
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/dashboard/analytics', label: 'Аналитика', Icon: LayoutGrid },
-  { to: '/dashboard', label: 'Заявки', Icon: ListChecks, end: true },
-  { to: '/dashboard/employees', label: 'Сотрудники', Icon: Users },
-  { to: '/dashboard/shifts', label: 'Смены', Icon: Clock },
-  { to: '/dashboard/templates', label: 'Шаблоны', Icon: Table2 },
-  { to: '/dashboard/addresses', label: 'Адреса', Icon: MapPin },
+  { to: '/dashboard/analytics', labelKey: 'nav.analytics', Icon: LayoutGrid },
+  { to: '/dashboard', labelKey: 'nav.requests', Icon: ListChecks, end: true },
+  { to: '/dashboard/employees', labelKey: 'nav.employees', Icon: Users },
+  { to: '/dashboard/shifts', labelKey: 'nav.shifts', Icon: Clock },
+  { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2 },
+  { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
 ]
 
 // ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────
@@ -71,6 +73,7 @@ function TopbarInner({
 }) {
   const { actions } = useTopbar()
   const { isDark, toggle } = useTheme()
+  const { t } = useTranslation()
 
   return (
     <header
@@ -88,7 +91,7 @@ function TopbarInner({
           variant="ghost"
           size="icon"
           onClick={onToggleMobile}
-          aria-label="Открыть меню"
+          aria-label={t('sidebar.openMenu')}
         >
           <Menu size={20} />
         </Button>
@@ -98,12 +101,13 @@ function TopbarInner({
 
       <div className="flex items-center gap-2">
         {actions}
+        <LanguageSwitcher />
         <Button
           variant="ghost"
           size="icon"
           onClick={toggle}
-          aria-label={isDark ? 'Светлая тема' : 'Тёмная тема'}
-          title={isDark ? 'Светлая тема' : 'Тёмная тема'}
+          aria-label={isDark ? t('theme.light') : t('theme.dark')}
+          title={isDark ? t('theme.light') : t('theme.dark')}
         >
           {isDark ? <Sun size={16} /> : <Moon size={16} />}
         </Button>
@@ -117,6 +121,7 @@ function TopbarInner({
 function UserDropdown({ collapsed }: { collapsed: boolean }) {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
@@ -168,10 +173,10 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
           <>
             <div className="min-w-0 flex-1 text-left">
               <div className="truncate text-[13px] font-semibold text-text-primary">
-                {user?.first_name ?? 'Пользователь'}
+                {user?.first_name ?? t('common.user')}
               </div>
               <div className="text-[11px] text-text-muted">
-                {user?.roles?.[0] ?? 'manager'}
+                {(['manager', 'executor', 'applicant'].find(r => user?.roles?.includes(r))) ?? 'manager'}
               </div>
             </div>
             <span className="shrink-0 text-text-muted">
@@ -186,7 +191,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
         <div
           className="absolute bottom-[calc(100%-4px)] left-3 right-3 z-[300] overflow-hidden rounded-default border border-border-default bg-bg-card shadow-[0_-8px_24px_rgba(0,0,0,0.3)]"
           role="menu"
-          aria-label="Меню пользователя"
+          aria-label={t('sidebar.userMenu')}
         >
           <button
             role="menuitem"
@@ -197,7 +202,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
             className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-primary font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
           >
             <User size={14} />
-            Профиль
+            {t('common.profile')}
           </button>
           <div className="mx-3 h-px bg-border-default" />
           <button
@@ -210,7 +215,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
             className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
           >
             <LogOut size={14} />
-            Выйти
+            {t('common.logout')}
           </button>
         </div>
       )}
@@ -227,6 +232,7 @@ function SidebarContent({
   collapsed: boolean
   onNavClick?: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <>
       {/* Logo */}
@@ -241,9 +247,9 @@ function SidebarContent({
           {!collapsed && (
             <div>
               <div className="font-[family-name:var(--font-display)] text-[15px] font-bold text-text-primary">
-                УК Панель
+                {t('sidebar.title')}
               </div>
-              <div className="text-[11px] text-text-muted">management system</div>
+              <div className="text-[11px] text-text-muted">{t('sidebar.subtitle')}</div>
             </div>
           )}
         </div>
@@ -253,11 +259,12 @@ function SidebarContent({
       <nav className={cn('flex-1 overflow-y-auto', collapsed ? 'px-2 py-2' : 'px-3 py-2')}>
         {!collapsed && (
           <div className="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            Основное
+            {t('nav.main')}
           </div>
         )}
-        {NAV_ITEMS.map(({ to, label, Icon, end }) =>
-          collapsed ? (
+        {NAV_ITEMS.map(({ to, labelKey, Icon, end }) => {
+          const label = t(labelKey)
+          return collapsed ? (
             <NavTooltip key={to} label={label}>
               <NavLink
                 to={to}
@@ -293,17 +300,17 @@ function SidebarContent({
               <Icon size={16} />
               {label}
             </NavLink>
-          ),
-        )}
+          )
+        })}
 
         {/* External section */}
         {!collapsed && (
           <div className="mt-3 mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            Внешнее
+            {t('nav.external')}
           </div>
         )}
         {collapsed ? (
-          <NavTooltip label="Табло жителей">
+          <NavTooltip label={t('nav.residentBoard')}>
             <NavLink
               to="/resident-board"
               onClick={onNavClick}
@@ -333,7 +340,7 @@ function SidebarContent({
             }
           >
             <BookOpen size={16} />
-            Табло жителей
+            {t('nav.residentBoard')}
           </NavLink>
         )}
       </nav>
@@ -347,6 +354,7 @@ function SidebarContent({
 // ─── Main DashboardLayout ───────────────────────────────────────────────────────
 
 export default function DashboardLayout() {
+  const { t } = useTranslation()
   const isDesktop = useMediaQuery('(min-width: 1280px)')
   const isTablet = useMediaQuery('(min-width: 1024px)')
   const isMobile = !isTablet
@@ -409,7 +417,7 @@ export default function DashboardLayout() {
               variant="ghost"
               size={sidebarState === 'collapsed' ? 'icon' : 'sm'}
               onClick={toggleSidebar}
-              aria-label={sidebarState === 'expanded' ? 'Свернуть меню' : 'Развернуть меню'}
+              aria-label={sidebarState === 'expanded' ? t('sidebar.collapseMenu') : t('sidebar.expandMenu')}
               className={cn(
                 'text-text-muted hover:text-text-primary',
                 sidebarState === 'expanded' && 'w-full justify-start gap-2',
@@ -418,7 +426,7 @@ export default function DashboardLayout() {
               {sidebarState === 'expanded' ? (
                 <>
                   <PanelLeftClose size={16} />
-                  <span className="text-xs">Свернуть</span>
+                  <span className="text-xs">{t('sidebar.collapse')}</span>
                 </>
               ) : (
                 <PanelLeftOpen size={16} />

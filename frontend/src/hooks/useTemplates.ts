@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '../api/client'
+import i18n from '../i18n'
 import type { TemplateBrief, CreateTemplatePayload } from '../types/api'
 
 export type { TemplateBrief, CreateTemplatePayload }
@@ -32,12 +33,12 @@ export function useCreateTemplate() {
     mutationFn: (body: CreateTemplatePayload) =>
       apiClient.post('/api/v2/shifts/templates', body).then(r => r.data),
     onSuccess: () => {
-      toast.success('Шаблон создан')
+      toast.success(i18n.t('toast.templateCreated'))
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
     },
     onError: (error: Error) => {
       console.error('Create template failed:', error)
-      toast.error('Не удалось создать шаблон', { description: error.message })
+      toast.error(i18n.t('toast.templateCreateFailed'), { description: error.message })
     },
   })
 }
@@ -48,13 +49,13 @@ export function useUpdateTemplate() {
     mutationFn: ({ id, ...body }: { id: number } & Record<string, unknown>) =>
       apiClient.patch(`/api/v2/shifts/templates/${id}`, body).then(r => r.data),
     onSuccess: (_, variables) => {
-      toast.success('Шаблон обновлён')
+      toast.success(i18n.t('toast.templateUpdated'))
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
       queryClient.invalidateQueries({ queryKey: ['shift-template', variables.id] })
     },
     onError: (error: Error) => {
       console.error('Update template failed:', error)
-      toast.error('Не удалось обновить шаблон', { description: error.message })
+      toast.error(i18n.t('toast.templateUpdateFailed'), { description: error.message })
     },
   })
 }
@@ -65,13 +66,13 @@ export function useDeleteTemplate() {
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v2/shifts/templates/${id}`).then(r => r.data),
     onSuccess: (_, id) => {
-      toast.success('Шаблон удалён')
+      toast.success(i18n.t('toast.templateDeleted'))
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
       queryClient.removeQueries({ queryKey: ['shift-template', id] })
     },
     onError: (error: Error) => {
       console.error('Delete template failed:', error)
-      toast.error('Не удалось удалить шаблон', { description: error.message })
+      toast.error(i18n.t('toast.templateDeleteFailed'), { description: error.message })
     },
   })
 }
@@ -82,13 +83,13 @@ export function useCreateShiftFromTemplate() {
     mutationFn: (body: { template_id: number; date: string }) =>
       apiClient.post('/api/v2/shifts/from-template', body).then(r => r.data),
     onSuccess: () => {
-      toast.success('Смена создана из шаблона')
+      toast.success(i18n.t('toast.shiftFromTemplate'))
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
     },
     onError: (error: Error) => {
       console.error('Create shift from template failed:', error)
-      toast.error('Не удалось создать смену из шаблона', { description: error.message })
+      toast.error(i18n.t('toast.shiftFromTemplateFailed'), { description: error.message })
     },
   })
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCreateBuilding, useUpdateBuilding } from '../../hooks/useAddresses'
 import type { BuildingBrief, YardBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function BuildingFormModal({ building, yardId, yards, onClose }: Props) {
+  const { t } = useTranslation()
   const [selectedYardId, setSelectedYardId] = useState(building?.yard_id ?? yardId)
   const [address, setAddress] = useState(building?.address ?? '')
   const [entranceCount, setEntranceCount] = useState(building?.entrance_count ?? 1)
@@ -64,12 +66,12 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{building ? 'Редактировать здание' : 'Новое здание'}</DialogTitle>
+          <DialogTitle>{building ? t('addressForms.editBuilding') : t('addressForms.newBuilding')}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Двор *</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.yardRequired')}</Label>
             <Select
               value={selectedYardId}
               onChange={e => setSelectedYardId(Number(e.target.value))}
@@ -81,7 +83,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
           </div>
 
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Адрес *</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.addressLabel')}</Label>
             <Input
               value={address}
               onChange={e => setAddress(e.target.value)}
@@ -91,7 +93,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">Подъезды</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.entrancesLabel')}</Label>
               <Input
                 type="number"
                 value={entranceCount}
@@ -100,7 +102,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
               />
             </div>
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">Этажи</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.floorsLabel')}</Label>
               <Input
                 type="number"
                 value={floorCount}
@@ -111,7 +113,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
           </div>
 
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">Описание</Label>
+            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.descriptionLabel')}</Label>
             <Textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -120,7 +122,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">GPS Широта</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
               <Input
                 type="number"
                 value={gpsLat}
@@ -129,7 +131,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
               />
             </div>
             <div className="flex-1">
-              <Label className="mb-1 block text-xs text-text-muted">GPS Долгота</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
               <Input
                 type="number"
                 value={gpsLon}
@@ -141,18 +143,18 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
 
           {mutation.error && (
             <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || 'Ошибка при сохранении'}
+              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || t('addressForms.saveError')}
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={handleSubmit}
             disabled={mutation.isPending || !address.trim()}
           >
-            {mutation.isPending ? 'Сохранение...' : building ? 'Сохранить' : 'Создать'}
+            {mutation.isPending ? t('common.saving') : building ? t('common.save') : t('common.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

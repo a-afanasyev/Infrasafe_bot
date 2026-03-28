@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCreateYard, useCreateBuilding } from '../../hooks/useAddresses'
 import type { YardBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function AddObjectModal({ open, onClose, yards, preselectedYardId }: Props) {
+  const { t } = useTranslation()
   const [objectType, setObjectType] = useState<ObjectType>(null)
 
   // Yard fields
@@ -105,7 +107,7 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
       <DialogContent className="max-w-[480px]">
         <DialogHeader>
           <DialogTitle>
-            {objectType === null ? 'Новый объект' : objectType === 'yard' ? 'Новый двор' : 'Новое здание'}
+            {objectType === null ? t('addressForms.newObject') : objectType === 'yard' ? t('addressForms.newYard') : t('addressForms.newBuilding')}
           </DialogTitle>
         </DialogHeader>
 
@@ -121,7 +123,7 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
               )}
             >
               <span className="text-3xl">{'\u{1F3D8}'}</span>
-              <span className="text-sm font-semibold font-[family-name:var(--font-display)] text-text-primary">Двор</span>
+              <span className="text-sm font-semibold font-[family-name:var(--font-display)] text-text-primary">{t('addressForms.yardLabel')}</span>
             </button>
             <button
               onClick={() => {
@@ -135,7 +137,7 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
               )}
             >
               <span className="text-3xl">{'\u{1F3E2}'}</span>
-              <span className="text-sm font-semibold font-[family-name:var(--font-display)] text-text-primary">Здание</span>
+              <span className="text-sm font-semibold font-[family-name:var(--font-display)] text-text-primary">{t('addressForms.buildingLabel')}</span>
             </button>
           </div>
         )}
@@ -148,30 +150,30 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
                 onClick={() => setObjectType(null)}
                 className="self-start text-xs text-accent cursor-pointer bg-transparent border-none font-[family-name:var(--font-display)] hover:underline"
               >
-                &larr; Выбрать тип
+                &larr; {t('addressForms.chooseType')}
               </button>
             )}
             <div>
-              <Label className="mb-1 block text-xs text-text-muted">Название *</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.nameLabel')}</Label>
               <Input value={yardName} onChange={e => setYardName(e.target.value)} autoFocus />
             </div>
             <div>
-              <Label className="mb-1 block text-xs text-text-muted">Описание</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.descriptionLabel')}</Label>
               <Textarea value={yardDescription} onChange={e => setYardDescription(e.target.value)} />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <Label className="mb-1 block text-xs text-text-muted">GPS Широта</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
                 <Input type="number" value={yardLat} onChange={e => setYardLat(e.target.value)} placeholder="-90 ... 90" />
               </div>
               <div className="flex-1">
-                <Label className="mb-1 block text-xs text-text-muted">GPS Долгота</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
                 <Input type="number" value={yardLon} onChange={e => setYardLon(e.target.value)} placeholder="-180 ... 180" />
               </div>
             </div>
             {createYard.error && (
               <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                {(createYard.error as any)?.response?.data?.detail || (createYard.error as Error).message || 'Ошибка при сохранении'}
+                {(createYard.error as any)?.response?.data?.detail || (createYard.error as Error).message || t('addressForms.saveError')}
               </div>
             )}
           </div>
@@ -185,11 +187,11 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
                 onClick={() => setObjectType(null)}
                 className="self-start text-xs text-accent cursor-pointer bg-transparent border-none font-[family-name:var(--font-display)] hover:underline"
               >
-                &larr; Выбрать тип
+                &larr; {t('addressForms.chooseType')}
               </button>
             )}
             <div>
-              <Label className="mb-1 block text-xs text-text-muted">Двор *</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.yardRequired')}</Label>
               <Select value={selectedYardId} onChange={e => setSelectedYardId(Number(e.target.value))}>
                 {yards.map(y => (
                   <option key={y.id} value={y.id}>{y.name}</option>
@@ -197,36 +199,36 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
               </Select>
             </div>
             <div>
-              <Label className="mb-1 block text-xs text-text-muted">Адрес *</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.addressLabel')}</Label>
               <Input value={address} onChange={e => setAddress(e.target.value)} autoFocus />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <Label className="mb-1 block text-xs text-text-muted">Подъезды</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.entrancesLabel')}</Label>
                 <Input type="number" value={entranceCount} onChange={e => setEntranceCount(Math.max(1, parseInt(e.target.value) || 1))} min={1} />
               </div>
               <div className="flex-1">
-                <Label className="mb-1 block text-xs text-text-muted">Этажи</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.floorsLabel')}</Label>
                 <Input type="number" value={floorCount} onChange={e => setFloorCount(Math.max(1, parseInt(e.target.value) || 1))} min={1} />
               </div>
             </div>
             <div>
-              <Label className="mb-1 block text-xs text-text-muted">Описание</Label>
+              <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.descriptionLabel')}</Label>
               <Textarea value={buildingDescription} onChange={e => setBuildingDescription(e.target.value)} />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <Label className="mb-1 block text-xs text-text-muted">GPS Широта</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
                 <Input type="number" value={buildingLat} onChange={e => setBuildingLat(e.target.value)} placeholder="-90 ... 90" />
               </div>
               <div className="flex-1">
-                <Label className="mb-1 block text-xs text-text-muted">GPS Долгота</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
                 <Input type="number" value={buildingLon} onChange={e => setBuildingLon(e.target.value)} placeholder="-180 ... 180" />
               </div>
             </div>
             {createBuilding.error && (
               <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                {(createBuilding.error as any)?.response?.data?.detail || (createBuilding.error as Error).message || 'Ошибка при сохранении'}
+                {(createBuilding.error as any)?.response?.data?.detail || (createBuilding.error as Error).message || t('addressForms.saveError')}
               </div>
             )}
           </div>
@@ -235,12 +237,12 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
         {/* Footer — only show when a type is selected */}
         {objectType !== null && (
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>Отмена</Button>
+            <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
             <Button
               onClick={objectType === 'yard' ? handleSubmitYard : handleSubmitBuilding}
               disabled={mutation?.isPending || !canSubmit}
             >
-              {mutation?.isPending ? 'Создание...' : 'Создать'}
+              {mutation?.isPending ? t('common.creating') : t('common.create')}
             </Button>
           </DialogFooter>
         )}

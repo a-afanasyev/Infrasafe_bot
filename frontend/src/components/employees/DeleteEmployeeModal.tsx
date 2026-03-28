@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogContent,
@@ -27,13 +28,14 @@ interface Props {
 type Step = 'confirm' | 'reassign'
 
 export default function DeleteEmployeeModal({ employee, onClose }: Props) {
+  const { t } = useTranslation()
   const [step, setStep] = useState<Step>('confirm')
   const [reason, setReason] = useState('')
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null)
 
   const name =
     [employee.first_name, employee.last_name].filter(Boolean).join(' ') ||
-    'Без имени'
+    t('employees.noName')
 
   const { data: activeRequestsData } = useActiveRequestsCount(employee.id)
   const activeCount = activeRequestsData?.count ?? 0
@@ -73,17 +75,17 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
         {step === 'confirm' && (
           <>
             <DialogHeader>
-              <DialogTitle>Удаление сотрудника</DialogTitle>
+              <DialogTitle>{t('deleteEmployee.title')}</DialogTitle>
               <DialogDescription>
-                Вы уверены, что хотите удалить {name}?
+                {t('deleteEmployee.description', { name })}
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="delete-reason">Причина удаления</Label>
+              <Label htmlFor="delete-reason">{t('deleteEmployee.reason')}</Label>
               <Textarea
                 id="delete-reason"
-                placeholder="Укажите причину..."
+                placeholder={t('deleteEmployee.reasonPlaceholder')}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
@@ -92,14 +94,14 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
 
             <DialogFooter>
               <Button variant="outline" onClick={onClose}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button
                 variant="destructive"
                 disabled={!reason.trim() || deleteEmployee.isPending}
                 onClick={handleConfirmStep}
               >
-                {deleteEmployee.isPending ? 'Удаление...' : 'Удалить'}
+                {deleteEmployee.isPending ? t('deleteEmployee.deleting') : t('common.delete')}
               </Button>
             </DialogFooter>
           </>
@@ -108,10 +110,9 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
         {step === 'reassign' && (
           <>
             <DialogHeader>
-              <DialogTitle>Передача заявок</DialogTitle>
+              <DialogTitle>{t('deleteEmployee.reassign')}</DialogTitle>
               <DialogDescription>
-                У сотрудника {activeCount} активных заявок. Выберите кому их
-                передать.
+                {t('deleteEmployee.activeRequestsWarning', { count: activeCount })}
               </DialogDescription>
             </DialogHeader>
 
@@ -122,7 +123,7 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
                 const initials = getInitials(e.first_name, e.last_name)
                 const targetName =
                   [e.first_name, e.last_name].filter(Boolean).join(' ') ||
-                  'Без имени'
+                  t('employees.noName')
                 const isSelected = selectedTarget === e.id
 
                 return (
@@ -155,7 +156,7 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
                     </div>
                     {e.active_shift_id !== null && (
                       <span className="text-[10px] font-semibold text-emerald bg-emerald/15 px-1.5 py-0.5 rounded-[10px] shrink-0">
-                        На смене
+                        {t('employees.activeShift')}
                       </span>
                     )}
                   </button>
@@ -163,14 +164,14 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
               })}
               {availableTargets.length === 0 && (
                 <div className="text-sm text-text-muted text-center py-4">
-                  Нет доступных сотрудников для передачи
+                  {t('deleteEmployee.noTargets')}
                 </div>
               )}
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep('confirm')}>
-                Назад
+                {t('common.back')}
               </Button>
               <Button
                 variant="destructive"
@@ -180,8 +181,8 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
                 onClick={handleReassignAndDelete}
               >
                 {deleteEmployee.isPending
-                  ? 'Удаление...'
-                  : 'Передать и удалить'}
+                  ? t('deleteEmployee.deleting')
+                  : t('deleteEmployee.reassignAndDelete')}
               </Button>
             </DialogFooter>
           </>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCreateTemplate } from '../../hooks/useTemplates'
 import type { CreateTemplatePayload } from '../../types/api'
-import { SPEC_DISPLAY } from '../../utils/employeeUtils'
 import {
   Dialog,
   DialogContent,
@@ -20,26 +20,14 @@ interface Props {
   onClose: () => void
 }
 
-const SHIFT_TYPES = [
-  { value: 'regular', label: 'Обычная' },
-  { value: 'emergency', label: 'Экстренная' },
-  { value: 'overtime', label: 'Сверхурочная' },
-  { value: 'maintenance', label: 'Техническое обслуживание' },
-]
-
-const PRIORITIES = [
-  { value: '1', label: '1 — Низкий' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3 — Средний' },
-  { value: '4', label: '4' },
-  { value: '5', label: '5 — Высокий' },
-]
-
-const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+import { SHIFT_TYPES, PRIORITIES } from '../../constants'
 
 const START_MINUTES = [0, 15, 30, 45]
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+const SPEC_KEYS = ['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation'] as const
 
 export default function CreateTemplateModal({ isOpen, onClose }: Props) {
+  const { t } = useTranslation()
   const createTemplate = useCreateTemplate()
 
   const [name, setName] = useState('')
@@ -75,11 +63,11 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
     e.preventDefault()
     setError(null)
     if (!name.trim()) {
-      setError('Введите название шаблона')
+      setError(t('errors.enterTemplateName'))
       return
     }
     if (Number(minExecutors) > Number(maxExecutors)) {
-      setError('Минимум исполнителей не может превышать максимум')
+      setError(t('errors.minExceedsMax'))
       return
     }
     try {
@@ -116,7 +104,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
       setAutoCreate(false)
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'Ошибка при создании шаблона'
+        err instanceof Error ? err.message : t('errors.createTemplate')
       setError(msg)
     }
   }
@@ -125,7 +113,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Создать шаблон смены</DialogTitle>
+          <DialogTitle>{t('templates.createTemplateTitle')}</DialogTitle>
         </DialogHeader>
 
         <form
@@ -134,30 +122,30 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
         >
           {/* Name */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Название *</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.nameLabel')}</Label>
             <Input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Например: Дневная смена"
+              placeholder={t('templates.namePlaceholder')}
             />
           </div>
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Описание</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.descriptionLabel')}</Label>
             <Input
               type="text"
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="Краткое описание (необязательно)"
+              placeholder={t('templates.descriptionPlaceholder')}
             />
           </div>
 
           {/* Time + Duration */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Начало смены</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.shiftStart')}</Label>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="number"
@@ -165,7 +153,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
                   max={23}
                   value={startHour}
                   onChange={e => setStartHour(e.target.value)}
-                  placeholder="Часы (0-23)"
+                  placeholder={t('templates.hourPlaceholder')}
                 />
                 <Select
                   value={startMinute}
@@ -180,7 +168,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Длительность (часов)</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.duration')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -193,14 +181,14 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
 
           {/* Shift type */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Тип смены</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.shiftType')}</Label>
             <Select
               value={shiftType}
               onChange={e => setShiftType(e.target.value)}
             >
-              {SHIFT_TYPES.map(t => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {SHIFT_TYPES.map(st => (
+                <option key={st.value} value={st.value}>
+                  {t(`shiftType.${st.value}`)}
                 </option>
               ))}
             </Select>
@@ -208,9 +196,9 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
 
           {/* Days of week */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Дни недели</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.daysOfWeek')}</Label>
             <div className="flex gap-1.5">
-              {DAY_LABELS.map((label, idx) => {
+              {DAY_KEYS.map((dayKey, idx) => {
                 const active = daysOfWeek.includes(idx)
                 return (
                   <button
@@ -224,7 +212,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
                         : 'bg-bg-surface text-text-muted border-border-default'
                     )}
                   >
-                    {label}
+                    {t(`days.short.${dayKey}`)}
                   </button>
                 )
               })}
@@ -233,9 +221,9 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
 
           {/* Required specializations */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Требуемые специализации</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.requiredSpecs')}</Label>
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(SPEC_DISPLAY).map(([key, label]) => {
+              {SPEC_KEYS.map(key => {
                 const active = selectedSpecs.includes(key)
                 return (
                   <button
@@ -249,7 +237,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
                         : 'bg-bg-surface text-text-secondary border-border-default'
                     )}
                   >
-                    {label}
+                    {t(`specialization.${key}`)}
                   </button>
                 )
               })}
@@ -259,7 +247,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
           {/* Executors + max requests */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Мин. исполнителей</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.minExecutors')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -268,7 +256,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Макс. исполнителей</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.maxExecutors')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -277,7 +265,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Макс. заявок</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.maxRequests')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -290,20 +278,20 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
           {/* Priority + auto create */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Приоритет</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.priority')}</Label>
               <Select
                 value={priority}
                 onChange={e => setPriority(e.target.value)}
               >
                 {PRIORITIES.map(p => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {t(`priority.${p.value}`)}
                   </option>
                 ))}
               </Select>
             </div>
             <div className="flex flex-col justify-end space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-text-secondary">Авто-создание</Label>
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.autoCreateLabel')}</Label>
               <label className="flex items-center gap-2.5 cursor-pointer h-9">
                 {/* Toggle switch */}
                 <div
@@ -319,7 +307,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
                   />
                 </div>
                 <span className="text-[13px] text-text-secondary">
-                  {autoCreate ? 'Включено' : 'Выключено'}
+                  {autoCreate ? t('common.enabled') : t('common.disabled')}
                 </span>
               </label>
             </div>
@@ -339,13 +327,13 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
               variant="outline"
               onClick={onClose}
             >
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
               disabled={createTemplate.isPending}
             >
-              {createTemplate.isPending ? 'Создание...' : 'Создать шаблон'}
+              {createTemplate.isPending ? t('common.creating') : t('templates.createAction')}
             </Button>
           </DialogFooter>
         </form>

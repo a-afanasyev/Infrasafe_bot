@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import i18n from '../../i18n'
 
 interface Props {
   children: ReactNode
@@ -42,10 +43,10 @@ export default class GlobalErrorBoundary extends Component<Props, State> {
         >
           <AlertTriangle size={48} style={{ color: 'var(--red, #ef4444)' }} />
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>
-            Что-то пошло не так
+            {i18n.t('errors.globalTitle')}
           </h1>
           <p style={{ margin: 0, color: 'var(--color-text-secondary)', maxWidth: '420px' }}>
-            Произошла непредвиденная ошибка. Попробуйте обновить страницу.
+            {i18n.t('errors.globalDescription')}
           </p>
           <button
             onClick={() => window.location.reload()}
@@ -61,7 +62,7 @@ export default class GlobalErrorBoundary extends Component<Props, State> {
               cursor: 'pointer',
             }}
           >
-            Обновить страницу
+            {i18n.t('common.refresh')}
           </button>
         </div>
       )

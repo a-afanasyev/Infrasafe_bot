@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCreateShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
-import { SPEC_DISPLAY } from '../../utils/employeeUtils'
 import {
   Dialog,
   DialogContent,
@@ -21,22 +21,10 @@ interface Props {
   onClose: () => void
 }
 
-const SHIFT_TYPES = [
-  { value: 'regular', label: 'Обычная' },
-  { value: 'emergency', label: 'Экстренная' },
-  { value: 'overtime', label: 'Сверхурочная' },
-  { value: 'maintenance', label: 'Техническое обслуживание' },
-]
-
-const PRIORITIES = [
-  { value: '1', label: '1 — Низкий' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3 — Средний' },
-  { value: '4', label: '4' },
-  { value: '5', label: '5 — Высокий' },
-]
+import { SHIFT_TYPES, PRIORITIES } from '../../constants'
 
 export default function CreateShiftModal({ isOpen, onClose }: Props) {
+  const { t } = useTranslation()
   const createShift = useCreateShift()
 
   const [executorId, setExecutorId] = useState('')
@@ -72,17 +60,17 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!executorId) { setError('Выберите исполнителя'); return }
+    if (!executorId) { setError(t('errors.selectExecutor')); return }
     if (!startTime) {
-      setError('Укажите время начала смены')
+      setError(t('errors.specifyStartTime'))
       return
     }
     if (!endTime) {
-      setError('Укажите время окончания смены')
+      setError(t('errors.specifyEndTime'))
       return
     }
     if (new Date(endTime) <= new Date(startTime)) {
-      setError('Время окончания должно быть позже времени начала')
+      setError(t('errors.endAfterStart'))
       return
     }
 
@@ -109,7 +97,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
       setSpecFocus([])
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'Ошибка при создании смены'
+        err instanceof Error ? err.message : t('errors.createShift')
       setError(msg)
     }
   }
@@ -118,7 +106,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Создать смену</DialogTitle>
+          <DialogTitle>{t('shifts.createShift').replace('+ ', '')}</DialogTitle>
         </DialogHeader>
 
         <form
@@ -127,16 +115,16 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
         >
           {/* Executor */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Исполнитель</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.executorLabel')}</Label>
             <Select
               value={executorId}
               onChange={e => setExecutorId(e.target.value)}
             >
-              <option value="">— Выберите исполнителя —</option>
+              <option value="">{t('shifts.selectExecutor')}</option>
               {employees.map(emp => (
                 <option key={emp.id} value={String(emp.id)}>
                   {[emp.first_name, emp.last_name].filter(Boolean).join(' ') || `ID ${emp.id}`}
-                  {emp.phone ? ` · ${emp.phone}` : ''}
+                  {emp.phone ? ` \u00B7 ${emp.phone}` : ''}
                 </option>
               ))}
             </Select>
@@ -144,7 +132,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
 
           {/* Start time */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Начало смены</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.shiftStart')}</Label>
             <Input
               type="datetime-local"
               value={startTime}
@@ -154,7 +142,7 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
 
           {/* End time */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Конец смены</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.shiftEnd')}</Label>
             <Input
               type="datetime-local"
               value={endTime}
@@ -164,22 +152,22 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
 
           {/* Shift type */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Тип смены</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.shiftType')}</Label>
             <Select
               value={shiftType}
               onChange={e => setShiftType(e.target.value)}
             >
-              {SHIFT_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+              {SHIFT_TYPES.map(st => (
+                <option key={st.value} value={st.value}>{t(`shiftType.${st.value}`)}</option>
               ))}
             </Select>
           </div>
 
           {/* Specializations */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Специализации</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.specializationsLabel')}</Label>
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(SPEC_DISPLAY).map(([key, label]) => (
+              {(['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation'] as const).map(key => (
                 <button
                   key={key}
                   type="button"
@@ -190,14 +178,14 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
                       ? 'bg-accent-dim text-accent border-border-active'
                       : 'bg-bg-surface text-text-secondary border-border-default'
                   )}
-                >{label}</button>
+                >{t(`specialization.${key}`)}</button>
               ))}
             </div>
           </div>
 
           {/* Max requests */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Макс. заявок</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.maxRequests')}</Label>
             <Input
               type="number"
               min={1}
@@ -208,25 +196,25 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
 
           {/* Priority */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Приоритет</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.priorityLabel')}</Label>
             <Select
               value={priority}
               onChange={e => setPriority(e.target.value)}
             >
               {PRIORITIES.map(p => (
-                <option key={p.value} value={p.value}>{p.label}</option>
+                <option key={p.value} value={p.value}>{t(`priority.${p.value}`)}</option>
               ))}
             </Select>
           </div>
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">Заметки</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.notesLabel')}</Label>
             <Textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
-              placeholder="Дополнительная информация..."
+              placeholder={t('shifts.notesPlaceholder')}
               className="resize-y"
             />
           </div>
@@ -245,13 +233,13 @@ export default function CreateShiftModal({ isOpen, onClose }: Props) {
               variant="outline"
               onClick={onClose}
             >
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
               disabled={createShift.isPending}
             >
-              {createShift.isPending ? 'Создание...' : 'Создать'}
+              {createShift.isPending ? t('common.creating') : t('common.create')}
             </Button>
           </DialogFooter>
         </form>

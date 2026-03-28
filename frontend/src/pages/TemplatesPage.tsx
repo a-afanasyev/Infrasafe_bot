@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/TopbarContext'
 import {
   useTemplates,
@@ -9,23 +10,11 @@ import {
 import CreateTemplateModal from '../components/templates/CreateTemplateModal'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
-import { SPEC_COLORS, SPEC_DISPLAY } from '../utils/employeeUtils'
+import { SPEC_COLORS, getSpecDisplay } from '../utils/employeeUtils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-
-// Map English spec keys -> colors from SPEC_COLORS (keyed by Russian name)
-const SPEC_KEY_TO_COLOR: Record<string, string> = {
-  electrician: SPEC_COLORS['Электрика'] ?? 'var(--text-secondary)',
-  plumber: SPEC_COLORS['Сантехника'] ?? 'var(--text-secondary)',
-  heating: SPEC_COLORS['Отопление'] ?? 'var(--text-secondary)',
-  cleaning: SPEC_COLORS['Уборка'] ?? 'var(--text-secondary)',
-  security: SPEC_COLORS['Безопасность'] ?? 'var(--text-secondary)',
-  elevator: SPEC_COLORS['Лифт'] ?? 'var(--text-secondary)',
-  landscaping: SPEC_COLORS['Благоустройство'] ?? 'var(--text-secondary)',
-  ventilation: SPEC_COLORS['Вентиляция'] ?? 'var(--text-secondary)',
-}
 
 const SHIFT_TYPE_COLOR: Record<string, string> = {
   regular: 'var(--blue)',
@@ -34,14 +23,7 @@ const SHIFT_TYPE_COLOR: Record<string, string> = {
   maintenance: 'var(--violet)',
 }
 
-const SHIFT_TYPE_LABEL: Record<string, string> = {
-  regular: 'Обычная',
-  emergency: 'Экстренная',
-  overtime: 'Сверхурочная',
-  maintenance: 'Тех. обслуживание',
-}
-
-const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
 function formatTime(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
@@ -55,7 +37,7 @@ function computeEndTime(hour: number, minute: number, duration: number): string 
 }
 
 // Subcomponent to isolate hover state for delete button
-function DeleteButton({ onDelete }: { onDelete: () => void }) {
+function DeleteButton({ label, onDelete }: { label: string; onDelete: () => void }) {
   return (
     <Button
       variant="outline"
@@ -63,13 +45,14 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
       onClick={onDelete}
       className="text-xs hover:bg-red/10 hover:text-red hover:border-red/40"
     >
-      Удал.
+      {label}
     </Button>
   )
 }
 
 export default function TemplatesPage() {
-  usePageTitle('Шаблоны')
+  const { t } = useTranslation()
+  usePageTitle(t('nav.templates'))
   const { setActions, clearActions } = useTopbar()
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingCreateId, setPendingCreateId] = useState<number | null>(null)
@@ -82,10 +65,10 @@ export default function TemplatesPage() {
   const actionsNode = useMemo(
     () => (
       <Button onClick={() => setCreateOpen(true)} size="sm">
-        + Создать шаблон
+        {t('templates.createTemplate')}
       </Button>
     ),
-    [setCreateOpen],
+    [setCreateOpen, t],
   )
 
   useEffect(() => {
@@ -94,30 +77,30 @@ export default function TemplatesPage() {
   }, [setActions, clearActions, actionsNode])
 
   const totalCount = templates.length
-  const autoCreateCount = templates.filter(t => t.auto_create).length
-  const activeCount = templates.filter(t => t.is_active).length
+  const autoCreateCount = templates.filter(tpl => tpl.auto_create).length
+  const activeCount = templates.filter(tpl => tpl.is_active).length
 
   const STATS = [
     {
-      emoji: '📋',
+      emoji: '\u{1F4CB}',
       value: totalCount,
-      label: 'Всего шаблонов',
+      label: t('templates.totalTemplates'),
       color: 'var(--blue)',
       bgGrad:
         'linear-gradient(135deg, rgba(59,130,246,0.25), rgba(37,99,235,0.1))',
     },
     {
-      emoji: '🔄',
+      emoji: '\u{1F504}',
       value: autoCreateCount,
-      label: 'Авто-создание',
+      label: t('templates.autoCreate'),
       color: 'var(--emerald)',
       bgGrad:
         'linear-gradient(135deg, rgba(16,185,129,0.25), rgba(5,150,105,0.1))',
     },
     {
-      emoji: '📅',
+      emoji: '\u{1F4C5}',
       value: activeCount,
-      label: 'Активных шаблонов',
+      label: t('templates.activeTemplates'),
       color: 'var(--amber)',
       bgGrad:
         'linear-gradient(135deg, rgba(245,158,11,0.25), rgba(217,119,6,0.1))',
@@ -150,10 +133,21 @@ export default function TemplatesPage() {
   if (isError) {
     return (
       <div className="p-5 px-6 text-red text-sm">
-        Ошибка загрузки шаблонов. Проверьте соединение и попробуйте снова.
+        {t('errors.loadTemplates')}
       </div>
     )
   }
+
+  const TABLE_HEADERS = [
+    t('templates.headers.name'),
+    t('templates.headers.time'),
+    t('templates.headers.type'),
+    t('templates.headers.daysOfWeek'),
+    t('templates.headers.specializations'),
+    t('templates.headers.executors'),
+    t('templates.headers.auto'),
+    t('templates.headers.actions'),
+  ]
 
   return (
     <div className="p-5 px-6 flex flex-col gap-5">
@@ -189,15 +183,15 @@ export default function TemplatesPage() {
       <div className="bg-bg-card border border-border-default rounded-[12px] overflow-hidden">
         {templates.length === 0 ? (
           <EmptyState
-            icon="📋"
-            title="Нет шаблонов"
-            subtitle="Создайте первый шаблон смены"
+            icon="\u{1F4CB}"
+            title={t('templates.noTemplates')}
+            subtitle={t('templates.noTemplatesDesc')}
           />
         ) : (
           <table className="w-full border-collapse border-spacing-0">
             <thead>
               <tr className="bg-bg-surface">
-                {['Название', 'Время', 'Тип', 'Дни недели', 'Специализации', 'Исполнители', 'Авто', 'Действия'].map(h => (
+                {TABLE_HEADERS.map(h => (
                   <th
                     key={h}
                     className="px-3.5 py-2.5 text-left text-[0.65rem] font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap"
@@ -218,9 +212,7 @@ export default function TemplatesPage() {
                 const typeColor =
                   SHIFT_TYPE_COLOR[tmpl.default_shift_type] ??
                   'var(--text-secondary)'
-                const typeLabel =
-                  SHIFT_TYPE_LABEL[tmpl.default_shift_type] ??
-                  tmpl.default_shift_type
+                const typeLabel = t(`shiftType.${tmpl.default_shift_type}`)
                 const executorProgress =
                   tmpl.max_executors > 0
                     ? Math.round(
@@ -258,9 +250,9 @@ export default function TemplatesPage() {
       <ConfirmDialog
         open={confirmState.open}
         onOpenChange={(open) => setConfirmState(prev => ({ ...prev, open }))}
-        title="Удалить шаблон"
-        description="Удалить шаблон? Это действие нельзя отменить."
-        confirmLabel="Удалить"
+        title={t('templates.confirmDeleteTitle')}
+        description={t('templates.confirmDeleteDesc')}
+        confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmState.templateId !== null) {
             deleteTemplate.mutate(confirmState.templateId)
@@ -298,6 +290,7 @@ function TemplateRow({
   onCreateFromToday,
   createPending,
 }: TemplateRowProps) {
+  const { t } = useTranslation()
   const [rowHovered, setRowHovered] = useState(false)
 
   return (
@@ -310,7 +303,7 @@ function TemplateRow({
       onMouseEnter={() => setRowHovered(true)}
       onMouseLeave={() => setRowHovered(false)}
     >
-      {/* Название */}
+      {/* Name */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <strong className="text-[13px] text-text-primary block">
           {tmpl.name}
@@ -322,17 +315,17 @@ function TemplateRow({
         )}
       </td>
 
-      {/* Время */}
+      {/* Time */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div className="font-[var(--font-mono)] text-[13px] text-text-primary whitespace-nowrap">
           {startStr} — {endStr}
         </div>
         <div className="text-[11px] text-text-muted mt-0.5">
-          {tmpl.duration_hours} часов
+          {tmpl.duration_hours} {t('common.hours')}
         </div>
       </td>
 
-      {/* Тип */}
+      {/* Type */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <span
           className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
@@ -345,10 +338,10 @@ function TemplateRow({
         </span>
       </td>
 
-      {/* Дни недели */}
+      {/* Days of week */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div className="flex gap-[3px]">
-          {DAY_LABELS.map((label, dayIdx) => {
+          {DAY_KEYS.map((dayKey, dayIdx) => {
             const active = tmpl.days_of_week?.includes(dayIdx) ?? false
             return (
               <div
@@ -360,20 +353,20 @@ function TemplateRow({
                     : 'bg-bg-surface text-text-muted border-border-default'
                 )}
               >
-                {label}
+                {t(`days.short.${dayKey}`)}
               </div>
             )
           })}
         </div>
       </td>
 
-      {/* Специализации */}
+      {/* Specializations */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         {tmpl.required_specializations && tmpl.required_specializations.length > 0 ? (
           <div className="flex flex-wrap gap-1 max-w-[160px]">
             {tmpl.required_specializations.map(spec => {
-              const color = SPEC_KEY_TO_COLOR[spec] ?? 'var(--text-secondary)'
-              const label = SPEC_DISPLAY[spec] ?? spec
+              const color = SPEC_COLORS[spec] ?? 'var(--text-secondary)'
+              const label = getSpecDisplay(spec, t)
               return (
                 <span
                   key={spec}
@@ -389,14 +382,14 @@ function TemplateRow({
             })}
           </div>
         ) : (
-          <span className="text-xs text-text-muted">—</span>
+          <span className="text-xs text-text-muted">{'—'}</span>
         )}
       </td>
 
-      {/* Исполнители */}
+      {/* Executors */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div className="font-[var(--font-mono)] text-[13px] text-text-primary whitespace-nowrap">
-          {tmpl.min_executors}—{tmpl.max_executors}
+          {tmpl.min_executors}{'—'}{tmpl.max_executors}
         </div>
         <div className="mt-1 w-[60px] h-1 rounded-sm bg-border-default overflow-hidden">
           <div
@@ -406,12 +399,12 @@ function TemplateRow({
         </div>
       </td>
 
-      {/* Авто toggle */}
+      {/* Auto toggle */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div
           onClick={() => onToggleAutoCreate(tmpl.id, !tmpl.auto_create)}
           title={
-            tmpl.auto_create ? 'Авто-создание включено' : 'Авто-создание выключено'
+            tmpl.auto_create ? t('templates.autoCreateOn') : t('templates.autoCreateOff')
           }
           className={cn(
             'w-10 h-[22px] rounded-full border border-border-default relative cursor-pointer transition-colors duration-200 shrink-0',
@@ -425,7 +418,7 @@ function TemplateRow({
         </div>
       </td>
 
-      {/* Действия */}
+      {/* Actions */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div className="flex gap-1.5 flex-nowrap">
           {tmpl.is_active && (
@@ -435,19 +428,19 @@ function TemplateRow({
               disabled={createPending}
               className="text-xs"
             >
-              Создать
+              {t('templates.createFromTemplate')}
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
             disabled
-            title="Редактирование в разработке"
+            title={t('employees.editInDev')}
             className="text-xs opacity-60"
           >
-            Ред.
+            {t('templates.editBtn')}
           </Button>
-          <DeleteButton onDelete={() => onDelete(tmpl.id)} />
+          <DeleteButton label={t('templates.deleteBtn')} onDelete={() => onDelete(tmpl.id)} />
         </div>
       </td>
     </tr>

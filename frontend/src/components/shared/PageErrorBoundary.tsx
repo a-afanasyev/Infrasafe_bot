@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import i18n from '../../i18n'
 
 interface Props {
   children: ReactNode
@@ -41,10 +42,10 @@ export default class PageErrorBoundary extends Component<Props, State> {
         >
           <AlertTriangle size={40} style={{ color: 'var(--amber, #f59e0b)' }} />
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
-            Ошибка загрузки страницы
+            {i18n.t('errors.pageTitle')}
           </h2>
           <p style={{ margin: 0, color: 'var(--text-secondary)', maxWidth: '400px' }}>
-            Не удалось загрузить содержимое. Попробуйте обновить.
+            {i18n.t('errors.pageDescription')}
           </p>
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
             <button
@@ -60,7 +61,7 @@ export default class PageErrorBoundary extends Component<Props, State> {
                 cursor: 'pointer',
               }}
             >
-              Попробовать снова
+              {i18n.t('common.tryAgain')}
             </button>
             <button
               onClick={() => { window.location.href = '/dashboard' }}
@@ -75,7 +76,7 @@ export default class PageErrorBoundary extends Component<Props, State> {
                 cursor: 'pointer',
               }}
             >
-              На главную
+              {i18n.t('common.goHome')}
             </button>
           </div>
         </div>

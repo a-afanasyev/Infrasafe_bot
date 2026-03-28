@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useBulkCreateApartments } from '../../hooks/useAddresses'
 import type { BulkCreateResult } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -6,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 
-// ── Parsing ──────────────────────────────────────────────────────────
+// -- Parsing ------------------------------------------------------------------
 
 function parseApartmentRange(input: string): string[] {
   const parts = input.split(',').map(s => s.trim()).filter(Boolean)
@@ -33,7 +34,7 @@ function parseApartmentRange(input: string): string[] {
   })
 }
 
-// ── Component ────────────────────────────────────────────────────────
+// -- Component ----------------------------------------------------------------
 
 interface Props {
   buildingId: number
@@ -42,6 +43,7 @@ interface Props {
 }
 
 export default function BulkCreateModal({ buildingId, buildingAddress, onClose }: Props) {
+  const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [result, setResult] = useState<BulkCreateResult | null>(null)
 
@@ -64,7 +66,7 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Массовое создание квартир</DialogTitle>
+          <DialogTitle>{t('addressForms.bulkTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -75,11 +77,11 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
           {result ? (
             /* Result summary */
             <div className="p-4 bg-bg-surface rounded-sm border border-border-default flex flex-col gap-1.5 font-[family-name:var(--font-display)] text-sm text-text-primary">
-              <div>Создано: {result.created}</div>
-              <div>Пропущено (дубли): {result.skipped}</div>
+              <div>{t('addressForms.resultCreated', { count: result.created })}</div>
+              <div>{t('addressForms.resultSkipped', { count: result.skipped })}</div>
               {result.errors.length > 0 && (
                 <div className="text-red">
-                  Ошибки: {result.errors.join(', ')}
+                  {t('addressForms.resultErrors', { errors: result.errors.join(', ') })}
                 </div>
               )}
             </div>
@@ -87,11 +89,11 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
             /* Input form */
             <>
               <div>
-                <Label className="mb-1 block text-xs text-text-muted">Номера квартир</Label>
+                <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.aptNumbers')}</Label>
                 <Textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder="Например: 1-50 или 1, 5, 10, 15-20"
+                  placeholder={t('addressForms.aptPlaceholder')}
                   className="min-h-[80px]"
                   autoFocus
                 />
@@ -100,15 +102,15 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
               {input.trim() && (
                 <div className={`text-[13px] font-[family-name:var(--font-display)] ${tooMany ? 'text-red' : 'text-text-secondary'}`}>
                   {tooMany
-                    ? 'Максимум 500 квартир за раз'
-                    : `Будет создано: ${parsed.length} квартир`
+                    ? t('addressForms.tooMany')
+                    : t('addressForms.willCreate', { count: parsed.length })
                   }
                 </div>
               )}
 
               {bulkCreate.error && (
                 <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                  {(bulkCreate.error as any)?.response?.data?.detail || (bulkCreate.error as Error).message || 'Ошибка при создании'}
+                  {(bulkCreate.error as any)?.response?.data?.detail || (bulkCreate.error as Error).message || t('addressForms.createError')}
                 </div>
               )}
             </>
@@ -120,12 +122,12 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
             <Button onClick={onClose}>OK</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={onClose}>Отмена</Button>
+              <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
               <Button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
               >
-                {bulkCreate.isPending ? 'Создание...' : 'Создать'}
+                {bulkCreate.isPending ? t('common.creating') : t('common.create')}
               </Button>
             </>
           )}

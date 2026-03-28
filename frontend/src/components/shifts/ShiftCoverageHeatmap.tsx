@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toTashkent } from '../../utils/timezone'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,7 @@ const LEGEND = [
 ]
 
 export default function ShiftCoverageHeatmap({ shifts }: Props) {
+  const { t } = useTranslation()
   const [hoveredHour, setHoveredHour] = useState<number | null>(null)
 
   const counts = Array.from({ length: 24 }, (_, h) =>
@@ -67,7 +69,7 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
             {/* Tooltip */}
             {hoveredHour === h && (
               <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 bg-[var(--bg-overlay,#1a1a2e)] border border-border-default rounded-[6px] px-2 py-1 text-[11px] text-text-primary whitespace-nowrap z-10 pointer-events-none">
-                {String(h).padStart(2, '0')}:00 — {count} исп.
+                {String(h).padStart(2, '0')}:00 {'—'} {count} {t('shifts.executorLabel').toLowerCase()}
               </div>
             )}
             <span
@@ -111,7 +113,7 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
           </div>
         ))}
         <span className="text-[11px] text-text-muted ml-1">
-          исполнителей
+          {t('shifts.executorLabel').toLowerCase()}
         </span>
       </div>
     </div>
