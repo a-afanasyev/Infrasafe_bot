@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   DndContext,
   DragOverlay,
@@ -33,7 +34,7 @@ const KANBAN_STATUSES = new Set([
   'Новая', 'В работе', 'Закуп', 'Уточнение',
   'Выполнена', 'Исполнено', 'Принято', 'Отменена',
 ])
-const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])
+import { FROZEN_STATUSES } from '../../constants'
 
 // Must mirror backend _REQUEST_VALID_TRANSITIONS exactly
 const VALID_TRANSITIONS: Record<string, Set<string>> = {
@@ -62,7 +63,8 @@ function isTransitionAllowed(sourceStatus: string | undefined, targetStatus: str
 export { isTransitionAllowed, FROZEN_STATUSES, VALID_TRANSITIONS, MODAL_STATUSES }
 
 export default function KanbanBoard({ onCardClick }: Props) {
-  const { columns, isLoading } = useKanban()
+  const { t } = useTranslation()
+  const { columns, isLoading, isError } = useKanban()
   const queryClient = useQueryClient()
   const [activeDragStatus, setActiveDragStatus] = useState<string | null>(null)
   const [activeCard, setActiveCard] = useState<TCard | null>(null)
@@ -72,7 +74,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
   const [transitionError, setTransitionError] = useState<string | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 20 } }),
   )
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -165,7 +167,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
       await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
     } catch {
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      setTransitionError('Не удалось сохранить изменение. Попробуйте снова.')
+      setTransitionError(t('errors.transitionFailed'))
       setTimeout(() => setTransitionError(null), 4000)
     }
   }
@@ -180,7 +182,15 @@ export default function KanbanBoard({ onCardClick }: Props) {
   if (isLoading) {
     return (
       <div className="p-8 text-center text-text-muted font-[family-name:var(--font-body)]">
-        Загрузка...
+        {t('common.loading')}
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-red-500 font-[family-name:var(--font-body)]">
+        {t('common.error')}
       </div>
     )
   }

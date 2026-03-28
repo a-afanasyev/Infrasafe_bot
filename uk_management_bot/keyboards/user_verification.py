@@ -407,7 +407,7 @@ def get_cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     """
     buttons = [
         [InlineKeyboardButton(
-            text=f"❌ {get_text('buttons.cancel', language)}",
+            text=f"{get_text('buttons.cancel', language)}",
             callback_data="cancel_action"
         )]
     ]
@@ -560,7 +560,7 @@ def get_document_checklist_keyboard(user_id: int, selected_docs: list = None, la
         ))
     
     action_buttons.append(InlineKeyboardButton(
-        text=f"❌ {get_text('buttons.cancel', language)}",
+        text=f"{get_text('buttons.cancel', language)}",
         callback_data=f"cancel_document_selection_{user_id}"
     ))
     

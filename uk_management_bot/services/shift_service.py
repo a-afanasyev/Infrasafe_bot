@@ -16,6 +16,7 @@ from uk_management_bot.utils.constants import (
     AUDIT_ACTION_SHIFT_ENDED,
 )
 from uk_management_bot.services.notification_service import notify_shift_started, notify_shift_ended
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 import logging
 
 
@@ -72,7 +73,8 @@ class ShiftService:
             user = self._get_user_by_tg(telegram_id)
             if not user:
                 return {"success": False, "message": "Пользователь не найден", "shift": None}
-            if user.role not in [ROLE_EXECUTOR, ROLE_MANAGER]:
+            user_roles = parse_roles_safe(user.roles)
+            if ROLE_EXECUTOR not in user_roles and ROLE_MANAGER not in user_roles:
                 return {"success": False, "message": "Доступ запрещен", "shift": None}
 
             # ИЗМЕНЕНО: Разрешаем несколько активных смен для разных специализаций
@@ -165,7 +167,7 @@ class ShiftService:
     ) -> Dict[str, Any]:
         try:
             manager = self._get_user_by_tg(manager_telegram_id)
-            if not manager or manager.role != ROLE_MANAGER:
+            if not manager or ROLE_MANAGER not in parse_roles_safe(manager.roles):
                 return {"success": False, "message": "Требуются права менеджера", "shift": None}
             active = self.get_active_shift(target_user_telegram_id)
             if not active:

@@ -126,14 +126,15 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
     category_display = get_category_display(category_key, language=language)
 
     # TASK 17 Этап C: Локализуем статус
-    from uk_management_bot.keyboards.requests import get_status_display
+    from uk_management_bot.utils.status_display import get_status_display
     status_display = get_status_display(request.status, language=language)
 
     # Build message with localized labels
     message_text = f"📋 {labels['request']} #{request.request_number}\n\n"
     message_text += f"{labels['category']} {category_display}\n"
     message_text += f"{labels['status']} {status_display}\n"
-    message_text += f"{labels['address']} {request.address}\n"
+    from uk_management_bot.utils.address_helpers import localize_address
+    message_text += f"{labels['address']} {localize_address(request.address, language)}\n"
     message_text += f"{labels['description']} {request.description}\n"
     message_text += f"{labels['urgency']} {request.urgency}\n"
 
@@ -265,7 +266,7 @@ def format_request_list_item(
     category_display = get_category_display(category_key, language=language)
 
     # TASK 17 Этап C: Локализуем статус
-    from uk_management_bot.keyboards.requests import get_status_display
+    from uk_management_bot.utils.status_display import get_status_display
     status_display = get_status_display(request.status, language=language)
 
     icon = get_status_icon(request.status)
@@ -277,7 +278,8 @@ def format_request_list_item(
         created_label = get_text('requests.created_label', language=language)
 
         # Format address (truncate if too long)
-        address = request.address
+        from uk_management_bot.utils.address_helpers import localize_address
+        address = localize_address(request.address, language)
         if len(address) > 60:
             address = address[:60] + "…"
 

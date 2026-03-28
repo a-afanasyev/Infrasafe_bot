@@ -1263,7 +1263,8 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             # TASK 17 Этап C: Локализованные метки
             address_label = get_text("requests.address_label", language=lang) or "Адрес"
             created_label = get_text("requests.created_label", language=lang) or "Создана"
-            message_text += f"   {address_label} {request.address}\n"
+            from uk_management_bot.utils.address_helpers import localize_address
+            message_text += f"   {address_label} {localize_address(request.address, lang)}\n"
             message_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
             if request.status == "Отменена" and request.notes:
                 # TASK 17 Этап C: Локализованная метка
@@ -2466,7 +2467,8 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
             message_text += get_text("requests.handlers.no_requests_hint", language=lang)
         else:
             for i, request in enumerate(page_requests, 1):
-                address = request.address
+                from uk_management_bot.utils.address_helpers import localize_address
+                address = localize_address(request.address, lang)
                 if len(address) > 60:
                     address = address[:60] + "…"
                 # TASK 17 Этап A и C: Локализуем категорию и статус через status_display.py

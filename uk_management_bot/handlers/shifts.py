@@ -148,7 +148,7 @@ async def end_shift_confirm(message: Message, db=None):
         keyboard_rows = []
         for idx, shift in enumerate(active_shifts, 1):
             # Рассчитываем длительность
-            duration = datetime.now() - shift.start_time
+            duration = datetime.now() - shift.start_time.replace(tzinfo=None).replace(tzinfo=None)
             hours = int(duration.total_seconds() // 3600)
             minutes = int((duration.total_seconds() % 3600) // 60)
 
@@ -210,7 +210,7 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
             return
 
         # Рассчитываем длительность
-        duration = datetime.now() - shift.start_time
+        duration = datetime.now() - shift.start_time.replace(tzinfo=None)
         hours = int(duration.total_seconds() // 3600)
         minutes = int((duration.total_seconds() % 3600) // 60)
 
@@ -298,7 +298,6 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
     except Exception as e:
         logger.error(f"Ошибка показа деталей смены: {e}")
         from uk_management_bot.utils.safe_localization import safe_get_text
-        lang = language
         await message.answer(safe_get_text("errors.unknown_error", language=lang))
 
 

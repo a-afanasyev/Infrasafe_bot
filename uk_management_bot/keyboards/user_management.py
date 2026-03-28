@@ -295,7 +295,7 @@ def get_roles_management_keyboard(user_roles: List[str], language: str = 'ru') -
             callback_data="roles_save"
         ),
         InlineKeyboardButton(
-            text=f"❌ {get_text('buttons.cancel', language)}",
+            text=f"{get_text('buttons.cancel', language)}",
             callback_data="roles_cancel"
         )
     ])
@@ -347,7 +347,7 @@ def get_specializations_selection_keyboard(user_specializations: List[str], lang
             callback_data="spec_save"
         ),
         InlineKeyboardButton(
-            text=f"❌ {get_text('buttons.cancel', language)}",
+            text=f"{get_text('buttons.cancel', language)}",
             callback_data="spec_cancel"
         )
     ])
@@ -419,7 +419,7 @@ def get_confirmation_keyboard(action: str, user_id: int, language: str = 'ru') -
                 callback_data=f"confirm_{action}_{user_id}"
             ),
             InlineKeyboardButton(
-                text=f"❌ {get_text('buttons.cancel', language)}",
+                text=f"{get_text('buttons.cancel', language)}",
                 callback_data=f"user_mgmt_user_{user_id}"
             )
         ]
@@ -440,7 +440,7 @@ def get_cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text=f"❌ {get_text('buttons.cancel', language)}",
+            text=f"{get_text('buttons.cancel', language)}",
             callback_data="user_mgmt_cancel"
         )]
     ])

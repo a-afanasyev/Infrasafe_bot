@@ -1232,7 +1232,8 @@
     "category_empty": "Kategoriya bo'sh bo'lishi mumkin emas",
     "phone_empty": "Telefon raqami bo'sh bo'lishi mumkin emas",
     "phone_invalid_format": "Telefon raqami formati noto'g'ri",
-    "phone_valid": "Telefon raqami to'g'ri"
+    "phone_valid": "Telefon raqami to'g'ri",
+    "unexpected": "⚠️ Kutilmagan xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring yoki qo'llab-quvvatlash xizmatiga murojaat qiling."
   },
   "filters": {
     "by_role": "Rol bo'yicha",
@@ -3833,7 +3834,7 @@
   },
   "help": {
     "title": "🤖 Botdan foydalanish bo'yicha yordam",
-    "usage_help": "📖 Bot buyruqlari bo'yicha yordam:\n\n/start - Botni ishga tushirish\n/help - Yordam ko'rsatish\n/requests - Mening arizalarim\n/shifts - Mening smenalarim\n/language - Tilni o'zgartirish"
+    "usage_help": "📖 Bot buyruqlari bo'yicha yordam:\n\n/start - Botni ishga tushirish\n/help - Yordam ko'rsatish\n\nNavigatsiya uchun menyu tugmalaridan foydalaning."
   },
   "invites": {
     "already_registered": "❌ Siz allaqachon tizimda ro'yxatdan o'tgansiz",
@@ -5925,7 +5926,7 @@
     "help_home": "🏠 Siz uyni tanladingiz. Odatda muammolar quyidagilar bilan bog'liq:\n• Elektr\n• Isitish\n• Suv ta'minoti\n• Xavfsizlik\n\nMuammoni batafsil tasvirlab bering:",
     "help_yard": "🌳 Siz hovlini tanladingiz. Odatdagi muammolar:\n• Obodonlashtirish\n• Yoritish\n• Tozalash\n• Xavfsizlik\n\nMuammoni batafsil tasvirlab bering:",
     "confirmation_summary": "📋 So'rov xulosasi:\n\n🏷️ Toifa: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n⚡ Shoshilinchlik: {urgency}\n📸 Fayllar: {files_count}\n\nSo'rov yaratishni tasdiqlang:",
-    "request_created_details": "✅ So'rov muvaffaqiyatli yaratildi!\n\nToifa: {category}\nManzil: {address}\nShoshilinchlik: {urgency}",
+    "request_created_details": "✅ #{request_number} so'rov muvaffaqiyatli yaratildi!\n\nToifa: {category}\nManzil: {address}\nShoshilinchlik: {urgency}",
     "back_to_media": "Fayllarni yuklashga qaytdik. Foto/video yuboring yoki 'Davom etish' tugmasini bosing",
     "select_action": "Iltimos, harakatni tanlang:",
     "select_address_help": "📍 Manzilni tanlang:\n• 🏠 Kvartira - kvartira muammolari uchun\n• 🏢 Uy - umumiy uy muammolari uchun\n• 🏘️ Hovli - hovli muammolari uchun",

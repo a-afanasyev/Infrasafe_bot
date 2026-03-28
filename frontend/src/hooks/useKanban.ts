@@ -30,7 +30,7 @@ export interface KanbanColumn {
 export function useKanban(filters: Record<string, string | undefined> = {}) {
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery<{ columns: KanbanColumn[] }>({
+  const { data, isLoading, isError } = useQuery<{ columns: KanbanColumn[] }>({
     queryKey: ['kanban', filters],
     queryFn: () => apiClient.get('/api/v2/requests/kanban', { params: filters }).then((r) => r.data),
     staleTime: 30_000,
@@ -42,5 +42,5 @@ export function useKanban(filters: Record<string, string | undefined> = {}) {
     }
   })
 
-  return { columns: data?.columns ?? [], isLoading }
+  return { columns: data?.columns ?? [], isLoading, isError }
 }
