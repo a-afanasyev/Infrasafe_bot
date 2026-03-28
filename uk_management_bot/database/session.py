@@ -13,9 +13,9 @@ from typing import AsyncGenerator
 engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    pool_size=20,  # Увеличиваем размер пула соединений
-    max_overflow=30,  # Дополнительные соединения при необходимости
-    pool_timeout=60,  # Таймаут ожидания соединения
+    pool_size=10,
+    max_overflow=10,
+    pool_timeout=60,
     pool_recycle=3600,  # Переиспользование соединений каждый час
     pool_pre_ping=True,  # Проверка соединений перед использованием
     connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
@@ -36,8 +36,8 @@ if "postgresql" in settings.DATABASE_URL:
     async_engine = create_async_engine(
         async_database_url,
         echo=settings.DEBUG,
-        pool_size=20,
-        max_overflow=30,
+        pool_size=10,
+        max_overflow=10,
         pool_timeout=60,
         pool_recycle=3600,
         pool_pre_ping=True,
