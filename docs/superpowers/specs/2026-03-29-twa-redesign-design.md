@@ -205,6 +205,109 @@ frontend/src/twa/
 
 ---
 
-## 6. Ресурсы VPS
+## 6. Обязательные backend-изменения (BLOCKER для TWA)
 
-TWA — это фронтенд (nginx static). Дополнительная нагрузка на API минимальная (те же endpoints). RAM: +0 MB (тот же nginx контейнер). Отдельного сервиса не нужно.
+TWA не может быть реализовано "как есть" на текущих API endpoints. Ниже — список обязательных изменений API, без которых TWA будет либо сломано, либо небезопасно.
+
+### 6.1 CRITICAL: Data isolation в request endpoints
+
+**Проблема:** `GET /api/v2/requests` и `GET /api/v2/requests/{number}` не фильтруют по владельцу/исполнителю. Любой авторизованный пользователь видит все заявки. `GET /api/v2/requests/{number}/comments` не проверяет, что пользователь — участник заявки.
+
+**Требуемые изменения:**
+
+| Endpoint | Текущее поведение | Требуемое |
+|----------|------------------|-----------|
+| `GET /requests` | Все заявки (для kanban менеджера) | Для роли applicant: `WHERE user_id = current_user.id OR apartment_id IN (user_apartments)`. Для executor: через `RequestAssignment` + `executor_id`. Для manager: без изменений. |
+| `GET /requests/{number}` | Любой видит любую заявку | Проверка: user_id, apartment_id, executor_id, или manager role |
+| `GET /requests/{number}/comments` | Нет проверки участия | Проверка: пользователь — участник заявки (owner, executor, manager) |
+| `POST /requests/{number}/comments` | Нет проверки участия | Аналогично |
+
+**Реализация:** Добавить middleware/dependency `get_request_with_access_check(request_number, current_user)` в `api/requests/router.py`, которая возвращает 403 если пользователь не имеет доступа.
+
+### 6.2 HIGH: Executor actions через API
+
+**Проблема:** `PATCH /api/v2/requests/{number}` допускает смену статуса только для manager. Executor не может менять статус через API (только через бот).
+
+**Требуемые изменения:**
+
+| Действие | Текущее | Требуемое |
+|----------|---------|-----------|
+| Executor: "В работу" | Нет в API | `PATCH /requests/{number}` с `status: "В работе"` — разрешить для executor, если он назначен на заявку |
+| Executor: "Закуп" | Нет | Разрешить переход "В работе" → "Закуп" для назначенного executor |
+| Executor: "Уточнение" | Нет | "В работе" → "Уточнение" |
+| Executor: "Выполнена" | Нет | "В работе"/"Закуп" → "Выполнена" + `completion_report` |
+| Executor: запрос материалов | Нет | `PATCH /requests/{number}` с `requested_materials` |
+
+**Реализация:** Расширить `update_request()` в `api/requests/router.py`:
+- Проверка `is_assigned_executor(user, request)` через `RequestAssignment`
+- Executor может менять: `status` (ограниченные переходы), `completion_report`, `requested_materials`
+- Manager может менять всё (как сейчас)
+
+### 6.3 MEDIUM: API для переключения active_role
+
+**Проблема:** Пользователь с ролями `[applicant, executor]` должен видеть разный UI. В боте есть переключение `active_role`, но в API нет endpoint'а для смены роли.
+
+**Требуемые изменения:**
+
+```
+PATCH /api/v2/profile/role
+Body: { "active_role": "executor" }
+Response: { "active_role": "executor", "roles": ["applicant", "executor"] }
+```
+
+**Реализация:**
+- Новый endpoint в `api/profile/router.py`
+- Валидация: `active_role` должен быть в `user.roles`
+- `useRole()` в TWA читает `active_role` из профиля, не угадывает
+
+### 6.4 MEDIUM: TWA-specific auth flow
+
+**Проблема:** Текущий `useTWAAuth` сохраняет токены в localStorage. В контексте Telegram WebApp это потенциально небезопасно (WebApp может быть закрыт и очищен в любой момент).
+
+**Решение:**
+- Access token — в памяти (React state/context)
+- Refresh token — в localStorage (как fallback при перезапуске WebApp)
+- При каждом открытии Mini App — авторизация через `initData` (бесшовная, не требует ввода)
+- Существующий `POST /api/v2/auth/twa` достаточен, но нужно убедиться что он обновляет `last_active_at` пользователя
+
+### 6.5 LOW: Новые API endpoints для TWA
+
+| Endpoint | Назначение | Приоритет |
+|----------|-----------|-----------|
+| `GET /api/v2/announcements` | Объявления УК для главной страницы | Новый endpoint, новая модель |
+| `GET /api/v2/profile/apartments` | Квартиры текущего пользователя | Может использовать существующий addresses API |
+| `POST /api/v2/requests/{number}/complete` | Executor отмечает выполнение (с фото) | Упрощение: вместо PATCH с кучей полей |
+| `POST /api/v2/requests/{number}/accept` | Applicant принимает заявку (с рейтингом) | Упрощение: вместо PATCH |
+| `POST /api/v2/requests/{number}/return` | Applicant возвращает заявку | Упрощение: с причиной и фото |
+| `PATCH /api/v2/profile/role` | Переключение active_role | См. п. 6.3 |
+
+---
+
+## 7. Scope и фазы реализации
+
+### Phase 1: Backend preparation (BLOCKER)
+- 6.1: Data isolation в request endpoints
+- 6.2: Executor actions через API
+- 6.3: API переключения роли
+- 6.4: Auth flow cleanup
+
+### Phase 2: Applicant TWA (6 страниц)
+- Компоненты: BottomTabBar, RequestCard, StatusBadge, StepWizard, StarRating, PhotoUploader
+- Страницы: A1-A6
+- Telegram SDK интеграция
+
+### Phase 3: Executor TWA (8 страниц)
+- Компоненты: SwipeAction, ShiftTimer, Timeline
+- Страницы: E1-E8
+- Executor-specific API интеграция
+
+### Phase 4: Polish
+- Animations, haptic feedback
+- Offline mode
+- QA + live-тест
+
+---
+
+## 8. Ресурсы VPS
+
+TWA — фронтенд (тот же nginx контейнер). Backend-изменения — модификация существующих endpoints, не новые сервисы. RAM: +0 MB. Нагрузка на API: минимальная (мобильные запросы легче desktop).
