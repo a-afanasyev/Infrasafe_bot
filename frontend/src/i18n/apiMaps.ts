@@ -48,6 +48,7 @@ export function tUrgency(apiValue: string, t: TFunction): string {
 
 // === Categories (11 values) ===
 export const CATEGORY_MAP = {
+  // Russian keys (from web/callcenter)
   'Электрика':       'category.electrical',
   'Сантехника':      'category.plumbing',
   'Отопление':       'category.heating',
@@ -59,6 +60,18 @@ export const CATEGORY_MAP = {
   'Интернет/ТВ':     'category.internet_tv',
   'Ремонт':          'category.repair',
   'Другое':          'category.other',
+  // English keys (from bot)
+  'electricity':     'category.electrical',
+  'plumbing':        'category.plumbing',
+  'heating':         'category.heating',
+  'ventilation':     'category.ventilation',
+  'elevator':        'category.elevator',
+  'cleaning':        'category.cleaning',
+  'landscaping':     'category.landscaping',
+  'security':        'category.security',
+  'internet_tv':     'category.internet_tv',
+  'repair':          'category.repair',
+  'other':           'category.other',
 } as const
 
 export type ApiCategory = keyof typeof CATEGORY_MAP
