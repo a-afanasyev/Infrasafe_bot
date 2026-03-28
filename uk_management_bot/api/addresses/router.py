@@ -20,6 +20,8 @@ from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.webhook_sender import queue_webhook
+from uk_management_bot.services.redis_pubsub import publish_building_event
 
 router = APIRouter()
 
@@ -319,8 +321,15 @@ async def create_building(
         created_by=user.id,
     )
     db.add(building)
+    await db.flush()
+    await queue_webhook(db, "building.created", "/api/webhooks/uk/building", {
+        "id": building.id, "address": building.address, "yard_name": yard.name,
+    })
     await db.commit()
     await db.refresh(building)
+    await publish_building_event("building.created", {
+        "id": building.id, "address": building.address, "yard_name": yard.name,
+    })
 
     return BuildingOut(**_building_dict(building), yard_name=yard.name, apartments_count=0)
 
@@ -367,19 +376,24 @@ async def update_building(
     for field, value in updates.items():
         setattr(building, field, value)
 
+    # Webhook outbox — same transaction as building update
+    yard_result_wh = await db.execute(select(Yard.name).where(Yard.id == building.yard_id))
+    yard_name_wh = yard_result_wh.scalar_one_or_none() or ""
+    await queue_webhook(db, "building.updated", "/api/webhooks/uk/building", {
+        "id": building.id, "address": building.address, "yard_name": yard_name_wh,
+    })
     await db.commit()
     await db.refresh(building)
-
-    # Fetch yard name
-    yard_result = await db.execute(select(Yard.name).where(Yard.id == building.yard_id))
-    yard_name = yard_result.scalar_one_or_none()
+    await publish_building_event("building.updated", {
+        "id": building.id, "address": building.address, "yard_name": yard_name_wh,
+    })
 
     # Fetch apartments count
     apt_count = (await db.execute(
         select(func.count(Apartment.id)).where(Apartment.building_id == building_id)
     )).scalar() or 0
 
-    return BuildingOut(**_building_dict(building), yard_name=yard_name, apartments_count=apt_count)
+    return BuildingOut(**_building_dict(building), yard_name=yard_name_wh, apartments_count=apt_count)
 
 
 @router.delete("/buildings/{building_id}", status_code=200)
@@ -406,7 +420,16 @@ async def delete_building(
         )
 
     building.is_active = False
+    # Fetch yard name before commit
+    yard_result = await db.execute(select(Yard.name).where(Yard.id == building.yard_id))
+    yard_name = yard_result.scalar_one_or_none() or ""
+    await queue_webhook(db, "building.deleted", "/api/webhooks/uk/building", {
+        "id": building.id, "address": building.address, "yard_name": yard_name,
+    })
     await db.commit()
+    await publish_building_event("building.deleted", {
+        "id": building.id, "address": building.address, "yard_name": yard_name,
+    })
     return {"ok": True, "detail": "Building deactivated"}
 
 
