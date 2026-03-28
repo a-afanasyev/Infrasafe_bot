@@ -465,14 +465,16 @@ async def confirm_yard_deletion(callback: CallbackQuery, language: str = "ru"):
 
         warning = ""
         if buildings_count > 0:
-            warning = f"\n\n⚠️ <b>Внимание:</b> В этом дворе {buildings_count} зданий. " \
-                     f"Удаление возможно только после деактивации всех зданий."
+            warning = get_text("address_yards.handlers.delete_warning_buildings", language=lang).format(
+                count=buildings_count
+            )
+
+        confirm_text = get_text("address_yards.handlers.confirm_delete_yard", language=lang).format(
+            name=yard.name
+        ) + warning
 
         await callback.message.edit_text(
-            f"❓ <b>Удаление двора</b>\n\n"
-            f"Вы уверены, что хотите удалить двор:\n"
-            f"<b>{yard.name}</b>?"
-            f"{warning}",
+            confirm_text,
             reply_markup=get_confirmation_keyboard(
                 confirm_callback=f"addr_yard_delete_confirm:{yard_id}",
                 cancel_callback=f"addr_yard_view:{yard_id}"

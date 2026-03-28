@@ -234,7 +234,9 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
                     if idx == 0:
                         media_group.append(InputMediaPhoto(
                             media=file_id,
-                            caption=f"Фото {idx+1}/{len(completion_media)}"
+                            caption=get_text("request_acceptance.handlers.media_photo_caption", language=lang).format(
+                                index=idx + 1, total=len(completion_media)
+                            )
                         ))
                     else:
                         media_group.append(InputMediaPhoto(media=file_id))
@@ -242,7 +244,9 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
                     if idx == 0:
                         media_group.append(InputMediaDocument(
                             media=file_id,
-                            caption=f"Файл {idx+1}/{len(completion_media)}"
+                            caption=get_text("request_acceptance.handlers.media_file_caption", language=lang).format(
+                                index=idx + 1, total=len(completion_media)
+                            )
                         ))
                     else:
                         media_group.append(InputMediaDocument(media=file_id))

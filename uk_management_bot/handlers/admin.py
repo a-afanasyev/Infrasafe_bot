@@ -1225,7 +1225,7 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
             "request_number": r.request_number,
             "category": get_category_display(resolve_category_key(r.category), language=lang),
             "address": r.address,
-            "status": f"🔄 Возврат{return_info}"
+            "status": get_text("admin.handlers.returned_status_label", language=lang) + return_info
         }
         items.append(item)
 
@@ -1598,11 +1598,11 @@ async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext,
         # Формируем текст с токеном
         role_name = get_text(f"roles.{role}", language=lang)
         expiry_text = {
-            1: "1 час",
-            24: "24 часа", 
-            168: "7 дней"
-        }.get(expiry_hours, "24 часа")
-        
+            1: get_text("admin.handlers.expiry_1h", language=lang),
+            24: get_text("admin.handlers.expiry_24h", language=lang),
+            168: get_text("admin.handlers.expiry_7d", language=lang)
+        }.get(expiry_hours, get_text("admin.handlers.expiry_24h", language=lang))
+
         success_text = get_text("admin.handlers.invite_created_header", language=lang) + "\n\n"
         success_text += get_text("admin.handlers.invite_confirm_role", language=lang).format(role_name=role_name) + "\n"
 
@@ -1651,10 +1651,10 @@ async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: S
         get_text("buttons.operation_cancelled", language=lang)
     )
     await callback.message.answer(
-        "Вернуться в админ-панель:",
+        get_text("admin.handlers.back_to_admin_panel", language=lang),
         reply_markup=get_manager_main_keyboard(language=lang)
     )
-    
+
     # Очищаем состояние
     await state.clear()
     
@@ -1748,10 +1748,10 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
                 address=request.address
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_{request_number}")]
+                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
             ])
         )
-        
+
         # Сохраняем номер заявки в состоянии для отклонения
         await state.update_data(deny_request_number=request_number)
         
@@ -1891,10 +1891,10 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
         await callback.message.edit_text(
             prompt_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_{request_number}")]
+                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
             ])
         )
-        
+
         # Сохраняем состояние
         from uk_management_bot.states.request_status import RequestStatusStates
         from aiogram.fsm.context import FSMContext
@@ -2072,7 +2072,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
 
         # Добавляем уточнение в примечания заявки
         timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
-        new_note = f"--- УТОЧНЕНИЕ {timestamp} ---\n"
+        new_note = get_text("admin.handlers.clarification_note_header", language=lang).format(timestamp=timestamp) + "\n"
         new_note += f"👨‍💼 {manager_name}:\n"
         new_note += f"{clarification_text}"
         
@@ -2190,7 +2190,11 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
         # Обновляем статус и добавляем примечание
         old_status = request.status
         request.status = REQUEST_STATUS_CANCELLED
-        cancel_note = f"Отклонена менеджером {manager_name} {datetime.now().strftime('%d.%m.%Y %H:%M')}\nПричина: {cancel_reason}"
+        cancel_note = get_text("admin.handlers.cancel_note_text", language=lang).format(
+            manager_name=manager_name,
+            cancel_date=datetime.now().strftime('%d.%m.%Y %H:%M'),
+            cancel_reason=cancel_reason
+        )
         
         if request.notes and request.notes.strip():
             request.notes = request.notes.strip() + "\n\n" + cancel_note
@@ -2314,13 +2318,14 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
             if request.manager_materials_comment:
                 manager_comment = request.manager_materials_comment
             else:
-                manager_comment = "Без комментариев"
-            
+                manager_comment = get_text("admin.handlers.no_comments", language=lang)
+
+            materials_val = request.requested_materials.split(f'{procurement_separator}')[0].strip()
             history_entry = (
-                f"ЗАКУП ЗАВЕРШЕН:\n"
-                f"Материалы: {request.requested_materials.split(f'{procurement_separator}')[0].strip()}\n"
-                f"Комментарий менеджера: {manager_comment}\n"
-                f"Дата завершения: {current_date}"
+                get_text("admin.handlers.purchase_history_completed_header", language=lang) + "\n"
+                + get_text("admin.handlers.purchase_history_materials_label", language=lang).format(materials=materials_val) + "\n"
+                + get_text("admin.handlers.purchase_history_comment_label", language=lang).format(comment=manager_comment) + "\n"
+                + get_text("admin.handlers.purchase_history_date_label", language=lang).format(date=current_date)
             )
             
             if request.purchase_history:
@@ -2458,11 +2463,11 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
         request.updated_at = datetime.now()
         
         # Обновляем историю закупов для сохранения данных
-        requested_materials = request.requested_materials or "Не указано"
+        requested_materials = request.requested_materials or get_text("admin.handlers.not_specified", language=lang)
         purchase_history_entry = (
-            f"Запрошенные материалы: {requested_materials}\n"
-            f"Комментарий менеджера: {new_comment}\n"
-            f"Обновлено: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            get_text("admin.handlers.purchase_history_entry_materials", language=lang).format(materials=requested_materials) + "\n"
+            + get_text("admin.handlers.purchase_history_entry_comment", language=lang).format(comment=new_comment) + "\n"
+            + get_text("admin.handlers.purchase_history_entry_updated", language=lang).format(date=datetime.now().strftime('%d.%m.%Y %H:%M'))
         )
         
         if request.purchase_history:
@@ -2479,7 +2484,10 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
             try:
                 from uk_management_bot.services.comment_service import CommentService
                 comment_service = CommentService(db)
-                comment_text = f"Комментарии к материалам изменены менеджером:\n\nБыло: {old_comment or 'Комментарий отсутствовал'}\n\nСтало: {new_comment}"
+                comment_text = get_text("admin.handlers.comment_changed_text", language=lang).format(
+                    old_comment=old_comment or get_text("admin.handlers.comment_absent", language=lang),
+                    new_comment=new_comment
+                )
                 comment_service.add_status_change_comment(
                     request_id=request_number,
                     user_id=user.id,
@@ -2531,7 +2539,7 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
         except TelegramBadRequest as telegram_error:
             # Если сообщение не изменилось, отправляем callback.answer вместо редактирования
             if "message is not modified" in str(telegram_error):
-                await callback.answer("✅ Назначение выполнено успешно", show_alert=False)
+                await callback.answer(get_text("admin.handlers.assignment_done_success", language=lang), show_alert=False)
                 logger.info(f"Сообщение не изменилось, использован callback.answer для заявки {request_number}")
             else:
                 # Если другая ошибка Telegram - отправляем новое сообщение
@@ -2686,7 +2694,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
             await callback.message.edit_text(success_message, parse_mode="HTML")
         except TelegramBadRequest as e:
             if "message is not modified" in str(e):
-                await callback.answer("✅ Назначение выполнено успешно", show_alert=False)
+                await callback.answer(get_text("admin.handlers.assignment_done_success", language=lang), show_alert=False)
                 logger.info(f"Сообщение не изменилось для заявки {request_number}")
             else:
                 # Отправляем новое сообщение

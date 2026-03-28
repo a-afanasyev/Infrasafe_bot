@@ -75,7 +75,7 @@ SPECIALIZATION_TRANSLATIONS = {
 def translate_specializations(specializations: list, language: str = "ru") -> str:
     """Переводит список специализаций на указанный язык"""
     if not specializations:
-        return "Любая" if language == "ru" else "Har qanday"
+        return get_text("shift_management.any_specialization", language=language)
 
     translations = SPECIALIZATION_TRANSLATIONS.get(language, SPECIALIZATION_TRANSLATIONS["ru"])
     translated = [translations.get(spec, spec) for spec in specializations]
@@ -1349,7 +1349,7 @@ async def handle_template_create_finish(callback: CallbackQuery, state: FSMConte
             start_hour=start_hour,
             start_minute=start_minute,
             duration_hours=duration,
-            description=f"Шаблон {template_name}",
+            description=get_text("shift_management.template_default_description", language=lang).format(name=template_name),
             required_specializations=selected_specs if selected_specs else None,
             is_active=True,
             auto_create=True,

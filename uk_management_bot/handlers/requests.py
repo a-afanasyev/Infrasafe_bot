@@ -2462,7 +2462,9 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
             status_title = get_text("requests.handlers.archive_requests_title", language=lang)
         else:
             status_title = get_text("requests.handlers.all_requests_title", language=lang)
-        message_text = f"📋 {status_title} (страница {current_page}/{total_pages}):\n\n"
+        message_text = get_text("requests.handlers.requests_list_page_header", language=lang).format(
+            title=status_title, current_page=current_page, total_pages=total_pages
+        )
         if not page_requests:
             message_text += get_text("requests.handlers.no_requests_hint", language=lang)
         else:

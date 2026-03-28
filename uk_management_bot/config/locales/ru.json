@@ -924,7 +924,21 @@
       "error_user_not_found": "Ошибка: пользователь не найден",
       "error_assignment_detail": "Ошибка назначения: {error}",
       "executor_assigned_success": "✅ <b>Заявка #{request_number} назначена исполнителю</b>\n\n👤 Исполнитель: {executor_name}\n📂 Категория: {category}\n📍 Адрес: {address}\n\nИсполнитель получит уведомление о назначении.",
-      "notify_executor_assigned": "📋 <b>Вам назначена новая заявка!</b>\n\n№ заявки: #{request_number}\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению."
+      "notify_executor_assigned": "📋 <b>Вам назначена новая заявка!</b>\n\n№ заявки: #{request_number}\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению.",
+      "returned_status_label": "🔄 Возврат",
+      "btn_cancel": "❌ Отмена",
+      "assignment_done_success": "✅ Назначение выполнено успешно",
+      "clarification_note_header": "--- УТОЧНЕНИЕ {timestamp} ---",
+      "cancel_note_text": "Отклонена менеджером {manager_name} {cancel_date}\nПричина: {cancel_reason}",
+      "purchase_history_completed_header": "ЗАКУП ЗАВЕРШЕН:",
+      "purchase_history_materials_label": "Материалы: {materials}",
+      "purchase_history_comment_label": "Комментарий менеджера: {comment}",
+      "purchase_history_date_label": "Дата завершения: {date}",
+      "purchase_history_entry_materials": "Запрошенные материалы: {materials}",
+      "purchase_history_entry_comment": "Комментарий менеджера: {comment}",
+      "purchase_history_entry_updated": "Обновлено: {date}",
+      "comment_changed_text": "Комментарии к материалам изменены менеджером:\n\nБыло: {old_comment}\n\nСтало: {new_comment}",
+      "comment_absent": "Комментарий отсутствовал"
     },
     "panel_title": "⚙️ Панель управления"
   },
@@ -6073,7 +6087,8 @@
       "all_requests_title": "Все заявки",
       "archive_requests_title": "Архив заявок",
       "no_requests_hint": "Пока нет заявок. Нажмите 'Создать заявку' в главном меню.",
-      "reply_to": "💬 Ответить на #{number}"
+      "reply_to": "💬 Ответить на #{number}",
+      "requests_list_page_header": "📋 {title} (страница {current_page}/{total_pages}):\n\n"
     },
     "count": "заявок",
     "enter_address_manually": "📍 Введите адрес вручную:",
@@ -6291,6 +6306,7 @@
     "template_created_popup": "✅ Шаблон создан!",
     "template_creation_failed_popup": "❌ Ошибка создания",
     "template_finish_error": "❌ Произошла ошибка",
+    "template_default_description": "Шаблон {name}",
     "cancel_button": "🔙 Отмена",
     "edit_name_prompt": "📝 <b>Изменение названия шаблона</b>\n\nТекущее название: <b>{current_name}</b>\n\nВведите новое название:",
     "edit_name_error": "❌ Произошла ошибка",
@@ -7810,7 +7826,9 @@
       "request_returned_success": "✅ <b>Заявка #{request_number} возвращена</b>\n\nВаши замечания отправлены менеджеру.\nЗаявка будет рассмотрена и исправлена.",
       "error_returning_request": "Произошла ошибка при возврате заявки",
       "pending_acceptance_title": "✅ Ожидают приёмки",
-      "press_pending_button": "Для просмотра списка заявок нажмите кнопку '✅ Ожидают приёмки' в меню."
+      "press_pending_button": "Для просмотра списка заявок нажмите кнопку '✅ Ожидают приёмки' в меню.",
+      "media_photo_caption": "Фото {index}/{total}",
+      "media_file_caption": "Файл {index}/{total}"
     }
   },
   "unaccepted": {
@@ -7878,7 +7896,9 @@
       "status_inactive": "❌ Неактивно",
       "unknown_yard": "Неизвестный двор",
       "user_not_found": "❌ Пользователь не найден",
-      "yard_not_found": "❌ Двор не найден"
+      "yard_not_found": "❌ Двор не найден",
+      "confirm_delete_building": "❓ <b>Удаление здания</b>\n\nВы уверены, что хотите удалить здание:\n<b>{address}</b>?",
+      "delete_warning_apartments": "\n\n⚠️ <b>Внимание:</b> В этом здании {count} квартир. Удаление возможно только после деактивации всех квартир."
     }
   },
   "address_moderation": {

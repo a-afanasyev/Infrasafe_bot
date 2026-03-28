@@ -924,7 +924,21 @@
       "error_user_not_found": "Xato: foydalanuvchi topilmadi",
       "error_assignment_detail": "Tayinlash xatosi: {error}",
       "executor_assigned_success": "✅ <b>Ariza #{request_number} ijrochiga tayinlandi</b>\n\n👤 Ijrochi: {executor_name}\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n\nIjrochi tayinlash haqida xabar oladi.",
-      "notify_executor_assigned": "📋 <b>Sizga yangi ariza tayinlandi!</b>\n\n№ ariza: #{request_number}\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n\nIltimos, bajarishga kirishin."
+      "notify_executor_assigned": "📋 <b>Sizga yangi ariza tayinlandi!</b>\n\n№ ariza: #{request_number}\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n\nIltimos, bajarishga kirishin.",
+      "returned_status_label": "🔄 Qaytarilgan",
+      "btn_cancel": "❌ Bekor qilish",
+      "assignment_done_success": "✅ Tayinlash muvaffaqiyatli bajarildi",
+      "clarification_note_header": "--- ANIQLIK {timestamp} ---",
+      "cancel_note_text": "Menejer {manager_name} tomonidan rad etildi {cancel_date}\nSabab: {cancel_reason}",
+      "purchase_history_completed_header": "XARID YAKUNLANDI:",
+      "purchase_history_materials_label": "Materiallar: {materials}",
+      "purchase_history_comment_label": "Menejer izohi: {comment}",
+      "purchase_history_date_label": "Yakunlanish sanasi: {date}",
+      "purchase_history_entry_materials": "So'ralgan materiallar: {materials}",
+      "purchase_history_entry_comment": "Menejer izohi: {comment}",
+      "purchase_history_entry_updated": "Yangilangan: {date}",
+      "comment_changed_text": "Materiallar izohlari menejer tomonidan o'zgartirildi:\n\nAvval: {old_comment}\n\nKeyin: {new_comment}",
+      "comment_absent": "Izoh yo'q edi"
     },
     "panel_title": "⚙️ Boshqaruv paneli"
   },
@@ -6073,7 +6087,8 @@
       "all_requests_title": "Barcha arizalar",
       "archive_requests_title": "Arizalar arxivi",
       "no_requests_hint": "Hozircha arizalar yo'q. Asosiy menyuda 'Ariza yaratish' tugmasini bosing.",
-      "reply_to": "💬 #{number} ga javob berish"
+      "reply_to": "💬 #{number} ga javob berish",
+      "requests_list_page_header": "📋 {title} (sahifa {current_page}/{total_pages}):\n\n"
     },
     "count": "arizalar",
     "enter_address_manually": "📍 Manzilni qo'lda kiriting:",
@@ -6291,6 +6306,7 @@
     "template_created_popup": "✅ Shablon yaratildi!",
     "template_creation_failed_popup": "❌ Yaratish xatosi",
     "template_finish_error": "❌ Xatolik yuz berdi",
+    "template_default_description": "Shablon {name}",
     "cancel_button": "🔙 Bekor qilish",
     "edit_name_prompt": "📝 <b>Shablon nomini o'zgartirish</b>\n\nJoriy nomi: <b>{current_name}</b>\n\nYangi nomini kiriting:",
     "edit_name_error": "❌ Xatolik yuz berdi",
@@ -7811,7 +7827,9 @@
       "request_returned_success": "✅ <b>Buyurtma #{request_number} qaytarildi</b>\n\nSizning izohlaringiz menejerga yuborildi.\nBuyurtma ko'rib chiqiladi va tuzatiladi.",
       "error_returning_request": "Buyurtmani qaytarishda xatolik yuz berdi",
       "pending_acceptance_title": "✅ Qabul qilishni kutmoqda",
-      "press_pending_button": "Buyurtmalar ro'yxatini ko'rish uchun menyuda '✅ Qabul qilishni kutmoqda' tugmasini bosing."
+      "press_pending_button": "Buyurtmalar ro'yxatini ko'rish uchun menyuda '✅ Qabul qilishni kutmoqda' tugmasini bosing.",
+      "media_photo_caption": "Rasm {index}/{total}",
+      "media_file_caption": "Fayl {index}/{total}"
     }
   },
   "unaccepted": {
@@ -7879,7 +7897,9 @@
       "status_inactive": "❌ Nofaol",
       "unknown_yard": "Noma'lum hovli",
       "user_not_found": "❌ Foydalanuvchi topilmadi",
-      "yard_not_found": "❌ Hovli topilmadi"
+      "yard_not_found": "❌ Hovli topilmadi",
+      "confirm_delete_building": "❓ <b>Binoni o'chirish</b>\n\nSiz rostdan ham binoni o'chirmoqchimisiz:\n<b>{address}</b>?",
+      "delete_warning_apartments": "\n\n⚠️ <b>Diqqat:</b> Bu binoda {count} ta xonadon bor. O'chirish faqat barcha xonadonlar nofaollashtirilgandan keyin mumkin."
     }
   },
   "address_moderation": {
