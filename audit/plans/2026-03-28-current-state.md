@@ -1,8 +1,8 @@
 # UK Management System — Текущее состояние
 
-**Дата:** 2026-03-28
-**Ветка:** feat/webhook-sender (незакоммичено)
-**Последний коммит:** 1b51e32 (fix: bot architecture fixes from E2E audit)
+**Дата:** 2026-03-29
+**Ветка:** main
+**Последний коммит:** 4d97eec (fix: acceptance shows apartment neighbors' requests)
 
 ---
 
@@ -93,18 +93,22 @@
 | Templates | /dashboard/templates | PASS |
 | Resident Board | /resident-board | PASS |
 
-## 7. Бот — live-тест executor flow (2026-03-28)
+## 7. Бот — live-тесты (2026-03-28 — 2026-03-29)
 
 | Тест | Результат |
 |------|-----------|
 | Переключение роли → executor | PASS |
-| Начало смены | PASS (fix: user.roles вместо user.role) |
-| Активные заявки | PASS (2 заявки видны) |
-| Завершение смены (список) | PASS (fix: datetime naive/aware) |
-| Завершение смены (детали) | PASS (fix: lang vs language NameError) |
-| Завершение смены (подтверждение) | PASS (fix: audit_logs BIGINT) |
+| Начало смены | PASS |
+| Активные заявки executor | PASS |
+| Завершение смены | PASS |
+| Переключение → applicant | PASS |
+| Создание заявки (полный цикл) | PASS — #260328-001 |
+| Переключение → manager | PASS |
+| Админ-панель (10 кнопок) | PASS |
+| Новые заявки в админ-панели | PASS |
+| Приёмка заявки соседа по квартире | PASS |
 
-## 8. Исправления 2026-03-28 (незакоммичено)
+## 8. Исправления (закоммичено, 10 коммитов в main)
 
 ### Веб
 | Файл | Исправление |
@@ -139,12 +143,17 @@
 
 | # | Серьёзность | Описание |
 |---|-------------|----------|
-| 1 | Низкая | Нелокализованные категории на /resident-board (plumbing вместо Сантехника) |
-| 2 | Низкая | 401 в консоли при token refresh (функционально ок) |
-| 3 | Низкая | Кнопка "Ред." шаблонов всегда disabled |
-| 4 | Низкая | Расхождение числа зданий в карточке двора |
-| 5 | Info | SAWarning: Request.executor overlaps User.executed_requests |
-| 6 | Info | Нужна alembic-миграция для audit_logs.telegram_user_id BIGINT |
+| 1 | Низкая | 401 в консоли при token refresh (функционально ок) |
+| 2 | Низкая | Кнопка "Ред." шаблонов всегда disabled |
+| 3 | Низкая | Расхождение числа зданий в карточке двора |
+| 4 | Info | SAWarning: Request.executor overlaps User.executed_requests |
+| 5 | Info | label+input связки в формах (accessibility) |
+
+Исправлены (ранее были в списке):
+- ~~Нелокализованные категории~~ → apiMaps.ts english keys (commit d4d4650)
+- ~~audit_logs BIGINT~~ → migration 004 (commit d2d4b34)
+- ~~Приёмка не показывает соседей~~ → apartment filter (commit 4d97eec)
+- ~~Неправильный статус приёмки~~ → REQUEST_STATUS_COMPLETED (commit 4d97eec)
 
 ## 10. Актуальные планы
 
@@ -156,5 +165,7 @@
 | `2026-03-22-bot-architecture-fixes.md` | Архитектурные фиксы бота | DONE (commit 1b51e32) |
 | `2026-03-11-kanban-business-logic.md` | Бизнес-логика канбана | DONE |
 | `2026-03-10-web-twa-expansion-plan.md` | Расширение веб/TWA | Частично |
-| `2026-03-08-i18n-hardcoded-strings.md` | Хардкод строк → i18n | Частично |
+| `2026-03-08-i18n-hardcoded-strings.md` | Хардкод строк → i18n | **~98% DONE** |
+| `2026-03-28-deployment-preparation.md` | Подготовка к деплою на VPS | Фазы 0-2 DONE |
+| `2026-03-28-work-plan.md` | План работы (P1-P4) | P1 DONE |
 | `00_MASTER_PLAN.md` | Мастер-план переписывания на Node.js | ОТЛОЖЕН |

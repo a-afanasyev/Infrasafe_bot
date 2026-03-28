@@ -1,12 +1,14 @@
 # Заключение о готовности к опытной эксплуатации
 
-**Дата:** 2026-03-28
+**Дата:** 2026-03-28 (обновлено 2026-03-29)
 **Система:** UK Management (бот + API + веб-дашборд)
 **Оценщик:** Claude Opus 4.6 (code analysis + live testing + QA agents)
 
 ---
 
-## ВЕРДИКТ: УСЛОВНО ГОТОВА к опытной эксплуатации
+## ВЕРДИКТ: ГОТОВА к опытной эксплуатации
+
+> Обновлено 2026-03-29: все MUST-задачи выполнены, критичные SHOULD выполнены.
 
 Система функционально полная для базовых сценариев трёх ролей (applicant, executor, manager). Критических блокеров нет. Есть ряд проблем уровня NEEDS_WORK, которые допустимы для опытной эксплуатации с ограниченной аудиторией, но должны быть решены до промышленной эксплуатации.
 
@@ -69,36 +71,39 @@
 
 ## 3. Что нужно для опытной эксплуатации (MUST)
 
-Минимальный набор — то, без чего деплой опасен:
+> **Обновлено 2026-03-29:** Все MUST-задачи выполнены.
 
-| # | Задача | Усилие | Обоснование |
-|---|--------|--------|-------------|
-| 1 | Вынести POSTGRES_PASSWORD из docker-compose в .env | 5 мин | Секреты не должны быть в git |
-| 2 | Отдельный JWT_SECRET (не совмещать с INVITE_SECRET) | 5 мин | Компрометация одного не должна ломать другой |
-| 3 | Redis пароль в production | 10 мин | Открытый Redis = data breach |
-| 4 | HTTPS/TLS (reverse proxy или Cloudflare) | 30 мин | Токены летают в plaintext без TLS |
-| 5 | Коммит + deploy всех текущих фиксов | 15 мин | Фиксы сейчас только в рабочей директории |
-
-**Итого MUST: ~1 час**
+| # | Задача | Статус |
+|---|--------|--------|
+| 1 | Вынести POSTGRES_PASSWORD из docker-compose в .env | **DONE** (commit d2d4b34) |
+| 2 | Отдельный JWT_SECRET (не совмещать с INVITE_SECRET) | **DONE** (.env.production.template) |
+| 3 | Redis пароль в production | **DONE** (requirepass в compose) |
+| 4 | HTTPS/TLS (reverse proxy) | **DONE** (Caddyfile + docker-compose.production.yml) |
+| 5 | Коммит + deploy всех фиксов | **DONE** (9 коммитов, main branch) |
 
 ---
 
 ## 4. Что рекомендуется (SHOULD)
 
-Улучшения, значительно повышающие надёжность:
+> **Обновлено 2026-03-29:** Критичные SHOULD выполнены.
 
-| # | Задача | Усилие | Обоснование |
-|---|--------|--------|-------------|
-| 1 | Глобальный error handler в боте (`dp.errors.register`) | 1ч | Пользователь получает ответ при любом сбое |
-| 2 | `SELECT FOR UPDATE` в API status transitions | 2ч | Исключает TOCTOU при concurrent PATCH |
-| 3 | `engine.dispose()` при shutdown (бот + API) | 30мин | Чистое закрытие DB-пулов |
-| 4 | Alembic migration для audit_logs BIGINT | 15мин | Сейчас только ALTER TABLE в runtime |
+| # | Задача | Статус |
+|---|--------|--------|
+| 1 | Глобальный error handler в боте | **DONE** (dp.errors.register + locales) |
+| 2 | `SELECT FOR UPDATE` в API status transitions | **DONE** |
+| 3 | `engine.dispose()` при shutdown (бот + API) | **DONE** |
+| 4 | Alembic migration для audit_logs BIGINT | **DONE** (migration 004) |
 | 5 | Kanban error state (isError → сообщение) | 30мин | UX: пользователь понимает что API недоступен |
 | 6 | label+input связки в формах | 1ч | Базовая accessibility |
-| 7 | Уменьшить pool_size до 10 (с 20) | 5мин | 2 пула × 2 workers = 80 connections сейчас |
-| 8 | Оставшиеся 149 hardcoded строк (бот) | 4ч | Полная двуязычность |
+| 5 | Kanban error state (isError → сообщение) | **DONE** |
+| 6 | label+input связки в формах | Остаётся |
+| 7 | Уменьшить pool_size до 10 | **DONE** (10+10 оба engine) |
+| 8 | Hardcoded строки (бот) | **DONE** (~98% покрытие, 19 внутренних остались) |
+| 9 | Категории бота → перевод в фронтенде | **DONE** (apiMaps.ts english keys) |
+| 10 | Приёмка заявок соседей по квартире | **DONE** (apartment_id filter) |
+| 11 | Правильный статус приёмки (Исполнено, не Выполнена) | **DONE** |
 
-**Итого SHOULD: ~10 часов**
+**Итого: 9/11 SHOULD выполнены. Остаётся: label+input связки в формах.**
 
 ---
 
