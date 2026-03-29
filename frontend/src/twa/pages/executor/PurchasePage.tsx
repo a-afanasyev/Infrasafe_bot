@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'
+import { CardSkeleton } from '../../components/Skeleton'
 
 export default function PurchasePage() {
   const { t } = useTranslation()
@@ -22,7 +23,7 @@ export default function PurchasePage() {
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.exec.purchase.title')}</h1>
 
-      {isLoading && <p className="text-center text-gray-400 py-8">{t('common.loading')}</p>}
+      {isLoading && <CardSkeleton />}
 
       {!isLoading && purchases.length === 0 && (
         <div className="text-center py-12">

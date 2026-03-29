@@ -21,6 +21,10 @@ export default function ExecutorProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       haptic('notification')
     },
+    onError: (err: any) => {
+      console.error('Mutation failed:', err)
+      // Toast would go here in the future
+    },
   })
 
   const specializations = profile?.specialization

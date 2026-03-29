@@ -23,7 +23,9 @@ export default function BottomTabBar({ tabs }: Props) {
     <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-2 pb-[env(safe-area-inset-bottom)] z-50">
       <div className="flex justify-around items-center h-14">
         {tabs.map((tab) => {
-          const isActive = location.pathname === tab.path
+          const isActive = tab.path === '/twa/app' || tab.path === '/twa/exec'
+            ? location.pathname === tab.path
+            : location.pathname.startsWith(tab.path)
           return (
             <button
               key={tab.path}

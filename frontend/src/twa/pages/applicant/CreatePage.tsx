@@ -52,6 +52,10 @@ export default function CreatePage() {
       queryClient.invalidateQueries({ queryKey: ['my-requests'] })
       navigate('/twa/app/requests')
     },
+    onError: (err: any) => {
+      console.error('Mutation failed:', err)
+      // Toast would go here in the future
+    },
   })
 
   const steps = [

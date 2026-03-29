@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'
+import { CardSkeleton } from '../../components/Skeleton'
 
 export default function RequestsPage() {
   const { t } = useTranslation()
@@ -45,7 +46,7 @@ export default function RequestsPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-center text-gray-400 py-8">{t('common.loading')}</p>}
+      {isLoading && <CardSkeleton />}
 
       {!isLoading && filtered.length === 0 && (
         <div className="text-center py-12">

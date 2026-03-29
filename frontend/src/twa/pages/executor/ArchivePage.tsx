@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'
 import { Star } from 'lucide-react'
+import { CardSkeleton } from '../../components/Skeleton'
 
 export default function ArchivePage() {
   const { t } = useTranslation()
@@ -31,7 +32,7 @@ export default function ArchivePage() {
         </div>
       </div>
 
-      {isLoading && <p className="text-center text-gray-400 py-8">{t('common.loading')}</p>}
+      {isLoading && <CardSkeleton />}
 
       {!isLoading && archive.length === 0 && (
         <div className="text-center py-12">

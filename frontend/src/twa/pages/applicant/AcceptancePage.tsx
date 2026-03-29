@@ -6,6 +6,7 @@ import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import StatusBadge from '../../components/StatusBadge'
 import StarRating from '../../components/StarRating'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
+import { CardSkeleton } from '../../components/Skeleton'
 
 export default function AcceptancePage() {
   const { t } = useTranslation()
@@ -30,6 +31,10 @@ export default function AcceptancePage() {
       queryClient.invalidateQueries({ queryKey: ['acceptance'] })
       setExpanded(null)
     },
+    onError: (err: any) => {
+      console.error('Mutation failed:', err)
+      // Toast would go here in the future
+    },
   })
 
   const returnMutation = useMutation({
@@ -41,13 +46,17 @@ export default function AcceptancePage() {
       queryClient.invalidateQueries({ queryKey: ['acceptance'] })
       setExpanded(null)
     },
+    onError: (err: any) => {
+      console.error('Mutation failed:', err)
+      // Toast would go here in the future
+    },
   })
 
   return (
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.acceptance.title')}</h1>
 
-      {isLoading && <p className="text-center text-gray-400 py-8">{t('common.loading')}</p>}
+      {isLoading && <CardSkeleton />}
 
       {!isLoading && requests.length === 0 && (
         <div className="text-center py-12">

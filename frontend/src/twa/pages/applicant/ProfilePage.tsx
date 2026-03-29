@@ -26,6 +26,10 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       haptic('notification')
     },
+    onError: (err: any) => {
+      console.error('Mutation failed:', err)
+      // Toast would go here in the future
+    },
   })
 
   return (
