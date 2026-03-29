@@ -165,6 +165,16 @@ sequenceDiagram
     Bot->>U: Главное меню исполнителя
 ```
 
+### Переключение через API (TWA, обновлено 2026-03-29)
+
+```
+PATCH /api/v2/profile/role
+Body: { "active_role": "executor" }
+Response: { "active_role": "executor", "roles": ["applicant", "executor"] }
+```
+
+Валидация: `active_role` должен быть в `user.roles`. TWA использует этот endpoint для переключения между applicant и executor интерфейсами.
+
 ## 4.5. Привязка к квартире
 
 ```mermaid

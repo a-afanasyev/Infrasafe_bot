@@ -85,7 +85,34 @@
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET | `/profile/me` | Текущий профиль пользователя |
+| GET | `/profile` | Текущий профиль пользователя |
+| PATCH | `/profile` | Обновить профиль (language, email) |
+| PATCH | `/profile/role` | Переключить active_role (TWA) |
+| GET | `/profile/apartments` | Квартиры текущего пользователя (TWA) |
+| POST | `/profile/documents` | Загрузить документ |
+
+#### Executor Shifts (`/api/v2/executor/shifts`) — добавлено 2026-03-29
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/executor/shifts/current` | Текущая активная смена executor |
+| GET | `/executor/shifts/me` | История смен executor |
+| POST | `/executor/shifts/start` | Начать смену |
+| POST | `/executor/shifts/{id}/end` | Завершить смену |
+
+#### Media Proxy (`/api/v2/media`) — добавлено 2026-03-29
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/media/upload` | Proxy загрузки файла в Media Service |
+| GET | `/media/request/{number}` | Файлы заявки из Media Service |
+
+#### Other
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/announcements` | Объявления УК (stub) |
+| GET | `/requests/acceptance` | Заявки для приёмки (свои + соседи по квартире) |
 
 #### WebSocket (`/ws/v2`)
 
