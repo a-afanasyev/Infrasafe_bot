@@ -42,6 +42,34 @@ def build_building_payload(event: str, data: dict) -> dict:
     }
 
 
+def build_request_payload(event: str, data: dict) -> dict:
+    """Build webhook payload for request.* events."""
+    payload = {
+        "event_id": str(uuid.uuid4()),
+        "event": event,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "request": {
+            "request_number": data["request_number"],
+        },
+    }
+    if event == "request.created":
+        payload["request"].update({
+            "category": data.get("category", ""),
+            "status": data.get("status", ""),
+            "urgency": data.get("urgency", ""),
+            "description": data.get("description", ""),
+            "address": data.get("address", ""),
+            "apartment_id": data.get("apartment_id"),
+            "created_at": data.get("created_at", payload["timestamp"]),
+        })
+    elif event == "request.status_changed":
+        payload["request"].update({
+            "old_status": data.get("old_status", ""),
+            "new_status": data.get("new_status", ""),
+        })
+    return payload
+
+
 async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict) -> None:
     """Write a webhook outbox record within the caller's transaction (no commit)."""
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
@@ -49,6 +77,8 @@ async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict)
 
     if event.startswith("building."):
         payload = build_building_payload(event, data)
+    elif event.startswith("request."):
+        payload = build_request_payload(event, data)
     else:
         payload = {
             "event_id": str(uuid.uuid4()),

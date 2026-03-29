@@ -67,3 +67,37 @@ class TestBuildBuildingPayload:
         })
         assert result["event"] == "building.deleted"
         assert result["building"]["id"] == 5
+
+
+class TestBuildRequestPayload:
+    def test_request_created_payload(self):
+        from uk_management_bot.services.webhook_sender import build_request_payload
+        result = build_request_payload("request.created", {
+            "request_number": "260329-001",
+            "category": "plumbing",
+            "status": "Новая",
+            "urgency": "Обычная",
+            "description": "Test request",
+            "address": "Test address",
+            "apartment_id": 54,
+            "created_at": "2026-03-29T10:00:00Z",
+        })
+        assert result["event"] == "request.created"
+        assert result["request"]["request_number"] == "260329-001"
+        assert result["request"]["category"] == "plumbing"
+        assert result["request"]["status"] == "Новая"
+        assert result["request"]["apartment_id"] == 54
+        assert "event_id" in result
+        assert result["timestamp"].endswith("Z")
+
+    def test_request_status_changed_payload(self):
+        from uk_management_bot.services.webhook_sender import build_request_payload
+        result = build_request_payload("request.status_changed", {
+            "request_number": "260329-001",
+            "old_status": "Новая",
+            "new_status": "В работе",
+        })
+        assert result["event"] == "request.status_changed"
+        assert result["request"]["request_number"] == "260329-001"
+        assert result["request"]["old_status"] == "Новая"
+        assert result["request"]["new_status"] == "В работе"
