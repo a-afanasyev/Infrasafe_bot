@@ -1,8 +1,8 @@
 # UK Management System — Текущее состояние
 
-**Дата:** 2026-03-29
+**Дата:** 2026-03-29 (обновлено)
 **Ветка:** main
-**Последний коммит:** 4d97eec (fix: acceptance shows apartment neighbors' requests)
+**Последний коммит:** 67d1496 (feat: TWA Phase 3 — Executor Mini App)
 
 ---
 
@@ -167,5 +167,9 @@
 | `2026-03-10-web-twa-expansion-plan.md` | Расширение веб/TWA | Частично |
 | `2026-03-08-i18n-hardcoded-strings.md` | Хардкод строк → i18n | **~98% DONE** |
 | `2026-03-28-deployment-preparation.md` | Подготовка к деплою на VPS | Фазы 0-2 DONE |
+| `2026-03-29-twa-redesign-design.md` | TWA Mini App spec (applicant+executor) | **DONE** (v5) |
+| `2026-03-29-twa-phase1-backend.md` | TWA backend (ACL, shifts, role) | **DONE** |
+| TWA Phase 2 | Applicant 6 страниц | **DONE** |
+| TWA Phase 3 | Executor 8 страниц | **DONE** |
 | `2026-03-28-work-plan.md` | План работы (P1-P4) | P1 DONE |
 | `00_MASTER_PLAN.md` | Мастер-план переписывания на Node.js | ОТЛОЖЕН |
