@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '../../../api/client'
+import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import StatusBadge from '../../components/StatusBadge'
 import StarRating from '../../components/StarRating'
@@ -16,12 +16,12 @@ export default function AcceptancePage() {
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['acceptance'],
-    queryFn: () => apiClient.get('/api/v2/requests/acceptance').then(r => r.data),
+    queryFn: () => twaClient.get('/api/v2/requests/acceptance').then(r => r.data),
     staleTime: 30_000,
   })
 
   const acceptMutation = useMutation({
-    mutationFn: (num: string) => apiClient.patch(`/api/v2/requests/${num}`, {
+    mutationFn: (num: string) => twaClient.patch(`/api/v2/requests/${num}`, {
       status: 'Принято',
       rating,
     }),
@@ -34,7 +34,7 @@ export default function AcceptancePage() {
   })
 
   const returnMutation = useMutation({
-    mutationFn: (num: string) => apiClient.patch(`/api/v2/requests/${num}`, {
+    mutationFn: (num: string) => twaClient.patch(`/api/v2/requests/${num}`, {
       status: 'В работе',
     }),
     onSuccess: () => {

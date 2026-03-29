@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useEffect } from 'react'
-import { apiClient } from '../../../api/client'
+import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import StatusBadge from '../../components/StatusBadge'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
@@ -20,13 +20,13 @@ export default function RequestDetailPage() {
 
   const { data: request, isLoading } = useQuery({
     queryKey: ['request', number],
-    queryFn: () => apiClient.get(`/api/v2/requests/${number}`).then(r => r.data),
+    queryFn: () => twaClient.get(`/api/v2/requests/${number}`).then(r => r.data),
     enabled: !!number,
   })
 
   const { data: comments = [] } = useQuery({
     queryKey: ['comments', number],
-    queryFn: () => apiClient.get(`/api/v2/requests/${number}/comments`).then(r => r.data),
+    queryFn: () => twaClient.get(`/api/v2/requests/${number}/comments`).then(r => r.data),
     enabled: !!number,
   })
 

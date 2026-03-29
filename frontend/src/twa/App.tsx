@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useTWAAuth } from './hooks/useTWAAuth'
 import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
-import { apiClient } from '../api/client'
+import { twaClient } from './twaClient'
 import '../i18n'
 
 // Pages
@@ -22,13 +22,10 @@ const queryClient = new QueryClient({
 function TWAContent() {
   const { accessToken, isLoading, isAuthenticated } = useTWAAuth()
 
-  // Set auth header for apiClient
+  // Set auth header for TWA-specific client (not shared apiClient)
   useEffect(() => {
     if (accessToken) {
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
-    }
-    return () => {
-      delete apiClient.defaults.headers.common['Authorization']
+      twaClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
     }
   }, [accessToken])
 

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '../../../api/client'
+import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { Globe, MapPin, LogOut } from 'lucide-react'
 
@@ -11,16 +11,16 @@ export default function ProfilePage() {
 
   const { data: profile } = useQuery({
     queryKey: ['profile'],
-    queryFn: () => apiClient.get('/api/v2/profile').then(r => r.data),
+    queryFn: () => twaClient.get('/api/v2/profile').then(r => r.data),
   })
 
   const { data: apartments = [] } = useQuery({
     queryKey: ['my-apartments'],
-    queryFn: () => apiClient.get('/api/v2/profile/apartments').then(r => r.data),
+    queryFn: () => twaClient.get('/api/v2/profile/apartments').then(r => r.data),
   })
 
   const langMutation = useMutation({
-    mutationFn: (lang: string) => apiClient.patch('/api/v2/profile', { language: lang }),
+    mutationFn: (lang: string) => twaClient.patch('/api/v2/profile', { language: lang }),
     onSuccess: (_, lang) => {
       i18n.changeLanguage(lang)
       queryClient.invalidateQueries({ queryKey: ['profile'] })

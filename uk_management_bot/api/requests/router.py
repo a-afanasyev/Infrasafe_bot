@@ -271,7 +271,20 @@ async def update_request(
 
     # ── Applicant path ──
     elif "applicant" in user_roles and "manager" not in user_roles:
-        if req.user_id != user.id:
+        is_owner = req.user_id == user.id
+        # Apartment co-resident can accept (Исполнено → Принято) only
+        is_apartment_resident = False
+        if not is_owner and req.apartment_id and req.status == "Исполнено":
+            from uk_management_bot.database.models.user_apartment import UserApartment
+            res = await db.execute(
+                select(UserApartment).where(
+                    UserApartment.user_id == user.id,
+                    UserApartment.apartment_id == req.apartment_id,
+                    UserApartment.status == "approved",
+                )
+            )
+            is_apartment_resident = res.scalar_one_or_none() is not None
+        if not is_owner and not is_apartment_resident:
             raise HTTPException(status_code=403, detail="Cannot update another user's request")
         allowed_fields = {"status", "rating"}
         unset_fields = set(updates.keys())

@@ -15,6 +15,15 @@
 - Status flow: guards in `isTransitionAllowed()` — frozen statuses block all, "Новая" blocks inbound from other columns
 - Optimistic update uses `queryClient.setQueryData(['kanban', {}], ...)` — must match hook's query key
 
+## i18n Architecture (2026-03-21)
+- Files: `src/i18n/index.ts`, `apiMaps.ts`, `formatters.ts`, `locales/ru.json`, `locales/uz.json`
+- Pattern: Russian API values -> `apiMaps.ts` -> i18n keys -> translated text
+- `constants.ts` holds raw API values (Russian for statuses/categories, English for shift types)
+- Known gaps: `AnalyticsPage` pie chart shows raw Russian category names; `AssignRequestModal` shows raw category; `ShiftDetailModal` shows raw English shift status; `TemplatesPage` uses hardcoded `SHIFT_TYPE_LABELS`/`DAY_LABELS` from constants instead of t()
+- DnD droppable IDs are raw Russian status strings (intentional, must NOT be translated)
+- Pluralization: Russian uses `_one/_few/_many`, Uzbek uses `_other` only
+- `formatters.ts` `formatDate()` has no Invalid Date guard
+
 ## Project Stack
 - React 19, Vite 7, TailwindCSS 4, TypeScript 5.9
 - React Query v5, Zustand v5, React Router v7

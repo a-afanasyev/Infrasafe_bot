@@ -84,7 +84,7 @@ async def require_active_shift(
             Shift.status == "active",
         )
     )
-    shift = result.scalar_one_or_none()
+    shift = result.scalars().first()  # .first() not scalar_one: executor may have multiple active shifts
     if not shift:
         raise HTTPException(
             status_code=403,

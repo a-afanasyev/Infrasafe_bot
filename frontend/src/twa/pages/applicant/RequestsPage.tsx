@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '../../../api/client'
+import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'
 
 export default function RequestsPage() {
@@ -12,7 +12,7 @@ export default function RequestsPage() {
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['my-requests', filter],
-    queryFn: () => apiClient.get('/api/v2/requests', {
+    queryFn: () => twaClient.get('/api/v2/requests', {
       params: { scope: 'my', limit: 50 }
     }).then(r => r.data),
     staleTime: 30_000,

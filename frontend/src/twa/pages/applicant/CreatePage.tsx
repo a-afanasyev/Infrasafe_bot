@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '../../../api/client'
+import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
 
@@ -25,11 +25,11 @@ export default function CreatePage() {
 
   const { data: apartments = [] } = useQuery({
     queryKey: ['my-apartments'],
-    queryFn: () => apiClient.get('/api/v2/profile/apartments').then(r => r.data),
+    queryFn: () => twaClient.get('/api/v2/profile/apartments').then(r => r.data),
   })
 
   const createMutation = useMutation({
-    mutationFn: () => apiClient.post('/api/v2/requests', {
+    mutationFn: () => twaClient.post('/api/v2/requests', {
       category,
       apartment_id: apartmentId,
       address,

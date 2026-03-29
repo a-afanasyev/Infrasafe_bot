@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '../../../api/client'
+import { twaClient } from '../../twaClient'
 import { Bell, Phone, Clock } from 'lucide-react'
 
 export default function HomePage() {
   const { t } = useTranslation()
   const { data } = useQuery({
     queryKey: ['announcements'],
-    queryFn: () => apiClient.get('/api/v2/announcements').then(r => r.data),
+    queryFn: () => twaClient.get('/api/v2/announcements').then(r => r.data),
     staleTime: 60_000,
   })
 

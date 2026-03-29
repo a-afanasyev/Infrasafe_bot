@@ -103,3 +103,14 @@ See: [shifts-review-2026-03-11.md](./shifts-review-2026-03-11.md) for full bug l
 - **No pagination**: list endpoints return unbounded result sets
 
 See: [addresses-review-2026-03-13.md](./addresses-review-2026-03-13.md) for full bug list
+
+### SAST Security Audit (2026-03-21)
+- **3 CRITICAL**: media_service zero auth, bot token in URLs, blocked user re-registration bypass
+- **5 HIGH**: wildcard CORS on web app, mass assignment (6 endpoints), LIKE injection (media_service), info disclosure, request_number race
+- **6 MEDIUM**: refresh no rate limit, hardcoded secrets/creds in media_service, WS token in URL, callcenter validation, nonce not consumed
+- Media service: `app/api/v1/media.py` has `settings.api_keys` field but NEVER checks it
+- Media service: `telegram_client.py:136` embeds bot token in file URLs returned to clients
+- Web invite: `web/api/invite.py:107-124` resets blocked user status to "pending" with valid invite
+- Web invite: nonce only consumed via `join_via_invite()`, bypassed on existing-user update paths
+- No eval/exec/subprocess/unsafe deserialization found in project
+- All DB queries use parameterized SQLAlchemy ORM (no raw SQL injection vectors)
