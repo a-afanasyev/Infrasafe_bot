@@ -277,7 +277,39 @@ Response: { "active_role": "executor", "roles": ["applicant", "executor"] }
 - Axios interceptor в TWA-контексте берёт access token из context, не из localStorage. Отдельный экземпляр `apiClient` или переконфигурация существующего через provider.
 - `POST /api/v2/auth/twa` — достаточен, изменений не требует. Поле `last_active_at` убрано из требований (в модели User его нет, и для MVP оно не нужно).
 
-### 6.5 LOW: Новые API endpoints для TWA
+### 6.5 HIGH: Executor shift endpoints (user-scoped)
+
+**Проблема:** Все текущие shift endpoints (`GET /shifts`, `POST /shifts`, `PATCH /shifts/{id}`, `GET /shifts/stats`, `GET /shifts/transfers`) защищены `require_roles("manager")`. Executor не может ни стартовать смену, ни смотреть свои смены через API — только через бот (sync `ShiftService`).
+
+**Требуемые новые endpoints:**
+
+| Endpoint | Метод | Назначение | ACL |
+|----------|-------|-----------|-----|
+| `GET /api/v2/shifts/me` | GET | Список смен текущего executor (active + history) | executor, фильтр `user_id = me` |
+| `GET /api/v2/shifts/current` | GET | Текущая активная смена (или null) | executor |
+| `POST /api/v2/shifts/start` | POST | Начать смену | executor (проверка: `user.roles` содержит executor) |
+| `POST /api/v2/shifts/{id}/end` | POST | Завершить смену | executor, `shift.user_id = me` |
+| `GET /api/v2/shifts/schedule` | GET | Расписание на неделю для текущего executor | executor, фильтр `user_id = me` |
+
+**Реализация:** Новый роутер `api/shifts/executor_router.py` (или расширение существующего с role-based routing). Логика старта/завершения смены — повторить `ShiftService.start_shift()` / `end_shift()` в async-варианте. Существующий `shifts/router.py` для manager остаётся без изменений.
+
+### 6.6 MEDIUM: Executor shift-gate для actions
+
+**Проблема:** Текущая бизнес-логика бота ограничивает executor:
+- Групповые заявки (по специализации) видны **только при активной смене** (requests.py line 1165)
+- Смена статуса executor'ом блокируется вне смены (request_service.py line 431, async_request_service.py line 523)
+
+TWA ОБЯЗАН сохранить это поведение, иначе расширит права executor'а:
+
+| Действие | Правило |
+|----------|---------|
+| `GET /requests` (executor list) | Individual assignments — всегда видны. Group assignments — **только при активной смене**. |
+| `PATCH /requests/{number}` (executor status change) | Разрешить **только при активной смене** executor'а. Без смены → 403 с сообщением "Начните смену для выполнения действий". |
+| `POST /shifts/start` | Проверка роли executor в `user.roles` (через `parse_roles_safe`, не через `user.role`) |
+
+**Реализация:** Dependency `require_active_shift(user)` — проверяет наличие `Shift` с `status='active'` и `user_id = user.id`. Используется в executor action endpoints.
+
+### 6.7 LOW: Прочие новые API endpoints для TWA
 
 | Endpoint | Назначение | Приоритет |
 |----------|-----------|-----------|
@@ -297,6 +329,8 @@ Response: { "active_role": "executor", "roles": ["applicant", "executor"] }
 - 6.2: Executor actions через API
 - 6.3: API переключения роли
 - 6.4: Auth flow cleanup
+- 6.5: Executor shift endpoints (start, end, me, current, schedule)
+- 6.6: Shift-gate для executor actions (require_active_shift dependency)
 
 ### Phase 2: Applicant TWA (6 страниц)
 - Компоненты: BottomTabBar, RequestCard, StatusBadge, StepWizard, StarRating, PhotoUploader
