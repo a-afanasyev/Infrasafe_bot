@@ -98,9 +98,51 @@ async def list_requests(
         select(Request, ExecutorUser)
         .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
     )
-    # scope=my: only user's own requests (for TWA applicant)
+    # scope=my: role-based filtering for TWA
     if scope == "my":
-        query = query.filter(Request.user_id == user.id)
+        user_roles = _parse_user_roles(user)
+        if "executor" in user_roles and "manager" not in user_roles:
+            # Executor: individual assignments + group (if in shift) + executor_id fallback
+            from sqlalchemy import or_
+            from uk_management_bot.database.models.request_assignment import RequestAssignment
+            from uk_management_bot.database.models.shift import Shift
+            import json as _json
+
+            conditions = []
+            # 1. Individual assignments
+            assignment_sub = select(RequestAssignment.request_number).where(
+                RequestAssignment.executor_id == user.id,
+                RequestAssignment.status == "active",
+            )
+            conditions.append(Request.request_number.in_(assignment_sub))
+            # 2. Group assignments (only if executor has active shift)
+            active_shift = await db.execute(
+                select(Shift).where(Shift.user_id == user.id, Shift.status == "active")
+            )
+            if active_shift.scalars().first():
+                specs = []
+                if user.specialization:
+                    try:
+                        raw = user.specialization
+                        if isinstance(raw, str) and raw.startswith("["):
+                            specs = _json.loads(raw)
+                        else:
+                            specs = [raw] if raw else []
+                    except Exception:
+                        specs = [user.specialization] if user.specialization else []
+                if specs:
+                    group_sub = select(RequestAssignment.request_number).where(
+                        RequestAssignment.assignment_type == "group",
+                        RequestAssignment.group_specialization.in_(specs),
+                        RequestAssignment.status == "active",
+                    )
+                    conditions.append(Request.request_number.in_(group_sub))
+            # 3. Fallback: executor_id
+            conditions.append(Request.executor_id == user.id)
+            query = query.filter(or_(*conditions))
+        else:
+            # Applicant/manager: own requests
+            query = query.filter(Request.user_id == user.id)
     if status:
         query = query.filter(Request.status == status)
     if category:
