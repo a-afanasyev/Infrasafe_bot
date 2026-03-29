@@ -818,6 +818,14 @@
         "placeholder": "Nima qilindi...",
         "submit": "Bajarilgan deb belgilash"
       }
+    },
+    "timeline": {
+      "current": "joriy"
+    },
+    "offline": "Tarmoqqa ulanish yo'q",
+    "photo": {
+      "add": "Rasm qo'shish",
+      "uploading": "Yuklanmoqda..."
     }
   },
   "toast": {

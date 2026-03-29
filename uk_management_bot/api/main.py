@@ -128,3 +128,48 @@ async def get_announcements():
         "emergency_phones": ["+998 XX XXX XX XX"],
         "working_hours": "08:00-20:00",
     }
+
+
+# ── Media proxy (TWA → Media Service) ────────────────────
+import httpx
+from fastapi import UploadFile, File, Form
+
+@app.post("/api/v2/media/upload")
+async def proxy_media_upload(
+    file: UploadFile = File(...),
+    request_number: str = Form(...),
+    category: str = Form("request_photo"),
+    user: User = Depends(get_current_user),
+):
+    """Proxy media upload from TWA to Media Service."""
+    media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
+    if not media_url:
+        raise HTTPException(status_code=503, detail="Media service not configured")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{media_url}/api/v1/media/upload",
+            files={"file": (file.filename, await file.read(), file.content_type)},
+            data={
+                "request_number": request_number,
+                "category": category,
+                "uploaded_by": str(user.id),
+            },
+        )
+        if resp.status_code != 200 and resp.status_code != 201:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text[:200])
+        return resp.json()
+
+
+@app.get("/api/v2/media/request/{request_number}")
+async def proxy_media_list(
+    request_number: str,
+    user: User = Depends(get_current_user),
+):
+    """Proxy: get media files for a request."""
+    media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{media_url}/api/v1/media/request/{request_number}")
+        if resp.status_code != 200:
+            return []
+        return resp.json()

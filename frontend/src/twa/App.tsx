@@ -6,6 +6,7 @@ import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
 import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
+import OfflineIndicator from './components/OfflineIndicator'
 import '../i18n'
 
 // Applicant pages
@@ -59,6 +60,7 @@ function TWAContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+      <OfflineIndicator />
       <Routes>
         <Route path="/" element={<Navigate to="/twa/app" replace />} />
 

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
+import PhotoUploader from '../../components/PhotoUploader'
 
 const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
 const URGENCIES = ['low', 'medium', 'high', 'critical']
@@ -32,6 +33,7 @@ export default function CreatePage() {
   const [address, setAddress] = useState('')
   const [description, setDescription] = useState('')
   const [urgency, setUrgency] = useState('low')
+  const [photos, setPhotos] = useState<File[]>([])
 
   const { data: apartments = [] } = useQuery({
     queryKey: ['my-apartments'],
@@ -96,11 +98,20 @@ export default function CreatePage() {
         className="w-full mt-3 bg-emerald-500 text-white py-3 rounded-xl font-medium disabled:opacity-40"
       >{t('twa.create.next')}</button>
     </div>,
-    // Step 3: Urgency
+    // Step 3: Photos (optional)
+    <div key="photos">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.photo.add')}</h2>
+      <PhotoUploader files={photos} onChange={setPhotos} maxFiles={5} />
+      <button
+        onClick={() => setStep(4)}
+        className="w-full mt-3 bg-emerald-500 text-white py-3 rounded-xl font-medium"
+      >{t('twa.create.next')}</button>
+    </div>,
+    // Step 4: Urgency
     <div key="urg" className="space-y-2">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectUrgency')}</h2>
       {URGENCIES.map((u) => (
-        <button key={u} onClick={() => { setUrgency(u); haptic('selection'); setStep(4) }}
+        <button key={u} onClick={() => { setUrgency(u); haptic('selection'); setStep(5) }}
           className={`w-full bg-white dark:bg-gray-800 border rounded-xl p-3 text-[13px] text-left active:scale-[0.97] transition-transform ${
             u === 'critical' ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'
           }`}>
@@ -108,7 +119,7 @@ export default function CreatePage() {
         </button>
       ))}
     </div>,
-    // Step 4: Confirm
+    // Step 5: Confirm
     <div key="confirm">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.confirm')}</h2>
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-[13px]">
