@@ -4,16 +4,27 @@ import { useEffect } from 'react'
 import { useTWAAuth } from './hooks/useTWAAuth'
 import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
+import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
 import '../i18n'
 
-// Pages
+// Applicant pages
 import HomePage from './pages/applicant/HomePage'
 import RequestsPage from './pages/applicant/RequestsPage'
 import CreatePage from './pages/applicant/CreatePage'
 import AcceptancePage from './pages/applicant/AcceptancePage'
 import ProfilePage from './pages/applicant/ProfilePage'
 import RequestDetailPage from './pages/applicant/RequestDetailPage'
+
+// Executor pages
+import TasksPage from './pages/executor/TasksPage'
+import ShiftPage from './pages/executor/ShiftPage'
+import PurchasePage from './pages/executor/PurchasePage'
+import ArchivePage from './pages/executor/ArchivePage'
+import ExecutorProfilePage from './pages/executor/ProfilePage'
+import TaskDetailPage from './pages/executor/TaskDetailPage'
+import MyShiftsPage from './pages/executor/MyShiftsPage'
+import CompletionReport from './pages/executor/CompletionReport'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
@@ -50,15 +61,27 @@ function TWAContent() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <Routes>
         <Route path="/" element={<Navigate to="/twa/app" replace />} />
-        <Route path="/app" element={<HomePage />} />
-        <Route path="/app/requests" element={<RequestsPage />} />
-        <Route path="/app/create" element={<CreatePage />} />
-        <Route path="/app/acceptance" element={<AcceptancePage />} />
-        <Route path="/app/profile" element={<ProfilePage />} />
+
+        {/* Applicant routes */}
+        <Route path="/app" element={<><HomePage /><ApplicantTabs /></>} />
+        <Route path="/app/requests" element={<><RequestsPage /><ApplicantTabs /></>} />
+        <Route path="/app/create" element={<><CreatePage /><ApplicantTabs /></>} />
+        <Route path="/app/acceptance" element={<><AcceptancePage /><ApplicantTabs /></>} />
+        <Route path="/app/profile" element={<><ProfilePage /><ApplicantTabs /></>} />
         <Route path="/app/requests/:number" element={<RequestDetailPage />} />
+
+        {/* Executor routes */}
+        <Route path="/exec" element={<><TasksPage /><ExecutorTabs /></>} />
+        <Route path="/exec/shift" element={<><ShiftPage /><ExecutorTabs /></>} />
+        <Route path="/exec/purchase" element={<><PurchasePage /><ExecutorTabs /></>} />
+        <Route path="/exec/archive" element={<><ArchivePage /><ExecutorTabs /></>} />
+        <Route path="/exec/profile" element={<><ExecutorProfilePage /><ExecutorTabs /></>} />
+        <Route path="/exec/tasks/:number" element={<TaskDetailPage />} />
+        <Route path="/exec/shifts" element={<MyShiftsPage />} />
+        <Route path="/exec/report/:number" element={<CompletionReport />} />
+
         <Route path="*" element={<Navigate to="/twa/app" replace />} />
       </Routes>
-      <ApplicantTabs />
     </div>
   )
 }

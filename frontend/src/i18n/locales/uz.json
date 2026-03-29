@@ -766,6 +766,58 @@
     },
     "detail": {
       "comments": "Izohlar"
+    },
+    "exec": {
+      "tabs": {
+        "tasks": "Vazifalar",
+        "shift": "Smena",
+        "purchase": "Xarid",
+        "archive": "Arxiv",
+        "profile": "Profil"
+      },
+      "tasks": {
+        "title": "Mening vazifalarim",
+        "empty": "Faol vazifalar yo'q"
+      },
+      "shift": {
+        "title": "Smena",
+        "active": "Smena faol",
+        "inactive": "Smena boshlanmagan",
+        "start": "Smenani boshlash",
+        "end": "Smenani tugatish"
+      },
+      "purchase": {
+        "title": "Materiallar xaridi",
+        "empty": "Xarid uchun arizalar yo'q"
+      },
+      "archive": {
+        "title": "Arxiv",
+        "completed": "Bajarilgan",
+        "empty": "Arxiv bo'sh"
+      },
+      "profile": {
+        "title": "Profil",
+        "specializations": "Mutaxassisliklar"
+      },
+      "detail": {
+        "takeWork": "Ishga olish",
+        "complete": "Bajarildi",
+        "purchase": "Xarid",
+        "clarify": "Aniqlashtirish",
+        "backToWork": "Ishga qaytarish",
+        "materials": "So'ralgan materiallar"
+      },
+      "myShifts": {
+        "title": "Mening smenalarim",
+        "active": "Faol",
+        "completed": "Tugatilgan"
+      },
+      "report": {
+        "title": "Bajarish hisoboti",
+        "description": "Nima qilinganini tasvirlang",
+        "placeholder": "Nima qilindi...",
+        "submit": "Bajarilgan deb belgilash"
+      }
     }
   },
   "toast": {

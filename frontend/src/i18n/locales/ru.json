@@ -776,6 +776,58 @@
     },
     "detail": {
       "comments": "Комментарии"
+    },
+    "exec": {
+      "tabs": {
+        "tasks": "Задания",
+        "shift": "Смена",
+        "purchase": "Закуп",
+        "archive": "Архив",
+        "profile": "Профиль"
+      },
+      "tasks": {
+        "title": "Мои задания",
+        "empty": "Нет активных заданий"
+      },
+      "shift": {
+        "title": "Смена",
+        "active": "Смена активна",
+        "inactive": "Смена не начата",
+        "start": "Начать смену",
+        "end": "Завершить смену"
+      },
+      "purchase": {
+        "title": "Закуп материалов",
+        "empty": "Нет заявок на закуп"
+      },
+      "archive": {
+        "title": "Архив",
+        "completed": "Выполнено",
+        "empty": "Архив пуст"
+      },
+      "profile": {
+        "title": "Профиль",
+        "specializations": "Специализации"
+      },
+      "detail": {
+        "takeWork": "В работу",
+        "complete": "Выполнена",
+        "purchase": "Закуп",
+        "clarify": "Уточнение",
+        "backToWork": "В работу",
+        "materials": "Запрошенные материалы"
+      },
+      "myShifts": {
+        "title": "Мои смены",
+        "active": "Активная",
+        "completed": "Завершена"
+      },
+      "report": {
+        "title": "Отчёт о выполнении",
+        "description": "Опишите что было сделано",
+        "placeholder": "Что было сделано...",
+        "submit": "Отметить выполненной"
+      }
     }
   },
   "toast": {
