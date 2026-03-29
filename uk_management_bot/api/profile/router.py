@@ -102,3 +102,69 @@ async def upload_document(
 
     # TODO: integrate with MediaServiceClient
     return {"ok": True, "document_type": document_type, "filename": file.filename}
+
+
+# ── Role switch ──────────────────────────────────────────
+
+
+class RoleSwitchBody(BaseModel):
+    active_role: str
+
+
+class RoleSwitchOut(BaseModel):
+    active_role: str
+    roles: list[str]
+
+
+@router.patch("/role", response_model=RoleSwitchOut)
+async def switch_role(
+    body: RoleSwitchBody,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Switch user's active role. Role must be in user's roles list."""
+    roles = _parse_user_roles(user)
+    if body.active_role not in roles:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Role '{body.active_role}' not in user roles: {roles}",
+        )
+    result = await db.execute(select(User).where(User.id == user.id))
+    db_user = result.scalar_one()
+    db_user.active_role = body.active_role
+    await db.commit()
+    return RoleSwitchOut(active_role=body.active_role, roles=roles)
+
+
+# ── User apartments (TWA) ────────────────────────────────
+
+
+@router.get("/apartments")
+async def get_my_apartments(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get apartments linked to current user (approved only)."""
+    from uk_management_bot.database.models.user_apartment import UserApartment
+    from uk_management_bot.database.models.apartment import Apartment
+    from uk_management_bot.database.models.building import Building
+    from uk_management_bot.database.models.yard import Yard
+
+    result = await db.execute(
+        select(Apartment, Building.address, Yard.name)
+        .join(UserApartment, UserApartment.apartment_id == Apartment.id)
+        .join(Building, Apartment.building_id == Building.id)
+        .join(Yard, Building.yard_id == Yard.id)
+        .where(UserApartment.user_id == user.id, UserApartment.status == "approved")
+    )
+    rows = result.all()
+    return [
+        {
+            "apartment_id": apt.id,
+            "apartment_number": apt.apartment_number,
+            "building_address": bld_addr,
+            "yard_name": yard_name,
+            "full_address": f"Квартира {apt.apartment_number}, {bld_addr}, ({yard_name})",
+        }
+        for apt, bld_addr, yard_name in rows
+    ]

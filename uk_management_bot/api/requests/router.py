@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
+from uk_management_bot.api.dependencies_access import check_request_access, require_active_shift, is_assigned_executor
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
     CreateRequestBody, UpdateRequestBody,
@@ -109,12 +110,50 @@ async def list_requests(
     return [_make_request_card(r, eu) for r, eu in result.all()]
 
 
+@router.get("/acceptance", response_model=list[RequestCard])
+async def get_acceptance_requests(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Requests pending acceptance: own + apartment neighbors, status=Исполнено."""
+    from sqlalchemy import or_
+    from uk_management_bot.database.models.user_apartment import UserApartment
+
+    apt_result = await db.execute(
+        select(UserApartment.apartment_id).where(
+            UserApartment.user_id == user.id,
+            UserApartment.status == "approved",
+        )
+    )
+    apt_ids = [row[0] for row in apt_result.all()]
+
+    conditions = [Request.user_id == user.id]
+    if apt_ids:
+        conditions.append(Request.apartment_id.in_(apt_ids))
+
+    ExecutorUser = aliased(User)
+    result = await db.execute(
+        select(Request, ExecutorUser)
+        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+        .where(
+            or_(*conditions),
+            Request.status == "Исполнено",
+        )
+        .order_by(Request.updated_at.desc())
+        .limit(20)
+    )
+    return [_make_request_card(r, eu) for r, eu in result.all()]
+
+
 @router.get("/{request_number}", response_model=RequestCard)
 async def get_request(
     request_number: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    # Access check (owner, executor, manager, apartment resident for acceptance)
+    await check_request_access(request_number, db, user)
+
     ExecutorUser = aliased(User)
     result = await db.execute(
         select(Request, ExecutorUser)
@@ -180,7 +219,7 @@ async def update_request(
     request_number: str,
     body: UpdateRequestBody,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager", "applicant")),
+    user: User = Depends(require_roles("manager", "applicant", "executor")),
 ):
     result = await db.execute(
         select(Request).where(Request.request_number == request_number).with_for_update()
@@ -190,15 +229,52 @@ async def update_request(
         raise HTTPException(status_code=404, detail="Request not found")
 
     user_roles = set(_parse_user_roles(user))
-    if "applicant" in user_roles and "manager" not in user_roles:
+    updates = body.model_dump(exclude_unset=True)
+
+    # ── Executor path ──
+    if "executor" in user_roles and "manager" not in user_roles:
+        # Check assignment (RequestAssignment OR executor_id fallback)
+        from uk_management_bot.database.models.request_assignment import RequestAssignment
+        assignments_result = await db.execute(
+            select(RequestAssignment).where(
+                RequestAssignment.request_number == request_number,
+            )
+        )
+        assignments = assignments_result.scalars().all()
+        if not is_assigned_executor(req, user, assignments):
+            raise HTTPException(status_code=403, detail="Not assigned to this request")
+        # Require active shift for status changes
+        new_status = updates.get("status")
+        if new_status:
+            await require_active_shift(db, user)
+            executor_transitions = {
+                "Новая": {"В работе"},
+                "В работе": {"Закуп", "Уточнение", "Выполнена"},
+                "Закуп": {"В работе"},
+                "Уточнение": {"В работе"},
+            }
+            allowed = executor_transitions.get(req.status, set())
+            if new_status not in allowed:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Executor cannot transition from '{req.status}' to '{new_status}'",
+                )
+        # Executor can only update specific fields
+        executor_fields = {"status", "completion_report", "requested_materials", "notes"}
+        for field in list(updates.keys()):
+            if field not in executor_fields:
+                del updates[field]
+
+    # ── Applicant path ──
+    elif "applicant" in user_roles and "manager" not in user_roles:
         if req.user_id != user.id:
             raise HTTPException(status_code=403, detail="Cannot update another user's request")
         allowed_fields = {"status", "rating"}
-        unset_fields = set(body.model_dump(exclude_unset=True).keys())
+        unset_fields = set(updates.keys())
         if not unset_fields.issubset(allowed_fields):
             raise HTTPException(status_code=403, detail="Applicants can only update status and rating")
 
-    updates = body.model_dump(exclude_unset=True)
+    # ── Status transition validation (all roles) ──
     new_status = updates.get("status")
     if new_status and new_status != req.status:
         allowed = _REQUEST_VALID_TRANSITIONS.get(req.status, set())
@@ -228,10 +304,8 @@ async def get_comments(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    # Verify request exists
-    req_result = await db.execute(select(Request).where(Request.request_number == request_number))
-    if not req_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Request not found")
+    # Access check (owner, executor, manager, apartment resident for acceptance)
+    await check_request_access(request_number, db, user)
 
     user_roles = _parse_user_roles(user)
     is_manager = any(r in user_roles for r in ["manager", "admin"])
@@ -251,9 +325,8 @@ async def add_comment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    req_check = await db.execute(select(Request).where(Request.request_number == request_number))
-    if not req_check.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Request not found")
+    # Access check
+    await check_request_access(request_number, db, user)
 
     # Only managers can create internal comments
     if body.is_internal:
