@@ -108,7 +108,11 @@
     "security": "Безопасность",
     "elevator": "Лифт",
     "landscaping": "Благоустройство",
-    "ventilation": "Вентиляция"
+    "ventilation": "Вентиляция",
+    "hvac": "ОВКВ",
+    "maintenance": "Обслуживание",
+    "installation": "Монтаж",
+    "repair": "Ремонт"
   },
   "shiftType": {
     "regular": "Обычная",

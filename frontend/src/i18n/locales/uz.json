@@ -108,7 +108,11 @@
     "security": "Xavfsizlik",
     "elevator": "Lift",
     "landscaping": "Obodonlashtirish",
-    "ventilation": "Ventilyatsiya"
+    "ventilation": "Ventilyatsiya",
+    "hvac": "OIKV",
+    "maintenance": "Xizmat ko'rsatish",
+    "installation": "O'rnatish",
+    "repair": "Ta'mirlash"
   },
   "shiftType": {
     "regular": "Oddiy",

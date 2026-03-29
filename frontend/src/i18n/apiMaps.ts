@@ -95,6 +95,10 @@ export const SPECIALIZATION_MAP = {
   'elevator':     'specialization.elevator',
   'landscaping':  'specialization.landscaping',
   'ventilation':  'specialization.ventilation',
+  'hvac':         'specialization.hvac',
+  'maintenance':  'specialization.maintenance',
+  'installation': 'specialization.installation',
+  'repair':       'specialization.repair',
 } as const
 
 export type ApiSpecialization = keyof typeof SPECIALIZATION_MAP
