@@ -11,7 +11,7 @@ export default function RequestsPage() {
   const [filter, setFilter] = useState<'active' | 'archive'>('active')
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: ['my-requests', filter],
+    queryKey: ['my-requests'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { scope: 'my', limit: 50 }
     }).then(r => r.data),

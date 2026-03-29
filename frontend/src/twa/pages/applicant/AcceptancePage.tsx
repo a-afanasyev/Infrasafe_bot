@@ -12,7 +12,7 @@ export default function AcceptancePage() {
   const queryClient = useQueryClient()
   const { haptic } = useTelegramSDK()
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [rating, setRating] = useState(0)
+  const [ratings, setRatings] = useState<Record<string, number>>({})
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['acceptance'],
@@ -23,13 +23,12 @@ export default function AcceptancePage() {
   const acceptMutation = useMutation({
     mutationFn: (num: string) => twaClient.patch(`/api/v2/requests/${num}`, {
       status: 'Принято',
-      rating,
+      rating: ratings[num] || 0,
     }),
     onSuccess: () => {
       haptic('notification')
       queryClient.invalidateQueries({ queryKey: ['acceptance'] })
       setExpanded(null)
-      setRating(0)
     },
   })
 
@@ -74,11 +73,11 @@ export default function AcceptancePage() {
           {expanded === req.request_number && (
             <div className="px-3.5 pb-3.5 border-t border-gray-100 dark:border-gray-700 pt-3">
               <p className="text-[12px] text-gray-600 dark:text-gray-400 mb-3">{t('twa.acceptance.rateWork')}</p>
-              <StarRating value={rating} onChange={setRating} />
+              <StarRating value={ratings[req.request_number] || 0} onChange={(v) => setRatings(prev => ({ ...prev, [req.request_number]: v }))} />
 
               <div className="flex gap-2 mt-4">
                 <button
-                  disabled={rating === 0 || acceptMutation.isPending}
+                  disabled={!ratings[req.request_number] || acceptMutation.isPending}
                   onClick={() => acceptMutation.mutate(req.request_number)}
                   className="flex-1 bg-emerald-500 text-white py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40"
                 >

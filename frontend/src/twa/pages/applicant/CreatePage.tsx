@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -14,9 +14,19 @@ export default function CreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { haptic } = useTelegramSDK()
+  const { haptic, showBackButton } = useTelegramSDK()
 
   const [step, setStep] = useState(0)
+
+  // Telegram BackButton for wizard steps
+  const goBack = useCallback(() => {
+    if (step > 0) setStep(s => s - 1)
+    else navigate(-1)
+  }, [step, navigate])
+
+  useEffect(() => {
+    if (step > 0) return showBackButton(goBack)
+  }, [step, showBackButton, goBack])
   const [category, setCategory] = useState('')
   const [apartmentId, setApartmentId] = useState<number | null>(null)
   const [address, setAddress] = useState('')
