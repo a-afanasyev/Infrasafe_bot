@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -132,7 +132,8 @@ async def get_announcements():
 
 # ── Media proxy (TWA → Media Service) ────────────────────
 import httpx
-from fastapi import UploadFile, File, Form
+from uk_management_bot.api.dependencies import get_current_user
+from uk_management_bot.database.models.user import User
 
 @app.post("/api/v2/media/upload")
 async def proxy_media_upload(
