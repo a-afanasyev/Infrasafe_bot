@@ -531,7 +531,7 @@
     "entranceLabel": "Kirish",
     "floorLabel": "Qavat",
     "roomsLabel": "Xonalar",
-    "areaLabel": "Maydon m\u00B2",
+    "areaLabel": "Maydon m²",
     "saveError": "Saqlashda xatolik",
     "createError": "Yaratishda xatolik",
     "aptNumbers": "Kvartira raqamlari",
@@ -568,7 +568,7 @@
     "requests": "arizalar",
     "created": "Yaratildi",
     "closed": "Yopildi",
-    "requestsAndHours": "{{completed}} ariza \u00B7 {{hours}}s",
+    "requestsAndHours": "{{completed}} ariza · {{hours}}s",
     "unknown": "Noma'lum",
     "h": "s",
     "requestsByCategory": "arizalar",
@@ -675,7 +675,7 @@
     },
     "header": {
       "title": "Boshqaruv kompaniyasi",
-      "subtitle": "TJM Olmazor Business City \u00B7 Aholilar uchun axborot tablosi"
+      "subtitle": "TJM Olmazor Business City · Aholilar uchun axborot tablosi"
     },
     "stats": {
       "activeRequests": "Faol arizalar",
@@ -696,7 +696,7 @@
       "emergencyService": "Favqulodda xizmat: kunduzi-kechasi"
     },
     "footer": {
-      "realtime": "Real vaqtda yangilanish \u00B7 Ma'lumotlar {{time}} ga dolzarb"
+      "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
     },
     "pipeline": {
       "new": "Yangilar",
@@ -704,7 +704,7 @@
       "purchase": "Xarid",
       "clarification": "Aniqlashtirish",
       "executed": "Bajarildi",
-      "approved": "Qabul qilindi \u2713"
+      "approved": "Qabul qilindi ✓"
     },
     "elapsed": {
       "min": "{{count}} daq",
@@ -713,29 +713,60 @@
     }
   },
   "twa": {
-    "myRequests": "Mening arizalarim",
-    "noActiveRequests": "Faol arizalar yo'q",
-    "createRequest": "+ Ariza yaratish",
-    "newRequest": "Yangi ariza",
-    "step": "Qadam {{current}}/{{total}}",
-    "selectCategory": "Kategoriyani tanlang:",
-    "urgencyLabel": "Shoshilinchlik:",
-    "descriptionLabel": "Muammo tavsifi:",
-    "descriptionPlaceholder": "Muammoni batafsil tavsiflang...",
-    "addressLabel": "Manzil (kvartira/kirish):",
-    "addressPlaceholder": "Masalan: kv. 42, kirish 3",
-    "summaryCategory": "Kategoriya",
-    "summaryUrgency": "Shoshilinchlik",
-    "summaryDescription": "Tavsif",
-    "summaryAddress": "Manzil",
-    "submit": "Ariza yuborish",
-    "messagePlaceholder": "Xabar yozish...",
-    "rateWork": "Ishni baholang (ixtiyoriy)",
-    "returnBtn": "Qaytarish",
-    "acceptBtn": "Qabul qilish",
-    "whyReturn": "Nima uchun qaytaryapsiz?",
-    "describeProblem": "Nima noto'g'ri ekanini yozing...",
-    "requestCancelled": "Ariza bekor qilindi"
+    "tabs": {
+      "home": "Bosh sahifa",
+      "requests": "Arizalar",
+      "create": "Yaratish",
+      "acceptance": "Qabul",
+      "profile": "Profil"
+    },
+    "home": {
+      "title": "Ma'lumot",
+      "workingHours": "Ish vaqti"
+    },
+    "requests": {
+      "title": "Mening arizalarim",
+      "active": "Faol",
+      "archive": "Arxiv",
+      "empty": "Arizalar yo'q"
+    },
+    "create": {
+      "selectCategory": "Toifani tanlang",
+      "selectAddress": "Manzilni tanlang",
+      "describe": "Muammoni tasvirlang",
+      "descriptionPlaceholder": "Muammoni batafsil tasvirlang...",
+      "next": "Keyingisi",
+      "selectUrgency": "Shoshilinchlik",
+      "urgency": {
+        "low": "Oddiy",
+        "medium": "O'rta",
+        "high": "Shoshilinch",
+        "critical": "Kritik"
+      },
+      "confirm": "Tasdiqlash",
+      "categoryLabel": "Toifa",
+      "addressLabel": "Manzil",
+      "descriptionLabel": "Tavsif",
+      "urgencyLabel": "Shoshilinchlik",
+      "submit": "Ariza yuborish"
+    },
+    "acceptance": {
+      "title": "Ishni qabul qilish",
+      "empty": "Qabul qilish uchun arizalar yo'q",
+      "rateWork": "Ish sifatini baholang",
+      "accept": "Qabul qilish",
+      "return": "Qaytarish"
+    },
+    "profile": {
+      "title": "Profil",
+      "myAddresses": "Mening manzillarim",
+      "noAddresses": "Bog'langan manzillar yo'q",
+      "language": "Til",
+      "close": "Ilovani yopish"
+    },
+    "detail": {
+      "comments": "Izohlar"
+    }
   },
   "toast": {
     "requestUpdated": "Ariza yangilandi",

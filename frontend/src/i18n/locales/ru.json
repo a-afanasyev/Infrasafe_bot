@@ -541,7 +541,7 @@
     "entranceLabel": "Подъезд",
     "floorLabel": "Этаж",
     "roomsLabel": "Комнаты",
-    "areaLabel": "Площадь м\u00B2",
+    "areaLabel": "Площадь м²",
     "saveError": "Ошибка при сохранении",
     "createError": "Ошибка при создании",
     "aptNumbers": "Номера квартир",
@@ -723,29 +723,60 @@
     }
   },
   "twa": {
-    "myRequests": "Мои заявки",
-    "noActiveRequests": "Нет активных заявок",
-    "createRequest": "+ Создать заявку",
-    "newRequest": "Новая заявка",
-    "step": "Шаг {{current}}/{{total}}",
-    "selectCategory": "Выберите категорию:",
-    "urgencyLabel": "Срочность:",
-    "descriptionLabel": "Описание проблемы:",
-    "descriptionPlaceholder": "Опишите проблему подробно...",
-    "addressLabel": "Адрес (квартира/подъезд):",
-    "addressPlaceholder": "Например: кв. 42, подъезд 3",
-    "summaryCategory": "Категория",
-    "summaryUrgency": "Срочность",
-    "summaryDescription": "Описание",
-    "summaryAddress": "Адрес",
-    "submit": "Отправить заявку",
-    "messagePlaceholder": "Написать сообщение...",
-    "rateWork": "Оцените работу (необязательно)",
-    "returnBtn": "Вернуть",
-    "acceptBtn": "Принять",
-    "whyReturn": "Почему возвращаете?",
-    "describeProblem": "Опишите что не так...",
-    "requestCancelled": "Заявка отменена"
+    "tabs": {
+      "home": "Главная",
+      "requests": "Заявки",
+      "create": "Создать",
+      "acceptance": "Приёмка",
+      "profile": "Профиль"
+    },
+    "home": {
+      "title": "Информация",
+      "workingHours": "Часы работы"
+    },
+    "requests": {
+      "title": "Мои заявки",
+      "active": "Активные",
+      "archive": "Архив",
+      "empty": "Нет заявок"
+    },
+    "create": {
+      "selectCategory": "Выберите категорию",
+      "selectAddress": "Выберите адрес",
+      "describe": "Опишите проблему",
+      "descriptionPlaceholder": "Подробно опишите проблему...",
+      "next": "Далее",
+      "selectUrgency": "Срочность",
+      "urgency": {
+        "low": "Обычная",
+        "medium": "Средняя",
+        "high": "Срочная",
+        "critical": "Критическая"
+      },
+      "confirm": "Подтверждение",
+      "categoryLabel": "Категория",
+      "addressLabel": "Адрес",
+      "descriptionLabel": "Описание",
+      "urgencyLabel": "Срочность",
+      "submit": "Отправить заявку"
+    },
+    "acceptance": {
+      "title": "Приёмка работ",
+      "empty": "Нет заявок для приёмки",
+      "rateWork": "Оцените качество работы",
+      "accept": "Принять",
+      "return": "Вернуть"
+    },
+    "profile": {
+      "title": "Профиль",
+      "myAddresses": "Мои адреса",
+      "noAddresses": "Нет привязанных адресов",
+      "language": "Язык",
+      "close": "Закрыть приложение"
+    },
+    "detail": {
+      "comments": "Комментарии"
+    }
   },
   "toast": {
     "requestUpdated": "Заявка обновлена",

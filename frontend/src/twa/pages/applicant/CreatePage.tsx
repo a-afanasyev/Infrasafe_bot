@@ -1,0 +1,132 @@
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { apiClient } from '../../../api/client'
+import { useTelegramSDK } from '../../hooks/useTelegramSDK'
+import { tCategory } from '../../../i18n/apiMaps'
+
+const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
+const URGENCIES = ['low', 'medium', 'high', 'critical']
+const URGENCY_API_MAP: Record<string, string> = { low: 'Обычная', medium: 'Средняя', high: 'Срочная', critical: 'Критическая' }
+
+export default function CreatePage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { haptic } = useTelegramSDK()
+
+  const [step, setStep] = useState(0)
+  const [category, setCategory] = useState('')
+  const [apartmentId, setApartmentId] = useState<number | null>(null)
+  const [address, setAddress] = useState('')
+  const [description, setDescription] = useState('')
+  const [urgency, setUrgency] = useState('low')
+
+  const { data: apartments = [] } = useQuery({
+    queryKey: ['my-apartments'],
+    queryFn: () => apiClient.get('/api/v2/profile/apartments').then(r => r.data),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: () => apiClient.post('/api/v2/requests', {
+      category,
+      apartment_id: apartmentId,
+      address,
+      description,
+      urgency: URGENCY_API_MAP[urgency] || urgency,
+      source: 'twa',
+    }),
+    onSuccess: () => {
+      haptic('notification')
+      queryClient.invalidateQueries({ queryKey: ['my-requests'] })
+      navigate('/twa/app/requests')
+    },
+  })
+
+  const steps = [
+    // Step 0: Category
+    <div key="cat" className="space-y-2">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectCategory')}</h2>
+      <div className="grid grid-cols-2 gap-2">
+        {CATEGORIES.map((c) => (
+          <button key={c} onClick={() => { setCategory(c); haptic('selection'); setStep(1) }}
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] font-medium text-left active:scale-[0.97] transition-transform">
+            {tCategory(c, t)}
+          </button>
+        ))}
+      </div>
+    </div>,
+    // Step 1: Address
+    <div key="addr" className="space-y-2">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectAddress')}</h2>
+      {apartments.map((a: any) => (
+        <button key={a.apartment_id} onClick={() => { setApartmentId(a.apartment_id); setAddress(a.full_address); haptic('selection'); setStep(2) }}
+          className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] text-left active:scale-[0.97] transition-transform">
+          {a.full_address}
+        </button>
+      ))}
+    </div>,
+    // Step 2: Description
+    <div key="desc">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.describe')}</h2>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder={t('twa.create.descriptionPlaceholder')}
+        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      />
+      <button
+        disabled={!description.trim()}
+        onClick={() => setStep(3)}
+        className="w-full mt-3 bg-emerald-500 text-white py-3 rounded-xl font-medium disabled:opacity-40"
+      >{t('twa.create.next')}</button>
+    </div>,
+    // Step 3: Urgency
+    <div key="urg" className="space-y-2">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectUrgency')}</h2>
+      {URGENCIES.map((u) => (
+        <button key={u} onClick={() => { setUrgency(u); haptic('selection'); setStep(4) }}
+          className={`w-full bg-white dark:bg-gray-800 border rounded-xl p-3 text-[13px] text-left active:scale-[0.97] transition-transform ${
+            u === 'critical' ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'
+          }`}>
+          {t(`twa.create.urgency.${u}`)}
+        </button>
+      ))}
+    </div>,
+    // Step 4: Confirm
+    <div key="confirm">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.confirm')}</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-[13px]">
+        <div><span className="text-gray-500">{t('twa.create.categoryLabel')}:</span> {tCategory(category, t)}</div>
+        <div><span className="text-gray-500">{t('twa.create.addressLabel')}:</span> {address}</div>
+        <div><span className="text-gray-500">{t('twa.create.descriptionLabel')}:</span> {description}</div>
+        <div><span className="text-gray-500">{t('twa.create.urgencyLabel')}:</span> {t(`twa.create.urgency.${urgency}`)}</div>
+      </div>
+      <button
+        onClick={() => createMutation.mutate()}
+        disabled={createMutation.isPending}
+        className="w-full mt-4 bg-emerald-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
+      >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
+    </div>,
+  ]
+
+  return (
+    <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Progress bar */}
+      <div className="flex gap-1 mb-4">
+        {steps.map((_, i) => (
+          <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= step ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
+        ))}
+      </div>
+
+      {step > 0 && (
+        <button onClick={() => setStep(step - 1)} className="text-[13px] text-emerald-500 mb-3">
+          ← {t('common.back')}
+        </button>
+      )}
+
+      {steps[step]}
+    </div>
+  )
+}

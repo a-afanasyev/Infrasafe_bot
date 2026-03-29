@@ -87,6 +87,7 @@ async def list_requests(
     category: Optional[str] = Query(None),
     executor_id: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db),
@@ -97,6 +98,9 @@ async def list_requests(
         select(Request, ExecutorUser)
         .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
     )
+    # scope=my: only user's own requests (for TWA applicant)
+    if scope == "my":
+        query = query.filter(Request.user_id == user.id)
     if status:
         query = query.filter(Request.status == status)
     if category:

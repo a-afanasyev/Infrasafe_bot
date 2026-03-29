@@ -11,9 +11,7 @@ import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
 import PageErrorBoundary from './components/shared/PageErrorBoundary'
 import { Toaster } from './components/ui/sonner'
 
-const TWAHomePage = lazy(() => import('./pages/twa/TWAHomePage'))
-const TWACreatePage = lazy(() => import('./pages/twa/TWACreatePage'))
-const TWARequestDetailPage = lazy(() => import('./pages/twa/TWARequestDetailPage'))
+const TWAApp = lazy(() => import('./twa/App'))
 
 // Lazy-load pages not yet implemented
 const ShiftsPage = lazy(() => import('./pages/ShiftsPage'))
@@ -69,10 +67,8 @@ export default function App() {
               {/* Resident board - standalone page */}
               <Route path="/resident-board" element={<ProtectedRoute><PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary></ProtectedRoute>} />
 
-              {/* TWA routes */}
-              <Route path="/twa" element={<PageErrorBoundary><TWAHomePage /></PageErrorBoundary>} />
-              <Route path="/twa/create" element={<PageErrorBoundary><TWACreatePage /></PageErrorBoundary>} />
-              <Route path="/twa/requests/:number" element={<PageErrorBoundary><TWARequestDetailPage /></PageErrorBoundary>} />
+              {/* TWA — self-contained Mini App */}
+              <Route path="/twa/*" element={<PageErrorBoundary><TWAApp /></PageErrorBoundary>} />
 
               <Route path="/" element={<Navigate to={isTWA() ? '/twa' : '/dashboard'} replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
