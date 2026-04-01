@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["uk_management_bot/tests"]
+testpaths = ["uk_management_bot"]
 
 [tool.coverage.run]
 source = ["uk_management_bot"]
