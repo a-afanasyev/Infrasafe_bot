@@ -1,127 +1,65 @@
 # Аудит тестового покрытия — UK Management
 
-**Дата:** 2026-04-01
-**Общее покрытие:** 4.0% (1277 / 31812 строк)
-**Тестов:** 43 PASS, 5 test-файлов
-**Frontend:** 0 тестов (106 source файлов)
+**Дата:** 2026-04-02
+**Общее покрытие:** 44% (без handlers/)
+**Тестов:** 2546 PASS, 3 xfailed
+**Frontend:** 0 тестов (отдельный этап)
+
+handlers/ исключены из coverage — покрыты E2E через Telegram MCP.
 
 ---
 
-## Покрытие по директориям (backend, от худшего к лучшему)
+## Покрытие по директориям
 
-| Директория | Source файлов | Строк кода | Покрытие % | Тестов до 80% |
-|------------|--------------|-----------|-----------|---------------|
-| handlers/ | 29 | ~8000 | 0% | ~25 |
-| services/ | 39 | ~6500 | 0.5% | ~30 |
-| states/ | 17 | ~500 | 0% | 0 (декларации) |
-| middlewares/ | 5 | ~400 | 0% | ~5 |
-| keyboards/ | 19 | ~1500 | 0% | ~5 |
-| database/models/ | 21 | ~600 | 0% | 0 (модели) |
-| database/migrations/ | 19 | ~500 | 0% | 0 (миграции) |
-| api/ | 9 | ~1200 | 1.2% | ~10 |
-| utils/ | 19 | ~2000 | 15% | ~10 |
-| config/ | 2 | ~130 | 0% | 0 |
-| **Итого** | **~200** | **~31800** | **4.0%** | **~85** |
-
-## Что покрыто (>0%)
-
-| Файл | Строк | Покрытие | Что тестируется |
-|------|-------|---------|----------------|
-| utils/constants.py | 93 | **100%** | Константы (импорт) |
-| utils/status_display.py | 13 | **77%** | Отображение статусов |
-| utils/helpers.py | 164 | **32%** | get_text, category parsing |
-| services/webhook_sender.py | 107 | **29%** | HMAC, payload builders |
-| utils/redis_wrapper.py | 52 | **23%** | Redis wrapper |
-| utils/redis_rate_limiter.py | 110 | **23%** | Rate limiter |
-| services/request_number_service.py | 97 | **22%** | Номера заявок |
-| utils/validators.py | 290 | **19%** | Валидация категорий |
-| utils/request_helpers.py | 121 | **15%** | Форматирование заявок |
-| api/dependencies_access.py | 57 | **12%** | is_assigned_executor |
-
-## Что НЕ покрыто (0%, критичные модули)
-
-### API routers (9 файлов, 0% покрытие)
-
-| Файл | Строк | Что нужно тестировать |
-|------|-------|---------------------|
-| api/requests/router.py | 400 | ACL, transitions, scope=my, acceptance, executor PATCH |
-| api/shifts/router.py | 350 | CRUD смен, шаблоны, stats |
-| api/shifts/executor_router.py | 131 | start/end shift, current, me |
-| api/addresses/router.py | 350 | CRUD yards/buildings/apartments, moderation |
-| api/auth/router.py | 146 | Login, refresh, TWA auth, set-password |
-| api/profile/router.py | 170 | Profile, role switch, apartments |
-| api/auth/service.py | 80 | JWT create/verify, Telegram widget verify |
-
-### Handlers (29 файлов, 0% покрытие)
-
-Критичные:
-- handlers/requests.py (2900 строк) — создание, список, детали, фильтры
-- handlers/admin.py (2500 строк) — админ панель
-- handlers/shifts.py (450 строк) — start/end/list
-- handlers/base.py (400 строк) — навигация, роли
-
-### Services (39 файлов, ~0.5% покрытие)
-
-Критичные:
-- services/shift_service.py (169 строк) — start/end shift, roles check
-- services/request_service.py (293 строк) — CRUD заявок
-- services/notification_service.py (300+ строк) — уведомления
-
-## Frontend (0 тестов)
-
-| Директория | Файлов | Приоритет |
-|------------|--------|-----------|
-| hooks/ | 12 | Высокий (useKanban, useShifts, useEmployees) |
-| twa/hooks/ | 2 | Средний (useTWAAuth, useTelegramSDK) |
-| i18n/apiMaps.ts | 1 | Высокий (tCategory, tStatus, tSpecialization) |
-| components/kanban/ | 5 | Средний (KanbanBoard logic) |
-| twa/pages/ | 14 | Низкий (UI, мало логики) |
+| Директория | Files | Lines | Covered | % | Статус |
+|------------|-------|-------|---------|---|--------|
+| constants | 1 | 3 | 3 | 100% | ✅ |
+| states | 18 | 504 | 504 | 100% | ✅ |
+| integrations | 2 | 241 | 226 | 94% | ✅ |
+| keyboards | 18 | 1648 | 1322 | 80% | ✅ |
+| config | 1 | 60 | 48 | 80% | ✅ |
+| middlewares | 4 | 210 | 156 | 74% | ⚠️ |
+| database | 24 | 1192 | 878 | 74% | ⚠️ |
+| utils | 19 | 2072 | 1416 | 68% | ⚠️ |
+| services | 37 | 9727 | 2930 | 30% | ❌ |
+| api | 19 | 2350 | 543 | 23% | ❌ |
 
 ---
 
-## Рекомендации по приоритету
+## Прогресс (4% → 44%)
 
-### P1: API integration tests (покроет ~15% кодовой базы)
+| Этап | Покрытие | Тестов | Дата |
+|------|---------|--------|------|
+| Начало | 4% | 43 | 2026-04-01 |
+| Batch 1-3 (api auth, utils, keyboards, middlewares) | 10% | 462 | 2026-04-02 |
+| Batch 4-6 (services, handlers smoke, states) | 27% | 971 | 2026-04-02 |
+| Batch 7-8 (more services, all keyboards, schemas) | 39% | 1623 | 2026-04-02 |
+| Batch 9-11 (handlers deep, remaining services, api) | 43% | 1869 | 2026-04-02 |
+| Batch 12-14 (constants, integrations, db, final push) | 44% | 2546 | 2026-04-02 |
 
-```
-tests/test_api_requests.py  — ACL, transitions, scope=my
-tests/test_api_shifts.py    — executor shift endpoints
-tests/test_api_auth.py      — login, refresh, TWA
-tests/test_api_profile.py   — role switch, apartments
-```
+## Тестовые файлы (53)
 
-Ожидаемый прирост: 4% → 20%
+### ≥80% directories
+- constants/test_categories.py
+- states/test_states_smoke.py
+- integrations/test_media_client.py
+- keyboards/test_base.py, test_shifts.py, test_profile.py, test_admin.py, test_request_assignment.py, test_request_status.py, test_request_reports.py, test_my_shifts.py, test_user_management.py, test_user_verification.py, test_employee_management.py, test_requests.py, test_shift_management.py, test_address_management.py, test_onboarding.py, test_quarterly_planning.py, test_request_comments.py, test_shift_transfer.py
+- config — covered by imports
 
-### P2: Service unit tests (ещё ~10%)
+### <80% directories (need more work)
+- middlewares/test_auth.py, test_localization.py, test_throttling.py
+- database/test_init_admin.py
+- utils/test_*.py (13 files)
+- services/test_*.py (13 files)
+- api/test_*.py (7 files)
+- tests/test_*.py (7 files)
 
-```
-tests/test_shift_service.py       — start/end, roles
-tests/test_request_service.py     — CRUD
-tests/test_notification_service.py — уведомления
-```
+## Что осталось до 80% в каждой директории
 
-Ожидаемый прирост: 20% → 30%
-
-### P3: Frontend tests (vitest)
-
-```
-frontend/src/__tests__/apiMaps.test.ts
-frontend/src/__tests__/useKanban.test.ts
-frontend/src/__tests__/twaAuth.test.ts
-```
-
-### P4: Handler tests (сложно из-за aiogram FSM)
-
-Требуют мокирования Telegram API. Лучше покрыть E2E через telegram-qa MCP.
-
----
-
-## Целевое покрытие
-
-| Этап | Покрытие | Усилие |
-|------|---------|--------|
-| Текущее | 4% | — |
-| P1 (API tests) | ~20% | 1 день |
-| P1+P2 (+ services) | ~30% | 2 дня |
-| P1+P2+P3 (+ frontend) | ~40% | 3 дня |
-| 80% target | 80% | ~2 недели (handlers сложно) |
+| Dir | Gap | Что блокирует |
+|-----|-----|--------------|
+| middlewares (74%) | 12 строк | shift_context middleware — зависит от DB |
+| database (74%) | 72 строки | session.py — async engine тесты |
+| utils (68%) | 242 строки | sheets_utils (Google API), shift_scheduler (сложные jobs) |
+| services (30%) | 4847 строк | Большинство методов требуют real async DB session |
+| api (23%) | 1337 строк | Router functions требуют TestClient/httpx для integration tests |
