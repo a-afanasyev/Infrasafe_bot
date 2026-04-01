@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["uk_management_bot/tests"]
+
+[tool.coverage.run]
+source = ["uk_management_bot"]
+omit = [
+    "uk_management_bot/tests/*",
+    "uk_management_bot/venv/*",
+    "uk_management_bot/web/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = false
+skip_empty = true
+precision = 1

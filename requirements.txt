@@ -52,3 +52,6 @@ passlib[bcrypt]>=1.7.4
 
 # Rate limiting
 slowapi>=0.1.9
+
+# Testing
+pytest-cov>=4.1.0
