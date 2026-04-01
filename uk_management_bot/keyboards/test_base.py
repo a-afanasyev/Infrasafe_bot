@@ -277,3 +277,209 @@ class TestGetExecutorSuggestionInline:
         from uk_management_bot.keyboards.base import get_executor_suggestion_inline
         result = get_executor_suggestion_inline(yes_text="Да", no_text="Нет")
         assert len(_all_inline_texts(result)) == 2
+
+    def test_yes_button_has_role_switch_callback(self):
+        from uk_management_bot.keyboards.base import get_executor_suggestion_inline
+        result = get_executor_suggestion_inline(yes_text="Да", no_text="Нет")
+        callbacks = [btn.callback_data for row in result.inline_keyboard for btn in row if btn.callback_data]
+        assert any("executor" in c for c in callbacks)
+
+    def test_no_button_has_skip_callback(self):
+        from uk_management_bot.keyboards.base import get_executor_suggestion_inline
+        result = get_executor_suggestion_inline(yes_text="Да", no_text="Нет")
+        callbacks = [btn.callback_data for row in result.inline_keyboard for btn in row if btn.callback_data]
+        assert "suggest_executor_skip" in callbacks
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_yes_no_keyboard
+# ---------------------------------------------------------------------------
+
+class TestGetYesNoKeyboard:
+    def test_returns_reply_keyboard_markup(self):
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard()
+        assert isinstance(result, ReplyKeyboardMarkup)
+
+    def test_has_three_buttons(self):
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard()
+        texts = _all_button_texts(result)
+        assert len(texts) == 3
+
+    def test_yes_button_present(self):
+        mapping = {"buttons.yes": "Да", "buttons.no": "Нет", "buttons.back": "Назад"}
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard()
+        assert "Да" in _all_button_texts(result)
+
+    def test_no_button_present(self):
+        mapping = {"buttons.yes": "Да", "buttons.no": "Нет", "buttons.back": "Назад"}
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard()
+        assert "Нет" in _all_button_texts(result)
+
+    def test_back_button_present(self):
+        mapping = {"buttons.yes": "Да", "buttons.no": "Нет", "buttons.back": "Назад"}
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard()
+        assert "Назад" in _all_button_texts(result)
+
+    def test_language_uz_accepted(self):
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard(language="uz")
+        assert isinstance(result, ReplyKeyboardMarkup)
+
+    def test_resize_keyboard_is_true(self):
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_yes_no_keyboard
+            result = get_yes_no_keyboard()
+        assert result.resize_keyboard is True
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_user_contextual_keyboard
+# ---------------------------------------------------------------------------
+
+class TestGetUserContextualKeyboard:
+    def test_user_found_returns_reply_keyboard(self):
+        user = MagicMock()
+        user.roles = ["executor"]
+        user.active_role = "executor"
+        user.role = None
+        user.status = "approved"
+        user.language = "ru"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = user
+
+        with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
+             patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+            result = get_user_contextual_keyboard(user_id=123)
+
+        assert isinstance(result, ReplyKeyboardMarkup)
+
+    def test_user_not_found_returns_default_keyboard(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
+             patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+            result = get_user_contextual_keyboard(user_id=999)
+
+        assert isinstance(result, ReplyKeyboardMarkup)
+
+    def test_db_exception_returns_default_keyboard(self):
+        mock_db = MagicMock()
+        mock_db.query.side_effect = Exception("DB failure")
+
+        with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
+             patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+            result = get_user_contextual_keyboard(user_id=0)
+
+        assert isinstance(result, ReplyKeyboardMarkup)
+
+    def test_user_with_no_roles_but_legacy_role(self):
+        """Falls back to user.role when user.roles is empty."""
+        user = MagicMock()
+        user.roles = None
+        user.active_role = None
+        user.role = "manager"
+        user.status = "approved"
+        user.language = "ru"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = user
+
+        with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
+             patch("uk_management_bot.utils.auth_helpers.parse_roles_safe", return_value=[]), \
+             patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+            result = get_user_contextual_keyboard(user_id=456)
+
+        assert isinstance(result, ReplyKeyboardMarkup)
+
+    def test_user_with_pending_status(self):
+        user = MagicMock()
+        user.roles = ["applicant"]
+        user.active_role = "applicant"
+        user.role = None
+        user.status = "pending"
+        user.language = "ru"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = user
+
+        mapping = {"main_menu.create_request": "Создать заявку"}
+        with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
+             patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+            result = get_user_contextual_keyboard(user_id=789)
+
+        texts = _all_button_texts(result)
+        assert "Создать заявку" not in texts
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_main_keyboard_for_role — additional role combinations
+# ---------------------------------------------------------------------------
+
+class TestGetMainKeyboardForRoleExtended:
+    """Additional branch coverage for get_main_keyboard_for_role."""
+
+    def test_duplicate_roles_deduped(self):
+        """Duplicate roles in list should not produce duplicate switch button."""
+        mapping = {"main_menu.switch_role": "Сменить роль"}
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            result = get_main_keyboard_for_role("applicant", ["applicant", "applicant", "executor"])
+        texts = _all_button_texts(result)
+        switch_count = texts.count("Сменить роль")
+        assert switch_count == 1
+
+    def test_none_roles_list_no_switch_button(self):
+        mapping = {"main_menu.switch_role": "Сменить роль"}
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            result = get_main_keyboard_for_role("applicant", None)
+        texts = _all_button_texts(result)
+        assert "Сменить роль" not in texts
+
+    def test_approved_applicant_has_create_button(self):
+        mapping = {"main_menu.create_request": "Создать заявку"}
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            result = get_main_keyboard_for_role(
+                "applicant", ["applicant"], user_status="approved"
+            )
+        assert "Создать заявку" in _all_button_texts(result)
+
+    def test_executor_multi_role_has_switch_button(self):
+        mapping = {
+            "main_menu.shift": "Смена",
+            "main_menu.my_shifts": "Мои смены",
+            "main_menu.switch_role": "Сменить роль",
+        }
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
+            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            result = get_main_keyboard_for_role(
+                "executor", ["executor", "manager"]
+            )
+        assert "Сменить роль" in _all_button_texts(result)
+
+    def test_non_string_roles_filtered_out(self):
+        """Non-string roles should be ignored (isinstance(r, str) guard)."""
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            # Pass a list with non-string mixed in
+            result = get_main_keyboard_for_role("applicant", ["applicant", 123, None])
+        assert isinstance(result, ReplyKeyboardMarkup)

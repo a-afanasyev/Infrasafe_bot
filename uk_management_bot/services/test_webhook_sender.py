@@ -385,3 +385,92 @@ class TestSendWebhook:
         assert "x-webhook-signature" in sent_headers
         sig = sent_headers["x-webhook-signature"]
         assert sig.startswith("t=") and ",v1=" in sig
+
+    @pytest.mark.asyncio
+    async def test_401_returns_permanent_failure(self):
+        client = AsyncMock()
+        client.post.return_value = self._make_response(401)
+
+        with patch("uk_management_bot.services.webhook_sender.settings") as ms:
+            ms.INFRASAFE_WEBHOOK_TIMEOUT = 10
+            success, error, retryable, retry_after = await send_webhook(
+                "https://example.com/webhook",
+                {"event": "test"},
+                "secret",
+                client,
+            )
+
+        assert success is False
+        assert retryable is False
+        assert "401" in error
+
+    @pytest.mark.asyncio
+    async def test_403_returns_permanent_failure(self):
+        client = AsyncMock()
+        client.post.return_value = self._make_response(403)
+
+        with patch("uk_management_bot.services.webhook_sender.settings") as ms:
+            ms.INFRASAFE_WEBHOOK_TIMEOUT = 10
+            success, error, retryable, retry_after = await send_webhook(
+                "https://example.com/webhook",
+                {"event": "test"},
+                "secret",
+                client,
+            )
+
+        assert success is False
+        assert retryable is False
+
+    @pytest.mark.asyncio
+    async def test_unexpected_4xx_returns_retryable(self):
+        client = AsyncMock()
+        client.post.return_value = self._make_response(418)
+
+        with patch("uk_management_bot.services.webhook_sender.settings") as ms:
+            ms.INFRASAFE_WEBHOOK_TIMEOUT = 10
+            success, error, retryable, retry_after = await send_webhook(
+                "https://example.com/webhook",
+                {"event": "test"},
+                "secret",
+                client,
+            )
+
+        assert success is False
+        assert "418" in error
+
+
+# ---------------------------------------------------------------------------
+# build_building_payload
+# ---------------------------------------------------------------------------
+
+class TestBuildBuildingPayload:
+    def test_building_created_fields(self):
+        result = build_building_payload("building.created", {
+            "id": 5,
+            "address": "Ленина 1",
+            "yard_name": "Двор А",
+        })
+        assert result["event"] == "building.created"
+        assert result["building"]["id"] == 5
+        assert result["building"]["address"] == "Ленина 1"
+        assert result["building"]["town"] == "Двор А"
+        assert "event_id" in result
+        assert result["timestamp"].endswith("Z")
+
+    def test_missing_yard_name_defaults_empty(self):
+        result = build_building_payload("building.created", {
+            "id": 1,
+            "address": "Test",
+        })
+        assert result["building"]["town"] == ""
+
+    def test_event_id_is_unique(self):
+        r1 = build_building_payload("building.created", {"id": 1, "address": "A"})
+        r2 = build_building_payload("building.created", {"id": 1, "address": "A"})
+        assert r1["event_id"] != r2["event_id"]
+
+
+# ---------------------------------------------------------------------------
+# process_outbox (async) — mocked AsyncSessionLocal + httpx
+# ---------------------------------------------------------------------------
+

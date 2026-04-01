@@ -523,3 +523,367 @@ class TestNotificationService:
         user = MagicMock()
         user.language = None
         assert svc._get_user_lang(user) == "ru"
+
+    @pytest.mark.asyncio
+    async def test_send_document_approved_calls_bot(self):
+        user = _make_user(telegram_id=600, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_document_approved_notification(user_id=1, document_type="passport")
+
+        bot.send_message.assert_called_once()
+        assert bot.send_message.call_args.args[0] == 600
+
+    @pytest.mark.asyncio
+    async def test_send_document_approved_user_not_found(self):
+        svc, db, bot = self._make_service(user=None)
+        await svc.send_document_approved_notification(user_id=9999, document_type="passport")
+        bot.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_document_rejected_calls_bot(self):
+        user = _make_user(telegram_id=601, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_document_rejected_notification(user_id=1, document_type="passport")
+
+        bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_document_rejected_with_reason(self):
+        user = _make_user(telegram_id=602, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_document_rejected_notification(
+                user_id=1, document_type="passport", reason="Wrong doc"
+            )
+
+        bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_access_rights_granted_calls_bot(self):
+        user = _make_user(telegram_id=700, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_access_rights_granted_notification(
+                user_id=1, access_level="full"
+            )
+
+        bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_access_rights_granted_with_details(self):
+        user = _make_user(telegram_id=701, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_access_rights_granted_notification(
+                user_id=1, access_level="full", details="All floors"
+            )
+
+        bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_access_rights_revoked_calls_bot(self):
+        user = _make_user(telegram_id=800, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_access_rights_revoked_notification(
+                user_id=1, access_level="full"
+            )
+
+        bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_access_rights_revoked_with_reason(self):
+        user = _make_user(telegram_id=801, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_access_rights_revoked_notification(
+                user_id=1, access_level="full", reason="Policy"
+            )
+
+        bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_verification_request_notification_calls_bot(self):
+        user = _make_user(telegram_id=900, language="ru")
+        svc, db, bot = self._make_service(user)
+
+        with patch(
+            "uk_management_bot.services.notification_service.get_text",
+            return_value="mocked",
+        ):
+            await svc.send_verification_request_notification(
+                user_id=1, info_type="passport", comment="Need valid scan"
+            )
+
+        bot.send_message.assert_called_once()
+        assert bot.send_message.call_args.args[0] == 900
+
+    @pytest.mark.asyncio
+    async def test_send_verification_request_notification_user_not_found(self):
+        svc, db, bot = self._make_service(user=None)
+        await svc.send_verification_request_notification(
+            user_id=9999, info_type="passport", comment="x"
+        )
+        bot.send_message.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# async_notify_request_status_changed
+# ---------------------------------------------------------------------------
+
+class TestAsyncNotifyRequestStatusChanged:
+    @pytest.mark.asyncio
+    async def test_notifies_applicant_and_channel(self):
+        from uk_management_bot.services.notification_service import (
+            async_notify_request_status_changed,
+        )
+
+        bot = AsyncMock()
+        db = MagicMock()
+
+        applicant = _make_user(telegram_id=111)
+        req = _make_request(user_id=1, executor_id=None)
+
+        db.query.return_value.filter.return_value.first.return_value = applicant
+
+        with (
+            patch(
+                "uk_management_bot.services.notification_service.send_to_user",
+                new_callable=AsyncMock,
+            ) as mock_user,
+            patch(
+                "uk_management_bot.services.notification_service.send_to_channel",
+                new_callable=AsyncMock,
+            ) as mock_channel,
+        ):
+            await async_notify_request_status_changed(bot, db, req, "Новая", "В работе")
+
+        mock_user.assert_called_once()
+        mock_channel.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_notifies_executor_when_assigned(self):
+        from uk_management_bot.services.notification_service import (
+            async_notify_request_status_changed,
+        )
+
+        bot = AsyncMock()
+        db = MagicMock()
+
+        applicant = _make_user(telegram_id=111, user_id=1)
+        executor = _make_user(telegram_id=222, user_id=2)
+        req = _make_request(user_id=1, executor_id=2)
+
+        db.query.return_value.filter.return_value.first.side_effect = [applicant, executor]
+
+        with (
+            patch(
+                "uk_management_bot.services.notification_service.send_to_user",
+                new_callable=AsyncMock,
+            ) as mock_user,
+            patch(
+                "uk_management_bot.services.notification_service.send_to_channel",
+                new_callable=AsyncMock,
+            ) as mock_channel,
+        ):
+            await async_notify_request_status_changed(bot, db, req, "В работе", "Выполнена")
+
+        # Two user notifications (applicant + executor)
+        assert mock_user.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_does_not_raise_on_db_exception(self):
+        from uk_management_bot.services.notification_service import (
+            async_notify_request_status_changed,
+        )
+
+        bot = AsyncMock()
+        db = MagicMock()
+        db.query.side_effect = Exception("DB fail")
+
+        req = _make_request()
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_channel",
+            new_callable=AsyncMock,
+        ):
+            await async_notify_request_status_changed(bot, db, req, "Новая", "В работе")
+
+
+# ---------------------------------------------------------------------------
+# build_role_switched_message / async_notify_role_switched
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncNotifyRoleSwitched:
+    @pytest.mark.asyncio
+    async def test_sends_to_user(self):
+        from uk_management_bot.services.notification_service import async_notify_role_switched
+
+        bot = AsyncMock()
+        db = MagicMock()
+        user = _make_user(telegram_id=123)
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await async_notify_role_switched(bot, db, user, "applicant", "executor")
+
+        mock_send.assert_called_once()
+        assert mock_send.call_args.args[1] == 123
+
+    @pytest.mark.asyncio
+    async def test_does_not_raise_on_exception(self):
+        from uk_management_bot.services.notification_service import async_notify_role_switched
+
+        bot = AsyncMock()
+        db = MagicMock()
+        user = _make_user(telegram_id=123)
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            side_effect=Exception("network"),
+        ):
+            await async_notify_role_switched(bot, db, user, "applicant", "executor")
+
+
+# ---------------------------------------------------------------------------
+# async_notify_action_denied
+# ---------------------------------------------------------------------------
+
+class TestAsyncNotifyActionDenied:
+    @pytest.mark.asyncio
+    async def test_sends_to_user(self):
+        from uk_management_bot.services.notification_service import async_notify_action_denied
+
+        bot = AsyncMock()
+        db = MagicMock()
+
+        user = _make_user(telegram_id=555, language="ru")
+        db.query.return_value.filter.return_value.first.return_value = user
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await async_notify_action_denied(bot, db, 555, "not_in_shift")
+
+        mock_send.assert_called_once()
+        assert mock_send.call_args.args[1] == 555
+
+    @pytest.mark.asyncio
+    async def test_does_not_raise_when_user_not_found(self):
+        from uk_management_bot.services.notification_service import async_notify_action_denied
+
+        bot = AsyncMock()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock,
+        ):
+            await async_notify_action_denied(bot, db, 999, "permission_denied")
+
+
+# ---------------------------------------------------------------------------
+# async_notify_document_request / async_notify_multiple_documents_request
+# ---------------------------------------------------------------------------
+
+class TestAsyncNotifyDocumentRequest:
+    @pytest.mark.asyncio
+    async def test_sends_to_user_and_channel(self):
+        from uk_management_bot.services.notification_service import async_notify_document_request
+
+        bot = AsyncMock()
+        db = MagicMock()
+        user = _make_user(telegram_id=300)
+
+        with (
+            patch(
+                "uk_management_bot.services.notification_service.send_to_user",
+                new_callable=AsyncMock,
+            ) as mock_user,
+            patch(
+                "uk_management_bot.services.notification_service.send_to_channel",
+                new_callable=AsyncMock,
+            ) as mock_channel,
+        ):
+            await async_notify_document_request(bot, db, user, "Upload passport", "passport")
+
+        mock_user.assert_called_once()
+        mock_channel.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_does_not_raise_on_send_failure(self):
+        from uk_management_bot.services.notification_service import async_notify_document_request
+
+        bot = AsyncMock()
+        db = MagicMock()
+        user = _make_user(telegram_id=301)
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            side_effect=Exception("fail"),
+        ):
+            await async_notify_document_request(bot, db, user, "text", "passport")
+
+
+class TestAsyncNotifyMultipleDocumentsRequest:
+    @pytest.mark.asyncio
+    async def test_sends_to_user_and_channel(self):
+        from uk_management_bot.services.notification_service import (
+            async_notify_multiple_documents_request,
+        )
+
+        bot = AsyncMock()
+        db = MagicMock()
+        user = _make_user(telegram_id=400)
+
+        with (
+            patch(
+                "uk_management_bot.services.notification_service.send_to_user",
+                new_callable=AsyncMock,
+            ) as mock_user,
+            patch(
+                "uk_management_bot.services.notification_service.send_to_channel",
+                new_callable=AsyncMock,
+            ) as mock_channel,
+        ):
+            await async_notify_multiple_documents_request(
+                bot, db, user, "Upload all", ["passport", "rental_agreement"]
+            )
+
+        mock_user.assert_called_once()
+        mock_channel.assert_called_once()

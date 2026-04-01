@@ -11,8 +11,9 @@ Covers pure (synchronous) functions only — no DB, no network, no async calls:
 - _get_russian_plural_key() — singular, plural, many forms
 - _get_uzbek_plural_key() — singular, plural forms
 """
+import asyncio
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -238,3 +239,174 @@ class TestGetUzbekPluralKey:
 
     def test_negative_many_returns_plural(self):
         assert self.fn("key", -5) == "key_plural"
+
+
+# ---------------------------------------------------------------------------
+# get_language_from_message — CallbackQuery and uz branches
+# ---------------------------------------------------------------------------
+
+class TestGetLanguageFromMessageExtended:
+    def test_ru_language_code_message_returns_ru(self):
+        from aiogram.types import Message as AioMessage
+        from uk_management_bot.utils.language_helpers import get_language_from_message
+        msg = MagicMock(spec=AioMessage)
+        msg.from_user = MagicMock()
+        msg.from_user.language_code = "ru-RU"
+        result = get_language_from_message(msg)
+        assert result == "ru"
+
+    def test_uz_language_code_message_returns_uz(self):
+        from aiogram.types import Message as AioMessage
+        from uk_management_bot.utils.language_helpers import get_language_from_message
+        msg = MagicMock(spec=AioMessage)
+        msg.from_user = MagicMock()
+        msg.from_user.language_code = "uz-UZ"
+        result = get_language_from_message(msg)
+        assert result == "uz"
+
+    def test_other_language_code_returns_default(self):
+        from aiogram.types import Message as AioMessage
+        from uk_management_bot.utils.language_helpers import get_language_from_message, DEFAULT_LANGUAGE
+        msg = MagicMock(spec=AioMessage)
+        msg.from_user = MagicMock()
+        msg.from_user.language_code = "en"
+        result = get_language_from_message(msg)
+        assert result == DEFAULT_LANGUAGE
+
+    def test_callback_query_with_uz_language(self):
+        from aiogram.types import CallbackQuery as AioCallbackQuery
+        from uk_management_bot.utils.language_helpers import get_language_from_message
+        cb = MagicMock(spec=AioCallbackQuery)
+        cb.from_user = MagicMock()
+        cb.from_user.language_code = "uz"
+        result = get_language_from_message(cb)
+        assert result == "uz"
+
+    def test_callback_query_with_ru_language(self):
+        from aiogram.types import CallbackQuery as AioCallbackQuery
+        from uk_management_bot.utils.language_helpers import get_language_from_message
+        cb = MagicMock(spec=AioCallbackQuery)
+        cb.from_user = MagicMock()
+        cb.from_user.language_code = "ru"
+        result = get_language_from_message(cb)
+        assert result == "ru"
+
+
+# ---------------------------------------------------------------------------
+# format_number_with_locale — default/unknown branch
+# ---------------------------------------------------------------------------
+
+class TestFormatNumberWithLocaleExtended:
+    def test_unknown_language_uses_dot_decimal(self):
+        from uk_management_bot.utils.language_helpers import format_number_with_locale
+        result = format_number_with_locale(1234.56, "en")
+        # Default formatting: 1,234.56
+        assert "1" in result and "234" in result
+
+
+# ---------------------------------------------------------------------------
+# Async: get_user_language
+# ---------------------------------------------------------------------------
+
+class TestGetUserLanguageAsync:
+    def test_returns_default_when_user_not_found(self):
+        from uk_management_bot.utils.language_helpers import get_user_language
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            get_user_language(12345, mock_session)
+        )
+        assert result == "ru"
+
+    def test_returns_user_language_when_found(self):
+        from uk_management_bot.utils.language_helpers import get_user_language
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_user = MagicMock()
+        mock_user.language = "uz"
+        mock_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            get_user_language(12345, mock_session)
+        )
+        assert result == "uz"
+
+    def test_returns_default_on_exception(self):
+        from uk_management_bot.utils.language_helpers import get_user_language
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(side_effect=Exception("DB error"))
+
+        result = asyncio.get_event_loop().run_until_complete(
+            get_user_language(12345, mock_session)
+        )
+        assert result == "ru"
+
+    def test_unsupported_user_language_returns_default(self):
+        from uk_management_bot.utils.language_helpers import get_user_language
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_user = MagicMock()
+        mock_user.language = "en"  # unsupported language
+        mock_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            get_user_language(12345, mock_session)
+        )
+        assert result == "ru"
+
+
+# ---------------------------------------------------------------------------
+# Async: set_user_language
+# ---------------------------------------------------------------------------
+
+class TestSetUserLanguageAsync:
+    def test_unsupported_language_returns_false(self):
+        from uk_management_bot.utils.language_helpers import set_user_language
+        mock_session = MagicMock()
+
+        result = asyncio.get_event_loop().run_until_complete(
+            set_user_language(12345, "en", mock_session)
+        )
+        assert result is False
+
+    def test_user_found_updates_and_returns_true(self):
+        from uk_management_bot.utils.language_helpers import set_user_language
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_user = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.commit = AsyncMock()
+
+        result = asyncio.get_event_loop().run_until_complete(
+            set_user_language(12345, "uz", mock_session)
+        )
+        assert result is True
+
+    def test_user_not_found_returns_false(self):
+        from uk_management_bot.utils.language_helpers import set_user_language
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            set_user_language(12345, "uz", mock_session)
+        )
+        assert result is False
+
+    def test_exception_returns_false(self):
+        from uk_management_bot.utils.language_helpers import set_user_language
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(side_effect=Exception("DB error"))
+        mock_session.rollback = AsyncMock()
+
+        result = asyncio.get_event_loop().run_until_complete(
+            set_user_language(12345, "uz", mock_session)
+        )
+        assert result is False

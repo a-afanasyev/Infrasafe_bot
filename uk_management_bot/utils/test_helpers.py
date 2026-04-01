@@ -301,3 +301,202 @@ class TestFormatDatetime:
         dt = datetime(2025, 6, 1, 9, 5)
         result = format_datetime(dt, language="uz")
         assert "01.06.2025" in result
+
+    def test_invalid_object_returns_str(self):
+        from uk_management_bot.utils.helpers import format_datetime
+        # A non-datetime with no strftime should trigger except -> str(dt)
+        class BadDT:
+            def strftime(self, _):
+                raise ValueError("bad")
+            def __str__(self):
+                return "fallback"
+        result = format_datetime(BadDT(), language="ru")
+        assert result == "fallback"
+
+
+# ---------------------------------------------------------------------------
+# get_language_from_event
+# ---------------------------------------------------------------------------
+
+class TestGetLanguageFromEvent:
+    def test_returns_telegram_language_code(self):
+        from uk_management_bot.utils.helpers import get_language_from_event
+        event = MagicMock()
+        event.from_user.language_code = "uz"
+        result = get_language_from_event(event)
+        assert result == "uz"
+
+    def test_falls_back_to_db_when_no_language_code(self):
+        from uk_management_bot.utils.helpers import get_language_from_event
+
+        event = MagicMock()
+        event.from_user.language_code = None
+        event.from_user.id = 42
+
+        db = MagicMock()
+        user = MagicMock()
+        user.language = "uz"
+        db.query.return_value.filter.return_value.first.return_value = user
+
+        result = get_language_from_event(event, db=db)
+        assert result == "uz"
+
+    def test_returns_ru_when_no_from_user(self):
+        from uk_management_bot.utils.helpers import get_language_from_event
+        event = MagicMock()
+        event.from_user = None
+        result = get_language_from_event(event)
+        assert result == "ru"
+
+    def test_returns_ru_when_no_db_and_no_language_code(self):
+        from uk_management_bot.utils.helpers import get_language_from_event
+        event = MagicMock()
+        event.from_user.language_code = None
+        result = get_language_from_event(event, db=None)
+        assert result == "ru"
+
+
+# ---------------------------------------------------------------------------
+# _get_plural_key
+# ---------------------------------------------------------------------------
+
+class TestGetPluralKey:
+    def test_russian_singular(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        assert _get_plural_key("requests.count", 1, "ru") == "requests.count"
+
+    def test_russian_plural_2_to_4(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        for n in [2, 3, 4, 22, 23]:
+            result = _get_plural_key("requests.count", n, "ru")
+            assert result == "requests.count_plural", f"Failed for n={n}"
+
+    def test_russian_plural_many(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        for n in [5, 10, 11, 12, 13, 14, 20, 25]:
+            result = _get_plural_key("requests.count", n, "ru")
+            assert result == "requests.count_plural_many", f"Failed for n={n}"
+
+    def test_uzbek_singular(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        assert _get_plural_key("items", 1, "uz") == "items"
+
+    def test_uzbek_plural(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        for n in [2, 5, 100]:
+            assert _get_plural_key("items", n, "uz") == "items_plural"
+
+    def test_unknown_language_returns_base_key(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        assert _get_plural_key("items", 5, "de") == "items"
+
+    def test_negative_count_russian(self):
+        from uk_management_bot.utils.helpers import _get_plural_key
+        # abs(-1) = 1 → singular
+        assert _get_plural_key("items", -1, "ru") == "items"
+
+
+# ---------------------------------------------------------------------------
+# get_text with plural count parameter
+# ---------------------------------------------------------------------------
+
+class TestGetTextWithCount:
+    def test_count_triggers_plural_lookup_russian(self):
+        """Use language='ru' so _get_plural_key actually generates ru variants."""
+        from uk_management_bot.utils.helpers import get_text, _locale_cache
+        # Override ru locale temporarily with test data
+        original_ru = _locale_cache.get("ru")
+        _locale_cache["ru"] = {
+            "items": "предмет",
+            "items_plural": "предмета",
+            "items_plural_many": "предметов",
+        }
+        try:
+            assert get_text("items", language="ru", count=1) == "предмет"
+            assert get_text("items", language="ru", count=2) == "предмета"
+            assert get_text("items", language="ru", count=5) == "предметов"
+        finally:
+            if original_ru is not None:
+                _locale_cache["ru"] = original_ru
+            else:
+                _locale_cache.pop("ru", None)
+
+    def test_plural_key_missing_falls_back_to_base(self):
+        """When plural variant not in locale, fall back to base key."""
+        from uk_management_bot.utils.helpers import get_text, _locale_cache
+        # Override ru locale temporarily
+        original_ru = _locale_cache.get("ru")
+        _locale_cache["ru"] = {"items": "предмет"}  # no plural variants
+        try:
+            result = get_text("items", language="ru", count=5)
+            assert result == "предмет"
+        finally:
+            if original_ru is not None:
+                _locale_cache["ru"] = original_ru
+            else:
+                _locale_cache.pop("ru", None)
+
+
+# ---------------------------------------------------------------------------
+# load_locale
+# ---------------------------------------------------------------------------
+
+class TestLoadLocale:
+    def test_caches_loaded_locale(self):
+        from uk_management_bot.utils.helpers import load_locale, _locale_cache
+        _locale_cache.pop("ru", None)
+        result1 = load_locale("ru")
+        result2 = load_locale("ru")
+        assert result1 is result2  # Same cached object
+
+    def test_missing_locale_returns_dict(self):
+        """An unknown language without locale file returns {} or falls back."""
+        from uk_management_bot.utils.helpers import load_locale, _locale_cache
+        lang = "__no_such_lang__"
+        _locale_cache.pop(lang, None)
+        result = load_locale(lang)
+        assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# format_user_info
+# ---------------------------------------------------------------------------
+
+class TestFormatUserInfo:
+    def test_returns_string(self):
+        from uk_management_bot.utils.helpers import format_user_info
+        from datetime import datetime
+        user = MagicMock()
+        user.telegram_id = 12345
+        user.role = "applicant"
+        user.status = "approved"
+        user.language = "ru"
+        user.created_at = datetime(2025, 1, 1)
+        locale = {}
+        result = format_user_info(user, locale)
+        assert isinstance(result, str)
+        assert "12345" in result
+
+    def test_known_role_mapped(self):
+        from uk_management_bot.utils.helpers import format_user_info
+        from datetime import datetime
+        user = MagicMock()
+        user.telegram_id = 99
+        user.role = "executor"
+        user.status = "pending"
+        user.language = "uz"
+        user.created_at = datetime(2025, 3, 1)
+        result = format_user_info(user, {})
+        assert "Исполнитель" in result
+
+    def test_unknown_role_uses_raw_value(self):
+        from uk_management_bot.utils.helpers import format_user_info
+        from datetime import datetime
+        user = MagicMock()
+        user.telegram_id = 1
+        user.role = "super_admin"
+        user.status = "approved"
+        user.language = "ru"
+        user.created_at = datetime(2025, 1, 1)
+        result = format_user_info(user, {})
+        assert "super_admin" in result

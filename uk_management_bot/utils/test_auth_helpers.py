@@ -122,3 +122,193 @@ class TestGetUserRoles:
         type(user).roles = property(lambda self: (_ for _ in ()).throw(RuntimeError("db error")))
         result = get_user_roles(user)
         assert result == ["applicant"]
+
+
+# ---------------------------------------------------------------------------
+# has_admin_access
+# ---------------------------------------------------------------------------
+
+class TestHasAdminAccess:
+    def _make_user(self, roles=None, role=None, telegram_id=1):
+        user = MagicMock()
+        user.telegram_id = telegram_id
+        user.roles = roles
+        user.role = role
+        return user
+
+    def test_roles_list_with_manager_returns_true(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        assert has_admin_access(roles=["manager"]) is True
+
+    def test_roles_list_with_admin_returns_true(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        assert has_admin_access(roles=["admin"]) is True
+
+    def test_roles_list_applicant_only_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        assert has_admin_access(roles=["applicant"]) is False
+
+    def test_no_roles_no_user_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        assert has_admin_access() is False
+
+    def test_user_with_json_manager_role(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        user = self._make_user(roles='["manager"]', role=None)
+        assert has_admin_access(user=user) is True
+
+    def test_user_with_json_executor_role_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        user = self._make_user(roles='["executor"]', role=None)
+        assert has_admin_access(user=user) is False
+
+    def test_user_fallback_to_role_field_admin(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        user = self._make_user(roles=None, role="admin")
+        assert has_admin_access(user=user) is True
+
+    def test_user_fallback_to_role_field_applicant_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        user = self._make_user(roles=None, role="applicant")
+        assert has_admin_access(user=user) is False
+
+    def test_user_json_parse_error_falls_through(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        user = self._make_user(roles="invalid-json-{[}", role="manager")
+        # JSON parse fails, falls back to user.role == 'manager' → True
+        assert has_admin_access(user=user) is True
+
+    def test_user_roles_list_directly_not_string(self):
+        from uk_management_bot.utils.auth_helpers import has_admin_access
+        user = self._make_user(roles=["manager"], role=None)
+        assert has_admin_access(user=user) is True
+
+
+# ---------------------------------------------------------------------------
+# has_executor_access
+# ---------------------------------------------------------------------------
+
+class TestHasExecutorAccess:
+    def _make_user(self, roles=None, role=None, active_role=None, telegram_id=1):
+        user = MagicMock()
+        user.telegram_id = telegram_id
+        user.roles = roles
+        user.role = role
+        user.active_role = active_role
+        return user
+
+    def test_roles_list_with_executor_returns_true(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        assert has_executor_access(roles=["executor"]) is True
+
+    def test_roles_list_applicant_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        assert has_executor_access(roles=["applicant"]) is False
+
+    def test_no_roles_no_user_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        assert has_executor_access() is False
+
+    def test_user_with_executor_active_role(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        user = self._make_user(active_role="executor")
+        assert has_executor_access(user=user) is True
+
+    def test_user_with_json_executor_role(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        user = self._make_user(roles='["executor"]', active_role=None)
+        assert has_executor_access(user=user) is True
+
+    def test_user_json_parse_error_falls_through(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        user = self._make_user(roles="not-json", role="executor", active_role=None)
+        # Falls back to user.role
+        assert has_executor_access(user=user) is True
+
+    def test_user_fallback_role_field_executor(self):
+        from uk_management_bot.utils.auth_helpers import has_executor_access
+        user = self._make_user(roles=None, role="executor", active_role=None)
+        assert has_executor_access(user=user) is True
+
+
+# ---------------------------------------------------------------------------
+# get_active_role
+# ---------------------------------------------------------------------------
+
+class TestGetActiveRole:
+    def _make_user(self, active_role=None, roles=None, role=None, telegram_id=1):
+        user = MagicMock()
+        user.telegram_id = telegram_id
+        user.active_role = active_role
+        user.roles = roles
+        user.role = role
+        return user
+
+    def test_returns_active_role_when_set(self):
+        from uk_management_bot.utils.auth_helpers import get_active_role
+        user = self._make_user(active_role="executor")
+        assert get_active_role(user) == "executor"
+
+    def test_falls_back_to_first_role(self):
+        from uk_management_bot.utils.auth_helpers import get_active_role
+        user = self._make_user(active_role=None, roles='["manager", "applicant"]')
+        result = get_active_role(user)
+        assert result == "manager"
+
+    def test_returns_applicant_when_no_roles(self):
+        from uk_management_bot.utils.auth_helpers import get_active_role
+        user = self._make_user(active_role=None, roles=None, role=None)
+        assert get_active_role(user) == "applicant"
+
+    def test_exception_returns_applicant(self):
+        from uk_management_bot.utils.auth_helpers import get_active_role
+        user = MagicMock()
+        user.telegram_id = 1
+        type(user).active_role = property(lambda self: (_ for _ in ()).throw(RuntimeError("err")))
+        assert get_active_role(user) == "applicant"
+
+
+# ---------------------------------------------------------------------------
+# check_user_role (async)
+# ---------------------------------------------------------------------------
+
+import asyncio
+from unittest.mock import AsyncMock
+
+
+class TestCheckUserRole:
+    def _make_db_with_user(self, user=None):
+        db = MagicMock()
+        mock_query = MagicMock()
+        db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = user
+        return db
+
+    def test_user_has_required_role_returns_true(self):
+        from uk_management_bot.utils.auth_helpers import check_user_role
+        user = MagicMock()
+        user.roles = '["executor"]'
+        user.role = None
+        db = self._make_db_with_user(user)
+        result = asyncio.get_event_loop().run_until_complete(
+            check_user_role(1, "executor", db)
+        )
+        assert result is True
+
+    def test_user_not_found_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import check_user_role
+        db = self._make_db_with_user(user=None)
+        result = asyncio.get_event_loop().run_until_complete(
+            check_user_role(1, "manager", db)
+        )
+        assert result is False
+
+    def test_db_exception_returns_false(self):
+        from uk_management_bot.utils.auth_helpers import check_user_role
+        db = MagicMock()
+        db.query.side_effect = Exception("DB error")
+        result = asyncio.get_event_loop().run_until_complete(
+            check_user_role(1, "executor", db)
+        )
+        assert result is False

@@ -487,3 +487,112 @@ class TestCheckAssignmentConflicts:
         db.query.return_value = q
         conflicts = service._check_assignment_conflicts(shift, executor.id)
         assert conflicts == []
+
+
+# ---------------------------------------------------------------------------
+# _calculate_availability_score
+# ---------------------------------------------------------------------------
+
+
+class TestAssignSingleShift:
+    def test_no_executors_returns_failure(self):
+        service, db = _make_service()
+        shift = _make_shift()
+        service._evaluate_executors_for_shift = MagicMock(return_value=[])
+
+        result = service._assign_single_shift(shift, [])
+        assert result["success"] is False
+        assert "error" in result
+
+    def test_successful_assignment(self):
+        service, db = _make_service()
+        shift = _make_shift()
+        executor = _make_executor()
+
+        score = MagicMock()
+        score.executor_id = executor.id
+        score.executor_name = "Ivan Petrov"
+        score.total_score = 0.8
+        score.reasons = []
+
+        service._evaluate_executors_for_shift = MagicMock(return_value=[score])
+        service._check_assignment_conflicts = MagicMock(return_value=[])
+        db.add = MagicMock()
+        db.commit = MagicMock()
+
+        result = service._assign_single_shift(shift, [executor])
+
+        assert result["success"] is True
+        assert result["executor_id"] == executor.id
+        assert shift.user_id == executor.id
+
+    def test_critical_conflict_prevents_assignment(self):
+        service, db = _make_service()
+        shift = _make_shift()
+        executor = _make_executor()
+
+        score = MagicMock()
+        score.executor_id = executor.id
+        score.executor_name = "Ivan Petrov"
+        score.total_score = 0.8
+
+        conflict = MagicMock()
+        conflict.severity = "critical"
+
+        service._evaluate_executors_for_shift = MagicMock(return_value=[score])
+        service._check_assignment_conflicts = MagicMock(return_value=[conflict])
+        service._conflict_to_dict = MagicMock(return_value={})
+
+        result = service._assign_single_shift(shift, [executor])
+
+        assert result["success"] is False
+        assert "conflicts" in result
+
+    def test_db_exception_returns_error(self):
+        service, db = _make_service()
+        shift = _make_shift()
+        executor = _make_executor()
+
+        service._evaluate_executors_for_shift = MagicMock(side_effect=Exception("boom"))
+
+        result = service._assign_single_shift(shift, [executor])
+        assert result["success"] is False
+        assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# _evaluate_executors_for_shift
+# ---------------------------------------------------------------------------
+
+class TestEvaluateExecutorsForShift:
+    def test_no_executors_returns_empty(self):
+        service, _ = _make_service()
+        shift = _make_shift()
+        result = service._evaluate_executors_for_shift(shift, [])
+        assert result == []
+
+    def test_skips_executors_with_zero_score(self):
+        service, db = _make_service()
+        shift = _make_shift()
+        executor = _make_executor()
+
+        zero_score = MagicMock()
+        zero_score.total_score = 0.0
+
+        service._calculate_executor_score = MagicMock(return_value=zero_score)
+
+        result = service._evaluate_executors_for_shift(shift, [executor])
+        assert result == []
+
+    def test_includes_executors_with_positive_score(self):
+        service, db = _make_service()
+        shift = _make_shift()
+        executor = _make_executor()
+
+        positive_score = MagicMock()
+        positive_score.total_score = 0.7
+
+        service._calculate_executor_score = MagicMock(return_value=positive_score)
+
+        result = service._evaluate_executors_for_shift(shift, [executor])
+        assert len(result) == 1

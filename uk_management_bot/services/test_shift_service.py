@@ -406,3 +406,255 @@ class TestEndShift:
 
         assert result["success"] is False
         db.rollback.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# force_end_shift
+# ---------------------------------------------------------------------------
+
+class TestForceEndShift:
+    def _db_for_force_end(self, manager, target_user, shift):
+        """Build DB mock: manager lookup, then active shift lookup, then target_user lookup."""
+        db = MagicMock()
+        from uk_management_bot.database.models.user import User as UserModel
+        from uk_management_bot.database.models.shift import Shift as ShiftModel
+
+        call_count = [0]
+
+        def _query(model):
+            q = MagicMock()
+            call_count[0] += 1
+            if model is UserModel:
+                # First User call = manager, later calls = target_user
+                ret = manager if call_count[0] <= 2 else target_user
+                q.filter.return_value.first.return_value = ret
+            elif model is ShiftModel:
+                q.filter.return_value.first.return_value = shift
+            else:
+                q.filter.return_value.first.return_value = None
+            return q
+
+        db.query.side_effect = _query
+        return db
+
+    def test_success_manager_can_force_end(self):
+        manager = _make_user(telegram_id=200, user_id=2, roles='["manager"]')
+        target = _make_user(telegram_id=100, user_id=1, roles='["executor"]')
+        shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
+        db = self._db_for_force_end(manager, target, shift)
+
+        with patch("uk_management_bot.services.shift_service.notify_shift_ended"):
+            service = ShiftService(db)
+            result = service.force_end_shift(200, 100)
+
+        assert result["success"] is True
+        assert "менеджером" in result["message"]
+        assert shift.status == SHIFT_STATUS_COMPLETED
+
+    def test_not_manager_is_rejected(self):
+        non_manager = _make_user(telegram_id=200, user_id=2, roles='["executor"]')
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value.first.return_value = non_manager
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.force_end_shift(200, 100)
+
+        assert result["success"] is False
+        assert "менеджера" in result["message"]
+
+    def test_manager_not_found_is_rejected(self):
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value.first.return_value = None
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.force_end_shift(999, 100)
+
+        assert result["success"] is False
+
+    def test_target_has_no_active_shift(self):
+        manager = _make_user(telegram_id=200, user_id=2, roles='["manager"]')
+        db = MagicMock()
+        from uk_management_bot.database.models.user import User as UserModel
+        from uk_management_bot.database.models.shift import Shift as ShiftModel
+
+        def _query(model):
+            q = MagicMock()
+            if model is UserModel:
+                q.filter.return_value.first.return_value = manager
+            else:
+                q.filter.return_value.first.return_value = None
+            return q
+
+        db.query.side_effect = _query
+
+        service = ShiftService(db)
+        result = service.force_end_shift(200, 100)
+
+        assert result["success"] is False
+        assert "активной смены" in result["message"].lower() or "нет" in result["message"].lower()
+
+    def test_notes_appended(self):
+        manager = _make_user(telegram_id=200, user_id=2, roles='["manager"]')
+        target = _make_user(telegram_id=100, user_id=1, roles='["executor"]')
+        shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
+        shift.notes = None
+        db = self._db_for_force_end(manager, target, shift)
+
+        with patch("uk_management_bot.services.shift_service.notify_shift_ended"):
+            service = ShiftService(db)
+            service.force_end_shift(200, 100, notes="force ended by mgr")
+
+        assert shift.notes == "force ended by mgr"
+
+    def test_db_commit_failure_returns_error(self):
+        manager = _make_user(telegram_id=200, user_id=2, roles='["manager"]')
+        target = _make_user(telegram_id=100, user_id=1, roles='["executor"]')
+        shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
+        db = self._db_for_force_end(manager, target, shift)
+        db.commit.side_effect = Exception("commit fail")
+
+        service = ShiftService(db)
+        result = service.force_end_shift(200, 100)
+
+        assert result["success"] is False
+        db.rollback.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# list_shifts
+# ---------------------------------------------------------------------------
+
+class TestListShifts:
+    def _db_with_shifts(self, shifts):
+        db = MagicMock()
+        from uk_management_bot.database.models.user import User as UserModel
+
+        def _query(model):
+            q = MagicMock()
+            if model is UserModel:
+                q.filter.return_value.first.return_value = _make_user()
+            else:
+                chain = MagicMock()
+                chain.filter.return_value = chain
+                chain.order_by.return_value = chain
+                chain.offset.return_value = chain
+                chain.limit.return_value = chain
+                chain.all.return_value = shifts
+                q.filter.return_value = chain
+                q.order_by.return_value = chain
+                q.offset.return_value = chain
+                q.limit.return_value = chain
+                q.all.return_value = shifts
+            return q
+
+        db.query.side_effect = _query
+        return db
+
+    def test_returns_all_shifts_no_filter(self):
+        shifts = [_make_shift(shift_id=i) for i in range(3)]
+        db = MagicMock()
+
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.offset.return_value = q
+        q.limit.return_value = q
+        q.all.return_value = shifts
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.list_shifts()
+        assert result == shifts
+
+    def test_returns_empty_on_db_exception(self):
+        db = MagicMock()
+        db.query.side_effect = Exception("db fail")
+
+        service = ShiftService(db)
+        result = service.list_shifts()
+        assert result == []
+
+    def test_filters_by_telegram_id_returns_empty_when_user_not_found(self):
+        db = MagicMock()
+        from uk_management_bot.database.models.user import User as UserModel
+
+        def _query(model):
+            q = MagicMock()
+            if model is UserModel:
+                q.filter.return_value.first.return_value = None
+            else:
+                chain = MagicMock()
+                chain.filter.return_value = chain
+                chain.order_by.return_value = chain
+                chain.offset.return_value = chain
+                chain.limit.return_value = chain
+                chain.all.return_value = []
+            return q
+
+        db.query.side_effect = _query
+
+        service = ShiftService(db)
+        result = service.list_shifts(telegram_id=999)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# get_shift_stats
+# ---------------------------------------------------------------------------
+
+class TestGetShiftStats:
+    def test_empty_shifts_returns_zero_stats(self):
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.offset.return_value = q
+        q.limit.return_value = q
+        q.all.return_value = []
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.get_shift_stats()
+
+        assert result["total_shifts"] == 0
+        assert result["active_count"] == 0
+        assert result["total_hours"] == 0.0
+
+    def test_counts_active_shifts(self):
+        active_shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
+        active_shift.start_time = datetime(2026, 4, 2, 9, 0, 0)
+        active_shift.end_time = None
+
+        completed = _make_shift(shift_id=2, status=SHIFT_STATUS_COMPLETED)
+        completed.start_time = datetime(2026, 4, 2, 9, 0, 0)
+        completed.end_time = datetime(2026, 4, 2, 10, 0, 0)
+
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.offset.return_value = q
+        q.limit.return_value = q
+        q.all.return_value = [active_shift, completed]
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.get_shift_stats()
+
+        assert result["total_shifts"] == 2
+        assert result["active_count"] == 1
+
+    def test_returns_zero_stats_on_exception(self):
+        db = MagicMock()
+        db.query.side_effect = Exception("fail")
+
+        service = ShiftService(db)
+        result = service.get_shift_stats()
+
+        assert result["total_shifts"] == 0
+        assert result["active_count"] == 0
+        assert result["total_hours"] == 0.0

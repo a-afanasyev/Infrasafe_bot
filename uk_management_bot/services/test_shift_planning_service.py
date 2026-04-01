@@ -314,3 +314,134 @@ class TestGetCoverageGaps:
             assert "date" in gaps[0]
             assert "uncovered_hours" in gaps[0]
             assert "gap_severity" in gaps[0]
+
+
+# ---------------------------------------------------------------------------
+# _get_available_executors_for_template
+# ---------------------------------------------------------------------------
+
+class TestGetAvailableExecutorsForTemplate:
+    def test_returns_executors_that_can_work_template(self):
+        service, db = _make_service()
+        template = _make_template(required_specializations=[])
+        executor = _make_executor(status="approved", roles=["executor"])
+
+        q = MagicMock()
+        q.filter.return_value.all.return_value = [executor]
+        db.query.return_value = q
+
+        service._can_executor_work_template = MagicMock(return_value=True)
+        service._is_executor_busy = MagicMock(return_value=False)
+
+        result = service._get_available_executors_for_template(template, date(2026, 4, 5))
+        assert executor in result
+
+    def test_excludes_busy_executors(self):
+        service, db = _make_service()
+        template = _make_template(required_specializations=[])
+        executor = _make_executor(status="approved", roles=["executor"])
+
+        q = MagicMock()
+        q.filter.return_value.all.return_value = [executor]
+        db.query.return_value = q
+
+        service._can_executor_work_template = MagicMock(return_value=True)
+        service._is_executor_busy = MagicMock(return_value=True)
+
+        result = service._get_available_executors_for_template(template, date(2026, 4, 5))
+        assert result == []
+
+    def test_excludes_executors_not_matching_template(self):
+        service, db = _make_service()
+        template = _make_template(required_specializations=["electric"])
+        executor = _make_executor(status="approved", roles=["executor"], specialization=["plumbing"])
+
+        q = MagicMock()
+        q.filter.return_value.all.return_value = [executor]
+        db.query.return_value = q
+
+        service._can_executor_work_template = MagicMock(return_value=False)
+        service._is_executor_busy = MagicMock(return_value=False)
+
+        result = service._get_available_executors_for_template(template, date(2026, 4, 5))
+        assert result == []
+
+    def test_returns_empty_on_db_error(self):
+        service, db = _make_service()
+        template = _make_template()
+        db.query.side_effect = Exception("db fail")
+
+        result = service._get_available_executors_for_template(template, date(2026, 4, 5))
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _is_executor_busy
+# ---------------------------------------------------------------------------
+
+class TestIsExecutorBusy:
+    def test_no_overlapping_shifts_returns_false(self):
+        service, db = _make_service()
+        template = _make_template(start_hour=9, start_minute=0, duration_hours=8)
+
+        q = MagicMock()
+        q.filter.return_value.count.return_value = 0
+        db.query.return_value = q
+
+        result = service._is_executor_busy(10, date(2026, 4, 5), template)
+        assert result is False
+
+    def test_overlapping_shifts_returns_true(self):
+        service, db = _make_service()
+        template = _make_template(start_hour=9, start_minute=0, duration_hours=8)
+
+        q = MagicMock()
+        q.filter.return_value.count.return_value = 2
+        db.query.return_value = q
+
+        result = service._is_executor_busy(10, date(2026, 4, 5), template)
+        assert result is True
+
+    def test_returns_true_on_db_error(self):
+        service, db = _make_service()
+        template = _make_template(start_hour=9, start_minute=0, duration_hours=8)
+        db.query.side_effect = Exception("fail")
+
+        result = service._is_executor_busy(10, date(2026, 4, 5), template)
+        assert result is True  # safe default
+
+
+# ---------------------------------------------------------------------------
+# create_shift_from_template — executor_ids path
+# ---------------------------------------------------------------------------
+
+class TestCreateShiftFromTemplateWithExecutors:
+    def test_creates_shifts_for_specific_executors(self):
+        service, db = _make_service()
+        template = _make_template(min_executors=1)
+        executor = _make_executor()
+
+        call_count = [0]
+
+        def _side(model):
+            from uk_management_bot.database.models.shift_template import ShiftTemplate
+            from uk_management_bot.database.models.shift import Shift
+            from uk_management_bot.database.models.user import User as UserModel
+            q = MagicMock()
+            call_count[0] += 1
+            if "ShiftTemplate" in str(model):
+                q.filter.return_value.first.return_value = template
+            elif "User" in str(model):
+                q.filter.return_value.first.return_value = executor
+            else:
+                q.filter.return_value.count.return_value = 0
+            return q
+
+        db.query.side_effect = _side
+        service._can_executor_work_template = MagicMock(return_value=True)
+        service._create_single_shift_from_template = MagicMock(return_value=MagicMock())
+
+        result = service.create_shift_from_template(1, date(2026, 4, 5), executor_ids=[1010])
+
+        # Single executor → single shift attempted
+        service._create_single_shift_from_template.assert_called_once()
