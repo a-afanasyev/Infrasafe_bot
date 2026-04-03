@@ -51,3 +51,6 @@ docker-compose.yml   — dev-окружение (bot, api, frontend, postgres, r
 ## Update Rule
 
 При существенных изменениях в архитектуре, стеке или рабочих процессах — обнови этот файл. Не раздувай: убирай устаревшее, держи < 100 строк.
+
+
+NEVER delete the project directory or run rm -rf in the project root
