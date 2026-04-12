@@ -14,10 +14,8 @@ export function useWebSocket(
   onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
-    const token = localStorage.getItem('access_token')
-    if (!token) return
-
-    const ws = new WebSocket(`${WS_URL}/ws/v2/${endpoint}?token=${token}`)
+    // Browser sends httpOnly cookie automatically with the WebSocket upgrade request
+    const ws = new WebSocket(`${WS_URL}/ws/v2/${endpoint}`)
     wsRef.current = ws
 
     ws.onmessage = (e) => {
@@ -41,7 +39,6 @@ export function useWebSocket(
         return
       }
       attemptsRef.current += 1
-      // Read fresh token (may have been refreshed by Axios interceptor)
       reconnectTimer.current = setTimeout(connect, 3000)
     }
   }, [endpoint])

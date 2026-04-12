@@ -1,10 +1,13 @@
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from uk_management_bot.api.auth.schemas import (
-    TokenResponse, TelegramWidgetLogin, TWALogin,
+    TelegramWidgetLogin, TWALogin,
     PasswordLogin, RefreshRequest, SetPasswordRequest,
 )
 from uk_management_bot.api.auth.service import (
@@ -17,9 +20,34 @@ from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.refresh_token import RefreshToken
 from uk_management_bot.config.settings import settings
-from uk_management_bot.api.rate_limit import limiter
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
+
+ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
+REFRESH_TOKEN_MAX_AGE = 30 * 86400  # 30 days
+
+
+def _set_auth_cookies(response: JSONResponse, access_token: str, refresh_token: str) -> None:
+    """Set httpOnly cookies for browser auth flow."""
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_MAX_AGE,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_MAX_AGE,
+        path="/api/v2/auth/refresh",
+    )
 
 
 def _build_token_response(user: User) -> dict:
@@ -41,7 +69,7 @@ async def _save_refresh_token(db: AsyncSession, user_id: int, token_value: str, 
     await db.commit()
 
 
-@router.post("/telegram-widget", response_model=TokenResponse)
+@router.post("/telegram-widget")
 @limiter.limit("10/minute")
 async def login_telegram_widget(request: Request, data: TelegramWidgetLogin, db: AsyncSession = Depends(get_db)):
     data_dict = data.model_dump()
@@ -55,10 +83,15 @@ async def login_telegram_widget(request: Request, data: TelegramWidgetLogin, db:
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
+    response = JSONResponse(content={
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_value"],
+    })
+    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
+    return response
 
 
-@router.post("/twa", response_model=TokenResponse)
+@router.post("/twa")
 @limiter.limit("20/minute")
 async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends(get_db)):
     user_data = verify_twa_init_data(data.init_data, settings.BOT_TOKEN)
@@ -76,10 +109,15 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
+    response = JSONResponse(content={
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_value"],
+    })
+    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
+    return response
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 @limiter.limit("10/minute")
 async def login_password(request: Request, data: PasswordLogin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == data.email))
@@ -91,10 +129,15 @@ async def login_password(request: Request, data: PasswordLogin, db: AsyncSession
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
+    response = JSONResponse(content={
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_value"],
+    })
+    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
+    return response
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh")
 @limiter.limit("20/minute")
 async def refresh_token(request: Request, data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     token_hash = hash_token(data.refresh_token)
@@ -114,7 +157,12 @@ async def refresh_token(request: Request, data: RefreshRequest, db: AsyncSession
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
+    response = JSONResponse(content={
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_value"],
+    })
+    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
+    return response
 
 
 @router.post("/logout")
@@ -126,12 +174,14 @@ async def logout(request: Request, data: RefreshRequest, db: AsyncSession = Depe
     if rt:
         rt.revoked_at = datetime.now(timezone.utc)
         await db.commit()
-    return {"ok": True}
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/api/v2/auth/refresh")
+    return response
 
 
 @router.post("/set-password")
-@limiter.limit("5/minute")
-async def set_password(request: Request, data: SetPasswordRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def set_password(data: SetPasswordRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if data.password != data.confirm_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match")
     if len(data.password) < 8:

@@ -21,8 +21,12 @@ shifts_manager = ConnectionManager()
 
 
 @router.websocket("/kanban")
-async def kanban_ws(websocket: WebSocket, token: str = Query(...)):
-    payload = verify_access_token(token)
+async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
+    actual_token = websocket.cookies.get("access_token") or token
+    if not actual_token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    payload = verify_access_token(actual_token)
     if not payload:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -64,8 +68,12 @@ async def kanban_ws(websocket: WebSocket, token: str = Query(...)):
 
 
 @router.websocket("/shifts")
-async def shifts_ws(websocket: WebSocket, token: str = Query(...)):
-    payload = verify_access_token(token)
+async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
+    actual_token = websocket.cookies.get("access_token") or token
+    if not actual_token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    payload = verify_access_token(actual_token)
     if not payload:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

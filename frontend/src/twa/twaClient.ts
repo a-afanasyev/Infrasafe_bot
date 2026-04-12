@@ -8,7 +8,7 @@ import axios, { type InternalAxiosRequestConfig } from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
-export const twaClient = axios.create({ baseURL: BASE_URL })
+export const twaClient = axios.create({ baseURL: BASE_URL, withCredentials: true })
 
 let refreshPromise: Promise<string> | null = null
 

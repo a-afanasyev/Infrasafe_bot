@@ -1,13 +1,13 @@
 import json
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.database.models.user import User
 from sqlalchemy import select
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def _parse_user_roles(user) -> list[str]:
@@ -42,11 +42,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     from uk_management_bot.api.auth.service import verify_access_token
-    token = credentials.credentials
+
+    # 1. Try httpOnly cookie first
+    token = request.cookies.get("access_token")
+    # 2. Fallback to Authorization header (for TWA / backward compat)
+    if not token and credentials:
+        token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
     payload = verify_access_token(token)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
