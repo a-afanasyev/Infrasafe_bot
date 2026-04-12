@@ -13,7 +13,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY uk_management_bot/ ./uk_management_bot/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

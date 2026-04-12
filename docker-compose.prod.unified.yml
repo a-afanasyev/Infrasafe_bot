@@ -6,7 +6,7 @@ services:
   bot:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: uk-bot
     restart: unless-stopped
     env_file: .env
