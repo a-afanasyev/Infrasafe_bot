@@ -11,6 +11,8 @@ router = APIRouter()
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_LANGUAGES = {"ru", "uz"}
+ALLOWED_DOCUMENT_TYPES = frozenset({"passport", "license", "insurance", "medical", "contract"})
+ALLOWED_MIME_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png", "image/webp"})
 
 
 class ProfileOut(BaseModel):
@@ -90,6 +92,16 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if document_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid document_type. Allowed: {', '.join(sorted(ALLOWED_DOCUMENT_TYPES))}",
+        )
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}",
+        )
     # Read in chunks to enforce size limit
     content = bytearray()
     while True:
