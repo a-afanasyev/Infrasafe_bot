@@ -75,9 +75,12 @@ docker-compose*.yml
 # Memory Bank (не нужен в production)
 MemoryBank/
 
-# Скрипты разработки
+# Скрипты разработки (кроме entrypoint)
 scripts/
+!scripts/entrypoint-api.sh
+!scripts/entrypoint-bot.sh
 *.sh
+!scripts/entrypoint-*.sh
 
 # Конфигурационные файлы разработки
 .env.local

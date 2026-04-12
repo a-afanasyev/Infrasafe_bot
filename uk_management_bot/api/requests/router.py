@@ -14,7 +14,7 @@ from uk_management_bot.api.requests.schemas import (
     CreateRequestBody, UpdateRequestBody,
     CommentBody, CommentOut,
 )
-from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_request_event
@@ -65,15 +65,15 @@ async def get_kanban(
 ):
     ExecutorUser = aliased(User)
     query = (
-        select(Request, ExecutorUser)
-        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+        select(RequestModel, ExecutorUser)
+        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
     )
     if executor_id:
-        query = query.filter(Request.executor_id == executor_id)
+        query = query.filter(RequestModel.executor_id == executor_id)
     if category:
-        query = query.filter(Request.category == category)
+        query = query.filter(RequestModel.category == category)
 
-    result = await db.execute(query.order_by(Request.created_at.desc()).limit(500))
+    result = await db.execute(query.order_by(RequestModel.created_at.desc()).limit(500))
     rows = result.all()
 
     columns = []
@@ -97,8 +97,8 @@ async def list_requests(
 ):
     ExecutorUser = aliased(User)
     query = (
-        select(Request, ExecutorUser)
-        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+        select(RequestModel, ExecutorUser)
+        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
     )
     # scope=my: role-based filtering for TWA
     if scope == "my":
@@ -116,7 +116,7 @@ async def list_requests(
                 RequestAssignment.executor_id == user.id,
                 RequestAssignment.status == "active",
             )
-            conditions.append(Request.request_number.in_(assignment_sub))
+            conditions.append(RequestModel.request_number.in_(assignment_sub))
             # 2. Group assignments (only if executor has active shift)
             active_shift = await db.execute(
                 select(Shift).where(Shift.user_id == user.id, Shift.status == "active")
@@ -138,23 +138,23 @@ async def list_requests(
                         RequestAssignment.group_specialization.in_(specs),
                         RequestAssignment.status == "active",
                     )
-                    conditions.append(Request.request_number.in_(group_sub))
+                    conditions.append(RequestModel.request_number.in_(group_sub))
             # 3. Fallback: executor_id
-            conditions.append(Request.executor_id == user.id)
+            conditions.append(RequestModel.executor_id == user.id)
             query = query.filter(or_(*conditions))
         else:
             # Applicant/manager: own requests
-            query = query.filter(Request.user_id == user.id)
+            query = query.filter(RequestModel.user_id == user.id)
     if status:
-        query = query.filter(Request.status == status)
+        query = query.filter(RequestModel.status == status)
     if category:
-        query = query.filter(Request.category == category)
+        query = query.filter(RequestModel.category == category)
     if executor_id:
-        query = query.filter(Request.executor_id == executor_id)
+        query = query.filter(RequestModel.executor_id == executor_id)
     if source:
-        query = query.filter(Request.source == source)
+        query = query.filter(RequestModel.source == source)
 
-    result = await db.execute(query.order_by(Request.created_at.desc()).offset(offset).limit(limit))
+    result = await db.execute(query.order_by(RequestModel.created_at.desc()).offset(offset).limit(limit))
     return [_make_request_card(r, eu) for r, eu in result.all()]
 
 
@@ -175,19 +175,19 @@ async def get_acceptance_requests(
     )
     apt_ids = [row[0] for row in apt_result.all()]
 
-    conditions = [Request.user_id == user.id]
+    conditions = [RequestModel.user_id == user.id]
     if apt_ids:
-        conditions.append(Request.apartment_id.in_(apt_ids))
+        conditions.append(RequestModel.apartment_id.in_(apt_ids))
 
     ExecutorUser = aliased(User)
     result = await db.execute(
-        select(Request, ExecutorUser)
-        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
+        select(RequestModel, ExecutorUser)
+        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
         .where(
             or_(*conditions),
-            Request.status == "Исполнено",
+            RequestModel.status == "Исполнено",
         )
-        .order_by(Request.updated_at.desc())
+        .order_by(RequestModel.updated_at.desc())
         .limit(20)
     )
     return [_make_request_card(r, eu) for r, eu in result.all()]
@@ -204,9 +204,9 @@ async def get_request(
 
     ExecutorUser = aliased(User)
     result = await db.execute(
-        select(Request, ExecutorUser)
-        .outerjoin(ExecutorUser, Request.executor_id == ExecutorUser.id)
-        .where(Request.request_number == request_number)
+        select(RequestModel, ExecutorUser)
+        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
+        .where(RequestModel.request_number == request_number)
     )
     row = result.first()
     if not row:
@@ -225,14 +225,14 @@ async def create_request(
 ):
     today = date.today().strftime("%y%m%d")
     count_result = await db.execute(
-        select(func.count(Request.request_number)).where(
-            Request.request_number.like(f"{today}-%")
+        select(func.count(RequestModel.request_number)).where(
+            RequestModel.request_number.like(f"{today}-%")
         )
     )
     count = count_result.scalar() or 0
     request_number = _generate_request_number(today, count)
 
-    req = Request(
+    req = RequestModel(
         request_number=request_number,
         user_id=user.id,
         category=body.category,
@@ -250,8 +250,8 @@ async def create_request(
     except IntegrityError:
         await db.rollback()
         count_result = await db.execute(
-            select(func.count(Request.request_number)).where(
-                Request.request_number.like(f"{today}-%")
+            select(func.count(RequestModel.request_number)).where(
+                RequestModel.request_number.like(f"{today}-%")
             )
         )
         count = count_result.scalar() or 0
@@ -286,7 +286,7 @@ async def update_request(
     user: User = Depends(require_roles("manager", "applicant", "executor")),
 ):
     result = await db.execute(
-        select(Request).where(Request.request_number == request_number).with_for_update()
+        select(RequestModel).where(RequestModel.request_number == request_number).with_for_update()
     )
     req = result.scalar_one_or_none()
     if not req:
@@ -441,7 +441,7 @@ async def remind_applicant(
     db: AsyncSession = Depends(get_db),
 ):
     """Send a Telegram reminder to the applicant to accept a completed request."""
-    req_result = await db.execute(select(Request).where(Request.request_number == request_number))
+    req_result = await db.execute(select(RequestModel).where(RequestModel.request_number == request_number))
     req = req_result.scalar_one_or_none()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
