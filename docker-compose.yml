@@ -135,7 +135,7 @@ services:
     
     # Открываем порт для подключения (только для разработки)
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   # Redis для кэширования и rate limiting
   redis:
@@ -161,7 +161,7 @@ services:
     
     # Health check для проверки готовности Redis
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -169,7 +169,7 @@ services:
     
     # Открываем порт для подключения (только для разработки)
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   # Веб-сервис для регистрации по приглашениям
   web:

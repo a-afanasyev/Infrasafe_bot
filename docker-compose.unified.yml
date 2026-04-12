@@ -137,7 +137,7 @@ services:
       start_period: 30s
     # Порты exposed для разработки. Для production закомментируйте эту секцию.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
 
   # ==================== REDIS CACHE ====================
   redis:
@@ -150,14 +150,14 @@ services:
     networks:
       - uk-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
     # Порты exposed для разработки. Для production закомментируйте эту секцию.
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
 
 # ==================== VOLUMES ====================
 volumes:
