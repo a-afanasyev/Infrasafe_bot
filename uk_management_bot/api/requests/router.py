@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +18,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_request_event
+from uk_management_bot.api.rate_limit import limiter
 
 router = APIRouter()
 
@@ -215,7 +216,9 @@ async def get_request(
 
 
 @router.post("", response_model=RequestCard, status_code=201)
+@limiter.limit("20/minute")
 async def create_request(
+    request: Request,
     body: CreateRequestBody,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -274,7 +277,9 @@ async def create_request(
 
 
 @router.patch("/{request_number}", response_model=RequestCard)
+@limiter.limit("30/minute")
 async def update_request(
+    request: Request,
     request_number: str,
     body: UpdateRequestBody,
     db: AsyncSession = Depends(get_db),

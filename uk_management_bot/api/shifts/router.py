@@ -2,7 +2,7 @@ import re
 import logging
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import aliased
@@ -24,6 +24,7 @@ from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event
+from uk_management_bot.api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -942,7 +943,9 @@ async def get_shift(
 
 
 @router.post("", response_model=ShiftDetail, status_code=201)
+@limiter.limit("10/minute")
 async def create_shift(
+    request: Request,
     body: CreateShiftBody,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
@@ -998,7 +1001,9 @@ async def create_shift(
 
 
 @router.patch("/{shift_id}", response_model=ShiftDetail)
+@limiter.limit("20/minute")
 async def update_shift(
+    request: Request,
     shift_id: int,
     body: UpdateShiftBody,
     db: AsyncSession = Depends(get_db),

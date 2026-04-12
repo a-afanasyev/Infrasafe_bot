@@ -2,8 +2,6 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from uk_management_bot.api.auth.schemas import (
     TokenResponse, TelegramWidgetLogin, TWALogin,
@@ -19,9 +17,9 @@ from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.refresh_token import RefreshToken
 from uk_management_bot.config.settings import settings
+from uk_management_bot.api.rate_limit import limiter
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _build_token_response(user: User) -> dict:
@@ -132,7 +130,8 @@ async def logout(request: Request, data: RefreshRequest, db: AsyncSession = Depe
 
 
 @router.post("/set-password")
-async def set_password(data: SetPasswordRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def set_password(request: Request, data: SetPasswordRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if data.password != data.confirm_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match")
     if len(data.password) < 8:

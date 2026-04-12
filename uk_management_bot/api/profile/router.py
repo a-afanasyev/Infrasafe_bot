@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
 from uk_management_bot.database.models.user import User
+from uk_management_bot.api.rate_limit import limiter
 from pydantic import BaseModel
 from typing import Optional
 
@@ -81,7 +82,9 @@ async def update_profile(
 
 
 @router.post("/documents")
+@limiter.limit("10/minute")
 async def upload_document(
+    request: Request,
     document_type: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
