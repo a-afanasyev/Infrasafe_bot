@@ -124,8 +124,12 @@ class Settings:
             raise ValueError("BOT_TOKEN must be set in environment variables")
         if DATABASE_URL.startswith("sqlite"):
             raise ValueError("SQLite is not allowed in production (DEBUG=False). Use PostgreSQL.")
-        if ADMIN_PASSWORD and len(ADMIN_PASSWORD) < 8:
-            raise ValueError("ADMIN_PASSWORD must be at least 8 characters in production")
+        if ADMIN_PASSWORD and len(ADMIN_PASSWORD) < 12:
+            raise ValueError("ADMIN_PASSWORD must be at least 12 characters in production")
+        if JWT_SECRET and INVITE_SECRET and JWT_SECRET == INVITE_SECRET:
+            raise ValueError("JWT_SECRET and INVITE_SECRET must be different in production")
+        if not REDIS_URL or "redis://" not in REDIS_URL:
+            raise ValueError("Valid REDIS_URL required in production")
 
 # Создаем экземпляр настроек
 settings = Settings()

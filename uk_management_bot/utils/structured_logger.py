@@ -3,6 +3,7 @@
 """
 import logging
 import json
+import re
 import sys
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -55,38 +56,32 @@ class StructuredFormatter(logging.Formatter):
 
 
 class SecurityFilter(logging.Filter):
-    """
-    Фильтр для исключения чувствительной информации из логов
-    """
-    
-    # Паттерны чувствительной информации
-    SENSITIVE_PATTERNS = [
-        "password",
-        "token", 
-        "secret",
-        "key",
-        "credentials",
-        "auth",
-        "bearer"
+    """Selectively redact sensitive values in log messages."""
+
+    REDACT_PATTERNS = [
+        re.compile(r'(password|passwd|pwd)\s*[=:]\s*\S+', re.IGNORECASE),
+        re.compile(r'(token|secret|api[_-]?key)\s*[=:]\s*\S+', re.IGNORECASE),
+        re.compile(r'(Authorization:\s*Bearer\s+)\S+', re.IGNORECASE),
+        re.compile(r'(Bot\s+)\d+:[A-Za-z0-9_-]+', re.IGNORECASE),
     ]
-    
+
     def filter(self, record: logging.LogRecord) -> bool:
-        """Фильтрация чувствительной информации"""
-        try:
-            message = record.getMessage().lower()
-            
-            # Проверяем на наличие чувствительных паттернов
-            for pattern in self.SENSITIVE_PATTERNS:
-                if pattern in message:
-                    # Заменяем потенциально чувствительную информацию
-                    record.msg = "[REDACTED] Sensitive information filtered"
-                    record.args = ()
-                    break
-            
-            return True
-        except Exception:
-            # Если что-то пошло не так с фильтрацией, пропускаем запись
-            return True
+        msg = record.getMessage()
+        for pattern in self.REDACT_PATTERNS:
+            msg = pattern.sub(lambda m: self._redact_match(m), msg)
+        record.msg = msg
+        record.args = ()
+        return True
+
+    @staticmethod
+    def _redact_match(match: re.Match) -> str:
+        full = match.group(0)
+        # Find the separator (= or :) and redact only the value part
+        for sep in ('=', ':'):
+            if sep in full:
+                key_part = full[:full.index(sep) + 1]
+                return f"{key_part} [REDACTED]"
+        return "[REDACTED]"
 
 
 class StructuredLogger:
