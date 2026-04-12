@@ -16,11 +16,7 @@ logger = logging.getLogger(__name__)
 
 SECRET_KEY = settings.JWT_SECRET or settings.INVITE_SECRET
 if not SECRET_KEY:
-    if settings.DEBUG:
-        SECRET_KEY = "dev-jwt-secret-DO-NOT-USE-IN-PROD"
-        logger.warning("Using development JWT secret — NOT safe for production")
-    else:
-        raise RuntimeError("JWT_SECRET or INVITE_SECRET must be set")
+    raise RuntimeError("JWT_SECRET or INVITE_SECRET must be set in all environments")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -44,13 +40,30 @@ def create_access_token(
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload = {"sub": str(user_id), "roles": roles, "exp": expire}
+    payload = {
+        "sub": str(user_id),
+        "roles": roles,
+        "exp": expire,
+        "iss": "uk-management",
+        "aud": "uk-management-api",
+    }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verify_access_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience="uk-management-api",
+            issuer="uk-management",
+        )
+        # python-jose skips audience check when 'aud' claim is absent;
+        # reject such tokens explicitly.
+        if "aud" not in payload:
+            return None
+        return payload
     except JWTError:
         return None
 
