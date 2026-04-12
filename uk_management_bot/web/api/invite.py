@@ -76,37 +76,37 @@ async def register_via_invite(request: Request, data: RegistrationData, db: Sess
         invite_service = InviteService(db)
         auth_service = AuthService(db)
         
-        # Валидируем токен
-        validation_result = invite_service.validate_invite_token(data.token)
-        
-        if not validation_result.get("valid"):
-            raise HTTPException(status_code=400, detail=validation_result.get("message", "Неверный токен"))
-        
-        invite_data = validation_result.get("invite_data", {})
-        
-        nonce = invite_data.get("nonce")
+        # telegram_id is required for registration
+        if not data.telegram_id:
+            raise HTTPException(status_code=400, detail="telegram_id is required for registration")
 
         # Проверяем, что пользователь не зарегистрирован уже
-        if data.telegram_id:
-            existing_user = db.query(User).filter(User.telegram_id == data.telegram_id).first()
-            if existing_user:
-                # Security: blocked users CANNOT re-register
-                if existing_user.status == "blocked":
-                    raise HTTPException(status_code=403, detail="Пользователь заблокирован")
+        existing_user = db.query(User).filter(User.telegram_id == data.telegram_id).first()
 
-                # If already approved, reject
-                if existing_user.status == "approved":
-                    raise HTTPException(status_code=400, detail="Пользователь уже зарегистрирован и одобрен")
+        if existing_user:
+            # Security: blocked users CANNOT re-register
+            if existing_user.status == "blocked":
+                raise HTTPException(status_code=403, detail="Пользователь заблокирован")
 
-                # Pending users can update their info (but NOT role from invite — keep existing)
-                existing_user.first_name = data.full_name.split()[0] if data.full_name else ""
-                existing_user.last_name = " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else ""
-                existing_user.specialization = data.specialization if existing_user.role == "executor" else None
+            # If already approved, reject
+            if existing_user.status == "approved":
+                raise HTTPException(status_code=400, detail="Пользователь уже зарегистрирован и одобрен")
 
-                # Consume nonce so invite link can't be reused
-                invite_service.mark_nonce_used(nonce, existing_user.id, invite_data)
+            # Validate and atomically consume nonce in one step (fixes TOCTOU)
+            validation_result = invite_service.validate_invite(
+                data.token, mark_used_by=existing_user.telegram_id
+            )
+            if not validation_result.get("valid"):
+                raise HTTPException(status_code=400, detail=validation_result.get("message", "Неверный токен"))
 
-                db.commit()
+            invite_data = validation_result.get("invite_data", {})
+
+            # Pending users can update their info (but NOT role from invite — keep existing)
+            existing_user.first_name = data.full_name.split()[0] if data.full_name else ""
+            existing_user.last_name = " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else ""
+            existing_user.specialization = data.specialization if existing_user.role == "executor" else None
+
+            db.commit()
 
                 return {
                     "success": True,
@@ -114,17 +114,8 @@ async def register_via_invite(request: Request, data: RegistrationData, db: Sess
                     "user_id": existing_user.id
                 }
         
-        # Создаем пользователя через веб-регистрацию
-        user_data = {
-            "telegram_id": data.telegram_id,
-            "first_name": data.full_name.split()[0] if data.full_name else "",
-            "last_name": " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else "",
-            "role": invite_data.get("role"),
-            "specialization": data.specialization if invite_data.get("role") == "executor" else None,
-            "status": "pending"
-        }
-        
-        # Используем существующий метод присоединения
+        # New user: validate + consume nonce atomically via join_via_invite
+        # (join_via_invite internally calls validate_invite with mark_used_by)
         result = invite_service.join_via_invite(
             token=data.token,
             telegram_id=data.telegram_id,

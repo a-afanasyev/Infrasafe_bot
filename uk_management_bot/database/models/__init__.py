@@ -24,6 +24,9 @@ from .user_yard import UserYard
 # Webhook integration
 from .webhook_outbox import WebhookOutbox
 
+# Invite nonce tracking
+from .invite_nonce import InviteNonce
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -58,7 +61,8 @@ __all__ = [
     'Apartment',
     'UserApartment',
     'UserYard',
-    'WebhookOutbox'
+    'WebhookOutbox',
+    'InviteNonce'
 ]
 
 # Добавляем модели заявок, если они доступны

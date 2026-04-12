@@ -147,13 +147,13 @@ class TestInviteService:
         nonce = payload["nonce"]
         
         # Первая проверка - nonce не использован
-        assert not invite_service.is_nonce_used(nonce)
-        
-        # Отмечаем как использованный
+        assert not invite_service._is_nonce_used(nonce)
+
+        # Отмечаем как использованный (public wrapper delegates to atomic INSERT)
         invite_service.mark_nonce_used(nonce, 999888777, payload)
-        
+
         # Вторая проверка - nonce использован
-        assert invite_service.is_nonce_used(nonce)
+        assert invite_service._is_nonce_used(nonce)
         
         # Попытка валидации того же токена должна провалиться
         with pytest.raises(ValueError, match="Token already used"):
