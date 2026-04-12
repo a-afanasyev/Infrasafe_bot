@@ -20,7 +20,12 @@ COPY alembic.ini .
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
+COPY scripts/entrypoint-api.sh /app/entrypoint.sh
+USER root
+RUN chmod +x /app/entrypoint.sh
 USER appuser
+
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1

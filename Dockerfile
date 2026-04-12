@@ -44,8 +44,15 @@ COPY tests/ ./tests/
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app
 
+# Копируем entrypoint скрипт
+COPY scripts/entrypoint-bot.sh /app/entrypoint.sh
+USER root
+RUN chmod +x /app/entrypoint.sh
+
 # Переключаемся на пользователя app
 USER app
+
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Устанавливаем переменные окружения по умолчанию
 # Эти переменные можно переопределить при запуске контейнера

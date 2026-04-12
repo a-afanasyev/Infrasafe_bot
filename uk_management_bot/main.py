@@ -6,7 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
 from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
-from uk_management_bot.database.session import engine, Base, SessionLocal
+from uk_management_bot.database.session import engine, SessionLocal
 from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.shifts import router as shifts_router
@@ -157,10 +157,9 @@ async def main():
     """Главная функция запуска бота"""
     
     # BOT_TOKEN is validated in settings.py at import time
-    # Создаем таблицы в базе данных
-    import uk_management_bot.database.models  # Импортируем все модели
-    Base.metadata.create_all(bind=engine)
-    logger.info("База данных инициализирована")
+    # DB schema is managed by Alembic migrations (run from API entrypoint)
+    import uk_management_bot.database.models  # noqa: F401 — ensure models are registered
+    logger.info("Модели БД загружены (миграции выполняются через API entrypoint)")
 
     # Инициализируем администраторов из ADMIN_USER_IDS
     from uk_management_bot.database.init_admin import init_all_admins
@@ -171,17 +170,6 @@ async def main():
     except Exception as e:
         logger.warning(f"Не удалось инициализировать администраторов: {e}")
 
-    # Миграция legacy-данных: проставить manager_confirmed для старых заявок
-    try:
-        from uk_management_bot.database.migrations.fix_manager_confirmed_legacy import migrate_legacy_manager_confirmed
-        migration_db = SessionLocal()
-        migrated = migrate_legacy_manager_confirmed(migration_db)
-        if migrated > 0:
-            logger.info(f"Legacy-миграция manager_confirmed: обновлено {migrated} заявок")
-        migration_db.close()
-    except Exception as e:
-        logger.warning(f"Ошибка legacy-миграции manager_confirmed: {e}")
-    
     # Инициализируем бота и диспетчер
     # ВАЖНО: parse_mode="HTML" позволяет использовать HTML теги (<b>, <i>, <code> и т.д.)
     from aiogram.client.default import DefaultBotProperties
