@@ -50,6 +50,15 @@ class CreateRequestBody(BaseModel):
     source: str = "web"
     media_files: Optional[List[str]] = None
 
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        from uk_management_bot.config.settings import settings
+        valid = settings.REQUEST_CATEGORIES
+        if v not in valid:
+            raise ValueError(f"category must be one of: {valid}")
+        return v
+
     @field_validator("urgency")
     @classmethod
     def validate_urgency(cls, v: str) -> str:
@@ -67,12 +76,20 @@ class UpdateRequestBody(BaseModel):
     manager_confirmation_notes: Optional[str] = None
     requested_materials: Optional[str] = None
     return_reason: Optional[str] = None
+    rating: Optional[int] = None
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in VALID_STATUSES:
             raise ValueError(f"status must be one of: {VALID_STATUSES}")
+        return v
+
+    @field_validator("rating")
+    @classmethod
+    def validate_rating(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (not isinstance(v, int) or v < 1 or v > 5):
+            raise ValueError("rating must be an integer between 1 and 5")
         return v
 
 

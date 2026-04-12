@@ -1,13 +1,12 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from slowapi import _rate_limit_exceeded_handler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-
-from uk_management_bot.api.rate_limit import limiter
 
 from uk_management_bot.api.auth.router import router as auth_router
 from uk_management_bot.api.requests.router import router as requests_router
@@ -20,6 +19,9 @@ from uk_management_bot.api.shifts.executor_router import router as executor_shif
 from uk_management_bot.api.requests.stats_router import router as requests_stats_router
 from uk_management_bot.api.addresses.router import router as addresses_router
 from uk_management_bot.config.settings import settings
+
+limiter = Limiter(key_func=get_remote_address)
+
 
 _logger = logging.getLogger(__name__)
 
@@ -129,14 +131,15 @@ async def get_announcements():
 
 
 # ── Media proxy (TWA → Media Service) ────────────────────
+import re
 import httpx
+
+REQUEST_NUMBER_PATTERN = re.compile(r"^\d{6}-\d{3}$")
 from uk_management_bot.api.dependencies import get_current_user
 from uk_management_bot.database.models.user import User
 
 @app.post("/api/v2/media/upload")
-@limiter.limit("10/minute")
 async def proxy_media_upload(
-    request: Request,
     file: UploadFile = File(...),
     request_number: str = Form(...),
     category: str = Form("request_photo"),
@@ -147,14 +150,9 @@ async def proxy_media_upload(
     if not media_url:
         raise HTTPException(status_code=503, detail="Media service not configured")
 
-    headers = {}
-    if settings.MEDIA_SERVICE_API_KEY:
-        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
-
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"{media_url}/api/v1/media/upload",
-            headers=headers,
             files={"file": (file.filename, await file.read(), file.content_type)},
             data={
                 "request_number": request_number,
@@ -173,13 +171,11 @@ async def proxy_media_list(
     user: User = Depends(get_current_user),
 ):
     """Proxy: get media files for a request."""
+    if not REQUEST_NUMBER_PATTERN.match(request_number):
+        raise HTTPException(400, "Invalid request number format. Expected: YYMMDD-NNN")
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
-    headers = {}
-    if settings.MEDIA_SERVICE_API_KEY:
-        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
-
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{media_url}/api/v1/media/request/{request_number}", headers=headers)
+        resp = await client.get(f"{media_url}/api/v1/media/request/{request_number}")
         if resp.status_code != 200:
             return []
         return resp.json()
