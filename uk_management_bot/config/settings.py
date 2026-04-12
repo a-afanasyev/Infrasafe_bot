@@ -8,6 +8,7 @@ load_dotenv()
 class Settings:
     # Telegram Bot
     BOT_TOKEN = os.getenv("BOT_TOKEN")
+    BOT_USERNAME = os.getenv("BOT_USERNAME", "infrasafebot")
     TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
     
     # Database: используем абсолютный путь по умолчанию, чтобы запуск из любого каталога

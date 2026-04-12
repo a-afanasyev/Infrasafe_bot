@@ -118,18 +118,21 @@ def upgrade(engine):
 
             # Проверяем существование каждой колонки перед удалением
             legacy_columns = ['address', 'home_address', 'apartment_address', 'yard_address', 'address_type']
+            ALLOWED_LEGACY_COLUMNS = frozenset({"address", "home_address", "apartment_address", "yard_address", "address_type"})
 
             for column in legacy_columns:
-                # Проверяем существование колонки
-                result = conn.execute(text(f"""
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name = 'users' AND column_name = '{column}'
-                """))
+                # Проверяем существование колонки (параметризованный запрос)
+                result = conn.execute(
+                    text("SELECT column_name FROM information_schema.columns WHERE table_name = :tbl AND column_name = :col"),
+                    {"tbl": "users", "col": column}
+                )
 
                 if result.fetchone():
-                    logger.info(f"Удаление колонки {column} из таблицы users...")
-                    conn.execute(text(f"ALTER TABLE users DROP COLUMN IF EXISTS {column}"))
+                    if column in ALLOWED_LEGACY_COLUMNS:
+                        logger.info(f"Удаление колонки {column} из таблицы users...")
+                        conn.execute(text(f'ALTER TABLE users DROP COLUMN IF EXISTS "{column}"'))
+                    else:
+                        logger.warning(f"Колонка {column} не в списке разрешённых, пропускаем...")
                 else:
                     logger.info(f"Колонка {column} не существует, пропускаем...")
 

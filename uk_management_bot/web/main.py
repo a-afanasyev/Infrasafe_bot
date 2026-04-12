@@ -46,7 +46,17 @@ async def add_telegram_headers(request: Request, call_next):
     
     # Заголовки для Telegram Web App
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["Content-Security-Policy"] = "frame-ancestors 'self' https://web.telegram.org https://telegram.org; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "frame-ancestors 'self' https://web.telegram.org https://telegram.org; "
+        "script-src 'self' https://telegram.org; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self' https:; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
     
     return response
 

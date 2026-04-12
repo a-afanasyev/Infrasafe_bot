@@ -11,9 +11,8 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import String
 from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.database.models.invite_nonce import InviteNonce
 from uk_management_bot.config.settings import settings
 import logging
 from uk_management_bot.utils.redis_rate_limiter import is_rate_limited, get_rate_limit_remaining_time
@@ -96,7 +95,7 @@ class InviteService:
         token = self.generate_invite(role, created_by, specialization, hours)
         
         # Формируем ссылку на бота (без параметров, так как Telegram их не передает)
-        bot_username = settings.BOT_USERNAME if hasattr(settings, 'BOT_USERNAME') else "infrasafebot"
+        bot_username = settings.BOT_USERNAME
         invite_link = f"https://t.me/{bot_username}"
         
         logger.info(f"Generated bot invite link for role {role} by user {created_by}")
@@ -143,7 +142,7 @@ class InviteService:
         Валидирует токен приглашения.
 
         If mark_used_by is provided, atomically validates AND marks the nonce
-        as used via UNIQUE constraint INSERT, preventing race conditions.
+        as used in a single transaction, preventing race conditions.
 
         Args:
             token: Токен для валидации
@@ -190,10 +189,13 @@ class InviteService:
             if payload.get('expires_at', 0) < time.time():
                 raise ValueError("Token has expired")
 
-            # Проверяем nonce
+            # Проверяем nonce на повторное использование
             nonce = payload.get('nonce')
             if not nonce:
                 raise ValueError("Token missing nonce")
+
+            if self.is_nonce_used(nonce):
+                raise ValueError("Token already used")
 
             # Валидируем структуру данных
             required_fields = ['role', 'expires_at', 'nonce', 'created_by']
@@ -204,13 +206,9 @@ class InviteService:
             if payload['role'] not in ['applicant', 'executor', 'manager']:
                 raise ValueError("Invalid role in token")
 
-            # Atomically consume the nonce if mark_used_by is set.
-            # Otherwise just check that the nonce has not been used yet.
+            # Atomically mark nonce as used within the same transaction
             if mark_used_by is not None:
-                self._use_nonce_atomically(nonce, mark_used_by, payload)
-            else:
-                if self._is_nonce_used(nonce):
-                    raise ValueError("Token already used")
+                self.mark_nonce_used(nonce, mark_used_by, payload)
 
             logger.info(f"Successfully validated invite token with nonce {nonce}")
             return payload
@@ -222,84 +220,73 @@ class InviteService:
         except Exception as e:
             logger.warning(f"Token validation failed: {str(e)}")
             raise ValueError(f"Token validation failed: {str(e)}")
-
-    def _is_nonce_used(self, nonce: str) -> bool:
-        """Check whether a nonce has already been consumed (exact match)."""
+    
+    def is_nonce_used(self, nonce: str) -> bool:
+        """
+        Проверяет использован ли nonce ранее
+        
+        Args:
+            nonce: Уникальный идентификатор токена
+            
+        Returns:
+            True если nonce уже использован
+        """
         try:
-            return (
-                self.db.query(InviteNonce)
-                .filter(InviteNonce.nonce == nonce)
-                .first()
-            ) is not None
+            # Ищем записи об использовании этого nonce в аудит логе
+            # Используем правильный синтаксис для PostgreSQL JSON
+            used_record = self.db.query(AuditLog).filter(
+                AuditLog.action == "invite_used",
+                AuditLog.details.cast(String).contains(f'"nonce":"{nonce}"')
+            ).first()
+            
+            return used_record is not None
+            
         except Exception as e:
             logger.error(f"Error checking nonce usage: {e}")
-            # Fail-closed: treat as used on error
+            # В случае ошибки считаем nonce использованным для безопасности
             return True
-
-    def _use_nonce_atomically(
-        self, nonce: str, user_id: int, invite_data: Dict[str, Any]
-    ) -> None:
+    
+    def mark_nonce_used(self, nonce: str, user_id: int, invite_data: Dict[str, Any]):
         """
-        Atomically consume a nonce by INSERT with UNIQUE constraint.
-
-        If the nonce already exists the INSERT raises IntegrityError,
-        which we translate to ValueError("Token already used").
-        This eliminates the TOCTOU race between is_nonce_used / mark_nonce_used.
+        Отмечает nonce как использованный
+        
+        Args:
+            nonce: Уникальный идентификатор токена
+            user_id: ID пользователя, который использовал токен
+            invite_data: Данные из токена приглашения
         """
-        record = InviteNonce(
-            nonce=nonce,
-            used_by=user_id,
-            invite_payload=invite_data,
-        )
         try:
-            self.db.begin_nested()  # SAVEPOINT — only rolls back the INSERT, not parent tx
-            self.db.add(record)
-            self.db.flush()  # Force INSERT now so IntegrityError surfaces
-        except IntegrityError:
-            self.db.rollback()  # Rolls back to SAVEPOINT only
-            raise ValueError("Token already used")
-
-        # Also write to audit_logs for backwards compatibility
-        self._log_nonce_used(nonce, user_id, invite_data)
-
-    def _log_nonce_used(
-        self, nonce: str, user_id: int, invite_data: Dict[str, Any]
-    ) -> None:
-        """Write an audit_logs record when a nonce is consumed."""
-        try:
+            # Проверяем, существует ли пользователь
             from uk_management_bot.database.models.user import User
             user_exists = self.db.query(User).filter(User.telegram_id == user_id).first()
-
+            
             audit_details = {
                 "nonce": nonce,
                 "role": invite_data.get("role"),
                 "created_by": invite_data.get("created_by"),
-                "new_user_id": user_id,
+                "new_user_id": user_id
             }
+            
             if "specialization" in invite_data:
                 audit_details["specialization"] = invite_data["specialization"]
-
+            
             audit = AuditLog(
                 action="invite_used",
                 user_id=user_exists.id if user_exists else None,
-                telegram_user_id=user_id,
-                details=json.dumps(audit_details),
+                telegram_user_id=user_id,  # Сохраняем Telegram ID
+                details=json.dumps(audit_details)
             )
+            
             self.db.add(audit)
-            # Do NOT commit here — caller owns the transaction boundary
+            self.db.commit()
+            
+            logger.info(f"Marked nonce {nonce} as used by user {user_id}")
+            
         except Exception as e:
-            logger.error(f"Error logging nonce usage: {e}")
-
-    # ---- public wrappers kept for external callers ----
-
-    def mark_nonce_used(self, nonce: str, user_id: int, invite_data: Dict[str, Any]) -> None:
-        """
-        Public wrapper: atomically mark nonce as used.
-
-        Kept for backward compatibility with callers outside this service
-        (e.g. web/api/invite.py).
-        """
-        self._use_nonce_atomically(nonce, user_id, invite_data)
+            logger.error(f"Error marking nonce as used: {e}")
+            # Пытаемся откатить транзакцию если что-то пошло не так
+            self.db.rollback()
+            raise
     
     def _generate_nonce(self) -> str:
         """Генерирует случайный nonce для токена"""
@@ -351,9 +338,9 @@ class InviteService:
             Словарь с результатом операции
         """
         try:
-            # Валидируем токен и атомарно потребляем nonce
-            invite_data = self.validate_invite(token, mark_used_by=telegram_id)
-
+            # Валидируем токен
+            invite_data = self.validate_invite(token)
+            
             # Проверяем, что пользователь не зарегистрирован уже
             from uk_management_bot.database.models.user import User
             existing_user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -362,7 +349,7 @@ class InviteService:
                     "success": False,
                     "message": "Пользователь уже зарегистрирован"
                 }
-
+            
             # Создаем нового пользователя
             user = User(
                 telegram_id=telegram_id,
@@ -372,10 +359,13 @@ class InviteService:
                 specialization=specialization if invite_data["role"] == "executor" else None,
                 status="pending"
             )
-
+            
             self.db.add(user)
             self.db.flush()  # Получаем ID пользователя
-
+            
+            # Отмечаем токен как использованный
+            self.mark_nonce_used(invite_data["nonce"], user.id, invite_data)
+            
             self.db.commit()
             
             logger.info(f"User {telegram_id} joined via invite with role {invite_data['role']}")

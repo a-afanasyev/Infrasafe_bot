@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 
-const BOT_USERNAME = 'infrasafebot'
+const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'infrasafebot'
 
 export default function LoginPage() {
   const { t } = useTranslation()
