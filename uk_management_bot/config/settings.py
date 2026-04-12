@@ -31,6 +31,7 @@ class Settings:
     # Application
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    SENTRY_DSN = os.getenv("SENTRY_DSN", "")
     
     # Admin
     ADMIN_USER_IDS = [int(x.strip()) for x in os.getenv("ADMIN_USER_IDS", "").split(",") if x.strip()]

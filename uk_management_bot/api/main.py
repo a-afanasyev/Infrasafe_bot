@@ -7,6 +7,18 @@ from contextlib import asynccontextmanager
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.config.settings import settings as _settings
+
+# Sentry error tracking with FastAPI integration (optional)
+if _settings.SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    sentry_sdk.init(
+        dsn=_settings.SENTRY_DSN,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=0.1,
+        environment="production" if not _settings.DEBUG else "development",
+    )
 
 from uk_management_bot.api.auth.router import router as auth_router
 from uk_management_bot.api.requests.router import router as requests_router

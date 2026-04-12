@@ -53,5 +53,8 @@ passlib[bcrypt]>=1.7.4
 # Rate limiting
 slowapi>=0.1.9
 
+# Error Tracking
+sentry-sdk[fastapi]>=2.0.0
+
 # Testing
 pytest-cov>=4.1.0

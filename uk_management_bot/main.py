@@ -6,6 +6,15 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
 from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
+
+# Sentry error tracking (optional — only if SENTRY_DSN is configured)
+if settings.SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=0.1,
+        environment="production" if not settings.DEBUG else "development",
+    )
 from uk_management_bot.database.session import engine, SessionLocal
 from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.requests import router as requests_router
