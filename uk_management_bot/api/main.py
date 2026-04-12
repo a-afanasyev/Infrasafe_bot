@@ -147,9 +147,14 @@ async def proxy_media_upload(
     if not media_url:
         raise HTTPException(status_code=503, detail="Media service not configured")
 
+    headers = {}
+    if settings.MEDIA_SERVICE_API_KEY:
+        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"{media_url}/api/v1/media/upload",
+            headers=headers,
             files={"file": (file.filename, await file.read(), file.content_type)},
             data={
                 "request_number": request_number,
@@ -169,8 +174,12 @@ async def proxy_media_list(
 ):
     """Proxy: get media files for a request."""
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
+    headers = {}
+    if settings.MEDIA_SERVICE_API_KEY:
+        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
+
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{media_url}/api/v1/media/request/{request_number}")
+        resp = await client.get(f"{media_url}/api/v1/media/request/{request_number}", headers=headers)
         if resp.status_code != 200:
             return []
         return resp.json()

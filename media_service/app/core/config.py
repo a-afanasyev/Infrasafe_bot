@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev_secret_key_change_in_production"
     access_token_expire_minutes: int = 30
     api_keys: str = Field(default="", validation_alias="MEDIA_API_KEYS")
-    allowed_origins: str = "*"
+    allowed_origins: str = Field(default="", description="Comma-separated allowed origins. Required in production.")
 
     @property
     def api_keys_list(self) -> List[str]:

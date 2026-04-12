@@ -110,11 +110,14 @@ _AUTH_EXEMPT_PATHS = {"/api/v1/health", "/api/v1/health/live", "/", "/version", 
 
 @app.middleware("http")
 async def api_key_auth(request: Request, call_next):
-    # Skip auth if no API keys configured (grace mode for migration)
-    if not settings.api_keys_list:
+    # Exempt health check endpoints
+    path = request.url.path.rstrip("/")
+    if path in ("/health", "/ping", "/api/v1/health"):
         return await call_next(request)
 
-    path = request.url.path.rstrip("/")
+    # Require API key for all other paths
+    if not settings.api_keys_list:
+        return JSONResponse(status_code=401, content={"error": "API keys not configured"})
 
     # Exempt paths
     if path in _AUTH_EXEMPT_PATHS:
