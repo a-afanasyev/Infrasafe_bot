@@ -18,11 +18,10 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-      api: { condition: service_healthy }
     networks: [uk-network]
     deploy:
       resources:
-        limits: { memory: 512M }
+        limits: { memory: 512M, cpus: "1.0" }
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -57,7 +56,7 @@ services:
     networks: [uk-network]
     deploy:
       resources:
-        limits: { memory: 512M }
+        limits: { memory: 512M, cpus: "1.0" }
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -79,7 +78,7 @@ services:
     networks: [uk-network]
     deploy:
       resources:
-        limits: { memory: 128M }
+        limits: { memory: 128M, cpus: "0.5" }
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "3" }
@@ -102,7 +101,7 @@ services:
     networks: [uk-network]
     deploy:
       resources:
-        limits: { memory: 512M }
+        limits: { memory: 512M, cpus: "1.0" }
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -124,7 +123,7 @@ services:
     networks: [uk-network]
     deploy:
       resources:
-        limits: { memory: 128M }
+        limits: { memory: 128M, cpus: "0.5" }
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "3" }
@@ -150,7 +149,7 @@ services:
     networks: [uk-network]
     deploy:
       resources:
-        limits: { memory: 128M }
+        limits: { memory: 128M, cpus: "0.5" }
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "3" }

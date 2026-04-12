@@ -1,5 +1,5 @@
 # Dockerfile для тестового фронтенда
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
 # Копируем статические файлы
 COPY index.html /usr/share/nginx/html/
