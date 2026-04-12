@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import i18n from '../i18n'
 import { apiClient } from '../api/client'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import type {
   AddressStats,
   YardBrief,
@@ -143,7 +144,7 @@ export function useCreateYard() {
     },
     onError: (error: Error) => {
       console.error('Create yard failed:', error)
-      toast.error(i18n.t('toast.yardCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.yardCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -159,7 +160,7 @@ export function useUpdateYard() {
     },
     onError: (error: Error) => {
       console.error('Update yard failed:', error)
-      toast.error(i18n.t('toast.yardUpdateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.yardUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -175,7 +176,7 @@ export function useDeleteYard() {
     },
     onError: (error: Error) => {
       console.error('Delete yard failed:', error)
-      toast.error(i18n.t('toast.yardDeleteFailed'), { description: error.message })
+      toast.error(i18n.t('toast.yardDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -194,7 +195,7 @@ export function useCreateBuilding() {
     },
     onError: (error: Error) => {
       console.error('Create building failed:', error)
-      toast.error(i18n.t('toast.buildingCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.buildingCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -210,7 +211,7 @@ export function useUpdateBuilding() {
     },
     onError: (error: Error) => {
       console.error('Update building failed:', error)
-      toast.error(i18n.t('toast.buildingUpdateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.buildingUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -227,7 +228,7 @@ export function useDeleteBuilding() {
     },
     onError: (error: Error) => {
       console.error('Delete building failed:', error)
-      toast.error(i18n.t('toast.buildingDeleteFailed'), { description: error.message })
+      toast.error(i18n.t('toast.buildingDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -246,7 +247,7 @@ export function useCreateApartment() {
     },
     onError: (error: Error) => {
       console.error('Create apartment failed:', error)
-      toast.error(i18n.t('toast.apartmentCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.apartmentCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -262,7 +263,7 @@ export function useUpdateApartment() {
     },
     onError: (error: Error) => {
       console.error('Update apartment failed:', error)
-      toast.error(i18n.t('toast.apartmentUpdateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.apartmentUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -279,7 +280,7 @@ export function useDeleteApartment() {
     },
     onError: (error: Error) => {
       console.error('Delete apartment failed:', error)
-      toast.error(i18n.t('toast.apartmentDeleteFailed'), { description: error.message })
+      toast.error(i18n.t('toast.apartmentDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -296,7 +297,7 @@ export function useBulkCreateApartments() {
     },
     onError: (error: Error) => {
       console.error('Bulk create apartments failed:', error)
-      toast.error(i18n.t('toast.bulkCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.bulkCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -315,7 +316,7 @@ export function useApproveModeration() {
     },
     onError: (error: Error) => {
       console.error('Approve moderation failed:', error)
-      toast.error(i18n.t('toast.addressApproveFailed'), { description: error.message })
+      toast.error(i18n.t('toast.addressApproveFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -332,7 +333,7 @@ export function useRejectModeration() {
     },
     onError: (error: Error) => {
       console.error('Reject moderation failed:', error)
-      toast.error(i18n.t('toast.addressRejectFailed'), { description: error.message })
+      toast.error(i18n.t('toast.addressRejectFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }

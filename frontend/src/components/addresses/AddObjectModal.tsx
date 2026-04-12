@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreateYard, useCreateBuilding } from '../../hooks/useAddresses'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import type { YardBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -173,7 +174,7 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
             </div>
             {createYard.error && (
               <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                {(createYard.error as any)?.response?.data?.detail || (createYard.error as Error).message || t('addressForms.saveError')}
+                {safeErrorMessage(createYard.error, t('addressForms.saveError'))}
               </div>
             )}
           </div>
@@ -228,7 +229,7 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
             </div>
             {createBuilding.error && (
               <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                {(createBuilding.error as any)?.response?.data?.detail || (createBuilding.error as Error).message || t('addressForms.saveError')}
+                {safeErrorMessage(createBuilding.error, t('addressForms.saveError'))}
               </div>
             )}
           </div>

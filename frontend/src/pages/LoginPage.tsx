@@ -7,7 +7,23 @@ import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 
-const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'infrasafebot'
+const BOT_USERNAME = 'infrasafebot'
+
+interface TelegramUser {
+  id: number
+  first_name: string
+  last_name?: string
+  username?: string
+  photo_url?: string
+  auth_date: number
+  hash: string
+}
+
+function isTelegramUser(data: unknown): data is TelegramUser {
+  if (!data || typeof data !== 'object') return false
+  const obj = data as Record<string, unknown>
+  return typeof obj.id === 'number' && typeof obj.hash === 'string' && typeof obj.auth_date === 'number'
+}
 
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -20,7 +36,11 @@ export default function LoginPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    ;(window as any).onTelegramAuth = async (tgUser: Record<string, unknown>) => {
+    ;(window as any).onTelegramAuth = async (tgUser: unknown) => {
+      if (!isTelegramUser(tgUser)) {
+        setError('Invalid Telegram data')
+        return
+      }
       setError('')
       setLoading(true)
       try {

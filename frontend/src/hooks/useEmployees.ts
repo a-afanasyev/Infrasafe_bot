@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import i18n from '../i18n'
 import { apiClient } from '../api/client'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import type {
   VerificationStatus,
   EmployeeBrief,
@@ -49,9 +50,9 @@ export function useApproveEmployee() {
       toast.success(i18n.t('toast.employeeApproved'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Approve employee failed:', error)
-      toast.error(i18n.t('toast.employeeApproveFailed'), { description: error.message })
+      toast.error(i18n.t('toast.employeeApproveFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -65,9 +66,9 @@ export function useRejectEmployee() {
       toast.success(i18n.t('toast.employeeRejected'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Reject employee failed:', error)
-      toast.error(i18n.t('toast.employeeRejectFailed'), { description: error.message })
+      toast.error(i18n.t('toast.employeeRejectFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -81,9 +82,9 @@ export function useBlockEmployee() {
       toast.success(i18n.t('toast.employeeBlocked'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Block employee failed:', error)
-      toast.error(i18n.t('toast.employeeBlockFailed'), { description: error.message })
+      toast.error(i18n.t('toast.employeeBlockFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -97,9 +98,9 @@ export function useUnblockEmployee() {
       toast.success(i18n.t('toast.employeeUnblocked'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Unblock employee failed:', error)
-      toast.error(i18n.t('toast.employeeUnblockFailed'), { description: error.message })
+      toast.error(i18n.t('toast.employeeUnblockFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -131,9 +132,9 @@ export function useCreateEmployee() {
       toast.success(i18n.t('toast.employeeCreated'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Create employee failed:', error)
-      toast.error(i18n.t('toast.employeeCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.employeeCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -148,9 +149,9 @@ export function useCreateInvite() {
       apiClient
         .post('/api/v2/shifts/employees/invite', data)
         .then(r => r.data as { token: string; bot_link: string; expires_at: string }),
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Create invite failed:', error)
-      toast.error(i18n.t('toast.inviteCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.inviteCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -166,9 +167,9 @@ export function useDeleteEmployee() {
       toast.success(i18n.t('toast.employeeDeleted'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Delete employee failed:', error)
-      toast.error(i18n.t('toast.employeeDeleteFailed'), { description: error.message })
+      toast.error(i18n.t('toast.employeeDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { safeErrorMessage } from '@/utils/errorMessage'
 
 interface Props {
   building?: BuildingBrief
@@ -143,7 +144,7 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
 
           {mutation.error && (
             <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || t('addressForms.saveError')}
+              {safeErrorMessage(mutation.error, t('addressForms.saveError'))}
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { safeErrorMessage } from '@/utils/errorMessage'
 
 interface Props {
   apartment?: ApartmentBrief
@@ -119,7 +120,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
 
           {mutation.error && (
             <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-              {(mutation.error as any)?.response?.data?.detail || (mutation.error as Error).message || t('addressForms.saveError')}
+              {safeErrorMessage(mutation.error, t('addressForms.saveError'))}
             </div>
           )}
         </div>

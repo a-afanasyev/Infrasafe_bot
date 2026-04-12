@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import i18n from '../i18n'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import type { TemplateBrief, CreateTemplatePayload } from '../types/api'
 
 export type { TemplateBrief, CreateTemplatePayload }
@@ -36,9 +37,9 @@ export function useCreateTemplate() {
       toast.success(i18n.t('toast.templateCreated'))
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Create template failed:', error)
-      toast.error(i18n.t('toast.templateCreateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.templateCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -53,9 +54,9 @@ export function useUpdateTemplate() {
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
       queryClient.invalidateQueries({ queryKey: ['shift-template', variables.id] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Update template failed:', error)
-      toast.error(i18n.t('toast.templateUpdateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.templateUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -70,9 +71,9 @@ export function useDeleteTemplate() {
       queryClient.invalidateQueries({ queryKey: ['shift-templates'] })
       queryClient.removeQueries({ queryKey: ['shift-template', id] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Delete template failed:', error)
-      toast.error(i18n.t('toast.templateDeleteFailed'), { description: error.message })
+      toast.error(i18n.t('toast.templateDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -87,9 +88,9 @@ export function useCreateShiftFromTemplate() {
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Create shift from template failed:', error)
-      toast.error(i18n.t('toast.shiftFromTemplateFailed'), { description: error.message })
+      toast.error(i18n.t('toast.shiftFromTemplateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { apiClient } from '../api/client'
 import { useWebSocket } from './useWebSocket'
 import i18n from '../i18n'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import type {
   EmployeeBrief,
   ShiftBrief,
@@ -85,8 +86,8 @@ export function useCreateShift() {
       queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
     },
-    onError: (error: Error) => {
-      toast.error(i18n.t('toast.shiftCreateFailed'), { description: error.message })
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.shiftCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -101,8 +102,8 @@ export function useEndShift() {
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
     },
-    onError: (error: Error) => {
-      toast.error(i18n.t('toast.shiftEndFailed'), { description: error.message })
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.shiftEndFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
@@ -127,8 +128,8 @@ export function useHandleTransfer() {
       queryClient.invalidateQueries({ queryKey: ['shift-transfers'] })
       queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
     },
-    onError: (error: Error) => {
-      toast.error(i18n.t('toast.transferHandleFailed'), { description: error.message })
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.transferHandleFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }

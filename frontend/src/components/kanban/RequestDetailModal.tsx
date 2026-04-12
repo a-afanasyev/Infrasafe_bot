@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ChevronDown } from 'lucide-react'
 import { apiClient } from '../../api/client'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import { tStatus, tUrgency, tCategory } from '../../i18n/apiMaps'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
@@ -112,8 +113,8 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
       setShowConfirmSection(false)
       setConfirmNote('')
     },
-    onError: (error: Error) => {
-      toast.error(t('toast.requestUpdateFailed'), { description: error.message })
+    onError: (error: unknown) => {
+      toast.error(t('toast.requestUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 
@@ -130,8 +131,8 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
       setShowForceAcceptSection(false)
       setForceAcceptNote('')
     },
-    onError: (error: Error) => {
-      toast.error(t('toast.requestForceAcceptFailed'), { description: error.message })
+    onError: (error: unknown) => {
+      toast.error(t('toast.requestForceAcceptFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 
@@ -157,8 +158,8 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
       setComment('')
     },
-    onError: (error: Error) => {
-      toast.error(t('toast.noteAddFailed'), { description: error.message })
+    onError: (error: unknown) => {
+      toast.error(t('toast.noteAddFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 
