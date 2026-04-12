@@ -19,3 +19,9 @@ docker exec "$CONTAINER" pg_dump -U "$DB_USER" "$DB_NAME" | gzip > "$BACKUP_DIR/
 find "$BACKUP_DIR" -name "uk_management_*.sql.gz" -mtime +$KEEP_DAYS -delete
 
 echo "Backup created: $BACKUP_DIR/$FILENAME ($(du -h "$BACKUP_DIR/$FILENAME" | cut -f1))"
+
+# Optional: upload to S3 for off-site backup
+if command -v aws &> /dev/null && [ -n "${S3_BACKUP_BUCKET:-}" ]; then
+    aws s3 cp "$BACKUP_DIR/$FILENAME" "s3://$S3_BACKUP_BUCKET/uk-management/$FILENAME"
+    echo "Backup uploaded to S3: s3://$S3_BACKUP_BUCKET/uk-management/$FILENAME"
+fi
