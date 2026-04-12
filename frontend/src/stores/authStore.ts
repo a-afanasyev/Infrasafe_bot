@@ -14,8 +14,8 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      login: async (access_token, refresh_token) => {
-        // Store refresh_token for body-based rotation; access_token handled via httpOnly cookie
+      login: async (_access_token, refresh_token) => {
+        // access_token handled via httpOnly cookie; refresh_token stored for body-based rotation
         localStorage.setItem('refresh_token', refresh_token)
         const { data } = await apiClient.get('/api/v2/profile')
         set({ user: data, isAuthenticated: true })
