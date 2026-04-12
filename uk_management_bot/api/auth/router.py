@@ -7,14 +7,16 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from uk_management_bot.api.auth.schemas import (
-    TelegramWidgetLogin, TWALogin,
+    TokenResponse, TelegramWidgetLogin, TWALogin,
     PasswordLogin, RefreshRequest, SetPasswordRequest,
+    MFARequiredResponse, VerifyOTPRequest,
 )
 from uk_management_bot.api.auth.service import (
     verify_telegram_widget, verify_twa_init_data,
     verify_password, hash_password,
     create_access_token, create_refresh_token_value, hash_token,
     REFRESH_TOKEN_EXPIRE_DAYS,
+    create_mfa_token, verify_mfa_token, generate_otp, store_otp, verify_otp, send_otp_via_bot,
 )
 from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
 from uk_management_bot.database.models.user import User
@@ -23,31 +25,6 @@ from uk_management_bot.config.settings import settings
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-
-ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
-REFRESH_TOKEN_MAX_AGE = 30 * 86400  # 30 days
-
-
-def _set_auth_cookies(response: JSONResponse, access_token: str, refresh_token: str) -> None:
-    """Set httpOnly cookies for browser auth flow."""
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="lax",
-        max_age=ACCESS_TOKEN_MAX_AGE,
-        path="/",
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="lax",
-        max_age=REFRESH_TOKEN_MAX_AGE,
-        path="/api/v2/auth/refresh",
-    )
 
 
 def _build_token_response(user: User) -> dict:
@@ -69,7 +46,7 @@ async def _save_refresh_token(db: AsyncSession, user_id: int, token_value: str, 
     await db.commit()
 
 
-@router.post("/telegram-widget")
+@router.post("/telegram-widget", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def login_telegram_widget(request: Request, data: TelegramWidgetLogin, db: AsyncSession = Depends(get_db)):
     data_dict = data.model_dump()
@@ -83,15 +60,10 @@ async def login_telegram_widget(request: Request, data: TelegramWidgetLogin, db:
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    response = JSONResponse(content={
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens["refresh_value"],
-    })
-    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
-    return response
+    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
 
 
-@router.post("/twa")
+@router.post("/twa", response_model=TokenResponse)
 @limiter.limit("20/minute")
 async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends(get_db)):
     user_data = verify_twa_init_data(data.init_data, settings.BOT_TOKEN)
@@ -109,12 +81,7 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    response = JSONResponse(content={
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens["refresh_value"],
-    })
-    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
-    return response
+    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
 
 
 @router.post("/login")
@@ -127,17 +94,74 @@ async def login_password(request: Request, data: PasswordLogin, db: AsyncSession
     if user.status != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
+    # MFA: require Telegram OTP
+    if not user.telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telegram account not linked. Use Telegram Widget to login.",
+        )
+
+    # Generate and send OTP
+    otp_code = generate_otp()
+    await store_otp(user.id, otp_code)
+    sent = await send_otp_via_bot(user.telegram_id, otp_code)
+    if not sent:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to send verification code. Try again later.",
+        )
+
+    # Return MFA token (short-lived, doesn't grant API access)
+    mfa_token = create_mfa_token(user.id)
+    return JSONResponse(content={"mfa_required": True, "mfa_token": mfa_token})
+
+
+@router.post("/login/verify-otp")
+@limiter.limit("10/minute")
+async def verify_login_otp(request: Request, data: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
+    # Verify MFA token
+    user_id = verify_mfa_token(data.mfa_token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="MFA session expired. Please login again.",
+        )
+
+    # Verify OTP code
+    success, error_msg = await verify_otp(user_id, data.code)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error_msg)
+
+    # OTP verified — issue full tokens
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or user.status != "approved":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
+
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    response = JSONResponse(content={
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens["refresh_value"],
-    })
-    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
-    return response
+    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
 
 
-@router.post("/refresh")
+@router.post("/login/resend-otp")
+@limiter.limit("3/minute")
+async def resend_otp(request: Request, data: MFARequiredResponse, db: AsyncSession = Depends(get_db)):
+    user_id = verify_mfa_token(data.mfa_token)
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA session expired")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.telegram_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")
+
+    otp_code = generate_otp()
+    await store_otp(user.id, otp_code)
+    await send_otp_via_bot(user.telegram_id, otp_code)
+    return {"ok": True}
+
+
+@router.post("/refresh", response_model=TokenResponse)
 @limiter.limit("20/minute")
 async def refresh_token(request: Request, data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     token_hash = hash_token(data.refresh_token)
@@ -157,12 +181,7 @@ async def refresh_token(request: Request, data: RefreshRequest, db: AsyncSession
 
     tokens = _build_token_response(user)
     await _save_refresh_token(db, user.id, tokens["refresh_value"])
-    response = JSONResponse(content={
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens["refresh_value"],
-    })
-    _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
-    return response
+    return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
 
 
 @router.post("/logout")
@@ -174,10 +193,7 @@ async def logout(request: Request, data: RefreshRequest, db: AsyncSession = Depe
     if rt:
         rt.revoked_at = datetime.now(timezone.utc)
         await db.commit()
-    response = JSONResponse(content={"ok": True})
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/api/v2/auth/refresh")
-    return response
+    return {"ok": True}
 
 
 @router.post("/set-password")

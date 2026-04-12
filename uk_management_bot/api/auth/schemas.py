@@ -34,3 +34,13 @@ class RefreshRequest(BaseModel):
 class SetPasswordRequest(BaseModel):
     password: str
     confirm_password: str
+
+
+class MFARequiredResponse(BaseModel):
+    mfa_required: bool = True
+    mfa_token: str
+
+
+class VerifyOTPRequest(BaseModel):
+    mfa_token: str
+    code: str

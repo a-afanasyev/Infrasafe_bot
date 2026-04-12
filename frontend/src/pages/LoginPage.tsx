@@ -9,22 +9,6 @@ import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 
 const BOT_USERNAME = 'infrasafebot'
 
-interface TelegramUser {
-  id: number
-  first_name: string
-  last_name?: string
-  username?: string
-  photo_url?: string
-  auth_date: number
-  hash: string
-}
-
-function isTelegramUser(data: unknown): data is TelegramUser {
-  if (!data || typeof data !== 'object') return false
-  const obj = data as Record<string, unknown>
-  return typeof obj.id === 'number' && typeof obj.hash === 'string' && typeof obj.auth_date === 'number'
-}
-
 export default function LoginPage() {
   const { t } = useTranslation()
   const [email, setEmail] = useState('')
@@ -32,15 +16,15 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [focusedField, setFocusedField] = useState<string | null>(null)
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpTimer, setOtpTimer] = useState(0)
+  const [canResend, setCanResend] = useState(false)
   const { login } = useAuthStore()
   const navigate = useNavigate()
 
   useEffect(() => {
-    ;(window as any).onTelegramAuth = async (tgUser: unknown) => {
-      if (!isTelegramUser(tgUser)) {
-        setError('Invalid Telegram data')
-        return
-      }
+    ;(window as any).onTelegramAuth = async (tgUser: Record<string, unknown>) => {
       setError('')
       setLoading(true)
       try {
@@ -94,15 +78,69 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { data } = await apiClient.post('/api/v2/auth/login', { email, password })
-      await login(data.access_token, data.refresh_token)
-      navigate('/dashboard')
-    } catch {
-      setError(t('login.error'))
-      toast.error(t('login.loginError'), { description: t('login.error') })
+      if (data.mfa_required) {
+        setMfaToken(data.mfa_token)
+        setOtpTimer(300)
+        setCanResend(false)
+        setTimeout(() => setCanResend(true), 60000)
+      } else {
+        await login(data.access_token, data.refresh_token)
+        navigate('/dashboard')
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || t('login.error'))
+      toast.error(t('login.loginError'), { description: detail || t('login.error') })
     } finally {
       setLoading(false)
     }
   }
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const { data } = await apiClient.post('/api/v2/auth/login/verify-otp', {
+        mfa_token: mfaToken,
+        code: otpCode,
+      })
+      await login(data.access_token, data.refresh_token)
+      navigate('/dashboard')
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Invalid code')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    if (!canResend || !mfaToken) return
+    try {
+      await apiClient.post('/api/v2/auth/login/resend-otp', { mfa_token: mfaToken })
+      setCanResend(false)
+      setOtpTimer(300)
+      setTimeout(() => setCanResend(true), 60000)
+      toast.success('Код отправлен повторно')
+    } catch {
+      setError('Не удалось отправить код')
+    }
+  }
+
+  useEffect(() => {
+    if (otpTimer <= 0) return
+    const interval = setInterval(() => {
+      setOtpTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [otpTimer])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-root relative overflow-hidden">
@@ -168,70 +206,152 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
-
-            <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
-                Email
-              </label>
-              <input
-                type="email"
-                placeholder="admin@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onFocus={() => setFocusedField('email')}
-                onBlur={() => setFocusedField(null)}
-                className={cn(
-                  'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
-                  focusedField === 'email'
-                    ? 'bg-accent/[.04] border-[1.5px] border-accent'
-                    : 'bg-bg-root border-[1.5px] border-white/10'
+          {mfaToken ? (
+            <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
+              <div className="text-center mb-1">
+                <div className="text-sm text-text-secondary font-[family-name:var(--font-body)]">
+                  Код отправлен в Telegram
+                </div>
+                {otpTimer > 0 && (
+                  <div className="text-xs text-text-muted font-[family-name:var(--font-body)] mt-1">
+                    {String(Math.floor(otpTimer / 60)).padStart(2, '0')}:{String(otpTimer % 60).padStart(2, '0')}
+                  </div>
                 )}
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
-                {t('login.password')}
-              </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
-                className={cn(
-                  'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
-                  focusedField === 'password'
-                    ? 'bg-accent/[.04] border-[1.5px] border-accent'
-                    : 'bg-bg-root border-[1.5px] border-white/10'
-                )}
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && (
-              <div className="flex items-center gap-2 p-2.5 px-3 bg-red/10 border border-red/20 rounded-lg">
-                <span className="text-[13px]">⚠</span>
-                <span className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">{error}</span>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={cn(
-                'rounded-[10px] p-3 text-sm font-bold text-[#001a14] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
-                loading
-                  ? 'bg-accent/50 cursor-not-allowed'
-                  : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
+                  Код подтверждения
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  onFocus={() => setFocusedField('otp')}
+                  onBlur={() => setFocusedField(null)}
+                  autoFocus
+                  className={cn(
+                    'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border text-center tracking-[0.3em] text-lg',
+                    focusedField === 'otp'
+                      ? 'bg-accent/[.04] border-[1.5px] border-accent'
+                      : 'bg-bg-root border-[1.5px] border-white/10'
+                  )}
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 p-2.5 px-3 bg-red/10 border border-red/20 rounded-lg">
+                  <span className="text-[13px]">!</span>
+                  <span className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">{error}</span>
+                </div>
               )}
-            >
-              {loading ? t('login.submitting') : t('login.submit')}
-            </button>
-          </form>
+
+              <button
+                type="submit"
+                disabled={loading || otpCode.length < 6}
+                className={cn(
+                  'rounded-[10px] p-3 text-sm font-bold text-[#001a14] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
+                  loading || otpCode.length < 6
+                    ? 'bg-accent/50 cursor-not-allowed'
+                    : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
+                )}
+              >
+                {loading ? t('login.submitting') : 'Подтвердить'}
+              </button>
+
+              <div className="flex items-center justify-between text-xs font-[family-name:var(--font-body)]">
+                <button
+                  type="button"
+                  onClick={() => { setMfaToken(null); setOtpCode(''); setError(''); setOtpTimer(0) }}
+                  className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer bg-transparent border-none p-0"
+                >
+                  Назад
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={!canResend}
+                  className={cn(
+                    'bg-transparent border-none p-0 transition-colors',
+                    canResend
+                      ? 'text-accent hover:text-[#00f0c0] cursor-pointer'
+                      : 'text-text-muted cursor-not-allowed'
+                  )}
+                >
+                  Отправить повторно
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="flex flex-col gap-4">
+
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  className={cn(
+                    'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
+                    focusedField === 'email'
+                      ? 'bg-accent/[.04] border-[1.5px] border-accent'
+                      : 'bg-bg-root border-[1.5px] border-white/10'
+                  )}
+                  autoComplete="email"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
+                  {t('login.password')}
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  className={cn(
+                    'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
+                    focusedField === 'password'
+                      ? 'bg-accent/[.04] border-[1.5px] border-accent'
+                      : 'bg-bg-root border-[1.5px] border-white/10'
+                  )}
+                  autoComplete="current-password"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 p-2.5 px-3 bg-red/10 border border-red/20 rounded-lg">
+                  <span className="text-[13px]">!</span>
+                  <span className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={cn(
+                  'rounded-[10px] p-3 text-sm font-bold text-[#001a14] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
+                  loading
+                    ? 'bg-accent/50 cursor-not-allowed'
+                    : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
+                )}
+              >
+                {loading ? t('login.submitting') : t('login.submit')}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
