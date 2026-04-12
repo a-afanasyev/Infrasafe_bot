@@ -84,6 +84,17 @@ scripts/
 .env.development
 .env.test
 
-# Другие файлы
+# Leaked secret files
+env.copy
+env.copy.dev
+ssl/
+
+# Audit and scan artifacts
+audit/
+scans/
+auth_scan.json
+scan_report.txt
+
+# Other
 .DS_Store
 Thumbs.db

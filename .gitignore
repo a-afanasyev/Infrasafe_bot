@@ -167,3 +167,8 @@ frontend/.claude/
 
 # Seed data scripts (dev only)
 seed_data.py
+
+# Leaked secret files (never track)
+env.copy
+env.copy.dev
+ssl/
