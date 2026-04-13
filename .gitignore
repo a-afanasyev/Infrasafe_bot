@@ -101,9 +101,14 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environments & Secrets — never track
 .env
-!.env.production.template
+**/.env
+!.env.example
+!.env.*.template
+!.env.*.example
+*.pem
+*.key
 .venv
 env/
 venv/
@@ -167,6 +172,12 @@ frontend/.claude/
 
 # Seed data scripts (dev only)
 seed_data.py
+
+# Artifacts
+*.bak
+*.bak2
+*.log
+!docs/**/*.log
 
 # Leaked secret files (never track)
 env.copy

@@ -81,6 +81,10 @@ def add_verification_fields():
                 ("birth_date", "TIMESTAMP WITH TIME ZONE")
             ]
             
+            # Whitelist: field definitions are hardcoded above, not from user input.
+            # Using f-string is safe here because both field_name and field_type
+            # come from the fields_to_add tuple literal (not external input).
+            # DDL identifiers (column names, types) cannot be parameterized in SQL.
             for field_name, field_type in fields_to_add:
                 try:
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {field_name} {field_type}"))
@@ -111,12 +115,10 @@ def check_verification_tables():
             
             missing_tables = []
             for table in tables_to_check:
-                result = conn.execute(text(f"""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_name = '{table}'
-                    )
-                """))
+                result = conn.execute(
+                    text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = :tbl)"),
+                    {"tbl": table}
+                )
                 
                 if not result.scalar():
                     missing_tables.append(table)

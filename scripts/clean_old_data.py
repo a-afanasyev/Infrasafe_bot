@@ -19,6 +19,30 @@ from uk_management_bot.database.models.request import Request
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Whitelist of tables allowed in raw SQL operations.
+# DDL identifiers cannot be parameterized, so we validate against this set.
+ALLOWED_TABLES = frozenset({
+    'request_comments',
+    'request_assignments',
+    'shift_assignments',
+    'user_documents',
+    'user_verifications',
+    'access_rights',
+})
+
+
+def _safe_table_query(db, table_name: str, operation: str = "count"):
+    """Execute a raw SQL operation on a whitelisted table name."""
+    if table_name not in ALLOWED_TABLES:
+        raise ValueError(f"Table '{table_name}' is not in ALLOWED_TABLES whitelist")
+    if operation == "count":
+        return db.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+    elif operation == "delete":
+        return db.execute(text(f"DELETE FROM {table_name}"))
+    else:
+        raise ValueError(f"Unknown operation: {operation}")
+
+
 class OldDataCleaner:
     """Класс для очистки старых данных"""
     
@@ -74,7 +98,7 @@ class OldDataCleaner:
         related_tables = self.get_tables_with_request_references()
         for table_name in related_tables:
             try:
-                result = self.db.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                result = _safe_table_query(self.db, table_name, "count")
                 count = result.scalar()
                 stats['tables'][table_name] = {
                     'count': count,
@@ -110,12 +134,12 @@ class OldDataCleaner:
                     continue
                 
                 # Получаем количество записей до очистки
-                result = self.db.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                result = _safe_table_query(self.db, table_name, "count")
                 count_before = result.scalar()
-                
+
                 if count_before > 0:
                     # Очищаем таблицу
-                    self.db.execute(text(f"DELETE FROM {table_name}"))
+                    _safe_table_query(self.db, table_name, "delete")
                     self.db.commit()
                     
                     logger.info(f"Cleaned table {table_name}: {count_before} records deleted")
@@ -179,7 +203,7 @@ class OldDataCleaner:
                 try:
                     inspector = inspect(engine)
                     if table_name in inspector.get_table_names():
-                        result = self.db.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                        result = _safe_table_query(self.db, table_name, "count")
                         count = result.scalar()
                         if count > 0:
                             logger.warning(f"Table {table_name} still has {count} records")

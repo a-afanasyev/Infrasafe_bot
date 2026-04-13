@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     channel_backup: str = "-1002951349061"    # uk_media_backup_private
 
     # === SECURITY ===
-    secret_key: str = "dev_secret_key_change_in_production"
+    secret_key: str = Field(default="dev_secret_key_CHANGE_IN_PRODUCTION", validation_alias="SECRET_KEY")
     access_token_expire_minutes: int = 30
     api_keys: str = Field(default="", validation_alias="MEDIA_API_KEYS")
     allowed_origins: str = Field(default="", description="Comma-separated allowed origins. Required in production.")
@@ -77,8 +77,11 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Fail-fast: reject insecure default secret_key in production
-if not settings.debug and settings.secret_key == "dev_secret_key_change_in_production":
-    raise RuntimeError("SECRET_KEY must be changed from default value in production")
+if not settings.debug and settings.secret_key.startswith("dev_secret_key_"):
+    raise RuntimeError(
+        "SECRET_KEY must be set via environment variable in production. "
+        "Generate with: openssl rand -hex 32"
+    )
 
 
 class TelegramChannels:
