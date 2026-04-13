@@ -1253,10 +1253,12 @@ class ShiftAssignmentService:
             # Получаем заявки с назначениями, где исполнитель не работает в этот день
             from uk_management_bot.database.models.request_assignment import RequestAssignment
 
-            mismatched_assignments = self.db.query(RequestAssignment).join(Request).join(User).filter(
+            mismatched_assignments = self.db.query(RequestAssignment).join(
+                Request, RequestAssignment.request_number == Request.request_number
+            ).filter(
                 RequestAssignment.status == 'active',
                 func.date(Request.created_at) == target_date,
-                ~RequestAssignment.assigned_to.in_(
+                ~RequestAssignment.executor_id.in_(
                     self.db.query(Shift.user_id).filter(
                         func.date(Shift.start_time) == target_date,
                         Shift.status.in_(['planned', 'active'])
@@ -1286,7 +1288,7 @@ class ShiftAssignmentService:
                     results['reassigned'] += 1
                     results['details'].append({
                         'request_id': assignment.request_number,
-                        'old_executor': assignment.assigned_to,
+                        'old_executor': assignment.executor_id,
                         'status': 'reassigned'
                     })
 

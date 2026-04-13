@@ -15,7 +15,7 @@ def test_services():
         # Импортируем сервисы
         from uk_management_bot.services.shift_planning_service import ShiftPlanningService
         from uk_management_bot.services.template_manager import TemplateManager
-        from uk_management_bot.services.workload_predictor import WorkloadPredictor
+        from uk_management_bot.services.async_workload_predictor import AsyncWorkloadPredictor as WorkloadPredictor
         
         print("✅ Все сервисы успешно импортированы")
         
