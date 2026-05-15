@@ -3,9 +3,25 @@ from typing import Optional
 
 
 class TokenResponse(BaseModel):
+    """TWA / legacy clients: tokens come back in body."""
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class WebTokenResponse(BaseModel):
+    """Web SPA: refresh lives only in httpOnly cookie (plan §7.2)."""
+    access_token: str
+    token_type: str = "bearer"
+
+
+class RefreshRequestOptional(BaseModel):
+    """Refresh body is optional now — Web SPA uses cookie, TWA uses body (deprecated)."""
+    refresh_token: str | None = None
+
+
+class LogoutRequestOptional(BaseModel):
+    refresh_token: str | None = None
 
 
 class TelegramWidgetLogin(BaseModel):

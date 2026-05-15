@@ -48,8 +48,10 @@ async def get_current_user(
 ) -> User:
     from uk_management_bot.api.auth.service import verify_access_token
 
-    # 1. Try httpOnly cookie first
-    token = request.cookies.get("access_token")
+    # 1. Try httpOnly cookie first (Web SPA, plan §4.2 / §7.2 — uk_access).
+    #    Legacy "access_token" is a transitional fallback for already-logged-in
+    #    sessions issued before this PR; remove after one release window.
+    token = request.cookies.get("uk_access") or request.cookies.get("access_token")
     # 2. Fallback to Authorization header (for TWA / backward compat)
     if not token and credentials:
         token = credentials.credentials
