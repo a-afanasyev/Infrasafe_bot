@@ -140,13 +140,25 @@ async def send_webhook(
         return (False, f"Request error: {exc}", True, 0)
 
 
+def _active_signing_secret() -> str:
+    """Pick which secret to sign outgoing webhooks with (plan §4.4 rotation flow).
+
+    During rotation: ops sets INFRASAFE_WEBHOOK_SECRET_NEXT first (verifier on
+    InfraSafe accepts OLD || NEW), then flips INFRASAFE_USE_NEXT_SECRET=true
+    here so we sign with NEW. After grace window the old secret is removed.
+    """
+    if settings.INFRASAFE_USE_NEXT_SECRET and settings.INFRASAFE_WEBHOOK_SECRET_NEXT:
+        return settings.INFRASAFE_WEBHOOK_SECRET_NEXT
+    return settings.INFRASAFE_WEBHOOK_SECRET
+
+
 async def process_outbox() -> None:
     """Poll pending outbox records, attempt delivery, mark sent or failed."""
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
         return
 
     base_url = settings.INFRASAFE_WEBHOOK_URL.rstrip("/")
-    secret = settings.INFRASAFE_WEBHOOK_SECRET
+    secret = _active_signing_secret()
     if not base_url or not secret:
         logger.warning("process_outbox: INFRASAFE_WEBHOOK_URL or SECRET not configured")
         return

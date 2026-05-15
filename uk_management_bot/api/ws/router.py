@@ -22,7 +22,14 @@ shifts_manager = ConnectionManager()
 
 @router.websocket("/kanban")
 async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
-    actual_token = websocket.cookies.get("access_token") or token
+    # Plan §7.2: WS handshake reads uk_access from cookie (Path=/uk/ covers
+    # /uk/ws/*). access_token kept as transitional alias for sessions issued
+    # before this PR; ?token= still supported for clients that pass it explicitly.
+    actual_token = (
+        websocket.cookies.get("uk_access")
+        or websocket.cookies.get("access_token")
+        or token
+    )
     if not actual_token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -69,7 +76,14 @@ async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
 
 @router.websocket("/shifts")
 async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
-    actual_token = websocket.cookies.get("access_token") or token
+    # Plan §7.2: WS handshake reads uk_access from cookie (Path=/uk/ covers
+    # /uk/ws/*). access_token kept as transitional alias for sessions issued
+    # before this PR; ?token= still supported for clients that pass it explicitly.
+    actual_token = (
+        websocket.cookies.get("uk_access")
+        or websocket.cookies.get("access_token")
+        or token
+    )
     if not actual_token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

@@ -27,7 +27,10 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 30
-AUTH_DATE_MAX_AGE_SECONDS = 86400  # 24 hours
+# Plan §7.4: tightened from 86400 (24h) to 300s (5min). A stale Telegram
+# Widget hash from a previous session can no longer be replayed; users with
+# expired session must press Telegram login again.
+AUTH_DATE_MAX_AGE_SECONDS = 300
 
 
 def hash_password(password: str) -> str:
@@ -73,14 +76,16 @@ def verify_telegram_widget(data: dict) -> bool:
     if not received_hash:
         return False
 
-    # Check auth_date freshness
+    # Plan §7.4: auth_date is mandatory and must be fresh. Without this a
+    # leaked widget payload can be replayed indefinitely.
     auth_date = data.get("auth_date")
-    if auth_date:
-        try:
-            if time.time() - int(auth_date) > AUTH_DATE_MAX_AGE_SECONDS:
-                return False
-        except (ValueError, TypeError):
+    if not auth_date:
+        return False
+    try:
+        if time.time() - int(auth_date) > AUTH_DATE_MAX_AGE_SECONDS:
             return False
+    except (ValueError, TypeError):
+        return False
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
     secret_key = hashlib.sha256(settings.BOT_TOKEN.encode()).digest()
@@ -95,14 +100,15 @@ def verify_twa_init_data(init_data: str, bot_token: str) -> Optional[dict]:
     if not received_hash:
         return None
 
-    # Check auth_date freshness
+    # Plan §7.4: auth_date is mandatory and must be fresh.
     auth_date = parsed.get("auth_date")
-    if auth_date:
-        try:
-            if time.time() - int(auth_date) > AUTH_DATE_MAX_AGE_SECONDS:
-                return None
-        except (ValueError, TypeError):
+    if not auth_date:
+        return None
+    try:
+        if time.time() - int(auth_date) > AUTH_DATE_MAX_AGE_SECONDS:
             return None
+    except (ValueError, TypeError):
+        return None
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()

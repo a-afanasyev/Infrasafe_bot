@@ -68,12 +68,34 @@ class Settings:
     REDIS_PUBSUB_URL: str = os.getenv("REDIS_PUBSUB_URL", "redis://redis:6379/1")
     USE_REDIS_RATE_LIMIT = os.getenv("USE_REDIS_RATE_LIMIT", "False").lower() == "true"
 
-    # InfraSafe webhook integration
+    # CORS origins (plan §4.1, §7.1). Comma-separated env list overrides defaults.
+    # Defaults must include web.telegram.org or Telegram Login Widget breaks.
+    CORS_ORIGINS = [
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "https://infrasafe.uz,https://infrasafe.aisolutions.uz,https://web.telegram.org",
+        ).split(",")
+        if o.strip()
+    ]
+
+    # InfraSafe webhook integration (UK -> InfraSafe)
     INFRASAFE_WEBHOOK_ENABLED = os.getenv("INFRASAFE_WEBHOOK_ENABLED", "false").lower() == "true"
     INFRASAFE_WEBHOOK_URL = os.getenv("INFRASAFE_WEBHOOK_URL", "")
     INFRASAFE_WEBHOOK_SECRET = os.getenv("INFRASAFE_WEBHOOK_SECRET", "")
+    # Secret rotation (plan §4.4, R-18). When *_NEXT is set and *_USE_NEXT is true,
+    # outgoing webhook signer switches to the new secret while verifier accepts both.
+    INFRASAFE_WEBHOOK_SECRET_NEXT = os.getenv("INFRASAFE_WEBHOOK_SECRET_NEXT", "")
+    INFRASAFE_USE_NEXT_SECRET = os.getenv("INFRASAFE_USE_NEXT_SECRET", "false").lower() == "true"
     INFRASAFE_WEBHOOK_TIMEOUT = int(os.getenv("INFRASAFE_WEBHOOK_TIMEOUT", "10"))
     INFRASAFE_WEBHOOK_MAX_RETRIES = int(os.getenv("INFRASAFE_WEBHOOK_MAX_RETRIES", "3"))
+
+    # InfraSafe -> UK webhook receiver (plan §4.4). Verifier accepts OLD || NEW
+    # for grace-window swaps. Currently no inbound webhook router lives in this
+    # repo (planned, see docs/superpowers/specs/2026-05-14-uk-infrasafe-web-integration-plan.md
+    # §1, §4.4); env keys exist now so a future PR can read them without a settings change.
+    UK_WEBHOOK_SECRET = os.getenv("UK_WEBHOOK_SECRET", "")
+    UK_WEBHOOK_SECRET_NEXT = os.getenv("UK_WEBHOOK_SECRET_NEXT", "")
 
     # Notifications
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
