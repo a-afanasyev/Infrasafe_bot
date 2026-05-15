@@ -1,6 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react'
 
-const WS_URL = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+// WS path is namespaced under the SPA base (e.g. wss://infrasafe.uz/uk/ws/v2/...).
+// VITE_WS_URL still wins for tests / dev with a non-default backend.
+const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') // "/uk"
+const WS_URL =
+  import.meta.env.VITE_WS_URL ||
+  `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${BASE_PATH}`
 const MAX_RECONNECT_ATTEMPTS = 5
 
 export function useWebSocket(

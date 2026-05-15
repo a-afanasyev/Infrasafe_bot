@@ -49,7 +49,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <Toaster position="bottom-right" richColors />
       <GlobalErrorBoundary>
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />

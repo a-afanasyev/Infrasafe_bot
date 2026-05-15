@@ -64,7 +64,7 @@ export default class PageErrorBoundary extends Component<Props, State> {
               {i18n.t('common.tryAgain')}
             </button>
             <button
-              onClick={() => { window.location.href = '/dashboard' }}
+              onClick={() => { window.location.href = `${import.meta.env.BASE_URL}dashboard` }}
               style={{
                 padding: '10px 24px',
                 border: '1px solid var(--border)',
