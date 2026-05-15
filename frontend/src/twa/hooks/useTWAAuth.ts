@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { useTelegramSDK } from './useTelegramSDK'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? ''
+// TWA shares the SPA base path (/uk/) — request URLs become /uk/api/...
+const BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export function useTWAAuth() {
   const { initData } = useTelegramSDK()

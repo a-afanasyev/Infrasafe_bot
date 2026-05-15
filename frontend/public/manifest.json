@@ -1,0 +1,11 @@
+{
+  "name": "УК · InfraSafe",
+  "short_name": "УК",
+  "start_url": "/uk/twa/app",
+  "scope": "/uk/",
+  "display": "standalone",
+  "theme_color": "#00BFA5",
+  "icons": [
+    { "src": "/uk/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

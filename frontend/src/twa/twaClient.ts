@@ -6,7 +6,10 @@
  */
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? ''
+// TWA shares the SPA base path (/uk/) — request URLs become /uk/api/...
+const BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export const twaClient = axios.create({ baseURL: BASE_URL, withCredentials: true })
 
