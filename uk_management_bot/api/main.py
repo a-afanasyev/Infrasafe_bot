@@ -70,21 +70,33 @@ async def lifespan(app: FastAPI):
         _logger.exception("Error disposing DB pool")
 
 
+# Disable interactive docs in prod (plan §4.6, §7.5).
+# Public OpenAPI surface increases attack/scrape risk; ops gets schemas via repo.
+_docs_kwargs = {} if settings.DEBUG else {
+    "docs_url": None,
+    "redoc_url": None,
+    "openapi_url": None,
+}
+
 app = FastAPI(
     title="UK Management API",
     version="2.0.0",
     lifespan=lifespan,
+    **_docs_kwargs,
 )
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
-allowed_origins = [
-    "https://web.telegram.org",
-]
+# CORS — origins come from settings.CORS_ORIGINS (env CORS_ORIGINS, plan §4.1, §7.1).
+# allow_credentials=True forbids wildcard "*", so we always pass an explicit list.
+# In dev (DEBUG=True) we also accept localhost dev servers and a single
+# FRONTEND_URL override for ad-hoc testing without re-deploying.
+allowed_origins = list(settings.CORS_ORIGINS)
 if settings.DEBUG:
-    allowed_origins.extend(["http://localhost:3000", "http://localhost:3002", "http://localhost:5173"])
+    for dev_origin in ("http://localhost:3000", "http://localhost:3002", "http://localhost:5173"):
+        if dev_origin not in allowed_origins:
+            allowed_origins.append(dev_origin)
 if settings.FRONTEND_URL and settings.FRONTEND_URL not in allowed_origins:
     allowed_origins.append(settings.FRONTEND_URL)
 
@@ -92,8 +104,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 # Routers
@@ -111,7 +124,16 @@ app.include_router(executor_shifts_router, prefix="/api/v2/executor/shifts", tag
 
 @app.get("/health")
 async def health():
+    # Internal docker healthcheck — kept stable for Dockerfile.api HEALTHCHECK
+    # and docker-compose probes (plan §4.6 variant A).
     return {"status": "healthy", "service": "api"}
+
+
+@app.get("/api/health")
+async def api_health():
+    # Public health, exposed via nginx as /uk/api/health (plan §4.6).
+    # Intentionally minimal: no service-name, no version — reduces fingerprinting.
+    return {"ok": True}
 
 
 # ── Stub: Announcements (TWA A1) ─────────────────────────
