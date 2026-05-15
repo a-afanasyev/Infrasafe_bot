@@ -1,33 +1,72 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.6
+#
+# UK Management API — multi-stage build per integration plan §7.8.
+#
+# - Builder: python:3.11-slim + libpq-dev + gcc to compile psycopg2/asyncpg.
+# - Runtime: python:3.11-slim + libpq5 only (no compiler), wheels copied via
+#   --user install, requirements installed with --require-hashes against the
+#   pip-compile lockfile (plan §7.6).
+# - Healthcheck stays on internal /health (plan §4.6 variant A); external
+#   /uk/api/health is served by the new /api/health route through nginx.
 
-# Install system deps for psycopg2 and healthcheck
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq-dev gcc curl && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.11-slim AS builder
 
-# Create non-root user
-RUN useradd --create-home appuser
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY uk_management_bot/ ./uk_management_bot/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+# Lockfile (with --hash sha256 entries) is the only thing pip is allowed to read.
+COPY requirements.txt ./
 
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
+# --user keeps the install in /root/.local — copyable into the runtime stage
+# without dragging build deps along. --require-hashes refuses to install any
+# package that isn't pinned with a sha256 in the lockfile.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user --require-hashes --no-warn-script-location -r requirements.txt
 
-COPY scripts/entrypoint-api.sh /app/entrypoint.sh
-USER root
+
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH=/home/appuser/.local/bin:$PATH
+
+# libpq5 is the runtime half of libpq-dev (psycopg2 dlopen target). curl is
+# kept only for the docker HEALTHCHECK below; if you switch to a Python-based
+# probe later, drop it to shave ~5MB.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq5 curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home appuser
+
+WORKDIR /app
+
+# Copy --user installs from the builder. Owner = appuser so non-root runtime
+# doesn't need write access to its own site-packages.
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+
+# Application + migrations + scripts. Migrations are required because the
+# entrypoint runs `alembic upgrade head` before launching uvicorn.
+COPY --chown=appuser:appuser uk_management_bot ./uk_management_bot
+COPY --chown=appuser:appuser alembic ./alembic
+COPY --chown=appuser:appuser alembic.ini ./
+COPY --chown=appuser:appuser scripts/entrypoint-api.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
 USER appuser
 
-ENTRYPOINT ["/app/entrypoint.sh"]
-
+# Internal probe — kept stable for docker-compose healthcheck. External health
+# (plan §4.6) is /api/health, proxied as /uk/api/health.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uvicorn", "uk_management_bot.api.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
