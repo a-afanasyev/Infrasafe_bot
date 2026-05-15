@@ -28,8 +28,8 @@ export default function LoginPage() {
       setError('')
       setLoading(true)
       try {
-        const { data } = await apiClient.post('/api/v2/auth/telegram-widget', tgUser)
-        await login(data.access_token, data.refresh_token)
+        await apiClient.post('/api/v2/auth/telegram-widget', tgUser)
+        await login()
         navigate('/dashboard')
       } catch {
         setError(t('login.telegramError'))
@@ -84,7 +84,7 @@ export default function LoginPage() {
         setCanResend(false)
         setTimeout(() => setCanResend(true), 60000)
       } else {
-        await login(data.access_token, data.refresh_token)
+        await login()
         navigate('/dashboard')
       }
     } catch (err: unknown) {
@@ -101,11 +101,11 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const { data } = await apiClient.post('/api/v2/auth/login/verify-otp', {
+      await apiClient.post('/api/v2/auth/login/verify-otp', {
         mfa_token: mfaToken,
         code: otpCode,
       })
-      await login(data.access_token, data.refresh_token)
+      await login()
       navigate('/dashboard')
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail

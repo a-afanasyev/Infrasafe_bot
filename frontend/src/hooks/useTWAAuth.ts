@@ -12,7 +12,7 @@ export function useTWAAuth() {
       setIsLoading(true)
       const init_data = getTWAInitData()
       apiClient.post('/api/v2/auth/twa', { init_data })
-        .then(({ data }) => login(data.access_token, data.refresh_token))
+        .then(() => login())
         .catch(console.error)
         .finally(() => setIsLoading(false))
     }
