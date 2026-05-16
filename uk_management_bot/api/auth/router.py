@@ -103,8 +103,16 @@ async def login_telegram_widget(
     data: TelegramWidgetLogin,
     db: AsyncSession = Depends(get_db),
 ):
-    data_dict = data.model_dump()
-    if not verify_telegram_widget(data_dict):
+    # HMAC must be checked over EXACTLY the payload Telegram signed. Routing it
+    # through TelegramWidgetLogin and using model_dump() injects None for any
+    # optional field Telegram omitted (last_name/username/photo_url for users
+    # without them) — those Nones land in data_check_string and break the hash.
+    # Verify against the raw request body instead; `data` stays for typed access.
+    try:
+        raw_payload = await request.json()
+    except Exception:
+        raw_payload = None
+    if not isinstance(raw_payload, dict) or not verify_telegram_widget(raw_payload):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Telegram auth data")
 
     result = await db.execute(select(User).where(User.telegram_id == data.id))
