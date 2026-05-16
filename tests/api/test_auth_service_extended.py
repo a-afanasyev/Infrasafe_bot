@@ -44,8 +44,9 @@ class TestConstants:
     def test_refresh_token_expire_days_is_positive(self):
         assert REFRESH_TOKEN_EXPIRE_DAYS > 0
 
-    def test_auth_date_max_age_is_24h(self):
-        assert AUTH_DATE_MAX_AGE_SECONDS == 86400
+    def test_auth_date_max_age_is_5min(self):
+        # Plan §7.4: tightened from 86400 (24h) to 300s to kill widget-hash replay.
+        assert AUTH_DATE_MAX_AGE_SECONDS == 300
 
     def test_secret_key_is_set(self):
         assert SECRET_KEY is not None
