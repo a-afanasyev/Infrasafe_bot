@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { tCategory } from '../i18n/apiMaps'
-import { useKanban } from '../hooks/useKanban'
-import { useShiftStats, useRequestStats } from '../hooks/useAnalytics'
+import { usePublicBoard } from '../hooks/usePublicBoard'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,16 +37,6 @@ const PIPELINE_STATUSES = [
   { status: '\u041F\u0440\u0438\u043D\u044F\u0442\u043E', key: 'approved', color: '#16a34a', bg: '#f0fdf4' },
 ]
 
-const STATUS_STYLE: Record<string, { color: string; bg: string; key: string }> = {
-  '\u041D\u043E\u0432\u0430\u044F': { color: '#2563eb', bg: '#eff3ff', key: 'new' },
-  '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435': { color: '#7c3aed', bg: '#f3f0ff', key: 'in_progress' },
-  '\u0417\u0430\u043A\u0443\u043F': { color: '#d97706', bg: '#fef9e7', key: 'purchase' },
-  '\u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435': { color: '#0891b2', bg: '#ecfeff', key: 'clarification' },
-  '\u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430': { color: '#059669', bg: '#ecfdf5', key: 'executed' },
-  '\u0418\u0441\u043F\u043E\u043B\u043D\u0435\u043D\u043E': { color: '#059669', bg: '#ecfdf5', key: 'executed' },
-  '\u041F\u0440\u0438\u043D\u044F\u0442\u043E': { color: '#16a34a', bg: '#f0fdf4', key: 'approved' },
-}
-
 const DOT: React.CSSProperties = { display: 'inline-block', width: 6, height: 6, background: 'rgba(255,255,255,0.4)', borderRadius: '50%', margin: '0 32px', verticalAlign: 'middle' }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -55,9 +44,7 @@ const DOT: React.CSSProperties = { display: 'inline-block', width: 6, height: 6,
 export default function ResidentBoardPage() {
   const { t } = useTranslation()
   const [now, setNow] = useState(new Date())
-  const { columns } = useKanban()
-  const { data: shiftStats } = useShiftStats('7d')
-  const { data: reqStats } = useRequestStats('30d')
+  const { data: board } = usePublicBoard()
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
@@ -77,21 +64,19 @@ export default function ResidentBoardPage() {
     return t('board.elapsed.days', { count: Math.round(diff / 86400) })
   }
 
-  const colMap = Object.fromEntries(columns.map(c => [c.status, c]))
-  const totalActive = ['\u041D\u043E\u0432\u0430\u044F', '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435', '\u0417\u0430\u043A\u0443\u043F', '\u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435'].reduce((s, k) => s + (colMap[k]?.count ?? 0), 0)
-  const totalDone = ['\u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430', '\u0418\u0441\u043F\u043E\u043B\u043D\u0435\u043D\u043E', '\u041F\u0440\u0438\u043D\u044F\u0442\u043E'].reduce((s, k) => s + (colMap[k]?.count ?? 0), 0)
+  const statusCounts = board?.status_counts ?? {}
+  const totalActive = ['\u041D\u043E\u0432\u0430\u044F', '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435', '\u0417\u0430\u043A\u0443\u043F', '\u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435'].reduce((s, k) => s + (statusCounts[k] ?? 0), 0)
+  const totalDone = ['\u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430', '\u0418\u0441\u043F\u043E\u043B\u043D\u0435\u043D\u043E', '\u041F\u0440\u0438\u043D\u044F\u0442\u043E'].reduce((s, k) => s + (statusCounts[k] ?? 0), 0)
 
-  const activeRequests = ['\u041D\u043E\u0432\u0430\u044F', '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435', '\u0417\u0430\u043A\u0443\u043F', '\u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435', '\u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430']
-    .flatMap(s => colMap[s]?.requests ?? [])
-    .slice(0, 8)
+  const activeRequests = board?.active_requests ?? []
 
   const todayDow = now.getDay() === 0 ? 6 : now.getDay() - 1
 
-  const avgResH = reqStats?.avg_resolution_hours != null
-    ? reqStats.avg_resolution_hours.toFixed(1)
+  const avgResH = board?.avg_resolution_hours != null
+    ? board.avg_resolution_hours.toFixed(1)
     : '—'
 
-  const effScore = shiftStats?.avg_efficiency ?? null
+  const effScore = board?.avg_efficiency ?? null
   const satisfactionVal = effScore != null ? (effScore / 20).toFixed(1) : '4.2'
   const satisfactionPct = effScore != null ? Math.round(effScore) : 84
   const starFill = Math.min(5, Math.round(Number(satisfactionVal)))
@@ -127,7 +112,7 @@ export default function ResidentBoardPage() {
         <span style={{ display: 'inline-block', animation: 'ticker 34s linear infinite', fontWeight: 600, fontSize: '0.9rem', letterSpacing: '0.02em' }}>
           {'\u{1F4CB}'} {t('board.ticker.newRequests')}
           <span style={DOT} />
-          {'\u{1F527}'} {t('board.ticker.specialistsWorking', { count: shiftStats?.active_executors ?? '\u2026' })}
+          {'\u{1F527}'} {t('board.ticker.specialistsWorking', { count: board?.active_executors ?? '\u2026' })}
           <span style={DOT} />
           {'\u2705'} {t('board.ticker.completedMonth', { count: totalDone })}
           <span style={DOT} />
@@ -166,7 +151,7 @@ export default function ResidentBoardPage() {
             { icon: '\u23F1', iconBg: '#fef9e7', valColor: '#d97706', label: t('board.stats.avgResolution'),
               render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#d97706' }}>{avgResH}<span style={{ fontSize: '1rem', color: '#9ca3af' }}>{t('analytics.h')}</span></span> },
             { icon: '\u{1F465}', iconBg: '#f3f0ff', valColor: '#7c3aed', label: t('board.stats.specialistsOnShift'),
-              render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#7c3aed' }}>{shiftStats?.active_executors ?? '—'}</span> },
+              render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#7c3aed' }}>{board?.active_executors ?? '—'}</span> },
           ] as const).map(tile => (
             <div key={tile.label} className="rb-stat-tile" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: 20, transition: 'transform 0.2s,box-shadow 0.2s', cursor: 'default' }}>
               <div style={{ width: 56, height: 56, borderRadius: 14, background: tile.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', flexShrink: 0 }}>{tile.icon}</div>
@@ -190,7 +175,7 @@ export default function ResidentBoardPage() {
               {PIPELINE_STATUSES.map((step, i) => (
                 <div key={step.status} style={{ display: 'contents' }}>
                   <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderRadius: 10, background: step.bg, color: step.color }}>
-                    <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.4rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>{colMap[step.status]?.count ?? 0}</span>
+                    <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.4rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>{statusCounts[step.status] ?? 0}</span>
                     <span style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>{t(`board.pipeline.${step.key}`)}</span>
                   </div>
                   {i < PIPELINE_STATUSES.length - 1 && <span style={{ color: '#9ca3af', fontSize: '1.2rem', flexShrink: 0 }}>{'\u2192'}</span>}
@@ -198,31 +183,29 @@ export default function ResidentBoardPage() {
               ))}
             </div>
 
-            {/* Request rows */}
-            {activeRequests.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 32, color: '#9ca3af', fontSize: '0.9rem' }}>{t('board.sections.noActiveRequests')}</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {activeRequests.map(req => {
-                  const ss = STATUS_STYLE[req.status] ?? { color: '#6b7280', bg: '#f3f4f6', key: 'new' }
-                  const catIcon = CATEGORY_ICONS[req.category] ?? '\u{1F4CB}'
-                  const descText = req.description
-                    ? (req.description.length > 55 ? req.description.slice(0, 55) + '\u2026' : req.description)
-                    : req.category
-                  return (
-                    <div key={req.request_number} className="rb-req-row" style={{ display: 'grid', gridTemplateColumns: '110px 1fr 150px 90px', gap: 16, alignItems: 'center', padding: '14px 18px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', transition: 'background 0.15s', cursor: 'default' }}>
-                      <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '0.88rem', color: '#1a6b52' }}>#{req.request_number}</div>
-                      <div>
-                        <div style={{ fontSize: '0.93rem', fontWeight: 500, color: '#1a1a1a' }}>{descText}</div>
-                        <div style={{ fontSize: '0.78rem', color: '#9ca3af', marginTop: 2 }}>{catIcon} {tCategory(req.category, t)}</div>
-                      </div>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 700, padding: '6px 14px', borderRadius: 20, background: ss.bg, color: ss.color }}>{'\u25CF'} {t(`board.pipeline.${ss.key}`)}</div>
-                      <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.82rem', color: '#9ca3af', textAlign: 'right' }}>{elapsed(req.created_at)}</div>
+            {/* Status columns */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
+              {PIPELINE_STATUSES.map((step, i) => {
+                const colReqs = activeRequests.filter(r => r.status === step.status)
+                return (
+                  <div key={step.status} style={{ padding: '0 10px', borderRight: i < PIPELINE_STATUSES.length - 1 ? '1px solid rgba(0,0,0,0.07)' : 'none' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {colReqs.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '14px 4px', color: '#cbd5e1', fontSize: '0.85rem' }}>{'\u2014'}</div>
+                      ) : colReqs.map((req, j) => {
+                        const catIcon = CATEGORY_ICONS[req.category] ?? '\u{1F4CB}'
+                        return (
+                          <div key={j} className="rb-req-row" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${step.color}`, transition: 'background 0.15s', cursor: 'default' }}>
+                            <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>{catIcon} {tCategory(req.category, t)}</div>
+                            <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>{elapsed(req.created_at)}</div>
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
-              </div>
-            )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
