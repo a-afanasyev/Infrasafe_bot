@@ -115,3 +115,15 @@ async def client(db_session_factory, manager_user):
         yield ac
 
     app.dependency_overrides.clear()
+
+
+# ── Reset the public-board TTL cache between tests ──────────────────
+# /api/v2/public/board memoizes its payload in a module-level variable;
+# without this reset a cached result leaks across tests.
+
+@pytest.fixture(autouse=True)
+def _reset_public_board_cache():
+    import uk_management_bot.api.public.router as public_router
+    public_router._board_cache = None
+    yield
+    public_router._board_cache = None
