@@ -6,6 +6,7 @@ addresses, executor or user identifiers — so it is safe to serve openly.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import logging
+import time
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, func
@@ -32,6 +33,14 @@ CLOSED_STATUSES = ["Выполнена", "Исполнено", "Принято",
 # Cards shown per status column — at most 10, newest first.
 PER_STATUS_LIMIT = 10
 
+# Short server-side cache. Residents behind one building NAT share a rate-limit
+# bucket and a lobby kiosk polls continuously; caching the assembled payload
+# means that traffic hits memory, not the DB. Time-based invalidation only, no
+# locks — at the TTL boundary a few concurrent requests may each rebuild once,
+# which is fine for this read-only anonymized payload. Per-worker cache.
+_CACHE_TTL_SECONDS = 30
+_board_cache: "Optional[tuple[PublicBoardOut, float]]" = None
+
 
 # ---------------------------------------------------------------------------
 # Response schema
@@ -57,7 +66,7 @@ class PublicBoardOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("/board", response_model=PublicBoardOut)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def get_public_board(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -66,6 +75,11 @@ async def get_public_board(
 
     Intentionally has NO authentication dependency.
     """
+    global _board_cache
+    now = time.monotonic()
+    if _board_cache is not None and _board_cache[1] > now:
+        return _board_cache[0]
+
     # --- status_counts: one GROUP BY, then 0-fill all known statuses ---
     counts_result = await db.execute(
         select(RequestModel.status, func.count())
@@ -133,10 +147,12 @@ async def get_public_board(
     eff_scalar = eff_result.scalar()
     avg_efficiency = float(eff_scalar) if eff_scalar is not None else None
 
-    return PublicBoardOut(
+    board = PublicBoardOut(
         status_counts=status_counts,
         active_requests=active_requests,
         active_executors=active_executors,
         avg_resolution_hours=avg_resolution_hours,
         avg_efficiency=avg_efficiency,
     )
+    _board_cache = (board, now + _CACHE_TTL_SECONDS)
+    return board

@@ -3,9 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.auth.schemas import (
     TokenResponse, WebTokenResponse,
     TelegramWidgetLogin, TWALogin,
@@ -26,7 +25,6 @@ from uk_management_bot.database.models.refresh_token import RefreshToken
 from uk_management_bot.config.settings import settings
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 # ---------------------------------------------------------------------------
