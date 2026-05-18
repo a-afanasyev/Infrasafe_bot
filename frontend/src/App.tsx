@@ -44,6 +44,15 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   return <>{children}</>
 }
 
+// Root entry: anonymous visitors land on the public board (УК main page),
+// authenticated staff go to the dashboard, TWA users to the Mini App.
+function RootRedirect() {
+  const { isAuthenticated } = useAuthStore()
+  if (isTWA()) return <Navigate to="/twa" replace />
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  return <Navigate to="/resident-board" replace />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -64,13 +73,13 @@ export default function App() {
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
               </Route>
 
-              {/* Resident board - standalone page */}
-              <Route path="/resident-board" element={<ProtectedRoute><PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary></ProtectedRoute>} />
+              {/* Resident board - public standalone page (УК landing) */}
+              <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />
 
               {/* TWA — self-contained Mini App */}
               <Route path="/twa/*" element={<PageErrorBoundary><TWAApp /></PageErrorBoundary>} />
 
-              <Route path="/" element={<Navigate to={isTWA() ? '/twa' : '/dashboard'} replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
