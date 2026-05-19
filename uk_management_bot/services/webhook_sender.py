@@ -73,6 +73,12 @@ def build_request_payload(event: str, data: dict) -> dict:
 async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict) -> None:
     """Write a webhook outbox record within the caller's transaction (no commit)."""
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
+        logger.warning(
+            "queue_webhook SKIPPED: INFRASAFE_WEBHOOK_ENABLED=False "
+            "(event=%s endpoint=%s) — event will be LOST. "
+            "Reconciliation will replay it within 1h if it's a building/request.",
+            event, endpoint,
+        )
         return
 
     if event.startswith("building."):
@@ -183,6 +189,10 @@ async def process_outbox() -> None:
             )
             .order_by(WebhookOutbox.created_at)
             .limit(50)
+            # FOR UPDATE SKIP LOCKED: under --workers 2 each worker grabs a
+            # disjoint slice of pending rows instead of racing on the same set.
+            # Lock is held until db.commit() at end of function.
+            .with_for_update(skip_locked=True)
         )
         result = await db.execute(stmt)
         records = result.scalars().all()
@@ -226,3 +236,11 @@ async def process_outbox() -> None:
                         )
 
         await db.commit()
+
+        sent = sum(1 for r in records if r.status == "sent")
+        failed = sum(1 for r in records if r.status == "failed")
+        retried = len(records) - sent - failed
+        logger.info(
+            "process_outbox cycle: fetched=%d sent=%d failed=%d retried=%d",
+            len(records), sent, failed, retried,
+        )

@@ -65,7 +65,9 @@ class Settings:
     # Redis для rate limiting в production
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
-    REDIS_PUBSUB_URL: str = os.getenv("REDIS_PUBSUB_URL", "redis://redis:6379/1")
+    # Empty by default so REDIS_PUBSUB_URL_RESOLVED can derive auth from REDIS_URL.
+    # Set this env explicitly only to point pubsub at a separate Redis instance.
+    REDIS_PUBSUB_URL: str = os.getenv("REDIS_PUBSUB_URL", "")
     USE_REDIS_RATE_LIMIT = os.getenv("USE_REDIS_RATE_LIMIT", "False").lower() == "true"
 
     # CORS origins (plan §4.1, §7.1). Comma-separated env list overrides defaults.
@@ -140,6 +142,22 @@ class Settings:
     MEDIA_SERVICE_TIMEOUT = int(os.getenv("MEDIA_SERVICE_TIMEOUT", "30"))
     MEDIA_SERVICE_ENABLED = os.getenv("MEDIA_SERVICE_ENABLED", "True").lower() == "true"
     MEDIA_SERVICE_API_KEY = os.getenv("MEDIA_SERVICE_API_KEY", "")
+
+    @property
+    def REDIS_PUBSUB_URL_RESOLVED(self) -> str:
+        """REDIS_PUBSUB_URL with auth derived from REDIS_URL if not explicitly set.
+
+        Default behaviour: take REDIS_URL (which has auth in prod) and swap /0 → /1
+        so pubsub runs on db 1. If REDIS_PUBSUB_URL is explicitly set in env, it
+        wins (escape hatch for separate Redis instance).
+        """
+        if self.REDIS_PUBSUB_URL:
+            return self.REDIS_PUBSUB_URL
+        if self.REDIS_URL:
+            if self.REDIS_URL.endswith("/0"):
+                return self.REDIS_URL[:-2] + "/1"
+            return f"{self.REDIS_URL.rstrip('/')}/1"
+        return "redis://redis:6379/1"
 
     # Startup validation (production-only checks)
     if not DEBUG:

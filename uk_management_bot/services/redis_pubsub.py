@@ -18,7 +18,7 @@ async def get_pubsub_redis():
             logger.warning("Redis pubsub connection lost, reconnecting")
             _redis_client = None
     if _redis_client is None:
-        url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+        url = settings.REDIS_PUBSUB_URL_RESOLVED
         _redis_client = aioredis.from_url(url, decode_responses=True)
     return _redis_client
 
@@ -35,7 +35,7 @@ async def publish_request_event(event_type: str, data: dict) -> None:
 
 async def subscribe_to_requests():
     """Returns a dedicated Redis Pub/Sub subscriber. Each caller gets its own connection."""
-    url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+    url = settings.REDIS_PUBSUB_URL_RESOLVED
     client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(CHANNEL)
@@ -57,7 +57,7 @@ async def publish_shift_event(event_type: str, data: dict) -> None:
 
 async def subscribe_to_shifts():
     """Returns a dedicated Redis Pub/Sub subscriber. Each caller gets its own connection."""
-    url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+    url = settings.REDIS_PUBSUB_URL_RESOLVED
     client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(SHIFTS_CHANNEL)
@@ -83,7 +83,7 @@ async def publish_building_event(event_type: str, data: dict) -> None:
 
 async def subscribe_to_buildings():
     """Returns a dedicated Redis Pub/Sub subscriber for building events."""
-    url = getattr(settings, 'REDIS_PUBSUB_URL', 'redis://redis:6379/1')
+    url = settings.REDIS_PUBSUB_URL_RESOLVED
     client = aioredis.from_url(url, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(BUILDINGS_CHANNEL)
