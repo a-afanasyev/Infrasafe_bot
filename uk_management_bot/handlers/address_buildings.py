@@ -139,7 +139,7 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru"):
 
         buildings = await AddressService.get_buildings_by_yard(db, yard_id, only_active=False)
 
-        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard_name=yard.name, count=len(buildings))
+        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard.name, total=len(buildings))
 
         if not buildings:
             text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
@@ -243,17 +243,17 @@ async def process_building_yard_selection(callback: CallbackQuery, state: FSMCon
     """Обработка выбора двора для нового здания"""
     yard_id = int(callback.data.split(":")[1])
 
-    await state.update_data(yard_id=yard_id)
-    await state.set_state(BuildingManagementStates.waiting_for_building_address)
-
     db = next(get_db())
     try:
         lang = language
         yard = await AddressService.get_yard_by_id(db, yard_id)
         yard_name = yard.name if yard else get_text("address_buildings.handlers.unknown_yard", language=lang)
 
+        await state.update_data(yard_id=yard_id, yard_name=yard_name)
+        await state.set_state(BuildingManagementStates.waiting_for_building_address)
+
         await callback.message.edit_text(
-            get_text("address_buildings.handlers.create_building_step2", language=lang).format(yard_name=yard_name),
+            get_text("address_buildings.handlers.create_building_step2", language=lang).format(yard=yard_name),
             reply_markup=get_cancel_keyboard_inline()
         )
     finally:
@@ -279,10 +279,13 @@ async def process_building_address(message: Message, state: FSMContext, language
         return
 
     await state.update_data(address=address)
-    await state.set_state(BuildingManagementStates.waiting_for_entrance_count)
+    await state.set_state(BuildingManagementStates.waiting_for_floor_count)
 
+    data = await state.get_data()
     await message.answer(
-        get_text("address_buildings.handlers.create_building_step3", language=lang).format(address=address),
+        get_text("address_buildings.handlers.create_building_step3", language=lang).format(
+            yard=data.get('yard_name', ''), address=address
+        ),
         reply_markup=get_skip_or_cancel_keyboard()
     )
 
@@ -314,10 +317,10 @@ async def process_entrance_count(message: Message, state: FSMContext, language: 
 
     lang = language
     await state.update_data(entrance_count=entrance_count)
-    await state.set_state(BuildingManagementStates.waiting_for_floor_count)
+    await state.set_state(BuildingManagementStates.waiting_for_building_gps)
 
     await message.answer(
-        get_text("address_buildings.handlers.create_building_step4", language=lang).format(entrance_count=entrance_count),
+        get_text("address_buildings.handlers.create_building_step5", language=lang),
         reply_markup=get_skip_or_cancel_keyboard()
     )
 
@@ -347,10 +350,13 @@ async def process_floor_count(message: Message, state: FSMContext, language: str
             return
 
     await state.update_data(floor_count=floor_count)
-    await state.set_state(BuildingManagementStates.waiting_for_building_gps)
+    await state.set_state(BuildingManagementStates.waiting_for_entrance_count)
 
+    data = await state.get_data()
     await message.answer(
-        get_text("address_buildings.handlers.create_building_step5", language=lang).format(floor_count=floor_count),
+        get_text("address_buildings.handlers.create_building_step4", language=lang).format(
+            yard=data.get('yard_name', ''), address=data.get('address', ''), floors=floor_count
+        ),
         reply_markup=get_skip_or_cancel_keyboard()
     )
 
@@ -428,8 +434,8 @@ async def process_building_gps(message: Message, state: FSMContext, language: st
 
         await message.answer(
             get_text("address_buildings.handlers.building_created_success", language=lang).format(
-                address=building.address, entrances=building.entrance_count,
-                floors=building.floor_count, gps=gps_info
+                address=building.address, yard=data.get('yard_name', ''),
+                entrances=building.entrance_count, floors=building.floor_count, gps=gps_info
             ),
             reply_markup=get_address_management_menu()
         )
