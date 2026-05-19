@@ -21,6 +21,7 @@ const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const AddressesPage = lazy(() => import('./pages/AddressesPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
+const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="employees/:id" element={<PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary>} />
                 <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
+                <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Resident board - public standalone page (УК landing) */}

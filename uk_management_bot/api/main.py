@@ -31,6 +31,7 @@ from uk_management_bot.api.shifts.executor_router import router as executor_shif
 from uk_management_bot.api.requests.stats_router import router as requests_stats_router
 from uk_management_bot.api.addresses.router import router as addresses_router
 from uk_management_bot.api.public.router import router as public_router
+from uk_management_bot.api.board_config.router import router as board_config_router
 from uk_management_bot.config.settings import settings
 
 _logger = logging.getLogger(__name__)
@@ -122,6 +123,7 @@ app.include_router(shifts_router, prefix="/api/v2/shifts", tags=["shifts"])
 app.include_router(addresses_router, prefix="/api/v2/addresses", tags=["addresses"])
 app.include_router(executor_shifts_router, prefix="/api/v2/executor/shifts", tags=["executor-shifts"])
 app.include_router(public_router, prefix="/api/v2/public", tags=["public"])
+app.include_router(board_config_router, prefix="/api/v2", tags=["board-config"])
 
 
 @app.get("/health")

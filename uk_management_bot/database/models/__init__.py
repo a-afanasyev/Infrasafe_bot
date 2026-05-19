@@ -27,6 +27,9 @@ from .webhook_outbox import WebhookOutbox
 # Invite nonce tracking
 from .invite_nonce import InviteNonce
 
+# Resident-board public page config
+from .board_config import BoardConfig
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -62,7 +65,8 @@ __all__ = [
     'UserApartment',
     'UserYard',
     'WebhookOutbox',
-    'InviteNonce'
+    'InviteNonce',
+    'BoardConfig'
 ]
 
 # Добавляем модели заявок, если они доступны
