@@ -99,6 +99,29 @@ class TestYards:
         assert "Yard A" in names
         assert "Yard B" in names
 
+    async def test_list_yards_buildings_count_excludes_inactive(self, client: AsyncClient):
+        """yard.buildings_count must match what the building list shows (active only).
+
+        Without is_active filtering, soft-deleted buildings inflate the count on
+        every yard card and the header counter disagrees with the visible list.
+        """
+        yard = await _create_yard(client, "Counter Yard")
+        active1 = await _create_building(client, yard["id"], "Active 1")
+        active2 = await _create_building(client, yard["id"], "Active 2")
+        inactive = await _create_building(client, yard["id"], "Soft-deleted")
+        # Soft-delete the third building (the delete endpoint sets is_active=False).
+        await client.delete(f"{BASE}/buildings/{inactive['id']}")
+
+        # list_yards: card-level count
+        r = await client.get(f"{BASE}/yards")
+        yards = r.json()
+        counter_yard = next(y for y in yards if y["id"] == yard["id"])
+        assert counter_yard["buildings_count"] == 2  # not 3 — inactive excluded
+
+        # update_yard returns the same count after a no-op patch
+        r2 = await client.patch(f"{BASE}/yards/{yard['id']}", json={"description": "x"})
+        assert r2.json()["buildings_count"] == 2
+
     async def test_list_yards_excludes_inactive(self, client: AsyncClient):
         yard = await _create_yard(client, "Active Yard")
         inactive = await _create_yard(client, "Inactive Yard")
