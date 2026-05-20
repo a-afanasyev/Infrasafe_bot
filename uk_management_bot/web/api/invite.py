@@ -108,11 +108,11 @@ async def register_via_invite(request: Request, data: RegistrationData, db: Sess
 
             db.commit()
 
-                return {
-                    "success": True,
-                    "message": "Данные пользователя обновлены",
-                    "user_id": existing_user.id
-                }
+            return {
+                "success": True,
+                "message": "Данные пользователя обновлены",
+                "user_id": existing_user.id
+            }
         
         # New user: validate + consume nonce atomically via join_via_invite
         # (join_via_invite internally calls validate_invite with mark_used_by)
