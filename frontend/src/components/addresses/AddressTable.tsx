@@ -28,10 +28,14 @@ interface AddressTableProps {
   onToggleBuilding?: (id: number, active: boolean) => void
   onToggleApartment?: (id: number, active: boolean) => void
   onDeleteYard?: (id: number) => void
+  /** Hard-delete an already-soft-deleted yard (is_active=False). */
+  onPurgeYard?: (id: number) => void
   onDeleteBuilding?: (id: number) => void
   /** Hard-delete an already-soft-deleted building (is_active=False). */
   onPurgeBuilding?: (id: number) => void
   onDeleteApartment?: (id: number) => void
+  /** Hard-delete an already-soft-deleted apartment (is_active=False). */
+  onPurgeApartment?: (id: number) => void
 }
 
 function StatusDot({ active }: { active: boolean }) {
@@ -76,10 +80,12 @@ function YardsTable({
   onEditYard,
   onToggleYard,
   onDeleteYard,
+  onPurgeYard,
 }: AddressTableProps) {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const items = yards ?? []
 
   if (items.length === 0) {
@@ -131,12 +137,21 @@ function YardsTable({
               <button onClick={() => onToggleYard?.(yard.id, !yard.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
                 {yard.is_active ? t('addresses.deactivate') : t('addresses.activate')}
               </button>
-              <button
-                onClick={() => setConfirmDelete({ open: true, id: yard.id })}
-                className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
-              >
-                {t('common.delete')}
-              </button>
+              {yard.is_active ? (
+                <button
+                  onClick={() => setConfirmDelete({ open: true, id: yard.id })}
+                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
+                >
+                  {t('common.delete')}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setConfirmPurge({ open: true, id: yard.id, name: yard.name })}
+                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
+                >
+                  {t('common.deletePermanently')}
+                </button>
+              )}
             </div>
           </div>
         )
@@ -150,6 +165,17 @@ function YardsTable({
         confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteYard?.(confirmDelete.id)
+        }}
+        variant="danger"
+      />
+      <ConfirmDialog
+        open={confirmPurge.open}
+        onOpenChange={(open) => setConfirmPurge(prev => ({ ...prev, open }))}
+        title={t('common.deletePermanently')}
+        description={t('addressModals.confirmPurgeYard', { name: confirmPurge.name })}
+        confirmLabel={t('common.deletePermanently')}
+        onConfirm={() => {
+          if (confirmPurge.id !== null) onPurgeYard?.(confirmPurge.id)
         }}
         variant="danger"
       />
@@ -277,10 +303,12 @@ function ApartmentsTable({
   onEditApartment,
   onToggleApartment,
   onDeleteApartment,
+  onPurgeApartment,
 }: AddressTableProps) {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
   const items = apartments ?? []
 
   if (items.length === 0) {
@@ -333,12 +361,21 @@ function ApartmentsTable({
               <button onClick={() => onToggleApartment?.(apt.id, !apt.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
                 {apt.is_active ? t('addresses.deactivate') : t('addresses.activate')}
               </button>
-              <button
-                onClick={() => setConfirmDelete({ open: true, id: apt.id })}
-                className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
-              >
-                {t('common.delete')}
-              </button>
+              {apt.is_active ? (
+                <button
+                  onClick={() => setConfirmDelete({ open: true, id: apt.id })}
+                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
+                >
+                  {t('common.delete')}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setConfirmPurge({ open: true, id: apt.id, number: apt.apartment_number })}
+                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
+                >
+                  {t('common.deletePermanently')}
+                </button>
+              )}
             </div>
           </div>
         )
@@ -352,6 +389,17 @@ function ApartmentsTable({
         confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteApartment?.(confirmDelete.id)
+        }}
+        variant="danger"
+      />
+      <ConfirmDialog
+        open={confirmPurge.open}
+        onOpenChange={(open) => setConfirmPurge(prev => ({ ...prev, open }))}
+        title={t('common.deletePermanently')}
+        description={t('addressModals.confirmPurgeApartment', { name: confirmPurge.number })}
+        confirmLabel={t('common.deletePermanently')}
+        onConfirm={() => {
+          if (confirmPurge.id !== null) onPurgeApartment?.(confirmPurge.id)
         }}
         variant="danger"
       />

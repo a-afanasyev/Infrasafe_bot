@@ -10,9 +10,11 @@ import {
   useAllApartments,
   usePendingModeration,
   useDeleteYard,
+  usePurgeYard,
   useDeleteBuilding,
   usePurgeBuilding,
   useDeleteApartment,
+  usePurgeApartment,
   useUpdateYard,
   useUpdateBuilding,
   useUpdateApartment,
@@ -165,9 +167,11 @@ export default function AddressesPage() {
 
   // Mutations
   const deleteYard = useDeleteYard()
+  const purgeYard = usePurgeYard()
   const deleteBuilding = useDeleteBuilding()
   const purgeBuilding = usePurgeBuilding()
   const deleteApartment = useDeleteApartment()
+  const purgeApartment = usePurgeApartment()
   const updateYard = useUpdateYard()
   const updateBuilding = useUpdateBuilding()
   const updateApartment = useUpdateApartment()
@@ -469,6 +473,7 @@ export default function AddressesPage() {
               onEditApartment={(apt) => setEditingApartment(apt)}
               onToggleApartment={(id, active) => updateApartment.mutate({ id, is_active: active })}
               onDeleteApartment={(id) => deleteApartment.mutate(id)}
+              onPurgeApartment={(id) => purgeApartment.mutate(id)}
             />
           ) : (
             <>
@@ -506,19 +511,35 @@ export default function AddressesPage() {
                                       }}
                                     />
                                     <div className="h-px bg-border-default mx-2" />
-                                    <MenuItem
-                                      label={t('common.delete')}
-                                      danger
-                                      onClick={() => {
-                                        close()
-                                        setConfirmState({
-                                          open: true,
-                                          title: t('addressModals.confirmDeleteYard', { name: yard.name }),
-                                          description: t('addressModals.confirmDeleteYard', { name: yard.name }),
-                                          onConfirm: () => deleteYard.mutate(yard.id),
-                                        })
-                                      }}
-                                    />
+                                    {yard.is_active ? (
+                                      <MenuItem
+                                        label={t('common.delete')}
+                                        danger
+                                        onClick={() => {
+                                          close()
+                                          setConfirmState({
+                                            open: true,
+                                            title: t('addressModals.confirmDeleteYard', { name: yard.name }),
+                                            description: t('addressModals.confirmDeleteYard', { name: yard.name }),
+                                            onConfirm: () => deleteYard.mutate(yard.id),
+                                          })
+                                        }}
+                                      />
+                                    ) : (
+                                      <MenuItem
+                                        label={t('common.deletePermanently')}
+                                        danger
+                                        onClick={() => {
+                                          close()
+                                          setConfirmState({
+                                            open: true,
+                                            title: t('common.deletePermanently'),
+                                            description: t('addressModals.confirmPurgeYard', { name: yard.name }),
+                                            onConfirm: () => purgeYard.mutate(yard.id),
+                                          })
+                                        }}
+                                      />
+                                    )}
                                   </>
                                 )}
                               </ActionMenu>
@@ -673,19 +694,35 @@ export default function AddressesPage() {
                                         }}
                                       />
                                       <div className="h-px bg-border-default mx-2" />
-                                      <MenuItem
-                                        label={t('common.delete')}
-                                        danger
-                                        onClick={() => {
-                                          close()
-                                          setConfirmState({
-                                            open: true,
-                                            title: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
-                                            description: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
-                                            onConfirm: () => deleteApartment.mutate(apt.id),
-                                          })
-                                        }}
-                                      />
+                                      {apt.is_active ? (
+                                        <MenuItem
+                                          label={t('common.delete')}
+                                          danger
+                                          onClick={() => {
+                                            close()
+                                            setConfirmState({
+                                              open: true,
+                                              title: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
+                                              description: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
+                                              onConfirm: () => deleteApartment.mutate(apt.id),
+                                            })
+                                          }}
+                                        />
+                                      ) : (
+                                        <MenuItem
+                                          label={t('common.deletePermanently')}
+                                          danger
+                                          onClick={() => {
+                                            close()
+                                            setConfirmState({
+                                              open: true,
+                                              title: t('common.deletePermanently'),
+                                              description: t('addressModals.confirmPurgeApartment', { name: apt.apartment_number }),
+                                              onConfirm: () => purgeApartment.mutate(apt.id),
+                                            })
+                                          }}
+                                        />
+                                      )}
                                     </>
                                   )}
                                 </ActionMenu>
@@ -743,9 +780,11 @@ export default function AddressesPage() {
                   onToggleBuilding={(id, active) => updateBuilding.mutate({ id, is_active: active })}
                   onToggleApartment={(id, active) => updateApartment.mutate({ id, is_active: active })}
                   onDeleteYard={(id) => deleteYard.mutate(id)}
+                  onPurgeYard={(id) => purgeYard.mutate(id)}
                   onDeleteBuilding={(id) => deleteBuilding.mutate(id)}
                   onPurgeBuilding={(id) => purgeBuilding.mutate(id)}
                   onDeleteApartment={(id) => deleteApartment.mutate(id)}
+                  onPurgeApartment={(id) => purgeApartment.mutate(id)}
                 />
                 </>
               )}

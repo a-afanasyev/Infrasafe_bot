@@ -20,6 +20,7 @@ from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.webhook_sender import queue_webhook
 from uk_management_bot.services.redis_pubsub import publish_building_event
 
@@ -224,6 +225,61 @@ async def delete_yard(
     yard.is_active = False
     await db.commit()
     return {"ok": True, "detail": "Yard deactivated"}
+
+
+@router.delete("/yards/{yard_id}/purge", status_code=200)
+async def purge_yard(
+    yard_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    """Hard-delete a soft-deleted yard. Cascades to buildings → apartments.
+
+    Pre-conditions:
+      - Yard must exist.
+      - Yard must already be soft-deleted (is_active=False).
+      - No active building under it (active=False is the invariant from
+        the soft-delete guard, but someone may have reactivated a child
+        after the yard went inactive — re-check defensively).
+      - No request rows reference any descendant apartment. requests.
+        apartment_id is FK without ON DELETE CASCADE; cascade-delete would
+        violate the constraint. Refuse loudly instead of crashing.
+    """
+    yard = (await db.execute(select(Yard).where(Yard.id == yard_id))).scalar_one_or_none()
+    if not yard:
+        raise HTTPException(status_code=404, detail="Yard not found")
+    if yard.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot purge an active yard. Soft-delete it first via DELETE /yards/{id}.",
+        )
+
+    active_buildings = (await db.execute(
+        select(func.count(Building.id)).where(
+            and_(Building.yard_id == yard_id, Building.is_active == True)  # noqa: E712
+        )
+    )).scalar() or 0
+    if active_buildings > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot purge yard: {active_buildings} active building(s) still attached",
+        )
+
+    linked_requests = (await db.execute(
+        select(func.count(Request.request_number))
+        .join(Apartment, Apartment.id == Request.apartment_id)
+        .join(Building, Building.id == Apartment.building_id)
+        .where(Building.yard_id == yard_id)
+    )).scalar() or 0
+    if linked_requests > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot purge yard: {linked_requests} request(s) reference its apartments",
+        )
+
+    await db.delete(yard)
+    await db.commit()
+    return {"ok": True, "detail": "Yard purged"}
 
 
 # ────────────────────── Buildings ──────────────────────
@@ -475,6 +531,19 @@ async def purge_building(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot purge an active building. Soft-delete it first via DELETE /buildings/{id}.",
+        )
+
+    # requests.apartment_id has no ON DELETE CASCADE — cascade-delete via
+    # apartments would crash on FK. Refuse loudly with a count instead.
+    linked_requests = (await db.execute(
+        select(func.count(Request.request_number))
+        .join(Apartment, Apartment.id == Request.apartment_id)
+        .where(Apartment.building_id == building_id)
+    )).scalar() or 0
+    if linked_requests > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot purge building: {linked_requests} request(s) reference its apartments",
         )
 
     await db.delete(building)
@@ -747,6 +816,62 @@ async def delete_apartment(
     apartment.is_active = False
     await db.commit()
     return {"ok": True, "detail": "Apartment deactivated"}
+
+
+@router.delete("/apartments/{apartment_id}/purge", status_code=200)
+async def purge_apartment(
+    apartment_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    """Hard-delete a soft-deleted apartment.
+
+    Pre-conditions:
+      - Apartment must exist.
+      - Apartment must already be soft-deleted (is_active=False).
+      - No approved residents (UserApartment.status='approved').
+      - No request rows reference this apartment — requests.apartment_id is
+        FK without ON DELETE CASCADE, deletion would FK-fail.
+
+    Cascades:
+      - user_apartments rows are removed via the relationship's
+        `cascade='all, delete-orphan'` (pending/rejected get cleaned up too).
+    """
+    apartment = (await db.execute(
+        select(Apartment).where(Apartment.id == apartment_id)
+    )).scalar_one_or_none()
+    if not apartment:
+        raise HTTPException(status_code=404, detail="Apartment not found")
+    if apartment.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot purge an active apartment. Soft-delete it first via DELETE /apartments/{id}.",
+        )
+
+    approved_residents = (await db.execute(
+        select(func.count(UserApartment.id)).where(and_(
+            UserApartment.apartment_id == apartment_id,
+            UserApartment.status == "approved",
+        ))
+    )).scalar() or 0
+    if approved_residents > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot purge apartment: {approved_residents} approved resident(s) still linked",
+        )
+
+    linked_requests = (await db.execute(
+        select(func.count(Request.request_number)).where(Request.apartment_id == apartment_id)
+    )).scalar() or 0
+    if linked_requests > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot purge apartment: {linked_requests} request(s) reference it",
+        )
+
+    await db.delete(apartment)
+    await db.commit()
+    return {"ok": True, "detail": "Apartment purged"}
 
 
 @router.get("/apartments/all", response_model=list[ApartmentOut])
