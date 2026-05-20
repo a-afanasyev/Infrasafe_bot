@@ -242,14 +242,17 @@ export default function AddressesPage() {
     },
     {
       label: t('addresses.stats.buildings'),
-      value: stats?.buildings_total ?? '-',
+      // Display active/total to match the yards card and the building list,
+      // which already filters by is_active. Soft-deleted rows would otherwise
+      // make the header counter disagree with what the user sees below it.
+      value: stats ? `${stats.buildings_active}/${stats.buildings_total}` : '-',
       iconBg: 'var(--emerald)',
       icon: '\u{1F3E2}',
       onClick: () => { setView('directory'); setLevel('all-buildings'); setFilterYardId(null); setSelectedYard(null); setSelectedBuilding(null) },
     },
     {
       label: t('addresses.stats.apartments'),
-      value: stats?.apartments_total ?? '-',
+      value: stats ? `${stats.apartments_active}/${stats.apartments_total}` : '-',
       iconBg: 'var(--amber)',
       icon: '\u{1F3E0}',
       onClick: () => { setView('directory'); setLevel('all-apartments'); setFilterYardId(null); setFilterBuildingId(null); setSelectedYard(null); setSelectedBuilding(null) },

@@ -98,9 +98,13 @@ async def list_yards(
     result = await db.execute(query)
     yards = result.scalars().all()
 
-    # Compute buildings_count via a single query
+    # Compute buildings_count via a single query.
+    # Filter by is_active so the displayed count matches what the building list
+    # shows (which also filters is_active=True by default) — soft-deleted rows
+    # would otherwise inflate the badge on every yard card.
     buildings_counts_result = await db.execute(
         select(Building.yard_id, func.count(Building.id))
+        .where(Building.is_active == True)  # noqa: E712 — SQLAlchemy needs ==
         .group_by(Building.yard_id)
     )
     buildings_map = dict(buildings_counts_result.all())
@@ -185,7 +189,10 @@ async def update_yard(
     await db.refresh(yard)
 
     buildings_count = (await db.execute(
-        select(func.count(Building.id)).where(Building.yard_id == yard_id)
+        select(func.count(Building.id)).where(
+            Building.yard_id == yard_id,
+            Building.is_active == True,  # noqa: E712 — keep parity with list_yards
+        )
     )).scalar() or 0
 
     return YardOut(**_yard_dict(yard), buildings_count=buildings_count)
