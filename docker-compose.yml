@@ -67,7 +67,11 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - REDIS_PUBSUB_URL=redis://redis:6379/1
+      # REDIS_PUBSUB_URL intentionally NOT set here — settings.REDIS_PUBSUB_URL_RESOLVED
+      # derives it from REDIS_URL (preserving auth). Hardcoding here without password
+      # broke pubsub when REDIS_PASSWORD was enabled. See PR-B in spec
+      # 2026-05-19-uk-infrasafe-webhook-hardening. Override via env if you need
+      # a separate Redis instance for pubsub.
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       - FRONTEND_URL=http://localhost:3002
