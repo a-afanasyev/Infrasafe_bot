@@ -293,7 +293,7 @@ export default function AnalyticsPage() {
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.requestsByDay')}</div>
           {byDayData.length === 0 ? (
-            <EmptyState icon="\u{1F4CA}" title={t('analytics.noData')} subtitle={t('analytics.noDataPeriod')} />
+            <EmptyState icon={'\u{1F4CA}'} title={t('analytics.noData')} subtitle={t('analytics.noDataPeriod')} />
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart
@@ -334,7 +334,7 @@ export default function AnalyticsPage() {
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden relative">
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.categoryBreakdown')}</div>
           {byCategoryData.length === 0 ? (
-            <EmptyState icon="\u{1F967}" title={t('analytics.noData')} subtitle={t('analytics.noDataCategories')} />
+            <EmptyState icon={'\u{1F967}'} title={t('analytics.noData')} subtitle={t('analytics.noDataCategories')} />
           ) : (
             <>
               {/* Chart + center label */}
@@ -400,7 +400,7 @@ export default function AnalyticsPage() {
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.statusDistribution')}</div>
           {byStatusEntries.length === 0 ? (
-            <EmptyState icon="\u{1F4CB}" title={t('analytics.noData')} />
+            <EmptyState icon={'\u{1F4CB}'} title={t('analytics.noData')} />
           ) : (
             <div className="flex flex-col gap-2.5">
               {byStatusEntries.map(([status, count]) => {
@@ -438,7 +438,7 @@ export default function AnalyticsPage() {
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.topExecutors')}</div>
           {topExecutors.length === 0 ? (
-            <EmptyState icon="\u{1F3C6}" title={t('analytics.noData')} />
+            <EmptyState icon={'\u{1F3C6}'} title={t('analytics.noData')} />
           ) : (
             <div className="flex flex-col gap-3">
               {topExecutors.map((ex, idx) => {
@@ -494,7 +494,7 @@ export default function AnalyticsPage() {
         <div className="bg-bg-card border border-border-default rounded-default p-5 overflow-hidden">
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary mb-4">{t('analytics.recentActions')}</div>
           {recentActions.length === 0 ? (
-            <EmptyState icon="\u{1F4DC}" title={t('analytics.noActions')} />
+            <EmptyState icon={'\u{1F4DC}'} title={t('analytics.noActions')} />
           ) : (
             <div className="flex flex-col">
               {recentActions.map((item, idx) => (

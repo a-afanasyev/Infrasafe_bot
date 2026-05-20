@@ -471,7 +471,7 @@ export default function AddressesPage() {
                   {/* Yards grid */}
                   {level === 'yards' && (
                     filteredYards.length === 0 ? (
-                      <EmptyState icon="\u{1F3D8}" title={t('addresses.noAddresses')} subtitle={t('addresses.noAddressesDesc')} />
+                      <EmptyState icon={'\u{1F3D8}'} title={t('addresses.noAddresses')} subtitle={t('addresses.noAddressesDesc')} />
                     ) : (
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                         {filteredYards.map(yard => (
@@ -543,7 +543,7 @@ export default function AddressesPage() {
                   {/* Buildings grid */}
                   {level === 'buildings' && (
                     filteredBuildings.length === 0 ? (
-                      <EmptyState icon="\u{1F3E2}" title={t('addresses.noBuildingsFound')} subtitle={t('addresses.noBuildingsFoundDesc')} />
+                      <EmptyState icon={'\u{1F3E2}'} title={t('addresses.noBuildingsFound')} subtitle={t('addresses.noBuildingsFoundDesc')} />
                     ) : (
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                         {filteredBuildings.map(building => (
@@ -622,7 +622,7 @@ export default function AddressesPage() {
                       </div>
 
                       {filteredApartments.length === 0 ? (
-                        <EmptyState icon="\u{1F3E0}" title={t('addresses.noApartmentsFound')} subtitle={t('addresses.noApartmentsFoundDesc')} />
+                        <EmptyState icon={'\u{1F3E0}'} title={t('addresses.noApartmentsFound')} subtitle={t('addresses.noApartmentsFoundDesc')} />
                       ) : (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
                           {filteredApartments.map(apt => (
