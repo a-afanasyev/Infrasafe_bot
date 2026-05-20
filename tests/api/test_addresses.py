@@ -13,6 +13,7 @@ from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
+from uk_management_bot.database.models.request import Request
 
 pytestmark = pytest.mark.asyncio
 
@@ -173,6 +174,34 @@ class TestYards:
         r = await client.patch(f"{BASE}/yards/{yard['id']}", json={"is_active": False})
         assert r.status_code == 409
 
+    async def test_purge_inactive_yard_succeeds(self, client: AsyncClient):
+        """Yard with no buildings → soft-delete → purge → 404 on re-fetch."""
+        yard = await _create_yard(client, "Purge Yard Empty")
+        await client.delete(f"{BASE}/yards/{yard['id']}")
+        r = await client.delete(f"{BASE}/yards/{yard['id']}/purge")
+        assert r.status_code == 200
+        # Already gone.
+        gone = await client.delete(f"{BASE}/yards/{yard['id']}/purge")
+        assert gone.status_code == 404
+
+    async def test_purge_active_yard_rejected(self, client: AsyncClient):
+        yard = await _create_yard(client, "Active Yard Purge")
+        r = await client.delete(f"{BASE}/yards/{yard['id']}/purge")
+        assert r.status_code == 409
+        assert "Soft-delete it first" in r.json()["detail"]
+
+    async def test_purge_yard_cascades_to_inactive_buildings(self, client: AsyncClient):
+        yard = await _create_yard(client, "Cascade Purge Yard")
+        bld = await _create_building(client, yard["id"], "Will cascade")
+        # Soft-delete building (so the yard can be soft-deleted).
+        await client.delete(f"{BASE}/buildings/{bld['id']}")
+        await client.delete(f"{BASE}/yards/{yard['id']}")
+        r = await client.delete(f"{BASE}/yards/{yard['id']}/purge")
+        assert r.status_code == 200
+        # Building is gone too: re-purge on the building 404s.
+        gone = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert gone.status_code == 404
+
 
 # ═══════════════════════ Buildings CRUD ═══════════════════════
 
@@ -240,6 +269,45 @@ class TestBuildings:
         await _create_apartment(client, bld["id"], "42")
         r = await client.patch(f"{BASE}/buildings/{bld['id']}", json={"is_active": False})
         assert r.status_code == 409
+
+    async def test_purge_inactive_building_succeeds(self, client: AsyncClient):
+        """Two-stage delete: soft-delete first, then purge removes the row."""
+        yard = await _create_yard(client, "Purge Yard")
+        bld = await _create_building(client, yard["id"], "Purge me")
+        # Soft-delete makes it eligible for purge.
+        soft = await client.delete(f"{BASE}/buildings/{bld['id']}")
+        assert soft.status_code == 200
+        # Purge removes the row entirely.
+        purged = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert purged.status_code == 200
+        # Re-purge → 404 (gone).
+        gone = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert gone.status_code == 404
+
+    async def test_purge_active_building_rejected(self, client: AsyncClient):
+        """Purging an active building is refused — must soft-delete first."""
+        yard = await _create_yard(client, "Purge Guard Yard")
+        bld = await _create_building(client, yard["id"], "Still active")
+        r = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert r.status_code == 409
+        assert "Soft-delete it first" in r.json()["detail"]
+
+    async def test_purge_cascades_to_apartments(self, client: AsyncClient):
+        """Inactive apartments are removed alongside their building."""
+        yard = await _create_yard(client, "Cascade Yard")
+        bld = await _create_building(client, yard["id"], "With apt")
+        apt = await _create_apartment(client, bld["id"], "10")
+        # Deactivate apartment, then the building.
+        await client.patch(f"{BASE}/apartments/{apt['id']}", json={"is_active": False})
+        await client.delete(f"{BASE}/buildings/{bld['id']}")
+        # Purge cascades.
+        r = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert r.status_code == 200
+        # Apartment is gone too (any list with include_inactive doesn't surface it).
+        r2 = await client.get(f"{BASE}/buildings/{bld['id']}/apartments?include_inactive=true")
+        assert r2.status_code in (200, 404)
+        if r2.status_code == 200:
+            assert all(a["id"] != apt["id"] for a in r2.json())
 
 
 # ═══════════════════════ Apartments CRUD ═══════════════════════
@@ -349,6 +417,49 @@ class TestApartments:
 
         r = await client.patch(f"{BASE}/apartments/{apt['id']}", json={"is_active": False})
         assert r.status_code == 409
+
+    async def test_purge_inactive_apartment_succeeds(self, client: AsyncClient):
+        yard = await _create_yard(client, "Purge Apt Yard")
+        bld = await _create_building(client, yard["id"], "Purge Apt Addr")
+        apt = await _create_apartment(client, bld["id"], "11")
+        await client.delete(f"{BASE}/apartments/{apt['id']}")
+        r = await client.delete(f"{BASE}/apartments/{apt['id']}/purge")
+        assert r.status_code == 200
+        gone = await client.delete(f"{BASE}/apartments/{apt['id']}/purge")
+        assert gone.status_code == 404
+
+    async def test_purge_active_apartment_rejected(self, client: AsyncClient):
+        yard = await _create_yard(client, "Active Apt Purge Yard")
+        bld = await _create_building(client, yard["id"], "Active Apt Addr")
+        apt = await _create_apartment(client, bld["id"], "22")
+        r = await client.delete(f"{BASE}/apartments/{apt['id']}/purge")
+        assert r.status_code == 409
+        assert "Soft-delete it first" in r.json()["detail"]
+
+    async def test_purge_apartment_blocked_by_requests(
+        self, client: AsyncClient, db_session: AsyncSession, resident_user
+    ):
+        """requests.apartment_id has no ON DELETE CASCADE — purge must refuse."""
+        yard = await _create_yard(client, "Req Block Yard")
+        bld = await _create_building(client, yard["id"], "Req Block Addr")
+        apt = await _create_apartment(client, bld["id"], "33")
+
+        # Insert a request linked to this apartment directly.
+        req = Request(
+            request_number="260520-001",
+            user_id=resident_user.id,
+            category="Прочее",
+            description="Test request blocking apartment purge",
+            apartment_id=apt["id"],
+        )
+        db_session.add(req)
+        await db_session.commit()
+
+        # Soft-delete first so the active-guard doesn't trip ahead of the request-guard.
+        await client.delete(f"{BASE}/apartments/{apt['id']}")
+        r = await client.delete(f"{BASE}/apartments/{apt['id']}/purge")
+        assert r.status_code == 409
+        assert "request(s) reference it" in r.json()["detail"]
 
 
 # ═══════════════════════ Apartment Detail ═══════════════════════

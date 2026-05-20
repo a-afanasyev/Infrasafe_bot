@@ -181,6 +181,25 @@ export function useDeleteYard() {
   })
 }
 
+/** Hard-delete a soft-deleted yard. Cascades to inactive buildings → apartments. */
+export function usePurgeYard() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v2/addresses/yards/${id}/purge`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.yardPurged'))
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] })
+    },
+    onError: (error: Error) => {
+      console.error('Purge yard failed:', error)
+      toast.error(i18n.t('toast.yardPurgeFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 // Buildings
 
 export function useCreateBuilding() {
@@ -233,6 +252,25 @@ export function useDeleteBuilding() {
   })
 }
 
+/** Hard-delete a building that has already been soft-deleted. */
+export function usePurgeBuilding() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v2/addresses/buildings/${id}/purge`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.buildingPurged'))
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] })
+    },
+    onError: (error: Error) => {
+      console.error('Purge building failed:', error)
+      toast.error(i18n.t('toast.buildingPurgeFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 // Apartments
 
 export function useCreateApartment() {
@@ -281,6 +319,25 @@ export function useDeleteApartment() {
     onError: (error: Error) => {
       console.error('Delete apartment failed:', error)
       toast.error(i18n.t('toast.apartmentDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
+/** Hard-delete a soft-deleted apartment. Refuses on linked requests / approved residents. */
+export function usePurgeApartment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v2/addresses/apartments/${id}/purge`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.apartmentPurged'))
+      queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] })
+    },
+    onError: (error: Error) => {
+      console.error('Purge apartment failed:', error)
+      toast.error(i18n.t('toast.apartmentPurgeFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }
