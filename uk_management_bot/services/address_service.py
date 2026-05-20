@@ -225,7 +225,13 @@ class AddressService:
                 session,
                 "building.created",
                 "/api/webhooks/uk/building",
-                {"id": building.id, "address": building.address, "yard_name": yard.name},
+                {
+                    "id": building.id,
+                    "address": building.address,
+                    "yard_name": yard.name,
+                    "latitude": building.gps_latitude,
+                    "longitude": building.gps_longitude,
+                },
             )
 
             session.commit()
@@ -326,6 +332,8 @@ class AddressService:
                     "id": building.id,
                     "address": building.address,
                     "yard_name": current_yard.name if current_yard else "",
+                    "latitude": building.gps_latitude,
+                    "longitude": building.gps_longitude,
                 },
             )
 
@@ -370,6 +378,8 @@ class AddressService:
                     "id": building.id,
                     "address": building.address,
                     "yard_name": current_yard.name if current_yard else "",
+                    "latitude": building.gps_latitude,
+                    "longitude": building.gps_longitude,
                 },
             )
 

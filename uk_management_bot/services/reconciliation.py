@@ -57,13 +57,15 @@ async def reconcile_buildings() -> dict:
             return {"skipped": "lock_held"}
 
         try:
-            # 1. UK side: all active buildings.
+            # 1. UK side: all active buildings (with coords for the replay payload).
             uk_stmt = (
                 select(
                     Building.id,
                     Building.address,
                     Building.yard_id,
                     Yard.name,
+                    Building.gps_latitude,
+                    Building.gps_longitude,
                 )
                 .join(Yard, Yard.id == Building.yard_id)
                 .where(Building.is_active == True)  # noqa: E712 — SQLAlchemy needs ==
@@ -121,7 +123,13 @@ async def reconcile_buildings() -> dict:
                     db,
                     "building.created",
                     "/api/webhooks/uk/building",
-                    {"id": row.id, "address": row.address, "yard_name": row.name},
+                    {
+                        "id": row.id,
+                        "address": row.address,
+                        "yard_name": row.name,
+                        "latitude": row.gps_latitude,
+                        "longitude": row.gps_longitude,
+                    },
                 )
                 enqueued += 1
 
