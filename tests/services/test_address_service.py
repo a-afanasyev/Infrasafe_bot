@@ -551,7 +551,8 @@ class TestCreateBuildingEmitsWebhook:
             "uk_management_bot.services.webhook_sender.queue_webhook_sync"
         ) as mock_qws:
             building, error = await AddressService.create_building(
-                session, "ул. Новая, 1", yard_id=7, created_by=1
+                session, "ул. Новая, 1", yard_id=7, created_by=1,
+                gps_latitude=41.111, gps_longitude=69.222,
             )
 
         assert error is None
@@ -563,13 +564,19 @@ class TestCreateBuildingEmitsWebhook:
         data = call.args[3]
         assert data["address"] == "ул. Новая, 1"
         assert data["yard_name"] == "ДворДемо"
+        # PR-F: coords flow through to outbox payload.
+        assert data["latitude"] == 41.111
+        assert data["longitude"] == 69.222
 
 
 class TestUpdateBuildingEmitsWebhook:
     @pytest.mark.asyncio
     async def test_enqueues_building_updated(self):
         session = MagicMock()
-        building = _FakeBuilding(id=42, address="ул. Старая, 1", yard_id=7)
+        building = _FakeBuilding(
+            id=42, address="ул. Старая, 1", yard_id=7,
+            gps_latitude=41.5, gps_longitude=69.5,
+        )
         yard = _FakeYard(id=7, name="ДворДемо")
 
         mock_get_building = MagicMock()
@@ -594,13 +601,19 @@ class TestUpdateBuildingEmitsWebhook:
         assert data["id"] == 42
         assert data["address"] == "ул. Новая, 1"
         assert data["yard_name"] == "ДворДемо"
+        # PR-F: coords sourced from the building row.
+        assert data["latitude"] == 41.5
+        assert data["longitude"] == 69.5
 
 
 class TestDeleteBuildingEmitsWebhook:
     @pytest.mark.asyncio
     async def test_enqueues_building_deleted_on_soft_delete(self):
         session = MagicMock()
-        building = _FakeBuilding(id=42, address="ул. Старая, 1", yard_id=7)
+        building = _FakeBuilding(
+            id=42, address="ул. Старая, 1", yard_id=7,
+            gps_latitude=41.7, gps_longitude=69.7,
+        )
         yard = _FakeYard(id=7, name="ДворДемо")
 
         mock_get = MagicMock()
@@ -626,6 +639,9 @@ class TestDeleteBuildingEmitsWebhook:
         data = call.args[3]
         assert data["id"] == 42
         assert data["yard_name"] == "ДворДемо"
+        # PR-F: coords still flow on delete (lets InfraSafe clear or mark the marker).
+        assert data["latitude"] == 41.7
+        assert data["longitude"] == 69.7
 
     @pytest.mark.asyncio
     async def test_no_webhook_when_blocked_by_apartments(self):

@@ -122,3 +122,46 @@ def test_queue_webhook_sync_does_not_commit(sync_session, webhook_enabled):
 
     sync_session.rollback()
     assert sync_session.query(WebhookOutbox).count() == 0
+
+
+# ===== PR-F: latitude / longitude pass-through =====
+
+def test_build_building_payload_includes_coordinates():
+    """Latitude and longitude land in payload.building unchanged."""
+    from uk_management_bot.services.webhook_sender import build_building_payload
+
+    result = build_building_payload("building.created", {
+        "id": 42, "address": "ul. Navoi 1", "yard_name": "Y1",
+        "latitude": 41.123456, "longitude": 69.654321,
+    })
+    assert result["building"]["latitude"] == 41.123456
+    assert result["building"]["longitude"] == 69.654321
+
+
+def test_build_building_payload_missing_coords_returns_none():
+    """No coords in data → payload carries null coords (backward-compat)."""
+    from uk_management_bot.services.webhook_sender import build_building_payload
+
+    result = build_building_payload("building.created", {
+        "id": 42, "address": "x", "yard_name": "y",
+    })
+    assert result["building"]["latitude"] is None
+    assert result["building"]["longitude"] is None
+
+
+def test_queue_webhook_sync_propagates_coords_to_outbox(sync_session, webhook_enabled):
+    """End-to-end: coords in data dict survive into the stored outbox payload."""
+    queue_webhook_sync(
+        sync_session,
+        "building.created",
+        "/api/webhooks/uk/building",
+        {
+            "id": 1, "address": "A", "yard_name": "Y",
+            "latitude": 41.111, "longitude": 69.222,
+        },
+    )
+    sync_session.commit()
+
+    row = sync_session.query(WebhookOutbox).first()
+    assert row.payload["building"]["latitude"] == 41.111
+    assert row.payload["building"]["longitude"] == 69.222

@@ -47,12 +47,14 @@ class _FakeSession:
         return result
 
 
-def _building_row(bid: int):
+def _building_row(bid: int, *, gps_latitude=None, gps_longitude=None):
     return SimpleNamespace(
         id=bid,
         address=f"Test St {bid}",
         yard_id=1,
         name="Test Yard",
+        gps_latitude=gps_latitude,
+        gps_longitude=gps_longitude,
     )
 
 
@@ -136,9 +138,13 @@ async def test_skips_when_advisory_lock_held(_wired):
 
 @pytest.mark.asyncio
 async def test_precise_diff_enqueues_exactly_missing(_wired):
-    """UK has ids 1,2,3; InfraSafe knows only 1 and 2 → only id=3 enqueued."""
+    """UK has ids 1,2,3 with coords; InfraSafe knows only 1 and 2 → id=3 enqueued with coords."""
     monkeypatch, mock_fetch, mock_queue = _wired
-    rows = [_building_row(1), _building_row(2), _building_row(3)]
+    rows = [
+        _building_row(1),
+        _building_row(2),
+        _building_row(3, gps_latitude=41.0, gps_longitude=69.0),
+    ]
     mock_fetch.return_value = {_expected_eid(1), _expected_eid(2)}
     monkeypatch.setattr(
         reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
@@ -150,6 +156,9 @@ async def test_precise_diff_enqueues_exactly_missing(_wired):
     payload = mock_queue.call_args.args[3]  # (db, event, endpoint, data)
     assert payload["id"] == 3
     assert payload["address"] == "Test St 3"
+    # PR-F: replay carries the coords stored in UK.
+    assert payload["latitude"] == 41.0
+    assert payload["longitude"] == 69.0
 
     assert result["enqueued"] == 1
     assert result["missing"] == 1

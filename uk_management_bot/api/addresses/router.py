@@ -324,6 +324,7 @@ async def create_building(
     await db.flush()
     await queue_webhook(db, "building.created", "/api/webhooks/uk/building", {
         "id": building.id, "address": building.address, "yard_name": yard.name,
+        "latitude": building.gps_latitude, "longitude": building.gps_longitude,
     })
     await db.commit()
     await db.refresh(building)
@@ -381,6 +382,7 @@ async def update_building(
     yard_name_wh = yard_result_wh.scalar_one_or_none() or ""
     await queue_webhook(db, "building.updated", "/api/webhooks/uk/building", {
         "id": building.id, "address": building.address, "yard_name": yard_name_wh,
+        "latitude": building.gps_latitude, "longitude": building.gps_longitude,
     })
     await db.commit()
     await db.refresh(building)
@@ -425,6 +427,7 @@ async def delete_building(
     yard_name = yard_result.scalar_one_or_none() or ""
     await queue_webhook(db, "building.deleted", "/api/webhooks/uk/building", {
         "id": building.id, "address": building.address, "yard_name": yard_name,
+        "latitude": building.gps_latitude, "longitude": building.gps_longitude,
     })
     await db.commit()
     await publish_building_event("building.deleted", {

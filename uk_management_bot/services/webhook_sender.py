@@ -29,7 +29,14 @@ def sign_payload(body: str, secret: str) -> str:
 
 
 def build_building_payload(event: str, data: dict) -> dict:
-    """Build webhook payload for building.* events with canonical field mapping."""
+    """Build webhook payload for building.* events with canonical field mapping.
+
+    Coordinates use the non-prefixed `latitude`/`longitude` keys (API-level
+    cross-system contract); UK's internal columns are `gps_latitude`/
+    `gps_longitude`, callers translate. `None` when UK building has no GPS.
+    InfraSafe's `trig_buildings_geom` trigger auto-derives the PostGIS geom
+    column from these on insert/update.
+    """
     return {
         "event_id": str(uuid.uuid4()),
         "event": event,
@@ -39,6 +46,8 @@ def build_building_payload(event: str, data: dict) -> dict:
             "name": data["address"],
             "address": data["address"],
             "town": data.get("yard_name", ""),
+            "latitude": data.get("latitude"),
+            "longitude": data.get("longitude"),
         },
     }
 
