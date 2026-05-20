@@ -233,6 +233,25 @@ export function useDeleteBuilding() {
   })
 }
 
+/** Hard-delete a building that has already been soft-deleted. */
+export function usePurgeBuilding() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v2/addresses/buildings/${id}/purge`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.buildingPurged'))
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] })
+    },
+    onError: (error: Error) => {
+      console.error('Purge building failed:', error)
+      toast.error(i18n.t('toast.buildingPurgeFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 // Apartments
 
 export function useCreateApartment() {

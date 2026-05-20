@@ -29,6 +29,8 @@ interface AddressTableProps {
   onToggleApartment?: (id: number, active: boolean) => void
   onDeleteYard?: (id: number) => void
   onDeleteBuilding?: (id: number) => void
+  /** Hard-delete an already-soft-deleted building (is_active=False). */
+  onPurgeBuilding?: (id: number) => void
   onDeleteApartment?: (id: number) => void
 }
 
@@ -163,10 +165,14 @@ function BuildingsTable({
   onEditBuilding,
   onToggleBuilding,
   onDeleteBuilding,
+  onPurgeBuilding,
 }: AddressTableProps) {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  // Purge is a separate, more dangerous confirm — keep state isolated so the
+  // dialog text and the mutation it triggers can't be mixed up.
+  const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; address: string }>({ open: false, id: null, address: '' })
   const items = buildings ?? []
 
   if (items.length === 0) {
@@ -217,12 +223,21 @@ function BuildingsTable({
               <button onClick={() => onToggleBuilding?.(bld.id, !bld.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
                 {bld.is_active ? t('addresses.deactivate') : t('addresses.activate')}
               </button>
-              <button
-                onClick={() => setConfirmDelete({ open: true, id: bld.id })}
-                className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
-              >
-                {t('common.delete')}
-              </button>
+              {bld.is_active ? (
+                <button
+                  onClick={() => setConfirmDelete({ open: true, id: bld.id })}
+                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
+                >
+                  {t('common.delete')}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setConfirmPurge({ open: true, id: bld.id, address: bld.address })}
+                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
+                >
+                  {t('common.deletePermanently')}
+                </button>
+              )}
             </div>
           </div>
         )
@@ -236,6 +251,17 @@ function BuildingsTable({
         confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteBuilding?.(confirmDelete.id)
+        }}
+        variant="danger"
+      />
+      <ConfirmDialog
+        open={confirmPurge.open}
+        onOpenChange={(open) => setConfirmPurge(prev => ({ ...prev, open }))}
+        title={t('common.deletePermanently')}
+        description={t('addressModals.confirmPurgeBuilding', { name: confirmPurge.address })}
+        confirmLabel={t('common.deletePermanently')}
+        onConfirm={() => {
+          if (confirmPurge.id !== null) onPurgeBuilding?.(confirmPurge.id)
         }}
         variant="danger"
       />

@@ -443,6 +443,45 @@ async def delete_building(
     return {"ok": True, "detail": "Building deactivated"}
 
 
+@router.delete("/buildings/{building_id}/purge", status_code=200)
+async def purge_building(
+    building_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    """Hard-delete a building that has already been soft-deleted.
+
+    Two-stage delete:
+      1. DELETE /buildings/{id}        → soft-delete (is_active=False),
+         emits building.deleted webhook to InfraSafe.
+      2. DELETE /buildings/{id}/purge  → hard-delete from DB.
+
+    Pre-conditions:
+      - Building must exist.
+      - Building must already be soft-deleted (is_active=False). This is the
+        guardrail — purging an active building would skip the webhook and
+        leave InfraSafe with an orphan row.
+
+    Cascades to apartments via SQLAlchemy `cascade="all, delete-orphan"` on
+    Building.apartments. InfraSafe was already notified by the prior soft-
+    delete, so no webhook fires here.
+    """
+    result = await db.execute(select(Building).where(Building.id == building_id))
+    building = result.scalar_one_or_none()
+    if not building:
+        raise HTTPException(status_code=404, detail="Building not found")
+
+    if building.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot purge an active building. Soft-delete it first via DELETE /buildings/{id}.",
+        )
+
+    await db.delete(building)
+    await db.commit()
+    return {"ok": True, "detail": "Building purged"}
+
+
 # ─────────────────────── Apartments ───────────────────────
 
 @router.get("/buildings/{building_id}/apartments", response_model=list[ApartmentOut])

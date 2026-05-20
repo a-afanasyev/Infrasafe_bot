@@ -241,6 +241,45 @@ class TestBuildings:
         r = await client.patch(f"{BASE}/buildings/{bld['id']}", json={"is_active": False})
         assert r.status_code == 409
 
+    async def test_purge_inactive_building_succeeds(self, client: AsyncClient):
+        """Two-stage delete: soft-delete first, then purge removes the row."""
+        yard = await _create_yard(client, "Purge Yard")
+        bld = await _create_building(client, yard["id"], "Purge me")
+        # Soft-delete makes it eligible for purge.
+        soft = await client.delete(f"{BASE}/buildings/{bld['id']}")
+        assert soft.status_code == 200
+        # Purge removes the row entirely.
+        purged = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert purged.status_code == 200
+        # Re-purge → 404 (gone).
+        gone = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert gone.status_code == 404
+
+    async def test_purge_active_building_rejected(self, client: AsyncClient):
+        """Purging an active building is refused — must soft-delete first."""
+        yard = await _create_yard(client, "Purge Guard Yard")
+        bld = await _create_building(client, yard["id"], "Still active")
+        r = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert r.status_code == 409
+        assert "Soft-delete it first" in r.json()["detail"]
+
+    async def test_purge_cascades_to_apartments(self, client: AsyncClient):
+        """Inactive apartments are removed alongside their building."""
+        yard = await _create_yard(client, "Cascade Yard")
+        bld = await _create_building(client, yard["id"], "With apt")
+        apt = await _create_apartment(client, bld["id"], "10")
+        # Deactivate apartment, then the building.
+        await client.patch(f"{BASE}/apartments/{apt['id']}", json={"is_active": False})
+        await client.delete(f"{BASE}/buildings/{bld['id']}")
+        # Purge cascades.
+        r = await client.delete(f"{BASE}/buildings/{bld['id']}/purge")
+        assert r.status_code == 200
+        # Apartment is gone too (any list with include_inactive doesn't surface it).
+        r2 = await client.get(f"{BASE}/buildings/{bld['id']}/apartments?include_inactive=true")
+        assert r2.status_code in (200, 404)
+        if r2.status_code == 200:
+            assert all(a["id"] != apt["id"] for a in r2.json())
+
 
 # ═══════════════════════ Apartments CRUD ═══════════════════════
 

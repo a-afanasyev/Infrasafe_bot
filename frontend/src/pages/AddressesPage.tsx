@@ -11,6 +11,7 @@ import {
   usePendingModeration,
   useDeleteYard,
   useDeleteBuilding,
+  usePurgeBuilding,
   useDeleteApartment,
   useUpdateYard,
   useUpdateBuilding,
@@ -165,6 +166,7 @@ export default function AddressesPage() {
   // Mutations
   const deleteYard = useDeleteYard()
   const deleteBuilding = useDeleteBuilding()
+  const purgeBuilding = usePurgeBuilding()
   const deleteApartment = useDeleteApartment()
   const updateYard = useUpdateYard()
   const updateBuilding = useUpdateBuilding()
@@ -457,6 +459,7 @@ export default function AddressesPage() {
               onEditBuilding={(building) => setEditingBuilding(building)}
               onToggleBuilding={(id, active) => updateBuilding.mutate({ id, is_active: active })}
               onDeleteBuilding={(id) => deleteBuilding.mutate(id)}
+              onPurgeBuilding={(id) => purgeBuilding.mutate(id)}
             />
           ) : level === 'all-apartments' ? (
             <AddressTable
@@ -575,19 +578,35 @@ export default function AddressesPage() {
                                       }}
                                     />
                                     <div className="h-px bg-border-default mx-2" />
-                                    <MenuItem
-                                      label={t('common.delete')}
-                                      danger
-                                      onClick={() => {
-                                        close()
-                                        setConfirmState({
-                                          open: true,
-                                          title: t('addressModals.confirmDeleteBuilding', { name: building.address }),
-                                          description: t('addressModals.confirmDeleteBuilding', { name: building.address }),
-                                          onConfirm: () => deleteBuilding.mutate(building.id),
-                                        })
-                                      }}
-                                    />
+                                    {building.is_active ? (
+                                      <MenuItem
+                                        label={t('common.delete')}
+                                        danger
+                                        onClick={() => {
+                                          close()
+                                          setConfirmState({
+                                            open: true,
+                                            title: t('addressModals.confirmDeleteBuilding', { name: building.address }),
+                                            description: t('addressModals.confirmDeleteBuilding', { name: building.address }),
+                                            onConfirm: () => deleteBuilding.mutate(building.id),
+                                          })
+                                        }}
+                                      />
+                                    ) : (
+                                      <MenuItem
+                                        label={t('common.deletePermanently')}
+                                        danger
+                                        onClick={() => {
+                                          close()
+                                          setConfirmState({
+                                            open: true,
+                                            title: t('common.deletePermanently'),
+                                            description: t('addressModals.confirmPurgeBuilding', { name: building.address }),
+                                            onConfirm: () => purgeBuilding.mutate(building.id),
+                                          })
+                                        }}
+                                      />
+                                    )}
                                   </>
                                 )}
                               </ActionMenu>
@@ -725,6 +744,7 @@ export default function AddressesPage() {
                   onToggleApartment={(id, active) => updateApartment.mutate({ id, is_active: active })}
                   onDeleteYard={(id) => deleteYard.mutate(id)}
                   onDeleteBuilding={(id) => deleteBuilding.mutate(id)}
+                  onPurgeBuilding={(id) => purgeBuilding.mutate(id)}
                   onDeleteApartment={(id) => deleteApartment.mutate(id)}
                 />
                 </>
