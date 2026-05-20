@@ -119,8 +119,8 @@ async def register_via_invite(request: Request, data: RegistrationData, db: Sess
         result = invite_service.join_via_invite(
             token=data.token,
             telegram_id=data.telegram_id,
-            first_name=user_data["first_name"],
-            last_name=user_data["last_name"],
+            first_name=data.full_name.split()[0] if data.full_name else "",
+            last_name=" ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else "",
             specialization=data.specialization
         )
         
