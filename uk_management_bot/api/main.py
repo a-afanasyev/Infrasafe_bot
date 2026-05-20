@@ -50,18 +50,34 @@ async def lifespan(app: FastAPI):
                 _logger.exception("Outbox processor error")
             await asyncio.sleep(10)
 
+    async def _reconciliation_loop():
+        # Run reconciliation hourly. Sleep first so we don't slam startup.
+        await asyncio.sleep(300)  # 5 min warmup
+        while True:
+            try:
+                from uk_management_bot.services.reconciliation import reconcile_buildings
+                result = await reconcile_buildings()
+                _logger.info("reconcile_buildings cycle: %s", result)
+            except Exception:
+                _logger.exception("Reconciliation error")
+            await asyncio.sleep(3600)  # 1 hour
+
     task = None
+    reconcile_task = None
     if settings.INFRASAFE_WEBHOOK_ENABLED:
         task = asyncio.create_task(_outbox_loop())
         _logger.info("Webhook outbox processor started (10s interval)")
+        reconcile_task = asyncio.create_task(_reconciliation_loop())
+        _logger.info("Reconciliation loop started (1h interval, advisory-lock guarded)")
     yield
     # shutdown
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    for bg_task in (task, reconcile_task):
+        if bg_task:
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
     # Dispose DB connection pools
     try:
         from uk_management_bot.database.session import async_engine
@@ -138,6 +154,57 @@ async def api_health():
     # Public health, exposed via nginx as /uk/api/health (plan §4.6).
     # Intentionally minimal: no service-name, no version — reduces fingerprinting.
     return {"ok": True}
+
+
+@app.get("/health/outbox")
+async def outbox_health():
+    """Outbox lag metrics for monitoring / alerting.
+
+    Returns 200 always (so HTTP probes don't flap); the consumer (Prometheus
+    scrape, alert rule) decides thresholds.
+    """
+    from sqlalchemy import select, func
+    from datetime import datetime, timedelta, timezone
+    from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
+
+    if not settings.INFRASAFE_WEBHOOK_ENABLED:
+        return {"enabled": False, "pending": 0, "oldest_pending_age_sec": 0, "failed_last_24h": 0}
+
+    from uk_management_bot.database.session import AsyncSessionLocal
+    if AsyncSessionLocal is None:
+        return {"enabled": True, "error": "db_unavailable"}
+
+    now = datetime.now(timezone.utc)
+    try:
+        async with AsyncSessionLocal() as db:
+            pending = await db.scalar(
+                select(func.count(WebhookOutbox.id))
+                .where(WebhookOutbox.status == "pending")
+            ) or 0
+            oldest = await db.scalar(
+                select(func.min(WebhookOutbox.created_at))
+                .where(WebhookOutbox.status == "pending")
+            )
+            failed_24h = await db.scalar(
+                select(func.count(WebhookOutbox.id))
+                .where(
+                    WebhookOutbox.status == "failed",
+                    WebhookOutbox.created_at > now - timedelta(hours=24),
+                )
+            ) or 0
+        # SQLite returns naive datetimes; Postgres returns tz-aware. Normalise
+        # so the subtraction below never raises on a naive/aware mismatch.
+        if oldest is not None and oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        return {
+            "enabled": True,
+            "pending": pending,
+            "oldest_pending_age_sec": (now - oldest).total_seconds() if oldest else 0,
+            "failed_last_24h": failed_24h,
+        }
+    except Exception as e:
+        _logger.exception("outbox_health failed")
+        return {"enabled": True, "error": str(e)}
 
 
 # ── Stub: Announcements (TWA A1) ─────────────────────────

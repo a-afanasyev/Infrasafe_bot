@@ -10,3 +10,4 @@ pre-commit==3.6.0
 coverage==7.3.2
 pytest-html==4.1.1
 pytest-xdist==3.5.0
+aiosqlite==0.20.0
