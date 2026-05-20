@@ -216,6 +216,18 @@ class AddressService:
             )
 
             session.add(building)
+            # Flush populates building.id so the webhook payload can reference it
+            # before the transaction commits. Outbox row and building land atomically.
+            session.flush()
+
+            from uk_management_bot.services.webhook_sender import queue_webhook_sync
+            queue_webhook_sync(
+                session,
+                "building.created",
+                "/api/webhooks/uk/building",
+                {"id": building.id, "address": building.address, "yard_name": yard.name},
+            )
+
             session.commit()
             session.refresh(building)
 
@@ -300,6 +312,23 @@ class AddressService:
             if is_active is not None:
                 building.is_active = is_active
 
+            session.flush()
+
+            # Re-fetch yard via current yard_id (may have just changed in this update).
+            # session.get hits the identity map first, so no extra query when unchanged.
+            from uk_management_bot.services.webhook_sender import queue_webhook_sync
+            current_yard = session.get(Yard, building.yard_id)
+            queue_webhook_sync(
+                session,
+                "building.updated",
+                "/api/webhooks/uk/building",
+                {
+                    "id": building.id,
+                    "address": building.address,
+                    "yard_name": current_yard.name if current_yard else "",
+                },
+            )
+
             session.commit()
             session.refresh(building)
 
@@ -329,6 +358,21 @@ class AddressService:
                 return False, f"Невозможно удалить здание: есть {active_apartments_count} активных квартир"
 
             building.is_active = False
+            session.flush()
+
+            from uk_management_bot.services.webhook_sender import queue_webhook_sync
+            current_yard = session.get(Yard, building.yard_id)
+            queue_webhook_sync(
+                session,
+                "building.deleted",
+                "/api/webhooks/uk/building",
+                {
+                    "id": building.id,
+                    "address": building.address,
+                    "yard_name": current_yard.name if current_yard else "",
+                },
+            )
+
             session.commit()
 
             logger.info(f"Деактивировано здание: {building.address} (ID: {building.id})")

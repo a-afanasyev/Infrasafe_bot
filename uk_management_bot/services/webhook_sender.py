@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
@@ -101,6 +102,47 @@ async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict)
         status="pending",
     )
     db.add(record)
+
+
+def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) -> None:
+    """Sync variant of queue_webhook for code paths using legacy sync Session.
+
+    Same semantics: writes to webhook_outbox in the caller's transaction
+    (no commit). Used by bot handlers via services/address_service.py which
+    operate on the sync SessionLocal.
+
+    Keep this in sync with `queue_webhook` — if the async version changes
+    payload shape, validation, or skip behaviour, mirror it here.
+    """
+    if not settings.INFRASAFE_WEBHOOK_ENABLED:
+        logger.warning(
+            "queue_webhook_sync SKIPPED: INFRASAFE_WEBHOOK_ENABLED=False "
+            "(event=%s endpoint=%s) — event will be LOST. "
+            "Reconciliation will replay it within 1h if it's a building/request.",
+            event, endpoint,
+        )
+        return
+
+    if event.startswith("building."):
+        payload = build_building_payload(event, data)
+    elif event.startswith("request."):
+        payload = build_request_payload(event, data)
+    else:
+        payload = {
+            "event_id": str(uuid.uuid4()),
+            "event": event,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "data": data,
+        }
+
+    record = WebhookOutbox(
+        event_id=payload["event_id"],
+        event=event,
+        endpoint=endpoint,
+        payload=payload,
+        status="pending",
+    )
+    session.add(record)
 
 
 async def send_webhook(
