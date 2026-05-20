@@ -69,33 +69,35 @@ templates = Jinja2Templates(directory="uk_management_bot/web/templates")
 # Подключаем API роутеры
 app.include_router(invite_router, prefix="/api")
 
+# Starlette 1.0 reordered TemplateResponse signature: first positional arg is
+# `request`, then `name`, then `context`. The old form
+# `TemplateResponse("name.html", {"request": request, ...})` is parsed as
+# `TemplateResponse(name=<dict>, request="name.html")` and crashes deep inside
+# Jinja2's LRUCache (`TypeError: unhashable type: 'dict'`).
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Главная страница"""
-    return templates.TemplateResponse("home.html", {"request": request})
+    return templates.TemplateResponse(request, "home.html")
 
 @app.get("/register/{token}", response_class=HTMLResponse)
 async def register_page(request: Request, token: str):
     """Страница регистрации по приглашению"""
-    return templates.TemplateResponse("register.html", {
-        "request": request,
-        "token": token
-    })
+    return templates.TemplateResponse(request, "register.html", {"token": token})
 
 @app.get("/test", response_class=HTMLResponse)
 async def test_page(request: Request):
     """Тестовая страница для проверки Telegram Web App"""
-    return templates.TemplateResponse("test.html", {"request": request})
+    return templates.TemplateResponse(request, "test.html")
 
 @app.get("/simple", response_class=HTMLResponse)
 async def simple_test_page(request: Request):
     """Простая тестовая страница для проверки Telegram Web App"""
-    return templates.TemplateResponse("simple_test.html", {"request": request})
+    return templates.TemplateResponse(request, "simple_test.html")
 
 @app.get("/minimal", response_class=HTMLResponse)
 async def minimal_test_page(request: Request):
     """Минимальная тестовая страница без внешних зависимостей"""
-    return templates.TemplateResponse("minimal_test.html", {"request": request})
+    return templates.TemplateResponse(request, "minimal_test.html")
 
 if __name__ == "__main__":
     import uvicorn
