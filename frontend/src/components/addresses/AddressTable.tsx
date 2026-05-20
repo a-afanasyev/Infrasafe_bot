@@ -84,7 +84,9 @@ function YardsTable({
 }: AddressTableProps) {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  // Carry the display name into the dialog state — otherwise the confirm
+  // template renders `…""?` because the i18n placeholder gets an empty string.
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const items = yards ?? []
 
@@ -139,7 +141,7 @@ function YardsTable({
               </button>
               {yard.is_active ? (
                 <button
-                  onClick={() => setConfirmDelete({ open: true, id: yard.id })}
+                  onClick={() => setConfirmDelete({ open: true, id: yard.id, name: yard.name })}
                   className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
                 >
                   {t('common.delete')}
@@ -160,8 +162,8 @@ function YardsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title={t('addressModals.confirmDeleteYard', { name: '' })}
-        description={t('addressModals.confirmDeleteYard', { name: '' })}
+        title={t('addressModals.confirmDeleteYard', { name: confirmDelete.name })}
+        description={t('addressModals.confirmDeleteYard', { name: confirmDelete.name })}
         confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteYard?.(confirmDelete.id)
@@ -195,7 +197,7 @@ function BuildingsTable({
 }: AddressTableProps) {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; address: string }>({ open: false, id: null, address: '' })
   // Purge is a separate, more dangerous confirm — keep state isolated so the
   // dialog text and the mutation it triggers can't be mixed up.
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; address: string }>({ open: false, id: null, address: '' })
@@ -251,7 +253,7 @@ function BuildingsTable({
               </button>
               {bld.is_active ? (
                 <button
-                  onClick={() => setConfirmDelete({ open: true, id: bld.id })}
+                  onClick={() => setConfirmDelete({ open: true, id: bld.id, address: bld.address })}
                   className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
                 >
                   {t('common.delete')}
@@ -272,8 +274,8 @@ function BuildingsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title={t('addressModals.confirmDeleteBuilding', { name: '' })}
-        description={t('addressModals.confirmDeleteBuilding', { name: '' })}
+        title={t('addressModals.confirmDeleteBuilding', { name: confirmDelete.address })}
+        description={t('addressModals.confirmDeleteBuilding', { name: confirmDelete.address })}
         confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteBuilding?.(confirmDelete.id)
@@ -307,7 +309,7 @@ function ApartmentsTable({
 }: AddressTableProps) {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
   const items = apartments ?? []
 
@@ -363,7 +365,7 @@ function ApartmentsTable({
               </button>
               {apt.is_active ? (
                 <button
-                  onClick={() => setConfirmDelete({ open: true, id: apt.id })}
+                  onClick={() => setConfirmDelete({ open: true, id: apt.id, number: apt.apartment_number })}
                   className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
                 >
                   {t('common.delete')}
@@ -384,8 +386,8 @@ function ApartmentsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title={t('addressModals.confirmDeleteApartment', { name: '' })}
-        description={t('addressModals.confirmDeleteApartment', { name: '' })}
+        title={t('addressModals.confirmDeleteApartment', { name: confirmDelete.number })}
+        description={t('addressModals.confirmDeleteApartment', { name: confirmDelete.number })}
         confirmLabel={t('common.delete')}
         onConfirm={() => {
           if (confirmDelete.id !== null) onDeleteApartment?.(confirmDelete.id)
