@@ -187,7 +187,7 @@ async def send_webhook(
         if response.status_code in (400, 401, 403):
             return (False, f"HTTP {response.status_code}: permanent error", False, 0)
         if response.status_code == 503:
-            return (False, f"HTTP 503: service unavailable", False, 0)
+            return (False, "HTTP 503: service unavailable", True, 0)
         if response.status_code >= 500:
             return (False, f"HTTP {response.status_code}: server error", True, 0)
         return (False, f"HTTP {response.status_code}: unexpected status", True, 0)
