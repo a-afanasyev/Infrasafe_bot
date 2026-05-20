@@ -183,7 +183,7 @@ export default function TemplatesPage() {
       <div className="bg-bg-card border border-border-default rounded-[12px] overflow-hidden">
         {templates.length === 0 ? (
           <EmptyState
-            icon="\u{1F4CB}"
+            icon={'\u{1F4CB}'}
             title={t('templates.noTemplates')}
             subtitle={t('templates.noTemplatesDesc')}
           />
