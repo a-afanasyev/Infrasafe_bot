@@ -45,6 +45,10 @@ export const MODULE_IDS: ModuleId[] = ['stats', 'requests', 'announcements', 'ra
 export interface LayoutItem {
   id: ModuleId
   visible: boolean
+  // Если true — модуль рендерится рядом со следующим видимым модулем
+  // (grid 1fr 1fr) вместо самостоятельной горизонтальной строки.
+  // Опционально для backward-compat со старыми ответами API без этого поля.
+  pair_with_next?: boolean
 }
 
 export interface BoardConfigData {

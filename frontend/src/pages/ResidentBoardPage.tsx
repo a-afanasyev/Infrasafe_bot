@@ -253,6 +253,23 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     hours: hoursModule,
   }
 
+  // Сборка видимых модулей в строки. Если у элемента pair_with_next=true и
+  // следующий видимый модуль существует — они становятся одной строкой
+  // (grid 1fr 1fr). Иначе модуль идёт в строку самостоятельно.
+  const visibleLayout = config.layout.filter(item => item.visible && MODULES[item.id])
+  const rows: typeof visibleLayout[] = []
+  for (let i = 0; i < visibleLayout.length;) {
+    const cur = visibleLayout[i]
+    const next = visibleLayout[i + 1]
+    if (cur.pair_with_next && next) {
+      rows.push([cur, next])
+      i += 2
+    } else {
+      rows.push([cur])
+      i += 1
+    }
+  }
+
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", background: '#f7f5f0', color: '#1a1a1a', minHeight: '100vh', overflowX: 'hidden' }}>
 
@@ -294,11 +311,21 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
         </div>
       </header>
 
-      {/* Modules — rendered in the order defined by board config layout */}
+      {/* Modules — rendered in the order defined by board config layout.
+          Pair_with_next packs two modules into one horizontal row. */}
       <div style={{ padding: '32px 48px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1600, margin: '0 auto' }}>
-        {config.layout
-          .filter(item => item.visible && MODULES[item.id])
-          .map(item => MODULES[item.id])}
+        {rows.map((row, rowIdx) => row.length === 1 ? (
+          <div key={`row-${rowIdx}-${row[0].id}`}>{MODULES[row[0].id]}</div>
+        ) : (
+          <div
+            key={`row-${rowIdx}-${row[0].id}-${row[1].id}`}
+            style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 24, alignItems: 'stretch' }}
+          >
+            {row.map(item => (
+              <div key={item.id} style={{ minWidth: 0 }}>{MODULES[item.id]}</div>
+            ))}
+          </div>
+        ))}
       </div>
 
       {/* Footer */}

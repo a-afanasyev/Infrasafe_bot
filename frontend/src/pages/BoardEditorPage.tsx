@@ -17,7 +17,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import { Columns2, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -89,11 +89,17 @@ function LocalizedField({
 function SortableModuleRow({
   item,
   label,
-  onToggle,
+  pairLabel,
+  pairDisabled,
+  onToggleVisible,
+  onTogglePair,
 }: {
   item: LayoutItem
   label: string
-  onToggle: () => void
+  pairLabel: string
+  pairDisabled: boolean
+  onToggleVisible: () => void
+  onTogglePair: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id })
@@ -113,8 +119,26 @@ function SortableModuleRow({
         <GripVertical size={16} />
       </button>
       <span className="flex-1 text-sm font-medium text-text-primary">{label}</span>
+      <label
+        className={`flex items-center gap-1 text-xs ${pairDisabled ? 'text-text-muted/40' : 'text-text-muted'} ${pairDisabled ? '' : 'cursor-pointer'}`}
+        title={pairLabel}
+      >
+        <Columns2 size={14} />
+        <input
+          type="checkbox"
+          checked={!!item.pair_with_next && !pairDisabled}
+          disabled={pairDisabled}
+          onChange={onTogglePair}
+          aria-label={pairLabel}
+        />
+      </label>
       <label className="flex items-center gap-1.5 text-xs text-text-muted">
-        <input type="checkbox" checked={item.visible} onChange={onToggle} />
+        <input
+          type="checkbox"
+          checked={item.visible}
+          onChange={onToggleVisible}
+          aria-label={item.id}
+        />
       </label>
     </div>
   )
@@ -159,6 +183,12 @@ export default function BoardEditorPage() {
       const from = d.layout.findIndex((l) => l.id === active.id)
       const to = d.layout.findIndex((l) => l.id === over.id)
       if (from >= 0 && to >= 0) d.layout = arrayMove(d.layout, from, to)
+      // Сброс pair-флага у тех, после которых не осталось видимых соседей —
+      // иначе флаг превращается в no-op, но запутывает UI.
+      for (let i = 0; i < d.layout.length; i++) {
+        const tail = d.layout.slice(i + 1).some((x) => x.visible)
+        if (!tail) d.layout[i].pair_with_next = false
+      }
     })
   }
 
@@ -202,19 +232,39 @@ export default function BoardEditorPage() {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
               <SortableContext items={draft.layout.map((l) => l.id)} strategy={verticalListSortingStrategy}>
                 <div className="flex flex-col gap-2">
-                  {draft.layout.map((item) => (
-                    <SortableModuleRow
-                      key={item.id}
-                      item={item}
-                      label={t(`boardEditor.modules.${item.id}`)}
-                      onToggle={() =>
-                        patch((d) => {
-                          const l = d.layout.find((x) => x.id === item.id)
-                          if (l) l.visible = !l.visible
-                        })
-                      }
-                    />
-                  ))}
+                  {draft.layout.map((item, idx) => {
+                    // Pair-флаг имеет смысл только когда после текущего элемента
+                    // в раскладке есть ещё хотя бы один видимый модуль и сам
+                    // модуль виден.
+                    const hasFollowingVisible = draft.layout.slice(idx + 1).some((x) => x.visible)
+                    const pairDisabled = !item.visible || !hasFollowingVisible
+                    return (
+                      <SortableModuleRow
+                        key={item.id}
+                        item={item}
+                        label={t(`boardEditor.modules.${item.id}`)}
+                        pairLabel={t('boardEditor.pairWithNext')}
+                        pairDisabled={pairDisabled}
+                        onToggleVisible={() =>
+                          patch((d) => {
+                            const l = d.layout.find((x) => x.id === item.id)
+                            if (!l) return
+                            l.visible = !l.visible
+                            // При скрытии модуля парирование теряет смысл —
+                            // сбрасываем флаг, чтобы он не «прыгал» на
+                            // следующего соседа после повторного включения.
+                            if (!l.visible) l.pair_with_next = false
+                          })
+                        }
+                        onTogglePair={() =>
+                          patch((d) => {
+                            const l = d.layout.find((x) => x.id === item.id)
+                            if (l) l.pair_with_next = !l.pair_with_next
+                          })
+                        }
+                      />
+                    )
+                  })}
                 </div>
               </SortableContext>
             </DndContext>

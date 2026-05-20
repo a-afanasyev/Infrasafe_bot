@@ -56,6 +56,10 @@ class WorkingHourCfg(BaseModel):
 class LayoutItem(BaseModel):
     id: str
     visible: bool = True
+    # Если True — модуль и следующий видимый модуль рендерятся бок-о-бок
+    # в одной горизонтальной строке (grid 1fr 1fr). Отсутствие флага в старых
+    # записях БД даёт False — backward-compatible.
+    pair_with_next: bool = False
 
     @field_validator("id")
     @classmethod

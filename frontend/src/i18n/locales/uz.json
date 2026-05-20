@@ -48,7 +48,8 @@
     "saved": "Tablo saqlandi",
     "saveFailed": "Tabloni saqlab bo'lmadi",
     "modulesOrder": "Sahifa bloklari",
-    "modulesHint": "Tartibni o'zgartirish uchun bloklarni torting. Yashirish uchun belgini olib tashlang.",
+    "modulesHint": "Tartibni o'zgartirish uchun bloklarni torting. Yashirish uchun belgini olib tashlang. ⛶ belgisi — blokni keyingisi bilan bir qatorda joylashtirish.",
+    "pairWithNext": "Keyingi blok bilan bir qatorda joylashtirish",
     "modules": {
       "stats": "Umumiy ma'lumot",
       "requests": "Joriy arizalar",
