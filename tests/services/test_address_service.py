@@ -254,7 +254,12 @@ class TestDeleteYard:
 
 class TestCreateBuilding:
     @pytest.mark.asyncio
-    async def test_creates_building(self):
+    async def test_creates_building(self, monkeypatch):
+        # Isolate this test from webhook emission (covered separately below).
+        monkeypatch.setattr(
+            "uk_management_bot.config.settings.settings.INFRASAFE_WEBHOOK_ENABLED",
+            False,
+        )
         session = MagicMock()
         yard = _FakeYard()
         mock_result = MagicMock()
@@ -522,3 +527,123 @@ class TestGetApartmentById:
 
         result = await AddressService.get_apartment_by_id(session, 999)
         assert result is None
+
+
+# ===== PR-E: bot-side webhook emission from AddressService =====
+#
+# AddressService is invoked both from the API router and the Telegram bot
+# handlers. queue_webhook_sync must fire on create/update/delete so bot-driven
+# changes reach InfraSafe inside the same transaction (≤15s via PR-A outbox
+# loop) instead of waiting for the hourly reconciliation cycle.
+
+class TestCreateBuildingEmitsWebhook:
+    @pytest.mark.asyncio
+    async def test_enqueues_building_created(self):
+        session = MagicMock()
+        yard = _FakeYard(id=7, name="ДворДемо")
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = yard
+        session.execute.return_value = mock_result
+
+        from uk_management_bot.services.address_service import AddressService
+
+        with patch(
+            "uk_management_bot.services.webhook_sender.queue_webhook_sync"
+        ) as mock_qws:
+            building, error = await AddressService.create_building(
+                session, "ул. Новая, 1", yard_id=7, created_by=1
+            )
+
+        assert error is None
+        assert mock_qws.call_count == 1
+        call = mock_qws.call_args
+        # positional args: (session, event, endpoint, data)
+        assert call.args[1] == "building.created"
+        assert call.args[2] == "/api/webhooks/uk/building"
+        data = call.args[3]
+        assert data["address"] == "ул. Новая, 1"
+        assert data["yard_name"] == "ДворДемо"
+
+
+class TestUpdateBuildingEmitsWebhook:
+    @pytest.mark.asyncio
+    async def test_enqueues_building_updated(self):
+        session = MagicMock()
+        building = _FakeBuilding(id=42, address="ул. Старая, 1", yard_id=7)
+        yard = _FakeYard(id=7, name="ДворДемо")
+
+        mock_get_building = MagicMock()
+        mock_get_building.scalar_one_or_none.return_value = building
+        session.execute.return_value = mock_get_building
+        session.get.return_value = yard  # session.get(Yard, building.yard_id)
+
+        from uk_management_bot.services.address_service import AddressService
+
+        with patch(
+            "uk_management_bot.services.webhook_sender.queue_webhook_sync"
+        ) as mock_qws:
+            result, error = await AddressService.update_building(
+                session, 42, address="ул. Новая, 1"
+            )
+
+        assert error is None
+        assert mock_qws.call_count == 1
+        call = mock_qws.call_args
+        assert call.args[1] == "building.updated"
+        data = call.args[3]
+        assert data["id"] == 42
+        assert data["address"] == "ул. Новая, 1"
+        assert data["yard_name"] == "ДворДемо"
+
+
+class TestDeleteBuildingEmitsWebhook:
+    @pytest.mark.asyncio
+    async def test_enqueues_building_deleted_on_soft_delete(self):
+        session = MagicMock()
+        building = _FakeBuilding(id=42, address="ул. Старая, 1", yard_id=7)
+        yard = _FakeYard(id=7, name="ДворДемо")
+
+        mock_get = MagicMock()
+        mock_get.scalar_one_or_none.return_value = building
+        mock_count = MagicMock()
+        mock_count.scalar.return_value = 0  # no active apartments
+        session.execute.side_effect = [mock_get, mock_count]
+        session.get.return_value = yard
+
+        from uk_management_bot.services.address_service import AddressService
+
+        with patch(
+            "uk_management_bot.services.webhook_sender.queue_webhook_sync"
+        ) as mock_qws:
+            success, error = await AddressService.delete_building(session, 42)
+
+        assert success is True
+        assert error is None
+        assert building.is_active is False  # soft-delete applied
+        assert mock_qws.call_count == 1
+        call = mock_qws.call_args
+        assert call.args[1] == "building.deleted"
+        data = call.args[3]
+        assert data["id"] == 42
+        assert data["yard_name"] == "ДворДемо"
+
+    @pytest.mark.asyncio
+    async def test_no_webhook_when_blocked_by_apartments(self):
+        """Delete refused → no outbox row (transaction never reached commit)."""
+        session = MagicMock()
+        building = _FakeBuilding(id=42)
+        mock_get = MagicMock()
+        mock_get.scalar_one_or_none.return_value = building
+        mock_count = MagicMock()
+        mock_count.scalar.return_value = 3  # has active apartments
+        session.execute.side_effect = [mock_get, mock_count]
+
+        from uk_management_bot.services.address_service import AddressService
+
+        with patch(
+            "uk_management_bot.services.webhook_sender.queue_webhook_sync"
+        ) as mock_qws:
+            success, error = await AddressService.delete_building(session, 42)
+
+        assert success is False
+        assert mock_qws.call_count == 0
