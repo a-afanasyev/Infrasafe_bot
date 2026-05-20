@@ -156,7 +156,7 @@ async def api_health():
     return {"ok": True}
 
 
-@app.get("/health/outbox")
+@app.get("/api/health/outbox")
 async def outbox_health():
     """Outbox lag metrics for monitoring / alerting.
 

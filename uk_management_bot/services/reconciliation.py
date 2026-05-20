@@ -4,8 +4,8 @@ Safety-net for silent webhook losses (e.g. queue_webhook skipped while
 INFRASAFE_WEBHOOK_ENABLED was False). Once an hour we compare building
 inventory and re-enqueue anything that appears to be missing in InfraSafe.
 """
+import hashlib
 import logging
-from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, text
 
@@ -22,11 +22,24 @@ logger = logging.getLogger(__name__)
 # one worker reconciles at a time even under --workers 2.
 RECONCILE_LOCK_KEY = 0x756B7265636F6E
 
-# Only replay buildings created within this window — avoids bulk-replaying
-# the full history on the first reconcile run.
-REPLAY_WINDOW_DAYS = 7
-# Cap how many replay events a single cycle enqueues.
+# Cap how many replay events a single cycle enqueues — safety bound against
+# accidentally flooding the outbox if InfraSafe state vanishes entirely.
 REPLAY_CAP = 50
+
+
+def _expected_external_id(uk_building_id: int) -> str:
+    """Predict the external_id InfraSafe will assign to a given UK building.
+
+    InfraSafe computes external_id as SHA-256 hash of "uk-building-{id}",
+    first 32 hex chars formatted as UUID. See
+    src/services/ukIntegrationService.js:158-167 in the InfraSafe repo.
+
+    This MUST stay in sync with that implementation — if InfraSafe ever
+    changes its hash algorithm, this function and the corresponding test
+    must change atomically across both repos.
+    """
+    h = hashlib.sha256(f"uk-building-{uk_building_id}".encode()).hexdigest()
+    return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
 
 
 async def reconcile_buildings() -> dict:
@@ -51,7 +64,6 @@ async def reconcile_buildings() -> dict:
                     Building.address,
                     Building.yard_id,
                     Yard.name,
-                    Building.created_at,
                 )
                 .join(Yard, Yard.id == Building.yard_id)
                 .where(Building.is_active == True)  # noqa: E712 — SQLAlchemy needs ==
@@ -65,38 +77,46 @@ async def reconcile_buildings() -> dict:
                 logger.exception("reconcile_buildings: failed to fetch InfraSafe state")
                 return {"error": "infrasafe_fetch_failed"}
 
-            # 3. Compute drift.
-            #    Until UK passes a deterministic external_id in the webhook payload
-            #    (InfraSafe ChangeRequest CR-2), we cannot do an exact set diff —
-            #    InfraSafe assigns its own UUID. So this is a coarse count-based
-            #    check: if UK has more active buildings than InfraSafe has
-            #    external_ids, the surplus is treated as "missing".
-            uk_count = len(uk_rows)
-            is_count = len(is_externals)
-            missing_est = max(0, uk_count - is_count)
-            extra_est = max(0, is_count - uk_count)
+            # 3. Compute drift — precise set diff via deterministic external_id.
+            #    InfraSafe derives external_id deterministically from UK id
+            #    (see _expected_external_id). We predict the set InfraSafe SHOULD
+            #    have for every active UK building, diff against what it actually
+            #    reports, and replay exactly the missing ones.
+            expected_by_uk = {_expected_external_id(r.id): r for r in uk_rows}
+            expected_set = set(expected_by_uk.keys())
 
-            if missing_est == 0 and extra_est == 0:
-                logger.info("reconcile_buildings: in sync (uk=%d is=%d)", uk_count, is_count)
-                return {"in_sync": True, "uk": uk_count, "infrasafe": is_count}
+            missing_in_is = expected_set - is_externals
+            extra_in_is = is_externals - expected_set
 
-            logger.warning(
-                "reconcile_buildings: drift detected — uk=%d infrasafe=%d "
-                "(estimated missing=%d extra=%d)",
-                uk_count, is_count, missing_est, extra_est,
-            )
+            if not missing_in_is and not extra_in_is:
+                logger.info(
+                    "reconcile_buildings: in sync (uk=%d is=%d)",
+                    len(uk_rows), len(is_externals),
+                )
+                return {
+                    "in_sync": True,
+                    "uk": len(uk_rows),
+                    "infrasafe": len(is_externals),
+                }
 
-            # 4. Re-enqueue recent UK buildings so the outbox processor retries
-            #    delivery. InfraSafe's receiver is idempotent, so re-sending an
-            #    already-known building is harmless.
-            cutoff = datetime.now(timezone.utc) - timedelta(days=REPLAY_WINDOW_DAYS)
-            recent = [
-                r for r in uk_rows
-                if r.created_at is not None and _as_aware(r.created_at) >= cutoff
-            ]
+            if extra_in_is:
+                # Orphans in InfraSafe (external_ids not matching any active UK building).
+                # Could be: soft-deleted UK rows, manual test data in InfraSafe, or a
+                # past UK building that got hard-deleted. Log up to 5 ids for triage;
+                # do NOT auto-delete in InfraSafe — that's an ops decision.
+                logger.warning(
+                    "reconcile_buildings: %d orphan(s) in InfraSafe "
+                    "(external_ids not in active UK set), sample: %s",
+                    len(extra_in_is), sorted(extra_in_is)[:5],
+                )
 
+            # 4. Re-enqueue exactly the buildings InfraSafe is missing.
+            #    queue_webhook adds rows in the same transaction; outbox processor
+            #    picks them up within 10s. Receiver is idempotent (event_id UUID4
+            #    + isDuplicateEvent check on InfraSafe side).
             enqueued = 0
-            for row in recent[:REPLAY_CAP]:
+            for missing_external_id in sorted(missing_in_is)[:REPLAY_CAP]:
+                row = expected_by_uk[missing_external_id]
                 await queue_webhook(
                     db,
                     "building.created",
@@ -104,13 +124,21 @@ async def reconcile_buildings() -> dict:
                     {"id": row.id, "address": row.address, "yard_name": row.name},
                 )
                 enqueued += 1
+
             await db.commit()
-            logger.warning("reconcile_buildings: enqueued %d replay events", enqueued)
+            logger.warning(
+                "reconcile_buildings: precise diff — uk=%d is=%d "
+                "missing=%d enqueued=%d orphans=%d",
+                len(uk_rows), len(is_externals),
+                len(missing_in_is), enqueued, len(extra_in_is),
+            )
             return {
                 "in_sync": False,
-                "uk": uk_count,
-                "infrasafe": is_count,
+                "uk": len(uk_rows),
+                "infrasafe": len(is_externals),
+                "missing": len(missing_in_is),
                 "enqueued": enqueued,
+                "orphans": len(extra_in_is),
             }
 
         finally:
@@ -118,8 +146,3 @@ async def reconcile_buildings() -> dict:
                 text("SELECT pg_advisory_unlock(:k)"),
                 {"k": RECONCILE_LOCK_KEY},
             )
-
-
-def _as_aware(dt: datetime) -> datetime:
-    """Normalise a possibly-naive datetime to UTC-aware for safe comparison."""
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
