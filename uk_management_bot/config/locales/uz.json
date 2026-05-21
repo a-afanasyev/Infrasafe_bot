@@ -8094,5 +8094,11 @@
     "apartment": "kvartira",
     "house": "uy",
     "yard": "hovli"
+  },
+  "shift_planning": {
+    "confirm_prompt": "⚠️ <b>Smenalarni ommaviy yaratishni tasdiqlang</b>\n\nAmal: {action}\nDavr: {period}\n\nFaol shablonlar bo'yicha smenalar yaratiladi. Davom etamizmi?",
+    "confirm_yes": "✅ Ha, yaratish",
+    "confirm_no": "❌ Bekor qilish",
+    "cancelled": "❎ Bekor qilindi"
   }
 }
