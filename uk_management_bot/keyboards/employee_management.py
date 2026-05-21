@@ -66,7 +66,7 @@ def get_employee_management_main_keyboard(stats: Dict[str, int], language: str =
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="admin_panel"
         )]
     ]
@@ -133,7 +133,7 @@ def get_employee_list_keyboard(employees_data: Dict, list_type: str, language: s
     
     # Кнопка "Назад"
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data="employee_mgmt_main"
     )])
     
@@ -203,7 +203,7 @@ def get_employee_actions_keyboard(employee_id: int, status: str, language: str =
     
     # Кнопка "Назад"
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data="employee_mgmt_main"
     )])
     
@@ -244,7 +244,7 @@ def get_roles_management_keyboard(selected_roles: list = None, language: str = '
     # Кнопки действий
     buttons.append([
         InlineKeyboardButton(
-            text=f"💾 {get_text('buttons.save', language)}",
+            text=get_text('buttons.save', language),
             callback_data="role_save"
         ),
         InlineKeyboardButton(
@@ -296,7 +296,7 @@ def get_specializations_selection_keyboard(selected_specializations: list = None
     # Кнопки действий
     buttons.append([
         InlineKeyboardButton(
-            text=f"💾 {get_text('buttons.save', language)}",
+            text=get_text('buttons.save', language),
             callback_data="spec_save"
         ),
         InlineKeyboardButton(
@@ -329,7 +329,7 @@ def get_employee_edit_keyboard(employee_id: int, language: str = 'ru') -> Inline
             callback_data=f"edit_employee_phone_{employee_id}"
         )],
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data=f"employee_mgmt_employee_{employee_id}"
         )]
     ]

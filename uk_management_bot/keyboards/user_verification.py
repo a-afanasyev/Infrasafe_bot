@@ -55,7 +55,7 @@ def get_verification_main_keyboard(stats: Dict[str, int], language: str = 'ru') 
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="user_management_panel"
         )]
     ]
@@ -105,7 +105,7 @@ def get_user_verification_keyboard(user_id: int, language: str = 'ru') -> Inline
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="user_verification_panel"
         )]
     ]
@@ -153,7 +153,7 @@ def get_verification_request_keyboard(user_id: int, language: str = 'ru') -> Inl
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data=f"verification_user_{user_id}"
         )]
     ]
@@ -189,7 +189,7 @@ def get_document_verification_keyboard(document_id: int, language: str = 'ru') -
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="verification_user_documents"
         )]
     ]
@@ -216,7 +216,7 @@ def get_document_management_keyboard(user_id: int, language: str = 'ru') -> Inli
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data=f"user_mgmt_user_{user_id}"
         )]
     ]
@@ -258,7 +258,7 @@ def get_access_rights_keyboard(user_id: int, language: str = 'ru') -> InlineKeyb
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data=f"verification_user_{user_id}"
         )]
     ]
@@ -324,7 +324,7 @@ def get_verification_list_keyboard(users_data: Dict, list_type: str, language: s
     
     # Назад
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data="user_verification_panel"
     )])
     
@@ -388,7 +388,7 @@ def get_documents_list_keyboard(documents_data: Dict, language: str = 'ru') -> I
     
     # Назад
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data="user_verification_panel"
     )])
     
@@ -490,7 +490,7 @@ def get_document_request_keyboard(user_id: int, language: str = 'ru') -> InlineK
     
     # Назад
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data=f"back_to_user_details_{user_id}"
     )])
     
@@ -569,7 +569,7 @@ def get_document_checklist_keyboard(user_id: int, selected_docs: list = None, la
     
     # Назад
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data=f"back_to_user_details_{user_id}"
     )])
     
