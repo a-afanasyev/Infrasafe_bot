@@ -122,9 +122,14 @@ def get_text(key: str, language: str = "ru", **kwargs) -> str:
                     return key  # Return key if translation not found
 
         # Замена параметров в тексте
+        # BUG-BOT-032 fix: prefer str.format(**kwargs) so format specs like {x:.1f} work.
+        # Fallback to simple replace if format raises (e.g., stray '{' in template).
         if isinstance(value, str) and kwargs:
-            for param, replacement in kwargs.items():
-                value = value.replace(f"{{{param}}}", str(replacement))
+            try:
+                value = value.format(**kwargs)
+            except (KeyError, ValueError, IndexError):
+                for param, replacement in kwargs.items():
+                    value = value.replace(f"{{{param}}}", str(replacement))
 
         result = value if isinstance(value, str) else key
         return result
