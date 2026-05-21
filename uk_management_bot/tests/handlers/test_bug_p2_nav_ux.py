@@ -192,16 +192,13 @@ class TestBug021CancelApartmentSelectionContext:
     @pytest.mark.asyncio
     async def test_cancel_from_profile_returns_to_profile_view(self):
         from uk_management_bot.handlers.address_apartments import (
-            cancel_apartment_selection,
+            cancel_apartment_action,
         )
 
         callback = _make_callback("cancel_apartment_selection")
         state = _make_state({"entry_from": "profile"})
 
         with patch(
-            "uk_management_bot.handlers.address_apartments.get_user_language",
-            return_value="ru",
-        ), patch(
             "uk_management_bot.handlers.address_apartments.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
@@ -211,8 +208,7 @@ class TestBug021CancelApartmentSelectionContext:
             "uk_management_bot.handlers.address_apartments._return_to_admin_yards",
             new=AsyncMock(return_value=True),
         ) as admin_return:
-            inner = getattr(cancel_apartment_selection, "__wrapped__", cancel_apartment_selection)
-            await inner(callback, state)
+            await cancel_apartment_action(callback, state, language="ru")
 
         profile_return.assert_awaited()
         admin_return.assert_not_awaited()
@@ -220,16 +216,13 @@ class TestBug021CancelApartmentSelectionContext:
     @pytest.mark.asyncio
     async def test_cancel_from_admin_returns_to_admin_view(self):
         from uk_management_bot.handlers.address_apartments import (
-            cancel_apartment_selection,
+            cancel_apartment_action,
         )
 
         callback = _make_callback("cancel_apartment_selection")
         state = _make_state({"entry_from": "admin"})
 
         with patch(
-            "uk_management_bot.handlers.address_apartments.get_user_language",
-            return_value="ru",
-        ), patch(
             "uk_management_bot.handlers.address_apartments.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
@@ -239,8 +232,7 @@ class TestBug021CancelApartmentSelectionContext:
             "uk_management_bot.handlers.address_apartments._return_to_admin_yards",
             new=AsyncMock(return_value=True),
         ) as admin_return:
-            inner = getattr(cancel_apartment_selection, "__wrapped__", cancel_apartment_selection)
-            await inner(callback, state)
+            await cancel_apartment_action(callback, state, language="ru")
 
         admin_return.assert_awaited()
         profile_return.assert_not_awaited()
