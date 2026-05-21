@@ -768,8 +768,10 @@ async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext,
                     shifts_by_date[shift_date] = 0
                 shifts_by_date[shift_date] += 1
         
+        # BUG-BOT-026: используем локализованное имя месяца вместо системного %B
+        from uk_management_bot.utils.date_helpers import localized_month_year
         response = get_text("shift_management.month_overview_title", language=lang,
-                          month=today.strftime('%B %Y'), total=len(shifts))
+                          month=localized_month_year(today, language=lang), total=len(shifts))
 
         # Показываем дни с наибольшим количеством смен
         if shifts_by_date:
