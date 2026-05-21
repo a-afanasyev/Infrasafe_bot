@@ -1367,13 +1367,19 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         has_access = False
 
         if active_role == "executor":
+            # BUG-BOT-004: прямое назначение через Request.executor_id (FK)
+            # имеет приоритет — если исполнитель назначен напрямую, он видит заявку
+            # независимо от наличия записей в RequestAssignment.
+            if request.executor_id == user.id:
+                has_access = True
+
             # Для исполнителей: проверяем назначение
             assignment = db_session.query(RequestAssignment).filter(
                 RequestAssignment.request_number == request.request_number,
                 RequestAssignment.status == "active"
             ).first()
 
-            if assignment:
+            if not has_access and assignment:
                 # Индивидуальное назначение
                 if assignment.executor_id == user.id:
                     has_access = True
