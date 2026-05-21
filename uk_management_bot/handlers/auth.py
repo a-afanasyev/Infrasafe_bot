@@ -63,7 +63,12 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
     Обработчик команды /join <token>
     Открывает веб-приложение для регистрации по приглашению
     """
-    logger.info(f"Команда /join получена от пользователя {message.from_user.id}: {message.text}")
+    # FIX-006: НЕ логировать полный токен. message.text начинается с "/join <token>",
+    # маскируем второй аргумент той же схемой что и на выходе хендлера.
+    _join_parts = (message.text or "").split(maxsplit=1)
+    _token_arg = _join_parts[1] if len(_join_parts) > 1 else ""
+    _masked = f"{_token_arg[:8]}…" if _token_arg else "(empty)"
+    logger.info(f"Команда /join получена от пользователя {message.from_user.id}: /join {_masked}")
     lang = language
     telegram_id = message.from_user.id
     
@@ -77,8 +82,9 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
             logger.warning(f"Превышен rate limit для /join от пользователя {telegram_id}")
             return
         
-        # Извлекаем токен из команды
-        text_parts = message.text.split(maxsplit=1)
+        # Извлекаем токен из команды (None-safe — Command("join") фильтр
+        # обычно гарантирует .text, но защищаемся от forwarded/media-only маршрутов)
+        text_parts = (message.text or "").split(maxsplit=1)
         if len(text_parts) < 2:
             await message.answer(
                 get_text("invites.usage_help", language=lang)
@@ -169,7 +175,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
             f"{invite_info}\n\n{get_text('auth.enter_full_name', language=lang)}"
         )
         
-        logger.info(f"Пользователь {telegram_id} получил ссылку на веб-регистрацию с токеном {token}")
+        logger.info(f"Пользователь {telegram_id} получил ссылку на веб-регистрацию с токеном {token[:8]}…")
         
     except Exception as e:
         logger.error(f"Ошибка обработки /join от {telegram_id}: {e}")
