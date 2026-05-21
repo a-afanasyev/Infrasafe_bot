@@ -1320,16 +1320,12 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 @router.callback_query(
-    lambda c: c.data.startswith("view_") 
-    and not c.data.startswith("view_comments") 
-    and not c.data.startswith("view_report") 
-    and not c.data.startswith("view_assignments") 
-    and not c.data.startswith("view_schedule") 
-    and not c.data.startswith("view_week") 
-    and not c.data.startswith("view_completed") 
-    and not c.data.startswith("view_completion_media") 
-    and not c.data.startswith("view_user")
-    and not c.data.startswith("view_language")  # Исключаем view_language из обработки заявок
+    # BUG-BOT-033 fix: replace fragile prefix-match + maintained exclusion list
+    # with strict regex matching request_number format `view_<YYMMDD-NNN>` or
+    # `view_request_<YYMMDD-NNN>`. Any other view_* callback (view_current_shifts,
+    # view_apartment:N, view_week_schedule, etc.) is no longer hijacked here and
+    # reaches its own handler in a later router.
+    F.data.regexp(r"^view(?:_request)?_\d{6}-\d{3}$")
 )
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
     """Обработка просмотра деталей заявки"""
