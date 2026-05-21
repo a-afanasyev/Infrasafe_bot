@@ -2107,13 +2107,12 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
 @router.callback_query(F.data == "weekly_analytics")
 @require_role(['admin', 'manager'])
-async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext):
+async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Аналитика за неделю"""
     try:
-        db = next(get_db())
-        planning_service = ShiftPlanningService(db)
         if not db:
             db = next(get_db())
+        planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
         
         # Анализируем последние 7 дней
@@ -2184,20 +2183,19 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка недельной аналитики: {e}")
+        logger.error(f"Ошибка недельной аналитики: {e}", exc_info=True)
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.weekly_analytics_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "workload_forecast")
 @require_role(['admin', 'manager'])
-async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
+async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Прогноз рабочей нагрузки"""
     try:
-        db = next(get_db())
-        planning_service = ShiftPlanningService(db)
         if not db:
             db = next(get_db())
+        planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
         
         # Прогноз на следующие 5 дней
@@ -2276,20 +2274,19 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка прогноза нагрузки: {e}")
+        logger.error(f"Ошибка прогноза нагрузки: {e}", exc_info=True)
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.workload_forecast_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "optimization_recommendations")
 @require_role(['admin', 'manager'])
-async def handle_optimization_recommendations(callback: CallbackQuery, state: FSMContext):
+async def handle_optimization_recommendations(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Рекомендации по оптимизации"""
     try:
-        db = next(get_db())
-        planning_service = ShiftPlanningService(db)
         if not db:
             db = next(get_db())
+        planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
         
         # Получаем рекомендации на сегодня
@@ -2367,9 +2364,67 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка рекомендаций по оптимизации: {e}")
+        logger.error(f"Ошибка рекомендаций по оптимизации: {e}", exc_info=True)
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.optimization_recommendations_error", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data == "monthly_analytics")
+@require_role(['admin', 'manager'])
+async def handle_monthly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Месячный отчёт — заглушка (функция в разработке).
+
+    Без этого handler-а кнопка `monthly_analytics` возвращала silent callback
+    (no answer, no edit). См. BUG-BOT-003.
+    """
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
+        await callback.message.edit_text(
+            get_text("shift_management.monthly_analytics_under_development", language=lang),
+            reply_markup=get_analytics_menu(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка месячного отчёта: {e}", exc_info=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "efficiency_analysis")
+@require_role(['admin', 'manager'])
+async def handle_efficiency_analysis(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Анализ эффективности — заглушка (функция в разработке).
+
+    Без этого handler-а кнопка `efficiency_analysis` возвращала silent callback
+    (no answer, no edit). См. BUG-BOT-003.
+    """
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
+        await callback.message.edit_text(
+            get_text("shift_management.efficiency_analysis_under_development", language=lang),
+            reply_markup=get_analytics_menu(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка анализа эффективности: {e}", exc_info=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "back_to_shifts")

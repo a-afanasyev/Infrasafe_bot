@@ -6446,6 +6446,8 @@
     "errors_label": "Ошибки",
     "weekly_planning_complete": "📅 <b>Недельное планирование завершено</b>\n⏰ Время: {timestamp}\n\n<b>Период:</b> {week_start} - {week_end}\n<b>Создано смен:</b> {total_shifts}\n{all_planned}{by_day}{by_template}{errors}",
     "template_management_under_development": "🗂️ <b>Управление шаблонами</b>\n\nФункция в разработке. Используйте команду /shifts для создания смен.",
+    "monthly_analytics_under_development": "📈 <b>Месячный отчёт</b>\n\nФункция в разработке. Воспользуйтесь «Недельной аналитикой» для оперативной сводки.",
+    "efficiency_analysis_under_development": "⚡ <b>Анализ эффективности</b>\n\nФункция в разработке. Воспользуйтесь «Недельной аналитикой» или «Рекомендациями по оптимизации».",
     "keyboards": {
       "shift_planning": "📅 Планирование смен",
       "analytics_reports": "📊 Аналитика и отчеты",
