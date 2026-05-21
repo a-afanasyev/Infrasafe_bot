@@ -1,6 +1,6 @@
 # UK Audit Execution Report — P0 Phase
 
-> **⚠️ This document covers the early-session P0 attempt. For the FULL session state including BUG-BOT-001..033 work, see the `## Post-P0 update (2026-05-21 late session)` section at the bottom of this file. The "done" status of FIX-001/003/005/006 below is now corrected to "branch-ready, NOT in main" per independent verification on 2026-05-21.**
+> **⚠️ Read order:** This document opens with the early-session P0 attempt. For the FULL session state (including BUG-BOT-001..033 work AND FIX-001/003/005/006 merge via PRs #17–#20), see the `## Post-P0 update (2026-05-21 late session)` section at the bottom. The "done" status of FIX-001/003/005/006 in the table below was originally a session-internal label; the items were eventually merged to main on 2026-05-21 via PRs #17–#20 with merge commits `164b2ad`/`dd3ea52`/`080d824`/`f45f5aa`.
 
 **Date:** 2026-05-21
 **Coordinator session:** chief-coordinator (Opus 4.7) + claude-flow swarm `swarm-1779307918559-ihpysq` (hierarchical, maxAgents=10)
@@ -19,7 +19,7 @@ P0 branch-ready: 4/6   awaiting-user-action: 2   deferred-to-P1: 2 (snapshot at 
 P1: 0/26 (next phase)        P2: 0/40       P3: 0/29
 ```
 
-**Note (corrected 2026-05-21):** branches `2fdda9e`/`2c3cbb8`/`b865d45`/`2ad6883` are NOT ancestors of `origin/main`. Each fix exists only in its `fix/fix-XXX-*` branch. Bug code on main is unchanged. See `## Post-P0 update` below for full session statistics including BUG-BOT-* batches that DID land in main.
+**Note (final state 2026-05-21):** original commits `2fdda9e`/`2c3cbb8`/`b865d45`/`2ad6883` were rebased on top of post-BUG-BOT main (becoming `5b8dccf`/`6f2eed4`/`b8d142e`/`bb52ffc`) and merged via PRs #17–#20. Bug code on main is now fixed. See `## Post-P0 update` below for full session statistics.
 
 | ID | Type | State | Branch | Commit | Notes |
 |---|---|---|---|---|---|
@@ -180,52 +180,46 @@ To purge memory namespace: `mcp__claude-flow__memory_cleanup` with the namespace
 
 ## Post-P0 update (2026-05-21 late session)
 
-After the initial P0 phase above, the user shifted scope to **live MCP testing of the Telegram bot** (via `mcp__telegram-qa`), which surfaced 33 new BUG-BOT-* items (BUG-BOT-001..033). These were fixed in batches and **merged to `origin/main`** through the regular PR workflow. The pre-session FIX-001/003/005/006 branches were **never merged** in this scope (the user did not give an explicit "merge those P0 fixes" signal — they remained in local branches awaiting review).
+After the initial P0 phase above, the user shifted scope to **live MCP testing of the Telegram bot** (via `mcp__telegram-qa`), which surfaced 33 new BUG-BOT-* items (BUG-BOT-001..033). These were fixed in batches and **merged to `origin/main`** through the regular PR workflow. Initially, the pre-session FIX-001/003/005/006 branches were not merged in the BUG-BOT scope. **Subsequently** (2026-05-21, after independent verification + user authorization "сделай пуш и мержи"), they were rebased on top of post-BUG-BOT main and merged via PRs #17, #18, #19, #20.
 
-### Updated counters (replaces the early-session "P1: 0/26 / P2: 0/40 / P3: 0/29" snapshot above)
+### Final counters (2026-05-21 late session, after FIX-001/003/005/006 merge)
 
-| Priority | Total | ✅ Merged | 🟡 Branch-ready | ⏸ User-action | 🚫 Gated | 🔓 Open |
-|---|---:|---:|---:|---:|---:|---:|
-| **P0** | 9 | 1 (BUG-BOT-001) | 4 (FIX-001/003/005/006) | 2 (FIX-002/004) | 2 (FIX-007/008) | 0 |
-| **P1** | 39 | 8 | 0 | 0 | 0 | 31 |
-| **P2** | 64 | 16 | 0 | 0 | 0 | 48 |
-| **P3** | 44 | 7 | 0 | 0 | 0 | 37 |
-| **Total** | **156** | **32** | **4** | **2** | **2** | **116** |
+| Priority | Total | ✅ Merged | ⏸ User-action | 🚫 Gated | 🔓 Open |
+|---|---:|---:|---:|---:|---:|
+| **P0** | 9 | 5 (BUG-BOT-001, FIX-001/003/005/006) | 2 (FIX-002/004) | 2 (FIX-007/008) | 0 |
+| **P1** | 39 | 8 | 0 | 0 | 31 |
+| **P2** | 64 | 16 | 0 | 0 | 48 |
+| **P3** | 44 | 7 | 0 | 0 | 37 |
+| **Total** | **156** | **36** | **2** | **2** | **116** |
 
-Math check: 32 + 4 + 2 + 2 + 116 = 156 ✓.
+Math check: 36 + 2 + 2 + 116 = 156 ✓.
 
-### Why FIX-001/003/005/006 are **not** merged
+### How FIX-001/003/005/006 reached main
 
-Verified 2026-05-21 via independent agent:
+| ID | PR | Merge commit | Action |
+|---|---|---|---|
+| FIX-001 | [#17](https://github.com/a-afanasyev/Infrasafe_bot/pull/17) | `164b2ad` | Rebase on main, push, PR, merge |
+| FIX-003 | [#18](https://github.com/a-afanasyev/Infrasafe_bot/pull/18) | `dd3ea52` | Same |
+| FIX-005 | [#19](https://github.com/a-afanasyev/Infrasafe_bot/pull/19) | `080d824` | Same |
+| FIX-006 | [#20](https://github.com/a-afanasyev/Infrasafe_bot/pull/20) | `f45f5aa` | Same |
 
-- `git merge-base --is-ancestor 2fdda9e origin/main` → exit 1
-- `git merge-base --is-ancestor 2c3cbb8 origin/main` → exit 1
-- `git merge-base --is-ancestor b865d45 origin/main` → exit 1
-- `git merge-base --is-ancestor 2ad6883 origin/main` → exit 1
+Also merged: [#16](https://github.com/a-afanasyev/Infrasafe_bot/pull/16) `a2ad7ed` — docs correction reconciling backlog state with verified reality (which itself had identified that the early-session "done" labels were inaccurate for the main branch).
 
-Code on main still contains the original bugs:
+Each rebase was conflict-free; each branch was deleted after merge.
 
-- `uk_management_bot/web/routers/invite.py:122` — `user_data["first_name"]` (FIX-001)
-- `uk_management_bot/services/webhook_sender.py:189` — HTTP 503 returns `retryable=False` (FIX-005)
-- `uk_management_bot/handlers/auth.py:172` — invite token logged in plaintext (FIX-006)
-- `alembic/versions/007_*` — migration absent (FIX-003)
+### What's now in main (2026-05-21 end of session)
 
-The branches exist locally but require PR + merge action. The earlier "done" label in the table above is **factually incorrect for the main branch** and is preserved only as a historical artifact of the first session.
+- 33 BUG-BOT-* fixes from the in-session batches
+- 4 FIX-* fixes (FIX-001/003/005/006) via PRs #17–#20
+- 1 backlog state correction PR #16
+- 61 commits total on origin/main during session
+- ~191 new unit tests (182 BUG-BOT + 9 FIX-*); 0 regressions
+- All P0 code-level work is in main.
 
-### What's actually in main as of 2026-05-21 23:30
+### Remaining P0 actions to fully close the release gate
 
-- 33 BUG-BOT-* fixes (commits `293b060`, `6e6f28e`, `913ba9d`, `99408e7`, `27b4548`, + 4 docs commits)
-- 56 commits on origin/main over the session
-- ~182 new unit tests + ~30 MCP smoke verifications, 0 regressions
+1. ⏸ Execute FIX-002 runbook (`docs/audit/runbooks/FIX-002.md`) — secret rotation (user-action, ~30 min)
+2. ⏸ Execute FIX-004 runbook on **production** — `ALTER ROLE uk_bot NOSUPERUSER` (dev already done 2026-05-21)
+3. 🚫 FIX-007/008 — gated by ARCH-014; address when ARCH-014 lands.
 
-### Remaining P0 actions to complete the release gate
-
-1. Merge `fix/fix-001-invite-namerror` → main (open PR for `2fdda9e`)
-2. Merge `fix/fix-003-fk-purge-set-null` → main (open PR for `2c3cbb8`, includes migration 007)
-3. Merge `fix/fix-005-webhook-503-retryable` → main (open PR for `b865d45`)
-4. Merge `fix/fix-006-invite-token-log-mask` → main (open PR for `2ad6883`)
-5. Execute FIX-002 runbook (`docs/audit/runbooks/FIX-002.md`) — secret rotation
-6. Execute FIX-004 runbook on **production** — `ALTER ROLE uk_bot NOSUPERUSER` (dev already done 2026-05-21)
-7. FIX-007/008 — gated by ARCH-014; address when ARCH-014 lands.
-
-After steps 1-4 are merged + 5-6 executed on prod, the P0 release gate is closed.
+After steps 1-2 executed on prod, the P0 release gate is closed.
