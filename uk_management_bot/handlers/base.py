@@ -18,6 +18,7 @@ from uk_management_bot.services.notification_service import async_notify_role_sw
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.filters import RoleFilter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -323,7 +324,10 @@ async def executor_active_requests(message: Message, state: FSMContext):
     await show_my_requests(message, state)
 
 
-@router.message(F.text.in_(ARCHIVE_TEXTS))
+# BUG-BOT-019: text "📦 Архив" is shared with admin panel — gate by active_role
+# so this handler only fires when the user is acting as executor/applicant.
+# Without this filter, the admin archive handler (registered earlier) wins.
+@router.message(F.text.in_(ARCHIVE_TEXTS), RoleFilter(["executor", "applicant"]))
 async def executor_archive_requests(message: Message, state: FSMContext):
     """Открывает список заявок пользователя с фильтром Архив."""
     await state.update_data(my_requests_status="archive", my_requests_page=1)
