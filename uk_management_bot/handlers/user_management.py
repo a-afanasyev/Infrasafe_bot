@@ -383,10 +383,16 @@ async def handle_view_user_from_notification(callback: CallbackQuery, db: Sessio
 
         if target_user.username:
             profile_text += f"📱 Username: @{target_user.username}\n"
+        else:
+            # BUG-BOT-024: показываем "Username не указан" без префикса `@`
+            profile_text += f"📱 {get_text('user_mgmt.handlers.username_not_specified', language=lang)}\n"
 
         profile_text += f"🆔 Telegram ID: {target_user.telegram_id}\n"
-        profile_text += get_text('user_mgmt.handlers.profile_role', language=lang).format(role=get_text(f'roles.{target_user.role}', language=lang) if target_user.role else not_specified) + "\n"
-        profile_text += get_text('user_mgmt.handlers.profile_status', language=lang).format(status=target_user.status) + "\n"
+        # BUG-BOT-024: локализованные значения вместо raw DB-строк
+        from uk_management_bot.utils.employee_display import format_user_status, format_roles
+        roles_source = target_user.roles if getattr(target_user, "roles", None) else getattr(target_user, "role", None)
+        profile_text += get_text('user_mgmt.handlers.profile_role', language=lang).format(role=format_roles(roles_source, lang)) + "\n"
+        profile_text += get_text('user_mgmt.handlers.profile_status', language=lang).format(status=format_user_status(target_user.status, lang)) + "\n"
 
         if target_user.specialization:
             profile_text += get_text('user_mgmt.handlers.profile_specialization', language=lang).format(spec=target_user.specialization) + "\n"

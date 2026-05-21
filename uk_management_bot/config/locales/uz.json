@@ -7654,6 +7654,7 @@
       "rejected_by": "\n\n❌ {name} tomonidan rad etildi",
       "error_rejecting_user": "Foydalanuvchini rad etishda xatolik",
       "not_specified": "Ko'rsatilmagan",
+      "username_not_specified": "Username ko'rsatilmagan",
       "profile_title": "👤 <b>Foydalanuvchi profili</b>",
       "profile_name": "👤 Ism: {name}",
       "profile_role": "🎯 Rol: {role}",

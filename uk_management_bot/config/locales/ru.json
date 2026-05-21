@@ -7653,6 +7653,7 @@
       "rejected_by": "\n\n❌ Отклонено {name}",
       "error_rejecting_user": "Ошибка отклонения пользователя",
       "not_specified": "Не указано",
+      "username_not_specified": "Username не указан",
       "profile_title": "👤 <b>Профиль пользователя</b>",
       "profile_name": "👤 Имя: {name}",
       "profile_role": "🎯 Роль: {role}",
