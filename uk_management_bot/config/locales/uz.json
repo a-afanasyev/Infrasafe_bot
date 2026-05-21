@@ -7287,6 +7287,8 @@
     }
   },
   "address": {
+    "apartment_short": "xon.",
+    "building_short": "uy",
     "keyboards": {
       "manage_yards": "🏘 Hovlilarni boshqarish",
       "manage_buildings": "🏢 Binolarni boshqarish",

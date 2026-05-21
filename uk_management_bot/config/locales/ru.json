@@ -7286,6 +7286,8 @@
     }
   },
   "address": {
+    "apartment_short": "кв.",
+    "building_short": "д.",
     "keyboards": {
       "manage_yards": "🏘 Управление дворами",
       "manage_buildings": "🏢 Управление зданиями",
