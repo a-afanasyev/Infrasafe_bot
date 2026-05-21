@@ -1816,7 +1816,8 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
         logger.info(f"Запрошен текст уточнения для заявки {request_number} менеджером {callback.from_user.id}")
         
     except Exception as e:
-        logger.error(f"Ошибка обработки запроса уточнения: {e}")
+        # BUG-BOT-022: ранее логировалось без stack-trace, что затрудняло диагностику.
+        logger.error(f"Ошибка обработки запроса уточнения: {e}", exc_info=True)
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 

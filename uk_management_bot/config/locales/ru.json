@@ -8008,7 +8008,9 @@
       "yard_status_changed": "✅ Двор {status}",
       "yards_list_empty": "📋 <b>Список дворов пуст</b>\n\nДобавьте первый двор для начала работы.",
       "yards_list_page": "📋 <b>Список дворов</b> (страница {page})\n\nВсего дворов: {total}\n\nВыберите двор для просмотра:",
-      "yards_list_title": "📋 <b>Список дворов</b>\n\nВсего дворов: {total}\nАктивных: {active}\n\nВыберите двор для просмотра:"
+      "yards_list_title": "📋 <b>Список дворов</b>\n\nВсего дворов: {total}\nАктивных: {active}\n\nВыберите двор для просмотра:",
+      "address_stats_report": "📊 <b>Статистика справочника адресов</b>\n\n🏘 <b>Дворы:</b> {total_yards} (активных: {active_yards}, неактивных: {inactive_yards})\n🏢 <b>Здания:</b> {total_buildings} (активных: {active_buildings}, неактивных: {inactive_buildings})\n🏠 <b>Квартиры:</b> {total_apartments} (активных: {active_apartments}, неактивных: {inactive_apartments})\n\n👥 <b>Жители:</b> {residents_total}\n  ✅ Подтверждено: {residents_approved}\n  ⏱ Ожидают: {residents_pending}\n  ❌ Отклонено: {residents_rejected}",
+      "address_stats_error": "❌ Ошибка получения статистики"
     }
   },
   "user_apt_selection": {
