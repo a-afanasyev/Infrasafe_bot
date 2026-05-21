@@ -140,7 +140,7 @@ class TestBug020CancelInputRereadsUser:
 
     @pytest.mark.asyncio
     async def test_cancel_input_uses_fresh_db_phone_and_name(self):
-        from uk_management_bot.handlers.profile_editing import cancel_input
+        from uk_management_bot.handlers.profile_editing import handle_cancel_input
 
         callback = _make_callback("cancel_input")
         state = _make_state({"editing_field": "phone"})
@@ -159,8 +159,8 @@ class TestBug020CancelInputRereadsUser:
 
         captured = {}
 
-        def fake_keyboard(user_obj, language="ru"):
-            captured["user"] = user_obj
+        def fake_keyboard(language="ru", user=None):
+            captured["user"] = user
             captured["language"] = language
             return MagicMock(spec=InlineKeyboardMarkup)
 
@@ -174,8 +174,7 @@ class TestBug020CancelInputRereadsUser:
             "uk_management_bot.handlers.profile_editing.get_text",
             side_effect=lambda key, **kw: key,
         ):
-            inner = getattr(cancel_input, "__wrapped__", cancel_input)
-            await inner(callback, state, db=db, user=MagicMock(telegram_id=555))
+            await handle_cancel_input(callback, state, db)
 
         # Handler must have queried fresh user from DB and rendered keyboard
         # for that fresh user object (not a stale state.data dict).
