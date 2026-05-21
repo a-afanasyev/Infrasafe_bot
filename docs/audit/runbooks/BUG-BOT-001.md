@@ -24,11 +24,20 @@ production bot**. The discrepancy was silent — no log line, no error.
 
 The bot never crashes from this check — diagnostic only.
 
+## Environment-specific values
+
+| Environment | Real `BOT_USERNAME` | Source |
+|---|---|---|
+| **Local / dev** | `Work_space_away_bot` | dev bot token (separate `@BotFather` bot) |
+| **Production** | `infrasafebot` | prod bot token |
+
+`BOT_USERNAME` is **not a secret** (it's the public Telegram handle), but `BOT_TOKEN` IS — never print or commit it. The two-bot setup keeps dev and prod traffic isolated; do not cross-use tokens.
+
 ## Operator steps (user action required)
 
-### 1. Confirm the real bot username
+### 1. (Optional) Verify the username for the current environment
 
-Run inside the running container:
+If you ever rotate the `BOT_TOKEN` or are unsure which bot the token belongs to, confirm with `getMe()`:
 
 ```bash
 docker exec uk-management-bot python3 -c "
@@ -46,22 +55,23 @@ asyncio.run(main())
 "
 ```
 
-Record the printed `username`. Do **not** print or share `BOT_TOKEN`.
+Do **not** print or share `BOT_TOKEN`. The script only outputs `username`.
 
-### 2. Update `.env` and the production template
+### 2. Update `.env` per environment
 
-In `.env` (local/dev) add or update:
-
-```
-BOT_USERNAME=<value from step 1>
-```
-
-In `.env.production.template` add the same key with a placeholder so deploys
-do not forget it:
+**Local/dev `.env`** (not committed; lives only on developer's machine):
 
 ```
-BOT_USERNAME=<your_bot_username>
+BOT_USERNAME=Work_space_away_bot
 ```
+
+**Production server `.env`** (deployed from `.env.production.template`):
+
+```
+BOT_USERNAME=infrasafebot
+```
+
+The template (`.env.production.template`, committed) already ships with `BOT_USERNAME=infrasafebot` as the prod default — operators only need to fill in the secret slots (`BOT_TOKEN`, `JWT_SECRET`, etc.).
 
 ### 3. Restart the bot and verify
 
