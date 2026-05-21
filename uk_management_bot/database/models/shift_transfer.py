@@ -23,6 +23,7 @@ class ShiftTransfer(Base):
     # rejected - отклонено новым исполнителем
     # cancelled - отменено инициатором
     # completed - передача завершена
+    # expired - автоматически отмечено как истёкшее планировщиком
 
     # Причина передачи
     reason = Column(String(100), nullable=False, index=True)

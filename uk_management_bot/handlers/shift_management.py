@@ -161,14 +161,94 @@ async def handle_auto_planning(callback: CallbackQuery, state: FSMContext, db=No
             db.close()
 
 
+def _get_confirm_keyboard(yes_callback: str, no_callback: str, lang: str) -> InlineKeyboardMarkup:
+    """Inline keyboard with Yes/No buttons for destructive confirmation."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=get_text("shift_planning.confirm_yes", language=lang),
+                callback_data=yes_callback,
+            ),
+            InlineKeyboardButton(
+                text=get_text("shift_planning.confirm_no", language=lang),
+                callback_data=no_callback,
+            ),
+        ]
+    ])
+
+
 @router.callback_query(F.data == "auto_plan_week")
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
-    """Автопланирование на неделю"""
+    """Подтверждение автопланирования на неделю (без создания смен)."""
     try:
         if not db:
             db = next(get_db())
-        
+        lang = get_user_language(callback.from_user.id, db)
+
+        today = date.today()
+        days_until_monday = today.weekday()
+        monday = today - timedelta(days=days_until_monday)
+        sunday = monday + timedelta(days=6)
+        period = f"{monday.strftime('%d.%m.%Y')} — {sunday.strftime('%d.%m.%Y')}"
+
+        prompt = get_text(
+            "shift_planning.confirm_prompt",
+            language=lang,
+            action=get_text("shift_management.keyboards.auto_plan_week", language=lang),
+            period=period,
+        )
+
+        await callback.message.edit_text(
+            prompt,
+            reply_markup=_get_confirm_keyboard(
+                yes_callback="confirm_auto_plan_week",
+                no_callback="cancel_auto_plan_week",
+                lang=lang,
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка подтверждения автопланирования недели: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "cancel_auto_plan_week")
+@require_role(['admin', 'manager'])
+async def handle_auto_plan_week_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Отмена автопланирования на неделю — возврат в меню автопланирования."""
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+        await callback.message.edit_text(
+            get_text("shift_planning.cancelled", language=lang),
+            reply_markup=get_auto_planning_keyboard(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка отмены автопланирования недели: {e}")
+        await callback.answer()
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "confirm_auto_plan_week")
+@require_role(['admin', 'manager'])
+async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Автопланирование на неделю (выполнение после подтверждения)."""
+    try:
+        if not db:
+            db = next(get_db())
+
         lang = get_user_language(callback.from_user.id, db)
         planning_service = ShiftPlanningService(db)
 
@@ -224,11 +304,73 @@ async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=N
 @router.callback_query(F.data == "auto_plan_month")
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
-    """Автопланирование на месяц"""
+    """Подтверждение автопланирования на месяц (без создания смен)."""
     try:
         if not db:
             db = next(get_db())
-        
+        lang = get_user_language(callback.from_user.id, db)
+
+        today = date.today()
+        month_end = today + timedelta(weeks=4) - timedelta(days=1)
+        period = f"{today.strftime('%d.%m.%Y')} — {month_end.strftime('%d.%m.%Y')}"
+
+        prompt = get_text(
+            "shift_planning.confirm_prompt",
+            language=lang,
+            action=get_text("shift_management.keyboards.auto_plan_month", language=lang),
+            period=period,
+        )
+
+        await callback.message.edit_text(
+            prompt,
+            reply_markup=_get_confirm_keyboard(
+                yes_callback="confirm_auto_plan_month",
+                no_callback="cancel_auto_plan_month",
+                lang=lang,
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка подтверждения автопланирования месяца: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "cancel_auto_plan_month")
+@require_role(['admin', 'manager'])
+async def handle_auto_plan_month_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Отмена автопланирования на месяц — возврат в меню автопланирования."""
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+        await callback.message.edit_text(
+            get_text("shift_planning.cancelled", language=lang),
+            reply_markup=get_auto_planning_keyboard(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка отмены автопланирования месяца: {e}")
+        await callback.answer()
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "confirm_auto_plan_month")
+@require_role(['admin', 'manager'])
+async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Автопланирование на месяц (выполнение после подтверждения)."""
+    try:
+        if not db:
+            db = next(get_db())
+
         lang = get_user_language(callback.from_user.id, db)
         planning_service = ShiftPlanningService(db)
 
@@ -285,11 +427,72 @@ async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=
 @router.callback_query(F.data == "auto_plan_tomorrow")
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
-    """Создание смен на завтра"""
+    """Подтверждение создания смен на завтра (без создания смен)."""
     try:
         if not db:
             db = next(get_db())
-        
+        lang = get_user_language(callback.from_user.id, db)
+
+        tomorrow = date.today() + timedelta(days=1)
+        period = tomorrow.strftime('%d.%m.%Y')
+
+        prompt = get_text(
+            "shift_planning.confirm_prompt",
+            language=lang,
+            action=get_text("shift_management.keyboards.create_shifts_tomorrow", language=lang),
+            period=period,
+        )
+
+        await callback.message.edit_text(
+            prompt,
+            reply_markup=_get_confirm_keyboard(
+                yes_callback="confirm_auto_plan_tomorrow",
+                no_callback="cancel_auto_plan_tomorrow",
+                lang=lang,
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка подтверждения создания смен на завтра: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "cancel_auto_plan_tomorrow")
+@require_role(['admin', 'manager'])
+async def handle_auto_plan_tomorrow_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Отмена создания смен на завтра — возврат в меню автопланирования."""
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+        await callback.message.edit_text(
+            get_text("shift_planning.cancelled", language=lang),
+            reply_markup=get_auto_planning_keyboard(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка отмены создания смен на завтра: {e}")
+        await callback.answer()
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "confirm_auto_plan_tomorrow")
+@require_role(['admin', 'manager'])
+async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Создание смен на завтра (выполнение после подтверждения)."""
+    try:
+        if not db:
+            db = next(get_db())
+
         lang = get_user_language(callback.from_user.id, db)
         planning_service = ShiftPlanningService(db)
 
@@ -1925,13 +2128,75 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
 @router.callback_query(F.data == "plan_weekly_schedule")
 @require_role(['admin', 'manager'])
 async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
-    """Планирование недельного расписания"""
+    """Подтверждение недельного планирования (без создания смен)."""
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
+        start_date = date.today() + timedelta(days=1)
+        days_until_monday = start_date.weekday()
+        week_start = start_date - timedelta(days=days_until_monday)
+        week_end = week_start + timedelta(days=6)
+        period = f"{week_start.strftime('%d.%m.%Y')} — {week_end.strftime('%d.%m.%Y')}"
+
+        prompt = get_text(
+            "shift_planning.confirm_prompt",
+            language=lang,
+            action=get_text("shift_management.keyboards.plan_week", language=lang),
+            period=period,
+        )
+
+        await callback.message.edit_text(
+            prompt,
+            reply_markup=_get_confirm_keyboard(
+                yes_callback="confirm_plan_weekly_schedule",
+                no_callback="cancel_plan_weekly_schedule",
+                lang=lang,
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка подтверждения недельного планирования: {e}")
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data == "cancel_plan_weekly_schedule")
+@require_role(['admin', 'manager'])
+async def handle_weekly_planning_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Отмена недельного планирования — возврат в меню планирования."""
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+        await callback.message.edit_text(
+            get_text("shift_planning.cancelled", language=lang),
+            reply_markup=get_planning_menu(lang),
+            parse_mode="HTML",
+        )
+        await state.set_state(ShiftManagementStates.planning_menu)
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка отмены недельного планирования: {e}")
+        await callback.answer()
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "confirm_plan_weekly_schedule")
+@require_role(['admin', 'manager'])
+async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Планирование недельного расписания (выполнение после подтверждения)."""
     try:
         if not db:
             db = next(get_db())
         planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
-        
+
         # Планируем смены на следующую неделю
         start_date = date.today() + timedelta(days=1)
         results = planning_service.plan_weekly_schedule(start_date)
@@ -2107,13 +2372,12 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
 @router.callback_query(F.data == "weekly_analytics")
 @require_role(['admin', 'manager'])
-async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext):
+async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Аналитика за неделю"""
     try:
-        db = next(get_db())
-        planning_service = ShiftPlanningService(db)
         if not db:
             db = next(get_db())
+        planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
         
         # Анализируем последние 7 дней
@@ -2184,20 +2448,19 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка недельной аналитики: {e}")
+        logger.error(f"Ошибка недельной аналитики: {e}", exc_info=True)
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.weekly_analytics_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "workload_forecast")
 @require_role(['admin', 'manager'])
-async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
+async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Прогноз рабочей нагрузки"""
     try:
-        db = next(get_db())
-        planning_service = ShiftPlanningService(db)
         if not db:
             db = next(get_db())
+        planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
         
         # Прогноз на следующие 5 дней
@@ -2276,20 +2539,19 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка прогноза нагрузки: {e}")
+        logger.error(f"Ошибка прогноза нагрузки: {e}", exc_info=True)
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.workload_forecast_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "optimization_recommendations")
 @require_role(['admin', 'manager'])
-async def handle_optimization_recommendations(callback: CallbackQuery, state: FSMContext):
+async def handle_optimization_recommendations(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Рекомендации по оптимизации"""
     try:
-        db = next(get_db())
-        planning_service = ShiftPlanningService(db)
         if not db:
             db = next(get_db())
+        planning_service = ShiftPlanningService(db)
         lang = get_user_language(callback.from_user.id, db)
         
         # Получаем рекомендации на сегодня
@@ -2367,9 +2629,67 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Ошибка рекомендаций по оптимизации: {e}")
+        logger.error(f"Ошибка рекомендаций по оптимизации: {e}", exc_info=True)
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.optimization_recommendations_error", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data == "monthly_analytics")
+@require_role(['admin', 'manager'])
+async def handle_monthly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Месячный отчёт — заглушка (функция в разработке).
+
+    Без этого handler-а кнопка `monthly_analytics` возвращала silent callback
+    (no answer, no edit). См. BUG-BOT-003.
+    """
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
+        await callback.message.edit_text(
+            get_text("shift_management.monthly_analytics_under_development", language=lang),
+            reply_markup=get_analytics_menu(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка месячного отчёта: {e}", exc_info=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
+
+
+@router.callback_query(F.data == "efficiency_analysis")
+@require_role(['admin', 'manager'])
+async def handle_efficiency_analysis(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """Анализ эффективности — заглушка (функция в разработке).
+
+    Без этого handler-а кнопка `efficiency_analysis` возвращала silent callback
+    (no answer, no edit). См. BUG-BOT-003.
+    """
+    try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
+        await callback.message.edit_text(
+            get_text("shift_management.efficiency_analysis_under_development", language=lang),
+            reply_markup=get_analytics_menu(lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка анализа эффективности: {e}", exc_info=True)
+        lang = get_user_language(callback.from_user.id, db) if db else "ru"
+        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "back_to_shifts")

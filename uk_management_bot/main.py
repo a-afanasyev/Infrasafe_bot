@@ -188,6 +188,36 @@ async def main():
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+
+    # BUG-BOT-001: Verify configured BOT_USERNAME matches token-derived username.
+    # Mismatch produces broken invite links (e.g. https://t.me/<wrong_bot>?start=...).
+    # We never crash here — bot must still serve. The goal is loud diagnostic.
+    try:
+        me = await bot.get_me()
+        real_username = me.username or ""
+        configured = settings.BOT_USERNAME
+        if not configured:
+            logger.error(
+                f"BUG-BOT-001: BOT_USERNAME is not set in environment. "
+                f"Falling back to token-derived username '{real_username}'. "
+                f"Set BOT_USERNAME={real_username} in .env to silence this error."
+            )
+            # Graceful: populate at runtime so invite-link builders work.
+            settings.BOT_USERNAME = real_username
+        elif configured != real_username:
+            logger.error(
+                f"BUG-BOT-001: BOT_USERNAME mismatch — configured='{configured}', "
+                f"actual (getMe)='{real_username}'. Invite links will point to the wrong bot. "
+                f"Update BOT_USERNAME in .env to '{real_username}' and restart."
+            )
+        else:
+            logger.info(f"BOT_USERNAME OK: {real_username}")
+    except Exception as exc:  # pragma: no cover — network/auth issues
+        logger.error(
+            f"BUG-BOT-001: getMe() failed during BOT_USERNAME check: {exc}. "
+            f"Bot will continue with configured BOT_USERNAME='{settings.BOT_USERNAME}'."
+        )
+
     # FSM Storage: Redis in production, MemoryStorage in debug
     if not settings.DEBUG and settings.REDIS_URL:
         try:

@@ -1367,13 +1367,19 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         has_access = False
 
         if active_role == "executor":
+            # BUG-BOT-004: прямое назначение через Request.executor_id (FK)
+            # имеет приоритет — если исполнитель назначен напрямую, он видит заявку
+            # независимо от наличия записей в RequestAssignment.
+            if request.executor_id == user.id:
+                has_access = True
+
             # Для исполнителей: проверяем назначение
             assignment = db_session.query(RequestAssignment).filter(
                 RequestAssignment.request_number == request.request_number,
                 RequestAssignment.status == "active"
             ).first()
 
-            if assignment:
+            if not has_access and assignment:
                 # Индивидуальное назначение
                 if assignment.executor_id == user.id:
                     has_access = True
@@ -2024,6 +2030,9 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(
     F.data.startswith("cancel_") &
     ~F.data.startswith("cancel_document_selection_") &
+    # BUG-BOT-018 follow-up: exclude shift_management cancels — they have own handlers
+    ~F.data.startswith("cancel_plan_") &
+    ~F.data.startswith("cancel_auto_plan_") &
     ~F.data.in_(["cancel_action", "cancel_apartment_selection"])
 )
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):

@@ -162,27 +162,44 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
 
 
 @router.callback_query(F.data == "view_week_schedule")
-@require_role(['executor'])
-async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
-    """Просмотр расписания на неделю"""
+@require_role(['admin', 'manager', 'executor'])
+async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None, roles: list = None, user: User = None):
+    """Просмотр расписания на неделю.
+
+    BUG-BOT-005: разрешён доступ executor + manager + admin. Для executor query
+    фильтруется по его собственному `Shift.user_id`. Manager/admin — видит все смены.
+    """
     try:
-        db = next(get_db())
-        user_id = callback.from_user.id
+        if not db:
+            db = next(get_db())
         lang = language
-        
+
+        # BUG-BOT-005: Получаем внутренний user.id (Shift.user_id — FK на users.id,
+        # а не telegram_id). Раньше сравнивалось с callback.from_user.id (telegram_id),
+        # что давало пустую выборку даже для существующих смен.
+        if user is None:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if user is None:
+            await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
+        is_privileged = bool(roles) and any(r in ('admin', 'manager') for r in roles)
+
         # Получаем смены на текущую неделю
         today = date.today()
         start_of_week = today - timedelta(days=today.weekday())  # Понедельник
         end_of_week = start_of_week + timedelta(days=6)  # Воскресенье
-        
-        week_shifts = db.query(Shift).filter(
-            and_(
-                Shift.user_id == user_id,
-                func.date(Shift.planned_start_time) >= start_of_week,
-                func.date(Shift.planned_start_time) <= end_of_week,
-                Shift.status.in_(['planned', 'active', 'completed'])
-            )
-        ).order_by(Shift.planned_start_time).all()
+
+        filters = [
+            func.date(Shift.planned_start_time) >= start_of_week,
+            func.date(Shift.planned_start_time) <= end_of_week,
+            Shift.status.in_(['planned', 'active', 'completed']),
+        ]
+        # Executor видит только свои смены; manager/admin — все.
+        if not is_privileged:
+            filters.append(Shift.user_id == user.id)
+
+        week_shifts = db.query(Shift).filter(and_(*filters)).order_by(Shift.planned_start_time).all()
         
         # Группируем по дням недели
         days_of_week = [
@@ -483,26 +500,41 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
 
 
 @router.callback_query(F.data == "shift_history")
-@require_role(['executor'])
-async def handle_shift_history(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
-    """История смен"""
+@require_role(['admin', 'manager', 'executor'])
+async def handle_shift_history(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None, roles: list = None, user: User = None):
+    """История смен.
+
+    BUG-BOT-005: разрешён доступ executor + manager + admin. Для executor query
+    фильтруется по `Shift.user_id == user.id` (внутренний DB id, не telegram_id).
+    Manager/admin — видит все смены.
+    """
     try:
-        db = next(get_db())
-        user_id = callback.from_user.id
+        if not db:
+            db = next(get_db())
         lang = language
-        
+
+        # BUG-BOT-005: Используем внутренний user.id (Shift.user_id — FK на users.id).
+        if user is None:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if user is None:
+            await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
+        is_privileged = bool(roles) and any(r in ('admin', 'manager') for r in roles)
+
         # Получаем историю смен за последние 30 дней
         end_date = date.today()
         start_date = end_date - timedelta(days=30)
-        
-        history_shifts = db.query(Shift).filter(
-            and_(
-                Shift.user_id == user_id,
-                func.date(Shift.planned_start_time) >= start_date,
-                func.date(Shift.planned_start_time) <= end_date,
-                Shift.status.in_(['completed', 'cancelled'])
-            )
-        ).order_by(Shift.planned_start_time.desc()).limit(20).all()
+
+        filters = [
+            func.date(Shift.planned_start_time) >= start_date,
+            func.date(Shift.planned_start_time) <= end_date,
+            Shift.status.in_(['completed', 'cancelled']),
+        ]
+        if not is_privileged:
+            filters.append(Shift.user_id == user.id)
+
+        history_shifts = db.query(Shift).filter(and_(*filters)).order_by(Shift.planned_start_time.desc()).limit(20).all()
         
         if not history_shifts:
             await callback.message.edit_text(
@@ -601,7 +633,8 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext,
     try:
         user_lang = language
 
-        with get_db() as db:
+        db = next(get_db())
+        try:
             # Получаем активные смены пользователя для передачи
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
             if not user:
@@ -649,6 +682,8 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
             )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка меню передачи смен: {e}")
@@ -661,7 +696,8 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, l
     try:
         user_lang = language
 
-        with get_db() as db:
+        db = next(get_db())
+        try:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
             # Получаем активные смены пользователя
@@ -682,6 +718,8 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, l
                 select_text,
                 reply_markup=shift_selection_keyboard(active_shifts, user_lang)
             )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка инициации передачи: {e}")
@@ -694,7 +732,8 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, l
     try:
         user_lang = language
 
-        with get_db() as db:
+        db = next(get_db())
+        try:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
             # Получаем передачи пользователя
@@ -715,6 +754,8 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, l
                 view_text,
                 reply_markup=transfers_list_keyboard(my_transfers, user_lang)
             )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка просмотра передач: {e}")

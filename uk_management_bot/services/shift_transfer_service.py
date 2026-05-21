@@ -14,6 +14,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.database.models.shift_transfer import ShiftTransfer as ShiftTransferModel
 from uk_management_bot.services.notification_service import NotificationService
 import logging
 
@@ -547,6 +548,102 @@ class ShiftTransferService:
             logger.error(f"Ошибка автоинициации передач: {e}")
             return []
     
+    async def process_expired_transfers(self, hours_threshold: int = 24) -> Dict[str, Any]:
+        """
+        Помечает «зависшие» передачи как expired.
+
+        Передача считается истёкшей, если её статус всё ещё «pending» / «assigned»,
+        а с момента создания прошло больше `hours_threshold` часов.
+
+        Args:
+            hours_threshold: сколько часов передача может оставаться без ответа.
+
+        Returns:
+            Dict с ключами:
+              - processed_count: количество помеченных как expired записей
+              - notified_count: количество отправленных уведомлений инициаторам
+              - errors: количество ошибок при обработке отдельных записей
+        """
+        processed_count = 0
+        notified_count = 0
+        errors = 0
+
+        try:
+            cutoff = datetime.utcnow() - timedelta(hours=hours_threshold)
+
+            expired_rows = self.db.query(ShiftTransferModel).filter(
+                ShiftTransferModel.status.in_(["pending", "assigned"]),
+                ShiftTransferModel.created_at < cutoff,
+            ).all()
+
+            if not expired_rows:
+                logger.info("Истёкших передач не обнаружено")
+                return {
+                    "processed_count": 0,
+                    "notified_count": 0,
+                    "errors": 0,
+                }
+
+            now = datetime.utcnow()
+            for transfer in expired_rows:
+                try:
+                    transfer.status = "expired"
+                    transfer.responded_at = now
+                    transfer.completed_at = now
+                    transfer.comment = (
+                        (transfer.comment or "")
+                        + f"\n[{now.strftime('%Y-%m-%d %H:%M')}] Истекло автоматически (>{hours_threshold}ч без ответа)"
+                    ).strip()
+                    processed_count += 1
+
+                    # Лучшее усилие: уведомить инициатора. Ошибка не должна
+                    # ломать обработку остальных записей.
+                    try:
+                        self.notification_service.notify_user(
+                            transfer.from_executor_id,
+                            "Передача смены истекла",
+                            f"Передача смены #{transfer.id} помечена как истёкшая после "
+                            f"{hours_threshold} ч без ответа.",
+                        )
+                        notified_count += 1
+                    except Exception as notify_err:  # pragma: no cover - defensive
+                        logger.warning(
+                            "Ошибка уведомления инициатора %s по передаче %s: %s",
+                            transfer.from_executor_id,
+                            transfer.id,
+                            notify_err,
+                        )
+                except Exception as row_err:
+                    logger.error(
+                        "Ошибка обработки истёкшей передачи %s: %s",
+                        getattr(transfer, "id", "?"),
+                        row_err,
+                    )
+                    errors += 1
+
+            self.db.commit()
+            logger.info(
+                "Обработано истёкших передач: %s (уведомлений: %s, ошибок: %s)",
+                processed_count,
+                notified_count,
+                errors,
+            )
+
+            return {
+                "processed_count": processed_count,
+                "notified_count": notified_count,
+                "errors": errors,
+            }
+
+        except Exception as e:
+            logger.error(f"Ошибка обработки истёкших передач: {e}")
+            self.db.rollback()
+            return {
+                "processed_count": processed_count,
+                "notified_count": notified_count,
+                "errors": errors + 1,
+            }
+
     # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
     
     def _create_transfer_audit(self, transfer: ShiftTransfer, user_id: int, action: str, details: str = None):

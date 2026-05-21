@@ -8,7 +8,11 @@ load_dotenv()
 class Settings:
     # Telegram Bot
     BOT_TOKEN = os.getenv("BOT_TOKEN")
-    BOT_USERNAME = os.getenv("BOT_USERNAME", "infrasafebot")
+    # BOT_USERNAME: no hardcoded default. Real value is token-derived and must
+    # be validated at startup (see main.py — getMe()/BOT_USERNAME check).
+    # If unset, main.py will populate it dynamically from Telegram getMe() and
+    # log a loud ERROR so the operator knows .env is missing the value.
+    BOT_USERNAME = os.getenv("BOT_USERNAME")
     TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
     
     # Database: используем абсолютный путь по умолчанию, чтобы запуск из любого каталога

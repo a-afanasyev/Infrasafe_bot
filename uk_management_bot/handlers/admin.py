@@ -49,6 +49,7 @@ from uk_management_bot.keyboards.requests import resolve_category_key, get_categ
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.filters import RoleFilter
 from datetime import datetime
 
 router = Router()
@@ -1340,7 +1341,11 @@ async def back_to_main_menu(message: Message, db: Session, roles: list = None, a
     )
 
 
-@router.message(F.text.in_(ADMIN_ARCHIVE_TEXTS))
+# BUG-BOT-019: text "📦 Архив" is shared with the executor main menu. Gate by
+# active_role so the admin archive only fires when the user is acting as
+# manager/admin. has_admin_access() also runs below but only checks roles list,
+# not active_role — RoleFilter is what prevents executor-mode mis-routing.
+@router.message(F.text.in_(ADMIN_ARCHIVE_TEXTS), RoleFilter(["manager", "admin"]))
 async def list_archive_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать архивные заявки"""
     lang = language
