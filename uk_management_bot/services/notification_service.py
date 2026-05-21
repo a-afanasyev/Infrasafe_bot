@@ -71,9 +71,31 @@ def build_shift_ended_message(user: User, shift: Shift, for_channel: bool = Fals
     return f"✅ Смена завершена в {ended}. Длительность: {duration}"
 
 
+# BUG-BOT-016: Default placeholder в .env.template — не валидный канал, должен игнорироваться
+_CHANNEL_ID_PLACEHOLDERS = frozenset({
+    "@your_notifications_channel",
+    "your_notifications_channel",
+    "your_channel_id",
+    "@your_channel",
+})
+
+
+def _resolve_channel_id() -> str | None:
+    """Возвращает channel_id если он задан и не является placeholder'ом."""
+    raw = settings.TELEGRAM_CHANNEL_ID
+    if not raw:
+        return None
+    stripped = raw.strip()
+    if not stripped:
+        return None
+    if stripped in _CHANNEL_ID_PLACEHOLDERS:
+        return None
+    return stripped
+
+
 async def send_to_channel(bot, text: str) -> None:
     try:
-        channel_id = settings.TELEGRAM_CHANNEL_ID
+        channel_id = _resolve_channel_id()
         if not channel_id:
             return
         await bot.send_message(channel_id, text)
@@ -441,6 +463,42 @@ class NotificationService:
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об отзыве прав доступа: {e}")
+
+    def notify_user(self, user_id: int, title: str, message: str) -> None:
+        """
+        BUG-BOT-029: общий метод отправки уведомления пользователю по
+        внутреннему user_id (а не telegram_id). Используется планировщиком
+        `ShiftTransferService.process_expired_transfers` и связанными методами.
+
+        Sync-сигнатура сохранена для обратной совместимости с существующими
+        не-async вызывающими (см. `_notify_transfer_*`). Внутри планирует
+        отправку через asyncio loop, или выполняет fallback-логирование.
+
+        Args:
+            user_id: ID пользователя в БД (`User.id`).
+            title: Заголовок уведомления (рендерится первой строкой).
+            message: Тело уведомления.
+        """
+        try:
+            from uk_management_bot.database.models.user import User
+
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"notify_user: пользователь user_id={user_id} не найден")
+                return
+
+            text = f"{title}\n{message}" if title else message
+            bot = self._get_bot()
+
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(send_to_user(bot, user.telegram_id, text))
+            except RuntimeError:
+                # Нет запущенного loop — выполняем синхронно через asyncio.run
+                asyncio.run(send_to_user(bot, user.telegram_id, text))
+        except Exception as e:
+            logger.warning(f"notify_user: ошибка отправки user_id={user_id}: {e}")
 
     async def send_system_notification(self, title: str, message: str) -> None:
         """

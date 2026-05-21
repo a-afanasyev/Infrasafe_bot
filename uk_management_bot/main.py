@@ -149,10 +149,12 @@ async def send_startup_notification(bot: Bot):
                 except Exception as e:
                     logger.warning(f"Не удалось отправить уведомление администратору {admin_id}: {e}")
 
-        # Отправляем в канал если указан
-        if settings.TELEGRAM_CHANNEL_ID:
+        # Отправляем в канал если указан (placeholder в .env.template игнорируется)
+        from uk_management_bot.services.notification_service import _resolve_channel_id
+        channel_id = _resolve_channel_id()
+        if channel_id:
             try:
-                await bot.send_message(settings.TELEGRAM_CHANNEL_ID, startup_message)
+                await bot.send_message(channel_id, startup_message)
                 logger.info("Уведомление о запуске отправлено в канал")
             except Exception as e:
                 logger.warning(f"Не удалось отправить уведомление в канал: {e}")
