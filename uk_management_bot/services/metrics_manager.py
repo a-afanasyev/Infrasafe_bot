@@ -202,7 +202,134 @@ class MetricsManager:
         }
     
     # =================== РАСЧЕТ МЕТРИК ===================
-    
+
+    async def calculate_period_metrics(
+        self,
+        period_start: date,
+        period_end: date,
+    ) -> Dict[str, Any]:
+        """
+        Расчет агрегированных метрик за произвольный период.
+
+        Используется аналитикой смен (`ShiftPlanningService.get_comprehensive_analytics`)
+        для построения недельной/месячной сводки. Работает только с существующими
+        полями модели `Shift` (`start_time`, `end_time`, `status`, `completed_requests`,
+        `efficiency_score`, `quality_rating`).
+
+        Args:
+            period_start: Начальная дата периода (включительно)
+            period_end: Конечная дата периода (включительно)
+
+        Returns:
+            Словарь с агрегированными метриками. Если за период нет смен, все
+            числовые поля возвращаются равными нулю; `error` отсутствует.
+        """
+        try:
+            start_datetime = datetime.combine(period_start, datetime.min.time())
+            end_datetime = datetime.combine(period_end, datetime.max.time())
+
+            shifts = self.db.query(Shift).filter(
+                and_(
+                    Shift.start_time >= start_datetime,
+                    Shift.start_time <= end_datetime,
+                )
+            ).all()
+
+            total_shifts = len(shifts)
+            completed_shifts = sum(
+                1 for s in shifts if s.status == SHIFT_STATUS_COMPLETED
+            )
+            cancelled_shifts = sum(1 for s in shifts if s.status == "cancelled")
+            active_shifts = sum(
+                1 for s in shifts if s.status == SHIFT_STATUS_ACTIVE
+            )
+
+            # Сумма фактически отработанных часов: используем end_time при наличии,
+            # иначе planned_end_time (см. duration_hours property модели).
+            total_hours = sum(s.duration_hours for s in shifts)
+
+            # On-time rate: фактический start_time <= planned_start_time.
+            shifts_with_plan = [
+                s for s in shifts if s.start_time and s.planned_start_time
+            ]
+            on_time_count = sum(
+                1
+                for s in shifts_with_plan
+                if s.start_time <= s.planned_start_time
+            )
+            on_time_rate = (
+                (on_time_count / len(shifts_with_plan)) * 100
+                if shifts_with_plan
+                else 0.0
+            )
+
+            completion_rate = (
+                (completed_shifts / total_shifts) * 100 if total_shifts else 0.0
+            )
+
+            # Средняя эффективность/качество только по сменам, где значения заданы.
+            efficiency_values = [
+                s.efficiency_score
+                for s in shifts
+                if s.efficiency_score is not None and s.efficiency_score > 0
+            ]
+            quality_values = [
+                s.quality_rating
+                for s in shifts
+                if s.quality_rating is not None and s.quality_rating > 0
+            ]
+            average_efficiency = (
+                sum(efficiency_values) / len(efficiency_values)
+                if efficiency_values
+                else 0.0
+            )
+            average_quality = (
+                sum(quality_values) / len(quality_values)
+                if quality_values
+                else 0.0
+            )
+
+            total_completed_requests = sum(
+                s.completed_requests or 0 for s in shifts
+            )
+
+            return {
+                "period_start": period_start.isoformat(),
+                "period_end": period_end.isoformat(),
+                "total_shifts": total_shifts,
+                "completed_shifts": completed_shifts,
+                "cancelled_shifts": cancelled_shifts,
+                "active_shifts": active_shifts,
+                "total_hours": round(total_hours, 2),
+                "on_time_rate": round(on_time_rate, 2),
+                "completion_rate": round(completion_rate, 2),
+                "average_efficiency": round(average_efficiency, 2),
+                "average_quality": round(average_quality, 2),
+                "total_completed_requests": total_completed_requests,
+            }
+
+        except Exception as e:  # noqa: BLE001 — service-level fallback
+            logger.error(f"Error calculating period metrics: {e}")
+            return {
+                "period_start": period_start.isoformat()
+                if hasattr(period_start, "isoformat")
+                else str(period_start),
+                "period_end": period_end.isoformat()
+                if hasattr(period_end, "isoformat")
+                else str(period_end),
+                "total_shifts": 0,
+                "completed_shifts": 0,
+                "cancelled_shifts": 0,
+                "active_shifts": 0,
+                "total_hours": 0.0,
+                "on_time_rate": 0.0,
+                "completion_rate": 0.0,
+                "average_efficiency": 0.0,
+                "average_quality": 0.0,
+                "total_completed_requests": 0,
+                "error": str(e),
+            }
+
     async def calculate_all_metrics(
         self, 
         period: MetricPeriod = MetricPeriod.DAILY,
