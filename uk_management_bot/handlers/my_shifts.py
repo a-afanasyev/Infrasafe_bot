@@ -601,7 +601,8 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext,
     try:
         user_lang = language
 
-        with get_db() as db:
+        db = next(get_db())
+        try:
             # Получаем активные смены пользователя для передачи
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
             if not user:
@@ -649,6 +650,8 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
             )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка меню передачи смен: {e}")
@@ -661,7 +664,8 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, l
     try:
         user_lang = language
 
-        with get_db() as db:
+        db = next(get_db())
+        try:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
             # Получаем активные смены пользователя
@@ -682,6 +686,8 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, l
                 select_text,
                 reply_markup=shift_selection_keyboard(active_shifts, user_lang)
             )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка инициации передачи: {e}")
@@ -694,7 +700,8 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, l
     try:
         user_lang = language
 
-        with get_db() as db:
+        db = next(get_db())
+        try:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
             # Получаем передачи пользователя
@@ -715,6 +722,8 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, l
                 view_text,
                 reply_markup=transfers_list_keyboard(my_transfers, user_lang)
             )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка просмотра передач: {e}")
