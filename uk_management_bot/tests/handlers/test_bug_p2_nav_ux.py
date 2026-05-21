@@ -242,7 +242,7 @@ class TestBug021CancelApartmentSelectionContext:
 
 
 class TestBug025EmployeeSearchHandler:
-    """waiting_for_query FSM message must run a DB ILIKE search."""
+    """waiting_for_search_query FSM message must run a DB ILIKE search."""
 
     @pytest.mark.asyncio
     async def test_search_handler_returns_results(self):
@@ -266,23 +266,28 @@ class TestBug025EmployeeSearchHandler:
         db.query.return_value.filter.return_value.limit.return_value.all.return_value = [emp]
 
         with patch(
-            "uk_management_bot.handlers.employee_management.get_user_language",
-            return_value="ru",
-        ), patch(
             "uk_management_bot.handlers.employee_management.get_text",
             side_effect=lambda key, **kw: key,
+        ), patch(
+            "uk_management_bot.handlers.employee_management.has_admin_access",
+            return_value=True,
         ):
-            inner = getattr(handle_employee_search_query, "__wrapped__", handle_employee_search_query)
-            await inner(msg, state, db=db, user=MagicMock(), roles=["admin"])
+            await handle_employee_search_query(
+                msg, state, db=db, user=MagicMock(), roles=["admin"], language="ru"
+            )
 
         msg.answer.assert_awaited()
         call = msg.answer.await_args
         # On non-empty results, a keyboard with at least one inline button must be present.
         markup = call.kwargs.get("reply_markup")
         assert isinstance(markup, InlineKeyboardMarkup)
+        # 1 row for the employee + 1 row for the cancel button → at least 1 non-empty row.
+        assert len(markup.inline_keyboard) >= 1
         assert any(
-            row for row in markup.inline_keyboard
-        ), "results keyboard must contain at least one row"
+            btn.callback_data == "employee_view_7"
+            for row in markup.inline_keyboard
+            for btn in row
+        ), "result rows must reference the matched employee"
 
     @pytest.mark.asyncio
     async def test_search_handler_returns_empty_state(self):
@@ -297,15 +302,20 @@ class TestBug025EmployeeSearchHandler:
         db.query.return_value.filter.return_value.limit.return_value.all.return_value = []
 
         with patch(
-            "uk_management_bot.handlers.employee_management.get_user_language",
-            return_value="ru",
-        ), patch(
             "uk_management_bot.handlers.employee_management.get_text",
             side_effect=lambda key, **kw: key,
+        ), patch(
+            "uk_management_bot.handlers.employee_management.has_admin_access",
+            return_value=True,
         ):
-            inner = getattr(handle_employee_search_query, "__wrapped__", handle_employee_search_query)
-            await inner(msg, state, db=db, user=MagicMock(), roles=["admin"])
+            await handle_employee_search_query(
+                msg, state, db=db, user=MagicMock(), roles=["admin"], language="ru"
+            )
 
         msg.answer.assert_awaited()
-        text_arg = msg.answer.await_args.args[0] if msg.answer.await_args.args else msg.answer.await_args.kwargs.get("text", "")
-        assert "not_found" in text_arg or "no" in text_arg.lower() or "не" in text_arg.lower()
+        args = msg.answer.await_args.args
+        kwargs = msg.answer.await_args.kwargs
+        text_arg = args[0] if args else kwargs.get("text", "")
+        assert "not_found" in text_arg or "empty" in text_arg.lower(), (
+            f"empty-state message should reference 'not_found' / 'empty' key, got: {text_arg}"
+        )
