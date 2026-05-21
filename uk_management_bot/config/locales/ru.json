@@ -7148,6 +7148,11 @@
     "approved": "Принято",
     "cancelled": "Отменена"
   },
+  "user_statuses": {
+    "pending": "⏳ Ожидает одобрения",
+    "approved": "✅ Одобрен",
+    "blocked": "🚫 Заблокирован"
+  },
   "quarterly": {
     "keyboards": {
       "create_plan": "📅 Создать план на квартал",

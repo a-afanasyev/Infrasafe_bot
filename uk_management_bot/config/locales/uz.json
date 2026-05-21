@@ -7149,6 +7149,11 @@
     "approved": "Qabul qilindi",
     "cancelled": "Bekor qilindi"
   },
+  "user_statuses": {
+    "pending": "⏳ Tasdiqlanishi kutilmoqda",
+    "approved": "✅ Tasdiqlangan",
+    "blocked": "🚫 Bloklangan"
+  },
   "quarterly": {
     "keyboards": {
       "create_plan": "📅 Chorak uchun reja yaratish",
