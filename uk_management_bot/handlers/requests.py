@@ -2030,6 +2030,9 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(
     F.data.startswith("cancel_") &
     ~F.data.startswith("cancel_document_selection_") &
+    # BUG-BOT-018 follow-up: exclude shift_management cancels — they have own handlers
+    ~F.data.startswith("cancel_plan_") &
+    ~F.data.startswith("cancel_auto_plan_") &
     ~F.data.in_(["cancel_action", "cancel_apartment_selection"])
 )
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
