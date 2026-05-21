@@ -7977,7 +7977,9 @@
       "yard_status_changed": "✅ Hovli {status}",
       "yards_list_empty": "📋 <b>Hovlilar ro'yxati bo'sh</b>\n\nIshni boshlash uchun birinchi hovlini qo'shing.",
       "yards_list_page": "📋 <b>Hovlilar ro'yxati</b> (sahifa {page})\n\nJami hovlilar: {total}\n\nKo'rish uchun hovlini tanlang:",
-      "yards_list_title": "📋 <b>Hovlilar ro'yxati</b>\n\nJami hovlilar: {total}\nFaol: {active}\n\nKo'rish uchun hovlini tanlang:"
+      "yards_list_title": "📋 <b>Hovlilar ro'yxati</b>\n\nJami hovlilar: {total}\nFaol: {active}\n\nKo'rish uchun hovlini tanlang:",
+      "address_stats_report": "📊 <b>Manzillar ma'lumotnomasi statistikasi</b>\n\n🏘 <b>Hovlilar:</b> {total_yards} (faol: {active_yards}, nofaol: {inactive_yards})\n🏢 <b>Binolar:</b> {total_buildings} (faol: {active_buildings}, nofaol: {inactive_buildings})\n🏠 <b>Kvartiralar:</b> {total_apartments} (faol: {active_apartments}, nofaol: {inactive_apartments})\n\n👥 <b>Aholi:</b> {residents_total}\n  ✅ Tasdiqlangan: {residents_approved}\n  ⏱ Kutmoqda: {residents_pending}\n  ❌ Rad etilgan: {residents_rejected}",
+      "address_stats_error": "❌ Statistikani olishda xatolik"
     }
   },
   "base": {
