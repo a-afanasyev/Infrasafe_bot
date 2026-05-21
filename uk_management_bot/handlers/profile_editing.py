@@ -250,17 +250,21 @@ async def handle_cancel_input(callback: CallbackQuery, state: FSMContext, db: Se
     """Отмена ввода - возврат к меню редактирования"""
     try:
         logger.info(f"Обработка отмены ввода для пользователя {callback.from_user.id}")
-        
+
         # Получаем язык пользователя
         lang = get_user_language(db, callback.from_user.id)
         logger.info(f"Язык пользователя: {lang}")
-        
+
         # Получаем текст заголовка
         title_text = get_text("profile.edit_title", language=lang)
         logger.info(f"Текст заголовка: {title_text}")
-        
+
+        # BUG-BOT-020: перечитываем пользователя из БД, чтобы клавиатура отрисовала
+        # актуальные значения (phone/first_name/last_name), а не stale "не указано".
+        fresh_user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+
         # Получаем клавиатуру
-        keyboard = get_profile_edit_keyboard(lang)
+        keyboard = get_profile_edit_keyboard(lang, fresh_user)
         logger.info(f"Клавиатура создана: {keyboard}")
         
         # Редактируем сообщение

@@ -975,35 +975,112 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
 # ═══ ПОИСК СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data == "employee_mgmt_search")
-async def start_employee_search(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def start_employee_search(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Начать поиск сотрудников"""
     lang = language
-    
+
     # Проверяем права доступа
     has_access = has_admin_access(roles=roles, user=user)
-    
+
     if not has_access:
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
         )
         return
-    
+
     try:
         await callback.message.edit_text(
             get_text('employee_management.search_instructions', language=lang),
             reply_markup=get_cancel_keyboard(lang)
         )
-        
-        # Устанавливаем состояние поиска
+
+        # BUG-BOT-025: переводим пользователя в FSM-состояние ожидания запроса,
+        # иначе message-handler ниже не сработает.
+        await state.set_state(EmployeeManagementStates.waiting_for_search_query)
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка начала поиска сотрудников: {e}")
         await callback.answer(
             get_text('errors.unknown_error', language=lang),
             show_alert=True
         )
+
+
+@router.message(EmployeeManagementStates.waiting_for_search_query)
+async def handle_employee_search_query(message: Message, state: FSMContext, db: Session = None, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+    """BUG-BOT-025: обработка введённого запроса поиска сотрудников.
+
+    Ищем по first_name / last_name / username / phone (ILIKE %query%).
+    На пусто-результат возвращаем дружелюбное сообщение, иначе — inline-клавиатуру
+    с кнопками-сотрудниками.
+    """
+    lang = language
+
+    # Проверяем права доступа (тот же check, что и на старте)
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
+
+    raw_query = (message.text or "").strip()
+    if not raw_query:
+        await message.answer(get_text('employee_management.search_empty_query', language=lang))
+        return
+
+    try:
+        from sqlalchemy import or_
+        pattern = f"%{raw_query}%"
+        employees = (
+            db.query(User)
+            .filter(
+                or_(
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                    User.username.ilike(pattern),
+                    User.phone.ilike(pattern),
+                )
+            )
+            .limit(20)
+            .all()
+        )
+
+        if not employees:
+            await message.answer(
+                get_text('employee_management.search_not_found', language=lang),
+                reply_markup=get_cancel_keyboard(lang)
+            )
+            await state.clear()
+            return
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        rows = []
+        for emp in employees:
+            label = _format_employee_name(emp)
+            rows.append([
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"employee_view_{emp.id}"
+                )
+            ])
+        rows.append([
+            InlineKeyboardButton(
+                text=get_text('buttons.cancel', language=lang),
+                callback_data="employee_management_panel"
+            )
+        ])
+
+        await message.answer(
+            get_text('employee_management.search_results_header', language=lang),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)
+        )
+        await state.clear()
+
+    except Exception as e:
+        logger.error(f"Ошибка поиска сотрудников: {e}")
+        await message.answer(get_text('errors.unknown_error', language=lang))
+        await state.clear()
 
 
 # ═══ УПРАВЛЕНИЕ СПЕЦИАЛИЗАЦИЯМИ ═══

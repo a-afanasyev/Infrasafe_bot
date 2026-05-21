@@ -2330,17 +2330,19 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
             Shift.start_time.between(now, week_ahead)
         ).order_by(Shift.start_time).limit(10).all()
 
+        # BUG-BOT-014: используем клавиатуру с кнопкой "Назад" для возврата к меню смен
+        from uk_management_bot.keyboards.shift_management import get_executor_assignment_keyboard
+
         if not unassigned_shifts:
             await callback.message.edit_text(
                 get_text("shift_management.no_unassigned_shifts", language=lang),
                 parse_mode="HTML",
-                reply_markup=get_main_shift_menu()
+                reply_markup=get_executor_assignment_keyboard(lang)
             )
             await callback.answer()
             return
 
         # Показываем список смен для назначения
-        from uk_management_bot.keyboards.shift_management import get_executor_assignment_keyboard
 
         shift_list = ""
         for shift in unassigned_shifts:
@@ -2356,7 +2358,7 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
         await callback.message.edit_text(
             text,
             parse_mode="HTML",
-            reply_markup=get_executor_assignment_keyboard()
+            reply_markup=get_executor_assignment_keyboard(lang)
         )
 
         await callback.answer()
