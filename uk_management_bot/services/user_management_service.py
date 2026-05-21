@@ -462,25 +462,34 @@ class UserManagementService:
             name = f"{user.first_name or ''} {user.last_name or ''}".strip()
             if not name:
                 name = user.username or f"ID{user.telegram_id}"
-            
-            # Статус с эмодзи
+
+            # BUG-BOT-024: статус уже содержит emoji в локали (user_status.approved = "✅ Одобрен"),
+            # отдельный emoji-префикс вызывает двойной значок (`✅ ✅ Одобрен`).
+            # Для краткого формата используем только emoji-карту; для detailed — только локализованный текст.
             status_emoji = {
                 "pending": "📝",
-                "approved": "✅", 
+                "approved": "✅",
                 "blocked": "🚫"
             }.get(user.status, "❓")
-            
+
             status_text = get_text(f"user_status.{user.status}", language=language)
-            
+
             # Роли
             roles_text = self._format_user_roles(user, language)
-            
+
             if detailed:
+                # BUG-BOT-024: для username показываем "Username не указан" вместо "@не указано"
+                if user.username:
+                    username_line = f"📱 @{user.username}"
+                else:
+                    username_line = (
+                        f"📱 {get_text('user_mgmt.handlers.username_not_specified', language=language)}"
+                    )
                 # Подробная информация
                 info_parts = [
                     f"👤 {name}",
-                    f"📱 @{user.username or get_text('common.none', language=language)}",
-                    f"{status_emoji} {status_text}",
+                    username_line,
+                    status_text,
                     f"👥 {roles_text}",
                 ]
                 

@@ -2008,16 +2008,16 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
-@router.callback_query(
-    F.data.startswith("cancel_") &
-    ~F.data.startswith("cancel_document_selection_") &
-    # BUG-BOT-018 follow-up: exclude shift_management cancels — they have own handlers
-    ~F.data.startswith("cancel_plan_") &
-    ~F.data.startswith("cancel_auto_plan_") &
-    ~F.data.in_(["cancel_action", "cancel_apartment_selection"])
-)
+# BUG-BOT-030: ранее использовался prefix-match `cancel_` с поддерживаемым exclusion list,
+# что приводило к anti-pattern (open-set, ловит любые новые cancel_-callback).
+# Заменено на строгий regex по формату request_number (`YYMMDD-NNN`).
+import re as _re
+_CANCEL_REQUEST_NUMBER_RE = _re.compile(r"^cancel_\d{6}-\d{3}$")
+
+
+@router.callback_query(F.data.regexp(_CANCEL_REQUEST_NUMBER_RE.pattern))
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
-    """Обработка отмены заявки"""
+    """Обработка отмены заявки. Срабатывает только на `cancel_<YYMMDD-NNN>`."""
     try:
         # Менеджер или владелец (в RequestService также есть проверка)
         request_number = callback.data.replace("cancel_", "")

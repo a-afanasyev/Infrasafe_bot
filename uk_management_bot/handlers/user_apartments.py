@@ -195,7 +195,10 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
 
     db = next(get_db())
     try:
-        from uk_management_bot.database.models import UserApartment
+        # BUG-BOT-027: исходный joinedload(UserApartment.apartment.property.mapper.class_.building...)
+        # был некорректным SQLAlchemy-выражением и валил handler в except → юзер видел
+        # generic "ошибка загрузки данных". Заменено на корректные nested joinedload.
+        from uk_management_bot.database.models import UserApartment, Apartment, Building
         from sqlalchemy import select
         from sqlalchemy.orm import joinedload
 
@@ -203,13 +206,16 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
             select(UserApartment)
             .options(
                 joinedload(UserApartment.user),
-                joinedload(UserApartment.apartment).joinedload(UserApartment.apartment.property.mapper.class_.building).joinedload(UserApartment.apartment.property.mapper.class_.building.property.mapper.class_.yard),
-                joinedload(UserApartment.reviewer)
+                joinedload(UserApartment.apartment)
+                    .joinedload(Apartment.building)
+                    .joinedload(Building.yard),
+                joinedload(UserApartment.reviewer),
             )
             .where(UserApartment.id == user_apartment_id)
         ).scalar_one_or_none()
 
         if not user_apartment:
+            # BUG-BOT-027: контекст-specific сообщение, а не generic "Заявка не найдена"
             await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
             return
 

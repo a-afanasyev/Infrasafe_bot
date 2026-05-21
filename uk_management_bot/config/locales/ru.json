@@ -1,4 +1,18 @@
 {
+  "months": {
+    "january": "Январь",
+    "february": "Февраль",
+    "march": "Март",
+    "april": "Апрель",
+    "may": "Май",
+    "june": "Июнь",
+    "july": "Июль",
+    "august": "Август",
+    "september": "Сентябрь",
+    "october": "Октябрь",
+    "november": "Ноябрь",
+    "december": "Декабрь"
+  },
   "admin": {
     "1_перейдите_по": "1. Перейдите по ссылке\n",
     "1_час": "1 час",
@@ -7653,6 +7667,7 @@
       "rejected_by": "\n\n❌ Отклонено {name}",
       "error_rejecting_user": "Ошибка отклонения пользователя",
       "not_specified": "Не указано",
+      "username_not_specified": "Username не указан",
       "profile_title": "👤 <b>Профиль пользователя</b>",
       "profile_name": "👤 Имя: {name}",
       "profile_role": "🎯 Роль: {role}",
@@ -7765,6 +7780,7 @@
       "residents_pending": "⏳ <b>Ожидают подтверждения ({count}):</b>",
       "residents_rejected": "❌ <b>Отклонённые ({count}):</b>",
       "residents_title": "👥 <b>Жители квартиры {number}</b>",
+      "back_to_apartment": "◀️ Назад к квартире",
       "select_action": "Выберите действие:",
       "select_building": "🏢 <b>Выберите здание</b>\n\nВсего зданий: <b>{total}</b>",
       "sqm": "м²",
