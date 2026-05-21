@@ -339,17 +339,22 @@ def get_employee_edit_keyboard(employee_id: int, language: str = 'ru') -> Inline
 
 def get_cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     """
-    Клавиатура отмены
-    
+    Клавиатура возврата в главное меню управления сотрудниками.
+
+    BUG-BOT-011: переименовано из "Отмена" в "Назад" — callback
+    `employee_mgmt_main` выполняет навигацию, без очистки FSM-состояния.
+    Для FSM-flow с очисткой используется `❌ Отмена` (см. role_cancel,
+    spec_cancel handlers с явным state-filter).
+
     Args:
         language: Язык интерфейса
-        
+
     Returns:
-        InlineKeyboardMarkup с кнопкой отмены
+        InlineKeyboardMarkup с кнопкой возврата.
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text=f"{get_text('buttons.cancel', language)}",
+            text=get_text('buttons.back', language),
             callback_data="employee_mgmt_main"
         )]
     ])
