@@ -395,11 +395,13 @@ async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"
             if rejected:
                 text += get_text("address_apartments.handlers.residents_rejected", language=lang).format(count=len(rejected)) + "\n"
 
-        from uk_management_bot.keyboards.address_management import get_confirmation_keyboard
-        keyboard = get_confirmation_keyboard(
-            confirm_callback=f"addr_apartment_view:{apartment_id}",
-            cancel_callback=f"addr_apartment_view:{apartment_id}"
-        )
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text=get_text("address_apartments.handlers.back_to_apartment", language=lang),
+                callback_data=f"addr_apartment_view:{apartment_id}"
+            )
+        ]])
 
         await callback.message.edit_text(text, reply_markup=keyboard)
 

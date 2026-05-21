@@ -7766,6 +7766,7 @@
       "residents_pending": "⏳ <b>Tasdiqlashni kutayotganlar ({count}):</b>",
       "residents_rejected": "❌ <b>Rad etilganlar ({count}):</b>",
       "residents_title": "👥 <b>Kvartira {number} aholisi</b>",
+      "back_to_apartment": "◀️ Kvartiraga qaytish",
       "select_action": "Amalni tanlang:",
       "select_building": "🏢 <b>Binoni tanlang</b>\n\nJami binolar: <b>{total}</b>",
       "sqm": "m²",

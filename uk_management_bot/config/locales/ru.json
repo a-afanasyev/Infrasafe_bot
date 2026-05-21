@@ -7765,6 +7765,7 @@
       "residents_pending": "⏳ <b>Ожидают подтверждения ({count}):</b>",
       "residents_rejected": "❌ <b>Отклонённые ({count}):</b>",
       "residents_title": "👥 <b>Жители квартиры {number}</b>",
+      "back_to_apartment": "◀️ Назад к квартире",
       "select_action": "Выберите действие:",
       "select_building": "🏢 <b>Выберите здание</b>\n\nВсего зданий: <b>{total}</b>",
       "sqm": "м²",
