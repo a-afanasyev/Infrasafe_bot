@@ -71,9 +71,31 @@ def build_shift_ended_message(user: User, shift: Shift, for_channel: bool = Fals
     return f"✅ Смена завершена в {ended}. Длительность: {duration}"
 
 
+# BUG-BOT-016: Default placeholder в .env.template — не валидный канал, должен игнорироваться
+_CHANNEL_ID_PLACEHOLDERS = frozenset({
+    "@your_notifications_channel",
+    "your_notifications_channel",
+    "your_channel_id",
+    "@your_channel",
+})
+
+
+def _resolve_channel_id() -> str | None:
+    """Возвращает channel_id если он задан и не является placeholder'ом."""
+    raw = settings.TELEGRAM_CHANNEL_ID
+    if not raw:
+        return None
+    stripped = raw.strip()
+    if not stripped:
+        return None
+    if stripped in _CHANNEL_ID_PLACEHOLDERS:
+        return None
+    return stripped
+
+
 async def send_to_channel(bot, text: str) -> None:
     try:
-        channel_id = settings.TELEGRAM_CHANNEL_ID
+        channel_id = _resolve_channel_id()
         if not channel_id:
             return
         await bot.send_message(channel_id, text)
