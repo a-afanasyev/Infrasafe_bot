@@ -6446,6 +6446,8 @@
     "errors_label": "Xatolar",
     "weekly_planning_complete": "📅 <b>Haftalik rejalashtirish yakunlandi</b>\n⏰ Vaqt: {timestamp}\n\n<b>Davr:</b> {week_start} - {week_end}\n<b>Yaratilgan smenalar:</b> {total_shifts}\n{all_planned}{by_day}{by_template}{errors}",
     "template_management_under_development": "🗂️ <b>Shablonlarni boshqarish</b>\n\nFunksiya ishlab chiqilmoqda. Smenalarni yaratish uchun /shifts buyrug'idan foydalaning.",
+    "monthly_analytics_under_development": "📈 <b>Oylik hisobot</b>\n\nFunksiya ishlab chiqilmoqda. Operativ ma'lumot uchun «Haftalik tahlil»dan foydalaning.",
+    "efficiency_analysis_under_development": "⚡ <b>Samaradorlik tahlili</b>\n\nFunksiya ishlab chiqilmoqda. «Haftalik tahlil» yoki «Optimallashtirish tavsiyalari»dan foydalaning.",
     "keyboards": {
       "shift_planning": "📅 Smenalarni rejalashtirish",
       "analytics_reports": "📊 Tahlil va hisobotlar",
