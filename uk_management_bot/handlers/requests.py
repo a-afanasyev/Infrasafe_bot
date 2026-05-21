@@ -1246,11 +1246,17 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         end_idx = start_idx + requests_per_page
         page_requests = user_requests[start_idx:end_idx]
 
-        # Формируем текст сообщения с эмодзи статусов и причиной отказа
-        message_text = get_text("requests.your_requests_page", language=lang).format(
+        # BUG-BOT-008: Унифицированный заголовок (см. format_requests_list_header).
+        # Использует единый шаблон для Page1/Page2/Активные/Архив.
+        from uk_management_bot.utils.request_helpers import format_requests_list_header
+        message_text = format_requests_list_header(
+            total_requests=total_requests,
             current_page=current_page,
-            total_pages=total_pages
-        ) + "\n\n"
+            total_pages=total_pages,
+            status_filter=active_status or "all",
+            role=active_role,
+            language=lang,
+        )
         # TASK 17 Этап A: Используем resolve_category_key и get_category_display для нормализации категорий
         # TASK 17 Этап C: Локализуем статусы через status_display.py
         from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display

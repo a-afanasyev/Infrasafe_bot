@@ -320,26 +320,28 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
             
         employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
         employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        
-        # Отображаем все роли пользователя
-        if employee.roles:
-            try:
-                user_roles = json.loads(employee.roles)
-                if user_roles:
-                    roles_text = ", ".join(user_roles)
-                    employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {roles_text}\n"
-                else:
-                    employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"Ошибка парсинга ролей сотрудника {employee.id}: {e}")
-                employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        else:
-            employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        
-        employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {employee.status or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        
+
+        # BUG-BOT-023: локализованные значения вместо сырых DB-строк
+        from uk_management_bot.utils.employee_display import (
+            format_user_status,
+            format_roles,
+            format_specializations,
+        )
+        roles_source = employee.roles if employee.roles else getattr(employee, "role", None)
+        employee_info += (
+            f"🎯 {get_text('employee_management.role', language=lang)}: "
+            f"{format_roles(roles_source, lang)}\n"
+        )
+        employee_info += (
+            f"📊 {get_text('employee_management.status', language=lang)}: "
+            f"{format_user_status(employee.status, lang)}\n"
+        )
+
         if employee.specialization:
-            employee_info += f"🛠️ {get_text('employee_management.specialization', language=lang)}: {employee.specialization}\n"
+            employee_info += (
+                f"🛠️ {get_text('employee_management.specialization', language=lang)}: "
+                f"{format_specializations(employee.specialization, lang)}\n"
+            )
         
         employee_info += f"📅 {get_text('employee_management.created_at', language=lang)}: {employee.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         
