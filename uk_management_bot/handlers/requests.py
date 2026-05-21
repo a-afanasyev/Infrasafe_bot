@@ -1246,11 +1246,17 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         end_idx = start_idx + requests_per_page
         page_requests = user_requests[start_idx:end_idx]
 
-        # Формируем текст сообщения с эмодзи статусов и причиной отказа
-        message_text = get_text("requests.your_requests_page", language=lang).format(
+        # BUG-BOT-008: Унифицированный заголовок (см. format_requests_list_header).
+        # Использует единый шаблон для Page1/Page2/Активные/Архив.
+        from uk_management_bot.utils.request_helpers import format_requests_list_header
+        message_text = format_requests_list_header(
+            total_requests=total_requests,
             current_page=current_page,
-            total_pages=total_pages
-        ) + "\n\n"
+            total_pages=total_pages,
+            status_filter=active_status or "all",
+            role=active_role,
+            language=lang,
+        )
         # TASK 17 Этап A: Используем resolve_category_key и get_category_display для нормализации категорий
         # TASK 17 Этап C: Локализуем статусы через status_display.py
         from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
@@ -1959,38 +1965,13 @@ async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("clarify_"))
-async def handle_clarify_request(callback: CallbackQuery, state: FSMContext):
-    """Обработка перевода заявки в статус 'Уточнение'"""
-    try:
-        # Только менеджер
-        request_number = callback.data.replace("clarify_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        auth = AuthService(db_session)
-        if not await auth.is_user_manager(callback.from_user.id):
-            await callback.answer(get_text("requests.manager_only", language=lang), show_alert=True)
-            return
-        service = RequestService(db_session)
-        result = service.update_status_by_actor(
-            request_number=request_number,
-            new_status="Уточнение",
-            actor_telegram_id=callback.from_user.id,
-        )
-        if not result.get("success"):
-            error_msg = result.get("message", get_text("common.error", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            return
-        await callback.message.edit_text(
-            get_text("requests.request_clarification_status", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard(language=lang)
-        )
-    except Exception as e:
-        logger.error(f"Ошибка обработки перевода в 'Уточнение': {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+# BUG-BOT-022: ранее здесь был дубликат handler-а `clarify_<NNN>`. Он
+# регистрировался в requests_router (включается раньше admin_router) и
+# перехватывал клик "❓ Уточнить" из admin request detail, после чего падал
+# в generic "Ошибка" (status update flow без интерактивного prompt-а).
+# Полноценный handler с FSM-flow (prompt → text input → notify applicant)
+# живёт в `uk_management_bot/handlers/admin.py::handle_clarify_request`.
+# Дубликат удалён — теперь клик корректно попадает в admin-handler.
 
 
 @router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))

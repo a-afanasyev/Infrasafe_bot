@@ -59,7 +59,7 @@ def get_user_management_main_keyboard(stats: Dict[str, int], language: str = 'ru
         
         # Назад
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="admin_panel"
         )]
     ]
@@ -126,13 +126,13 @@ def get_user_list_keyboard(users_data: Dict, list_type: str, language: str = 'ru
     # Обновить и назад
     buttons.append([
         InlineKeyboardButton(
-            text=f"🔄 {get_text('buttons.refresh', language)}",
+            text=get_text('buttons.refresh', language),
             callback_data=f"user_mgmt_list_{list_type}_{current_page}"
         )
     ])
     
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data="user_mgmt_main"
     )])
     
@@ -244,7 +244,7 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
     
     # Назад к списку
     buttons.append([InlineKeyboardButton(
-        text=f"◀️ {get_text('buttons.back', language)}",
+        text=get_text('buttons.back', language),
         callback_data="user_mgmt_back_to_list"
     )])
     
@@ -291,7 +291,7 @@ def get_roles_management_keyboard(user_roles: List[str], language: str = 'ru') -
     # Кнопки управления
     buttons.append([
         InlineKeyboardButton(
-            text=f"💾 {get_text('buttons.save', language)}",
+            text=get_text('buttons.save', language),
             callback_data="roles_save"
         ),
         InlineKeyboardButton(
@@ -343,7 +343,7 @@ def get_specializations_selection_keyboard(user_specializations: List[str], lang
     # Кнопки управления
     buttons.append([
         InlineKeyboardButton(
-            text=f"💾 {get_text('buttons.save', language)}",
+            text=get_text('buttons.save', language),
             callback_data="spec_save"
         ),
         InlineKeyboardButton(
@@ -392,7 +392,7 @@ def get_search_filters_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
             callback_data="search_reset_filters"
         )],
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="user_mgmt_main"
         )]
     ]
@@ -466,7 +466,7 @@ def get_specialization_stats_keyboard(language: str = 'ru') -> InlineKeyboardMar
             callback_data="spec_stats"
         )],
         [InlineKeyboardButton(
-            text=f"◀️ {get_text('buttons.back', language)}",
+            text=get_text('buttons.back', language),
             callback_data="user_mgmt_main"
         )]
     ]

@@ -75,25 +75,40 @@ async def handle_my_shifts_button(message: Message, state: FSMContext, language:
 
 @router.callback_query(F.data == "view_current_shifts")
 @require_role(['executor'])
-async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
-    """Просмотр текущих смен"""
+async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None, user: User = None, roles: list = None):
+    """Просмотр текущих смен.
+
+    BUG-BOT-007: ранее filter использовал ``callback.from_user.id`` (telegram_id)
+    напрямую как ``Shift.user_id`` — но ``Shift.user_id`` это FK на ``users.id``
+    (внутренний DB id), а не telegram_id. Это давало пустую выборку и handler
+    показывал "no_current_shifts". Дополнительно для пустой выборки текст был
+    про "Заявка не найдена" в шапке — переключаем на корректный shift-контекст.
+    """
     try:
-        db = next(get_db())
-        user_id = callback.from_user.id
+        if not db:
+            db = next(get_db())
         lang = language
-        
+
+        # BUG-BOT-007: получаем внутренний user.id (Shift.user_id — FK на users.id),
+        # как в BUG-BOT-005. callback.from_user.id — это telegram_id.
+        if user is None:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if user is None:
+            await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
         # Получаем смены на сегодня и завтра
         today = date.today()
         tomorrow = today + timedelta(days=1)
-        
+
         current_shifts = db.query(Shift).filter(
             and_(
-                Shift.user_id == user_id,
+                Shift.user_id == user.id,
                 func.date(Shift.planned_start_time).in_([today, tomorrow]),
                 Shift.status.in_(['planned', 'active'])
             )
         ).order_by(Shift.planned_start_time).all()
-        
+
         if not current_shifts:
             await callback.message.edit_text(
                 get_text("my_shifts.handlers.no_current_shifts", language=lang),

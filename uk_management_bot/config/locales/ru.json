@@ -1193,7 +1193,10 @@
     "reject": "Отклонить",
     "role": "Роль",
     "search": "Поиск",
+    "search_empty_query": "🔍 Введите поисковый запрос, например имя или телефон.",
     "search_instructions": "🔍 Введите поисковый запрос (имя, фамилия, телефон):",
+    "search_not_found": "❌ Сотрудники не найдены. Попробуйте другой запрос.",
+    "search_results_header": "🔍 Найденные сотрудники:",
     "specialization": "Специализация",
     "specializations": "Специализации",
     "stats": "Статистика",
@@ -6864,6 +6867,7 @@
     "main_title": "👥 Панель управления пользователями",
     "new_users": "Новые жители",
     "no_users_found": "Жители не найдены",
+    "pending_users": "📝 Новые жители",
     "search": "Поиск",
     "specializations": "Специализации",
     "staff_users": "Сотрудники",
@@ -7147,6 +7151,11 @@
     "approved": "Принято",
     "cancelled": "Отменена"
   },
+  "user_statuses": {
+    "pending": "⏳ Ожидает одобрения",
+    "approved": "✅ Одобрен",
+    "blocked": "🚫 Заблокирован"
+  },
   "quarterly": {
     "keyboards": {
       "create_plan": "📅 Создать план на квартал",
@@ -7285,6 +7294,8 @@
     }
   },
   "address": {
+    "apartment_short": "кв.",
+    "building_short": "д.",
     "keyboards": {
       "manage_yards": "🏘 Управление дворами",
       "manage_buildings": "🏢 Управление зданиями",
@@ -8000,7 +8011,9 @@
       "yard_status_changed": "✅ Двор {status}",
       "yards_list_empty": "📋 <b>Список дворов пуст</b>\n\nДобавьте первый двор для начала работы.",
       "yards_list_page": "📋 <b>Список дворов</b> (страница {page})\n\nВсего дворов: {total}\n\nВыберите двор для просмотра:",
-      "yards_list_title": "📋 <b>Список дворов</b>\n\nВсего дворов: {total}\nАктивных: {active}\n\nВыберите двор для просмотра:"
+      "yards_list_title": "📋 <b>Список дворов</b>\n\nВсего дворов: {total}\nАктивных: {active}\n\nВыберите двор для просмотра:",
+      "address_stats_report": "📊 <b>Статистика справочника адресов</b>\n\n🏘 <b>Дворы:</b> {total_yards} (активных: {active_yards}, неактивных: {inactive_yards})\n🏢 <b>Здания:</b> {total_buildings} (активных: {active_buildings}, неактивных: {inactive_buildings})\n🏠 <b>Квартиры:</b> {total_apartments} (активных: {active_apartments}, неактивных: {inactive_apartments})\n\n👥 <b>Жители:</b> {residents_total}\n  ✅ Подтверждено: {residents_approved}\n  ⏱ Ожидают: {residents_pending}\n  ❌ Отклонено: {residents_rejected}",
+      "address_stats_error": "❌ Ошибка получения статистики"
     }
   },
   "user_apt_selection": {

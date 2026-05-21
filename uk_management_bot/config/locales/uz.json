@@ -1193,7 +1193,10 @@
     "reject": "Rad qilmoq",
     "role": "Rol",
     "search": "Qidirish",
+    "search_empty_query": "🔍 Qidiruv so'rovini kiriting, masalan ism yoki telefon.",
     "search_instructions": "The Qidiruv so'rovini kiriting (Ism, familiya, telefon raqami):",
+    "search_not_found": "❌ Xodimlar topilmadi. Boshqa so'rov bilan urinib ko'ring.",
+    "search_results_header": "🔍 Topilgan xodimlar:",
     "specialization": "Ixtisoslik",
     "specializations": "Maxsus malakalar",
     "stats": "Statistika",
@@ -6864,6 +6867,7 @@
     "main_title": "👥 Foydalanuvchilarni boshqarish paneli",
     "new_users": "Yangi foydalanuvchilar",
     "no_users_found": "Foydalanuvchilar topilmadi",
+    "pending_users": "📝 Yangi aholilar",
     "search": "Qidirish",
     "specializations": "Mutaxassisliklar",
     "staff_users": "Xodimlar",
@@ -7148,6 +7152,11 @@
     "approved": "Qabul qilindi",
     "cancelled": "Bekor qilindi"
   },
+  "user_statuses": {
+    "pending": "⏳ Tasdiqlanishi kutilmoqda",
+    "approved": "✅ Tasdiqlangan",
+    "blocked": "🚫 Bloklangan"
+  },
   "quarterly": {
     "keyboards": {
       "create_plan": "📅 Chorak uchun reja yaratish",
@@ -7286,6 +7295,8 @@
     }
   },
   "address": {
+    "apartment_short": "xon.",
+    "building_short": "uy",
     "keyboards": {
       "manage_yards": "🏘 Hovlilarni boshqarish",
       "manage_buildings": "🏢 Binolarni boshqarish",
@@ -7977,7 +7988,9 @@
       "yard_status_changed": "✅ Hovli {status}",
       "yards_list_empty": "📋 <b>Hovlilar ro'yxati bo'sh</b>\n\nIshni boshlash uchun birinchi hovlini qo'shing.",
       "yards_list_page": "📋 <b>Hovlilar ro'yxati</b> (sahifa {page})\n\nJami hovlilar: {total}\n\nKo'rish uchun hovlini tanlang:",
-      "yards_list_title": "📋 <b>Hovlilar ro'yxati</b>\n\nJami hovlilar: {total}\nFaol: {active}\n\nKo'rish uchun hovlini tanlang:"
+      "yards_list_title": "📋 <b>Hovlilar ro'yxati</b>\n\nJami hovlilar: {total}\nFaol: {active}\n\nKo'rish uchun hovlini tanlang:",
+      "address_stats_report": "📊 <b>Manzillar ma'lumotnomasi statistikasi</b>\n\n🏘 <b>Hovlilar:</b> {total_yards} (faol: {active_yards}, nofaol: {inactive_yards})\n🏢 <b>Binolar:</b> {total_buildings} (faol: {active_buildings}, nofaol: {inactive_buildings})\n🏠 <b>Kvartiralar:</b> {total_apartments} (faol: {active_apartments}, nofaol: {inactive_apartments})\n\n👥 <b>Aholi:</b> {residents_total}\n  ✅ Tasdiqlangan: {residents_approved}\n  ⏱ Kutmoqda: {residents_pending}\n  ❌ Rad etilgan: {residents_rejected}",
+      "address_stats_error": "❌ Statistikani olishda xatolik"
     }
   },
   "base": {

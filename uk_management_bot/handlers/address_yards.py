@@ -74,6 +74,86 @@ async def show_address_menu_callback(callback: CallbackQuery, state: FSMContext,
     )
 
 
+@router.callback_query(F.data == "addr_stats")
+async def show_address_stats(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None):
+    """Сводная статистика справочника адресов.
+
+    BUG-BOT-013: ранее кнопка "📊 Статистика" в меню справочника адресов была
+    silent click (handler отсутствовал, экран не менялся, callback answer пуст).
+    Этот handler агрегирует: количество дворов / зданий / квартир / жителей с
+    разбивкой по active/inactive и user_apartment.status.
+    """
+    from uk_management_bot.keyboards.address_management import get_address_management_menu
+    from uk_management_bot.database.models import Yard, Building, Apartment, UserApartment
+    from sqlalchemy import func as _sa_func
+
+    await state.clear()
+    lang = language
+
+    own_db = False
+    try:
+        if db is None:
+            db = next(get_db())
+            own_db = True
+
+        # Aggregates — single roundtrip each, no Python-side loop over rows.
+        total_yards = db.query(_sa_func.count(Yard.id)).scalar() or 0
+        active_yards = db.query(_sa_func.count(Yard.id)).filter(Yard.is_active.is_(True)).scalar() or 0
+
+        total_buildings = db.query(_sa_func.count(Building.id)).scalar() or 0
+        active_buildings = db.query(_sa_func.count(Building.id)).filter(Building.is_active.is_(True)).scalar() or 0
+
+        total_apartments = db.query(_sa_func.count(Apartment.id)).scalar() or 0
+        active_apartments = db.query(_sa_func.count(Apartment.id)).filter(Apartment.is_active.is_(True)).scalar() or 0
+
+        # Жители — group by status (pending / approved / rejected).
+        residents_rows = (
+            db.query(UserApartment.status, _sa_func.count(UserApartment.id))
+            .group_by(UserApartment.status)
+            .all()
+        )
+        residents_by_status = {status: count for status, count in residents_rows}
+        residents_total = sum(residents_by_status.values())
+        residents_approved = residents_by_status.get("approved", 0)
+        residents_pending = residents_by_status.get("pending", 0)
+        residents_rejected = residents_by_status.get("rejected", 0)
+
+        text = get_text("address_yards.handlers.address_stats_report", language=lang).format(
+            total_yards=total_yards,
+            active_yards=active_yards,
+            inactive_yards=total_yards - active_yards,
+            total_buildings=total_buildings,
+            active_buildings=active_buildings,
+            inactive_buildings=total_buildings - active_buildings,
+            total_apartments=total_apartments,
+            active_apartments=active_apartments,
+            inactive_apartments=total_apartments - active_apartments,
+            residents_total=residents_total,
+            residents_approved=residents_approved,
+            residents_pending=residents_pending,
+            residents_rejected=residents_rejected,
+        )
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_address_management_menu(language=lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+    except Exception as exc:
+        logger.error(f"Ошибка показа статистики справочника адресов: {exc}", exc_info=True)
+        await callback.answer(
+            get_text("address_yards.handlers.address_stats_error", language=lang),
+            show_alert=True,
+        )
+    finally:
+        if own_db and db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ПРОСМОТР СПИСКА ДВОРОВ
 # ═══════════════════════════════════════════════════════════════════════════════

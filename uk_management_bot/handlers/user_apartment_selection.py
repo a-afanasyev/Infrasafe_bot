@@ -454,6 +454,9 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
     """
     # Используем те же состояния onboarding для простоты
     # Можно создать отдельные состояния, если нужна другая логика
+    # BUG-BOT-021: помечаем entry-point, чтобы cancel мог вернуться в профиль,
+    # а не утечь в admin-вью справочника адресов.
+    await state.update_data(entry_from="profile")
     await state.set_state(OnboardingStates.waiting_for_yard_selection)
 
     db = next(get_db())

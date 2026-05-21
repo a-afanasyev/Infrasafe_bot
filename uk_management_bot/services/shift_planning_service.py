@@ -708,11 +708,15 @@ class ShiftPlanningService:
                         shift_scores.append(score)
                 
                 # Агрегированная статистика смен
+                # BUG-BOT-028: модель Shift не имеет колонок actual_start_time /
+                # actual_end_time — используем `start_time` / `end_time`, которые
+                # в handlers/my_shifts.py выставляются как фактические значения
+                # при старте/окончании смены.
                 analytics['shift_analytics'] = {
                     'total_shifts': len(shifts),
                     'average_efficiency': sum(s.get('overall_score', 0) for s in shift_scores) / len(shift_scores) if shift_scores else 0,
                     'completion_rate': sum(1 for s in shifts if s.status == 'completed') / len(shifts) * 100,
-                    'on_time_rate': sum(1 for s in shifts if s.actual_start_time and s.planned_start_time and s.actual_start_time <= s.planned_start_time) / len(shifts) * 100,
+                    'on_time_rate': sum(1 for s in shifts if s.start_time and s.planned_start_time and s.start_time <= s.planned_start_time) / len(shifts) * 100,
                     'shift_scores': shift_scores
                 }
             
@@ -944,17 +948,19 @@ class ShiftPlanningService:
                 return {'message': 'Нет смен для анализа'}
             
             # Анализируем различные аспекты эффективности
+            # BUG-BOT-028: модель Shift не имеет actual_start_time/actual_end_time —
+            # фактические времена хранятся в `start_time` / `end_time`.
             total_shifts = len(shifts)
             completed_shifts = [s for s in shifts if s.status == 'completed']
-            on_time_starts = [s for s in shifts if s.actual_start_time and s.planned_start_time and s.actual_start_time <= s.planned_start_time]
-            
+            on_time_starts = [s for s in shifts if s.start_time and s.planned_start_time and s.start_time <= s.planned_start_time]
+
             # Вычисляем временные показатели
             avg_duration_planned = sum((s.planned_end_time - s.planned_start_time).total_seconds() / 3600 for s in shifts if s.planned_start_time and s.planned_end_time) / total_shifts
-            
-            completed_with_times = [s for s in completed_shifts if s.actual_start_time and s.actual_end_time]
+
+            completed_with_times = [s for s in completed_shifts if s.start_time and s.end_time]
             avg_duration_actual = 0
             if completed_with_times:
-                avg_duration_actual = sum((s.actual_end_time - s.actual_start_time).total_seconds() / 3600 for s in completed_with_times) / len(completed_with_times)
+                avg_duration_actual = sum((s.end_time - s.start_time).total_seconds() / 3600 for s in completed_with_times) / len(completed_with_times)
             
             return {
                 'total_shifts_analyzed': total_shifts,
