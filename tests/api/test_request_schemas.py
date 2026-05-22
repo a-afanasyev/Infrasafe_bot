@@ -130,7 +130,7 @@ class TestCreateRequestBody:
     @pytest.mark.parametrize("urgency", VALID_URGENCIES)
     def test_all_valid_urgencies(self, urgency: str):
         body = CreateRequestBody(
-            category="Тест", urgency=urgency, description="Описание"
+            category="Электрика", urgency=urgency, description="Описание"
         )
         assert body.urgency == urgency
 
