@@ -49,8 +49,16 @@ async def enqueue_outbox(db: AsyncSession, *, event: str, data: dict) -> None:
 
     `data` is RAW entity data — queue_webhook builds the webhook envelope.
     No-op when the event has no webhook endpoint (endpoint=None).
+
+    Raises ValueError for an unknown event — a programming error that must
+    fail loud pre-commit, never silently drop the outbox row.
     """
-    endpoint, _ = _ROUTING[event]
+    route = _ROUTING.get(event)
+    if route is None:
+        raise ValueError(
+            f"enqueue_outbox: unknown event {event!r} — add it to _ROUTING"
+        )
+    endpoint, _ = route
     if endpoint is None:
         return
     await queue_webhook(db, event, endpoint, data)
@@ -61,8 +69,17 @@ async def publish_realtime_after_commit(event: str, data: dict) -> None:
 
     Redis failures are swallowed by the underlying publish_* functions, so a
     pub/sub outage never rolls back an already-committed CRUD operation.
+
+    An unknown event is logged and skipped — raising here is unsafe because
+    the CRUD commit has already happened.
     """
-    _, redis_fn = _ROUTING[event]
+    route = _ROUTING.get(event)
+    if route is None:
+        logger.warning(
+            "publish_realtime_after_commit: unknown event %r — skipping", event
+        )
+        return
+    _, redis_fn = route
     if redis_fn is None:
         return
     await redis_fn(event, data)

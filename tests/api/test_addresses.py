@@ -583,7 +583,8 @@ class TestBulkCreate:
         })
         data = r.json()
         assert data["created"] == 1
-        assert any("too long" in e for e in data["errors"])
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert any("слишком длинн" in e for e in data["errors"])
 
     async def test_bulk_create_inactive_building(self, client: AsyncClient):
         yard = await _create_yard(client, "Bulk Inact Yard")

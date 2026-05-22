@@ -16,10 +16,7 @@ import os
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import (
-    create_async_engine, AsyncSession, async_sessionmaker,
-)
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 
 def _async_database_url() -> str:
@@ -33,8 +30,13 @@ def _async_database_url() -> str:
     pytest.skip(f"DATABASE_URL is not PostgreSQL ({url!r}) — postgres-only test")
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def address_async_engine():
+    """Function-scoped: an asyncpg engine/pool is bound to the event loop it
+    was created in. pytest-asyncio (asyncio_mode=auto, default function-scoped
+    loop) gives each test its own loop, so a session-scoped engine would be
+    used across loops → "another operation is in progress". One engine per
+    test keeps engine and connections on the same loop."""
     engine = create_async_engine(_async_database_url())
     yield engine
     await engine.dispose()
@@ -44,20 +46,23 @@ async def address_async_engine():
 async def address_async_db(address_async_engine) -> AsyncSession:
     """An AsyncSession wrapped in a rolled-back outer transaction.
 
-    `core` functions can call db.commit() freely — it commits a SAVEPOINT that
-    is discarded when the fixture tears the outer transaction down.
+    `core` functions call db.commit() freely. `join_transaction_mode=
+    "create_savepoint"` (SQLAlchemy 2.0) makes the session, when bound to a
+    Connection that already has a transaction, run inside a SAVEPOINT and
+    automatically restart it after each commit. The outer transaction is rolled
+    back at teardown, so nothing persists in the real database.
+
+    The old manual `after_transaction_end` event-listener recipe is sync-only
+    and breaks on asyncpg ("another operation is in progress"); the native
+    join_transaction_mode replaces it.
     """
     conn = await address_async_engine.connect()
     outer = await conn.begin()
-    maker = async_sessionmaker(bind=conn, class_=AsyncSession, expire_on_commit=False)
-    session = maker()
-    await session.begin_nested()
-
-    @event.listens_for(session.sync_session, "after_transaction_end")
-    def _restart_savepoint(sess, trans):
-        if trans.nested and not trans._parent.nested:
-            sess.begin_nested()
-
+    session = AsyncSession(
+        bind=conn,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    )
     try:
         yield session
     finally:
