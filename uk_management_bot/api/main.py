@@ -106,6 +106,12 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Address-core domain exceptions → HTTP 404/409/422
+from uk_management_bot.api.addresses.exception_handlers import (
+    register_address_exception_handlers,
+)
+register_address_exception_handlers(app)
+
 # CORS — origins come from settings.CORS_ORIGINS (env CORS_ORIGINS, plan §4.1, §7.1).
 # allow_credentials=True forbids wildcard "*", so we always pass an explicit list.
 # In dev (DEBUG=True) we also accept localhost dev servers and a single

@@ -2,7 +2,9 @@ import json as _json
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from uk_management_bot.api.auth.service import verify_access_token
-from uk_management_bot.services.redis_pubsub import subscribe_to_requests, subscribe_to_shifts
+from uk_management_bot.services.redis_pubsub import (
+    subscribe_to_requests, subscribe_to_shifts, subscribe_to_buildings,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -18,6 +20,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 shifts_manager = ConnectionManager()
+buildings_manager = ConnectionManager()
 
 
 @router.websocket("/kanban")
@@ -121,6 +124,60 @@ async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
                 await pubsub.unsubscribe()
             except Exception:
                 logger.warning("Failed to unsubscribe from shifts pubsub", exc_info=True)
+        if redis_client is not None:
+            try:
+                await redis_client.aclose()
+            except Exception:
+                logger.warning("Failed to close redis client", exc_info=True)
+
+
+@router.websocket("/buildings")
+async def buildings_ws(websocket: WebSocket, token: str = Query(default=None)):
+    # Real-time push for the address book (yards/buildings/apartments).
+    # Auth mirrors /kanban and /shifts: uk_access cookie, access_token alias,
+    # or ?token=; manager role required.
+    actual_token = (
+        websocket.cookies.get("uk_access")
+        or websocket.cookies.get("access_token")
+        or token
+    )
+    if not actual_token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    payload = verify_access_token(actual_token)
+    if not payload:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    roles = payload.get("roles", [])
+    if isinstance(roles, str):
+        try:
+            roles = _json.loads(roles)
+        except Exception:
+            roles = [r.strip() for r in roles.split(',') if r.strip()]
+    if "manager" not in roles:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await buildings_manager.connect(websocket)
+    pubsub = None
+    redis_client = None
+    try:
+        pubsub, redis_client = await subscribe_to_buildings()
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                await websocket.send_text(message["data"])
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        logger.exception("Buildings WebSocket error")
+    finally:
+        buildings_manager.disconnect(websocket)
+        if pubsub is not None:
+            try:
+                await pubsub.unsubscribe()
+            except Exception:
+                logger.warning("Failed to unsubscribe from buildings pubsub", exc_info=True)
         if redis_client is not None:
             try:
                 await redis_client.aclose()

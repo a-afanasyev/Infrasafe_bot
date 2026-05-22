@@ -9,7 +9,7 @@ const WS_URL =
 const MAX_RECONNECT_ATTEMPTS = 5
 
 export function useWebSocket(
-  endpoint: 'kanban' | 'shifts',
+  endpoint: 'kanban' | 'shifts' | 'buildings',
   onMessage: (event: { type: string; data: unknown }) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null)

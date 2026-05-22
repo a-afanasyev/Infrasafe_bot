@@ -3,7 +3,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
-from sqlalchemy.exc import IntegrityError
 
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.addresses.schemas import (
@@ -21,8 +20,7 @@ from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.services.webhook_sender import queue_webhook
-from uk_management_bot.services.redis_pubsub import publish_building_event
+from uk_management_bot.services.addresses import core
 
 router = APIRouter()
 
@@ -123,25 +121,14 @@ async def create_yard(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    # Check name uniqueness (case-sensitive)
-    existing = await db.execute(select(Yard.id).where(Yard.name == body.name))
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Yard with name '{body.name}' already exists",
-        )
-
-    yard = Yard(
+    yard = await core.create_yard(
+        db,
         name=body.name,
         description=body.description,
         gps_latitude=body.gps_latitude,
         gps_longitude=body.gps_longitude,
         created_by=user.id,
     )
-    db.add(yard)
-    await db.commit()
-    await db.refresh(yard)
-
     return YardOut(**_yard_dict(yard), buildings_count=0)
 
 
@@ -152,42 +139,7 @@ async def update_yard(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Yard).where(Yard.id == yard_id))
-    yard = result.scalar_one_or_none()
-    if not yard:
-        raise HTTPException(status_code=404, detail="Yard not found")
-
-    updates = body.model_dump(exclude_unset=True)
-
-    # Block deactivation if active buildings exist
-    if "is_active" in updates and updates["is_active"] is False and yard.is_active:
-        active_buildings = (await db.execute(
-            select(func.count(Building.id)).where(
-                and_(Building.yard_id == yard_id, Building.is_active == True)  # noqa: E712
-            )
-        )).scalar() or 0
-        if active_buildings > 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot deactivate yard: {active_buildings} active building(s) exist",
-            )
-
-    # Re-check uniqueness only if name changed
-    if "name" in updates and updates["name"] != yard.name:
-        existing = await db.execute(
-            select(Yard.id).where(and_(Yard.name == updates["name"], Yard.id != yard_id))
-        )
-        if existing.scalar_one_or_none() is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Yard with name '{updates['name']}' already exists",
-            )
-
-    for field, value in updates.items():
-        setattr(yard, field, value)
-
-    await db.commit()
-    await db.refresh(yard)
+    yard = await core.update_yard(db, yard_id, body.model_dump(exclude_unset=True))
 
     buildings_count = (await db.execute(
         select(func.count(Building.id)).where(
@@ -205,25 +157,7 @@ async def delete_yard(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Yard).where(Yard.id == yard_id))
-    yard = result.scalar_one_or_none()
-    if not yard:
-        raise HTTPException(status_code=404, detail="Yard not found")
-
-    # Block if active buildings exist
-    active_buildings = (await db.execute(
-        select(func.count(Building.id)).where(
-            and_(Building.yard_id == yard_id, Building.is_active == True)  # noqa: E712
-        )
-    )).scalar() or 0
-    if active_buildings > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete yard: {active_buildings} active building(s) exist",
-        )
-
-    yard.is_active = False
-    await db.commit()
+    await core.delete_yard(db, yard_id)
     return {"ok": True, "detail": "Yard deactivated"}
 
 
@@ -362,18 +296,8 @@ async def create_building(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    # Check yard exists and is active
-    yard_result = await db.execute(select(Yard).where(Yard.id == body.yard_id))
-    yard = yard_result.scalar_one_or_none()
-    if not yard:
-        raise HTTPException(status_code=404, detail="Yard not found")
-    if not yard.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot add building to inactive yard",
-        )
-
-    building = Building(
+    building = await core.create_building(
+        db,
         address=body.address,
         yard_id=body.yard_id,
         entrance_count=body.entrance_count,
@@ -383,19 +307,10 @@ async def create_building(
         gps_longitude=body.gps_longitude,
         created_by=user.id,
     )
-    db.add(building)
-    await db.flush()
-    await queue_webhook(db, "building.created", "/api/webhooks/uk/building", {
-        "id": building.id, "address": building.address, "yard_name": yard.name,
-        "latitude": building.gps_latitude, "longitude": building.gps_longitude,
-    })
-    await db.commit()
-    await db.refresh(building)
-    await publish_building_event("building.created", {
-        "id": building.id, "address": building.address, "yard_name": yard.name,
-    })
-
-    return BuildingOut(**_building_dict(building), yard_name=yard.name, apartments_count=0)
+    yard_name = (await db.execute(
+        select(Yard.name).where(Yard.id == building.yard_id)
+    )).scalar_one_or_none() or ""
+    return BuildingOut(**_building_dict(building), yard_name=yard_name, apartments_count=0)
 
 
 @router.patch("/buildings/{building_id}", response_model=BuildingOut)
@@ -405,60 +320,18 @@ async def update_building(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Building).where(Building.id == building_id))
-    building = result.scalar_one_or_none()
-    if not building:
-        raise HTTPException(status_code=404, detail="Building not found")
+    building = await core.update_building(
+        db, building_id, body.model_dump(exclude_unset=True)
+    )
 
-    updates = body.model_dump(exclude_unset=True)
-
-    # Block deactivation if active apartments exist
-    if "is_active" in updates and updates["is_active"] is False and building.is_active:
-        active_apartments = (await db.execute(
-            select(func.count(Apartment.id)).where(
-                and_(Apartment.building_id == building_id, Apartment.is_active == True)  # noqa: E712
-            )
-        )).scalar() or 0
-        if active_apartments > 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot deactivate building: {active_apartments} active apartment(s) exist",
-            )
-
-    # If changing yard_id, verify new yard exists and is active
-    if "yard_id" in updates and updates["yard_id"] != building.yard_id:
-        yard_result = await db.execute(select(Yard).where(Yard.id == updates["yard_id"]))
-        new_yard = yard_result.scalar_one_or_none()
-        if not new_yard:
-            raise HTTPException(status_code=404, detail="Target yard not found")
-        if not new_yard.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot move building to inactive yard",
-            )
-
-    for field, value in updates.items():
-        setattr(building, field, value)
-
-    # Webhook outbox — same transaction as building update
-    yard_result_wh = await db.execute(select(Yard.name).where(Yard.id == building.yard_id))
-    yard_name_wh = yard_result_wh.scalar_one_or_none() or ""
-    await queue_webhook(db, "building.updated", "/api/webhooks/uk/building", {
-        "id": building.id, "address": building.address, "yard_name": yard_name_wh,
-        "latitude": building.gps_latitude, "longitude": building.gps_longitude,
-    })
-    await db.commit()
-    await db.refresh(building)
-    await publish_building_event("building.updated", {
-        "id": building.id, "address": building.address, "yard_name": yard_name_wh,
-    })
-
-    # Fetch apartments count
+    yard_name = (await db.execute(
+        select(Yard.name).where(Yard.id == building.yard_id)
+    )).scalar_one_or_none() or ""
     apt_count = (await db.execute(
         select(func.count(Apartment.id)).where(Apartment.building_id == building_id)
     )).scalar() or 0
 
-    return BuildingOut(**_building_dict(building), yard_name=yard_name_wh, apartments_count=apt_count)
+    return BuildingOut(**_building_dict(building), yard_name=yard_name, apartments_count=apt_count)
 
 
 @router.delete("/buildings/{building_id}", status_code=200)
@@ -467,35 +340,7 @@ async def delete_building(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Building).where(Building.id == building_id))
-    building = result.scalar_one_or_none()
-    if not building:
-        raise HTTPException(status_code=404, detail="Building not found")
-
-    # Block if active apartments exist
-    active_apartments = (await db.execute(
-        select(func.count(Apartment.id)).where(
-            and_(Apartment.building_id == building_id, Apartment.is_active == True)  # noqa: E712
-        )
-    )).scalar() or 0
-    if active_apartments > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete building: {active_apartments} active apartment(s) exist",
-        )
-
-    building.is_active = False
-    # Fetch yard name before commit
-    yard_result = await db.execute(select(Yard.name).where(Yard.id == building.yard_id))
-    yard_name = yard_result.scalar_one_or_none() or ""
-    await queue_webhook(db, "building.deleted", "/api/webhooks/uk/building", {
-        "id": building.id, "address": building.address, "yard_name": yard_name,
-        "latitude": building.gps_latitude, "longitude": building.gps_longitude,
-    })
-    await db.commit()
-    await publish_building_event("building.deleted", {
-        "id": building.id, "address": building.address, "yard_name": yard_name,
-    })
+    await core.delete_building(db, building_id)
     return {"ok": True, "detail": "Building deactivated"}
 
 
@@ -611,36 +456,8 @@ async def create_apartment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    # Check building exists and is active
-    bld_result = await db.execute(
-        select(Building, Yard.name)
-        .join(Yard, Building.yard_id == Yard.id)
-        .where(Building.id == body.building_id)
-    )
-    row = bld_result.first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Building not found")
-    building, yard_name = row
-    if not building.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot add apartment to inactive building",
-        )
-
-    # Check unique (building_id, apartment_number)
-    existing = await db.execute(
-        select(Apartment.id).where(and_(
-            Apartment.building_id == body.building_id,
-            Apartment.apartment_number == body.apartment_number,
-        ))
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Apartment '{body.apartment_number}' already exists in this building",
-        )
-
-    apartment = Apartment(
+    apartment = await core.create_apartment(
+        db,
         building_id=body.building_id,
         apartment_number=body.apartment_number,
         entrance=body.entrance,
@@ -650,11 +467,17 @@ async def create_apartment(
         description=body.description,
         created_by=user.id,
     )
-    db.add(apartment)
-    await db.commit()
-    await db.refresh(apartment)
-
-    return ApartmentOut(**_apartment_dict(apartment), building_address=building.address, yard_name=yard_name, residents_count=0)
+    row = (await db.execute(
+        select(Building.address, Yard.name)
+        .join(Yard, Building.yard_id == Yard.id)
+        .where(Building.id == apartment.building_id)
+    )).first()
+    return ApartmentOut(
+        **_apartment_dict(apartment),
+        building_address=row[0] if row else None,
+        yard_name=row[1] if row else None,
+        residents_count=0,
+    )
 
 
 @router.post("/apartments/bulk", response_model=BulkCreateResult, status_code=201)
@@ -663,56 +486,12 @@ async def bulk_create(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    # Check building exists and is active
-    bld_result = await db.execute(select(Building).where(Building.id == body.building_id))
-    building = bld_result.scalar_one_or_none()
-    if not building:
-        raise HTTPException(status_code=404, detail="Building not found")
-    if not building.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot add apartments to inactive building",
-        )
-
-    # Pre-load existing apartment numbers for this building
-    existing_result = await db.execute(
-        select(Apartment.apartment_number).where(Apartment.building_id == body.building_id)
+    created, skipped, errors = await core.bulk_create_apartments(
+        db,
+        building_id=body.building_id,
+        apartment_numbers=body.apartment_numbers,
+        created_by=user.id,
     )
-    existing_numbers = set(existing_result.scalars().all())
-
-    created = 0
-    skipped = 0
-    errors: list[str] = []
-
-    for num in body.apartment_numbers:
-        num_stripped = num.strip()
-        if not num_stripped:
-            errors.append("Empty apartment number skipped")
-            continue
-        if len(num_stripped) > 20:
-            errors.append(f"Apartment number '{num_stripped}' too long (max 20 chars)")
-            continue
-        if num_stripped in existing_numbers:
-            skipped += 1
-            continue
-
-        apartment = Apartment(
-            building_id=body.building_id,
-            apartment_number=num_stripped,
-            created_by=user.id,
-        )
-        db.add(apartment)
-        existing_numbers.add(num_stripped)
-        created += 1
-
-    if created > 0:
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            errors.append("Database integrity error during bulk insert")
-            created = 0
-
     return BulkCreateResult(created=created, skipped=skipped, errors=errors)
 
 
@@ -723,47 +502,9 @@ async def update_apartment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Apartment).where(Apartment.id == apartment_id))
-    apartment = result.scalar_one_or_none()
-    if not apartment:
-        raise HTTPException(status_code=404, detail="Apartment not found")
-
-    updates = body.model_dump(exclude_unset=True)
-
-    # Block deactivation if approved residents exist
-    if "is_active" in updates and updates["is_active"] is False and apartment.is_active:
-        approved_residents = (await db.execute(
-            select(func.count(UserApartment.id)).where(and_(
-                UserApartment.apartment_id == apartment_id,
-                UserApartment.status == "approved",
-            ))
-        )).scalar() or 0
-        if approved_residents > 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot deactivate apartment: {approved_residents} approved resident(s) exist",
-            )
-
-    # If apartment_number changed, check uniqueness
-    if "apartment_number" in updates and updates["apartment_number"] != apartment.apartment_number:
-        existing = await db.execute(
-            select(Apartment.id).where(and_(
-                Apartment.building_id == apartment.building_id,
-                Apartment.apartment_number == updates["apartment_number"],
-                Apartment.id != apartment_id,
-            ))
-        )
-        if existing.scalar_one_or_none() is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Apartment '{updates['apartment_number']}' already exists in this building",
-            )
-
-    for field, value in updates.items():
-        setattr(apartment, field, value)
-
-    await db.commit()
-    await db.refresh(apartment)
+    apartment = await core.update_apartment(
+        db, apartment_id, body.model_dump(exclude_unset=True)
+    )
 
     # Fetch building address and yard name
     bld_result = await db.execute(
@@ -795,26 +536,7 @@ async def delete_apartment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Apartment).where(Apartment.id == apartment_id))
-    apartment = result.scalar_one_or_none()
-    if not apartment:
-        raise HTTPException(status_code=404, detail="Apartment not found")
-
-    # Block if approved residents exist
-    approved_residents = (await db.execute(
-        select(func.count(UserApartment.id)).where(and_(
-            UserApartment.apartment_id == apartment_id,
-            UserApartment.status == "approved",
-        ))
-    )).scalar() or 0
-    if approved_residents > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete apartment: {approved_residents} approved resident(s) exist",
-        )
-
-    apartment.is_active = False
-    await db.commit()
+    await core.delete_apartment(db, apartment_id)
     return {"ok": True, "detail": "Apartment deactivated"}
 
 
@@ -1093,19 +815,9 @@ async def approve_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(UserApartment).where(UserApartment.id == item_id))
-    ua = result.scalar_one_or_none()
-    if not ua:
-        raise HTTPException(status_code=404, detail="Moderation item not found")
-    if ua.status != "pending":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Item is already '{ua.status}', can only approve pending items",
-        )
-
-    ua.approve(reviewer_id=user.id, comment=body.comment)
-    await db.commit()
-    await db.refresh(ua)
+    ua = await core.approve_apartment_request(
+        db, user_apartment_id=item_id, reviewer_id=user.id, comment=body.comment
+    )
 
     # Fetch related data for response
     apt_result = await db.execute(
@@ -1157,19 +869,9 @@ async def reject_request(
             detail="Comment is required for rejection (at least 3 characters)",
         )
 
-    result = await db.execute(select(UserApartment).where(UserApartment.id == item_id))
-    ua = result.scalar_one_or_none()
-    if not ua:
-        raise HTTPException(status_code=404, detail="Moderation item not found")
-    if ua.status != "pending":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Item is already '{ua.status}', can only reject pending items",
-        )
-
-    ua.reject(reviewer_id=user.id, comment=body.comment.strip())
-    await db.commit()
-    await db.refresh(ua)
+    ua = await core.reject_apartment_request(
+        db, user_apartment_id=item_id, reviewer_id=user.id, comment=body.comment.strip()
+    )
 
     # Fetch related data for response
     apt_result = await db.execute(

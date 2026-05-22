@@ -88,3 +88,53 @@ async def subscribe_to_buildings():
     pubsub = client.pubsub()
     await pubsub.subscribe(BUILDINGS_CHANNEL)
     return pubsub, client
+
+
+YARDS_CHANNEL = "yards:updates"
+
+
+async def publish_yard_event(event_type: str, data: dict) -> None:
+    """Publish yard event to Redis Pub/Sub for real-time frontend updates.
+
+    NOTE: frontend WebSocket push only, NOT webhook delivery.
+    """
+    try:
+        client = await get_pubsub_redis()
+        message = json.dumps({"type": event_type, "data": data})
+        await client.publish(YARDS_CHANNEL, message)
+    except Exception:
+        logger.warning("Failed to publish yard event %s", event_type, exc_info=True)
+
+
+async def subscribe_to_yards():
+    """Returns a dedicated Redis Pub/Sub subscriber for yard events."""
+    url = settings.REDIS_PUBSUB_URL_RESOLVED
+    client = aioredis.from_url(url, decode_responses=True)
+    pubsub = client.pubsub()
+    await pubsub.subscribe(YARDS_CHANNEL)
+    return pubsub, client
+
+
+APARTMENTS_CHANNEL = "apartments:updates"
+
+
+async def publish_apartment_event(event_type: str, data: dict) -> None:
+    """Publish apartment event to Redis Pub/Sub for real-time frontend updates.
+
+    NOTE: frontend WebSocket push only, NOT webhook delivery.
+    """
+    try:
+        client = await get_pubsub_redis()
+        message = json.dumps({"type": event_type, "data": data})
+        await client.publish(APARTMENTS_CHANNEL, message)
+    except Exception:
+        logger.warning("Failed to publish apartment event %s", event_type, exc_info=True)
+
+
+async def subscribe_to_apartments():
+    """Returns a dedicated Redis Pub/Sub subscriber for apartment events."""
+    url = settings.REDIS_PUBSUB_URL_RESOLVED
+    client = aioredis.from_url(url, decode_responses=True)
+    pubsub = client.pubsub()
+    await pubsub.subscribe(APARTMENTS_CHANNEL)
+    return pubsub, client
