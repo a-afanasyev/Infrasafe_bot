@@ -77,7 +77,7 @@ JSON-объект, обязательные поля:
 | `event_id` | string | Уникальный id события (для подписи/dedup/audit) |
 | `event` | string | Тип события, напр. `alert.created` |
 | `timestamp` | string | Метка времени события (ISO-8601) |
-| `alert` | object | Данные алерта (точные поля — согласуем под Фазу 2) |
+| `alert` | object | Данные алерта (точные поля — согласованы под Фазу 2, см. ниже) |
 
 Пример:
 
@@ -86,11 +86,23 @@ JSON-объект, обязательные поля:
   "event_id": "a1b2c3d4-...",
   "event": "alert.created",
   "timestamp": "2026-05-22T10:00:00Z",
-  "alert": { "severity": "high", "message": "..." }
+  "alert": {
+    "external_id": "11111111-1111-4111-8111-111111111111",
+    "type": "TRANSFORMER_OVERLOAD",
+    "severity": "CRITICAL",
+    "message": "Перегрузка трансформатора"
+  }
 }
 ```
 
 Невалидная схема (нет обязательного поля) → **422**.
+
+**Поля `alert` для Фазы 2** (согласованы 2026-05-22, разделы A/O/P
+questions-документа): обязательны `external_id` (UUID здания на UK-стороне),
+`type`, `severity`, `message`; желательны `alert_id`, `created_at`,
+`correlation_id`. **`severity` — строго `WARNING` или `CRITICAL`** (словарь
+InfraSafe `alert_rules`, без маппинга на стороне sender'а; UK сам выводит
+`urgency`). В Фазе 1 `alert` не валидируется — принимается как есть.
 
 ## 5. Общий секрет
 
