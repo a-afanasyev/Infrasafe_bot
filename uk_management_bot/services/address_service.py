@@ -1,5 +1,11 @@
 """
-Сервис для работы со справочником адресов
+Сервис для работы со справочником адресов.
+
+ARCH-014: write-методы — тонкие async-обёртки над services/addresses/core.
+Они открывают собственную AsyncSession (sync-аргумент `session` игнорируется,
+сохранён только для обратной совместимости сигнатур) и переводят доменные
+исключения core в текущий контракт Tuple[Entity|None, error_str|None].
+Read-методы по-прежнему работают на переданной sync-сессии.
 """
 import logging
 from typing import Optional, List, Dict, Any, Tuple
@@ -10,8 +16,24 @@ from sqlalchemy.orm import Session, joinedload
 from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment, User
 )
+from uk_management_bot.database.session import AsyncSessionLocal
+from uk_management_bot.services.addresses import core as _core
+from uk_management_bot.services.addresses.exceptions import AddressError
 
 logger = logging.getLogger(__name__)
+
+
+def _async_session():
+    """Open a fresh AsyncSession for delegating to the address core.
+
+    The bot runs on PostgreSQL; AsyncSessionLocal is None only in SQLite dev
+    mode, where the async address core is not supported.
+    """
+    if AsyncSessionLocal is None:
+        raise RuntimeError(
+            "AsyncSessionLocal недоступна — адресный CRUD требует PostgreSQL"
+        )
+    return AsyncSessionLocal()
 
 
 class AddressService:
@@ -28,39 +50,17 @@ class AddressService:
         gps_latitude: Optional[float] = None,
         gps_longitude: Optional[float] = None
     ) -> Tuple[Optional[Yard], Optional[str]]:
-        """
-        Создание нового двора
-
-        Returns:
-            Tuple[Yard | None, error_message | None]
-        """
+        """Создание нового двора. Делегирует в services/addresses/core."""
         try:
-            # Проверка на дубликат
-            existing = session.execute(
-                select(Yard).where(Yard.name == name)
-            ).scalar_one_or_none()
-
-            if existing:
-                return None, f"Двор с названием '{name}' уже существует"
-
-            yard = Yard(
-                name=name,
-                description=description,
-                gps_latitude=gps_latitude,
-                gps_longitude=gps_longitude,
-                created_by=created_by,
-                is_active=True
-            )
-
-            session.add(yard)
-            session.commit()
-            session.refresh(yard)
-
-            logger.info(f"Создан двор: {yard.name} (ID: {yard.id})")
+            async with _async_session() as adb:
+                yard = await _core.create_yard(
+                    adb, name=name, created_by=created_by, description=description,
+                    gps_latitude=gps_latitude, gps_longitude=gps_longitude,
+                )
             return yard, None
-
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка создания двора: {e}")
             return None, f"Ошибка создания двора: {str(e)}"
 
@@ -108,74 +108,32 @@ class AddressService:
         gps_longitude: Optional[float] = None,
         is_active: Optional[bool] = None
     ) -> Tuple[Optional[Yard], Optional[str]]:
-        """Обновление двора"""
+        """Обновление двора. `None`-аргументы означают «не менять поле»."""
+        updates = {k: v for k, v in {
+            "name": name, "description": description,
+            "gps_latitude": gps_latitude, "gps_longitude": gps_longitude,
+            "is_active": is_active,
+        }.items() if v is not None}
         try:
-            yard = await AddressService.get_yard_by_id(session, yard_id)
-            if not yard:
-                return None, "Двор не найден"
-
-            # Проверка уникальности имени
-            if name and name != yard.name:
-                existing = session.execute(
-                    select(Yard).where(Yard.name == name)
-                ).scalar_one_or_none()
-
-                if existing:
-                    return None, f"Двор с названием '{name}' уже существует"
-
-                yard.name = name
-
-            if description is not None:
-                yard.description = description
-            if gps_latitude is not None:
-                yard.gps_latitude = gps_latitude
-            if gps_longitude is not None:
-                yard.gps_longitude = gps_longitude
-            if is_active is not None:
-                yard.is_active = is_active
-
-            session.commit()
-            session.refresh(yard)
-
-            logger.info(f"Обновлен двор: {yard.name} (ID: {yard.id})")
+            async with _async_session() as adb:
+                yard = await _core.update_yard(adb, yard_id, updates)
             return yard, None
-
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка обновления двора: {e}")
             return None, f"Ошибка обновления: {str(e)}"
 
     @staticmethod
     async def delete_yard(session: Session, yard_id: int) -> Tuple[bool, Optional[str]]:
-        """
-        Удаление двора (мягкое - деактивация)
-
-        Returns:
-            Tuple[success, error_message]
-        """
+        """Удаление двора (мягкое — деактивация). Returns Tuple[success, error]."""
         try:
-            yard = await AddressService.get_yard_by_id(session, yard_id)
-            if not yard:
-                return False, "Двор не найден"
-
-            # Проверяем, есть ли активные здания
-            active_buildings_count = session.execute(
-                select(func.count(Building.id))
-                .where(and_(Building.yard_id == yard_id, Building.is_active == True))
-            ).scalar()
-
-            if active_buildings_count > 0:
-                return False, f"Невозможно удалить двор: есть {active_buildings_count} активных зданий"
-
-            # Мягкое удаление
-            yard.is_active = False
-            session.commit()
-
-            logger.info(f"Деактивирован двор: {yard.name} (ID: {yard.id})")
+            async with _async_session() as adb:
+                await _core.delete_yard(adb, yard_id)
             return True, None
-
+        except AddressError as e:
+            return False, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка удаления двора: {e}")
             return False, f"Ошибка удаления: {str(e)}"
 
@@ -193,55 +151,19 @@ class AddressService:
         floor_count: int = 1,
         description: Optional[str] = None
     ) -> Tuple[Optional[Building], Optional[str]]:
-        """Создание нового здания"""
+        """Создание нового здания. Делегирует в services/addresses/core."""
         try:
-            # Проверка существования двора
-            yard = await AddressService.get_yard_by_id(session, yard_id)
-            if not yard:
-                return None, "Двор не найден"
-
-            if not yard.is_active:
-                return None, "Двор неактивен"
-
-            building = Building(
-                address=address,
-                yard_id=yard_id,
-                gps_latitude=gps_latitude,
-                gps_longitude=gps_longitude,
-                entrance_count=entrance_count,
-                floor_count=floor_count,
-                description=description,
-                created_by=created_by,
-                is_active=True
-            )
-
-            session.add(building)
-            # Flush populates building.id so the webhook payload can reference it
-            # before the transaction commits. Outbox row and building land atomically.
-            session.flush()
-
-            from uk_management_bot.services.webhook_sender import queue_webhook_sync
-            queue_webhook_sync(
-                session,
-                "building.created",
-                "/api/webhooks/uk/building",
-                {
-                    "id": building.id,
-                    "address": building.address,
-                    "yard_name": yard.name,
-                    "latitude": building.gps_latitude,
-                    "longitude": building.gps_longitude,
-                },
-            )
-
-            session.commit()
-            session.refresh(building)
-
-            logger.info(f"Создано здание: {building.address} (ID: {building.id})")
+            async with _async_session() as adb:
+                building = await _core.create_building(
+                    adb, address=address, yard_id=yard_id, created_by=created_by,
+                    gps_latitude=gps_latitude, gps_longitude=gps_longitude,
+                    entrance_count=entrance_count, floor_count=floor_count,
+                    description=description,
+                )
             return building, None
-
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка создания здания: {e}")
             return None, f"Ошибка создания здания: {str(e)}"
 
@@ -289,107 +211,33 @@ class AddressService:
         description: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Tuple[Optional[Building], Optional[str]]:
-        """Обновление здания"""
+        """Обновление здания. `None`-аргументы означают «не менять поле»."""
+        updates = {k: v for k, v in {
+            "address": address, "yard_id": yard_id,
+            "gps_latitude": gps_latitude, "gps_longitude": gps_longitude,
+            "entrance_count": entrance_count, "floor_count": floor_count,
+            "description": description, "is_active": is_active,
+        }.items() if v is not None}
         try:
-            building = await AddressService.get_building_by_id(session, building_id)
-            if not building:
-                return None, "Здание не найдено"
-
-            if yard_id and yard_id != building.yard_id:
-                yard = await AddressService.get_yard_by_id(session, yard_id)
-                if not yard:
-                    return None, "Двор не найден"
-                if not yard.is_active:
-                    return None, "Двор неактивен"
-                building.yard_id = yard_id
-
-            if address:
-                building.address = address
-            if gps_latitude is not None:
-                building.gps_latitude = gps_latitude
-            if gps_longitude is not None:
-                building.gps_longitude = gps_longitude
-            if entrance_count is not None:
-                building.entrance_count = entrance_count
-            if floor_count is not None:
-                building.floor_count = floor_count
-            if description is not None:
-                building.description = description
-            if is_active is not None:
-                building.is_active = is_active
-
-            session.flush()
-
-            # Re-fetch yard via current yard_id (may have just changed in this update).
-            # session.get hits the identity map first, so no extra query when unchanged.
-            from uk_management_bot.services.webhook_sender import queue_webhook_sync
-            current_yard = session.get(Yard, building.yard_id)
-            queue_webhook_sync(
-                session,
-                "building.updated",
-                "/api/webhooks/uk/building",
-                {
-                    "id": building.id,
-                    "address": building.address,
-                    "yard_name": current_yard.name if current_yard else "",
-                    "latitude": building.gps_latitude,
-                    "longitude": building.gps_longitude,
-                },
-            )
-
-            session.commit()
-            session.refresh(building)
-
-            logger.info(f"Обновлено здание: {building.address} (ID: {building.id})")
+            async with _async_session() as adb:
+                building = await _core.update_building(adb, building_id, updates)
             return building, None
-
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка обновления здания: {e}")
             return None, f"Ошибка обновления: {str(e)}"
 
     @staticmethod
     async def delete_building(session: Session, building_id: int) -> Tuple[bool, Optional[str]]:
-        """Удаление здания (мягкое - деактивация)"""
+        """Удаление здания (мягкое — деактивация)."""
         try:
-            building = await AddressService.get_building_by_id(session, building_id)
-            if not building:
-                return False, "Здание не найдено"
-
-            # Проверяем активные квартиры
-            active_apartments_count = session.execute(
-                select(func.count(Apartment.id))
-                .where(and_(Apartment.building_id == building_id, Apartment.is_active == True))
-            ).scalar()
-
-            if active_apartments_count > 0:
-                return False, f"Невозможно удалить здание: есть {active_apartments_count} активных квартир"
-
-            building.is_active = False
-            session.flush()
-
-            from uk_management_bot.services.webhook_sender import queue_webhook_sync
-            current_yard = session.get(Yard, building.yard_id)
-            queue_webhook_sync(
-                session,
-                "building.deleted",
-                "/api/webhooks/uk/building",
-                {
-                    "id": building.id,
-                    "address": building.address,
-                    "yard_name": current_yard.name if current_yard else "",
-                    "latitude": building.gps_latitude,
-                    "longitude": building.gps_longitude,
-                },
-            )
-
-            session.commit()
-
-            logger.info(f"Деактивировано здание: {building.address} (ID: {building.id})")
+            async with _async_session() as adb:
+                await _core.delete_building(adb, building_id)
             return True, None
-
+        except AddressError as e:
+            return False, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка удаления здания: {e}")
             return False, f"Ошибка удаления: {str(e)}"
 
@@ -407,50 +255,18 @@ class AddressService:
         area: Optional[float] = None,
         description: Optional[str] = None
     ) -> Tuple[Optional[Apartment], Optional[str]]:
-        """Создание новой квартиры"""
+        """Создание новой квартиры. Делегирует в services/addresses/core."""
         try:
-            # Проверка существования здания
-            building = await AddressService.get_building_by_id(session, building_id)
-            if not building:
-                return None, "Здание не найдено"
-
-            if not building.is_active:
-                return None, "Здание неактивно"
-
-            # Проверка уникальности номера квартиры в здании
-            existing = session.execute(
-                select(Apartment).where(
-                    and_(
-                        Apartment.building_id == building_id,
-                        Apartment.apartment_number == apartment_number
-                    )
+            async with _async_session() as adb:
+                apartment = await _core.create_apartment(
+                    adb, building_id=building_id, apartment_number=apartment_number,
+                    created_by=created_by, entrance=entrance, floor=floor,
+                    rooms_count=rooms_count, area=area, description=description,
                 )
-            ).scalar_one_or_none()
-
-            if existing:
-                return None, f"Квартира {apartment_number} уже существует в этом здании"
-
-            apartment = Apartment(
-                building_id=building_id,
-                apartment_number=apartment_number,
-                entrance=entrance,
-                floor=floor,
-                rooms_count=rooms_count,
-                area=area,
-                description=description,
-                created_by=created_by,
-                is_active=True
-            )
-
-            session.add(apartment)
-            session.commit()
-            session.refresh(apartment)
-
-            logger.info(f"Создана квартира: {apartment.apartment_number} в здании ID {building_id}")
             return apartment, None
-
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка создания квартиры: {e}")
             return None, f"Ошибка создания квартиры: {str(e)}"
 
@@ -477,67 +293,14 @@ class AddressService:
                 - errors: Список ошибок
         """
         try:
-            # Проверка существования здания
-            building = await AddressService.get_building_by_id(session, building_id)
-            if not building:
-                return 0, 0, ["Здание не найдено"]
-
-            if not building.is_active:
-                return 0, 0, ["Здание неактивно"]
-
-            # Получаем существующие квартиры в здании
-            existing_apartments = session.execute(
-                select(Apartment.apartment_number).where(
-                    Apartment.building_id == building_id
+            async with _async_session() as adb:
+                return await _core.bulk_create_apartments(
+                    adb, building_id=building_id,
+                    apartment_numbers=apartment_numbers, created_by=created_by,
                 )
-            ).scalars().all()
-
-            existing_numbers = set(existing_apartments)
-
-            created_count = 0
-            skipped_count = 0
-            errors = []
-
-            # Создаём квартиры
-            for apartment_number in apartment_numbers:
-                try:
-                    # Пропускаем уже существующие
-                    if apartment_number in existing_numbers:
-                        skipped_count += 1
-                        continue
-
-                    # Создаём квартиру
-                    apartment = Apartment(
-                        building_id=building_id,
-                        apartment_number=apartment_number,
-                        entrance=None,
-                        floor=None,
-                        rooms_count=None,
-                        area=None,
-                        description=None,
-                        created_by=created_by,
-                        is_active=True
-                    )
-
-                    session.add(apartment)
-                    created_count += 1
-
-                except Exception as e:
-                    errors.append(f"Квартира {apartment_number}: {str(e)}")
-                    logger.error(f"Ошибка создания квартиры {apartment_number}: {e}")
-
-            # Коммит всех изменений одной транзакцией
-            session.commit()
-
-            logger.info(
-                f"Массовое создание квартир в здании {building_id}: "
-                f"создано {created_count}, пропущено {skipped_count}, ошибок {len(errors)}"
-            )
-
-            return created_count, skipped_count, errors
-
+        except AddressError as e:
+            return 0, 0, [str(e)]
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка массового создания квартир: {e}")
             return 0, 0, [f"Критическая ошибка: {str(e)}"]
 
@@ -622,94 +385,32 @@ class AddressService:
         description: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Tuple[Optional[Apartment], Optional[str]]:
-        """Обновление квартиры"""
+        """Обновление квартиры. `None`-аргументы означают «не менять поле»."""
+        updates = {k: v for k, v in {
+            "apartment_number": apartment_number, "building_id": building_id,
+            "entrance": entrance, "floor": floor, "rooms_count": rooms_count,
+            "area": area, "description": description, "is_active": is_active,
+        }.items() if v is not None}
         try:
-            apartment = await AddressService.get_apartment_by_id(session, apartment_id)
-            if not apartment:
-                return None, "Квартира не найдена"
-
-            # Проверка уникальности при изменении номера или здания
-            if (apartment_number and apartment_number != apartment.apartment_number) or \
-               (building_id and building_id != apartment.building_id):
-
-                target_building_id = building_id if building_id else apartment.building_id
-                target_number = apartment_number if apartment_number else apartment.apartment_number
-
-                existing = session.execute(
-                    select(Apartment).where(
-                        and_(
-                            Apartment.building_id == target_building_id,
-                            Apartment.apartment_number == target_number,
-                            Apartment.id != apartment_id
-                        )
-                    )
-                ).scalar_one_or_none()
-
-                if existing:
-                    return None, f"Квартира {target_number} уже существует в этом здании"
-
-            if building_id and building_id != apartment.building_id:
-                building = await AddressService.get_building_by_id(session, building_id)
-                if not building:
-                    return None, "Здание не найдено"
-                if not building.is_active:
-                    return None, "Здание неактивно"
-                apartment.building_id = building_id
-
-            if apartment_number:
-                apartment.apartment_number = apartment_number
-            if entrance is not None:
-                apartment.entrance = entrance
-            if floor is not None:
-                apartment.floor = floor
-            if rooms_count is not None:
-                apartment.rooms_count = rooms_count
-            if area is not None:
-                apartment.area = area
-            if description is not None:
-                apartment.description = description
-            if is_active is not None:
-                apartment.is_active = is_active
-
-            session.commit()
-            session.refresh(apartment)
-
-            logger.info(f"Обновлена квартира: {apartment.apartment_number} (ID: {apartment.id})")
+            async with _async_session() as adb:
+                apartment = await _core.update_apartment(adb, apartment_id, updates)
             return apartment, None
-
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка обновления квартиры: {e}")
             return None, f"Ошибка обновления: {str(e)}"
 
     @staticmethod
     async def delete_apartment(session: Session, apartment_id: int) -> Tuple[bool, Optional[str]]:
-        """Удаление квартиры (мягкое - деактивация)"""
+        """Удаление квартиры (мягкое — деактивация)."""
         try:
-            apartment = await AddressService.get_apartment_by_id(session, apartment_id)
-            if not apartment:
-                return False, "Квартира не найдена"
-
-            # Проверяем активных жителей
-            active_residents_count = session.execute(
-                select(func.count(UserApartment.id))
-                .where(and_(
-                    UserApartment.apartment_id == apartment_id,
-                    UserApartment.status == 'approved'
-                ))
-            ).scalar()
-
-            if active_residents_count > 0:
-                return False, f"Невозможно удалить квартиру: есть {active_residents_count} подтвержденных жителей"
-
-            apartment.is_active = False
-            session.commit()
-
-            logger.info(f"Деактивирована квартира: {apartment.apartment_number} (ID: {apartment.id})")
+            async with _async_session() as adb:
+                await _core.delete_apartment(adb, apartment_id)
             return True, None
-
+        except AddressError as e:
+            return False, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка удаления квартиры: {e}")
             return False, f"Ошибка удаления: {str(e)}"
 
@@ -723,56 +424,17 @@ class AddressService:
         is_owner: bool = False,
         is_primary: bool = True
     ) -> Tuple[Optional[UserApartment], Optional[str]]:
-        """
-        Пользователь запрашивает привязку к квартире
-
-        Returns:
-            Tuple[UserApartment | None, error_message | None]
-        """
+        """Пользователь запрашивает привязку к квартире."""
         try:
-            # Проверка существования квартиры
-            apartment = await AddressService.get_apartment_by_id(session, apartment_id)
-            if not apartment:
-                return None, "Квартира не найдена"
-
-            if not apartment.is_active:
-                return None, "Квартира неактивна"
-
-            # Проверка на дубликат
-            existing = session.execute(
-                select(UserApartment).where(
-                    and_(
-                        UserApartment.user_id == user_id,
-                        UserApartment.apartment_id == apartment_id
-                    )
+            async with _async_session() as adb:
+                ua = await _core.request_apartment(
+                    adb, user_id=user_id, apartment_id=apartment_id,
+                    is_owner=is_owner, is_primary=is_primary,
                 )
-            ).scalar_one_or_none()
-
-            if existing:
-                if existing.status == 'pending':
-                    return None, "Заявка уже отправлена и ожидает рассмотрения"
-                elif existing.status == 'approved':
-                    return None, "Вы уже подтверждены как житель этой квартиры"
-                elif existing.status == 'rejected':
-                    return None, "Ваша предыдущая заявка была отклонена. Обратитесь к администратору."
-
-            user_apartment = UserApartment(
-                user_id=user_id,
-                apartment_id=apartment_id,
-                status='pending',
-                is_owner=is_owner,
-                is_primary=is_primary
-            )
-
-            session.add(user_apartment)
-            session.commit()
-            session.refresh(user_apartment)
-
-            logger.info(f"Пользователь {user_id} запросил квартиру {apartment_id}")
-            return user_apartment, None
-
+            return ua, None
+        except AddressError as e:
+            return None, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка запроса квартиры: {e}")
             return None, f"Ошибка создания заявки: {str(e)}"
 
@@ -783,31 +445,17 @@ class AddressService:
         reviewer_id: int,
         comment: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Подтверждение заявки на квартиру администратором"""
+        """Подтверждение заявки на квартиру администратором."""
         try:
-            user_apartment = session.execute(
-                select(UserApartment)
-                .options(joinedload(UserApartment.user), joinedload(UserApartment.apartment))
-                .where(UserApartment.id == user_apartment_id)
-            ).scalar_one_or_none()
-
-            if not user_apartment:
-                return False, "Заявка не найдена"
-
-            if user_apartment.status != 'pending':
-                return False, f"Заявка уже обработана (статус: {user_apartment.status})"
-
-            user_apartment.approve(reviewer_id, comment)
-            session.commit()
-
-            logger.info(
-                f"Заявка {user_apartment_id} подтверждена администратором {reviewer_id}. "
-                f"Пользователь {user_apartment.user_id} → Квартира {user_apartment.apartment_id}"
-            )
+            async with _async_session() as adb:
+                await _core.approve_apartment_request(
+                    adb, user_apartment_id=user_apartment_id,
+                    reviewer_id=reviewer_id, comment=comment,
+                )
             return True, None
-
+        except AddressError as e:
+            return False, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка подтверждения заявки: {e}")
             return False, f"Ошибка подтверждения: {str(e)}"
 
@@ -818,31 +466,17 @@ class AddressService:
         reviewer_id: int,
         comment: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Отклонение заявки на квартиру администратором"""
+        """Отклонение заявки на квартиру администратором."""
         try:
-            user_apartment = session.execute(
-                select(UserApartment)
-                .options(joinedload(UserApartment.user), joinedload(UserApartment.apartment))
-                .where(UserApartment.id == user_apartment_id)
-            ).scalar_one_or_none()
-
-            if not user_apartment:
-                return False, "Заявка не найдена"
-
-            if user_apartment.status != 'pending':
-                return False, f"Заявка уже обработана (статус: {user_apartment.status})"
-
-            user_apartment.reject(reviewer_id, comment)
-            session.commit()
-
-            logger.info(
-                f"Заявка {user_apartment_id} отклонена администратором {reviewer_id}. "
-                f"Пользователь {user_apartment.user_id} → Квартира {user_apartment.apartment_id}"
-            )
+            async with _async_session() as adb:
+                await _core.reject_apartment_request(
+                    adb, user_apartment_id=user_apartment_id,
+                    reviewer_id=reviewer_id, comment=comment,
+                )
             return True, None
-
+        except AddressError as e:
+            return False, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка отклонения заявки: {e}")
             return False, f"Ошибка отклонения: {str(e)}"
 
@@ -915,26 +549,16 @@ class AddressService:
         session: Session,
         user_apartment_id: int
     ) -> Tuple[bool, Optional[str]]:
-        """Удаление связи пользователя с квартирой"""
+        """Удаление связи пользователя с квартирой."""
         try:
-            user_apartment = session.execute(
-                select(UserApartment).where(UserApartment.id == user_apartment_id)
-            ).scalar_one_or_none()
-
-            if not user_apartment:
-                return False, "Связь не найдена"
-
-            session.delete(user_apartment)
-            session.commit()
-
-            logger.info(
-                f"Удалена связь: пользователь {user_apartment.user_id} "
-                f"→ квартира {user_apartment.apartment_id}"
-            )
+            async with _async_session() as adb:
+                await _core.remove_user_from_apartment(
+                    adb, user_apartment_id=user_apartment_id,
+                )
             return True, None
-
+        except AddressError as e:
+            return False, str(e)
         except Exception as e:
-            session.rollback()
             logger.error(f"Ошибка удаления связи: {e}")
             return False, f"Ошибка удаления: {str(e)}"
 

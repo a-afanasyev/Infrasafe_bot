@@ -89,7 +89,8 @@ class TestYards:
         await _create_yard(client, "Unique Name")
         r = await client.post(f"{BASE}/yards", json={"name": "Unique Name"})
         assert r.status_code == 409
-        assert "already exists" in r.json()["detail"]
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert "уже существует" in r.json()["detail"]
 
     async def test_list_yards(self, client: AsyncClient):
         await _create_yard(client, "Yard A")
@@ -166,7 +167,8 @@ class TestYards:
         await _create_building(client, yard["id"], "Some addr 123")
         r = await client.delete(f"{BASE}/yards/{yard['id']}")
         assert r.status_code == 409
-        assert "active building" in r.json()["detail"]
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert "активных зданий" in r.json()["detail"]
 
     async def test_deactivate_yard_via_patch_blocked(self, client: AsyncClient):
         yard = await _create_yard(client, "Patch Deactivate")
@@ -223,7 +225,8 @@ class TestBuildings:
         await client.patch(f"{BASE}/yards/{yard['id']}", json={"is_active": False})
         r = await client.post(f"{BASE}/buildings", json={"yard_id": yard["id"], "address": "ул. X 1"})
         assert r.status_code == 409
-        assert "inactive yard" in r.json()["detail"]
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert "неактивен" in r.json()["detail"]
 
     async def test_create_building_nonexistent_yard(self, client: AsyncClient):
         r = await client.post(f"{BASE}/buildings", json={"yard_id": 99999, "address": "ул. X 1"})
@@ -261,7 +264,8 @@ class TestBuildings:
         await _create_apartment(client, bld["id"], "1")
         r = await client.delete(f"{BASE}/buildings/{bld['id']}")
         assert r.status_code == 409
-        assert "active apartment" in r.json()["detail"]
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert "активных квартир" in r.json()["detail"]
 
     async def test_deactivate_building_via_patch_blocked(self, client: AsyncClient):
         yard = await _create_yard(client, "Deact Bld Yard")
@@ -335,7 +339,8 @@ class TestApartments:
         await _create_apartment(client, bld["id"], "1")
         r = await client.post(f"{BASE}/apartments", json={"building_id": bld["id"], "apartment_number": "1"})
         assert r.status_code == 409
-        assert "already exists" in r.json()["detail"]
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert "уже существует" in r.json()["detail"]
 
     async def test_create_apartment_in_inactive_building(self, client: AsyncClient):
         yard = await _create_yard(client, "Inactive Bld Yard")
@@ -396,7 +401,8 @@ class TestApartments:
 
         r = await client.delete(f"{BASE}/apartments/{apt['id']}")
         assert r.status_code == 409
-        assert "approved resident" in r.json()["detail"]
+        # ARCH-014: address domain errors carry Russian messages (D-NOLOCALE).
+        assert "подтвержденных жителей" in r.json()["detail"]
 
     async def test_deactivate_apartment_via_patch_blocked_by_residents(
         self, client: AsyncClient, db_session: AsyncSession, resident_user

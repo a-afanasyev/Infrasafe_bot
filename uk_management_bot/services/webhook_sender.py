@@ -114,14 +114,16 @@ async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict)
 
 
 def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) -> None:
-    """Sync variant of queue_webhook for code paths using legacy sync Session.
+    """DEPRECATED — sync variant of queue_webhook for legacy sync-Session paths.
+
+    Since ARCH-014 the address CRUD flows through services/addresses/core
+    (async) and uses `queue_webhook`. The only remaining caller is
+    services/reconciliation.py. Do NOT use in new code — prefer `queue_webhook`
+    on an AsyncSession.
 
     Same semantics: writes to webhook_outbox in the caller's transaction
-    (no commit). Used by bot handlers via services/address_service.py which
-    operate on the sync SessionLocal.
-
-    Keep this in sync with `queue_webhook` — if the async version changes
-    payload shape, validation, or skip behaviour, mirror it here.
+    (no commit). Keep this in sync with `queue_webhook` — if the async version
+    changes payload shape, validation, or skip behaviour, mirror it here.
     """
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
         logger.warning(

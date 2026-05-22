@@ -18,6 +18,7 @@ import {
   useUpdateYard,
   useUpdateBuilding,
   useUpdateApartment,
+  useAddressesWebSocket,
 } from '../hooks/useAddresses'
 import type {
   YardBrief,
@@ -135,6 +136,8 @@ export default function AddressesPage() {
   }, [viewMode])
 
   // Queries
+  useAddressesWebSocket()
+
   const { data: stats } = useAddressStats()
   const { data: yards = [], isLoading: yardsLoading } = useYards(showInactive)
   const { data: buildings = [], isLoading: buildingsLoading } = useBuildings(

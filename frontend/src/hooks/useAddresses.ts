@@ -1,7 +1,9 @@
+import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import i18n from '../i18n'
 import { apiClient } from '../api/client'
+import { useWebSocket } from './useWebSocket'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import type {
   AddressStats,
@@ -393,4 +395,21 @@ export function useRejectModeration() {
       toast.error(i18n.t('toast.addressRejectFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
+}
+
+// ── Real-time ────────────────────────────────────────────────────────
+
+/** Subscribe to the /ws/v2/buildings channel and refresh address queries on
+ *  building.* events emitted by the bot or the API (ARCH-014). */
+export function useAddressesWebSocket() {
+  const queryClient = useQueryClient()
+  const onEvent = useCallback((event: { type: string; data: unknown }) => {
+    if (typeof event.type === 'string' && event.type.startsWith('building.')) {
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['all-buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] })
+    }
+  }, [queryClient])
+  useWebSocket('buildings', onEvent)
 }
