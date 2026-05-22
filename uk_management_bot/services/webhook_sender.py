@@ -77,6 +77,10 @@ def build_request_payload(event: str, data: dict) -> dict:
             "old_status": data.get("old_status", ""),
             "new_status": data.get("new_status", ""),
         })
+    # FIX-007 Phase 2: for requests born from an inbound InfraSafe alert, echo the
+    # originating event_id so InfraSafe can link alert ↔ request_number.
+    if data.get("source_event_id"):
+        payload["request"]["source_event_id"] = data["source_event_id"]
     return payload
 
 

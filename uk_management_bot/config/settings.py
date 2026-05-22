@@ -102,6 +102,10 @@ class Settings:
     # §1, §4.4); env keys exist now so a future PR can read them without a settings change.
     UK_WEBHOOK_SECRET = os.getenv("UK_WEBHOOK_SECRET", "")
     UK_WEBHOOK_SECRET_NEXT = os.getenv("UK_WEBHOOK_SECRET_NEXT", "")
+    # FIX-007 Phase 2: requests created from inbound InfraSafe alerts are owned by
+    # a dedicated system user (seeded by migration 009), resolved via this sentinel
+    # telegram_id. Telegram never issues id 0.
+    INFRASAFE_SYSTEM_USER_TELEGRAM_ID = int(os.getenv("INFRASAFE_SYSTEM_USER_TELEGRAM_ID", "0"))
 
     # Notifications
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
