@@ -5,14 +5,14 @@ dedup, audit); `alert` stays a raw dict at envelope level so non-`alert.created`
 events don't fail validation. `AlertBlock` is validated by the Phase 2 handler
 only for `event == "alert.created"`.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class InfrasafeAlertIn(BaseModel):
     """Inbound webhook envelope from InfraSafe."""
 
-    event_id: str
-    event: str
+    event_id: str = Field(min_length=1, max_length=64)
+    event: str = Field(min_length=1, max_length=50)
     timestamp: str
     alert: dict
 

@@ -47,16 +47,17 @@ async def handle_infrasafe_alert(
 ) -> InboundResult:
     """Process one inbound InfraSafe webhook. See module docstring for the flow."""
     # Redis fast-guard against simultaneous re-delivery (Phase 1 layer). The
-    # authoritative dedup is the webhook_inbox.event_id unique index below.
-    await is_replay(payload.event_id)
+    # authoritative dedup is the webhook_inbox.event_id unique index below —
+    # the inbox row also carries request_number, which Redis cannot.
+    replay = await is_replay(payload.event_id)
 
     existing = await db.scalar(
         select(WebhookInbox).where(WebhookInbox.event_id == payload.event_id)
     )
-    if existing is not None:
+    if existing is not None or replay:
         return InboundResult(409, {
             "detail": "duplicate event",
-            "request_number": existing.request_number,
+            "request_number": existing.request_number if existing else None,
         })
 
     # Non-alert.created events — record and no-op (contract B1).
@@ -86,7 +87,11 @@ async def handle_infrasafe_alert(
 
     category = TYPE_TO_CATEGORY.get(alert.type, DEFAULT_CATEGORY)
     urgency = SEVERITY_TO_URGENCY.get(alert.severity, DEFAULT_URGENCY)
-    system_user_id = await _system_user_id(db)
+    try:
+        system_user_id = await _system_user_id(db)
+    except RuntimeError as exc:
+        logger.error("inbound alert: %s (event_id=%s)", exc, payload.event_id)
+        return InboundResult(503, {"detail": "webhook receiver not configured"})
 
     # Create request + emit request.created + record inbox — one transaction.
     request_number = await _create_request(
@@ -101,7 +106,6 @@ async def handle_infrasafe_alert(
         "description": alert.message,
         "address": building.address,
         "apartment_id": None,
-        "created_at": "",
         "source_event_id": payload.event_id,
     })
     db.add(WebhookInbox(
@@ -174,12 +178,13 @@ async def _create_request(
             urgency=urgency, description=description, address=address,
             apartment_id=None, status="Новая", source="infrasafe", media_files=[],
         )
-        db.add(req)
         try:
-            await db.flush()
+            # SAVEPOINT: a request_number collision rolls back only this insert,
+            # leaving the caller's transaction (and loaded ORM objects) intact.
+            async with db.begin_nested():
+                db.add(req)
             return request_number
         except IntegrityError:
-            await db.rollback()
             if attempt == 1:
                 raise
     raise RuntimeError("unreachable")
