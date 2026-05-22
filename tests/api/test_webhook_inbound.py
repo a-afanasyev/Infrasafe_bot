@@ -1,7 +1,8 @@
-"""FIX-007 Phase 1 — inbound webhook receiver (InfraSafe → UK) security envelope.
+"""FIX-007 — inbound webhook receiver (InfraSafe → UK) security envelope.
 
-Covers the full response matrix: 401 (no/bad/stale signature), 503 (no secret),
-422 (bad schema), 409 (replay), 429 (rate-limit), 202 (accepted, dual-secret).
+Covers the envelope layer: 401 (no/bad/stale signature), 503 (no secret),
+422 (bad envelope schema), 429 (rate-limit), 202 (signature OK → handler).
+The alert→request handler itself is covered by test_inbound_alert.py.
 """
 import hashlib
 import hmac
@@ -12,8 +13,8 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
+from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.main import app
-from uk_management_bot.api.webhooks import router as router_module
 from uk_management_bot.config.settings import settings
 
 URL = "/api/v2/webhooks/infrasafe/alert"
@@ -23,20 +24,20 @@ TEST_SECRET_NEXT = "test_uk_webhook_secret_next"
 
 # ── helpers ──────────────────────────────────────────────────────────
 
-def _body(event_id: str = "evt-1") -> bytes:
+def _body(event_id: str = "evt-1", event: str = "alert.acknowledged") -> bytes:
+    """A signature-valid envelope. Uses a non-alert.created event so the handler
+    no-ops (202 ignored) without needing a seeded building."""
     return json.dumps({
         "event_id": event_id,
-        "event": "alert.created",
+        "event": event,
         "timestamp": "2026-05-22T10:00:00Z",
-        "alert": {"severity": "high", "message": "boiler offline"},
+        "alert": {"note": "envelope test"},
     }).encode()
 
 
 def _sign(raw: bytes, secret: str, ts: int | None = None) -> str:
-    """Build an `x-webhook-signature` header — mirrors webhook_sender.sign_payload."""
     ts = ts if ts is not None else int(time.time())
-    message = f"{ts}.".encode() + raw
-    sig = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+    sig = hmac.new(secret.encode(), f"{ts}.".encode() + raw, hashlib.sha256).hexdigest()
     return f"t={ts},v1={sig}"
 
 
@@ -48,22 +49,28 @@ def _set_secrets(monkeypatch, primary: str = TEST_SECRET, nxt: str = TEST_SECRET
 # ── fixtures ─────────────────────────────────────────────────────────
 
 @pytest_asyncio.fixture
-async def webhook_client():
-    """HTTP client for the webhook endpoint — no DB, no auth overrides needed."""
+async def webhook_client(db_session_factory):
+    async def override_get_db():
+        async with db_session_factory() as session:
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(autouse=True)
 def _stub_replay(monkeypatch):
-    """Default: every request is a fresh event (no Redis in the test env).
-
-    The replay-specific test overrides this with a stateful fake.
-    """
+    """Redis is unavailable in tests — stub the handler's fast-guard."""
     async def _no_replay(event_id: str) -> bool:
         return False
-    monkeypatch.setattr(router_module, "is_replay", _no_replay)
+    monkeypatch.setattr("uk_management_bot.services.inbound_alert.is_replay", _no_replay)
 
 
 # ── 401 — signature failures ─────────────────────────────────────────
@@ -108,26 +115,25 @@ async def test_stale_timestamp(webhook_client, monkeypatch):
     assert r.status_code == 401
 
 
-# ── 202 — accepted (dual-secret) ─────────────────────────────────────
+# ── 202 — signature OK, handler reached (dual-secret) ────────────────
 
 @pytest.mark.asyncio
 async def test_valid_signature_primary_secret(webhook_client, monkeypatch):
     _set_secrets(monkeypatch)
-    raw = _body()
+    raw = _body("evt-envelope-1")
     sig = _sign(raw, TEST_SECRET)
     r = await webhook_client.post(
         URL, content=raw,
         headers={"x-webhook-signature": sig, "X-Real-IP": "203.0.113.5"},
     )
     assert r.status_code == 202
-    assert r.json()["status"] == "accepted"
 
 
 @pytest.mark.asyncio
 async def test_valid_signature_next_secret(webhook_client, monkeypatch):
     """Dual-secret rotation — a signature made with UK_WEBHOOK_SECRET_NEXT passes."""
     _set_secrets(monkeypatch)
-    raw = _body()
+    raw = _body("evt-envelope-2")
     sig = _sign(raw, TEST_SECRET_NEXT)
     r = await webhook_client.post(
         URL, content=raw,
@@ -136,36 +142,11 @@ async def test_valid_signature_next_secret(webhook_client, monkeypatch):
     assert r.status_code == 202
 
 
-# ── 409 — replay ─────────────────────────────────────────────────────
+# ── 422 — bad envelope schema ────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_replay_returns_409(webhook_client, monkeypatch):
-    _set_secrets(monkeypatch)
-    seen: set[str] = set()
-
-    async def _stateful_replay(event_id: str) -> bool:
-        duplicate = event_id in seen
-        seen.add(event_id)
-        return duplicate
-
-    monkeypatch.setattr(router_module, "is_replay", _stateful_replay)
-
-    raw = _body("evt-replay")
-    sig = _sign(raw, TEST_SECRET)
-    headers = {"x-webhook-signature": sig, "X-Real-IP": "203.0.113.7"}
-
-    first = await webhook_client.post(URL, content=raw, headers=headers)
-    second = await webhook_client.post(URL, content=raw, headers=headers)
-
-    assert first.status_code == 202
-    assert second.status_code == 409
-
-
-# ── 422 — bad schema ─────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_invalid_schema(webhook_client, monkeypatch):
-    """Valid signature, but the body is missing the required `event_id`."""
+async def test_invalid_envelope_schema(webhook_client, monkeypatch):
+    """Valid signature, but the envelope is missing the required `event_id`."""
     _set_secrets(monkeypatch)
     raw = json.dumps({"event": "alert.created", "timestamp": "t", "alert": {}}).encode()
     sig = _sign(raw, TEST_SECRET)
@@ -194,10 +175,10 @@ async def test_no_secret_configured(webhook_client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_rate_limit_60_per_minute(webhook_client, monkeypatch):
-    """61 requests from one IP within a minute → the 61st is 429.
+    """61 unsigned requests from one IP within a minute → the 61st is 429.
 
-    Requests are unsigned (each is a 401) — the limiter counts every call to the
-    route regardless of outcome. A unique X-Real-IP isolates this test's bucket.
+    Requests are unsigned (each is a 401) — the limiter counts every call.
+    A unique X-Real-IP isolates this test's bucket.
     """
     _set_secrets(monkeypatch)
     headers = {"X-Real-IP": "203.0.113.99"}

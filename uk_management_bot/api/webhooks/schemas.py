@@ -1,16 +1,29 @@
-"""Inbound webhook payload schemas.
+"""Inbound webhook payload schemas (FIX-007).
 
-Stub schema for FIX-007 Phase 1 — the envelope fields (event_id/event/timestamp)
-are needed for signature, dedup and audit; the `alert` block is accepted as a
-raw dict. The exact alert fields are confirmed with InfraSafe in Phase 2.
+`InfrasafeAlertIn` — the envelope (event_id/event/timestamp needed for signature,
+dedup, audit); `alert` stays a raw dict at envelope level so non-`alert.created`
+events don't fail validation. `AlertBlock` is validated by the Phase 2 handler
+only for `event == "alert.created"`.
 """
 from pydantic import BaseModel
 
 
 class InfrasafeAlertIn(BaseModel):
-    """Inbound alert webhook from InfraSafe."""
+    """Inbound webhook envelope from InfraSafe."""
 
     event_id: str
     event: str
     timestamp: str
     alert: dict
+
+
+class AlertBlock(BaseModel):
+    """The `alert` block of an `alert.created` event (contract A1/O0/P2)."""
+
+    external_id: str
+    type: str
+    severity: str
+    message: str
+    alert_id: int | None = None
+    created_at: str | None = None
+    correlation_id: str | None = None
