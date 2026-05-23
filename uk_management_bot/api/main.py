@@ -56,11 +56,20 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(300)  # 5 min warmup
         while True:
             try:
-                from uk_management_bot.services.reconciliation import reconcile_buildings
+                from uk_management_bot.services.reconciliation import (
+                    reconcile_buildings, reconcile_requests,
+                )
                 result = await reconcile_buildings()
                 _logger.info("reconcile_buildings cycle: %s", result)
             except Exception:
-                _logger.exception("Reconciliation error")
+                _logger.exception("Reconciliation (buildings) error")
+            # ARCH-114: request inventory reconcile (independent — own lock,
+            # own feature flag). One failure doesn't poison the other.
+            try:
+                req_result = await reconcile_requests()
+                _logger.info("reconcile_requests cycle: %s", req_result)
+            except Exception:
+                _logger.exception("Reconciliation (requests) error")
             await asyncio.sleep(3600)  # 1 hour
 
     task = None

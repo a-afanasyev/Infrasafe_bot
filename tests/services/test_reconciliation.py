@@ -205,3 +205,136 @@ async def test_replay_capped_at_replay_cap(_wired, monkeypatch):
     assert result["missing"] == 60
     assert result["enqueued"] == reconciliation.REPLAY_CAP == 50
     assert mock_queue.call_count == 50
+
+
+# ═══════════════════════ ARCH-114: reconcile_requests ═══════════════════════
+
+
+def _request_row(rn: str, status: str = "Новая"):
+    return SimpleNamespace(request_number=rn, status=status)
+
+
+@pytest.fixture
+def _wired_requests(monkeypatch):
+    """Enable webhooks + ARCH-114 flag + URL, return monkeypatch + mocks for fetch/emit."""
+    monkeypatch.setattr(reconciliation.settings, "INFRASAFE_WEBHOOK_ENABLED", True)
+    monkeypatch.setattr(reconciliation.settings, "RECONCILE_REQUESTS_ENABLED", True)
+    monkeypatch.setattr(
+        reconciliation.settings, "INFRASAFE_REQUESTS_INVENTORY_URL",
+        "http://test/api/uk-requests-metrics",
+    )
+    mock_fetch = AsyncMock()
+    mock_emit = AsyncMock()
+    monkeypatch.setattr(reconciliation, "fetch_infrasafe_uk_request_numbers", mock_fetch)
+    monkeypatch.setattr(reconciliation, "emit_request_status_changed", mock_emit)
+    return monkeypatch, mock_fetch, mock_emit
+
+
+@pytest.mark.asyncio
+async def test_requests_in_sync_when_inventory_matches(_wired_requests):
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row("260524-001"), _request_row("260524-002")]
+    mock_fetch.return_value = {"260524-001", "260524-002"}
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+    )
+
+    result = await reconciliation.reconcile_requests()
+
+    assert result == {"in_sync": True, "uk": 2, "infrasafe": 2}
+    mock_emit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_requests_drift_replays_missing_with_current_status(_wired_requests):
+    """Missing on InfraSafe → emit request.status_changed with old=new=current status."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [
+        _request_row("260524-001", status="Новая"),
+        _request_row("260524-002", status="Принято"),
+        _request_row("260524-003", status="В работе"),
+    ]
+    mock_fetch.return_value = {"260524-001"}
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+    )
+
+    result = await reconciliation.reconcile_requests()
+
+    assert result["missing"] == 2
+    assert result["enqueued"] == 2
+    assert mock_emit.call_count == 2
+    # Each call must pass (db, request_number, old_status, new_status, source="reconcile").
+    by_rn = {c.args[1]: c for c in mock_emit.call_args_list}
+    assert by_rn["260524-002"].args[2] == "Принято"   # old_status
+    assert by_rn["260524-002"].args[3] == "Принято"   # new_status — current state per spec
+    assert by_rn["260524-002"].kwargs["source"] == "reconcile"
+    assert by_rn["260524-003"].args[2] == "В работе"
+    assert by_rn["260524-003"].args[3] == "В работе"
+
+
+@pytest.mark.asyncio
+async def test_requests_skipped_when_flag_off(monkeypatch):
+    """RECONCILE_REQUESTS_ENABLED=false → skip without DB or HTTP."""
+    monkeypatch.setattr(reconciliation.settings, "INFRASAFE_WEBHOOK_ENABLED", True)
+    monkeypatch.setattr(reconciliation.settings, "RECONCILE_REQUESTS_ENABLED", False)
+    mock_fetch = AsyncMock()
+    monkeypatch.setattr(reconciliation, "fetch_infrasafe_uk_request_numbers", mock_fetch)
+
+    result = await reconciliation.reconcile_requests()
+
+    assert result == {"skipped": "reconcile_requests_disabled"}
+    mock_fetch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_requests_skipped_when_url_missing(monkeypatch):
+    """Flag on but URL not configured → skip with explicit reason."""
+    monkeypatch.setattr(reconciliation.settings, "INFRASAFE_WEBHOOK_ENABLED", True)
+    monkeypatch.setattr(reconciliation.settings, "RECONCILE_REQUESTS_ENABLED", True)
+    monkeypatch.setattr(reconciliation.settings, "INFRASAFE_REQUESTS_INVENTORY_URL", "")
+    mock_fetch = AsyncMock()
+    monkeypatch.setattr(reconciliation, "fetch_infrasafe_uk_request_numbers", mock_fetch)
+
+    result = await reconciliation.reconcile_requests()
+
+    assert result == {"skipped": "no_inventory_url"}
+    mock_fetch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_requests_orphan_logged_no_replay(_wired_requests, caplog):
+    """InfraSafe knows request_numbers UK doesn't — log warning, don't replay UK-side."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row("260524-001")]
+    # InfraSafe has the local one plus a stale request_number UK no longer carries.
+    mock_fetch.return_value = {"260524-001", "260101-999"}
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+    )
+
+    with caplog.at_level("WARNING", logger="uk_management_bot.services.reconciliation"):
+        result = await reconciliation.reconcile_requests()
+
+    mock_emit.assert_not_called()
+    assert result["orphans"] == 1
+    assert result["missing"] == 0
+    assert result["in_sync"] is False
+    assert any("orphan" in rec.message.lower() for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_requests_replay_capped_at_replay_cap(_wired_requests):
+    """A huge missing set is capped to REPLAY_CAP per cycle."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row(f"260524-{i:03d}") for i in range(1, 61)]
+    mock_fetch.return_value = set()
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+    )
+
+    result = await reconciliation.reconcile_requests()
+
+    assert result["missing"] == 60
+    assert result["enqueued"] == reconciliation.REPLAY_CAP == 50
+    assert mock_emit.call_count == 50

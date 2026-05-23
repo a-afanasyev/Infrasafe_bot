@@ -29,3 +29,31 @@ async def fetch_infrasafe_external_buildings() -> set[str]:
         for item in items
         if item.get("external_id")
     }
+
+
+async def fetch_infrasafe_uk_request_numbers() -> set[str]:
+    """Return the set of uk_request_number values InfraSafe has on file (ARCH-114).
+
+    Mirror of fetch_infrasafe_external_buildings but for request inventory.
+    Endpoint shape (per InfraSafe ARCH-114 spec 2026-05-24):
+
+        GET INFRASAFE_REQUESTS_INVENTORY_URL?limit=5000
+        → {"data": [{"uk_request_number": "260523-004", ...}, ...], "total": N}
+
+    Extra fields (status / building_external_id / infrasafe_alert_id / updated_at)
+    are returned for debugging; we only consume uk_request_number for the set-diff.
+    """
+    base = settings.INFRASAFE_REQUESTS_INVENTORY_URL.rstrip("/")
+    if not base:
+        raise RuntimeError("INFRASAFE_REQUESTS_INVENTORY_URL not configured")
+    url = f"{base}?limit=5000"
+    async with httpx.AsyncClient(timeout=INFRASAFE_API_TIMEOUT) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+    items = data.get("data", data) if isinstance(data, dict) else data
+    return {
+        str(item["uk_request_number"])
+        for item in items
+        if item.get("uk_request_number")
+    }

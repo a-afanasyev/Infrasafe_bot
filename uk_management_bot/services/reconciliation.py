@@ -9,11 +9,16 @@ import logging
 
 from sqlalchemy import select, text
 
-from uk_management_bot.clients.infrasafe_client import fetch_infrasafe_external_buildings
+from uk_management_bot.clients.infrasafe_client import (
+    fetch_infrasafe_external_buildings,
+    fetch_infrasafe_uk_request_numbers,
+)
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.session import AsyncSessionLocal
+from uk_management_bot.services.webhook_payloads import emit_request_status_changed
 from uk_management_bot.services.webhook_sender import queue_webhook
 
 logger = logging.getLogger(__name__)
@@ -21,6 +26,9 @@ logger = logging.getLogger(__name__)
 # Advisory-lock id — fixed 64-bit integer ("uk recon" in ascii). Ensures only
 # one worker reconciles at a time even under --workers 2.
 RECONCILE_LOCK_KEY = 0x756B7265636F6E
+# Separate lock id for ARCH-114 request reconcile so both can run concurrently
+# if a future deployment wants them on different schedules.
+RECONCILE_REQUESTS_LOCK_KEY = 0x756B726571636E
 
 # Cap how many replay events a single cycle enqueues — safety bound against
 # accidentally flooding the outbox if InfraSafe state vanishes entirely.
@@ -153,4 +161,106 @@ async def reconcile_buildings() -> dict:
             await db.execute(
                 text("SELECT pg_advisory_unlock(:k)"),
                 {"k": RECONCILE_LOCK_KEY},
+            )
+
+
+async def reconcile_requests() -> dict:
+    """Run one request-reconcile cycle. Returns summary stats (ARCH-114).
+
+    Safety-net for silent webhook losses on the request channel — mirrors
+    reconcile_buildings but for `requests`. Set-diffs UK request_numbers
+    against InfraSafe inventory and replays missing ones as
+    `request.status_changed` with the current UK status (per InfraSafe's
+    spec 2026-05-24: their receiver is idempotent on this event, works for
+    both ARM-mapped and orphan/stale-ARM requests).
+    """
+    if not settings.INFRASAFE_WEBHOOK_ENABLED:
+        return {"skipped": "disabled"}
+    if not settings.RECONCILE_REQUESTS_ENABLED:
+        return {"skipped": "reconcile_requests_disabled"}
+    if not settings.INFRASAFE_REQUESTS_INVENTORY_URL:
+        logger.warning("reconcile_requests: INFRASAFE_REQUESTS_INVENTORY_URL not set")
+        return {"skipped": "no_inventory_url"}
+
+    async with AsyncSessionLocal() as db:
+        locked = await db.scalar(
+            text("SELECT pg_try_advisory_lock(:k)"),
+            {"k": RECONCILE_REQUESTS_LOCK_KEY},
+        )
+        if not locked:
+            logger.debug("reconcile_requests: skipped (lock held by other worker)")
+            return {"skipped": "lock_held"}
+
+        try:
+            # 1. UK side: every request — including terminal. InfraSafe's
+            #    inventory returns everything (per Q6 of the spec); we mirror
+            #    that so the diff is symmetric.
+            uk_stmt = select(Request.request_number, Request.status)
+            uk_rows = (await db.execute(uk_stmt)).all()
+            uk_by_number = {r.request_number: r for r in uk_rows}
+            uk_set = set(uk_by_number.keys())
+
+            # 2. InfraSafe side: every uk_request_number it has in ARM.
+            try:
+                is_set = await fetch_infrasafe_uk_request_numbers()
+            except Exception:
+                logger.exception("reconcile_requests: failed to fetch InfraSafe state")
+                return {"error": "infrasafe_fetch_failed"}
+
+            missing_in_is = uk_set - is_set
+            extra_in_is = is_set - uk_set
+
+            if not missing_in_is and not extra_in_is:
+                logger.info(
+                    "reconcile_requests: in sync (uk=%d is=%d)",
+                    len(uk_set), len(is_set),
+                )
+                return {
+                    "in_sync": True,
+                    "uk": len(uk_set),
+                    "infrasafe": len(is_set),
+                }
+
+            if extra_in_is:
+                # InfraSafe knows request_numbers UK doesn't have. Most likely
+                # stale ARM rows after a UK-side cleanup. Log a sample for
+                # triage; do not auto-delete (ops decision).
+                logger.warning(
+                    "reconcile_requests: %d orphan(s) in InfraSafe "
+                    "(request_numbers not in UK requests table), sample: %s",
+                    len(extra_in_is), sorted(extra_in_is)[:5],
+                )
+
+            # 3. Replay missing as request.status_changed with current state.
+            #    Per InfraSafe spec Q8: this event is idempotent on their side —
+            #    if ARM exists, updates status; if ARM missing, success no-op.
+            #    Safer than request.created (which only matches alert-originated
+            #    requests via source_event_id).
+            enqueued = 0
+            for rn in sorted(missing_in_is)[:REPLAY_CAP]:
+                row = uk_by_number[rn]
+                await emit_request_status_changed(
+                    db, rn, row.status, row.status, source="reconcile",
+                )
+                enqueued += 1
+
+            await db.commit()
+            logger.warning(
+                "reconcile_requests: uk=%d is=%d missing=%d enqueued=%d orphans=%d",
+                len(uk_set), len(is_set),
+                len(missing_in_is), enqueued, len(extra_in_is),
+            )
+            return {
+                "in_sync": False,
+                "uk": len(uk_set),
+                "infrasafe": len(is_set),
+                "missing": len(missing_in_is),
+                "enqueued": enqueued,
+                "orphans": len(extra_in_is),
+            }
+
+        finally:
+            await db.execute(
+                text("SELECT pg_advisory_unlock(:k)"),
+                {"k": RECONCILE_REQUESTS_LOCK_KEY},
             )

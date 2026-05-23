@@ -107,6 +107,12 @@ class Settings:
     # telegram_id. Telegram never issues id 0.
     INFRASAFE_SYSTEM_USER_TELEGRAM_ID = int(os.getenv("INFRASAFE_SYSTEM_USER_TELEGRAM_ID", "0"))
 
+    # ARCH-114: request inventory reconciliation. URL must point at InfraSafe's
+    # /api/uk-requests-metrics. RECONCILE_REQUESTS_ENABLED is a feature flag —
+    # flip to true after InfraSafe deploys the endpoint.
+    INFRASAFE_REQUESTS_INVENTORY_URL = os.getenv("INFRASAFE_REQUESTS_INVENTORY_URL", "")
+    RECONCILE_REQUESTS_ENABLED = os.getenv("RECONCILE_REQUESTS_ENABLED", "false").lower() == "true"
+
     # Notifications
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
     NOTIFICATION_RETRY_COUNT = int(os.getenv("NOTIFICATION_RETRY_COUNT", "3"))
