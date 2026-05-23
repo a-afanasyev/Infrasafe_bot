@@ -307,6 +307,10 @@ class AsyncRequestService:
             await self.db.flush()
             await self.db.refresh(request)
 
+            # ARCH-113: emit request.created webhook (caller's transaction handles commit)
+            from uk_management_bot.services.webhook_payloads import emit_request_created
+            await emit_request_created(self.db, request, source="bot")
+
             logger.info(f"[ASYNC] Создана заявка {request.request_number} пользователем {user_id}")
             return request
 
@@ -366,6 +370,10 @@ class AsyncRequestService:
             # Если заявка завершена, устанавливаем время завершения
             if new_status == "Выполнена":
                 request.completed_at = datetime.now()
+
+            # ARCH-113: emit request.status_changed webhook (same txn)
+            from uk_management_bot.services.webhook_payloads import emit_request_status_changed
+            await emit_request_status_changed(self.db, request_number, old_status, new_status, source="bot")
 
             await self.db.flush()
             await self.db.refresh(request)

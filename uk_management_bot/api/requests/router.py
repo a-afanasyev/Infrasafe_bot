@@ -8,7 +8,10 @@ from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
 from uk_management_bot.api.dependencies_access import check_request_access, require_active_shift, is_assigned_executor
-from uk_management_bot.services.webhook_sender import queue_webhook
+from uk_management_bot.services.webhook_payloads import (
+    emit_request_created,
+    emit_request_status_changed,
+)
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
     CreateRequestBody, UpdateRequestBody,
@@ -261,17 +264,8 @@ async def create_request(
     await db.refresh(req)
 
     await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))
-    # Webhook to InfraSafe
-    await queue_webhook(db, "request.created", "/api/webhooks/uk/request", {
-        "request_number": req.request_number,
-        "category": req.category,
-        "status": req.status,
-        "urgency": req.urgency,
-        "description": req.description,
-        "address": req.address,
-        "apartment_id": req.apartment_id,
-        "created_at": req.created_at.isoformat() if req.created_at else "",
-    })
+    # Webhook to InfraSafe (ARCH-113: shared builder, tagged source=api)
+    await emit_request_created(db, req, source="api")
     await db.commit()
     return RequestCard.model_validate(req)
 
@@ -371,12 +365,8 @@ async def update_request(
     if old_status != req.status:
         event_data = {"number": request_number, "old_status": old_status, "new_status": req.status}
         await publish_request_event("request.status_changed", event_data)
-        # Webhook to InfraSafe
-        await queue_webhook(db, "request.status_changed", "/api/webhooks/uk/request", {
-            "request_number": request_number,
-            "old_status": old_status,
-            "new_status": req.status,
-        })
+        # Webhook to InfraSafe (ARCH-113: shared builder, tagged source=api)
+        await emit_request_status_changed(db, request_number, old_status, req.status, source="api")
         await db.commit()
 
     return RequestCard.model_validate(req)

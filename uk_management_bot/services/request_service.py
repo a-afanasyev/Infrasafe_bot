@@ -19,6 +19,10 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.services.notification_service import notify_status_changed, async_notify_request_status_changed
+from uk_management_bot.services.webhook_payloads import (
+    emit_request_created_sync,
+    emit_request_status_changed_sync,
+)
 # Google Sheets интеграция убрана из продукта
 
 logger = logging.getLogger(__name__)
@@ -97,10 +101,14 @@ class RequestService:
             self.db.add(request)
             self.db.commit()
             self.db.refresh(request)
-            
+
+            # ARCH-113: emit request.created webhook (mirrors API path)
+            emit_request_created_sync(self.db, request, source="bot")
+            self.db.commit()
+
             # Синхронизация с Google Sheets
             # await self._sync_request_to_sheets(request, "create")  # Временно отключено
-            
+
             logger.info(f"Создана заявка {request.request_number} пользователем {user_id}")
             return request
             
@@ -254,10 +262,13 @@ class RequestService:
             # Если заявка завершена, устанавливаем время завершения
             if new_status == "Выполнена":
                 request.completed_at = datetime.now()
-            
+
+            # ARCH-113: emit request.status_changed webhook (same txn as the status update)
+            emit_request_status_changed_sync(self.db, request_number, old_status, new_status, source="bot")
+
             self.db.commit()
             self.db.refresh(request)
-            
+
             # Синхронизация с Google Sheets
             changes = {"status": new_status}
             if executor_id:
@@ -447,6 +458,9 @@ class RequestService:
 
             if new_status == "Выполнена":
                 request.completed_at = datetime.now()
+
+            # ARCH-113: emit request.status_changed webhook (same txn as the status update)
+            emit_request_status_changed_sync(self.db, request.request_number, old_status, new_status, source="bot")
 
             self.db.commit()
             self.db.refresh(request)
