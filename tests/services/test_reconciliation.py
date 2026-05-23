@@ -324,6 +324,21 @@ async def test_requests_orphan_logged_no_replay(_wired_requests, caplog):
 
 
 @pytest.mark.asyncio
+async def test_requests_skipped_when_lock_held(_wired_requests):
+    """pg_try_advisory_lock returns false → another worker owns the cycle."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(False, [])
+    )
+
+    result = await reconciliation.reconcile_requests()
+
+    assert result == {"skipped": "lock_held"}
+    mock_fetch.assert_not_called()
+    mock_emit.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_requests_replay_capped_at_replay_cap(_wired_requests):
     """A huge missing set is capped to REPLAY_CAP per cycle."""
     monkeypatch, mock_fetch, mock_emit = _wired_requests

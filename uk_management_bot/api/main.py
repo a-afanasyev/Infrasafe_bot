@@ -55,17 +55,18 @@ async def lifespan(app: FastAPI):
         # Run reconciliation hourly. Sleep first so we don't slam startup.
         await asyncio.sleep(300)  # 5 min warmup
         while True:
+            # Each reconciler imports + runs inside its own try/except so an
+            # ImportError or runtime failure in one cannot mask or skip the
+            # other. Imports are deferred (not module-level) on purpose —
+            # keeps lifespan startup resilient to a recon-module bug.
             try:
-                from uk_management_bot.services.reconciliation import (
-                    reconcile_buildings, reconcile_requests,
-                )
+                from uk_management_bot.services.reconciliation import reconcile_buildings
                 result = await reconcile_buildings()
                 _logger.info("reconcile_buildings cycle: %s", result)
             except Exception:
                 _logger.exception("Reconciliation (buildings) error")
-            # ARCH-114: request inventory reconcile (independent — own lock,
-            # own feature flag). One failure doesn't poison the other.
             try:
+                from uk_management_bot.services.reconciliation import reconcile_requests
                 req_result = await reconcile_requests()
                 _logger.info("reconcile_requests cycle: %s", req_result)
             except Exception:
