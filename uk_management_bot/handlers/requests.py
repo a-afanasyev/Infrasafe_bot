@@ -854,12 +854,12 @@ async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -
 
         logger.info(f"[SAVE_REQUEST] Сохранение в БД...")
         db.add(request)
-        db.commit()
-        db.refresh(request)
 
-        # ARCH-113: emit request.created webhook to InfraSafe (parity with API path)
+        # ARCH-113: emit + INSERT in one transaction — protects against orphan
+        # requests (request row durable but outbox row missing on commit failure).
         from uk_management_bot.services.webhook_payloads import emit_request_created_sync
         emit_request_created_sync(db, request, source="bot")
+
         db.commit()
 
         logger.info(f"[SAVE_REQUEST] ✅ Заявка {request_number} успешно сохранена")

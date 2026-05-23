@@ -99,12 +99,14 @@ class RequestService:
             )
             
             self.db.add(request)
+
+            # ARCH-113: emit + INSERT in one transaction — protects against orphan
+            # requests (request row durable but outbox row missing on commit failure).
+            # `created_at` is None pre-commit and serialises as "" via the builder fallback.
+            emit_request_created_sync(self.db, request, source="bot")
+
             self.db.commit()
             self.db.refresh(request)
-
-            # ARCH-113: emit request.created webhook (mirrors API path)
-            emit_request_created_sync(self.db, request, source="bot")
-            self.db.commit()
 
             # Синхронизация с Google Sheets
             # await self._sync_request_to_sheets(request, "create")  # Временно отключено

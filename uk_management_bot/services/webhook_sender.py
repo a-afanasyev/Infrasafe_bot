@@ -118,12 +118,16 @@ async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict)
 
 
 def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) -> None:
-    """DEPRECATED — sync variant of queue_webhook for legacy sync-Session paths.
+    """Sync variant of queue_webhook — for legacy sync-Session paths.
 
-    Since ARCH-014 the address CRUD flows through services/addresses/core
-    (async) and uses `queue_webhook`. The only remaining caller is
-    services/reconciliation.py. Do NOT use in new code — prefer `queue_webhook`
-    on an AsyncSession.
+    Accepted callers:
+      - services/reconciliation.py (sync replay loop)
+      - services/webhook_payloads.emit_*_sync (ARCH-113: bot request paths) —
+        request_service.py, handlers/requests.py both use sync Session.
+
+    Prefer `queue_webhook` on AsyncSession for new async code; FIX-008 will
+    eventually de-async services/request_service.py, and only then this can be
+    revisited for removal.
 
     Same semantics: writes to webhook_outbox in the caller's transaction
     (no commit). Keep this in sync with `queue_webhook` — if the async version
