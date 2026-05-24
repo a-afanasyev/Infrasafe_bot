@@ -41,22 +41,23 @@ def _alert_body(event_id, external_id, *, event="alert.created",
              "severity": severity, "message": message}
     if omit_type:
         del alert["type"]
+    # Sprint 10 / INT-120 — fields nest INSIDE the `alert` block to match
+    # deployed wire (alertForwarder.js:199-226). The spec §2.2 example shows
+    # them top-level — known doc drift, wire wins.
+    if reopen_sequence is not None:
+        alert["reopen_sequence"] = reopen_sequence
+    if reopen_chain_id is not None:
+        alert["reopen_chain_id"] = reopen_chain_id
+    if related_request_number is not None:
+        alert["related_request_number"] = related_request_number
+    if uk_urgency_override is not None:
+        alert["uk_urgency_override"] = uk_urgency_override
+    if engineer_required_reason is not None:
+        alert["engineer_required_reason"] = engineer_required_reason
     body = {
         "event_id": event_id, "event": event,
         "timestamp": "2026-05-22T12:00:00Z", "alert": alert,
     }
-    # Sprint 10 / INT-120 — only attach when explicitly requested (mirrors
-    # InfraSafe wire behaviour: fields omitted on first-time alerts).
-    if reopen_sequence is not None:
-        body["reopen_sequence"] = reopen_sequence
-    if reopen_chain_id is not None:
-        body["reopen_chain_id"] = reopen_chain_id
-    if related_request_number is not None:
-        body["related_request_number"] = related_request_number
-    if uk_urgency_override is not None:
-        body["uk_urgency_override"] = uk_urgency_override
-    if engineer_required_reason is not None:
-        body["engineer_required_reason"] = engineer_required_reason
     return json.dumps(body).encode()
 
 
@@ -285,6 +286,27 @@ async def test_uk_urgency_override_takes_precedence(
 
 
 @pytest.mark.asyncio
+async def test_uk_urgency_override_outside_ladder_falls_back(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """Defensive: if InfraSafe ever sends a value outside the canonical ladder
+    (config drift, new tier they haven't told us about), we don't 422 the
+    request — we fall back to SEVERITY_TO_URGENCY and log a warning. Spec
+    §2.2 phrases it «UK SHOULD use this value», not MUST."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-override-bad", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="CRITICAL",  # → "Срочная"
+        reopen_sequence=2, uk_urgency_override="ЧтоТоНеИзЛестницы",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.18"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    # Fell back to severity mapping (CRITICAL → Срочная), NOT the bad override.
+    assert req.urgency == "Срочная"
+
+
+@pytest.mark.asyncio
 async def test_reopen_metadata_persisted_in_inbox(
     webhook_client, building, db_session, monkeypatch,
 ):
@@ -302,10 +324,12 @@ async def test_reopen_metadata_persisted_in_inbox(
     inbox = await db_session.scalar(
         select(WebhookInbox).where(WebhookInbox.event_id == "evt-meta")
     )
-    assert inbox.payload["reopen_sequence"] == 3
-    assert inbox.payload["reopen_chain_id"] == "chain-abc"
-    assert inbox.payload["related_request_number"] == "260523-009"
-    assert inbox.payload["uk_urgency_override"] == "Срочная"
+    # Per deployed wire (alertForwarder.js:199-226) the fields are nested
+    # inside the `alert` block — webhook_inbox.payload preserves that shape.
+    assert inbox.payload["alert"]["reopen_sequence"] == 3
+    assert inbox.payload["alert"]["reopen_chain_id"] == "chain-abc"
+    assert inbox.payload["alert"]["related_request_number"] == "260523-009"
+    assert inbox.payload["alert"]["uk_urgency_override"] == "Срочная"
 
 
 @pytest.mark.asyncio
@@ -389,7 +413,7 @@ async def test_engineer_required_persists_reason_in_inbox(
         select(WebhookInbox).where(WebhookInbox.event_id == "evt-engreq-reason")
     )
     assert inbox.outcome == "accepted"
-    assert inbox.payload["engineer_required_reason"] == "max_reopens_per_24h"
+    assert inbox.payload["alert"]["engineer_required_reason"] == "max_reopens_per_24h"
 
 
 @pytest.mark.asyncio

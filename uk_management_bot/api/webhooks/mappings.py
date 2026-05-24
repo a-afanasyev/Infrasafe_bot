@@ -29,6 +29,11 @@ SEVERITY_TO_URGENCY = {
 }
 DEFAULT_URGENCY = "Обычная"
 
+# Sprint 10 / INT-120 — canonical urgency ladder, used to validate
+# `uk_urgency_override` on inbound webhooks. Order matters for ops/audit but
+# not for membership checks (we only use it as a set here).
+URGENCY_LADDER = frozenset({"Обычная", "Средняя", "Срочная", "Критическая"})
+
 # Sprint 10 / INT-120 — `event=alert.engineer_required` (chain hit
 # `max_reopens_per_24h`). Per InfraSafe Sprint 10 spec §2.4 these are fixed:
 # дальнейшая automatic re-escalation для chain'а не делается, route на отдельную

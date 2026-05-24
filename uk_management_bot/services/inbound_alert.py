@@ -21,6 +21,7 @@ from uk_management_bot.api.webhooks.mappings import (
     ENGINEER_REQUIRED_URGENCY,
     SEVERITY_TO_URGENCY,
     TYPE_TO_CATEGORY,
+    URGENCY_LADDER,
 )
 from uk_management_bot.api.webhooks.replay import is_replay
 from uk_management_bot.api.webhooks.schemas import AlertBlock, InfrasafeAlertIn
@@ -104,17 +105,25 @@ async def handle_infrasafe_alert(
         # Sprint 10 / INT-120: per-rule urgency bump on reopens. When InfraSafe
         # sends `uk_urgency_override`, it has authoritatively walked the ladder
         # (Обычная → Средняя → Срочная → Критическая) — UK trusts the value
-        # as-is rather than re-deriving from severity. Fallback to severity
-        # mapping when absent (first-time alert or rule.reopen_urgency_bump
-        # =false).
-        urgency = payload.uk_urgency_override or SEVERITY_TO_URGENCY.get(
-            alert.severity, DEFAULT_URGENCY
-        )
-    # Sprint 10 / INT-120: reopen-marker. `reopen_sequence` is omitted for
-    # first-time alerts (sequence=1) — only ≥ 2 carries the marker on wire.
+        # if it's a known ladder entry, else logs and falls back to severity
+        # mapping. Spec §2.2 says UK *SHOULD* (not MUST) use the override —
+        # graceful fallback keeps the request creatable on contract drift.
+        urgency = SEVERITY_TO_URGENCY.get(alert.severity, DEFAULT_URGENCY)
+        if alert.uk_urgency_override is not None:
+            if alert.uk_urgency_override in URGENCY_LADDER:
+                urgency = alert.uk_urgency_override
+            else:
+                logger.warning(
+                    "inbound alert: uk_urgency_override=%r outside canonical "
+                    "ladder, falling back to severity mapping (event_id=%s)",
+                    alert.uk_urgency_override, payload.event_id,
+                )
+    # Sprint 10 / INT-120: reopen-marker. Deployed wire sends `reopen_sequence=1`
+    # for first-time alerts (per alertForwarder.js:222 `|| 1` default); we only
+    # prefix when ≥ 2 — that's the actual reopen signal.
     description = alert.message
-    if payload.reopen_sequence is not None and payload.reopen_sequence >= 2:
-        description = f"Повторное обращение №{payload.reopen_sequence}. {alert.message}"
+    if alert.reopen_sequence is not None and alert.reopen_sequence >= 2:
+        description = f"Повторное обращение №{alert.reopen_sequence}. {alert.message}"
 
     try:
         system_user_id = await _system_user_id(db)
