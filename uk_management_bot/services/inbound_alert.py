@@ -91,24 +91,22 @@ async def handle_infrasafe_alert(
                         alert.external_id, payload.event_id)
         return InboundResult(422, {"detail": "unknown building external_id"})
 
-    # Sprint 10 / INT-120: route engineer_required events to the engineering
-    # escalation queue (chain hit max_reopens_per_24h). Both category and
-    # urgency are fixed by spec §2.4 — neither severity mapping nor
-    # uk_urgency_override applies. UK owns the taxonomy; we hardcode here
-    # instead of trusting `rule.uk_category`/`rule.uk_urgency` from the wire
-    # for the same reason FIX-007 contract O1/P1 keeps mappings UK-side.
+    # Sprint 10 / INT-120 — base category/urgency depend on event_type:
+    #   alert.created          → TYPE_TO_CATEGORY + SEVERITY_TO_URGENCY
+    #   alert.engineer_required → hardcoded engineering-queue routing
+    #                             (chain hit max_reopens_per_24h, spec §2.4)
     if payload.event == "alert.engineer_required":
         category = ENGINEER_REQUIRED_CATEGORY
         urgency = ENGINEER_REQUIRED_URGENCY
     else:
         category = TYPE_TO_CATEGORY.get(alert.type, DEFAULT_CATEGORY)
-        # Sprint 10 / INT-120: per-rule urgency bump on reopens. When InfraSafe
-        # sends `uk_urgency_override`, it has authoritatively walked the ladder
+        urgency = SEVERITY_TO_URGENCY.get(alert.severity, DEFAULT_URGENCY)
+        # Sprint 10: per-rule urgency bump on reopens. When InfraSafe sends
+        # `uk_urgency_override`, it has authoritatively walked the ladder
         # (Обычная → Средняя → Срочная → Критическая) — UK trusts the value
         # if it's a known ladder entry, else logs and falls back to severity
         # mapping. Spec §2.2 says UK *SHOULD* (not MUST) use the override —
         # graceful fallback keeps the request creatable on contract drift.
-        urgency = SEVERITY_TO_URGENCY.get(alert.severity, DEFAULT_URGENCY)
         if alert.uk_urgency_override is not None:
             if alert.uk_urgency_override in URGENCY_LADDER:
                 urgency = alert.uk_urgency_override
@@ -118,6 +116,21 @@ async def handle_infrasafe_alert(
                     "ladder, falling back to severity mapping (event_id=%s)",
                     alert.uk_urgency_override, payload.event_id,
                 )
+    # Sprint 10 follow-up (InfraSafe PR #56, 2026-05-24): `uk_category_override`
+    # — if present and non-empty, replaces whichever category we derived above
+    # (TYPE_TO_CATEGORY mapping OR engineer-required hardcode). InfraSafe owns
+    # the chain transitions; UK trusts their resolved category. Empty/whitespace
+    # → fall back to the derived value (same SHOULD-not-MUST principle).
+    if alert.uk_category_override is not None:
+        normalized = alert.uk_category_override.strip()
+        if normalized:
+            category = normalized
+        else:
+            logger.warning(
+                "inbound alert: uk_category_override is blank, "
+                "falling back to derived category (event_id=%s)",
+                payload.event_id,
+            )
     # Sprint 10 / INT-120: reopen-marker. Deployed wire sends `reopen_sequence=1`
     # for first-time alerts (per alertForwarder.js:222 `|| 1` default); we only
     # prefix when ≥ 2 — that's the actual reopen signal.

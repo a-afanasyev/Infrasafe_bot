@@ -43,6 +43,12 @@ class AlertBlock(BaseModel):
     # ladder, not by Pydantic, so an unknown value triggers a graceful fallback
     # to SEVERITY_TO_URGENCY rather than a 422. max_length guards length only.
     uk_urgency_override: str | None = Field(default=None, max_length=32)
+    # Sprint 10 follow-up (InfraSafe PR #56, 2026-05-24): InfraSafe may force
+    # a UK request category for chains where their `alert_rule.uk_category`
+    # changes (e.g. engineer_required transitions). When present, takes
+    # precedence over both TYPE_TO_CATEGORY mapping and event-type hardcode.
+    # Empty/whitespace value → graceful fallback (UK still owns the taxonomy).
+    uk_category_override: str | None = Field(default=None, max_length=64)
     # Sprint 10 §2.4 — only on `alert.engineer_required`. Position not yet
     # observed in deployed wire (sender unshipped at the InfraSafe side as of
     # 2026-05-24); we treat it as a nested field for symmetry with the rest.

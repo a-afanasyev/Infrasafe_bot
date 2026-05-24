@@ -36,7 +36,7 @@ def _alert_body(event_id, external_id, *, event="alert.created",
                 message="Перегрузка трансформатора", omit_type=False,
                 reopen_sequence=None, reopen_chain_id=None,
                 related_request_number=None, uk_urgency_override=None,
-                engineer_required_reason=None):
+                uk_category_override=None, engineer_required_reason=None):
     alert = {"external_id": external_id, "type": alert_type,
              "severity": severity, "message": message}
     if omit_type:
@@ -52,6 +52,8 @@ def _alert_body(event_id, external_id, *, event="alert.created",
         alert["related_request_number"] = related_request_number
     if uk_urgency_override is not None:
         alert["uk_urgency_override"] = uk_urgency_override
+    if uk_category_override is not None:
+        alert["uk_category_override"] = uk_category_override
     if engineer_required_reason is not None:
         alert["engineer_required_reason"] = engineer_required_reason
     body = {
@@ -443,3 +445,68 @@ async def test_engineer_required_emits_outbound_request_created(
     assert match is not None
     assert match.payload["request"]["category"] == "Инженерный разбор"
     assert match.payload["request"]["urgency"] == "Критическая"
+
+
+# ── INT-120 #1b — uk_category_override (InfraSafe PR #56) ────────────
+
+@pytest.mark.asyncio
+async def test_uk_category_override_replaces_type_mapping(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """When InfraSafe sends `uk_category_override`, it wins over the local
+    TYPE_TO_CATEGORY mapping. Same SHOULD-not-MUST principle as urgency."""
+    _set_secrets(monkeypatch)
+    # LEAK_DETECTED would normally → "Сантехника"; override should win.
+    raw = _alert_body(
+        "evt-cat-override", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        uk_category_override="Безопасность",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.19"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.category == "Безопасность"
+
+
+@pytest.mark.asyncio
+async def test_uk_category_override_wins_on_engineer_required(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """InfraSafe PR #56 sends `uk_category_override` even on engineer_required
+    events. UK must honor it instead of the engineer-required hardcode — keeps
+    InfraSafe in control of the chain-end taxonomy.
+
+    In practice the override matches the hardcode («Инженерный разбор») so the
+    observable category is identical; test asserts the override branch is
+    actually taken by sending an unusual value."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-cat-override-engreq", _expected_external_id(building.id),
+        event="alert.engineer_required",
+        reopen_sequence=4,
+        uk_category_override="Особый разбор",  # not the hardcoded value
+        engineer_required_reason="max_reopens_per_24h",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.20"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.category == "Особый разбор"
+    # Urgency hardcode still applies (no urgency override sent here).
+    assert req.urgency == "Критическая"
+
+
+@pytest.mark.asyncio
+async def test_uk_category_override_blank_falls_back(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """Defensive: blank/whitespace override → fall back to derived category."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-cat-blank", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        uk_category_override="   ",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.21"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.category == "Сантехника"  # fell back to TYPE_TO_CATEGORY
