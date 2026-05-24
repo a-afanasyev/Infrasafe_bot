@@ -25,6 +25,21 @@ def test_password_hash_and_verify():
     assert verify_password("WrongPassword", hashed) is False
 
 
+def test_verify_password_handles_malformed_hash():
+    """A corrupted password_hash in DB (shell-escape strip, manual edit, bad
+    seed migration) must produce a failed-credential result, NOT a 500 from
+    leaked bcrypt ValueError. Found during INT-120 prod smoke 2026-05-25:
+    psql -c with shell-escaped $ stripped the prefix, leaving "b2.WVBA..."
+    instead of "$2b$12$Y4Xb.WVBA..." — login_password then 500'd on every
+    attempt."""
+    # No prefix → bcrypt raises ValueError("Invalid salt")
+    assert verify_password("anything", "b2.WVBA.no.prefix") is False
+    # Empty string → bcrypt raises ValueError
+    assert verify_password("anything", "") is False
+    # Random garbage
+    assert verify_password("anything", "not-a-bcrypt-hash-at-all") is False
+
+
 def test_twa_init_data_invalid_hash():
     result = verify_twa_init_data("user=%7B%22id%22%3A123%7D&hash=badhash", "fake_bot_token")
     assert result is None

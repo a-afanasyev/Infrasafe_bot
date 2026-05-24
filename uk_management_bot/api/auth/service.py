@@ -38,7 +38,15 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    """Verify a bcrypt password. Returns False on any malformed-hash error
+    instead of leaking the bcrypt ValueError to the caller — a corrupted
+    stored hash (wrong format, missing salt, truncated by shell-escape, etc.)
+    must look like a failed credential check (401), not a 500 server error.
+    """
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(
