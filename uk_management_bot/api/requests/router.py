@@ -20,6 +20,7 @@ from uk_management_bot.api.requests.schemas import (
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.api.rate_limit import limiter
 
@@ -52,11 +53,50 @@ def _format_executor_name(user) -> Optional[str]:
     return name or None
 
 
-def _make_request_card(req, exec_user=None) -> RequestCard:
-    """Build RequestCard from ORM Request, optionally with executor user."""
+def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
+    """Build RequestCard from ORM Request, optionally with executor user.
+
+    When `inbox_row` (a WebhookInbox row associated with this request) is
+    provided, surface the Sprint 10 reopen-meta fields on the card.
+    Sequence=1 (deployed-wire first-time default) → None — only true reopens
+    (≥ 2) carry visible meta. List endpoints skip the enrichment to keep
+    their query cost identical to pre-INT-120 baseline.
+    """
     card = RequestCard.model_validate(req)
     card.executor_name = _format_executor_name(exec_user)
+    if inbox_row is not None:
+        alert = (inbox_row.payload or {}).get("alert", {}) or {}
+        seq = alert.get("reopen_sequence")
+        if isinstance(seq, int) and seq >= 2:
+            card.reopen_sequence = seq
+            card.reopen_chain_id = alert.get("reopen_chain_id") or None
+            card.related_request_number = alert.get("related_request_number") or None
+        # engineer_required_reason is independent of the seq≥2 gate — it can
+        # be informational even on edge cases (no current contract path puts
+        # it on seq=1, but surface it whenever present for ops audit).
+        reason = alert.get("engineer_required_reason")
+        if reason:
+            card.engineer_required_reason = reason
     return card
+
+
+async def _latest_accepted_inbox(db: AsyncSession, request_number: str) -> WebhookInbox | None:
+    """Return the most recent accepted webhook_inbox row for the request, or None.
+
+    Defensive ORDER BY id DESC LIMIT 1: in normal operation there's exactly
+    one inbox row per infrasafe-originated request (alert.created or
+    alert.engineer_required → accepted), but ordering protects against any
+    future contract where a request_number is reused across replays.
+    """
+    return await db.scalar(
+        select(WebhookInbox)
+        .where(
+            WebhookInbox.request_number == request_number,
+            WebhookInbox.outcome == "accepted",
+        )
+        .order_by(WebhookInbox.id.desc())
+        .limit(1)
+    )
 
 
 @router.get("/kanban", response_model=KanbanResponse)
@@ -215,7 +255,10 @@ async def get_request(
     if not row:
         raise HTTPException(status_code=404, detail="Request not found")
     req, exec_user = row
-    return _make_request_card(req, exec_user)
+    # INT-120 #3 — detail endpoint enriches with reopen-meta from webhook_inbox
+    # (list endpoints skip this to keep their cost identical to the baseline).
+    inbox_row = await _latest_accepted_inbox(db, request_number)
+    return _make_request_card(req, exec_user, inbox_row=inbox_row)
 
 
 @router.post("", response_model=RequestCard, status_code=201)

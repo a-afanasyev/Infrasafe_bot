@@ -27,6 +27,15 @@ class RequestCard(BaseModel):
     notes: Optional[str] = None
     requested_materials: Optional[str] = None
     return_reason: Optional[str] = None
+    # INT-120 #3 — Sprint 10 reopen-chain metadata, surfaced on the detail
+    # endpoint only (GET /api/v2/requests/{number}). Populated from the
+    # accepted webhook_inbox row when the request was created via inbound
+    # InfraSafe alert. Sequence=1 (deployed-wire first-time default) is
+    # treated as «no reopen» and returned as None.
+    reopen_sequence: Optional[int] = None
+    reopen_chain_id: Optional[str] = None
+    related_request_number: Optional[str] = None
+    engineer_required_reason: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
