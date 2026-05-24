@@ -33,15 +33,31 @@ TEST_SECRET = "test_uk_webhook_secret_primary"
 
 def _alert_body(event_id, external_id, *, event="alert.created",
                 alert_type="TRANSFORMER_OVERLOAD", severity="CRITICAL",
-                message="Перегрузка трансформатора", omit_type=False):
+                message="Перегрузка трансформатора", omit_type=False,
+                reopen_sequence=None, reopen_chain_id=None,
+                related_request_number=None, uk_urgency_override=None,
+                engineer_required_reason=None):
     alert = {"external_id": external_id, "type": alert_type,
              "severity": severity, "message": message}
     if omit_type:
         del alert["type"]
-    return json.dumps({
+    body = {
         "event_id": event_id, "event": event,
         "timestamp": "2026-05-22T12:00:00Z", "alert": alert,
-    }).encode()
+    }
+    # Sprint 10 / INT-120 — only attach when explicitly requested (mirrors
+    # InfraSafe wire behaviour: fields omitted on first-time alerts).
+    if reopen_sequence is not None:
+        body["reopen_sequence"] = reopen_sequence
+    if reopen_chain_id is not None:
+        body["reopen_chain_id"] = reopen_chain_id
+    if related_request_number is not None:
+        body["related_request_number"] = related_request_number
+    if uk_urgency_override is not None:
+        body["uk_urgency_override"] = uk_urgency_override
+    if engineer_required_reason is not None:
+        body["engineer_required_reason"] = engineer_required_reason
+    return json.dumps(body).encode()
 
 
 def _signed(raw: bytes, ip: str, secret: str = TEST_SECRET) -> dict:
@@ -205,3 +221,201 @@ async def test_request_created_webhook_emitted(webhook_client, building, db_sess
     assert len(outbox) == 1
     assert outbox[0].payload["request"]["source_event_id"] == "evt-webhook"
     assert outbox[0].payload["request"]["request_number"] == r.json()["request_number"]
+
+
+# ── INT-120 (Sprint 10) ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_reopen_sequence_prefixes_description(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """When InfraSafe sets reopen_sequence ≥ 2 the request description gets
+    a «Повторное обращение №N. {original}» prefix so dispatchers see the
+    reopen context at a glance."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-reopen-2", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        message="После закрытия датчик снова показывает воду",
+        reopen_sequence=2, reopen_chain_id="chain-f3a1c-uuid",
+        related_request_number="260523-004",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.10"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.description.startswith("Повторное обращение №2. ")
+    assert "После закрытия датчик снова показывает воду" in req.description
+
+
+@pytest.mark.asyncio
+async def test_no_reopen_sequence_no_prefix(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """First-time alerts (Sprint 9 baseline shape) keep the description as-is —
+    no «Повторное обращение» marker."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-firsttime", _expected_external_id(building.id),
+        message="Утечка в стояке",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.11"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.description == "Утечка в стояке"
+    assert "Повторное" not in req.description
+
+
+@pytest.mark.asyncio
+async def test_uk_urgency_override_takes_precedence(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """When InfraSafe sends `uk_urgency_override`, UK trusts it as the
+    resolved urgency — bypassing the SEVERITY_TO_URGENCY mapping."""
+    _set_secrets(monkeypatch)
+    # severity=WARNING would normally map to "Обычная" — override should win.
+    raw = _alert_body(
+        "evt-override", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        reopen_sequence=2, uk_urgency_override="Критическая",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.12"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.urgency == "Критическая"
+
+
+@pytest.mark.asyncio
+async def test_reopen_metadata_persisted_in_inbox(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """Reopen-chain metadata is stored in webhook_inbox.payload so the UI
+    enrichment endpoint (FE/INT-120 sub-task #3) can surface it later."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-meta", _expected_external_id(building.id),
+        reopen_sequence=3, reopen_chain_id="chain-abc",
+        related_request_number="260523-009", uk_urgency_override="Срочная",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.13"))
+    assert r.status_code == 202
+
+    inbox = await db_session.scalar(
+        select(WebhookInbox).where(WebhookInbox.event_id == "evt-meta")
+    )
+    assert inbox.payload["reopen_sequence"] == 3
+    assert inbox.payload["reopen_chain_id"] == "chain-abc"
+    assert inbox.payload["related_request_number"] == "260523-009"
+    assert inbox.payload["uk_urgency_override"] == "Срочная"
+
+
+@pytest.mark.asyncio
+async def test_outbound_webhook_carries_reopen_description(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """The outbound request.created webhook back to InfraSafe should carry
+    the prefixed description — so their side sees the same operator-facing
+    text we recorded locally."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-out-reopen", _expected_external_id(building.id),
+        reopen_sequence=2, message="Опять течь",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.14"))
+    assert r.status_code == 202
+
+    # SQLite test dialect lacks JSONB path operators (`.astext`), so filter
+    # the source_event_id in Python after pulling the small result set.
+    rows = (await db_session.execute(
+        select(WebhookOutbox).where(WebhookOutbox.event == "request.created")
+    )).scalars().all()
+    match = next(
+        (row for row in rows
+         if row.payload.get("request", {}).get("source_event_id") == "evt-out-reopen"),
+        None,
+    )
+    assert match is not None
+    assert match.payload["request"]["description"] == "Повторное обращение №2. Опять течь"
+
+
+# ── INT-120 sub-task #2 (alert.engineer_required) ────────────────────
+
+@pytest.mark.asyncio
+async def test_engineer_required_routes_to_engineering_queue(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """`alert.engineer_required` produces a request in the engineering queue
+    (category=«Инженерный разбор», urgency=«Критическая») — fixed per Sprint 10
+    spec §2.4. Severity / uk_urgency_override do not apply to this event."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-engreq", _expected_external_id(building.id),
+        event="alert.engineer_required",
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        message="Цепь алертов не закрылась после 3 заявок",
+        reopen_sequence=4, reopen_chain_id="chain-f3a1c-uuid",
+        related_request_number="260523-006",
+        uk_urgency_override="Срочная",  # MUST be ignored for this event type
+        engineer_required_reason="max_reopens_per_24h",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.15"))
+    assert r.status_code == 202
+
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req is not None
+    assert req.category == "Инженерный разбор"
+    assert req.urgency == "Критическая"
+    # Reopen-marker prefix from sub-task #1 still works on engineer_required.
+    assert req.description.startswith("Повторное обращение №4. ")
+
+
+@pytest.mark.asyncio
+async def test_engineer_required_persists_reason_in_inbox(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """`engineer_required_reason` lands in webhook_inbox.payload for ops audit
+    (no business logic depends on the value — InfraSafe owns the reason
+    vocabulary)."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-engreq-reason", _expected_external_id(building.id),
+        event="alert.engineer_required",
+        engineer_required_reason="max_reopens_per_24h",
+        reopen_sequence=4,
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.16"))
+    assert r.status_code == 202
+
+    inbox = await db_session.scalar(
+        select(WebhookInbox).where(WebhookInbox.event_id == "evt-engreq-reason")
+    )
+    assert inbox.outcome == "accepted"
+    assert inbox.payload["engineer_required_reason"] == "max_reopens_per_24h"
+
+
+@pytest.mark.asyncio
+async def test_engineer_required_emits_outbound_request_created(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """`alert.engineer_required` triggers the same outbound `request.created`
+    webhook back to InfraSafe so they can link source_event_id → engineering
+    request_number for chain-tail accounting."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-engreq-out", _expected_external_id(building.id),
+        event="alert.engineer_required",
+        reopen_sequence=4, engineer_required_reason="max_reopens_per_24h",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.17"))
+    assert r.status_code == 202
+
+    rows = (await db_session.execute(
+        select(WebhookOutbox).where(WebhookOutbox.event == "request.created")
+    )).scalars().all()
+    match = next(
+        (row for row in rows
+         if row.payload.get("request", {}).get("source_event_id") == "evt-engreq-out"),
+        None,
+    )
+    assert match is not None
+    assert match.payload["request"]["category"] == "Инженерный разбор"
+    assert match.payload["request"]["urgency"] == "Критическая"

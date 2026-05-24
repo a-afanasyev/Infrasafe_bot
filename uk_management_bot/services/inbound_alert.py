@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.webhooks.mappings import (
     DEFAULT_CATEGORY,
     DEFAULT_URGENCY,
+    ENGINEER_REQUIRED_CATEGORY,
+    ENGINEER_REQUIRED_URGENCY,
     SEVERITY_TO_URGENCY,
     TYPE_TO_CATEGORY,
 )
@@ -33,6 +35,9 @@ from uk_management_bot.services.webhook_sender import queue_webhook
 logger = logging.getLogger(__name__)
 
 REQUEST_WEBHOOK_ENDPOINT = "/api/webhooks/uk/request"
+
+# Event types that materialise an UK request. Anything else → no-op (B1).
+REQUEST_CREATING_EVENTS = frozenset({"alert.created", "alert.engineer_required"})
 
 
 @dataclass(frozen=True)
@@ -60,8 +65,8 @@ async def handle_infrasafe_alert(
             "request_number": existing.request_number if existing else None,
         })
 
-    # Non-alert.created events — record and no-op (contract B1).
-    if payload.event != "alert.created":
+    # Non-request-creating events — record and no-op (contract B1).
+    if payload.event not in REQUEST_CREATING_EVENTS:
         db.add(WebhookInbox(
             event_id=payload.event_id, event=payload.event, source_ip=source_ip,
             payload=payload.model_dump(), outcome="ignored",
@@ -85,8 +90,32 @@ async def handle_infrasafe_alert(
                         alert.external_id, payload.event_id)
         return InboundResult(422, {"detail": "unknown building external_id"})
 
-    category = TYPE_TO_CATEGORY.get(alert.type, DEFAULT_CATEGORY)
-    urgency = SEVERITY_TO_URGENCY.get(alert.severity, DEFAULT_URGENCY)
+    # Sprint 10 / INT-120: route engineer_required events to the engineering
+    # escalation queue (chain hit max_reopens_per_24h). Both category and
+    # urgency are fixed by spec §2.4 — neither severity mapping nor
+    # uk_urgency_override applies. UK owns the taxonomy; we hardcode here
+    # instead of trusting `rule.uk_category`/`rule.uk_urgency` from the wire
+    # for the same reason FIX-007 contract O1/P1 keeps mappings UK-side.
+    if payload.event == "alert.engineer_required":
+        category = ENGINEER_REQUIRED_CATEGORY
+        urgency = ENGINEER_REQUIRED_URGENCY
+    else:
+        category = TYPE_TO_CATEGORY.get(alert.type, DEFAULT_CATEGORY)
+        # Sprint 10 / INT-120: per-rule urgency bump on reopens. When InfraSafe
+        # sends `uk_urgency_override`, it has authoritatively walked the ladder
+        # (Обычная → Средняя → Срочная → Критическая) — UK trusts the value
+        # as-is rather than re-deriving from severity. Fallback to severity
+        # mapping when absent (first-time alert or rule.reopen_urgency_bump
+        # =false).
+        urgency = payload.uk_urgency_override or SEVERITY_TO_URGENCY.get(
+            alert.severity, DEFAULT_URGENCY
+        )
+    # Sprint 10 / INT-120: reopen-marker. `reopen_sequence` is omitted for
+    # first-time alerts (sequence=1) — only ≥ 2 carries the marker on wire.
+    description = alert.message
+    if payload.reopen_sequence is not None and payload.reopen_sequence >= 2:
+        description = f"Повторное обращение №{payload.reopen_sequence}. {alert.message}"
+
     try:
         system_user_id = await _system_user_id(db)
     except RuntimeError as exc:
@@ -96,14 +125,14 @@ async def handle_infrasafe_alert(
     # Create request + emit request.created + record inbox — one transaction.
     request_number = await _create_request(
         db, user_id=system_user_id, category=category, urgency=urgency,
-        description=alert.message, address=building.address,
+        description=description, address=building.address,
     )
     await queue_webhook(db, "request.created", REQUEST_WEBHOOK_ENDPOINT, {
         "request_number": request_number,
         "category": category,
         "status": "Новая",
         "urgency": urgency,
-        "description": alert.message,
+        "description": description,
         "address": building.address,
         "apartment_id": None,
         "source_event_id": payload.event_id,

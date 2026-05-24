@@ -28,3 +28,11 @@ SEVERITY_TO_URGENCY = {
     "CRITICAL": "Срочная",
 }
 DEFAULT_URGENCY = "Обычная"
+
+# Sprint 10 / INT-120 — `event=alert.engineer_required` (chain hit
+# `max_reopens_per_24h`). Per InfraSafe Sprint 10 spec §2.4 these are fixed:
+# дальнейшая automatic re-escalation для chain'а не делается, route на отдельную
+# инженерную очередь. UK игнорирует `uk_urgency_override`/`severity` для этого
+# event-type — они нерелевантны при принудительном route'е.
+ENGINEER_REQUIRED_CATEGORY = "Инженерный разбор"
+ENGINEER_REQUIRED_URGENCY = "Критическая"
