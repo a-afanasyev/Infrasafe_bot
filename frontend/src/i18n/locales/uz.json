@@ -309,7 +309,11 @@
     "forceAcceptPlaceholder": "Kamida 10 belgi — masalan: aholi 3 kun davomida aloqaga chiqmadi, ishlar vizual qabul qilindi",
     "history": "Tarix",
     "managerNote": "Menejer eslatmasi",
-    "addNote": "Eslatma qo'shish..."
+    "addNote": "Eslatma qo'shish...",
+    "reopenBadge": "Takroriy murojaat №{{n}}",
+    "relatedRequest": "bog'liq",
+    "engineerEscalation": "Muhandisga eskalatsiya",
+    "engineerReason": "Sabab:"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",
@@ -754,6 +758,8 @@
     }
   },
   "twa": {
+    "reopenBadge": "Takroriy murojaat №{{n}}",
+    "relatedRequest": "bog'liq",
     "tabs": {
       "home": "Bosh sahifa",
       "requests": "Arizalar",

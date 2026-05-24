@@ -110,6 +110,19 @@ export default function TWARequestDetailPage() {
           </div>
           <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{tStatus(request.status, t)}</span>
         </div>
+        {/* INT-120 #4 — reopen context for residents (built-trust marker). */}
+        {request.reopen_sequence && (
+          <div className="mt-2 text-xs bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 text-amber-800">
+            🔁 {t('twa.reopenBadge', { n: request.reopen_sequence })}
+            {request.related_request_number && (
+              <span className="text-amber-600">
+                {' · '}
+                {t('twa.relatedRequest')}{' '}
+                <span className="font-mono">{request.related_request_number}</span>
+              </span>
+            )}
+          </div>
+        )}
         <p className="text-sm text-gray-600 mt-2">{request.description}</p>
       </div>
 

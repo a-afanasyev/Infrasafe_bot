@@ -64,9 +64,15 @@ const SOURCE_ICON: Record<string, string> = {
 interface Props {
   requestNumber: string | null
   onClose: () => void
+  /**
+   * INT-120 #4 — handler for opening a different request from inside this modal
+   * (clicking the «Связанная заявка» link on the reopen-block). When omitted,
+   * the link renders as plain text — callers can opt in to navigation.
+   */
+  onOpenRelated?: (relatedRequestNumber: string) => void
 }
 
-export default function RequestDetailModal({ requestNumber, onClose }: Props) {
+export default function RequestDetailModal({ requestNumber, onClose, onOpenRelated }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
@@ -238,6 +244,58 @@ export default function RequestDetailModal({ requestNumber, onClose }: Props) {
                   </span>
                 )}
               </div>
+
+              {/* INT-120 #4 — Sprint 10 reopen-chain context.
+                  Backend surfaces these from webhook_inbox.payload.alert when
+                  the request was created via inbound InfraSafe alert (sub-task
+                  #3). reopen_sequence is null for first-time alerts and
+                  manual requests; engineer_required_reason is non-null only
+                  on alert.engineer_required chain-end transitions. */}
+              {(request.reopen_sequence || request.engineer_required_reason) && (
+                <div className="bg-amber/8 border border-amber/25 rounded-[10px] px-3 py-2.5 text-[13px] flex flex-col gap-1.5">
+                  {request.reopen_sequence && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-[#d97706]">
+                        🔁 {t('kanban.reopenBadge', { n: request.reopen_sequence })}
+                      </span>
+                      {request.related_request_number && (
+                        <>
+                          <span className="text-text-muted">·</span>
+                          <span className="text-text-secondary">
+                            {t('kanban.relatedRequest')}{' '}
+                          </span>
+                          {onOpenRelated ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRelated(request.related_request_number)}
+                              className="font-[family-name:var(--font-mono)] text-blue hover:underline cursor-pointer"
+                            >
+                              {request.related_request_number}
+                            </button>
+                          ) : (
+                            <span className="font-[family-name:var(--font-mono)] text-text-primary">
+                              {request.related_request_number}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {request.engineer_required_reason && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-amber/15">
+                      <span className="font-semibold text-red">
+                        ⚠ {t('kanban.engineerEscalation')}
+                      </span>
+                      <span className="text-text-secondary">
+                        {t('kanban.engineerReason')}{' '}
+                      </span>
+                      <span className="font-[family-name:var(--font-mono)] text-text-primary text-[12px]">
+                        {request.engineer_required_reason}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Description */}
               {request.description && (

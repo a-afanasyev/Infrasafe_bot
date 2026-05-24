@@ -309,7 +309,11 @@
     "forceAcceptPlaceholder": "Минимум 10 символов — например: житель недоступен 3 дня, работы приняты визуально",
     "history": "История",
     "managerNote": "Заметка менеджера",
-    "addNote": "Добавить заметку..."
+    "addNote": "Добавить заметку...",
+    "reopenBadge": "Повторное обращение №{{n}}",
+    "relatedRequest": "связана с",
+    "engineerEscalation": "Эскалация на инженера",
+    "engineerReason": "Причина:"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",
@@ -764,6 +768,8 @@
     }
   },
   "twa": {
+    "reopenBadge": "Повторное обращение №{{n}}",
+    "relatedRequest": "связана с",
     "tabs": {
       "home": "Главная",
       "requests": "Заявки",
