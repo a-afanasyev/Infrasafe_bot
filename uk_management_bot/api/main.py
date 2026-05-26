@@ -253,8 +253,24 @@ async def get_announcements():
 # ── Media proxy (TWA → Media Service) ────────────────────
 import re
 import httpx
+from enum import Enum
 
 REQUEST_NUMBER_PATTERN = re.compile(r"^\d{6}-\d{3}$")
+
+
+class FileCategories(str, Enum):
+    """SEC-021 whitelist for media-upload category. Mirrors the strings
+    sent by `uk_management_bot.integrations.media_client` so the proxy
+    can't be used to push arbitrary category values into the downstream
+    Media Service."""
+    REQUEST_PHOTO = "request_photo"
+    REQUEST_VIDEO = "request_video"
+    REQUEST_DOCUMENT = "request_document"
+    COMPLETION_PHOTO = "completion_photo"
+    COMPLETION_VIDEO = "completion_video"
+    COMPLETION_DOCUMENT = "completion_document"
+
+
 from uk_management_bot.api.dependencies import get_current_user
 from uk_management_bot.database.models.user import User
 
@@ -262,10 +278,23 @@ from uk_management_bot.database.models.user import User
 async def proxy_media_upload(
     file: UploadFile = File(...),
     request_number: str = Form(...),
-    category: str = Form("request_photo"),
+    category: FileCategories = Form(FileCategories.REQUEST_PHOTO),
     user: User = Depends(get_current_user),
 ):
-    """Proxy media upload from TWA to Media Service."""
+    """Proxy media upload from TWA to Media Service.
+
+    SEC-021: validate `request_number` against REQUEST_NUMBER_PATTERN and
+    constrain `category` to FileCategories enum BEFORE forwarding to the
+    Media Service. Without these checks a crafted authenticated upload
+    could push path-traversal / IDOR values (`../../etc/passwd`, arbitrary
+    category strings) downstream.
+    """
+    if not REQUEST_NUMBER_PATTERN.match(request_number):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid request_number format. Expected: YYMMDD-NNN",
+        )
+
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
     if not media_url:
         raise HTTPException(status_code=503, detail="Media service not configured")
@@ -281,7 +310,7 @@ async def proxy_media_upload(
             files={"file": (file.filename, await file.read(), file.content_type)},
             data={
                 "request_number": request_number,
-                "category": category,
+                "category": category.value,
                 "uploaded_by": str(user.id),
             },
         )

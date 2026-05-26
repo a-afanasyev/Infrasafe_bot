@@ -56,7 +56,7 @@ class TestGenerateInvite:
 
     def test_token_roundtrip(self):
         """Generate a token, then validate it."""
-        with patch.object(self.svc, "is_nonce_used", return_value=False):
+        with patch.object(self.svc, "_is_nonce_used", return_value=False):
             token = self.svc.generate_invite("applicant", created_by=100, hours=24)
             payload = self.svc.validate_invite(token)
             assert payload["role"] == "applicant"
@@ -85,13 +85,13 @@ class TestValidateInvite:
         self.svc = _build_service(self.db)
 
     def test_valid_token(self):
-        with patch.object(self.svc, "is_nonce_used", return_value=False):
+        with patch.object(self.svc, "_is_nonce_used", return_value=False):
             token = self.svc.generate_invite("manager", created_by=100)
             payload = self.svc.validate_invite(token)
             assert payload["role"] == "manager"
 
     def test_expired_token_raises(self):
-        with patch.object(self.svc, "is_nonce_used", return_value=False):
+        with patch.object(self.svc, "_is_nonce_used", return_value=False):
             # Generate a token with 0 hours = already expired
             token = self.svc.generate_invite("applicant", created_by=100, hours=0)
             # Need to wait a moment for it to be expired, or set expires_at in the past
@@ -129,17 +129,20 @@ class TestValidateInvite:
             self.svc.validate_invite(bad_token)
 
     def test_used_nonce_raises(self):
-        with patch.object(self.svc, "is_nonce_used", return_value=True):
+        with patch.object(self.svc, "_is_nonce_used", return_value=True):
             token = self.svc.generate_invite("applicant", created_by=100)
             with pytest.raises(ValueError, match="already used"):
                 self.svc.validate_invite(token)
 
-    def test_mark_used_by_calls_mark_nonce(self):
-        with patch.object(self.svc, "is_nonce_used", return_value=False), \
-             patch.object(self.svc, "mark_nonce_used") as mock_mark:
+    def test_mark_used_by_calls_atomic_consume(self):
+        """With mark_used_by set, validate_invite consumes the nonce via
+        the atomic UNIQUE-constraint path (`_use_nonce_atomically`), NOT
+        the racy check-then-act `_is_nonce_used`. This is the SEC-020
+        TOCTOU fix."""
+        with patch.object(self.svc, "_use_nonce_atomically") as mock_consume:
             token = self.svc.generate_invite("applicant", created_by=100)
             self.svc.validate_invite(token, mark_used_by=200)
-            mock_mark.assert_called_once()
+            mock_consume.assert_called_once()
 
 
 # ===== validate_invite_token =====
@@ -151,7 +154,7 @@ class TestValidateInviteToken:
         self.svc = _build_service(self.db)
 
     def test_valid_returns_valid_dict(self):
-        with patch.object(self.svc, "is_nonce_used", return_value=False):
+        with patch.object(self.svc, "_is_nonce_used", return_value=False):
             token = self.svc.generate_invite("applicant", created_by=100)
             result = self.svc.validate_invite_token(token)
             assert result["valid"] is True
@@ -162,7 +165,12 @@ class TestValidateInviteToken:
         assert result["valid"] is False
 
 
-# ===== is_nonce_used =====
+# ===== _is_nonce_used =====
+# Note: `is_nonce_used` was renamed to `_is_nonce_used` as part of the
+# SEC-020 atomic-consume refactor — the lookup is now an internal helper
+# that the caller `validate_invite` / `_use_nonce_atomically` reaches into.
+# External code (web/api/invite.py, tests/test_invite_integration.py)
+# either uses the atomic path or calls the underscored helper.
 
 class TestIsNonceUsed:
     def setup_method(self):
@@ -171,36 +179,52 @@ class TestIsNonceUsed:
 
     def test_unused_nonce(self):
         self.db.query.return_value.filter.return_value.first.return_value = None
-        assert self.svc.is_nonce_used("unused-nonce") is False
+        assert self.svc._is_nonce_used("unused-nonce") is False
 
     def test_used_nonce(self):
         self.db.query.return_value.filter.return_value.first.return_value = MagicMock()
-        assert self.svc.is_nonce_used("used-nonce") is True
+        assert self.svc._is_nonce_used("used-nonce") is True
 
     def test_exception_returns_true(self):
-        """On exception, assume nonce is used for safety."""
+        """On DB exception, fail-closed — assume nonce is used. This keeps
+        a flapping DB from minting fresh successful registrations."""
         self.db.query.side_effect = Exception("DB error")
-        assert self.svc.is_nonce_used("error-nonce") is True
+        assert self.svc._is_nonce_used("error-nonce") is True
 
 
 # ===== mark_nonce_used =====
+# Public wrapper around the atomic path: adds an InviteNonce row (UNIQUE
+# constraint enforces single-use), then writes an audit_logs entry. Does
+# NOT commit — caller owns the transaction boundary (SEC-020 refactor).
+
+from sqlalchemy.exc import IntegrityError
+
 
 class TestMarkNonceUsed:
     def setup_method(self):
         self.db = MagicMock()
         self.svc = _build_service(self.db)
 
-    def test_creates_audit_log(self):
+    def test_adds_invite_nonce_and_audit_log(self):
+        """Atomic consume: SAVEPOINT, add InviteNonce, flush, add AuditLog.
+        No commit — caller owns the transaction boundary."""
         self.db.query.return_value.filter.return_value.first.return_value = None  # user not found
         self.svc.mark_nonce_used("test-nonce", 100, {"role": "applicant", "created_by": 50})
-        self.db.add.assert_called_once()
-        self.db.commit.assert_called_once()
+        # Two adds: the InviteNonce row + the AuditLog row.
+        assert self.db.add.call_count == 2
+        self.db.begin_nested.assert_called_once()
+        self.db.flush.assert_called_once()
+        # commit is the caller's responsibility — assert it stayed untouched.
+        self.db.commit.assert_not_called()
 
-    def test_exception_raises(self):
-        self.db.add.side_effect = Exception("fail")
-        with pytest.raises(Exception):
+    def test_integrity_error_rolls_back_savepoint_and_raises(self):
+        """If the UNIQUE constraint fires on flush, the atomic path rolls
+        back the SAVEPOINT and re-raises as ValueError('Token already
+        used') so the caller can translate it to a 409/410."""
+        self.db.flush.side_effect = IntegrityError("INSERT", {}, Exception())
+        with pytest.raises(ValueError, match="already used"):
             self.svc.mark_nonce_used("test-nonce", 100, {"role": "applicant", "created_by": 50})
-        self.db.rollback.assert_called()
+        self.db.rollback.assert_called_once()
 
 
 # ===== InviteService.__init__ =====
