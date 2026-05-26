@@ -1,9 +1,10 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toTashkent, formatTime } from '../../utils/timezone'
 import {
-  addDays,
+  executorKey,
   isSameDay,
   isWeekend,
   shiftTypeColor,
@@ -120,34 +121,39 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
 
   // Group shifts by executor; preserve insertion order so the same shift list
   // produces a stable row order across re-renders (sorted by first start_time).
+  // Memoize the heavy bucket-and-segment work — `useShiftsWebSocket` triggers
+  // frequent parent re-renders and the segment math is O(N).
   type ExecutorRow = {
+    key: string
     name: string
     primarySpec: string | null
     segments: DaySegment[]
     firstStartMs: number
   }
-  const executorMap = new Map<string, ExecutorRow>()
-  for (const shift of shifts) {
-    const key =
-      shift.executor_name || (shift.user_id ? `user_${shift.user_id}` : `shift_${shift.id}`)
-    if (!executorMap.has(key)) {
-      executorMap.set(key, {
-        name: shift.executor_name ?? key,
-        primarySpec: (shift.specialization_focus ?? [])[0] ?? null,
-        segments: [],
-        firstStartMs: new Date(shift.start_time).getTime(),
-      })
+  const executors = useMemo(() => {
+    const executorMap = new Map<string, ExecutorRow>()
+    for (const shift of shifts) {
+      const key = executorKey(shift)
+      if (!executorMap.has(key)) {
+        executorMap.set(key, {
+          key,
+          name: shift.executor_name ?? key,
+          primarySpec: (shift.specialization_focus ?? [])[0] ?? null,
+          segments: [],
+          firstStartMs: new Date(shift.start_time).getTime(),
+        })
+      }
+      const row = executorMap.get(key)!
+      row.segments.push(...shiftSegmentsByDay(shift))
+      row.firstStartMs = Math.min(row.firstStartMs, new Date(shift.start_time).getTime())
+      if (!row.primarySpec && (shift.specialization_focus ?? []).length > 0) {
+        row.primarySpec = shift.specialization_focus![0]
+      }
     }
-    const row = executorMap.get(key)!
-    row.segments.push(...shiftSegmentsByDay(shift))
-    row.firstStartMs = Math.min(row.firstStartMs, new Date(shift.start_time).getTime())
-    if (!row.primarySpec && (shift.specialization_focus ?? []).length > 0) {
-      row.primarySpec = shift.specialization_focus![0]
-    }
-  }
-  const executors = Array.from(executorMap.values()).sort(
-    (a, b) => a.firstStartMs - b.firstStartMs,
-  )
+    return Array.from(executorMap.values()).sort(
+      (a, b) => a.firstStartMs - b.firstStartMs,
+    )
+  }, [shifts])
 
   return (
     <div className="overflow-x-auto">
@@ -188,7 +194,7 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
 
         {/* Body rows: executor + 7 day cells */}
         {executors.map(row => (
-          <div key={row.name} className="contents">
+          <div key={row.key} className="contents">
             <div className="sticky left-0 z-[2] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2 flex items-center gap-2 min-h-[56px]">
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"

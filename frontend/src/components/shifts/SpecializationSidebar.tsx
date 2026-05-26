@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { specColor } from '../../utils/shiftWeek'
+import { executorKey, specColor, UNSPECIFIED_SPEC_KEY } from '../../utils/shiftWeek'
 import { cn } from '@/lib/utils'
 
 /**
@@ -18,8 +18,6 @@ interface Props {
   selectedSpec: string | null
   onSelectSpec: (spec: string | null) => void
 }
-
-const UNSPECIFIED_KEY = '__unspecified__'
 
 interface SpecRow {
   key: string
@@ -60,11 +58,11 @@ export default function SpecializationSidebar({
     }
 
     for (const shift of shifts) {
-      const execKey = shift.executor_name || (shift.user_id ? `user_${shift.user_id}` : `shift_${shift.id}`)
+      const execKey = executorKey(shift)
       const hours = shiftDurationHours(shift)
       const specs = (shift.specialization_focus ?? []).filter(Boolean)
       if (specs.length === 0) {
-        const bucket = ensure(UNSPECIFIED_KEY, t('shifts.specSidebar.unspecified'), true)
+        const bucket = ensure(UNSPECIFIED_SPEC_KEY, t('shifts.specSidebar.unspecified'), true)
         bucket.executors.add(execKey)
         bucket.shiftCount += 1
         bucket.totalHours += hours
@@ -98,8 +96,7 @@ export default function SpecializationSidebar({
     let allShifts = 0
     let allHours = 0
     for (const shift of shifts) {
-      const execKey = shift.executor_name || (shift.user_id ? `user_${shift.user_id}` : `shift_${shift.id}`)
-      allExecutors.add(execKey)
+      allExecutors.add(executorKey(shift))
       allShifts += 1
       allHours += shiftDurationHours(shift)
     }
@@ -134,11 +131,11 @@ export default function SpecializationSidebar({
       {rows.map(row => (
         <SidebarItem
           key={row.key}
-          active={selectedSpec === row.key || (selectedSpec === '' && row.isUnspecified)}
+          active={selectedSpec === row.key}
           color={row.isUnspecified ? 'var(--text-muted)' : specColor(row.label)}
           label={row.label}
           count={row.executorCount}
-          onClick={() => onSelectSpec(row.isUnspecified ? '' : row.key)}
+          onClick={() => onSelectSpec(row.key)}
         />
       ))}
 
@@ -183,4 +180,3 @@ function SidebarItem({ active, color, label, count, onClick }: SidebarItemProps)
   )
 }
 
-export { UNSPECIFIED_KEY }

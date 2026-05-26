@@ -120,3 +120,26 @@ export function specColor(label: string): string {
   const hash = label.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
   return SPEC_PALETTE[hash % SPEC_PALETTE.length]
 }
+
+/**
+ * Sentinel for shifts whose `specialization_focus` is null or `[]`. Lives
+ * here (not in `SpecializationSidebar`) so that `MonthResourceGrid` and
+ * sidebar both depend on a utility constant — not on each other.
+ */
+export const UNSPECIFIED_SPEC_KEY = '__unspecified__'
+
+/**
+ * Stable per-shift executor key. We try `user_id` first because two
+ * different executors may share the same display name. The shift-id
+ * fallback exists only for legacy rows where neither identifier is
+ * populated.
+ */
+export function executorKey(shift: {
+  user_id: number | null
+  executor_name: string | null
+  id: number
+}): string {
+  if (shift.user_id != null) return `user_${shift.user_id}`
+  if (shift.executor_name) return shift.executor_name
+  return `shift_${shift.id}`
+}

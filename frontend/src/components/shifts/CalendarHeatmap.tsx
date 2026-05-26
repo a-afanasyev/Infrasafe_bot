@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toTashkent } from '../../utils/timezone'
 import {
+  executorKey,
   isSameDay,
   isWeekend,
   monthWeekRows,
@@ -32,14 +33,35 @@ interface Props {
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
-function shiftActiveOnDay(shift: ShiftBrief, day: Date): boolean {
-  const startTZ = toTashkent(shift.start_time)
-  const startDay = new Date(startTZ.getFullYear(), startTZ.getMonth(), startTZ.getDate())
-  if (!shift.end_time) return isSameDay(startDay, day)
-  const endTZ = toTashkent(shift.end_time)
-  const endDay = new Date(endTZ.getFullYear(), endTZ.getMonth(), endTZ.getDate())
-  // Day in [startDay, endDay] inclusive.
-  return day.getTime() >= startDay.getTime() && day.getTime() <= endDay.getTime()
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+/**
+ * Pre-compute per-day executor sets in one pass over the shifts list.
+ * Without this the render-loop calls `toTashkent` twice per shift per day
+ * cell — at 600 shifts × 31 days that's ~37k tz conversions per render.
+ */
+function buildDayCoverage(shifts: ShiftBrief[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const shift of shifts) {
+    const startTZ = toTashkent(shift.start_time)
+    const startDay = new Date(startTZ.getFullYear(), startTZ.getMonth(), startTZ.getDate())
+    const endTZ = shift.end_time ? toTashkent(shift.end_time) : null
+    const endDay = endTZ
+      ? new Date(endTZ.getFullYear(), endTZ.getMonth(), endTZ.getDate())
+      : startDay
+    const execKey = executorKey(shift)
+    const cursor = new Date(startDay)
+    while (cursor.getTime() <= endDay.getTime()) {
+      const k = dayKey(cursor)
+      const set = out.get(k)
+      if (set) set.add(execKey)
+      else out.set(k, new Set([execKey]))
+      cursor.setDate(cursor.getDate() + 1)
+    }
+  }
+  return out
 }
 
 function coverageBucket(pct: number): 'low' | 'mid' | 'high' | 'over' {
@@ -73,6 +95,7 @@ export default function CalendarHeatmap({
   const today = new Date()
 
   const rows = useMemo(() => monthWeekRows(monthAnchor), [monthAnchor])
+  const dayCoverage = useMemo(() => buildDayCoverage(shifts), [shifts])
 
   return (
     <div className="flex flex-col gap-2">
@@ -114,16 +137,7 @@ export default function CalendarHeatmap({
                 />
               )
             }
-            const executors = new Set<string>()
-            for (const shift of shifts) {
-              if (shiftActiveOnDay(shift, day)) {
-                executors.add(
-                  shift.executor_name ||
-                    (shift.user_id ? `user_${shift.user_id}` : `shift_${shift.id}`),
-                )
-              }
-            }
-            const headcount = executors.size
+            const headcount = dayCoverage.get(dayKey(day))?.size ?? 0
             const pct = coverageTarget > 0 ? headcount / coverageTarget : 0
             const bucket = coverageBucket(pct)
             const isToday = isSameDay(day, today)
@@ -163,7 +177,7 @@ export default function CalendarHeatmap({
           </span>
         ))}
         <span className="ml-2 opacity-80">
-          {t('shifts.specSidebar.summary', {
+          {t('shifts.heatmapSummary', {
             shifts: shifts.length,
             hours: shifts.reduce((acc, s) => {
               if (!s.end_time) return acc

@@ -2,18 +2,18 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent } from '../../utils/timezone'
+import { formatTime, toTashkent } from '../../utils/timezone'
 import {
   daysInMonth,
+  executorKey,
   isSameDay,
   isWeekend,
   shiftTypeColor,
   specColor,
+  UNSPECIFIED_SPEC_KEY,
 } from '../../utils/shiftWeek'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
-
-import { UNSPECIFIED_KEY } from './SpecializationSidebar'
 
 interface Props {
   shifts: ShiftBrief[]
@@ -30,7 +30,7 @@ interface Props {
 function shiftMatchesSpec(shift: ShiftBrief, selected: string | null): boolean {
   if (selected === null) return true
   const specs = shift.specialization_focus ?? []
-  if (selected === '' || selected === UNSPECIFIED_KEY) {
+  if (selected === UNSPECIFIED_SPEC_KEY) {
     return specs.length === 0
   }
   return specs.includes(selected)
@@ -65,8 +65,7 @@ export default function MonthResourceGrid({
     const filtered = shifts.filter(s => shiftMatchesSpec(s, selectedSpec))
     const map = new Map<string, ExecutorRow>()
     for (const shift of filtered) {
-      const key =
-        shift.executor_name || (shift.user_id ? `user_${shift.user_id}` : `shift_${shift.id}`)
+      const key = executorKey(shift)
       let row = map.get(key)
       if (!row) {
         row = {
@@ -141,7 +140,7 @@ export default function MonthResourceGrid({
             </div>
           )
         })}
-        <div className="border-b border-border-default px-2 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider text-right">
+        <div className="sticky right-0 z-[3] bg-bg-card border-b border-border-default border-l border-l-border-default px-2 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider text-right">
           {/* compact "Σ" header — translation handled inside label */}
           {'Σ'}
         </div>
@@ -173,9 +172,9 @@ export default function MonthResourceGrid({
                 />
               )
             })}
-            <div className="border-b border-border-default px-2 py-1.5 text-right text-[10px] text-text-muted font-[var(--font-mono)]">
+            <div className="sticky right-0 z-[2] bg-bg-card border-b border-border-default border-l border-l-border-default px-2 py-1.5 text-right text-[10px] text-text-muted font-[var(--font-mono)]">
               <div className="text-text-primary font-semibold">{row.totalShifts}</div>
-              <div>{Math.round(row.totalHours)}ч</div>
+              <div>{Math.round(row.totalHours)}{t('analytics.h')}</div>
             </div>
           </div>
         ))}
@@ -210,10 +209,13 @@ function DayDot({ shifts, hasRightBorder, isWeekendDay, isToday, onShiftClick }:
   const first = shifts[0]
   const color = shiftTypeColor(first.shift_type)
   const isHalf = shifts.length > 1
+  // Tooltip times must use the same Tashkent-aware helper the rest of the
+  // dashboard uses (formatTime) — raw `toISOString` here would render in
+  // UTC and disagree with the times shown in WeekResourceGrid / Timeline.
   const tooltip = shifts
     .map(s => {
-      const start = new Date(s.start_time).toISOString().split('T')[1]?.slice(0, 5) ?? ''
-      const end = s.end_time ? new Date(s.end_time).toISOString().split('T')[1]?.slice(0, 5) ?? '' : '—'
+      const start = formatTime(s.start_time)
+      const end = s.end_time ? formatTime(s.end_time) : '—'
       return `${start}–${end} (${t(`shiftStatus.${s.status}`, s.status)})`
     })
     .join('\n')

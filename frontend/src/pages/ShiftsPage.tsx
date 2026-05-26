@@ -178,7 +178,7 @@ export default function ShiftsPage() {
               ? t('shifts.prevMonth')
               : viewMode === 'week'
                 ? t('shifts.prevWeek')
-                : t('shifts.today')
+                : t('shifts.prevDay')
           }
         >
           <ChevronLeft size={16} />
@@ -193,7 +193,7 @@ export default function ShiftsPage() {
               ? t('shifts.nextMonth')
               : viewMode === 'week'
                 ? t('shifts.nextWeek')
-                : t('shifts.today')
+                : t('shifts.nextDay')
           }
         >
           <ChevronRight size={16} />
