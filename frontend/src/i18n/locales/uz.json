@@ -634,6 +634,33 @@
     "noTemplates": "Shablonlar yo'q",
     "prevWeek": "Oldingi hafta",
     "nextWeek": "Keyingi hafta",
+    "prevMonth": "Oldingi oy",
+    "nextMonth": "Keyingi oy",
+    "thisWeek": "Bu hafta",
+    "thisMonth": "Bu oy",
+    "weekLabel": "{{from}} – {{to}} hafta",
+    "viewMode": {
+      "label": "Ko'rinish rejimi",
+      "day": "Kun",
+      "week": "Hafta",
+      "month": "Oy"
+    },
+    "specSidebar": {
+      "title": "Mutaxassisliklar",
+      "all": "Barchasi",
+      "summary": "{{shifts}} smena · {{hours}} soat",
+      "unspecified": "Universal",
+      "extraFilters": "Filtrlar",
+      "filterShiftType": "Smena turi",
+      "filterArea": "Hudud",
+      "onlyActive": "Faqat faollar"
+    },
+    "empty": {
+      "week": "Bu haftada smenalar yo'q",
+      "month": "Bu oyda smenalar yo'q"
+    },
+    "weekHeatmapTitle": "Hafta kunlari va soatlari bo'yicha qoplash",
+    "monthHeatmapTitle": "Oy kunlari bo'yicha qoplash",
     "active": "Faol",
     "completed": "Yakunlangan",
     "avgLoad": "O'rtacha yuklama",

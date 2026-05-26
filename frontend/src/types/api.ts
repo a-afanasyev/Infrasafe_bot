@@ -28,6 +28,9 @@ export interface ShiftBrief {
   max_requests: number
   current_request_count: number
   load_percentage: number
+  // Surfaced on Brief so week/month views can color-code rows + drive the
+  // SpecializationSidebar without re-fetching ShiftDetail for each shift.
+  specialization_focus: string[] | null
 }
 
 export interface ShiftDetail extends ShiftBrief {

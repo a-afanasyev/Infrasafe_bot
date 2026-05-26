@@ -644,6 +644,33 @@
     "noTemplates": "Нет шаблонов",
     "prevWeek": "Пред. неделя",
     "nextWeek": "След. неделя",
+    "prevMonth": "Пред. месяц",
+    "nextMonth": "След. месяц",
+    "thisWeek": "Эта неделя",
+    "thisMonth": "Этот месяц",
+    "weekLabel": "Неделя {{from}} – {{to}}",
+    "viewMode": {
+      "label": "Режим просмотра",
+      "day": "День",
+      "week": "Неделя",
+      "month": "Месяц"
+    },
+    "specSidebar": {
+      "title": "Специализации",
+      "all": "Все",
+      "summary": "{{shifts}} смен · {{hours}} ч",
+      "unspecified": "Универсалы",
+      "extraFilters": "Фильтры",
+      "filterShiftType": "Тип смены",
+      "filterArea": "Зона",
+      "onlyActive": "Только активные"
+    },
+    "empty": {
+      "week": "На этой неделе нет смен",
+      "month": "В этом месяце нет смен"
+    },
+    "weekHeatmapTitle": "Покрытие по часам и дням недели",
+    "monthHeatmapTitle": "Покрытие по дням месяца",
     "active": "Активных",
     "completed": "Завершённых",
     "avgLoad": "Средн. нагрузка",

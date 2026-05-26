@@ -57,6 +57,7 @@ def _shift_brief(shift: Shift, user: Optional[User] = None) -> ShiftBrief:
         max_requests=shift.max_requests,
         current_request_count=shift.current_request_count,
         load_percentage=load_pct,
+        specialization_focus=shift.specialization_focus,
     )
 
 

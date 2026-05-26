@@ -61,6 +61,11 @@ class ShiftBrief(BaseModel):
     max_requests: int
     current_request_count: int
     load_percentage: float  # current_request_count / max_requests * 100
+    # Week/month views need the specialization to drive the sidebar filter
+    # (`MonthResourceGrid` + `SpecializationSidebar`). Without it the client
+    # would need a per-shift N+1 fetch into /shifts/{id} just to color-code
+    # rows by spec — same data already lives on `Shift.specialization_focus`.
+    specialization_focus: Optional[list[str]] = None
 
     model_config = {"from_attributes": True}
 
