@@ -84,20 +84,25 @@ async def register_page(request: Request, token: str):
     """Страница регистрации по приглашению"""
     return templates.TemplateResponse(request, "register.html", {"token": token})
 
-@app.get("/test", response_class=HTMLResponse)
-async def test_page(request: Request):
-    """Тестовая страница для проверки Telegram Web App"""
-    return templates.TemplateResponse(request, "test.html")
+# SEC-092: debug/test pages exposed at public edge (infrasafe.uz/uk/test, /simple,
+# /minimal) were reachable from prod and increased attack surface (HTML injection,
+# information leakage via raw template renders). Gate them behind settings.DEBUG so
+# they only register on dev builds.
+if settings.DEBUG:
+    @app.get("/test", response_class=HTMLResponse)
+    async def test_page(request: Request):
+        """Dev-only: Telegram Web App testing harness."""
+        return templates.TemplateResponse(request, "test.html")
 
-@app.get("/simple", response_class=HTMLResponse)
-async def simple_test_page(request: Request):
-    """Простая тестовая страница для проверки Telegram Web App"""
-    return templates.TemplateResponse(request, "simple_test.html")
+    @app.get("/simple", response_class=HTMLResponse)
+    async def simple_test_page(request: Request):
+        """Dev-only: simplified Telegram Web App testing page."""
+        return templates.TemplateResponse(request, "simple_test.html")
 
-@app.get("/minimal", response_class=HTMLResponse)
-async def minimal_test_page(request: Request):
-    """Минимальная тестовая страница без внешних зависимостей"""
-    return templates.TemplateResponse(request, "minimal_test.html")
+    @app.get("/minimal", response_class=HTMLResponse)
+    async def minimal_test_page(request: Request):
+        """Dev-only: minimal Telegram Web App page without external deps."""
+        return templates.TemplateResponse(request, "minimal_test.html")
 
 if __name__ == "__main__":
     import uvicorn

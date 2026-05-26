@@ -111,10 +111,13 @@ async def register_via_invite(request: Request, data: RegistrationData, db: Sess
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
-            # Pending users can update their info (but NOT role from invite — keep existing)
+            # Pending users can update their info (but NOT role from invite — keep existing).
+            # BUG-024: source of truth for role is `active_role` + `roles` JSON; the legacy
+            # `User.role` column is deprecated per CLAUDE.md and lags behind on role switches.
+            current_role = existing_user.active_role or existing_user.role
             existing_user.first_name = data.full_name.split()[0] if data.full_name else ""
             existing_user.last_name = " ".join(data.full_name.split()[1:]) if len(data.full_name.split()) > 1 else ""
-            existing_user.specialization = data.specialization if existing_user.role == "executor" else None
+            existing_user.specialization = data.specialization if current_role == "executor" else None
 
             db.commit()
 
