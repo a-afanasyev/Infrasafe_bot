@@ -315,7 +315,13 @@ async def logout(
 
 
 @router.post("/set-password")
-async def set_password(data: SetPasswordRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def set_password(
+    request: Request,
+    data: SetPasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     if data.password != data.confirm_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match")
     if len(data.password) < 8:
