@@ -18,11 +18,14 @@ RUN apt-get update && apt-get install -y \
 # Копируем только requirements для установки зависимостей
 COPY requirements.txt .
 COPY uk_management_bot/requirements.txt ./uk_management_bot/
+COPY requirements-dev.txt .
 
-# Устанавливаем Python зависимости
+# Устанавливаем Python зависимости (включая dev-deps: aiosqlite, pytest-*, etc.)
+# OPS-117 — dev image всегда тащит requirements-dev.txt, никаких conditionals
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r uk_management_bot/requirements.txt
+    pip install --no-cache-dir -r uk_management_bot/requirements.txt && \
+    pip install --no-cache-dir -r requirements-dev.txt
 
 # Устанавливаем переменные окружения для разработки
 ENV PYTHONPATH=/app

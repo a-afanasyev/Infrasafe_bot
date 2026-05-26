@@ -24,13 +24,23 @@ RUN apt-get update && apt-get install -y \
 # Сначала копируем requirements.txt для оптимизации кэширования Docker слоев
 COPY requirements.txt .
 COPY uk_management_bot/requirements.txt ./uk_management_bot/
+COPY requirements-dev.txt .
+
+# OPS-117 — dev-deps по умолчанию включены: образ используется для тестов
+# (`docker exec uk-management-bot pytest` per CLAUDE.md), а tests/ всё равно
+# копируются в этот же image (см. COPY tests/ ниже). Чистый prod-build:
+# `docker compose build --build-arg INSTALL_DEV=false app`.
+ARG INSTALL_DEV=true
 
 # Устанавливаем Python зависимости
 # --no-cache-dir уменьшает размер образа
 # --upgrade обновляет пакеты до последних версий
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r uk_management_bot/requirements.txt
+    pip install --no-cache-dir -r uk_management_bot/requirements.txt && \
+    if [ "$INSTALL_DEV" = "true" ]; then \
+        pip install --no-cache-dir -r requirements-dev.txt; \
+    fi
 
 # Копируем весь код приложения
 # Копируем папку uk_management_bot в контейнер
