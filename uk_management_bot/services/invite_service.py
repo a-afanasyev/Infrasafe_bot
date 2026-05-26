@@ -20,9 +20,15 @@ from uk_management_bot.utils.redis_rate_limiter import is_rate_limited, get_rate
 
 logger = logging.getLogger(__name__)
 
+class TokenAlreadyUsedError(ValueError):
+    """SEC-020: distinct exception for nonce-already-consumed races so the
+    web endpoint can return 409 Conflict (the second of two simultaneous
+    POSTs lost the race) rather than 400 (which suggests bad input)."""
+
+
 class InviteService:
     """Сервис для создания и валидации токенов приглашений"""
-    
+
     def __init__(self, db: Session):
         self.db = db
         if not settings.INVITE_SECRET:
@@ -210,7 +216,7 @@ class InviteService:
                 self._use_nonce_atomically(nonce, mark_used_by, payload)
             else:
                 if self._is_nonce_used(nonce):
-                    raise ValueError("Token already used")
+                    raise TokenAlreadyUsedError("Token already used")
 
             logger.info(f"Successfully validated invite token with nonce {nonce}")
             return payload
@@ -257,7 +263,7 @@ class InviteService:
             self.db.flush()  # Force INSERT now so IntegrityError surfaces
         except IntegrityError:
             self.db.rollback()  # Rolls back to SAVEPOINT only
-            raise ValueError("Token already used")
+            raise TokenAlreadyUsedError("Token already used")
 
         # Also write to audit_logs for backwards compatibility
         self._log_nonce_used(nonce, user_id, invite_data)
@@ -386,17 +392,24 @@ class InviteService:
                 "user_id": user.id
             }
             
+        except TokenAlreadyUsedError as e:
+            # SEC-020: signal race-loser so the endpoint can return 409.
+            return {
+                "success": False,
+                "reason": "already_used",
+                "message": str(e),
+            }
         except ValueError as e:
             return {
                 "success": False,
-                "message": str(e)
+                "message": str(e),
             }
         except Exception as e:
             logger.error(f"Error during join via invite: {e}")
             self.db.rollback()
             return {
                 "success": False,
-                "message": "Ошибка регистрации"
+                "message": "Ошибка регистрации",
             }
 
 
