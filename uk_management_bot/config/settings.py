@@ -155,7 +155,9 @@ class Settings:
     MEDIA_SERVICE_URL = os.getenv("MEDIA_SERVICE_URL", "http://localhost:8001")
     MEDIA_SERVICE_TIMEOUT = int(os.getenv("MEDIA_SERVICE_TIMEOUT", "30"))
     MEDIA_SERVICE_ENABLED = os.getenv("MEDIA_SERVICE_ENABLED", "True").lower() == "true"
-    MEDIA_SERVICE_API_KEY = os.getenv("MEDIA_SERVICE_API_KEY", "")
+    # Accept either MEDIA_SERVICE_API_KEY (API-specific) or MEDIA_API_KEY
+    # (shared with the bot side) — both deployments use one key per env.
+    MEDIA_SERVICE_API_KEY = os.getenv("MEDIA_SERVICE_API_KEY") or os.getenv("MEDIA_API_KEY", "")
 
     @property
     def REDIS_PUBSUB_URL_RESOLVED(self) -> str:
