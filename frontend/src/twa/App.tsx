@@ -7,6 +7,7 @@ import { ApplicantTabs } from './components/BottomTabBar'
 import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
 import OfflineIndicator from './components/OfflineIndicator'
+import RoleGuard from './components/RoleGuard'
 import { Toaster } from '../components/ui/sonner'
 import '../i18n'
 
@@ -74,15 +75,17 @@ function TWAContent() {
         <Route path="/app/profile" element={<><ProfilePage /><ApplicantTabs /></>} />
         <Route path="/app/requests/:number" element={<RequestDetailPage />} />
 
-        {/* Executor routes */}
-        <Route path="/exec" element={<><TasksPage /><ExecutorTabs /></>} />
-        <Route path="/exec/shift" element={<><ShiftPage /><ExecutorTabs /></>} />
-        <Route path="/exec/purchase" element={<><PurchasePage /><ExecutorTabs /></>} />
-        <Route path="/exec/archive" element={<><ArchivePage /><ExecutorTabs /></>} />
-        <Route path="/exec/profile" element={<><ExecutorProfilePage /><ExecutorTabs /></>} />
-        <Route path="/exec/tasks/:number" element={<TaskDetailPage />} />
-        <Route path="/exec/shifts" element={<MyShiftsPage />} />
-        <Route path="/exec/report/:number" element={<CompletionReport />} />
+        {/* Executor routes — wrapped in RoleGuard (TWA-12) so an applicant
+            opening /twa/exec/* gets sent back to /twa/app rather than seeing
+            an empty executor UI with 403s in the network panel. */}
+        <Route path="/exec" element={<RoleGuard required="executor"><TasksPage /><ExecutorTabs /></RoleGuard>} />
+        <Route path="/exec/shift" element={<RoleGuard required="executor"><ShiftPage /><ExecutorTabs /></RoleGuard>} />
+        <Route path="/exec/purchase" element={<RoleGuard required="executor"><PurchasePage /><ExecutorTabs /></RoleGuard>} />
+        <Route path="/exec/archive" element={<RoleGuard required="executor"><ArchivePage /><ExecutorTabs /></RoleGuard>} />
+        <Route path="/exec/profile" element={<RoleGuard required="executor"><ExecutorProfilePage /><ExecutorTabs /></RoleGuard>} />
+        <Route path="/exec/tasks/:number" element={<RoleGuard required="executor"><TaskDetailPage /></RoleGuard>} />
+        <Route path="/exec/shifts" element={<RoleGuard required="executor"><MyShiftsPage /></RoleGuard>} />
+        <Route path="/exec/report/:number" element={<RoleGuard required="executor"><CompletionReport /></RoleGuard>} />
 
         <Route path="*" element={<Navigate to="/twa/app" replace />} />
       </Routes>

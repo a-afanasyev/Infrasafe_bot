@@ -32,7 +32,29 @@ export default function CreatePage() {
   const queryClient = useQueryClient()
   const { haptic, showBackButton } = useTelegramSDK()
 
-  const [step, setStep] = useState(0)
+  // TWA-13: restore wizard state from sessionStorage so a user who minimised
+  // the Telegram WebApp mid-flow doesn't have to start over. Photos (File[])
+  // can't survive serialisation; only text fields persist.
+  const DRAFT_KEY = 'twa.create.draft'
+  type Draft = {
+    step: number
+    category: string
+    apartmentId: number | null
+    address: string
+    description: string
+    urgency: string
+  }
+  const loadDraft = (): Partial<Draft> => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      return raw ? (JSON.parse(raw) as Partial<Draft>) : {}
+    } catch {
+      return {}
+    }
+  }
+  const draft = loadDraft()
+
+  const [step, setStep] = useState<number>(draft.step ?? 0)
 
   // Telegram BackButton for wizard steps
   const goBack = useCallback(() => {
@@ -43,12 +65,23 @@ export default function CreatePage() {
   useEffect(() => {
     if (step > 0) return showBackButton(goBack)
   }, [step, showBackButton, goBack])
-  const [category, setCategory] = useState('')
-  const [apartmentId, setApartmentId] = useState<number | null>(null)
-  const [address, setAddress] = useState('')
-  const [description, setDescription] = useState('')
-  const [urgency, setUrgency] = useState('low')
+  const [category, setCategory] = useState<string>(draft.category ?? '')
+  const [apartmentId, setApartmentId] = useState<number | null>(draft.apartmentId ?? null)
+  const [address, setAddress] = useState<string>(draft.address ?? '')
+  const [description, setDescription] = useState<string>(draft.description ?? '')
+  const [urgency, setUrgency] = useState<string>(draft.urgency ?? 'low')
   const [photos, setPhotos] = useState<File[]>([])
+
+  // Persist text-field draft on every change so a backgrounded WebApp can
+  // resume where the user left off.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ step, category, apartmentId, address, description, urgency } satisfies Draft)
+      )
+    } catch {}
+  }, [step, category, apartmentId, address, description, urgency])
   // TWA-16: track per-photo upload progress so the user sees "Загрузка фото
   // 2/5" instead of staring at an unchanging spinner while we POST each file
   // sequentially through the proxy.
@@ -114,6 +147,7 @@ export default function CreatePage() {
         toast.success('Заявка создана')
       }
       setUploadProgress(null)
+      try { sessionStorage.removeItem(DRAFT_KEY) } catch {}
       navigate('/twa/app/requests')
     },
     onError: (err: unknown) => {

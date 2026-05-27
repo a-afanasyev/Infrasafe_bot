@@ -40,7 +40,13 @@ export function useTWAAuth() {
     }
   }, [initData])
 
-  useEffect(() => { authenticate() }, [authenticate])
+  useEffect(() => {
+    // TWA-05: don't re-authenticate if we already have a token — useTelegramSDK
+    // updates `initData` once the Telegram script finishes loading, which
+    // would otherwise re-fire authenticate() after a successful first attempt.
+    if (accessToken) return
+    authenticate()
+  }, [authenticate, accessToken])
 
   // TWA-06: clear local token state when the axios interceptor reports that
   // refresh failed. Without this the UI keeps treating the user as

@@ -230,17 +230,26 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       <div style={headerStyle}>
         <div style={titleStyle}>{t('board.sections.workingHours')}</div>
       </div>
-      <div style={{ padding: '20px 28px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 8, textAlign: 'center' }}>
-          {config.working_hours.map((d, i) => (
-            <div key={d.day}>
-              <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.78rem', color: i === todayDow ? '#1a6b52' : '#6b7280', marginBottom: 6 }}>{t(`days.short.${d.day}`)}</div>
-              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 600, padding: '8px 4px', borderRadius: 8, background: i === todayDow ? '#e8f5ef' : '#f0ede6', color: i === todayDow ? '#1a6b52' : '#1a1a1a', border: `2px solid ${i === todayDow ? '#1a6b52' : 'transparent'}` }}>
-                {d.closed ? '—' : `${hm(d.open)}–${hm(d.close)}`}
+      {/* TWA-17: 7 day cells × time-range labels overflow narrow phone widths
+          (≤360px). Wrap the grid (only) in a horizontal-scroll container
+          with min-width so users can swipe through the week — same pattern
+          as the request pipeline above. Emergency contact + bot text stay
+          outside so they don't pick up the horizontal scrollbar. */}
+      <div style={{ paddingTop: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ minWidth: 560, padding: '0 28px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 8, textAlign: 'center' }}>
+            {config.working_hours.map((d, i) => (
+              <div key={d.day}>
+                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.78rem', color: i === todayDow ? '#1a6b52' : '#6b7280', marginBottom: 6 }}>{t(`days.short.${d.day}`)}</div>
+                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 600, padding: '8px 4px', borderRadius: 8, background: i === todayDow ? '#e8f5ef' : '#f0ede6', color: i === todayDow ? '#1a6b52' : '#1a1a1a', border: `2px solid ${i === todayDow ? '#1a6b52' : 'transparent'}` }}>
+                  {d.closed ? '—' : `${hm(d.open)}–${hm(d.close)}`}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+      </div>
+      <div style={{ padding: '0 28px 20px' }}>
         <div style={{ textAlign: 'center', marginTop: 16, padding: 12, background: '#fef2f2', borderRadius: 10, fontSize: '0.85rem', fontWeight: 600, color: '#dc2626' }}>
           {'\u{1F4DE}'} {loc(config.contacts.emergency)}
         </div>
