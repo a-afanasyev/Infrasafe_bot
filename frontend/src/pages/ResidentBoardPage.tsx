@@ -116,7 +116,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
   const titleStyle: React.CSSProperties = { fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.1rem' }
 
   const statsModule = (
-    <div key="stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+    <div key="stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
       {([
         { icon: '\u{1F4CB}', iconBg: '#eff3ff', label: t('board.stats.activeRequests'),
           render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#2563eb' }}>{totalActive}</span> },
@@ -144,39 +144,45 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
         <div style={{ ...titleStyle, letterSpacing: '-0.01em' }}>{t('board.sections.currentRequests')}</div>
         <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#eff3ff', color: '#2563eb' }}>{t('board.sections.activeCount', { count: totalActive })}</div>
       </div>
-      <div style={{ padding: '20px 28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
-          {PIPELINE_STATUSES.map((step, i) => (
-            <div key={step.status} style={{ display: 'contents' }}>
-              <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderRadius: 10, background: step.bg, color: step.color }}>
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.4rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>{statusCounts[step.status] ?? 0}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>{t(`board.pipeline.${step.key}`)}</span>
-              </div>
-              {i < PIPELINE_STATUSES.length - 1 && <span style={{ color: '#9ca3af', fontSize: '1.2rem', flexShrink: 0 }}>{'→'}</span>}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
-          {PIPELINE_STATUSES.map((step, i) => {
-            const colReqs = activeRequests.filter(r => r.status === step.status)
-            return (
-              <div key={step.status} style={{ padding: '0 10px', borderRight: i < PIPELINE_STATUSES.length - 1 ? '1px solid rgba(0,0,0,0.07)' : 'none' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {colReqs.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '14px 4px', color: '#cbd5e1', fontSize: '0.85rem' }}>{'—'}</div>
-                  ) : colReqs.map((req, j) => {
-                    const catIcon = CATEGORY_ICONS[req.category] ?? '\u{1F4CB}'
-                    return (
-                      <div key={j} className="rb-req-row" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${step.color}`, transition: 'background 0.15s', cursor: 'default' }}>
-                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>{catIcon} {tCategory(req.category, t)}</div>
-                        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>{elapsed(req.created_at)}</div>
-                      </div>
-                    )
-                  })}
+      {/* Horizontal scroll wrapper: on narrow viewports (mobile) the 6-status
+          pipeline + 6-column grid don't fit. Inner block has min-width so
+          users can swipe sideways through all status columns instead of
+          getting the rightmost columns clipped. */}
+      <div style={{ padding: '20px 0', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ minWidth: 720, padding: '0 28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
+            {PIPELINE_STATUSES.map((step, i) => (
+              <div key={step.status} style={{ display: 'contents' }}>
+                <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderRadius: 10, background: step.bg, color: step.color }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.4rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>{statusCounts[step.status] ?? 0}</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>{t(`board.pipeline.${step.key}`)}</span>
                 </div>
+                {i < PIPELINE_STATUSES.length - 1 && <span style={{ color: '#9ca3af', fontSize: '1.2rem', flexShrink: 0 }}>{'→'}</span>}
               </div>
-            )
-          })}
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
+            {PIPELINE_STATUSES.map((step, i) => {
+              const colReqs = activeRequests.filter(r => r.status === step.status)
+              return (
+                <div key={step.status} style={{ padding: '0 10px', borderRight: i < PIPELINE_STATUSES.length - 1 ? '1px solid rgba(0,0,0,0.07)' : 'none' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {colReqs.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '14px 4px', color: '#cbd5e1', fontSize: '0.85rem' }}>{'—'}</div>
+                    ) : colReqs.map((req, j) => {
+                      const catIcon = CATEGORY_ICONS[req.category] ?? '\u{1F4CB}'
+                      return (
+                        <div key={j} className="rb-req-row" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${step.color}`, transition: 'background 0.15s', cursor: 'default' }}>
+                          <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>{catIcon} {tCategory(req.category, t)}</div>
+                          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>{elapsed(req.created_at)}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>
