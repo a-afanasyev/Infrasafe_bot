@@ -48,9 +48,12 @@ export function useTWAAuth() {
     authenticate()
   }, [authenticate, accessToken])
 
-  // TWA-06: clear local token state when the axios interceptor reports that
-  // refresh failed. Without this the UI keeps treating the user as
-  // authenticated while every subsequent request fails with 401.
+  // TWA-06 + TWA-08: when the axios interceptor reports refresh failed, clear
+  // the token. The effect above then re-runs authenticate() — which on a live
+  // Telegram session will succeed via /twa-init with fresh initData rather
+  // than dumping the user back to the "Open via Telegram" gate. The
+  // shorter TWA refresh TTL (24h server-side) makes this re-init flow the
+  // common case for sessions older than a day.
   useEffect(() => {
     const onAuthFailed = () => setAccessToken(null)
     window.addEventListener('twa:auth-failed', onAuthFailed)

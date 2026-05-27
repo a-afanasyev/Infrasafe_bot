@@ -27,6 +27,11 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+# TWA-08: refresh tokens issued from the TWA endpoint get a shorter TTL.
+# Telegram WebApp is re-opened by the user often (each open returns fresh
+# initData and a new refresh token), so 24h covers normal usage while
+# shrinking the window for a stolen refresh-token from 30d → 1d.
+TWA_REFRESH_TOKEN_EXPIRE_HOURS = 24
 # Plan §7.4: tightened from 86400 (24h) to 300s (5min). A stale Telegram
 # Widget hash from a previous session can no longer be replayed; users with
 # expired session must press Telegram login again.

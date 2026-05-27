@@ -17,6 +17,7 @@ from uk_management_bot.api.auth.service import (
     verify_password, hash_password,
     create_access_token, create_refresh_token_value, hash_token,
     ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
+    TWA_REFRESH_TOKEN_EXPIRE_HOURS,
     create_mfa_token, verify_mfa_token, generate_otp, store_otp, verify_otp, send_otp_via_bot,
 )
 from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
@@ -81,8 +82,17 @@ def _build_token_response(user: User) -> dict:
     return {"access_token": access_token, "refresh_value": refresh_value, "roles": roles}
 
 
-async def _save_refresh_token(db: AsyncSession, user_id: int, token_value: str, device_info: str = "") -> None:
-    expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+async def _save_refresh_token(
+    db: AsyncSession,
+    user_id: int,
+    token_value: str,
+    device_info: str = "",
+    ttl: timedelta | None = None,
+) -> None:
+    # TWA-08: callers may pass a shorter TTL (e.g. login_twa uses 24h instead
+    # of 30d) — see TWA_REFRESH_TOKEN_EXPIRE_HOURS.
+    effective_ttl = ttl if ttl is not None else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expires = datetime.now(timezone.utc) + effective_ttl
     rt = RefreshToken(
         user_id=user_id,
         token_hash=hash_token(token_value),
@@ -146,7 +156,15 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
     tokens = _build_token_response(user)
-    await _save_refresh_token(db, user.id, tokens["refresh_value"])
+    # TWA-08: TWA-issued refresh tokens get 24h TTL (vs 30d for web SPA).
+    # Combined with the frontend re-init on auth-failed event, the window
+    # for a stolen TWA refresh token is bounded to one day.
+    await _save_refresh_token(
+        db,
+        user.id,
+        tokens["refresh_value"],
+        ttl=timedelta(hours=TWA_REFRESH_TOKEN_EXPIRE_HOURS),
+    )
     return TokenResponse(access_token=tokens["access_token"], refresh_token=tokens["refresh_value"])
 
 
@@ -272,7 +290,12 @@ async def refresh_token(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
     tokens = _build_token_response(user)
-    await _save_refresh_token(db, user.id, tokens["refresh_value"])
+    # TWA-08: preserve the shorter TTL when rotating a TWA refresh token.
+    # The cookie-vs-body distinction acts as the source signal (web SPA uses
+    # cookies, TWA falls back to body — see plan §7.2). Without this, the
+    # first /refresh would silently extend a TWA token back to 30 days.
+    ttl = None if source == "cookie" else timedelta(hours=TWA_REFRESH_TOKEN_EXPIRE_HOURS)
+    await _save_refresh_token(db, user.id, tokens["refresh_value"], ttl=ttl)
 
     if source == "cookie":
         # Refresh and access cookies are rotated together — server-driven.
