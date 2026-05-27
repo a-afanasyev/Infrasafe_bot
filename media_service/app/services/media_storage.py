@@ -134,6 +134,12 @@ class MediaStorageService:
                 query = query.filter(MediaFile.category == category)
 
             media_files = query.order_by(MediaFile.uploaded_at.desc()).limit(limit).all()
+            # MEDIA-01: detach objects from the session before the context exits,
+            # otherwise the API layer hits DetachedInstanceError on field access
+            # when serialising the response (this caused the 500 on
+            # GET /api/v1/media/request/{request_number}).
+            for mf in media_files:
+                db.expunge(mf)
             logger.info(f"Found {len(media_files)} media files for request {request_number}")
             return media_files
 
@@ -406,6 +412,24 @@ class MediaStorageService:
             telegram_file_id = message.document.file_id
         else:
             raise ValueError("Unknown file type")
+
+        # MEDIA-02: Telegram returns the same telegram_file_id for the same
+        # file content across uploads. The DB has UNIQUE(telegram_file_id);
+        # a naive INSERT raises IntegrityError → 500. Look up an existing row
+        # first and reuse it (idempotent) — the freshly-posted Telegram
+        # message in this case is a harmless duplicate post, but we don't
+        # explode for the caller. Same payload, same row.
+        existing = (
+            db.query(MediaFile)
+            .filter(MediaFile.telegram_file_id == telegram_file_id)
+            .first()
+        )
+        if existing is not None:
+            logger.warning(
+                f"Duplicate telegram_file_id={telegram_file_id} for request "
+                f"{request_number}; reusing existing media_file id={existing.id}"
+            )
+            return existing
 
         media_file = MediaFile(
             telegram_channel_id=message.chat.id,
