@@ -32,7 +32,11 @@ twaClient.interceptors.response.use(
               return data.access_token as string
             })
             .catch(() => {
+              // TWA-06: signal App-level listener so the UI can surface a
+              // "session expired" state instead of silently failing every
+              // subsequent request with empty Authorization.
               localStorage.removeItem('twa_refresh_token')
+              window.dispatchEvent(new CustomEvent('twa:auth-failed'))
               return ''
             })
             .finally(() => { refreshPromise = null })

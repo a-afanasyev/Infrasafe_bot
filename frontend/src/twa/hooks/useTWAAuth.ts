@@ -42,5 +42,14 @@ export function useTWAAuth() {
 
   useEffect(() => { authenticate() }, [authenticate])
 
+  // TWA-06: clear local token state when the axios interceptor reports that
+  // refresh failed. Without this the UI keeps treating the user as
+  // authenticated while every subsequent request fails with 401.
+  useEffect(() => {
+    const onAuthFailed = () => setAccessToken(null)
+    window.addEventListener('twa:auth-failed', onAuthFailed)
+    return () => window.removeEventListener('twa:auth-failed', onAuthFailed)
+  }, [])
+
   return { accessToken, isLoading, isAuthenticated: !!accessToken }
 }

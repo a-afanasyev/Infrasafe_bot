@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
+import { getErrorMessage } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
 
 const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
@@ -53,23 +55,62 @@ export default function CreatePage() {
     queryFn: () => twaClient.get('/api/v2/profile/apartments').then(r => r.data),
   })
 
+  // TWA-02: upload each photo through the API proxy to media-service.
+  // The proxy lives at POST /api/v2/media/upload, requires the auth Bearer
+  // (already on twaClient) and validates request_number + category against
+  // FileCategories enum server-side. Photos are uploaded sequentially; any
+  // per-photo failure is reported but doesn't roll back the created request.
+  async function uploadPhotos(requestNumber: string): Promise<number[]> {
+    const failedIdx: number[] = []
+    for (let i = 0; i < photos.length; i++) {
+      const form = new FormData()
+      form.append('file', photos[i])
+      form.append('request_number', requestNumber)
+      form.append('category', 'request_photo')
+      try {
+        await twaClient.post('/api/v2/media/upload', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      } catch {
+        failedIdx.push(i + 1)
+      }
+    }
+    return failedIdx
+  }
+
   const createMutation = useMutation({
-    mutationFn: () => twaClient.post('/api/v2/requests', {
-      category: CATEGORY_API_MAP[category] || category,
-      apartment_id: apartmentId,
-      address,
-      description,
-      urgency: URGENCY_API_MAP[urgency] || urgency,
-      source: 'twa',
-    }),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const res = await twaClient.post('/api/v2/requests', {
+        category: CATEGORY_API_MAP[category] || category,
+        apartment_id: apartmentId,
+        address,
+        description,
+        urgency: URGENCY_API_MAP[urgency] || urgency,
+        source: 'twa',
+      })
+      const requestNumber: string | undefined = res.data?.request_number
+      let photoFailures: number[] = []
+      if (requestNumber && photos.length > 0) {
+        photoFailures = await uploadPhotos(requestNumber)
+      }
+      return { requestNumber, photoFailures }
+    },
+    onSuccess: ({ photoFailures }) => {
       haptic('notification')
       queryClient.invalidateQueries({ queryKey: ['my-requests'] })
+      if (photoFailures.length > 0) {
+        toast.warning(
+          `Заявка создана, но не загрузились фото №${photoFailures.join(', ')}`
+        )
+      } else if (photos.length > 0) {
+        toast.success(`Заявка создана (фото: ${photos.length})`)
+      } else {
+        toast.success('Заявка создана')
+      }
       navigate('/twa/app/requests')
     },
-    onError: (err: any) => {
-      console.error('Mutation failed:', err)
-      // Toast would go here in the future
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, 'Не удалось создать заявку'))
     },
   })
 

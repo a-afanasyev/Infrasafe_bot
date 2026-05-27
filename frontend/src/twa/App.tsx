@@ -7,6 +7,7 @@ import { ApplicantTabs } from './components/BottomTabBar'
 import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
 import OfflineIndicator from './components/OfflineIndicator'
+import { Toaster } from '../components/ui/sonner'
 import '../i18n'
 
 // Applicant pages
@@ -61,6 +62,7 @@ function TWAContent() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <OfflineIndicator />
+      <Toaster position="top-center" richColors closeButton />
       <Routes>
         <Route path="/" element={<Navigate to="/twa/app" replace />} />
 

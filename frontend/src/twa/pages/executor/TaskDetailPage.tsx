@@ -2,8 +2,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
+import { getErrorMessage } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, MapPin, Calendar } from 'lucide-react'
@@ -43,7 +45,10 @@ export default function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['request', number] })
       queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
     },
-    onError: () => haptic('notification'),
+    onError: (err: unknown) => {
+      haptic('notification')
+      toast.error(getErrorMessage(err, 'Не удалось изменить статус'))
+    },
   })
 
   if (isLoading) return <div className="p-8 text-center text-gray-400">{t('common.loading')}</div>

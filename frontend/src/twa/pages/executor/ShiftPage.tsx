@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
+import { getErrorMessage } from '../../utils/errors'
 import { Play, Square, Clock } from 'lucide-react'
 
 export default function ShiftPage() {
@@ -35,14 +37,28 @@ export default function ShiftPage() {
 
   const startMutation = useMutation({
     mutationFn: () => twaClient.post('/api/v2/executor/shifts/start', {}),
-    onSuccess: () => { haptic('notification'); queryClient.invalidateQueries({ queryKey: ['current-shift'] }) },
-    onError: () => haptic('notification'),
+    onSuccess: () => {
+      haptic('notification')
+      queryClient.invalidateQueries({ queryKey: ['current-shift'] })
+      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
+    },
+    onError: (err: unknown) => {
+      haptic('notification')
+      toast.error(getErrorMessage(err, 'Не удалось начать смену'))
+    },
   })
 
   const endMutation = useMutation({
     mutationFn: (id: number) => twaClient.post(`/api/v2/executor/shifts/${id}/end`),
-    onSuccess: () => { haptic('notification'); queryClient.invalidateQueries({ queryKey: ['current-shift'] }) },
-    onError: () => haptic('notification'),
+    onSuccess: () => {
+      haptic('notification')
+      queryClient.invalidateQueries({ queryKey: ['current-shift'] })
+      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
+    },
+    onError: (err: unknown) => {
+      haptic('notification')
+      toast.error(getErrorMessage(err, 'Не удалось завершить смену'))
+    },
   })
 
   const isActive = !!currentShift?.id

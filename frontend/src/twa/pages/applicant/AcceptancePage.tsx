@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
+import { getErrorMessage } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
 import StarRating from '../../components/StarRating'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
@@ -31,9 +33,8 @@ export default function AcceptancePage() {
       queryClient.invalidateQueries({ queryKey: ['acceptance'] })
       setExpanded(null)
     },
-    onError: (err: any) => {
-      console.error('Mutation failed:', err)
-      // Toast would go here in the future
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err))
     },
   })
 
@@ -46,9 +47,8 @@ export default function AcceptancePage() {
       queryClient.invalidateQueries({ queryKey: ['acceptance'] })
       setExpanded(null)
     },
-    onError: (err: any) => {
-      console.error('Mutation failed:', err)
-      // Toast would go here in the future
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err))
     },
   })
 

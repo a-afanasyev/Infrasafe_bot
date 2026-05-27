@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
+import { getErrorMessage } from '../../utils/errors'
 import { Globe, MapPin, LogOut } from 'lucide-react'
 
 export default function ProfilePage() {
@@ -26,9 +28,8 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       haptic('notification')
     },
-    onError: (err: any) => {
-      console.error('Mutation failed:', err)
-      // Toast would go here in the future
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err))
     },
   })
 
