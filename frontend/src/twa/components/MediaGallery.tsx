@@ -74,26 +74,39 @@ interface ThumbProps {
   onOpen: () => void
 }
 
+// Site-wide CSP disallows blob: URIs in img-src. We fetch with the auth
+// Bearer (so the API proxy can call media-service), then convert the
+// blob to a data: URL — data: is allowed by the existing img-src.
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result
+      if (typeof result === 'string') resolve(result)
+      else reject(new Error('FileReader returned non-string'))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader error'))
+    reader.readAsDataURL(blob)
+  })
+}
+
 function MediaThumb({ id, isVideo, onOpen }: ThumbProps) {
   const [url, setUrl] = useState<string | null>(null)
   const [errored, setErrored] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    let blobUrl: string | null = null
     twaClient
       .get(`/api/v2/media/${id}/file`, { responseType: 'blob' })
-      .then((r) => {
-        if (cancelled) return
-        blobUrl = URL.createObjectURL(r.data as Blob)
-        setUrl(blobUrl)
+      .then((r) => blobToDataUrl(r.data as Blob))
+      .then((dataUrl) => {
+        if (!cancelled) setUrl(dataUrl)
       })
       .catch(() => {
         if (!cancelled) setErrored(true)
       })
     return () => {
       cancelled = true
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
   }, [id])
 
@@ -128,18 +141,15 @@ function Lightbox({ id, onClose }: LightboxProps) {
 
   useEffect(() => {
     let cancelled = false
-    let blobUrl: string | null = null
     twaClient
       .get(`/api/v2/media/${id}/file`, { responseType: 'blob' })
-      .then((r) => {
-        if (cancelled) return
-        blobUrl = URL.createObjectURL(r.data as Blob)
-        setUrl(blobUrl)
+      .then((r) => blobToDataUrl(r.data as Blob))
+      .then((dataUrl) => {
+        if (!cancelled) setUrl(dataUrl)
       })
       .catch(() => {})
     return () => {
       cancelled = true
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
   }, [id])
 
