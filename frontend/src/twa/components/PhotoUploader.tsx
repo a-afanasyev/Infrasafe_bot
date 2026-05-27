@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
 import { Camera, X } from 'lucide-react'
 
@@ -11,6 +11,13 @@ interface Props {
 export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) {
   const { haptic } = useTelegramSDK()
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Stable blob URLs tied to file identity; revoked on file removal or unmount
+  // (TWA-10). Avoids inline URL.createObjectURL on every render.
+  const urls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files])
+  useEffect(() => {
+    return () => urls.forEach((u) => URL.revokeObjectURL(u))
+  }, [urls])
 
   const handleAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files || [])
@@ -28,13 +35,12 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
   return (
     <div>
       <div className="flex flex-wrap gap-2 mb-2">
-        {files.map((file, i) => (
+        {files.map((_, i) => (
           <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
             <img
-              src={URL.createObjectURL(file)}
+              src={urls[i]}
               alt=""
               className="w-full h-full object-cover"
-              onLoad={(e) => URL.revokeObjectURL((e.target as HTMLImageElement).src)}
             />
             <button
               onClick={() => handleRemove(i)}

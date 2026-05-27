@@ -10,6 +10,19 @@ import PhotoUploader from '../../components/PhotoUploader'
 const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
 const URGENCIES = ['low', 'medium', 'high', 'critical']
 const URGENCY_API_MAP: Record<string, string> = { low: 'Обычная', medium: 'Средняя', high: 'Срочная', critical: 'Критическая' }
+// Backend (settings.REQUEST_CATEGORIES) expects Russian strings — map TWA i18n keys to API values.
+const CATEGORY_API_MAP: Record<string, string> = {
+  electricity: 'Электрика',
+  plumbing: 'Сантехника',
+  heating: 'Отопление',
+  ventilation: 'Вентиляция',
+  elevator: 'Лифт',
+  cleaning: 'Уборка',
+  landscaping: 'Благоустройство',
+  security: 'Безопасность',
+  internet_tv: 'Интернет/ТВ',
+  other: 'Другое',
+}
 
 export default function CreatePage() {
   const { t } = useTranslation()
@@ -42,7 +55,7 @@ export default function CreatePage() {
 
   const createMutation = useMutation({
     mutationFn: () => twaClient.post('/api/v2/requests', {
-      category,
+      category: CATEGORY_API_MAP[category] || category,
       apartment_id: apartmentId,
       address,
       description,
@@ -133,6 +146,17 @@ export default function CreatePage() {
         disabled={createMutation.isPending}
         className="w-full mt-4 bg-emerald-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
+      {createMutation.isError && (
+        <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
+          {(() => {
+            const err = createMutation.error as any
+            const detail = err?.response?.data?.detail
+            if (Array.isArray(detail)) return detail.map((d: any) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
+            if (typeof detail === 'string') return detail
+            return err?.message || t('common.error')
+          })()}
+        </div>
+      )}
     </div>,
   ]
 

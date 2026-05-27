@@ -533,13 +533,16 @@ async def save_document(message: Message, state: FSMContext, db: Session, langua
         # Загружаем документ в Media Service (в канал ARCHIVE)
         from uk_management_bot.utils.media_helpers import upload_document_to_media_service
         try:
-            await upload_document_to_media_service(
+            media_result = await upload_document_to_media_service(
                 bot=message.bot,
                 file_id=file_id,
                 user_telegram_id=message.from_user.id,
                 description=f"Документ пользователя: {document_type_value}"
             )
-            logger.info(f"Документ пользователя {message.from_user.id} загружен в Media Service")
+            if media_result is not None:
+                logger.info(f"Документ пользователя {message.from_user.id} загружен в Media Service")
+            else:
+                logger.warning(f"Документ пользователя {message.from_user.id} НЕ загружен в Media Service (см. предыдущие ошибки)")
         except Exception as e:
             logger.error(f"Ошибка загрузки документа в Media Service: {e}")
             # Продолжаем сохранение даже если загрузка не удалась

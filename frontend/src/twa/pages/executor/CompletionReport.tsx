@@ -21,6 +21,7 @@ export default function CompletionReport() {
     onSuccess: () => {
       haptic('notification')
       queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['request', number] })
       navigate('/twa/exec')
     },
     onError: () => haptic('notification'),
