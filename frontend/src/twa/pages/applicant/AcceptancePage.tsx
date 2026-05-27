@@ -9,6 +9,7 @@ import StatusBadge from '../../components/StatusBadge'
 import StarRating from '../../components/StarRating'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { CardSkeleton } from '../../components/Skeleton'
+import PullToRefresh from '../../components/PullToRefresh'
 
 export default function AcceptancePage() {
   const { t } = useTranslation()
@@ -53,6 +54,7 @@ export default function AcceptancePage() {
   })
 
   return (
+    <PullToRefresh queryKeys={[['acceptance']]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.acceptance.title')}</h1>
 
@@ -105,5 +107,6 @@ export default function AcceptancePage() {
         </div>
       ))}
     </div>
+    </PullToRefresh>
   )
 }

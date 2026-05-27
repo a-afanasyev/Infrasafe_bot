@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import StatusBadge from '../../components/StatusBadge'
+import MediaGallery from '../../components/MediaGallery'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, User, MapPin, Calendar } from 'lucide-react'
 
@@ -72,6 +73,14 @@ export default function RequestDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Media */}
+      {number && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
+          <h3 className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 mb-2">{t('twa.detail.media')}</h3>
+          <MediaGallery requestNumber={number} />
+        </div>
+      )}
 
       {/* Comments */}
       {comments.length > 0 && (

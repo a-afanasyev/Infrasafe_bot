@@ -7,6 +7,7 @@ import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import { getErrorMessage } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
+import MediaGallery from '../../components/MediaGallery'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, MapPin, Calendar } from 'lucide-react'
 
@@ -91,6 +92,13 @@ export default function TaskDetailPage() {
         <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-2xl p-4 border border-cyan-100 dark:border-cyan-800 mb-3">
           <p className="font-semibold text-[12px] text-cyan-800 dark:text-cyan-300 mb-1">{t('twa.exec.detail.materials')}</p>
           <p className="text-[12px] text-cyan-700 dark:text-cyan-400">{request.requested_materials}</p>
+        </div>
+      )}
+
+      {number && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
+          <h3 className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 mb-2">{t('twa.detail.media')}</h3>
+          <MediaGallery requestNumber={number} />
         </div>
       )}
 

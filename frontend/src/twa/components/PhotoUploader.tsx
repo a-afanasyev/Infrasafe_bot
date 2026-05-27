@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
-import { Camera, X } from 'lucide-react'
+import { Camera, Image as ImageIcon, X } from 'lucide-react'
 
 interface Props {
   files: File[]
@@ -10,7 +10,8 @@ interface Props {
 
 export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) {
   const { haptic } = useTelegramSDK()
-  const inputRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
 
   // Stable blob URLs tied to file identity; revoked on file removal or unmount
   // (TWA-10). Avoids inline URL.createObjectURL on every render.
@@ -24,13 +25,17 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
     const combined = [...files, ...newFiles].slice(0, maxFiles)
     onChange(combined)
     haptic('selection')
-    if (inputRef.current) inputRef.current.value = ''
+    // Reset both inputs so the same file can be picked again if needed.
+    if (cameraRef.current) cameraRef.current.value = ''
+    if (galleryRef.current) galleryRef.current.value = ''
   }
 
   const handleRemove = (index: number) => {
     onChange(files.filter((_, i) => i !== index))
     haptic('impact')
   }
+
+  const canAddMore = files.length < maxFiles
 
   return (
     <div>
@@ -50,23 +55,46 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
             </button>
           </div>
         ))}
-        {files.length < maxFiles && (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 active:scale-95 transition-transform"
-          >
-            <Camera size={20} />
-            <span className="text-[10px] mt-0.5">{files.length}/{maxFiles}</span>
-          </button>
+        {canAddMore && (
+          <>
+            {/* TWA-18: explicit camera vs. gallery actions. The previous single
+                tile used capture="environment" which forces the OS camera and
+                blocks gallery selection on iOS — now two side-by-side tiles. */}
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 active:scale-95 transition-transform"
+            >
+              <Camera size={20} />
+              <span className="text-[10px] mt-0.5">{files.length}/{maxFiles}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 active:scale-95 transition-transform"
+            >
+              <ImageIcon size={20} />
+              <span className="text-[10px] mt-0.5">Галерея</span>
+            </button>
+          </>
         )}
       </div>
+      {/* Camera-only: capture attribute opens the OS camera directly. */}
       <input
-        ref={inputRef}
+        ref={cameraRef}
+        type="file"
+        accept="image/*,video/*"
+        capture="environment"
+        onChange={handleAdd}
+        className="hidden"
+      />
+      {/* Gallery / file picker: no capture attribute → OS shows the regular
+          file/photo chooser (existing photos + Files app on iOS). */}
+      <input
+        ref={galleryRef}
         type="file"
         accept="image/*,video/*"
         multiple
-        capture="environment"
         onChange={handleAdd}
         className="hidden"
       />

@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from slowapi import _rate_limit_exceeded_handler
@@ -337,3 +338,38 @@ async def proxy_media_list(
         if resp.status_code != 200:
             return []
         return resp.json()
+
+
+@app.get("/api/v2/media/{media_id}/file")
+async def proxy_media_file(
+    media_id: int,
+    user: User = Depends(get_current_user),
+):
+    """TWA-15: stream a media file's raw bytes from media-service.
+
+    The browser can't send the X-API-Key header for an <img src=...>,
+    so the TWA layer fetches via twaClient (Bearer auth) and turns the
+    blob into an object URL. This proxy handles auth on the server
+    side and forwards the binary content with the original Content-Type.
+    """
+    media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
+    if not media_url:
+        raise HTTPException(status_code=503, detail="Media service not configured")
+    headers = {}
+    if settings.MEDIA_SERVICE_API_KEY:
+        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{media_url}/api/v1/media/{media_id}/file",
+            headers=headers,
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text[:200])
+        return Response(
+            content=resp.content,
+            media_type=resp.headers.get("content-type", "application/octet-stream"),
+            # Short-lived cache: photo bytes are immutable per media_id, but
+            # we don't want indefinite caching in case of moderation/archive.
+            headers={"Cache-Control": "private, max-age=300"},
+        )

@@ -49,6 +49,10 @@ export default function CreatePage() {
   const [description, setDescription] = useState('')
   const [urgency, setUrgency] = useState('low')
   const [photos, setPhotos] = useState<File[]>([])
+  // TWA-16: track per-photo upload progress so the user sees "Загрузка фото
+  // 2/5" instead of staring at an unchanging spinner while we POST each file
+  // sequentially through the proxy.
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
 
   const { data: apartments = [] } = useQuery({
     queryKey: ['my-apartments'],
@@ -62,6 +66,7 @@ export default function CreatePage() {
   // per-photo failure is reported but doesn't roll back the created request.
   async function uploadPhotos(requestNumber: string): Promise<number[]> {
     const failedIdx: number[] = []
+    setUploadProgress({ done: 0, total: photos.length })
     for (let i = 0; i < photos.length; i++) {
       const form = new FormData()
       form.append('file', photos[i])
@@ -74,6 +79,7 @@ export default function CreatePage() {
       } catch {
         failedIdx.push(i + 1)
       }
+      setUploadProgress({ done: i + 1, total: photos.length })
     }
     return failedIdx
   }
@@ -107,9 +113,11 @@ export default function CreatePage() {
       } else {
         toast.success('Заявка создана')
       }
+      setUploadProgress(null)
       navigate('/twa/app/requests')
     },
     onError: (err: unknown) => {
+      setUploadProgress(null)
       toast.error(getErrorMessage(err, 'Не удалось создать заявку'))
     },
   })
@@ -187,6 +195,11 @@ export default function CreatePage() {
         disabled={createMutation.isPending}
         className="w-full mt-4 bg-emerald-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
+      {uploadProgress && uploadProgress.total > 0 && (
+        <div className="mt-3 text-center text-[12px] text-gray-500 dark:text-gray-400">
+          Загрузка фото {uploadProgress.done}/{uploadProgress.total}
+        </div>
+      )}
       {createMutation.isError && (
         <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
           {(() => {

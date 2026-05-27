@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { Bell, Phone, Clock } from 'lucide-react'
+import PullToRefresh from '../../components/PullToRefresh'
 
 export default function HomePage() {
   const { t } = useTranslation()
@@ -12,6 +13,7 @@ export default function HomePage() {
   })
 
   return (
+    <PullToRefresh queryKeys={[['announcements']]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.home.title')}</h1>
 
@@ -35,5 +37,6 @@ export default function HomePage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   )
 }
