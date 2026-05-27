@@ -28,6 +28,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/media", tags=["media"])
 
 
+def _sniff_image_mime(data: bytes) -> Optional[str]:
+    """Detect content type from magic bytes (first ~12 bytes). Returns None
+    if not a recognised image/video signature so the caller can fall back."""
+    if not data:
+        return None
+    if data.startswith(b"\xFF\xD8\xFF"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+        return "image/gif"
+    # WEBP: "RIFF????WEBP"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    # HEIC/HEIF: bytes 4..12 contain "ftypheic" / "ftypheix" / "ftypmif1" / "ftypheis"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        brand = data[8:12]
+        if brand in (b"heic", b"heix", b"heim", b"heis", b"mif1", b"msf1"):
+            return "image/heic"
+    # MP4: ftyp box with mp4* / isom / avc1 brands
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        brand = data[8:12]
+        if brand in (b"mp42", b"isom", b"avc1", b"mp41"):
+            return "video/mp4"
+    return None
+
+
 # Dependency для сервисов
 async def get_storage_service() -> MediaStorageService:
     return MediaStorageService()
@@ -265,11 +292,12 @@ async def get_media_file_stream(
         file_bytes, content_type = await storage_service.telegram.download_file(
             media_file.telegram_file_id
         )
-        # Telegram CDN returns "application/octet-stream" for many files
-        # even when they're known images/videos. Prefer the mime_type we
-        # stored at upload time so the browser can render <img>/<video>
-        # without sniffing.
-        effective_type = (
+        # mime_type stored at upload time can be wrong: some mobile pickers
+        # report image/png for JPEGs (or vice-versa) and Telegram CDN
+        # returns application/octet-stream regardless. Sniff the magic
+        # bytes here — that's the authoritative content type and the only
+        # one the browser will agree to render in <img>/<video>.
+        effective_type = _sniff_image_mime(file_bytes) or (
             media_file.mime_type
             if media_file.mime_type and media_file.mime_type != "application/octet-stream"
             else content_type
