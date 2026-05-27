@@ -265,9 +265,18 @@ async def get_media_file_stream(
         file_bytes, content_type = await storage_service.telegram.download_file(
             media_file.telegram_file_id
         )
+        # Telegram CDN returns "application/octet-stream" for many files
+        # even when they're known images/videos. Prefer the mime_type we
+        # stored at upload time so the browser can render <img>/<video>
+        # without sniffing.
+        effective_type = (
+            media_file.mime_type
+            if media_file.mime_type and media_file.mime_type != "application/octet-stream"
+            else content_type
+        )
         return Response(
             content=file_bytes,
-            media_type=content_type,
+            media_type=effective_type,
             headers={"Content-Disposition": f'inline; filename="{media_file.original_filename or "file"}"'},
         )
 

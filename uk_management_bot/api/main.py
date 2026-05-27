@@ -359,7 +359,10 @@ async def proxy_media_file(
     if settings.MEDIA_SERVICE_API_KEY:
         headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    # 60s — Telegram CDN can be slow on the first hit for a given file_id
+    # (cold cache); subsequent fetches are fast. 30s was clipping legitimate
+    # downloads.
+    async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.get(
             f"{media_url}/api/v1/media/{media_id}/file",
             headers=headers,
