@@ -240,12 +240,11 @@ function SidebarContent({
       {/* Logo */}
       <div className={cn('px-5 pt-5 pb-4', collapsed && 'flex justify-center px-3')}>
         <div className={cn('flex items-center gap-3', collapsed && 'flex-col gap-0')}>
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] font-[family-name:var(--font-display)] text-base font-bold text-black"
-            style={{ background: 'linear-gradient(135deg, var(--accent), #0099aa)' }}
-          >
-            УК
-          </div>
+          <img
+            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            alt="InfraSafe"
+            className="h-10 w-10 shrink-0"
+          />
           {!collapsed && (
             <div>
               <div className="font-[family-name:var(--font-display)] text-[15px] font-bold text-text-primary">

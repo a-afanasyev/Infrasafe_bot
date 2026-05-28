@@ -176,13 +176,13 @@ export default function LoginPage() {
       <div className="w-full max-w-[400px] px-4 relative">
         {/* Logo mark */}
         <div className="flex flex-col items-center mb-7">
-          <div className="w-[52px] h-[52px] rounded-[14px] flex items-center justify-center font-[family-name:var(--font-display)] font-extrabold text-xl text-[#001a14] mb-3 shadow-[0_0_32px_rgba(0,212,170,0.3)]"
-            style={{ background: 'linear-gradient(135deg, var(--accent), #0099aa)' }}
-          >
-            УК
-          </div>
+          <img
+            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            alt="InfraSafe"
+            className="w-[52px] h-[52px] mb-3 rounded-full shadow-[0_0_32px_rgba(0,212,170,0.3)]"
+          />
           <div className="font-[family-name:var(--font-display)] font-bold text-[22px] text-text-primary tracking-tight">
-            UK Management
+            Сервисная панель
           </div>
           <div className="text-xs text-text-muted font-[family-name:var(--font-body)] mt-1">
             {t('login.subtitle')}

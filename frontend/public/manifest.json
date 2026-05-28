@@ -1,6 +1,6 @@
 {
-  "name": "УК · InfraSafe",
-  "short_name": "УК",
+  "name": "Сервисная панель · InfraSafe",
+  "short_name": "Сервис",
   "start_url": "/uk/twa/app",
   "scope": "/uk/",
   "display": "standalone",
