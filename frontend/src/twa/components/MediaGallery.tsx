@@ -9,10 +9,20 @@ interface MediaItem {
   file_type: string
   mime_type: string
   caption?: string | null
+  category?: string | null
 }
 
 interface Props {
   requestNumber: string
+  /**
+   * Which media to show. 'request' = everything except the completion report;
+   * 'completion' = only the executor's completion_photo report. Omit to show
+   * all. Lets a detail page render two distinct sections (Фото / Фотоотчёт).
+   */
+  kind?: 'request' | 'completion'
+  /** Optional section title; when set, the gallery renders its own card and
+   *  hides entirely (title included) when it has no matching media. */
+  title?: string
   /**
    * TWA-20: lets the host page intercept the Telegram BackButton. When the
    * lightbox opens we hand the parent a `close` callback; when it closes we
@@ -29,7 +39,7 @@ interface Props {
  * binary bytes via /api/v2/media/{id}/file as a blob (we can't put a
  * Bearer token on a plain <img src=>). Tap a thumb → fullscreen lightbox.
  */
-export default function MediaGallery({ requestNumber, onLightboxChange }: Props) {
+export default function MediaGallery({ requestNumber, kind, title, onLightboxChange }: Props) {
   const { t } = useTranslation()
   const [lightboxId, setLightboxId] = useState<number | null>(null)
 
@@ -51,37 +61,51 @@ export default function MediaGallery({ requestNumber, onLightboxChange }: Props)
     return () => onLightboxChange(null)
   }, [lightboxId, onLightboxChange])
 
-  if (isLoading) {
-    return (
-      <div className="text-[12px] text-gray-400">{t('common.loading')}</div>
-    )
+  const visible = items.filter((m) => {
+    if (kind === 'completion') return m.category === 'completion_photo'
+    if (kind === 'request') return m.category !== 'completion_photo'
+    return true
+  })
+
+  // While loading we render nothing (title included) to avoid an empty card
+  // flash; same once we know there's no matching media.
+  if (isLoading || visible.length === 0) {
+    return title ? null : isLoading ? <div className="text-[12px] text-gray-400">{t('common.loading')}</div> : null
   }
 
-  if (items.length === 0) {
-    return null
+  const grid = (
+    <div className="flex flex-wrap gap-2">
+      {visible.map((m) => (
+        <MediaThumb
+          key={m.id}
+          id={m.id}
+          isVideo={m.file_type === 'video'}
+          onOpen={() => setLightboxId(m.id)}
+        />
+      ))}
+    </div>
+  )
+
+  const lightbox = lightboxId !== null && (
+    // TWA-30: key by id so React remounts on thumbnail switch — a fresh
+    // component can't show the data-URL from a previous, slower fetch.
+    <Lightbox key={lightboxId} id={lightboxId} onClose={() => setLightboxId(null)} />
+  )
+
+  if (title) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
+        <h3 className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
+        {grid}
+        {lightbox}
+      </div>
+    )
   }
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
-        {items.map((m) => (
-          <MediaThumb
-            key={m.id}
-            id={m.id}
-            isVideo={m.file_type === 'video'}
-            onOpen={() => setLightboxId(m.id)}
-          />
-        ))}
-      </div>
-      {lightboxId !== null && (
-        // TWA-30: key by id so React remounts on thumbnail switch — a fresh
-        // component can't show the data-URL from a previous, slower fetch.
-        <Lightbox
-          key={lightboxId}
-          id={lightboxId}
-          onClose={() => setLightboxId(null)}
-        />
-      )}
+      {grid}
+      {lightbox}
     </div>
   )
 }

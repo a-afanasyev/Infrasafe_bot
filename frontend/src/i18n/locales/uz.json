@@ -844,6 +844,7 @@
     "detail": {
       "comments": "Izohlar",
       "media": "Fotosuratlar",
+      "photoReport": "Foto-hisobot",
       "mediaLoadError": "Yuklab bo'lmadi"
     },
     "exec": {
@@ -885,7 +886,11 @@
         "clarify": "Aniqlashtirish",
         "backToWork": "Ishga qaytarish",
         "reopen": "Ishga qaytarish",
-        "materials": "So'ralgan materiallar"
+        "materials": "So'ralgan materiallar",
+        "purchaseTitle": "Nima xarid qilish kerak?",
+        "purchasePlaceholder": "Materiallar ro'yxati...",
+        "clarifyTitle": "Nimani aniqlashtirish kerak?",
+        "clarifyPlaceholder": "Nimani aniqlashtirish kerakligini yozing..."
       },
       "myShifts": {
         "title": "Mening smenalarim",
@@ -899,6 +904,7 @@
         "title": "Bajarish hisoboti",
         "description": "Nima qilinganini tasvirlang",
         "placeholder": "Nima qilindi...",
+        "photos": "Bajarilgan ishlar fotosurati",
         "submit": "Bajarilgan deb belgilash"
       }
     },

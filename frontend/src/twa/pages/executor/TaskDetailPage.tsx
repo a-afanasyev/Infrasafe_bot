@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import { notifyError } from '../../utils/errors'
@@ -33,16 +33,27 @@ export default function TaskDetailPage() {
 
   // TWA-20: route BackButton to closing an open gallery lightbox first.
   const lightboxCloseRef = useRef<(() => void) | null>(null)
+  const setLightboxClose = useCallback((close: (() => void) | null) => {
+    lightboxCloseRef.current = close
+  }, [])
+
+  // Закуп / Уточнение need a text payload before the status flip.
+  const [sheet, setSheet] = useState<'Закуп' | 'Уточнение' | null>(null)
+  const [sheetText, setSheetText] = useState('')
 
   useEffect(() => {
     return showBackButton(() => {
+      if (sheet) {
+        setSheet(null)
+        return
+      }
       if (lightboxCloseRef.current) {
         lightboxCloseRef.current()
         return
       }
       navigate(-1)
     })
-  }, [showBackButton, navigate])
+  }, [showBackButton, navigate, sheet])
 
   const { data: request, isLoading } = useQuery({
     queryKey: ['request', number],
@@ -51,9 +62,12 @@ export default function TaskDetailPage() {
   })
 
   const statusMutation = useMutation({
-    mutationFn: (newStatus: string) => twaClient.patch(`/api/v2/requests/${number}`, { status: newStatus }),
+    mutationFn: (payload: { status: string; requested_materials?: string; notes?: string }) =>
+      twaClient.patch(`/api/v2/requests/${number}`, payload),
     onSuccess: () => {
       haptic('notification')
+      setSheet(null)
+      setSheetText('')
       queryClient.invalidateQueries({ queryKey: ['request', number] })
       queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
     },
@@ -62,6 +76,18 @@ export default function TaskDetailPage() {
       notifyError(err, 'Не удалось изменить статус')
     },
   })
+
+  const submitSheet = () => {
+    const text = sheetText.trim()
+    if (!text) return
+    if (sheet === 'Закуп') {
+      statusMutation.mutate({ status: 'Закуп', requested_materials: text })
+    } else if (sheet === 'Уточнение') {
+      // Append rather than clobber any existing manager/prior notes.
+      const existing = (request?.notes ?? '').trim()
+      statusMutation.mutate({ status: 'Уточнение', notes: existing ? `${existing}\n\n${text}` : text })
+    }
+  }
 
   if (isLoading) return <div className="p-8 text-center text-gray-400">{t('common.loading')}</div>
   if (!request) return <div className="p-8 text-center text-gray-400">{t('common.error')}</div>
@@ -107,10 +133,20 @@ export default function TaskDetailPage() {
       )}
 
       {number && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
-          <h3 className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 mb-2">{t('twa.detail.media')}</h3>
-          <MediaGallery requestNumber={number} onLightboxChange={(close) => { lightboxCloseRef.current = close }} />
-        </div>
+        <>
+          <MediaGallery
+            requestNumber={number}
+            kind="request"
+            title={t('twa.detail.media')}
+            onLightboxChange={setLightboxClose}
+          />
+          <MediaGallery
+            requestNumber={number}
+            kind="completion"
+            title={t('twa.detail.photoReport')}
+            onLightboxChange={setLightboxClose}
+          />
+        </>
       )}
 
       {actions.length > 0 && (
@@ -120,13 +156,20 @@ export default function TaskDetailPage() {
               key={action.target}
               onClick={() => {
                 // TWA-25: "Выполнена" goes through the completion-report page
-                // (textarea for a structured report) instead of a blind status
-                // flip — that's the only path that reaches /twa/exec/report/:n.
+                // (textarea + photo report) instead of a blind status flip —
+                // that's the only path that reaches /twa/exec/report/:n.
                 if (action.target === 'Выполнена') {
                   navigate(`/twa/exec/report/${number}`)
                   return
                 }
-                statusMutation.mutate(action.target)
+                // Закуп / Уточнение open a text sheet first (materials list /
+                // clarification); the rest flip status directly.
+                if (action.target === 'Закуп' || action.target === 'Уточнение') {
+                  setSheetText('')
+                  setSheet(action.target)
+                  return
+                }
+                statusMutation.mutate({ status: action.target })
               }}
               disabled={statusMutation.isPending}
               className={`flex-1 text-white py-3 rounded-xl text-[13px] font-semibold disabled:opacity-50 ${action.color}`}
@@ -134,6 +177,44 @@ export default function TaskDetailPage() {
               {t(action.label)}
             </button>
           ))}
+        </div>
+      )}
+
+      {sheet && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end"
+          onClick={() => setSheet(null)}
+        >
+          <div
+            className="w-full bg-white dark:bg-gray-800 rounded-t-2xl p-4 pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100 mb-3">
+              {t(sheet === 'Закуп' ? 'twa.exec.detail.purchaseTitle' : 'twa.exec.detail.clarifyTitle')}
+            </h3>
+            <textarea
+              autoFocus
+              value={sheetText}
+              onChange={(e) => setSheetText(e.target.value)}
+              placeholder={t(sheet === 'Закуп' ? 'twa.exec.detail.purchasePlaceholder' : 'twa.exec.detail.clarifyPlaceholder')}
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSheet(null)}
+                className="flex-1 py-3 rounded-xl text-[13px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={submitSheet}
+                disabled={!sheetText.trim() || statusMutation.isPending}
+                className="flex-1 py-3 rounded-xl text-[13px] font-semibold bg-emerald-500 text-white disabled:opacity-50"
+              >
+                {t('common.confirm')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
