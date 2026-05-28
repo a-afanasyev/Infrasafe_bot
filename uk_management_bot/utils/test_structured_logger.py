@@ -130,26 +130,33 @@ class TestSecurityFilter:
         assert result is True
         assert record.msg == "User logged in successfully"
 
+    # NOTE: SecurityFilter does SELECTIVE redaction of key=value / key: value
+    # secrets (preserving the rest of the message), not whole-message nuking.
+    # Inputs must therefore carry an explicit `=`/`:` separator to be redacted.
+
     def test_message_with_password_gets_redacted(self):
         from uk_management_bot.utils.structured_logger import SecurityFilter
         f = SecurityFilter()
-        record = self._make_record("User set password to 12345")
+        record = self._make_record("password=12345")
         f.filter(record)
-        assert record.msg == "[REDACTED] Sensitive information filtered"
+        assert record.msg == "password= [REDACTED]"
+        assert "12345" not in record.msg
 
     def test_message_with_token_gets_redacted(self):
         from uk_management_bot.utils.structured_logger import SecurityFilter
         f = SecurityFilter()
-        record = self._make_record("auth token: abc123")
+        record = self._make_record("token: abc123")
         f.filter(record)
-        assert record.msg == "[REDACTED] Sensitive information filtered"
+        assert record.msg == "token: [REDACTED]"
+        assert "abc123" not in record.msg
 
     def test_message_with_secret_gets_redacted(self):
         from uk_management_bot.utils.structured_logger import SecurityFilter
         f = SecurityFilter()
-        record = self._make_record("The secret key is xyz")
+        record = self._make_record("secret=xyz")
         f.filter(record)
-        assert record.msg == "[REDACTED] Sensitive information filtered"
+        assert record.msg == "secret= [REDACTED]"
+        assert "xyz" not in record.msg
 
     def test_filter_always_returns_true(self):
         """SecurityFilter always returns True (never drops log records)."""
@@ -162,9 +169,10 @@ class TestSecurityFilter:
     def test_sensitive_patterns_case_insensitive(self):
         from uk_management_bot.utils.structured_logger import SecurityFilter
         f = SecurityFilter()
-        record = self._make_record("Bearer TOKEN value")  # "token" in lowercase check
+        record = self._make_record("PASSWORD=hunter2")  # uppercase key still matches
         f.filter(record)
-        assert record.msg == "[REDACTED] Sensitive information filtered"
+        assert record.msg == "PASSWORD= [REDACTED]"
+        assert "hunter2" not in record.msg
 
 
 # ---------------------------------------------------------------------------

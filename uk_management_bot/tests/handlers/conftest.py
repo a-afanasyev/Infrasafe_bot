@@ -34,8 +34,14 @@ os.environ.setdefault("DEBUG", "True")  # bypass settings.py production guard
 os.environ.setdefault("BOT_TOKEN", "test-token")
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-pw")
 
-# 2) Stub psycopg2 in case anything tries to import it directly.
-if "psycopg2" not in sys.modules:
+# 2) Stub psycopg2 ONLY when the real driver is genuinely unavailable.
+#    A naive `if "psycopg2" not in sys.modules` guard would preemptively install
+#    the stub during collection (before the real driver is first imported) and
+#    leak it process-wide, breaking postgres-backed tests that build their own
+#    engine (e.g. tests/test_apartment_*.py). Prefer the real driver if present.
+try:
+    import psycopg2  # noqa: F401 — real driver present, keep it
+except Exception:
     psycopg2_stub = types.ModuleType("psycopg2")
     psycopg2_stub.__version__ = "0.0.0-stub"
     sys.modules["psycopg2"] = psycopg2_stub

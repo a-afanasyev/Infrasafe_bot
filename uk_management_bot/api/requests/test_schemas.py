@@ -120,7 +120,7 @@ class TestKanbanResponse:
 class TestCreateRequestBody:
     def test_valid_minimal(self):
         body = CreateRequestBody(
-            category="electricity",
+            category="Электрика",
             urgency="Обычная",
             description="Нет света",
         )
@@ -130,7 +130,7 @@ class TestCreateRequestBody:
 
     def test_valid_with_all_fields(self):
         body = CreateRequestBody(
-            category="plumbing",
+            category="Сантехника",
             urgency="Срочная",
             description="Потоп",
             apartment_id=5,
@@ -153,7 +153,7 @@ class TestCreateRequestBody:
     @pytest.mark.parametrize("urgency", VALID_URGENCIES)
     def test_all_valid_urgencies_accepted(self, urgency: str):
         body = CreateRequestBody(
-            category="electricity",
+            category="Электрика",
             urgency=urgency,
             description="test",
         )

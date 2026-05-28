@@ -293,7 +293,8 @@ class TestSendWebhook:
         assert retry_after == 60
 
     @pytest.mark.asyncio
-    async def test_503_returns_non_retryable(self):
+    async def test_503_returns_retryable(self):
+        # 503 Service Unavailable is transient → retryable (same as 5xx below).
         client = AsyncMock()
         client.post.return_value = self._make_response(503)
 
@@ -307,7 +308,7 @@ class TestSendWebhook:
             )
 
         assert success is False
-        assert retryable is False
+        assert retryable is True
         assert "503" in error
 
     @pytest.mark.asyncio

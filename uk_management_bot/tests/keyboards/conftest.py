@@ -14,7 +14,12 @@ os.environ.setdefault("DEBUG", "True")
 os.environ.setdefault("BOT_TOKEN", "test-token")
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-pw")
 
-if "psycopg2" not in sys.modules:
+# Stub psycopg2 ONLY when the real driver is genuinely unavailable — a bare
+# `not in sys.modules` guard installs the stub during collection and leaks it
+# process-wide, breaking postgres-backed tests (e.g. tests/test_apartment_*.py).
+try:
+    import psycopg2  # noqa: F401 — real driver present, keep it
+except Exception:
     psycopg2_stub = types.ModuleType("psycopg2")
     psycopg2_stub.__version__ = "0.0.0-stub"
     sys.modules["psycopg2"] = psycopg2_stub

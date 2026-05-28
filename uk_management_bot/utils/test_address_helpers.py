@@ -91,9 +91,13 @@ class TestLocalizeAddressEdgeCases:
         assert result == ""
 
     def test_unknown_language_processes_kv(self):
-        # Any language other than "ru" goes through the replacement logic
+        # Any language other than "ru" goes through the replacement logic.
+        # get_text falls back to the base (ru) locale for an unknown language,
+        # so the apartment marker is reformatted to number-first "2-кв." rather
+        # than adopting the uz "xon." form. (Prod only ever passes ru/uz.)
         result = localize_address("Дом: 1, кв. 2", "en")
-        assert "2-xon." in result
+        assert "2-кв." in result
+        assert "кв. 2" not in result
 
     def test_multiple_kv_occurrences(self):
         # Re.sub replaces all occurrences
