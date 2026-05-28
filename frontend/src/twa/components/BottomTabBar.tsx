@@ -1,7 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Home, ClipboardList, PlusCircle, CheckCircle, UserCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
+import { twaClient } from '../twaClient'
 
 interface Tab {
   path: string
@@ -36,7 +38,7 @@ export default function BottomTabBar({ tabs }: Props) {
             >
               <div className="relative">
                 {tab.icon}
-                {tab.badge && tab.badge > 0 && (
+                {(tab.badge ?? 0) > 0 && (
                   <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
                     {tab.badge}
                   </span>
@@ -51,13 +53,20 @@ export default function BottomTabBar({ tabs }: Props) {
   )
 }
 
-export function ApplicantTabs({ acceptanceBadge = 0 }: { acceptanceBadge?: number }) {
+export function ApplicantTabs() {
   const { t } = useTranslation()
+  // Self-fetch the acceptance count (shared cache with AcceptancePage) so the
+  // tab badge reflects requests actually awaiting acceptance.
+  const { data: acceptance = [] } = useQuery({
+    queryKey: ['acceptance'],
+    queryFn: () => twaClient.get('/api/v2/requests/acceptance').then((r) => r.data),
+    staleTime: 30_000,
+  })
   const tabs: Tab[] = [
     { path: '/twa/app', icon: <Home size={20} />, label: t('twa.tabs.home') },
     { path: '/twa/app/requests', icon: <ClipboardList size={20} />, label: t('twa.tabs.requests') },
     { path: '/twa/app/create', icon: <PlusCircle size={22} />, label: t('twa.tabs.create') },
-    { path: '/twa/app/acceptance', icon: <CheckCircle size={20} />, label: t('twa.tabs.acceptance'), badge: acceptanceBadge },
+    { path: '/twa/app/acceptance', icon: <CheckCircle size={20} />, label: t('twa.tabs.acceptance'), badge: acceptance.length },
     { path: '/twa/app/profile', icon: <UserCircle size={20} />, label: t('twa.tabs.profile') },
   ]
   return <BottomTabBar tabs={tabs} />
