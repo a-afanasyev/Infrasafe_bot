@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
-import { getErrorMessage } from '../../utils/errors'
+import { notifyError } from '../../utils/errors'
 import { Play, Square, Clock } from 'lucide-react'
 
 export default function ShiftPage() {
@@ -44,7 +43,7 @@ export default function ShiftPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      toast.error(getErrorMessage(err, 'Не удалось начать смену'))
+      notifyError(err, 'Не удалось начать смену')
     },
   })
 
@@ -57,7 +56,7 @@ export default function ShiftPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      toast.error(getErrorMessage(err, 'Не удалось завершить смену'))
+      notifyError(err, 'Не удалось завершить смену')
     },
   })
 

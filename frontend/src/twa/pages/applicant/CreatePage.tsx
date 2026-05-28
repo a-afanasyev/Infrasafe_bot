@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
-import { getErrorMessage } from '../../utils/errors'
+import { notifyError } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
 
 const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
@@ -168,7 +168,7 @@ export default function CreatePage() {
     },
     onError: (err: unknown) => {
       setUploadProgress(null)
-      toast.error(getErrorMessage(err, 'Не удалось создать заявку'))
+      notifyError(err, 'Не удалось создать заявку')
     },
   })
 

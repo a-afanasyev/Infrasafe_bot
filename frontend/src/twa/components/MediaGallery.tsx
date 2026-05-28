@@ -167,6 +167,16 @@ function Lightbox({ id, onClose }: LightboxProps) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 
+  // TWA-26: Escape closes the lightbox (desktop / browser-wrapper expectation;
+  // the in-Telegram BackButton path is handled separately by the host page).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   useEffect(() => {
     let cancelled = false
     twaClient

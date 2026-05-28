@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+
 /**
  * Extract a human-readable message from an axios/fetch error.
  *
@@ -34,4 +36,17 @@ export function getErrorMessage(err: unknown, fallback = 'Произошла о�
   }
 
   return fallback
+}
+
+/**
+ * Show an error toast — unless we're offline.
+ *
+ * TWA-28: when `navigator.onLine === false` the persistent OfflineIndicator
+ * banner already tells the user there's no connection. Firing a "Network
+ * Error" toast on top of it (and one more per failed tap) is double noise,
+ * so we suppress the toast and let the banner speak.
+ */
+export function notifyError(err: unknown, fallback?: string): void {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+  toast.error(getErrorMessage(err, fallback))
 }

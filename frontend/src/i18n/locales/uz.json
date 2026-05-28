@@ -903,6 +903,9 @@
       "current": "joriy"
     },
     "offline": "Tarmoqqa ulanish yo'q",
+    "roleGuard": {
+      "executorOnly": "Bo'lim faqat ijrochilar uchun"
+    },
     "photo": {
       "add": "Rasm qo'shish",
       "uploading": "Yuklanmoqda..."

@@ -2,10 +2,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useRef } from 'react'
-import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
-import { getErrorMessage } from '../../utils/errors'
+import { notifyError } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
 import MediaGallery from '../../components/MediaGallery'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
@@ -60,7 +59,7 @@ export default function TaskDetailPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      toast.error(getErrorMessage(err, 'Не удалось изменить статус'))
+      notifyError(err, 'Не удалось изменить статус')
     },
   })
 
@@ -119,7 +118,16 @@ export default function TaskDetailPage() {
           {actions.map((action) => (
             <button
               key={action.target}
-              onClick={() => statusMutation.mutate(action.target)}
+              onClick={() => {
+                // TWA-25: "Выполнена" goes through the completion-report page
+                // (textarea for a structured report) instead of a blind status
+                // flip — that's the only path that reaches /twa/exec/report/:n.
+                if (action.target === 'Выполнена') {
+                  navigate(`/twa/exec/report/${number}`)
+                  return
+                }
+                statusMutation.mutate(action.target)
+              }}
               disabled={statusMutation.isPending}
               className={`flex-1 text-white py-3 rounded-xl text-[13px] font-semibold disabled:opacity-50 ${action.color}`}
             >

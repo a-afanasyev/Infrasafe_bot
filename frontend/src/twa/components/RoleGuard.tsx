@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { twaClient } from '../twaClient'
 
 interface ProfileResponse {
@@ -47,8 +49,22 @@ export default function RoleGuard({ required, fallback = '/twa/app', children }:
 
   const roles = data?.roles ?? (data?.active_role ? [data.active_role] : [])
   if (!roles.includes(required)) {
-    return <Navigate to={fallback} replace />
+    return <DeniedRedirect fallback={fallback} message={t('twa.roleGuard.executorOnly')} />
   }
 
   return <>{children}</>
+}
+
+/**
+ * TWA-27: redirecting silently leaves the user confused — they tapped a
+ * deep-link and just landed on their home page. Surface a one-line toast
+ * explaining why before sending them away. Lives in its own component so the
+ * toast effect only mounts when access is actually denied, keeping
+ * RoleGuard's hook order stable across its early returns.
+ */
+function DeniedRedirect({ fallback, message }: { fallback: string; message: string }) {
+  useEffect(() => {
+    toast.info(message)
+  }, [message])
+  return <Navigate to={fallback} replace />
 }

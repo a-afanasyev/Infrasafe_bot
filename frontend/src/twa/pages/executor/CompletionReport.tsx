@@ -2,10 +2,9 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
-import { getErrorMessage } from '../../utils/errors'
+import { notifyError } from '../../utils/errors'
 
 export default function CompletionReport() {
   const { number } = useParams()
@@ -28,7 +27,7 @@ export default function CompletionReport() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      toast.error(getErrorMessage(err, 'Не удалось завершить заявку'))
+      notifyError(err, 'Не удалось завершить заявку')
     },
   })
 
