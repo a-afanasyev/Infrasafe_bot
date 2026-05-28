@@ -847,6 +847,9 @@
       "photoReport": "Foto-hisobot",
       "clarification": "Aniqlashtirish",
       "report": "Bajarish hisoboti",
+      "dialog": "Muloqot",
+      "dialogPlaceholder": "Xabar yozish...",
+      "dialogEmpty": "Hozircha xabarlar yo'q",
       "mediaLoadError": "Yuklab bo'lmadi"
     },
     "exec": {

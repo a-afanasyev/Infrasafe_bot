@@ -7,6 +7,7 @@ import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import { notifyError } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
 import MediaGallery from '../../components/MediaGallery'
+import CommentThread from '../../components/CommentThread'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, MapPin, Calendar } from 'lucide-react'
 
@@ -77,15 +78,34 @@ export default function TaskDetailPage() {
     },
   })
 
+  // Уточнение posts the question into the dialog thread (so the applicant can
+  // answer back) and then moves the request to "Уточнение".
+  const clarifyMutation = useMutation({
+    mutationFn: async (body: string) => {
+      await twaClient.post(`/api/v2/requests/${number}/comments`, { text: body })
+      await twaClient.patch(`/api/v2/requests/${number}`, { status: 'Уточнение' })
+    },
+    onSuccess: () => {
+      haptic('notification')
+      setSheet(null)
+      setSheetText('')
+      queryClient.invalidateQueries({ queryKey: ['request', number] })
+      queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['comments', number] })
+    },
+    onError: (err: unknown) => {
+      haptic('notification')
+      notifyError(err, 'Не удалось отправить уточнение')
+    },
+  })
+
   const submitSheet = () => {
     const text = sheetText.trim()
     if (!text) return
     if (sheet === 'Закуп') {
       statusMutation.mutate({ status: 'Закуп', requested_materials: text })
     } else if (sheet === 'Уточнение') {
-      // Append rather than clobber any existing manager/prior notes.
-      const existing = (request?.notes ?? '').trim()
-      statusMutation.mutate({ status: 'Уточнение', notes: existing ? `${existing}\n\n${text}` : text })
+      clarifyMutation.mutate(text)
     }
   }
 
@@ -160,6 +180,7 @@ export default function TaskDetailPage() {
             title={t('twa.detail.photoReport')}
             onLightboxChange={setLightboxClose}
           />
+          <CommentThread requestNumber={number} />
         </>
       )}
 
@@ -222,7 +243,7 @@ export default function TaskDetailPage() {
               </button>
               <button
                 onClick={submitSheet}
-                disabled={!sheetText.trim() || statusMutation.isPending}
+                disabled={!sheetText.trim() || statusMutation.isPending || clarifyMutation.isPending}
                 className="flex-1 py-3 rounded-xl text-[13px] font-semibold bg-emerald-500 text-white disabled:opacity-50"
               >
                 {t('common.confirm')}

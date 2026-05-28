@@ -857,6 +857,9 @@
       "photoReport": "Фотоотчёт",
       "clarification": "Уточнение",
       "report": "Отчёт о выполнении",
+      "dialog": "Диалог",
+      "dialogPlaceholder": "Написать сообщение...",
+      "dialogEmpty": "Пока нет сообщений",
       "mediaLoadError": "Не удалось загрузить"
     },
     "exec": {
