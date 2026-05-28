@@ -8,6 +8,7 @@ import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
 import OfflineIndicator from './components/OfflineIndicator'
 import RoleGuard from './components/RoleGuard'
+import RoleLanding from './components/RoleLanding'
 import { Toaster } from '../components/ui/sonner'
 import '../i18n'
 
@@ -65,7 +66,7 @@ function TWAContent() {
       <OfflineIndicator />
       <Toaster position="top-center" richColors closeButton />
       <Routes>
-        <Route path="/" element={<Navigate to="/twa/app" replace />} />
+        <Route path="/" element={<RoleLanding />} />
 
         {/* Applicant routes */}
         <Route path="/app" element={<><HomePage /><ApplicantTabs /></>} />

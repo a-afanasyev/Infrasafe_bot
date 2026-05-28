@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
+import RoleSwitchButton from '../../components/RoleSwitchButton'
 import { Globe, Wrench, LogOut } from 'lucide-react'
 
 export default function ExecutorProfilePage() {
@@ -54,6 +55,9 @@ export default function ExecutorProfilePage() {
           </div>
         </div>
       )}
+
+      {/* Switch to applicant mode (only for dual-role users) */}
+      <RoleSwitchButton to="applicant" />
 
       {specializations.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
