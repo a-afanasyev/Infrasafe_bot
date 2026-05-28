@@ -91,6 +91,28 @@ export default function RequestDetailPage() {
         )}
       </div>
 
+      {/* Clarification thread + completion report text */}
+      {request.requested_materials && (
+        <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-2xl p-4 border border-cyan-100 dark:border-cyan-800 mb-3">
+          <p className="font-semibold text-[12px] text-cyan-800 dark:text-cyan-300 mb-1">{t('twa.exec.detail.materials')}</p>
+          <p className="text-[12px] text-cyan-700 dark:text-cyan-400 whitespace-pre-line">{request.requested_materials}</p>
+        </div>
+      )}
+
+      {request.notes && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 border border-amber-100 dark:border-amber-800 mb-3">
+          <p className="font-semibold text-[12px] text-amber-800 dark:text-amber-300 mb-1">{t('twa.detail.clarification')}</p>
+          <p className="text-[12px] text-amber-700 dark:text-amber-400 whitespace-pre-line">{request.notes}</p>
+        </div>
+      )}
+
+      {request.completion_report && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
+          <p className="font-semibold text-[12px] text-gray-900 dark:text-gray-100 mb-1">{t('twa.detail.report')}</p>
+          <p className="text-[12px] text-gray-600 dark:text-gray-400 whitespace-pre-line">{request.completion_report}</p>
+        </div>
+      )}
+
       {/* Media: request photos + (if any) the executor's completion report */}
       {number && (
         <>

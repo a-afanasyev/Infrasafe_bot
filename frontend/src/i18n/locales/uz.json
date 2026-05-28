@@ -845,6 +845,8 @@
       "comments": "Izohlar",
       "media": "Fotosuratlar",
       "photoReport": "Foto-hisobot",
+      "clarification": "Aniqlashtirish",
+      "report": "Bajarish hisoboti",
       "mediaLoadError": "Yuklab bo'lmadi"
     },
     "exec": {

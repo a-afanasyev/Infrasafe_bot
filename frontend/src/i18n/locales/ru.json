@@ -855,6 +855,8 @@
       "comments": "Комментарии",
       "media": "Фото",
       "photoReport": "Фотоотчёт",
+      "clarification": "Уточнение",
+      "report": "Отчёт о выполнении",
       "mediaLoadError": "Не удалось загрузить"
     },
     "exec": {
