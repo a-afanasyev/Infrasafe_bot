@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
 import StatusBadge from '../../components/StatusBadge'
@@ -15,8 +15,19 @@ export default function RequestDetailPage() {
   const navigate = useNavigate()
   const { showBackButton } = useTelegramSDK()
 
+  // TWA-20: when the gallery lightbox is open, BackButton closes it first
+  // instead of navigating off the page. Ref keeps the handler stable so we
+  // don't re-register the Telegram BackButton on every lightbox toggle.
+  const lightboxCloseRef = useRef<(() => void) | null>(null)
+
   useEffect(() => {
-    return showBackButton(() => navigate(-1))
+    return showBackButton(() => {
+      if (lightboxCloseRef.current) {
+        lightboxCloseRef.current()
+        return
+      }
+      navigate(-1)
+    })
   }, [showBackButton, navigate])
 
   const { data: request, isLoading } = useQuery({
@@ -78,7 +89,7 @@ export default function RequestDetailPage() {
       {number && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
           <h3 className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 mb-2">{t('twa.detail.media')}</h3>
-          <MediaGallery requestNumber={number} />
+          <MediaGallery requestNumber={number} onLightboxChange={(close) => { lightboxCloseRef.current = close }} />
         </div>
       )}
 

@@ -272,8 +272,10 @@ class FileCategories(str, Enum):
     COMPLETION_DOCUMENT = "completion_document"
 
 
-from uk_management_bot.api.dependencies import get_current_user
+from uk_management_bot.api.dependencies import get_current_user, get_db
+from uk_management_bot.api.dependencies_access import check_request_access
 from uk_management_bot.database.models.user import User
+from sqlalchemy.ext.asyncio import AsyncSession
 
 @app.post("/api/v2/media/upload")
 async def proxy_media_upload(
@@ -281,6 +283,7 @@ async def proxy_media_upload(
     request_number: str = Form(...),
     category: FileCategories = Form(FileCategories.REQUEST_PHOTO),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Proxy media upload from TWA to Media Service.
 
@@ -289,12 +292,19 @@ async def proxy_media_upload(
     Media Service. Without these checks a crafted authenticated upload
     could push path-traversal / IDOR values (`../../etc/passwd`, arbitrary
     category strings) downstream.
+
+    TWA-19 (write-side IDOR): also gate on check_request_access so a user
+    can't attach files to an arbitrary request_number they don't own. For
+    the normal create-then-upload flow the request was just created by this
+    same user, so they pass as owner.
     """
     if not REQUEST_NUMBER_PATTERN.match(request_number):
         raise HTTPException(
             status_code=422,
             detail="Invalid request_number format. Expected: YYMMDD-NNN",
         )
+
+    await check_request_access(request_number, db, user)
 
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
     if not media_url:
@@ -324,10 +334,18 @@ async def proxy_media_upload(
 async def proxy_media_list(
     request_number: str,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Proxy: get media files for a request."""
+    """Proxy: get media files for a request.
+
+    TWA-19: gate on check_request_access — an authenticated user may only
+    list media for a request they own / are assigned to / can accept /
+    manage. Without this any authenticated user could enumerate any
+    request_number's attachments.
+    """
     if not REQUEST_NUMBER_PATTERN.match(request_number):
         raise HTTPException(400, "Invalid request number format. Expected: YYMMDD-NNN")
+    await check_request_access(request_number, db, user)
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
     headers = {}
     if settings.MEDIA_SERVICE_API_KEY:
@@ -344,6 +362,7 @@ async def proxy_media_list(
 async def proxy_media_file(
     media_id: int,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """TWA-15: stream a media file's raw bytes from media-service.
 
@@ -351,6 +370,12 @@ async def proxy_media_file(
     so the TWA layer fetches via twaClient (Bearer auth) and turns the
     blob into an object URL. This proxy handles auth on the server
     side and forwards the binary content with the original Content-Type.
+
+    TWA-19 (IDOR): media_id is a sequential integer and trivially
+    enumerable. Resolve it to its request_number via the media-service
+    metadata endpoint, then gate on check_request_access so a user can
+    only fetch bytes for a request they own / are assigned to / can
+    accept / manage.
     """
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
     if not media_url:
@@ -359,10 +384,22 @@ async def proxy_media_file(
     if settings.MEDIA_SERVICE_API_KEY:
         headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
 
-    # 60s — Telegram CDN can be slow on the first hit for a given file_id
-    # (cold cache); subsequent fetches are fast. 30s was clipping legitimate
-    # downloads.
     async with httpx.AsyncClient(timeout=60) as client:
+        # 1) Resolve media_id → request_number (cheap metadata call).
+        meta_resp = await client.get(
+            f"{media_url}/api/v1/media/{media_id}",
+            headers=headers,
+        )
+        if meta_resp.status_code != 200:
+            raise HTTPException(status_code=meta_resp.status_code, detail="Media not found")
+        request_number = meta_resp.json().get("request_number")
+        if not request_number:
+            raise HTTPException(status_code=404, detail="Media has no associated request")
+
+        # 2) Authorization gate — raises 403/404 if the user can't see it.
+        await check_request_access(request_number, db, user)
+
+        # 3) Stream the bytes. 60s — Telegram CDN can be slow on first hit.
         resp = await client.get(
             f"{media_url}/api/v1/media/{media_id}/file",
             headers=headers,

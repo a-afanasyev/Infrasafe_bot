@@ -44,7 +44,19 @@ twaClient.interceptors.response.use(
         const newToken = await refreshPromise
         if (newToken) {
           originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return twaClient(originalRequest)
+          // TWA-24: the retry can still 401 if the freshly-minted access
+          // token was already revoked server-side (rotation race / revoke).
+          // _retry is set, so the interceptor won't refresh again — escalate
+          // to the auth-failed listener so useTWAAuth re-inits instead of
+          // leaving the app silently 401ing on every subsequent request.
+          try {
+            return await twaClient(originalRequest)
+          } catch (retryErr: any) {
+            if (retryErr?.response?.status === 401) {
+              window.dispatchEvent(new CustomEvent('twa:auth-failed'))
+            }
+            return Promise.reject(retryErr)
+          }
         }
       }
     }

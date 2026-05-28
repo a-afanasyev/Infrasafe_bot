@@ -87,10 +87,26 @@ export default function CreatePage() {
   // sequentially through the proxy.
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
 
-  const { data: apartments = [] } = useQuery({
+  const { data: apartments = [], isSuccess: apartmentsLoaded } = useQuery({
     queryKey: ['my-apartments'],
     queryFn: () => twaClient.get('/api/v2/profile/apartments').then(r => r.data),
   })
+
+  // TWA-22: a draft restored from sessionStorage may reference an apartment
+  // the user no longer belongs to (removed between sessions). Once the fresh
+  // apartments list loads, drop a stale apartmentId and bounce the wizard
+  // back to address selection so the user can't reach submit with an
+  // invalid address that would 422 server-side.
+  useEffect(() => {
+    if (!apartmentsLoaded || apartmentId == null) return
+    const stillValid = apartments.some((a: any) => a.apartment_id === apartmentId)
+    if (!stillValid) {
+      setApartmentId(null)
+      setAddress('')
+      setStep(s => Math.min(s, 1))
+      toast.info('Адрес изменился — выберите заново')
+    }
+  }, [apartmentsLoaded, apartments, apartmentId])
 
   // TWA-02: upload each photo through the API proxy to media-service.
   // The proxy lives at POST /api/v2/media/upload, requires the auth Bearer

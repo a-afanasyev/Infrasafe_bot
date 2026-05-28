@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
@@ -20,6 +20,9 @@ const EXECUTOR_ACTIONS: Record<string, { label: string; target: string; color: s
   ],
   'Закуп': [{ label: 'twa.exec.detail.backToWork', target: 'В работе', color: 'bg-emerald-500' }],
   'Уточнение': [{ label: 'twa.exec.detail.backToWork', target: 'В работе', color: 'bg-emerald-500' }],
+  // TWA-23: backend _REQUEST_VALID_TRANSITIONS allows "Выполнена" → "В работе";
+  // expose reopen so an executor can undo a premature completion themselves.
+  'Выполнена': [{ label: 'twa.exec.detail.reopen', target: 'В работе', color: 'bg-amber-500' }],
 }
 
 export default function TaskDetailPage() {
@@ -29,8 +32,17 @@ export default function TaskDetailPage() {
   const queryClient = useQueryClient()
   const { showBackButton, haptic } = useTelegramSDK()
 
+  // TWA-20: route BackButton to closing an open gallery lightbox first.
+  const lightboxCloseRef = useRef<(() => void) | null>(null)
+
   useEffect(() => {
-    return showBackButton(() => navigate(-1))
+    return showBackButton(() => {
+      if (lightboxCloseRef.current) {
+        lightboxCloseRef.current()
+        return
+      }
+      navigate(-1)
+    })
   }, [showBackButton, navigate])
 
   const { data: request, isLoading } = useQuery({
@@ -98,7 +110,7 @@ export default function TaskDetailPage() {
       {number && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
           <h3 className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 mb-2">{t('twa.detail.media')}</h3>
-          <MediaGallery requestNumber={number} />
+          <MediaGallery requestNumber={number} onLightboxChange={(close) => { lightboxCloseRef.current = close }} />
         </div>
       )}
 

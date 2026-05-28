@@ -853,7 +853,8 @@
     },
     "detail": {
       "comments": "Комментарии",
-      "media": "Фото"
+      "media": "Фото",
+      "mediaLoadError": "Не удалось загрузить"
     },
     "exec": {
       "tabs": {
@@ -893,6 +894,7 @@
         "purchase": "Закуп",
         "clarify": "Уточнение",
         "backToWork": "В работу",
+        "reopen": "Вернуть в работу",
         "materials": "Запрошенные материалы"
       },
       "myShifts": {

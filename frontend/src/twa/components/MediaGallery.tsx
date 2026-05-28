@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../twaClient'
-import { X } from 'lucide-react'
+import { X, ImageOff } from 'lucide-react'
 
 interface MediaItem {
   id: number
@@ -13,6 +13,13 @@ interface MediaItem {
 
 interface Props {
   requestNumber: string
+  /**
+   * TWA-20: lets the host page intercept the Telegram BackButton. When the
+   * lightbox opens we hand the parent a `close` callback; when it closes we
+   * hand `null`. The page's BackButton handler calls `close()` first if set,
+   * so back closes the lightbox instead of navigating away from the page.
+   */
+  onLightboxChange?: (close: (() => void) | null) => void
 }
 
 /**
@@ -22,7 +29,7 @@ interface Props {
  * binary bytes via /api/v2/media/{id}/file as a blob (we can't put a
  * Bearer token on a plain <img src=>). Tap a thumb → fullscreen lightbox.
  */
-export default function MediaGallery({ requestNumber }: Props) {
+export default function MediaGallery({ requestNumber, onLightboxChange }: Props) {
   const { t } = useTranslation()
   const [lightboxId, setLightboxId] = useState<number | null>(null)
 
@@ -35,6 +42,14 @@ export default function MediaGallery({ requestNumber }: Props) {
     enabled: !!requestNumber,
     staleTime: 60_000,
   })
+
+  // TWA-20: publish open/close state to the host page so it can route the
+  // Telegram BackButton to closing the lightbox.
+  useEffect(() => {
+    if (!onLightboxChange) return
+    onLightboxChange(lightboxId !== null ? () => setLightboxId(null) : null)
+    return () => onLightboxChange(null)
+  }, [lightboxId, onLightboxChange])
 
   if (isLoading) {
     return (
@@ -96,6 +111,7 @@ function MediaThumb({ id, isVideo, onOpen }: ThumbProps) {
 
   useEffect(() => {
     let cancelled = false
+    setErrored(false)
     twaClient
       .get(`/api/v2/media/${id}/file`, { responseType: 'blob' })
       .then((r) => blobToDataUrl(r.data as Blob))
@@ -110,11 +126,21 @@ function MediaThumb({ id, isVideo, onOpen }: ThumbProps) {
     }
   }, [id])
 
+  // TWA-21: distinct error state — broken-image icon instead of a blank
+  // disabled tile that's indistinguishable from "still loading".
+  if (errored) {
+    return (
+      <div className="w-20 h-20 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400">
+        <ImageOff size={20} />
+      </div>
+    )
+  }
+
   return (
     <button
       type="button"
       onClick={onOpen}
-      disabled={!url || errored}
+      disabled={!url}
       className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 active:scale-95 transition-transform"
     >
       {url && (
@@ -137,7 +163,9 @@ interface LightboxProps {
 }
 
 function Lightbox({ id, onClose }: LightboxProps) {
+  const { t } = useTranslation()
   const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -147,7 +175,9 @@ function Lightbox({ id, onClose }: LightboxProps) {
       .then((dataUrl) => {
         if (!cancelled) setUrl(dataUrl)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setFailed(true)
+      })
     return () => {
       cancelled = true
     }
@@ -165,7 +195,13 @@ function Lightbox({ id, onClose }: LightboxProps) {
       >
         <X size={20} />
       </button>
-      {url ? (
+      {/* TWA-21: surface load failure instead of an eternal "…" spinner. */}
+      {failed ? (
+        <div className="flex flex-col items-center text-white/80 gap-2" onClick={(e) => e.stopPropagation()}>
+          <ImageOff size={40} />
+          <span className="text-[14px]">{t('twa.detail.mediaLoadError')}</span>
+        </div>
+      ) : url ? (
         <img
           src={url}
           alt=""

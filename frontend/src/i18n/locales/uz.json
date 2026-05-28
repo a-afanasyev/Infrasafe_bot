@@ -843,7 +843,8 @@
     },
     "detail": {
       "comments": "Izohlar",
-      "media": "Fotosuratlar"
+      "media": "Fotosuratlar",
+      "mediaLoadError": "Yuklab bo'lmadi"
     },
     "exec": {
       "tabs": {
@@ -883,6 +884,7 @@
         "purchase": "Xarid",
         "clarify": "Aniqlashtirish",
         "backToWork": "Ishga qaytarish",
+        "reopen": "Ishga qaytarish",
         "materials": "So'ralgan materiallar"
       },
       "myShifts": {
