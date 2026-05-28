@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -13,7 +13,8 @@ class AuditLog(Base):
     user = relationship("User")
     
     # Telegram ID пользователя (для сохранения логов после удаления пользователя)
-    telegram_user_id = Column(Integer, nullable=True, index=True)
+    # BigInteger: современные Telegram ID превышают int4 (2^31)
+    telegram_user_id = Column(BigInteger, nullable=True, index=True)
     
     # Тип действия
     action = Column(String(100), nullable=False)
