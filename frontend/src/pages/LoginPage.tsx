@@ -177,7 +177,7 @@ export default function LoginPage() {
         {/* Logo mark */}
         <div className="flex flex-col items-center mb-7">
           <img
-            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            src={`${import.meta.env.BASE_URL}infrasafe-logo.svg`}
             alt="InfraSafe"
             className="w-[52px] h-[52px] mb-3 rounded-full shadow-[0_0_32px_rgba(0,212,170,0.3)]"
           />

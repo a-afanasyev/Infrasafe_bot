@@ -241,7 +241,7 @@ function SidebarContent({
       <div className={cn('px-5 pt-5 pb-4', collapsed && 'flex justify-center px-3')}>
         <div className={cn('flex items-center gap-3', collapsed && 'flex-col gap-0')}>
           <img
-            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            src={`${import.meta.env.BASE_URL}infrasafe-logo.svg`}
             alt="InfraSafe"
             className="h-10 w-10 shrink-0"
           />
