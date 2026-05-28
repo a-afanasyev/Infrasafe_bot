@@ -3,7 +3,6 @@ Single source of truth: category → specialization mapping.
 
 Used by:
 - admin.py: auto_assign_request_by_category, assign specific executor
-- requests.py: auto_assign_request_by_category, assign specific executor
 """
 
 CATEGORY_TO_SPECIALIZATION: dict[str, str] = {

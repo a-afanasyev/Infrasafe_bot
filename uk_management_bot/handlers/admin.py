@@ -1725,7 +1725,7 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("deny_"))
+@router.callback_query(F.data.startswith("mgr_deny_"))
 async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка отклонения заявки менеджером"""
     try:
@@ -1737,7 +1737,7 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
             await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
             return
 
-        request_number = callback.data.replace("deny_", "")
+        request_number = callback.data.replace("mgr_deny_", "")
 
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
@@ -1925,7 +1925,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("complete_"))
+@router.callback_query(F.data.startswith("mgr_complete_"))
 async def handle_complete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка завершения заявки менеджером"""
     try:
@@ -1937,7 +1937,7 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
             await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
             return
 
-        request_number = callback.data.replace("complete_", "")
+        request_number = callback.data.replace("mgr_complete_", "")
 
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
@@ -1977,10 +1977,7 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.callback_query(
-    F.data.startswith("delete_") &
-    ~F.data.startswith("delete_employee_")
-)
+@router.callback_query(F.data.startswith("mgr_delete_"))
 async def handle_delete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка удаления заявки администратором (только для админов!)"""
     try:
@@ -1997,7 +1994,7 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
             logger.warning(f"Пользователь {callback.from_user.id} попытался удалить заявку без прав администратора")
             return
         
-        request_number = callback.data.replace("delete_", "")
+        request_number = callback.data.replace("mgr_delete_", "")
 
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()

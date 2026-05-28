@@ -26,7 +26,6 @@ from uk_management_bot.keyboards.requests import (
     get_inline_confirmation_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
-from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
 from uk_management_bot.keyboards.requests import (
     get_status_filter_inline_keyboard,
     get_category_filter_inline_keyboard,
@@ -45,8 +44,6 @@ import logging
 from datetime import datetime
 from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.auth_service import AuthService
-from uk_management_bot.services.notification_service import async_notify_action_denied
-from uk_management_bot.utils.constants import ERROR_MESSAGES
 from typing import Optional
 
 # Localization imports - TASK 17 Phase 2
@@ -198,112 +195,10 @@ async def graceful_fallback(message: Message, error_type: str, language: str = "
     
     logger.warning(f"[GRACEFUL_FALLBACK] Ошибка типа '{error_type}' для пользователя {message.from_user.id}")
 
-async def auto_assign_request_by_category(request_number: str, db_session: Session, manager_telegram_id: int):
-    """
-    Автоматически назначает заявку исполнителям по категории/специализации
-    
-    Args:
-        request_number: Номер заявки для назначения
-        db_session: Сессия базы данных
-        manager_telegram_id: Telegram ID менеджера, который назначает заявку
-    """
-    try:
-        from uk_management_bot.database.models.request_assignment import RequestAssignment
-        from uk_management_bot.database.models.user import User
-        from uk_management_bot.database.models.request import Request
-        import json
-        
-        # Получаем заявку
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
-            logger.error(f"Заявка {request_number} не найдена для назначения")
-            return
-        
-        # Получаем менеджера
-        manager = db_session.query(User).filter(User.telegram_id == manager_telegram_id).first()
-        if not manager:
-            logger.error(f"Менеджер {manager_telegram_id} не найден")
-            return
-        
-        category_to_specialization = CATEGORY_TO_SPECIALIZATION
-
-        # Определяем специализацию по категории заявки
-        specialization = category_to_specialization.get(request.category)
-        if not specialization:
-            logger.warning(f"Неизвестная категория заявки: {request.category}")
-            return
-        
-        # Находим исполнителей с нужной специализацией
-        executors = db_session.query(User).filter(
-            User.active_role == "executor",
-            User.status == "approved"
-        ).all()
-        
-        matching_executors = []
-        for executor in executors:
-            if executor.specialization:
-                try:
-                    # Парсим специализации исполнителя
-                    if isinstance(executor.specialization, str):
-                        executor_specializations = json.loads(executor.specialization)
-                    else:
-                        executor_specializations = executor.specialization
-                    
-                    # Проверяем, есть ли нужная специализация
-                    if specialization in executor_specializations:
-                        matching_executors.append(executor)
-                except (json.JSONDecodeError, TypeError):
-                    # Если специализация - просто строка
-                    if executor.specialization == specialization:
-                        matching_executors.append(executor)
-        
-        if not matching_executors:
-            logger.warning(f"Не найдено исполнителей для специализации {specialization}")
-            return
-        
-        # Проверяем, есть ли уже назначение для этой заявки
-        existing_assignment = db_session.query(RequestAssignment).filter(
-            RequestAssignment.request_number == request_number,
-            RequestAssignment.status == "active"
-        ).first()
-        
-        if existing_assignment:
-            logger.info(f"Заявка {request_number} уже назначена, пропускаем")
-            return
-        
-        # Дополнительная проверка на групповые назначения для той же специализации
-        existing_group_assignment = db_session.query(RequestAssignment).filter(
-            RequestAssignment.request_number == request_number,
-            RequestAssignment.assignment_type == "group",
-            RequestAssignment.group_specialization == specialization,
-            RequestAssignment.status == "active"
-        ).first()
-        
-        if existing_group_assignment:
-            logger.info(f"Заявка {request_number} уже назначена группе {specialization}, пропускаем")
-            return
-        
-        # Создаем групповое назначение
-        assignment = RequestAssignment(
-            request_number=request_number,
-            assignment_type="group",
-            group_specialization=specialization,
-            status="active",
-            created_by=manager.id
-        )
-        
-        db_session.add(assignment)
-        
-        # Обновляем поля заявки
-        request.assignment_type = "group"
-        request.assigned_group = specialization
-        request.assigned_at = datetime.now()
-        request.assigned_by = manager.id
-        
-        logger.info(f"Заявка {request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
-        
-    except Exception as e:
-        logger.error(f"Ошибка автоматического назначения заявки {request_number}: {e}")
+# auto_assign_request_by_category lived here as a duplicate of the version in
+# handlers/admin.py. This copy never committed the session and never notified
+# active-shift executors, so the duty-assignment flow silently did nothing. The
+# admin.py version is now the single source of truth.
 
 
 # Временно отключаем отладочный обработчик
@@ -1801,53 +1696,11 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
         lang = get_user_language(callback.from_user.id, db_session)
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
-@router.callback_query(
-    F.data.startswith("delete_") &
-    ~F.data.startswith("delete_employee_")
-)
-async def handle_delete_request(callback: CallbackQuery, state: FSMContext):
-    """Обработка удаления заявки"""
-    try:
-        logger.info(f"Обработка удаления заявки для пользователя {callback.from_user.id}")
-
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        request_number = callback.data.replace("delete_", "")
-
-        # Получаем заявку из базы данных
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
-
-        # Проверяем права доступа (сравниваем с telegram_id пользователя)
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not user or request.user_id != user.id:
-            await callback.answer(get_text("requests.no_delete_permission", language=lang), show_alert=True)
-            return
-
-        # Удаляем заявку
-        db_session.delete(request)
-        db_session.commit()
-
-        await callback.message.edit_text(
-            get_text("requests.request_deleted", language=lang)
-        )
-        await callback.message.answer(
-            get_text("common.return_to_menu", language=lang),
-            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
-        )
-
-        logger.info(f"Заявка {request_number} удалена пользователем {callback.from_user.id}")
-
-    except Exception as e:
-        logger.error(f"Ошибка обработки удаления заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+# Менеджерское удаление заявки перенесено на префикс `mgr_delete_` и живёт в
+# handlers/admin.py::handle_delete_request (гейт ADMIN_USER_IDS + каскадное удаление).
+# Прежний bare-`delete_` owner-delete здесь затенял админский (requests_router
+# регистрируется раньше admin_router) и к тому же удалял заявку без подтверждения.
+# Удалён — см. test_bug_duty_assign_routing::test_admin_router_owns_mgr_delete.
 
 @router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
 async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
@@ -1905,67 +1758,13 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
         lang = get_user_language(callback.from_user.id, db_session)
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
-@router.callback_query(F.data.startswith("complete_"))
-async def handle_complete_request(callback: CallbackQuery, state: FSMContext):
-    """Обработка завершения заявки"""
-    try:
-        logger.info(f"Обработка завершения заявки для пользователя {callback.from_user.id}")
-        # Разрешаем только исполнителю
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        auth = AuthService(db_session)
-        if not await auth.is_user_executor(callback.from_user.id):
-            await callback.answer(get_text("requests.executor_only", language=lang), show_alert=True)
-            return
-        # Ранняя проверка смены из middleware (если подключено на роутер)
-        try:
-            shift_ctx = state and (await state.get_data()).get("__shift_ctx__")  # резерв, если сохраняли в FSM
-        except Exception:
-            shift_ctx = None
-        # Предпочтительно берем из data контекста aiogram (если middleware установил)
-        # Aiogram 3 передает data в handler, но в нашей сигнатуре его нет. Поэтому используем сервисную проверку ниже как основной барьер.
-        # Для ранней UX-подсказки перед сервисной проверкой повторно проверим смену быстрим способом:
-        from uk_management_bot.services.shift_service import ShiftService
-        quick_service = ShiftService(db_session)
-        if not quick_service.is_user_in_active_shift(callback.from_user.id):
-            error_msg = ERROR_MESSAGES.get("not_in_shift", get_text("shift.not_in_shift", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            # Дополнительное единичное уведомление пользователю (best-effort)
-            try:
-                from aiogram import Bot
-                bot: Bot = callback.message.bot
-                await async_notify_action_denied(bot, db_session, callback.from_user.id, "not_in_shift")
-            except Exception:
-                pass
-            return
-        request_number = callback.data.replace("complete_", "")
-        service = RequestService(db_session)
-        result = service.update_status_by_actor(
-            request_number=request_number,
-            new_status="Выполнена",
-            actor_telegram_id=callback.from_user.id,
-        )
-
-        if not result.get("success"):
-            error_msg = result.get("message", get_text("common.error", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            return
-
-        await callback.message.edit_text(
-            get_text("requests.request_completed", language=lang).format(request_number=request_number)
-        )
-        await callback.message.answer(
-            get_text("common.return_to_menu", language=lang),
-            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
-        )
-        logger.info(f"Заявка {request_number} завершена пользователем {callback.from_user.id}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка обработки завершения заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+# Менеджерское завершение заявки перенесено на префикс `mgr_complete_` и живёт в
+# handlers/admin.py::handle_complete_request (статус EXECUTED + AuditLog). Прежний
+# bare-`complete_` исполнительский complete здесь затенял и админский менеджерский
+# complete, и выделенный `complete_work_` (по префиксу). Исполнитель завершает
+# через `executor_complete_` (ниже) и `complete_work_` (request_status_management).
+# Удалён — см. test_bug_duty_assign_routing::{test_admin_router_owns_mgr_complete,
+# test_complete_work_routes_to_status_management}.
 
 
 # BUG-BOT-022: ранее здесь был дубликат handler-а `clarify_<NNN>`. Он
@@ -2050,36 +1849,13 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("deny_"))
-async def handle_executor_propose_deny(callback: CallbackQuery, state: FSMContext):
-    """Исполнитель предлагает отказ (эскалируется менеджеру). Добавляем запись в notes без смены статуса."""
-    try:
-        request_number = callback.data.replace("deny_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        auth = AuthService(db_session)
-        # Только исполнитель
-        if not await auth.is_user_executor(callback.from_user.id):
-            await callback.answer(get_text("requests.executor_only", language=lang), show_alert=True)
-            return
-        service = RequestService(db_session)
-        req = service.get_request_by_number(request_number)
-        if not req:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
-        existing = (req.notes or "").strip()
-        executor_label = get_text("requests.executor_label", language=lang)
-        deny_note = get_text("requests.deny_proposal_note", language=lang)
-        new_notes = (existing + "\n" if existing else "") + f"[{executor_label}] {deny_note}"
-        req.notes = new_notes
-        db_session.commit()
-        await callback.answer(get_text("requests.deny_proposal_sent", language=lang), show_alert=True)
-    except Exception as e:
-        logger.error(f"Ошибка предложения отказа: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+# Менеджерское «Отклонить» перенесено на префикс `mgr_deny_` и живёт в
+# handlers/admin.py::handle_deny_request (FSM «ввод причины отклонения»). Прежний
+# bare-`deny_` handler здесь («исполнитель предлагает отказ») затенял менеджерский
+# (requests_router раньше admin_router): клик менеджера давал «предложение отказа
+# отправлено» вместо запроса причины. Фича propose-deny сейчас без кнопки; если
+# понадобится — завести отдельный префикс `executor_deny_` + кнопку.
+# Удалён — см. test_bug_duty_assign_routing::test_admin_router_owns_mgr_deny.
 
 
 @router.callback_query(F.data.startswith("approve_") & ~F.data.startswith("approve_employee_") & ~F.data.startswith("approve_user_"))
@@ -2621,220 +2397,25 @@ async def handle_executor_filter(callback: CallbackQuery, state: FSMContext):
 
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
 
-@router.callback_query(F.data.startswith("assign_duty_"))
-async def handle_assign_duty_executor(callback: CallbackQuery):
-    """Назначение дежурного специалиста (автоматическое по сменам)"""
-    try:
-        request_number = callback.data.replace("assign_duty_", "")
-        logger.info(f"Назначение дежурного специалиста для заявки {request_number}")
-
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        # Используем существующую логику auto_assign
-        await auto_assign_request_by_category(request_number, db_session, callback.from_user.id)
-
-        await callback.message.edit_text(
-            get_text("requests.request_assigned_to_duty", language=lang).format(request_number=request_number),
-            parse_mode="HTML"
-        )
-
-        await callback.message.answer(
-            get_text("common.return_to_menu", language=lang),
-            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
-        )
-
-        logger.info(f"Заявка {request_number} назначена дежурному специалисту")
-
-    except Exception as e:
-        logger.error(f"Ошибка назначения дежурного специалиста: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("requests.assignment_error", language=lang), show_alert=True)
+# NOTE: assign_duty_* is handled by handlers/admin.py:handle_assign_duty_executor_admin,
+# which commits the group assignment and notifies executors on an active shift.
+# A duplicate handler here previously shadowed it (requests_router is registered
+# before admin_router) and silently dropped the assignment — see test_bug_duty_assign_routing.
 
 
-@router.callback_query(F.data.startswith("assign_specific_"))
-async def handle_assign_specific_executor(callback: CallbackQuery):
-    """Показать список исполнителей для ручного выбора"""
-    try:
-        request_number = callback.data.replace("assign_specific_", "")
-        logger.info(f"Выбор конкретного исполнителя для заявки {request_number}")
-
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        # Получаем заявку
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
-
-        category_to_spec = CATEGORY_TO_SPECIALIZATION
-
-        spec = category_to_spec.get(request.category, "other")
-
-        # Получаем всех исполнителей с данной специализацией
-        from uk_management_bot.database.models.user import User
-        import json
-
-        executors = db_session.query(User).filter(
-            User.roles.contains('"executor"'),
-            User.status == "approved"
-        ).all()
-
-        # Фильтруем по специализации
-        filtered_executors = []
-        for ex in executors:
-            if ex.specialization:
-                try:
-                    specializations = json.loads(ex.specialization) if isinstance(ex.specialization, str) else ex.specialization
-                    if spec in specializations or "other" in specializations:
-                        filtered_executors.append(ex)
-                except:
-                    pass
-
-        # Показываем клавиатуру с исполнителями
-        from uk_management_bot.keyboards.admin import get_executors_by_category_keyboard
-
-        if filtered_executors:
-            executors_text = get_text("requests.executors_found", language=lang).format(count=len(filtered_executors))
-        else:
-            executors_text = get_text("requests.no_available_executors", language=lang)
-
-        message_text = get_text("requests.select_executor_title", language=lang)
-        message_text += get_text("requests.select_executor_info", language=lang).format(
-            request_number=request_number,
-            category=request.category,
-            spec=spec,
-            executors_text=executors_text
-        )
-        message_text += get_text("requests.select_executor_legend", language=lang)
-
-        await callback.message.edit_text(
-            message_text,
-            reply_markup=get_executors_by_category_keyboard(request_number, request.category, filtered_executors),
-            parse_mode="HTML"
-        )
-
-        logger.info(f"Показан список из {len(filtered_executors)} исполнителей для заявки {request_number}")
-
-    except Exception as e:
-        logger.error(f"Ошибка показа списка исполнителей: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+# NOTE: assign_specific_* and assign_executor_* are handled by handlers/admin.py
+# (handle_assign_specific_executor_admin / handle_final_executor_assignment_admin), which
+# route through AssignmentService — creating a RequestAssignment row, cancelling stale
+# assignments, and writing an audit log. Duplicate copies lived here and shadowed them
+# (requests_router precedes admin_router); the old copy set request.executor_id directly
+# with assignment_type="manual" and skipped the assignment record/audit. See
+# test_bug_duty_assign_routing.
 
 
-@router.callback_query(F.data.startswith("assign_executor_"))
-async def handle_final_executor_assignment(callback: CallbackQuery):
-    """Финальное назначение конкретного исполнителя"""
-    try:
-        # Парсим данные: assign_executor_251013-001_123
-        parts = callback.data.replace("assign_executor_", "").split("_")
-        request_number = parts[0]
-        executor_id = int(parts[1])
-
-        logger.info(f"Финальное назначение исполнителя {executor_id} на заявку {request_number}")
-
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        # Получаем заявку и исполнителя
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        from uk_management_bot.database.models.user import User
-        executor = db_session.query(User).filter(User.id == executor_id).first()
-
-        if not request or not executor:
-            await callback.answer(get_text("requests.request_or_executor_not_found", language=lang), show_alert=True)
-            return
-
-        # Назначаем исполнителя
-        request.executor_id = executor_id
-        request.assignment_type = "manual"  # Помечаем как ручное назначение
-        db_session.commit()
-
-        executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
-        if not executor_name:
-            executor_name = f"@{executor.username}" if executor.username else f"ID{executor.id}"
-
-        await callback.message.edit_text(
-            get_text("requests.request_assigned_to_executor", language=lang).format(
-                request_number=request_number,
-                executor_name=executor_name,
-                category=request.category,
-                address=request.address
-            ),
-            parse_mode="HTML"
-        )
-
-        # Отправляем уведомление исполнителю
-        try:
-            from aiogram import Bot
-            bot = callback.bot
-
-            # Get executor's language
-            executor_lang = get_user_language(executor.telegram_id, db_session)
-
-            notification_text = get_text("requests.new_request_assigned_notification", language=executor_lang).format(
-                request_number=request.format_number_for_display(),
-                category=request.category,
-                address=request.address,
-                description=request.description
-            )
-
-            await bot.send_message(executor.telegram_id, notification_text, parse_mode="HTML")
-            logger.info(f"Уведомление о назначении отправлено исполнителю {executor.telegram_id}")
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления исполнителю: {e}")
-
-        await callback.message.answer(
-            get_text("common.return_to_menu", language=lang),
-            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
-        )
-
-        logger.info(f"Заявка {request_number} назначена исполнителю {executor_id}")
-
-    except Exception as e:
-        logger.error(f"Ошибка финального назначения исполнителя: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("requests.assignment_error", language=lang), show_alert=True)
-
-
-@router.callback_query(F.data.startswith("back_to_assignment_type_"))
-async def handle_back_to_assignment_type(callback: CallbackQuery):
-    """Возврат к выбору типа назначения"""
-    try:
-        request_number = callback.data.replace("back_to_assignment_type_", "")
-
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
-
-        from uk_management_bot.keyboards.admin import get_assignment_type_keyboard
-
-        await callback.message.edit_text(
-            get_text("requests.request_accepted_select_assignment", language=lang).format(
-                request_number=request_number,
-                category=request.category,
-                address=request.address
-            ),
-            reply_markup=get_assignment_type_keyboard(request_number),
-            parse_mode="HTML"
-        )
-
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(f"Ошибка возврата к выбору типа назначения: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+# `back_to_assignment_type_*` обрабатывается в handlers/admin.py::
+# handle_back_to_assignment_type_admin (функционально идентичная копия). Дубликат
+# здесь затенял её (requests_router раньше admin_router). Удалён —
+# см. test_bug_duty_assign_routing::test_back_to_assignment_type_owned_by_admin.
 
 
 # ============================

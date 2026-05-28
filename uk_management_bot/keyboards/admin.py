@@ -153,11 +153,11 @@ def get_manager_request_actions_keyboard(request_number: str, has_media: bool = 
 
     # Основные действия с заявкой - сокращенный текст для лучшей читаемости
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.to_work", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("accept_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.decline", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("deny_", request_number)))
+    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.decline", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_deny_", request_number)))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.clarify", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("clarify_", request_number)))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.to_purchase", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.complete", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.delete", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("delete_", request_number)))
+    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.complete", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_complete_", request_number)))
+    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.delete", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_delete_", request_number)))
 
     # Настройка расположения кнопок (2 кнопки в ряд для основных действий)
     builder.adjust(2)

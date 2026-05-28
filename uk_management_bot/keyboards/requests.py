@@ -465,7 +465,7 @@ def get_pagination_keyboard(current_page: int, total_pages: int, request_number:
         action_buttons = [
             InlineKeyboardButton(text=f"👁️ {view_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_", request_number)),
             InlineKeyboardButton(text=f"✏️ {edit_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("edit_", request_number)),
-            InlineKeyboardButton(text=f"🗑️ {delete_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("delete_", request_number))
+            InlineKeyboardButton(text=f"🗑️ {delete_text}", callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_delete_", request_number))
         ]
         keyboard.append(action_buttons)
         if show_reply_clarify:
@@ -494,7 +494,7 @@ def get_request_actions_keyboard(request_number: str, language: str = "ru") -> I
     complete_text = get_text("buttons.complete", language=language) or "✅ Выполнена"
     approve_text = get_text("buttons.approve", language=language) or "✅ Подтвердить"
     cancel_text = get_text("buttons.cancel", language=language) or "❌ Отменить"
-    deny_text = get_text("buttons.deny", language=language) or "🚫 Предложить отказ"
+    deny_text = get_text("buttons.deny", language=language) or "❌ Отклонить"
     
     keyboard = [
         [
@@ -510,14 +510,14 @@ def get_request_actions_keyboard(request_number: str, language: str = "ru") -> I
             InlineKeyboardButton(text=purchase_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number))
         ],
         [
-            InlineKeyboardButton(text=complete_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("complete_", request_number)),
+            InlineKeyboardButton(text=complete_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_complete_", request_number)),
             InlineKeyboardButton(text=approve_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("approve_", request_number))
         ],
         [
             InlineKeyboardButton(text=cancel_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("cancel_", request_number))
         ],
         [
-            InlineKeyboardButton(text=deny_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("deny_", request_number))
+            InlineKeyboardButton(text=deny_text, callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_deny_", request_number))
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
