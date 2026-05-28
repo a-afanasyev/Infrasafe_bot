@@ -37,6 +37,9 @@ export default function CommentThread({ requestNumber }: Props) {
     queryKey: ['comments', requestNumber],
     queryFn: () => twaClient.get(`/api/v2/requests/${requestNumber}/comments`).then((r) => r.data),
     enabled: !!requestNumber,
+    // Poll so the other party's reply shows up without a manual refresh —
+    // only while the detail page (and thus this thread) is mounted.
+    refetchInterval: 10_000,
   })
 
   const { data: profile } = useQuery<Profile>({

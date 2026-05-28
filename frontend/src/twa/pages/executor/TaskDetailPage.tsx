@@ -20,9 +20,9 @@ const EXECUTOR_ACTIONS: Record<string, { label: string; target: string; color: s
   ],
   'Закуп': [{ label: 'twa.exec.detail.backToWork', target: 'В работе', color: 'bg-emerald-500' }],
   'Уточнение': [{ label: 'twa.exec.detail.backToWork', target: 'В работе', color: 'bg-emerald-500' }],
-  // TWA-23: backend _REQUEST_VALID_TRANSITIONS allows "Выполнена" → "В работе";
-  // expose reopen so an executor can undo a premature completion themselves.
-  'Выполнена': [{ label: 'twa.exec.detail.reopen', target: 'В работе', color: 'bg-amber-500' }],
+  // No "Выполнена" entry: the backend's executor transition table forbids
+  // Выполнена → В работе (reopening a completed request is a manager action),
+  // so a reopen button here would only ever 422.
 }
 
 export default function TaskDetailPage() {
