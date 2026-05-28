@@ -890,7 +890,10 @@
       "myShifts": {
         "title": "Mening smenalarim",
         "active": "Faol",
-        "completed": "Tugatilgan"
+        "completed": "Tugatilgan",
+        "all": "Hammasi",
+        "empty": "Smenalar yo'q",
+        "limitNote": "Oxirgi {{count}} ta smena ko'rsatildi"
       },
       "report": {
         "title": "Bajarish hisoboti",
@@ -908,7 +911,8 @@
     },
     "photo": {
       "add": "Rasm qo'shish",
-      "uploading": "Yuklanmoqda..."
+      "uploading": "Yuklanmoqda...",
+      "maxFiles": "Ko'pi bilan {{count}} ta fayl"
     }
   },
   "toast": {

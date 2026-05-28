@@ -1,15 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, Clock } from 'lucide-react'
 
+// Backend /executor/shifts/me has no status filter and caps at limit=100.
+// We fetch the cap and filter client-side; if we actually hit 100 rows we
+// surface an honest "showing last 100" note instead of silently truncating.
+const SHIFTS_LIMIT = 100
+
+type Filter = 'all' | 'active' | 'completed'
+
 export default function MyShiftsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { showBackButton } = useTelegramSDK()
+  const [filter, setFilter] = useState<Filter>('all')
 
   useEffect(() => {
     return showBackButton(() => navigate(-1))
@@ -17,8 +25,19 @@ export default function MyShiftsPage() {
 
   const { data: shifts = [], isLoading } = useQuery({
     queryKey: ['my-shifts'],
-    queryFn: () => twaClient.get('/api/v2/executor/shifts/me', { params: { limit: 20 } }).then(r => r.data),
+    queryFn: () => twaClient.get('/api/v2/executor/shifts/me', { params: { limit: SHIFTS_LIMIT } }).then(r => r.data),
   })
+
+  const visible = shifts.filter((s: any) =>
+    filter === 'all' ? true : filter === 'active' ? s.status === 'active' : s.status !== 'active'
+  )
+  const truncated = shifts.length >= SHIFTS_LIMIT
+
+  const tabs: { key: Filter; label: string }[] = [
+    { key: 'all', label: t('twa.exec.myShifts.all') },
+    { key: 'active', label: t('twa.exec.myShifts.active') },
+    { key: 'completed', label: t('twa.exec.myShifts.completed') },
+  ]
 
   return (
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -27,9 +46,29 @@ export default function MyShiftsPage() {
       </button>
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.exec.myShifts.title')}</h1>
 
+      <div className="flex gap-2 mb-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setFilter(tab.key)}
+            className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
+              filter === tab.key
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {isLoading && <p className="text-center text-gray-400 py-8">{t('common.loading')}</p>}
 
-      {shifts.map((s: any) => {
+      {!isLoading && visible.length === 0 && (
+        <p className="text-center text-gray-400 py-8 text-[14px]">{t('twa.exec.myShifts.empty')}</p>
+      )}
+
+      {visible.map((s: any) => {
         const start = s.start_time ? new Date(s.start_time) : null
         const end = s.end_time ? new Date(s.end_time) : null
         const isActive = s.status === 'active'
@@ -51,6 +90,10 @@ export default function MyShiftsPage() {
           </div>
         )
       })}
+
+      {truncated && (
+        <p className="text-center text-gray-400 py-3 text-[11px]">{t('twa.exec.myShifts.limitNote', { count: SHIFTS_LIMIT })}</p>
+      )}
     </div>
   )
 }

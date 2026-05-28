@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
 import { Camera, Image as ImageIcon, X } from 'lucide-react'
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) {
+  const { t } = useTranslation()
   const { haptic } = useTelegramSDK()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
@@ -79,6 +81,11 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
           </>
         )}
       </div>
+      {/* TWA-32: when the limit is hit both add-tiles disappear; without this
+          the user can't tell whether adding is broken or simply capped. */}
+      {!canAddMore && (
+        <p className="text-[11px] text-gray-400 mb-1">{t('twa.photo.maxFiles', { count: maxFiles })}</p>
+      )}
       {/* Camera-only: capture attribute opens the OS camera directly. */}
       <input
         ref={cameraRef}

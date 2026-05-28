@@ -74,7 +74,10 @@ export default function MediaGallery({ requestNumber, onLightboxChange }: Props)
         ))}
       </div>
       {lightboxId !== null && (
+        // TWA-30: key by id so React remounts on thumbnail switch — a fresh
+        // component can't show the data-URL from a previous, slower fetch.
         <Lightbox
+          key={lightboxId}
           id={lightboxId}
           onClose={() => setLightboxId(null)}
         />
