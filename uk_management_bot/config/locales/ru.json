@@ -4300,6 +4300,7 @@
     },
     "handlers": {
       "btn_complete_without_docs": "✅ Завершить без документов",
+      "btn_register_webapp": "📝 Регистрация (форма)",
       "btn_specify_phone": "📱 Указать телефон",
       "btn_upload_documents": "📄 Загрузить документы",
       "can_upload_later": "Вы можете загрузить документы позже в настройках профиля.",

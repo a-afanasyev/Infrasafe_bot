@@ -19,6 +19,7 @@ from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.filters import RoleFilter
+from uk_management_bot.config.settings import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -170,16 +171,25 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
         welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
 
         # Создаём клавиатуру онбординга
-        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
         missing_items = []
         if not user.phone:
             missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
         if not has_approved_apartment:
             missing_items.append(get_text("base.handlers.btn_select_apartment", language=lang))
-        
+
         if missing_items:
+            keyboard_rows = [[KeyboardButton(text=item)] for item in missing_items]
+            # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL)
+            if settings.FRONTEND_URL:
+                keyboard_rows.append([
+                    KeyboardButton(
+                        text=get_text("base.handlers.btn_register_webapp", language=lang),
+                        web_app=WebAppInfo(url=f"{settings.FRONTEND_URL}/uk/register"),
+                    )
+                ])
             onboarding_keyboard = ReplyKeyboardMarkup(
-                keyboard=[[KeyboardButton(text=item)] for item in missing_items],
+                keyboard=keyboard_rows,
                 resize_keyboard=True,
                 one_time_keyboard=False
             )
