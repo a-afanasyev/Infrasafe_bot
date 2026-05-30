@@ -49,6 +49,10 @@ COPY uk_management_bot/ ./uk_management_bot/
 # Копируем тесты
 COPY tests/ ./tests/
 
+# pytest-конфиг (testpaths, asyncio_mode, import-mode) — без него
+# `docker exec uk-management-bot pytest` игнорирует config и собирает не тот скоуп
+COPY pyproject.toml ./
+
 # Создаем пользователя для безопасности
 # Запуск приложения от имени непривилегированного пользователя
 RUN useradd --create-home --shell /bin/bash app && \

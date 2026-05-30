@@ -4,13 +4,10 @@ import asyncio
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Добавляем в sys.path корень пакета `uk_management_bot`, как в существующих тестах
-sys.path.append(os.path.join(os.path.dirname(__file__), 'uk_management_bot'))
-
-from database.session import Base
-from database.models.user import User
-from database.models.audit import AuditLog
-from services.auth_service import AuthService
+from uk_management_bot.database.session import Base
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.services.auth_service import AuthService
 
 
 def setup_db():
@@ -24,7 +21,7 @@ def teardown_db(engine):
     Base.metadata.drop_all(bind=engine)
 
 
-def test_rate_limit_and_audit_record():
+def test_role_switch_records_audit():
     engine, SessionLocal = setup_db()
     try:
         db = SessionLocal()
@@ -55,10 +52,10 @@ def test_rate_limit_and_audit_record():
         assert log.details.get("old_role") == "applicant"
         assert log.details.get("new_role") == "executor"
 
-        # 2) Повторная попытка в окне лимита → отказ с reason=rate_limited
-        ok2, reason2 = asyncio.run(service.try_set_active_role_with_rate_limit(user.telegram_id, "applicant", window_seconds=10))
-        assert ok2 is False
-        assert reason2 == "rate_limited"
+        # NB: the in-window rate-limit assertion was dropped — rate limiting moved
+        # to a Redis-backed async limiter (utils/redis_rate_limiter.py), which
+        # fails open without a Redis backend, so it can't be asserted in this
+        # sqlite/no-Redis unit test. Rate-limit behaviour is covered separately.
 
     finally:
         teardown_db(engine)

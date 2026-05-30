@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: backend-tests (pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: uk_management
+          POSTGRES_USER: uk_bot
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U uk_bot -d uk_management"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: "postgresql://uk_bot:postgres@localhost:5432/uk_management"
+      REDIS_URL: "redis://localhost:6379/0"
+      PYTHONPATH: "${{ github.workspace }}"
+      BOT_TOKEN: "ci:dummy-token"
+      JWT_SECRET: "ci-dummy-secret"
+      INVITE_SECRET: "ci-dummy-secret"
+      UK_WEBHOOK_SECRET: "ci-dummy-secret"
+      INFRASAFE_WEBHOOK_SECRET: "ci-dummy-secret"
+      ADMIN_PASSWORD: "ci-dummy-admin-pw-0123456"
+      DEBUG: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # requirements.txt is hash-pinned (pip auto-enables --require-hashes when
+      # hashes are present), so it MUST be installed on its own — mixing with the
+      # un-hashed requirements-dev.txt in one invocation makes pip reject the run.
+      - name: Install runtime deps (hash-pinned)
+        run: pip install -r requirements.txt
+
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      # No baseline migration exists (001 does add_column on a pre-existing
+      # users table), so `alembic upgrade head` on an empty DB fails. create_all
+      # builds the current model schema (the historical base), then migrations
+      # 007..010 apply the deltas create_all can't express: 007 fixes the
+      # requests.apartment_id FK to ON DELETE SET NULL, 008 creates webhook_inbox
+      # (no ORM model in models/__init__.py, so create_all skips it), 009 seeds
+      # the system user, 010 re-applies the audit_logs bigint change.
+      - name: Bootstrap DB schema + apply migrations
+        run: |
+          python -c "import uk_management_bot.database.models; from uk_management_bot.database.session import engine, Base; Base.metadata.create_all(bind=engine)"
+          python -m alembic stamp 006
+          python -m alembic upgrade head
+
+      # pyproject.toml drives the run: testpaths=[uk_management_bot] (root tests/
+      # legacy tree excluded), asyncio_mode=auto, --import-mode=importlib.
+      - name: Run tests
+        run: pytest -q
+
+  images-build:
+    name: images-build (docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build bot image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: "type=gha,mode=max"
+
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: "type=gha,mode=max"
+
+  frontend:
+    name: frontend (build + lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      # `npm run build` = `tsc -b && vite build` — the real typecheck + build gate.
+      # Vitest is intentionally not wired here (TEST-068); add `npm run test` once
+      # a vitest config + test script exist.
+      - run: npm run build
