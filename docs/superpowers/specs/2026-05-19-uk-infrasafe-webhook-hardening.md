@@ -1,5 +1,28 @@
 # UK ↔ InfraSafe Webhook Hardening — план для двух сессий
 
+## ✅ STATUS (verified against code + prod 2026-05-30)
+
+**Все 4 UK-PR реализованы, смержены в `main` и задеплоены на prod. InfraSafe CR-1/CR-2 выполнены. CR-3 — сознательно пропущен.**
+
+| Пункт | Статус | Доказательство |
+|---|---|---|
+| **PR-A** — `SKIP LOCKED` в `process_outbox` | ✅ DONE | `services/webhook_sender.py:256` `.with_for_update(skip_locked=True)` |
+| **PR-B** — fail-loud + `REDIS_PUBSUB_URL_RESOLVED` | ✅ DONE | `settings.py:163` property; `redis_pubsub.py` ×6 sites; warning в `queue_webhook` **и** `queue_webhook_sync` (бонус) |
+| **PR-C** — observability | ✅ DONE | `api/main.py:181` `GET /api/health/outbox`; `webhook_sender.py:305` `process_outbox cycle` log. Prod live: `/uk/api/health/outbox` → 200 |
+| **PR-D** — reconciliation | ✅ DONE+ | `services/reconciliation.py` `reconcile_buildings()` (precise set-diff via `_expected_external_id`) **+ `reconcile_requests()`** (ARCH-114); `clients/infrasafe_client.py`; lifespan loop `api/main.py:55`. Prod-verified на real drift 2026-05-24 |
+| **CR-1** — `/api/buildings-metrics` отдаёт `external_id` | ✅ DONE | UK-клиент читает `item["external_id"]`; ARCH-114 prod-verified |
+| **CR-2** — детерминированный `external_id` | ✅ DONE (иначе) | Решено **на стороне InfraSafe**: `Infrasafe/src/services/uk/buildingSync.js:37` `sha256("uk-building-{id}")`; UK предсказывает тем же `_expected_external_id`. UK НЕ кладёт external_id в payload (не нужно) |
+| **CR-3** — internal auth для GET | ⏭️ SKIP (by design) | Endpoint ходит по uk-network; отслеживается как [SEC-115] (P3 open) |
+| **Deploy** (Phase 1-2) | ✅ DONE | a20686f в main 2026-05-19; prod via FIX-007 deploy 2026-05-23; ARCH-114 prod 2026-05-24 |
+| **Verification** (8 чеков, Phase 3) | 🟡 НЕ задокументировано формально | `docs/audit/verifier-logs/OPS-112.md` отсутствует → **OPS-112 (P1) остаётся open**. Косвенно покрыто prod-проверкой FIX-007/ARCH-114. Чек #2 (`/health/outbox`) проходит live |
+
+### 🔴 НОВЫЙ операционный инцидент (найден при этом анализе 2026-05-30)
+Prod `/uk/api/health/outbox` → **`failed_last_24h: 464`**; логи: `Webhook failed permanently: ... error=HTTP 401: permanent error` (серийно, ≥104 за окно логов). **Старт ~2026-05-30 15:31 UTC**, продолжается — совпадает с сегодняшней ротацией/`--force-recreate`. UK подписывает outbound HMAC-SHA256 (`t=,v1=` header, `webhook_sender.py:24`) ключом `INFRASAFE_WEBHOOK_SECRET` (с dual-secret `INFRASAFE_USE_NEXT_SECRET` flow). InfraSafe отвечает **401** → подпись не сходится. Причина — рассинхрон эффективного `INFRASAFE_WEBHOOK_SECRET` между UK и InfraSafe (value сам по себе при ротации «не трогали», но recreate мог подхватить другой effective-value: dup-key в `.env` → берётся последний, или флаг `INFRASAFE_USE_NEXT_SECRET`, или InfraSafe-сторона). Сама обвязка PR-A/B/C/D работает — observability PR-C ровно для этого и делалась. **Фикс (отдельная задача, нужен prod-доступ + координация с InfraSafe):** сверить effective `INFRASAFE_WEBHOOK_SECRET` (+`_NEXT`/`USE_NEXT`) на обеих сторонах, выровнять, перепроверить `failed_last_24h→0`. См. [[uk-secret-rotation-2026-05-30]], [[prod-deploy-env-gotchas]] (dup-key trap).
+
+> Полный план ниже сохранён как исторический референс. Чеклисты **Definition of Done** в конце обновлены.
+
+---
+
 > **HOW TO USE THIS FILE**
 >
 > 1. Скопируй этот файл в **оба** репо как
@@ -912,12 +935,11 @@ PR-D reconciliation корректно работает только если In
 
 ## Definition of Done
 
-- [ ] PR-A merged, тесты зелёные, `tests/api/test_webhook_outbox_concurrency.py` зелёный
-- [ ] PR-B merged, тесты зелёные, `tests/services/test_redis_pubsub_url.py` зелёный
-- [ ] PR-C merged, `/health/outbox` отвечает 200 на сервере
-- [ ] PR-D merged, `tests/services/test_reconciliation.py` зелёный
-- [ ] Deploy на demo (`scripts/deploy-uk.sh` или ручной recreate api)
-- [ ] Все 8 verification-чеков пройдены
-- [ ] В docker logs нет `redis.*auth` errors за 10 минут после deploy
-- [ ] Создан новый building в UK Dashboard — он появляется в InfraSafe
-      за ≤15 секунд автоматически (без ручного trigger)
+- [x] PR-A merged (`SKIP LOCKED` в `process_outbox`, `webhook_sender.py:256`)
+- [x] PR-B merged (`REDIS_PUBSUB_URL_RESOLVED` + fail-loud warning)
+- [x] PR-C merged, `/api/health/outbox` отвечает 200 на сервере (prod live)
+- [x] PR-D merged (`reconcile_buildings` + `reconcile_requests`, prod-verified 2026-05-24)
+- [x] Deploy на prod (a20686f / FIX-007 2026-05-23 / ARCH-114 2026-05-24)
+- [ ] **Все 8 verification-чеков формально пройдены и задокументированы** — НЕ сделано: `docs/audit/verifier-logs/OPS-112.md` отсутствует (OPS-112 P1 open)
+- [ ] В docker logs нет `redis.*auth` errors — ❓ не перепроверено после ротации 2026-05-30
+- [ ] Создан building в UK Dashboard → в InfraSafe ≤15с автоматически — ⚠️ **СЕЙЧАС СЛОМАНО**: outbound 401 (HTTP 401 permanent ×464/24h), вероятно рассинхрон `INFRASAFE_WEBHOOK_SECRET` после ротации 2026-05-30

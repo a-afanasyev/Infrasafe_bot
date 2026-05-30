@@ -183,3 +183,15 @@ seed_data.py
 env.copy
 env.copy.dev
 ssl/
+
+# Local tooling / agent state (not for VCS)
+.claude-flow/
+.swarm/
+.cursor/
+
+# E2E (Playwright) generated artifacts — keep specs/ + config, ignore generated
+tests/e2e/node_modules/
+tests/e2e/html-report/
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+tests/e2e/artifacts/
