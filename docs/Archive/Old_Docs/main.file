@@ -7,27 +7,27 @@
 
 # Telegram Bot Token (получить у @BotFather)
 # ВАЖНО: Замените на ваш реальный токен!
-BOT_TOKEN=8327391319:AAFuC8-uZlT9vEp3Z56JPxUmW89Ilfy205c
-MEDIA_BOT_TOKEN=8211703425:AAGKHG992VwWPznmXEq-B4kn5P-AppLizp0
+BOT_TOKEN=your_bot_token_here
+MEDIA_BOT_TOKEN=your_media_bot_token_here
 
 # КРИТИЧНО: Смените дефолтный пароль!
 # Используйте: openssl rand -base64 32
-ADMIN_PASSWORD=Inf%40%24afe
+ADMIN_PASSWORD=changeme_use_openssl_rand
 
 # КРИТИЧНО: Секрет для подписи инвайт-токенов
 # Используйте: openssl rand -base64 64
-INVITE_SECRET=MulOTz25MsSRbnhheg0MfOHGsXOGEInESVuA+/gp9XD6yiolZA+CHsCdUjFnGBko6QfYqmBCQa1W36Csgn0mGg==
+INVITE_SECRET=changeme_use_openssl_rand_base64_64
 
 # ═══════════════════════════════════════════════════════════════
 # БАЗА ДАННЫХ (Docker автоматически настроит)
 # ═══════════════════════════════════════════════════════════════
 
 # PostgreSQL для Docker (настраивается автоматически)
-DATABASE_URL=postgresql://uk_bot:uk_bot_password@postgres:5432/uk_management
+DATABASE_URL=postgresql://uk_bot:your_db_password_here@postgres:5432/uk_management
 
 POSTGRES_DB=uk_management
 POSTGRES_USER=uk_bot
-POSTGRES_PASSWORD=uk_bot_password
+POSTGRES_PASSWORD=your_db_password_here
 
 POSTGRES_PORT=5432
 

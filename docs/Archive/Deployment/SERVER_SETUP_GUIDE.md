@@ -37,7 +37,7 @@ nano .env
 
 **Решение 1: URL-encoding паролей**
 
-Если пароль `Inf@$afe`, закодируйте его:
+Если пароль `Example@Pw$`, закодируйте его:
 - `@` → `%40`
 - `$` → `%24`
 - `#` → `%23`
@@ -45,8 +45,8 @@ nano .env
 - `/` → `%2F`
 
 ```bash
-# Пример: пароль Inf@$afe становится Inf%40%24afe
-DATABASE_URL=postgresql://uk_bot:Inf%40%24afe@postgres:5432/uk_management
+# Пример: пароль Example@Pw$ становится Example%40Pw%24
+DATABASE_URL=postgresql://uk_bot:Example%40Pw%24@postgres:5432/uk_management
 ```
 
 **Решение 2: Использование простого пароля (рекомендуется для начала)**
@@ -152,10 +152,10 @@ MEDIA_BOT_TOKEN=your_media_bot_token_here
 
 ### Ошибка: "The 'afe' variable is not set"
 
-**Причина**: Пароль `Inf@$afe` содержит `$afe`, который Docker воспринимает как переменную.
+**Причина**: Пароль вида `Example@Pw$` содержит `$…`, который Docker воспринимает как переменную.
 
 **Решение**:
-1. Используйте URL-encoding: `Inf%40%24afe`
+1. Используйте URL-encoding: `Example%40Pw%24`
 2. Или измените пароль на простой без `$`
 
 ### Ошибка: "dependency failed to start: container uk-postgres is unhealthy"
