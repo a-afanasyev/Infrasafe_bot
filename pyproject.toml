@@ -1,6 +1,12 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["uk_management_bot"]
+# uk_management_bot/ has no top-level __init__.py and tests are colocated with
+# source (e.g. services/test_*.py), so prepend import-mode derives clashing
+# package names (services.*, api.*) and full-suite collection errors with
+# "ModuleNotFoundError". importlib mode imports each test by file path, which
+# avoids the collision and tolerates duplicate basenames across packages.
+addopts = "--import-mode=importlib"
 
 [tool.coverage.run]
 source = ["uk_management_bot"]
