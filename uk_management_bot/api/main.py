@@ -160,6 +160,9 @@ app.include_router(public_router, prefix="/api/v2/public", tags=["public"])
 app.include_router(board_config_router, prefix="/api/v2", tags=["board-config"])
 app.include_router(webhooks_router, prefix="/api/v2/webhooks", tags=["webhooks"])
 
+from uk_management_bot.api.registration.router import router as registration_router
+app.include_router(registration_router, prefix="/api/v2/registration", tags=["registration"])
+
 
 @app.get("/health")
 async def health():

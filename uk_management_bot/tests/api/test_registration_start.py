@@ -23,3 +23,29 @@ async def test_is_apartment_selectable_true_for_active(async_db, seed_apartment)
 @pytest.mark.asyncio
 async def test_is_apartment_selectable_false_for_missing(async_db):
     assert await is_apartment_selectable(async_db, 999999) is False
+
+
+from httpx import AsyncClient
+
+
+@pytest.mark.asyncio
+async def test_start_invalid_initdata_401(api_client: AsyncClient):
+    r = await api_client.post("/api/v2/registration/start", json={"init_data": "bad"})
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_start_new_user_returns_ticket_and_catalog(api_client, fake_initdata, seed_apartment):
+    await seed_apartment()
+    r = await api_client.post("/api/v2/registration/start", json={"init_data": fake_initdata(99001)})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["registration_ticket"]
+    assert isinstance(body["apartments"], list)
+
+
+@pytest.mark.asyncio
+async def test_start_approved_user_409(api_client, fake_initdata, seed_user):
+    await seed_user(telegram_id=99002, status="approved")
+    r = await api_client.post("/api/v2/registration/start", json={"init_data": fake_initdata(99002)})
+    assert r.status_code == 409
