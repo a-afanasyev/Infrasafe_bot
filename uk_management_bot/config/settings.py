@@ -181,8 +181,16 @@ class Settings:
             raise ValueError("BOT_TOKEN must be set in environment variables")
         if DATABASE_URL.startswith("sqlite"):
             raise ValueError("SQLite is not allowed in production (DEBUG=False). Use PostgreSQL.")
-        if ADMIN_PASSWORD and len(ADMIN_PASSWORD) < 12:
-            raise ValueError("ADMIN_PASSWORD must be at least 12 characters in production")
+        # SEC-083: ADMIN_PASSWORD strength. Min length raised 12→16. Note the
+        # password is used VERBATIM (secrets.compare_digest, no URL-decoding),
+        # so length is measured on the raw string — do NOT unquote() it here, or
+        # validation would disagree with the comparison. Add a low-entropy guard
+        # (distinct-character count) to reject long-but-trivial values.
+        if ADMIN_PASSWORD:
+            if len(ADMIN_PASSWORD) < 16:
+                raise ValueError("ADMIN_PASSWORD must be at least 16 characters in production")
+            if len(set(ADMIN_PASSWORD)) < 8:
+                raise ValueError("ADMIN_PASSWORD is too weak: needs at least 8 distinct characters")
         if JWT_SECRET and INVITE_SECRET and JWT_SECRET == INVITE_SECRET:
             raise ValueError("JWT_SECRET and INVITE_SECRET must be different in production")
         if not REDIS_URL or "redis://" not in REDIS_URL:
