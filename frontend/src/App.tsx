@@ -22,6 +22,7 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const AddressesPage = lazy(() => import('./pages/AddressesPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +78,9 @@ export default function App() {
 
               {/* Resident board - public standalone page (УК landing) */}
               <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />
+
+              {/* Applicant registration - public Telegram Mini App page */}
+              <Route path="/register" element={<PageErrorBoundary><RegisterPage /></PageErrorBoundary>} />
 
               {/* TWA — self-contained Mini App */}
               <Route path="/twa/*" element={<PageErrorBoundary><TWAApp /></PageErrorBoundary>} />

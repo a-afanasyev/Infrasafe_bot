@@ -105,6 +105,18 @@
     "loginError": "Kirish xatosi",
     "or": "yoki"
   },
+  "register": {
+    "title": "Aholini ro'yxatdan o'tkazish",
+    "full_name": "F.I.Sh.",
+    "phone": "Telefon",
+    "apartment": "Xonadon",
+    "submit": "Arizani yuborish",
+    "pending_title": "Ariza yuborildi",
+    "pending_body": "Arizangiz tekshiruvga yuborildi. Tasdiqlangach sizga xabar beramiz.",
+    "open_in_telegram": "Ro'yxatdan o'tish uchun ushbu sahifani Telegram orqali oching.",
+    "already_registered": "Siz allaqachon ro'yxatdan o'tgansiz. Ilovaga o'ting.",
+    "error_generic": "Arizani yuborib bo'lmadi. Qaytadan urinib ko'ring."
+  },
   "status": {
     "new": "Yangi",
     "in_progress": "Jarayonda",
