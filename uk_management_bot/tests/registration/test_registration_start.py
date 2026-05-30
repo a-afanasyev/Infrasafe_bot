@@ -49,3 +49,10 @@ async def test_start_approved_user_409(api_client, fake_initdata, seed_user):
     await seed_user(telegram_id=99002, status="approved")
     r = await api_client.post("/api/v2/registration/start", json={"init_data": fake_initdata(99002)})
     assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_start_blocked_user_403(api_client, fake_initdata, seed_user):
+    await seed_user(telegram_id=99003, status="blocked")
+    r = await api_client.post("/api/v2/registration/start", json={"init_data": fake_initdata(99003)})
+    assert r.status_code == 403

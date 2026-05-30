@@ -16,7 +16,7 @@ from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.api.registration.tickets import (
     create_registration_ticket, verify_registration_ticket,
 )
-from uk_management_bot.api.registration.catalog import list_apartments, is_apartment_selectable
+from uk_management_bot.api.registration.catalog import list_apartments, is_apartment_selectable, get_apartment_label
 from uk_management_bot.api.registration.schemas import (
     StartIn, StartOut, Prefill, RegisterApplicantIn, RegistrationResult,
 )
@@ -151,7 +151,8 @@ async def register_applicant(
         await db.rollback()
         return RegistrationResult(status="pending")
 
+    label = await get_apartment_label(db, body.apartment_id)
     await notify_managers_new_registration(
-        telegram_id=telegram_id, full_name=full_name, apartment_label=f"apt #{body.apartment_id}",
+        telegram_id=telegram_id, full_name=full_name, apartment_label=label,
     )
     return RegistrationResult(status="pending")

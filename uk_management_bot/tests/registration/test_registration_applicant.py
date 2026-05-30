@@ -101,3 +101,13 @@ async def test_applicant_bad_phone_400(api_client, seed_apartment, mock_notify):
         headers=_bearer(99101),
         json={"full_name": "Иван", "phone": "xxx", "apartment_id": apt_id})
     assert r.status_code in (400, 422)
+
+
+@pytest.mark.asyncio
+async def test_applicant_blocked_user_403(api_client, seed_user, seed_apartment, mock_notify):
+    await seed_user(telegram_id=99500, status="blocked")
+    apt_id = (await seed_apartment()).id
+    r = await api_client.post("/api/v2/registration/applicant",
+        headers=_bearer(99500),
+        json={"full_name": "Иван", "phone": "+998901112233", "apartment_id": apt_id})
+    assert r.status_code == 403

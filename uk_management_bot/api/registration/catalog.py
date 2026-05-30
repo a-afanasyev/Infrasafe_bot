@@ -28,6 +28,23 @@ async def list_apartments(db: AsyncSession) -> list[ApartmentOut]:
     ]
 
 
+async def get_apartment_label(db: AsyncSession, apartment_id: int) -> str:
+    """Human-readable 'yard · building · кв N' label for notifications. Falls back
+    to '#<id>' if not found."""
+    result = await db.execute(
+        select(Yard.name, Building.address, Apartment.apartment_number)
+        .join(Building, Apartment.building_id == Building.id)
+        .join(Yard, Building.yard_id == Yard.id)
+        .where(Apartment.id == apartment_id)
+    )
+    row = result.first()
+    if not row:
+        return f"#{apartment_id}"
+    yard, address, number = row
+    parts = [p for p in (yard, address) if p]
+    return " · ".join(parts + [f"кв {number}"])
+
+
 async def is_apartment_selectable(db: AsyncSession, apartment_id: int) -> bool:
     """True iff the apartment exists AND its apartment/building/yard are all active
     (i.e. it would appear in list_apartments). Honors catalog membership, since
