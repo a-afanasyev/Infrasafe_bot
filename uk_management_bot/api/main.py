@@ -221,9 +221,9 @@ async def outbox_health():
             "oldest_pending_age_sec": (now - oldest).total_seconds() if oldest else 0,
             "failed_last_24h": failed_24h,
         }
-    except Exception as e:
+    except Exception:
         _logger.exception("outbox_health failed")
-        return {"enabled": True, "error": str(e)}
+        return {"enabled": True, "error": "internal_error"}
 
 
 # ── Stub: Announcements (TWA A1) ─────────────────────────
@@ -326,7 +326,8 @@ async def proxy_media_upload(
             },
         )
         if resp.status_code != 200 and resp.status_code != 201:
-            raise HTTPException(status_code=resp.status_code, detail=resp.text[:200])
+            _logger.error("Media service upload error %s: %s", resp.status_code, resp.text[:200])
+            raise HTTPException(status_code=resp.status_code, detail="Media service error")
         return resp.json()
 
 
@@ -405,7 +406,8 @@ async def proxy_media_file(
             headers=headers,
         )
         if resp.status_code != 200:
-            raise HTTPException(status_code=resp.status_code, detail=resp.text[:200])
+            _logger.error("Media service file error %s: %s", resp.status_code, resp.text[:200])
+            raise HTTPException(status_code=resp.status_code, detail="Media service error")
         return Response(
             content=resp.content,
             media_type=resp.headers.get("content-type", "application/octet-stream"),

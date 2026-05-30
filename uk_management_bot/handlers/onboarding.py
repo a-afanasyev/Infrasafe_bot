@@ -172,13 +172,13 @@ async def process_contact(message: Message, state: FSMContext, db: Session, lang
         if user:
             user.phone = phone_number
             db.commit()
-            logger.info(f"Сохранен телефон {phone_number} для пользователя {message.from_user.id}")
-            
+            logger.info(f"Сохранен телефон для пользователя {message.from_user.id}")
+
             await message.answer(
                 get_text("onboarding.phone_saved", language=lang, phone=phone_number),
                 reply_markup=ReplyKeyboardRemove()
             )
-            
+
             # Переходим к выбору квартиры из справочника
             from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
             await start_apartment_selection(message, state)
@@ -188,7 +188,7 @@ async def process_contact(message: Message, state: FSMContext, db: Session, lang
                 reply_markup=ReplyKeyboardRemove()
             )
             await state.clear()
-            
+
     except Exception as e:
         logger.error(f"Ошибка обработки контакта для {message.from_user.id}: {e}")
         await message.answer(
@@ -242,13 +242,13 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
         if user:
             user.phone = phone_number
             db.commit()
-            logger.info(f"Сохранен телефон {phone_number} для пользователя {message.from_user.id}")
-            
+            logger.info(f"Сохранен телефон для пользователя {message.from_user.id}")
+
             await message.answer(
                 get_text("onboarding.phone_saved", language=lang, phone=phone_number),
                 reply_markup=ReplyKeyboardRemove()
             )
-            
+
             # Переходим к выбору квартиры из справочника
             from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
             await start_apartment_selection(message, state)

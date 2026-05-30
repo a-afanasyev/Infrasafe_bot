@@ -10,7 +10,7 @@ services:
       - "8001:8000"
     environment:
       # Database
-      - DATABASE_URL=postgresql://media_user:media_password@media-db:5432/uk_media
+      - DATABASE_URL=postgresql://media_user:${MEDIA_DB_PASSWORD:?MEDIA_DB_PASSWORD is required}@media-db:5432/uk_media
       - DATABASE_ECHO=true  # Включено для разработки
 
       # Telegram
@@ -51,14 +51,14 @@ services:
     environment:
       - POSTGRES_DB=uk_media
       - POSTGRES_USER=media_user
-      - POSTGRES_PASSWORD=media_password
+      - POSTGRES_PASSWORD=${MEDIA_DB_PASSWORD:?MEDIA_DB_PASSWORD is required}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
 
     volumes:
       - media_db_dev_data:/var/lib/postgresql/data
 
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
 
     networks:
       - media-network
@@ -86,11 +86,11 @@ services:
     restart: unless-stopped
     environment:
       - PGADMIN_DEFAULT_EMAIL=admin@example.com
-      - PGADMIN_DEFAULT_PASSWORD=admin123
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required}
       - PGADMIN_CONFIG_SERVER_MODE=False
 
     ports:
-      - "8082:80"
+      - "127.0.0.1:8082:80"
 
     volumes:
       - pgadmin_dev_data:/var/lib/pgadmin

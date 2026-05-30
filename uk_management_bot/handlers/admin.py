@@ -1465,10 +1465,15 @@ async def start_invite_creation(message: Message, db: Session, roles: list = Non
 
 
 @router.callback_query(F.data.startswith("invite_role_"))
-async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработчик выбора роли для приглашения"""
     lang = language
-    
+
+    # Проверяем права доступа (только менеджеры могут создавать приглашения)
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text("invites.manager_only", language=lang), show_alert=True)
+        return
+
     # Извлекаем роль из callback_data
     role = callback.data.replace("invite_role_", "")
     
@@ -1497,11 +1502,16 @@ async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContex
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("invite_spec_"))
-async def handle_invite_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+@router.callback_query(F.data.startswith("invite_spec_"), InviteCreationStates.waiting_for_specialization)
+async def handle_invite_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработчик выбора специализации для исполнителя"""
     lang = language
-    
+
+    # Проверяем права доступа (только менеджеры могут создавать приглашения)
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text("invites.manager_only", language=lang), show_alert=True)
+        return
+
     # Извлекаем специализацию из callback_data
     specialization = callback.data.replace("invite_spec_", "")
     
@@ -1518,11 +1528,16 @@ async def handle_invite_specialization_selection(callback: CallbackQuery, state:
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("invite_expiry_"))
-async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+@router.callback_query(F.data.startswith("invite_expiry_"), InviteCreationStates.waiting_for_expiry)
+async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработчик выбора срока действия приглашения"""
     lang = language
-    
+
+    # Проверяем права доступа (только менеджеры могут создавать приглашения)
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text("invites.manager_only", language=lang), show_alert=True)
+        return
+
     # Извлекаем срок действия из callback_data
     expiry = callback.data.replace("invite_expiry_", "")
     
@@ -1567,11 +1582,16 @@ async def handle_invite_expiry_selection(callback: CallbackQuery, state: FSMCont
     await callback.answer()
 
 
-@router.callback_query(F.data == "invite_confirm")
-async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+@router.callback_query(F.data == "invite_confirm", InviteCreationStates.waiting_for_confirmation)
+async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработчик подтверждения создания приглашения"""
     lang = language
-    
+
+    # Проверяем права доступа (только менеджеры могут создавать приглашения)
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text("invites.manager_only", language=lang), show_alert=True)
+        return
+
     try:
         # Получаем данные из состояния
         data = await state.get_data()
@@ -2440,10 +2460,17 @@ async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: 
 
 
 @router.message(ManagerStates.waiting_for_materials_edit)
-async def handle_materials_edit_text(message: Message, state: FSMContext, db: Session, user: User = None, language: str = "ru"):
+async def handle_materials_edit_text(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка нового текста списка материалов"""
     try:
         lang = language
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await message.answer(get_text("admin.handlers.no_access_actions", language=lang))
+            await state.clear()
+            return
+
         data = await state.get_data()
         request_number = data.get("edit_materials_request_number")
 
@@ -2515,10 +2542,16 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
 
 @router.callback_query(F.data.startswith("assign_duty_"))
-async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session, user: User = None, language: str = "ru"):
+async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Назначение дежурного специалиста (автоматическое по сменам)"""
     try:
         lang = language
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+            return
+
         request_number = callback.data.replace("assign_duty_", "")
         logger.info(f"Назначение дежурного специалиста для заявки {request_number}")
 
@@ -2561,10 +2594,16 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
 
 
 @router.callback_query(F.data.startswith("assign_specific_"))
-async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Session, language: str = "ru"):
+async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать список исполнителей для ручного выбора"""
     try:
         lang = language
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+            return
+
         request_number = callback.data.replace("assign_specific_", "")
         logger.info(f"Выбор конкретного исполнителя для заявки {request_number}")
 
@@ -2635,10 +2674,16 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 
 
 @router.callback_query(F.data.startswith("assign_executor_"))
-async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, user: User = None, language: str = "ru"):
+async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Финальное назначение конкретного исполнителя"""
     try:
         lang = language
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+            return
+
         # Парсим данные: assign_executor_251013-001_123
         parts = callback.data.replace("assign_executor_", "").split("_")
         request_number = parts[0]
@@ -2744,10 +2789,16 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
 
 @router.callback_query(F.data.startswith("back_to_assignment_type_"))
-async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Session, language: str = "ru"):
+async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Возврат к выбору типа назначения"""
     try:
         lang = language
+
+        # Проверяем права доступа
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+            return
+
         request_number = callback.data.replace("back_to_assignment_type_", "")
 
         request = db.query(Request).filter(Request.request_number == request_number).first()

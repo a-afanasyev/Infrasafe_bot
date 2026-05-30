@@ -302,10 +302,14 @@ async def get_media_file_stream(
             if media_file.mime_type and media_file.mime_type != "application/octet-stream"
             else content_type
         )
+        safe_filename = (media_file.original_filename or "file").replace('"', "").replace("\r", "").replace("\n", "")[:255]
         return Response(
             content=file_bytes,
             media_type=effective_type,
-            headers={"Content-Disposition": f'inline; filename="{media_file.original_filename or "file"}"'},
+            headers={
+                "Content-Disposition": f'inline; filename="{safe_filename}"',
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     except HTTPException:
@@ -379,7 +383,10 @@ async def stream_telegram_file(
         return Response(
             content=file_bytes,
             media_type=content_type,
-            headers={"Content-Disposition": 'inline; filename="file"'},
+            headers={
+                "Content-Disposition": 'inline; filename="file"',
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     except TelegramAPIError:

@@ -104,7 +104,7 @@ async def get_kanban(
     executor_id: Optional[int] = Query(None),
     category: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_roles("manager")),
 ):
     ExecutorUser = aliased(User)
     query = (
@@ -143,10 +143,12 @@ async def list_requests(
         select(RequestModel, ExecutorUser)
         .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
     )
-    # scope=my: role-based filtering for TWA
-    if scope == "my":
-        user_roles = _parse_user_roles(user)
-        if "executor" in user_roles and "manager" not in user_roles:
+    # Server-enforced object-level scoping: only managers may list across all
+    # users. For everyone else, ownership/assignment filtering is applied
+    # unconditionally (the client-supplied `scope` param is not an authz input).
+    user_roles = _parse_user_roles(user)
+    if "manager" not in user_roles:
+        if "executor" in user_roles:
             # Executor: individual assignments + group (if in shift) + executor_id fallback
             from sqlalchemy import or_
             from uk_management_bot.database.models.request_assignment import RequestAssignment
@@ -186,7 +188,7 @@ async def list_requests(
             conditions.append(RequestModel.executor_id == user.id)
             query = query.filter(or_(*conditions))
         else:
-            # Applicant/manager: own requests
+            # Applicant: own requests only
             query = query.filter(RequestModel.user_id == user.id)
     if status:
         query = query.filter(RequestModel.status == status)

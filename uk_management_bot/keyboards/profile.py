@@ -30,7 +30,7 @@ def get_profile_edit_keyboard(language: str = "ru", user=None) -> InlineKeyboard
         # Кнопки редактирования
         cancel_text = get_text('buttons.cancel', language=language)
 
-        logger.debug(f"Текущие значения: phone={current_phone}, language={current_lang}, first_name={current_first_name}, last_name={current_last_name}")
+        logger.debug(f"Текущие значения: phone_set={bool(user and user.phone)}, language={current_lang}, first_name_set={bool(user and user.first_name)}, last_name_set={bool(user and user.last_name)}")
 
         # Редактирование телефона и языка с текущими значениями
         builder.add(InlineKeyboardButton(
