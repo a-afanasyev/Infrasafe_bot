@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { apiClient } from '../api/client'
 
 // One-time migration purge: builds before the cookie-auth switch (§6.5)
@@ -9,6 +9,10 @@ import { apiClient } from '../api/client'
 // set out to eliminate. Drop them on load.
 localStorage.removeItem('access_token')
 localStorage.removeItem('refresh_token')
+// SEC-018: prior builds persisted UI identity (id/roles) under localStorage
+// 'auth-store'. We now persist to sessionStorage (below); purge the stale
+// localStorage copy so an XSS can't read roles/id after this deploy.
+localStorage.removeItem('auth-store')
 
 // Web SPA auth: tokens live only in httpOnly cookies (uk_access on Path=/uk/,
 // uk_refresh on Path=/uk/api/). The store holds user identity for UI gating.
@@ -39,6 +43,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-store',
+      // SEC-018: identity lives in sessionStorage, not localStorage — survives a
+      // reload within the tab (ProtectedRoute reads isAuthenticated synchronously,
+      // so the cookie-backed session stays usable) but is cleared on tab close,
+      // shrinking the XSS exposure window from 30 days to the tab lifetime.
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user
           ? { id: state.user.id, first_name: state.user.first_name, roles: state.user.roles }
