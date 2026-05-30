@@ -302,8 +302,7 @@ class InviteService:
         """
         Public wrapper: atomically mark nonce as used.
 
-        Kept for backward compatibility with callers outside this service
-        (e.g. web/api/invite.py).
+        Kept for backward compatibility with callers outside this service.
         """
         self._use_nonce_atomically(nonce, user_id, invite_data)
     
