@@ -5,6 +5,7 @@
  * 401 interceptor re-authenticates via refresh token or initData.
  */
 import axios, { type InternalAxiosRequestConfig } from 'axios'
+import { getTwaRefreshToken, setTwaRefreshToken, clearTwaRefreshToken } from './twaToken'
 
 // TWA shares the SPA base path (/uk/) — request URLs become /uk/api/...
 const BASE_URL =
@@ -21,13 +22,13 @@ twaClient.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
-      const refreshToken = localStorage.getItem('twa_refresh_token')
+      const refreshToken = getTwaRefreshToken()
       if (refreshToken) {
         if (!refreshPromise) {
           refreshPromise = axios
             .post(`${BASE_URL}/api/v2/auth/refresh`, { refresh_token: refreshToken })
             .then(({ data }) => {
-              localStorage.setItem('twa_refresh_token', data.refresh_token)
+              setTwaRefreshToken(data.refresh_token)
               twaClient.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
               return data.access_token as string
             })
@@ -35,7 +36,7 @@ twaClient.interceptors.response.use(
               // TWA-06: signal App-level listener so the UI can surface a
               // "session expired" state instead of silently failing every
               // subsequent request with empty Authorization.
-              localStorage.removeItem('twa_refresh_token')
+              clearTwaRefreshToken()
               window.dispatchEvent(new CustomEvent('twa:auth-failed'))
               return ''
             })

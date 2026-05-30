@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { useTelegramSDK } from './useTelegramSDK'
+import { getTwaRefreshToken, setTwaRefreshToken, clearTwaRefreshToken } from '../twaToken'
 
 // TWA shares the SPA base path (/uk/) — request URLs become /uk/api/...
 const BASE_URL =
@@ -15,16 +16,18 @@ export function useTWAAuth() {
   const authenticate = useCallback(async () => {
     try {
       if (!initData) {
-        // Try refresh token from localStorage
-        const refreshToken = localStorage.getItem('twa_refresh_token')
+        // No fresh initData yet — try the in-memory refresh token (survives
+        // within the session, not across reload). On reload this is null and
+        // we wait for initData (useTelegramSDK repopulates it on open).
+        const refreshToken = getTwaRefreshToken()
         if (refreshToken) {
           try {
             const { data } = await axios.post(`${BASE_URL}/api/v2/auth/refresh`, { refresh_token: refreshToken })
             setAccessToken(data.access_token)
-            localStorage.setItem('twa_refresh_token', data.refresh_token)
+            setTwaRefreshToken(data.refresh_token)
             return
           } catch {
-            localStorage.removeItem('twa_refresh_token')
+            clearTwaRefreshToken()
           }
         }
         return
@@ -32,7 +35,7 @@ export function useTWAAuth() {
 
       const { data } = await axios.post(`${BASE_URL}/api/v2/auth/twa`, { init_data: initData })
       setAccessToken(data.access_token)
-      localStorage.setItem('twa_refresh_token', data.refresh_token)
+      setTwaRefreshToken(data.refresh_token)
     } catch (err) {
       console.error('TWA auth failed:', err)
     } finally {
