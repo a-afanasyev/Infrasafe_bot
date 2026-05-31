@@ -12,7 +12,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
 
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import session_scope
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
@@ -43,10 +43,10 @@ router = Router()
 @require_role(['executor'])
 async def cmd_transfer_shift(message: Message, state: FSMContext):
     """Команда для передачи смены"""
+    user_lang = "ru"
     try:
-        user_lang = await get_user_language(message.from_user.id)
-
-        with get_db() as db:
+        with session_scope() as db:
+            user_lang = get_user_language(message.from_user.id, db)
             # Получаем пользователя
             user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
             if not user:
@@ -78,11 +78,12 @@ async def cmd_transfer_shift(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("transfer_shift:"))
 async def handle_shift_selection(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора смены для передачи"""
+    user_lang = "ru"
     try:
         shift_id = int(callback.data.split(":")[1])
-        user_lang = await get_user_language(callback.from_user.id)
 
-        with get_db() as db:
+        with session_scope() as db:
+            user_lang = get_user_language(callback.from_user.id, db)
             # Проверяем права на смену
             shift = db.query(Shift).filter(
                 Shift.id == shift_id,
@@ -120,9 +121,11 @@ async def handle_shift_selection(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("transfer_reason:"))
 async def handle_reason_selection(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора причины передачи"""
+    user_lang = "ru"
     try:
         reason = callback.data.split(":")[1]
-        user_lang = await get_user_language(callback.from_user.id)
+        with session_scope() as db:
+            user_lang = get_user_language(callback.from_user.id, db)
 
         # Сохраняем причину
         await state.update_data(transfer_reason=reason)
@@ -141,9 +144,11 @@ async def handle_reason_selection(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("transfer_urgency:"))
 async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора уровня срочности"""
+    user_lang = "ru"
     try:
         urgency = callback.data.split(":")[1]
-        user_lang = await get_user_language(callback.from_user.id)
+        with session_scope() as db:
+            user_lang = get_user_language(callback.from_user.id, db)
 
         # Сохраняем уровень срочности
         await state.update_data(transfer_urgency=urgency)
@@ -162,8 +167,10 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext):
 @router.message(ShiftTransferStates.enter_comment)
 async def handle_comment_input(message: Message, state: FSMContext):
     """Обработка ввода комментария"""
+    user_lang = "ru"
     try:
-        user_lang = await get_user_language(message.from_user.id)
+        with session_scope() as db:
+            user_lang = get_user_language(message.from_user.id, db)
 
         # Сохраняем комментарий
         await state.update_data(transfer_comment=message.text)
@@ -179,8 +186,10 @@ async def handle_comment_input(message: Message, state: FSMContext):
 @router.callback_query(F.data == "transfer_comment:skip")
 async def handle_skip_comment(callback: CallbackQuery, state: FSMContext):
     """Обработка пропуска комментария"""
+    user_lang = "ru"
     try:
-        user_lang = await get_user_language(callback.from_user.id)
+        with session_scope() as db:
+            user_lang = get_user_language(callback.from_user.id, db)
 
         # Устанавливаем пустой комментарий
         await state.update_data(transfer_comment="")
@@ -198,7 +207,7 @@ async def show_transfer_confirmation(message: Message, state: FSMContext, user_l
     try:
         data = await state.get_data()
 
-        with get_db() as db:
+        with session_scope() as db:
             # Получаем информацию о смене
             shift = db.query(Shift).filter(Shift.id == data['selected_shift_id']).first()
 
@@ -238,9 +247,11 @@ async def show_transfer_confirmation(message: Message, state: FSMContext, user_l
 @router.callback_query(F.data.startswith("transfer_confirm:"))
 async def handle_transfer_confirmation(callback: CallbackQuery, state: FSMContext):
     """Обработка подтверждения передачи"""
+    user_lang = "ru"
     try:
         action = callback.data.split(":")[1]
-        user_lang = await get_user_language(callback.from_user.id)
+        with session_scope() as db:
+            user_lang = get_user_language(callback.from_user.id, db)
 
         if action == "cancel":
             await callback.message.edit_text(get_text("shift_transfer.handlers.transfer_cancelled", language=user_lang))
@@ -259,7 +270,7 @@ async def handle_transfer_confirmation(callback: CallbackQuery, state: FSMContex
             # Создаем передачу
             data = await state.get_data()
 
-            with get_db() as db:
+            with session_scope() as db:
                 transfer_service = ShiftTransferService(db)
 
                 result = await transfer_service.create_transfer(
@@ -288,10 +299,10 @@ async def handle_transfer_confirmation(callback: CallbackQuery, state: FSMContex
 @require_role(['manager'])
 async def cmd_pending_transfers(message: Message):
     """Команда для просмотра ожидающих передач (для менеджеров)"""
+    user_lang = "ru"
     try:
-        user_lang = await get_user_language(message.from_user.id)
-
-        with get_db() as db:
+        with session_scope() as db:
+            user_lang = get_user_language(message.from_user.id, db)
             # Получаем ожидающие передачи
             pending_transfers = db.query(ShiftTransfer).filter(
                 ShiftTransfer.status == 'pending'
@@ -327,10 +338,10 @@ async def cmd_pending_transfers(message: Message):
 @require_role(['executor', 'manager'])
 async def cmd_my_transfers(message: Message):
     """Команда для просмотра своих передач"""
+    user_lang = "ru"
     try:
-        user_lang = await get_user_language(message.from_user.id)
-
-        with get_db() as db:
+        with session_scope() as db:
+            user_lang = get_user_language(message.from_user.id, db)
             user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
 
             # Получаем передачи пользователя (исходящие и входящие)

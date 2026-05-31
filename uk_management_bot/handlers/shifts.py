@@ -400,7 +400,6 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
 
         # Отправляем уведомления
         try:
-            from uk_management_bot.services.shift_service import async_notify_shift_ended
             from aiogram import Bot
             bot: Bot = callback.message.bot
             await async_notify_shift_ended(bot, db, user, shift)
