@@ -5,11 +5,11 @@
 Монорепо: Telegram-бот управления ЖК (aiogram 3 + Python 3.11), REST API (FastAPI), и React-дашборд (Vite + TypeScript + shadcn/ui).
 
 ```
-uk_management_bot/   — бот: handlers, services, middlewares, keyboards, states, utils, config/locales
-uk_management_api/   — FastAPI backend (REST + WebSocket)
-frontend/            — React SPA (Vite, TanStack Query, Zustand, i18next)
-alembic/             — миграции PostgreSQL
-docker-compose.yml   — dev-окружение (bot, api, frontend, postgres, redis)
+uk_management_bot/       — бот: handlers, services, middlewares, keyboards, states, utils, config/locales
+uk_management_bot/api/   — FastAPI backend (REST + WebSocket); образ собирается из Dockerfile.api → контейнер uk-management-api
+frontend/                — React SPA (Vite, TanStack Query, Zustand, i18next)
+alembic/                 — миграции PostgreSQL
+docker-compose.yml       — dev-окружение (bot, api, frontend, postgres, redis)
 ```
 
 ## Goal
