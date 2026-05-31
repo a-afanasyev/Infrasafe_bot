@@ -46,6 +46,7 @@ MY_SHIFTS_TEXTS = get_my_shifts_texts()
 @router.message(Command("my_shifts"))
 async def cmd_my_shifts(message: Message, state: FSMContext, language: str = "ru", db=None):
     """Главное меню моих смен"""
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -63,7 +64,7 @@ async def cmd_my_shifts(message: Message, state: FSMContext, language: str = "ru
         logger.error(f"Ошибка команды /my_shifts: {e}")
         await message.answer(get_text("my_shifts.handlers.error_loading", language=language))
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
@@ -84,6 +85,7 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
     показывал "no_current_shifts". Дополнительно для пустой выборки текст был
     про "Заявка не найдена" в шапке — переключаем на корректный shift-контекст.
     """
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         if not db:
             db = next(get_db())
@@ -174,6 +176,9 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
     except Exception as e:
         logger.error(f"Ошибка просмотра текущих смен: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "view_week_schedule")
@@ -184,6 +189,7 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
     BUG-BOT-005: разрешён доступ executor + manager + admin. Для executor query
     фильтруется по его собственному `Shift.user_id`. Manager/admin — видит все смены.
     """
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         if not db:
             db = next(get_db())
@@ -290,12 +296,16 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
     except Exception as e:
         logger.error(f"Ошибка просмотра недельного расписания: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data.startswith("shift_details:"))
 @require_role(['executor'])
 async def handle_shift_details(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Подробная информация о смене"""
+    db = None  # ARCH-013: гарантируем close в finally
     try:
         shift_id = int(callback.data.split(':')[1])
         db = next(get_db())
@@ -400,12 +410,16 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
     except Exception as e:
         logger.error(f"Ошибка просмотра деталей смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "start_shift")
 @require_role(['executor'])
 async def handle_start_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Начать смену"""
+    db = None  # ARCH-013: гарантируем close в finally
     try:
         lang = language
         data = await state.get_data()
@@ -449,12 +463,16 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
     except Exception as e:
         logger.error(f"Ошибка начала смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "end_shift")
 @require_role(['executor'])
 async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Завершить смену"""
+    db = None  # ARCH-013: гарантируем close в finally
     try:
         lang = language
         data = await state.get_data()
@@ -512,6 +530,9 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "shift_history")
@@ -523,6 +544,7 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
     фильтруется по `Shift.user_id == user.id` (внутренний DB id, не telegram_id).
     Manager/admin — видит все смены.
     """
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         if not db:
             db = next(get_db())
@@ -618,6 +640,9 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
     except Exception as e:
         logger.error(f"Ошибка просмотра истории смен: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "back_to_my_shifts")

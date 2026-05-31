@@ -170,8 +170,7 @@ def get_yard_selection_keyboard(user_telegram_id: int, lang: str = 'ru') -> Inli
 @router.callback_query(F.data.startswith("manage_user_yards_"))
 async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Показать управление дворами пользователя"""
-    db_session = next(get_db())
-    lang = get_user_language(callback.from_user.id, db_session)
+    lang = get_user_language(callback.from_user.id, db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -208,8 +207,7 @@ async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: 
 @router.callback_query(F.data.startswith("add_user_yard_"))
 async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Показать список дворов для добавления"""
-    db_session = next(get_db())
-    lang = get_user_language(callback.from_user.id, db_session)
+    lang = get_user_language(callback.from_user.id, db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -236,8 +234,7 @@ async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list
 @router.callback_query(F.data.startswith("user_yard_add_confirm_"))
 async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Подтвердить добавление двора"""
-    db_session = next(get_db())
-    lang = get_user_language(callback.from_user.id, db_session)
+    lang = get_user_language(callback.from_user.id, db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -282,8 +279,7 @@ async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: l
 @router.callback_query(F.data.startswith("remove_user_yard_"))
 async def handle_remove_user_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
     """Удалить дополнительный двор у пользователя"""
-    db_session = next(get_db())
-    lang = get_user_language(callback.from_user.id, db_session)
+    lang = get_user_language(callback.from_user.id, db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):

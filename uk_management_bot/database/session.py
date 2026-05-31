@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -69,6 +70,25 @@ Base = declarative_base()
 
 def get_db():
     """Получение синхронной сессии базы данных (LEGACY)"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def session_scope():
+    """Синхронная сессия как context manager — гарантирует ``close()`` при любом
+    выходе из блока (return, ранний return, исключение). Close-only by design:
+    сервисы коммитят явно, поэтому семантика совпадает с legacy ``next(get_db())``,
+    но без утечки, где ``next()`` не запускает finally генератора (ARCH-013).
+
+    Использовать вместо ``db = next(get_db())`` в handlers/keyboards::
+
+        with session_scope() as db:
+            ...  # db.close() выполнится независимо от того, как завершится блок
+    """
     db = SessionLocal()
     try:
         yield db

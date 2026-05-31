@@ -935,6 +935,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 
     if await _deny_if_pending_callback(callback, user_status):
         return
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка подтверждения для пользователя {callback.from_user.id}")
 
@@ -1005,6 +1006,9 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения: {e}")
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 def _get_executor_requests_query(db_session: Session, user: User):
@@ -1092,6 +1096,7 @@ def _get_executor_requests_query(db_session: Session, user: User):
 @router.callback_query(F.data.startswith("page_"))
 async def handle_pagination(callback: CallbackQuery, state: FSMContext):
     """Обработка пагинации списков заявок"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка пагинации для пользователя {callback.from_user.id}")
 
@@ -1217,9 +1222,11 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка обработки пагинации: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 @router.callback_query(
     # BUG-BOT-033 fix: replace fragile prefix-match + maintained exclusion list
@@ -1231,6 +1238,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
 )
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
     """Обработка просмотра деталей заявки"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка просмотра заявки для пользователя {callback.from_user.id}")
 
@@ -1406,14 +1414,17 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка обработки просмотра заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("back_list_"))
 async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
     """Возврат из деталей заявки к списку с восстановлением страницы и фильтра"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         # Восстанавливаем страницу из callback_data
         page = int(callback.data.replace("back_list_", ""))
@@ -1650,13 +1661,16 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка возврата к списку: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 @router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_employee_") & ~F.data.startswith("edit_profile") & ~F.data.startswith("edit_first_name") & ~F.data.startswith("edit_last_name"))
 async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
     """Обработка редактирования заявки"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка редактирования заявки для пользователя {callback.from_user.id}")
 
@@ -1692,9 +1706,11 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка обработки редактирования заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 # Менеджерское удаление заявки перенесено на префикс `mgr_delete_` и живёт в
 # handlers/admin.py::handle_delete_request (гейт ADMIN_USER_IDS + каскадное удаление).
@@ -1705,6 +1721,7 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
 async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
     """Обработка принятия заявки менеджером - показывает выбор типа назначения"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка принятия заявки менеджером для пользователя {callback.from_user.id}")
         # Проверяем, что действие выполняет менеджер
@@ -1754,9 +1771,11 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка обработки принятия заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 # Менеджерское завершение заявки перенесено на префикс `mgr_complete_` и живёт в
 # handlers/admin.py::handle_complete_request (статус EXECUTED + AuditLog). Прежний
@@ -1779,6 +1798,7 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))
 async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
     """Обработка перевода заявки в статус 'Закуп'"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         # Только менеджер
         request_number = callback.data.replace("purchase_", "")
@@ -1805,9 +1825,11 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
         )
     except Exception as e:
         logger.error(f"Ошибка обработки перевода в 'Закуп': {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 # BUG-BOT-030: ранее использовался prefix-match `cancel_` с поддерживаемым exclusion list,
@@ -1820,6 +1842,7 @@ _CANCEL_REQUEST_NUMBER_RE = _re.compile(r"^cancel_\d{6}-\d{3}$")
 @router.callback_query(F.data.regexp(_CANCEL_REQUEST_NUMBER_RE.pattern))
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
     """Обработка отмены заявки. Срабатывает только на `cancel_<YYMMDD-NNN>`."""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         # Менеджер или владелец (в RequestService также есть проверка)
         request_number = callback.data.replace("cancel_", "")
@@ -1844,9 +1867,11 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
         )
     except Exception as e:
         logger.error(f"Ошибка обработки отмены заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 # Менеджерское «Отклонить» перенесено на префикс `mgr_deny_` и живёт в
@@ -1861,6 +1886,7 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("approve_") & ~F.data.startswith("approve_employee_") & ~F.data.startswith("approve_user_"))
 async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
     """Подтверждение выполненной заявки заявителем -> 'Принято'"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("approve_", "")
         db_session = next(get_db())
@@ -1882,9 +1908,11 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
         )
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 # ============================
@@ -1894,6 +1922,7 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
 @router.message(F.text.in_(MY_REQUESTS_TEXTS))
 async def show_my_requests(message: Message, state: FSMContext):
     """Показать список заявок пользователя (страница 1)"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         telegram_id = message.from_user.id
         # Читаем активный фильтр и страницу из FSM
@@ -2088,9 +2117,11 @@ async def show_my_requests(message: Message, state: FSMContext):
             await message.answer(message_text, reply_markup=combined)
     except Exception as e:
         logger.error(f"Ошибка отображения списка заявок для пользователя {message.from_user.id}: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("requests.error_loading_requests", language=lang))
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.message(Command("my_requests"))
@@ -2104,6 +2135,7 @@ async def cmd_my_requests(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("replyclarify_"))
 async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext):
     """Пользователь хочет ответить на запрос уточнения. Просим ввести текст."""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
@@ -2130,14 +2162,17 @@ async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext)
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка старта ответа на уточнение: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang))
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.message(RequestStates.waiting_clarify_reply)
 async def handle_reply_clarify_text(message: Message, state: FSMContext):
     """Сохраняем ответ пользователя в notes без смены статуса."""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         db_session = next(get_db())
         lang = get_user_language(message.from_user.id, db_session)
@@ -2172,15 +2207,18 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
         await state.clear()
     except Exception as e:
         logger.error(f"Ошибка сохранения ответа на уточнение: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await state.clear()
         await message.answer(get_text("requests.reply_save_failed", language=lang), reply_markup=get_main_keyboard(language=lang))
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("status_"))
 async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора фильтра статуса для списка заявок"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         # Совместимость с тестами: поддержать текстовые статусы, но маппить на упрощённые "active"/"archive"/"all"
         raw = callback.data.replace("status_", "")
@@ -2309,9 +2347,11 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра статуса: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 @router.callback_query(F.data.startswith("categoryfilter_"))
 async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
     """
@@ -2319,6 +2359,7 @@ async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
     
     TASK 17 Этап A: Теперь работает с внутренними ключами категорий вместо русских текстов.
     """
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
@@ -2333,14 +2374,17 @@ async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра категории: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data == "filters_reset")
 async def handle_filters_reset(callback: CallbackQuery, state: FSMContext):
     """Сброс всех фильтров списка заявок"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
@@ -2356,13 +2400,16 @@ async def handle_filters_reset(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text("requests.filters_reset", language=lang))
     except Exception as e:
         logger.error(f"Ошибка сброса фильтров: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("period_"))
 async def handle_period_filter(callback: CallbackQuery, state: FSMContext):
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
@@ -2373,13 +2420,16 @@ async def handle_period_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра периода: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executorfilter_"))
 async def handle_executor_filter(callback: CallbackQuery, state: FSMContext):
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
@@ -2390,9 +2440,11 @@ async def handle_executor_filter(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка применения фильтра исполнителя: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
@@ -2432,6 +2484,7 @@ class ExecutorRequestStates(StatesGroup):
 @router.callback_query(F.data.startswith("executor_view_media_"))
 async def executor_view_media(callback: CallbackQuery):
     """Просмотр медиа-файлов заявки исполнителем"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_view_media_", "")
         db_session = next(get_db())
@@ -2474,14 +2527,17 @@ async def executor_view_media(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка просмотра медиа исполнителем: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_purchase_"))
 async def executor_request_purchase(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Закуп'"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_purchase_", "")
         db_session = next(get_db())
@@ -2498,14 +2554,17 @@ async def executor_request_purchase(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка начала процесса закупа: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.message(ExecutorRequestStates.waiting_purchase_comment)
 async def executor_process_purchase_comment(message: Message, state: FSMContext):
     """Обработка комментария для закупа"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         data = await state.get_data()
         request_number = data.get("executor_request_number")
@@ -2550,15 +2609,18 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
 
     except Exception as e:
         logger.error(f"Ошибка обработки комментария закупа: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("common.error", language=lang))
         await state.clear()
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_complete_"))
 async def executor_complete_request(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Выполнено'"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_complete_", "")
         db_session = next(get_db())
@@ -2575,14 +2637,17 @@ async def executor_complete_request(callback: CallbackQuery, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Ошибка начала завершения заявки: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.message(ExecutorRequestStates.waiting_completion_comment)
 async def executor_process_completion_comment(message: Message, state: FSMContext):
     """Обработка комментария для завершения"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         data = await state.get_data()
         request_number = data.get("executor_request_number")
@@ -2606,15 +2671,18 @@ async def executor_process_completion_comment(message: Message, state: FSMContex
 
     except Exception as e:
         logger.error(f"Ошибка обработки комментария завершения: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("common.error", language=lang))
         await state.clear()
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.message(ExecutorRequestStates.waiting_completion_media, F.photo | F.video | F.document)
 async def executor_collect_completion_media(message: Message, state: FSMContext):
     """Сбор медиа-файлов для завершения заявки"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         data = await state.get_data()
         completion_media = data.get("completion_media", [])
@@ -2647,14 +2715,17 @@ async def executor_collect_completion_media(message: Message, state: FSMContext)
 
     except Exception as e:
         logger.error(f"Ошибка сбора медиа для завершения: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("common.error", language=lang))
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_finish_completion_"))
 async def executor_finish_completion(callback: CallbackQuery, state: FSMContext):
     """Финализация завершения заявки"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_finish_completion_", "")
         data = await state.get_data()
@@ -2765,15 +2836,18 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
 
     except Exception as e:
         logger.error(f"Ошибка финализации завершения: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
         await state.clear()
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_work_"))
 async def executor_return_to_work(callback: CallbackQuery):
     """Возврат заявки в работу из статуса Закуп/Уточнение"""
+    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_work_", "")
         db_session = next(get_db())
@@ -2805,6 +2879,8 @@ async def executor_return_to_work(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка возврата заявки в работу: {e}")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
