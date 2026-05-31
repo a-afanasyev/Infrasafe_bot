@@ -41,4 +41,37 @@ def build_limiter() -> Limiter:
     return Limiter(key_func=client_ip_key)
 
 
+async def rate_limit_backend_status() -> dict:
+    """Probe the limiter's storage backend for observability (SEC-062).
+
+    The limiter is intentionally fail-open: when Redis is unreachable it
+    silently degrades to a per-worker in-memory counter (``in_memory_fallback``)
+    so a Redis blip never returns 500 on auth endpoints. The hazard is that the
+    degradation is *silent* — the effective limit balloons ~Nx (one counter per
+    uvicorn worker) with no signal, which can mask both an outage and an abuse
+    window. This probe surfaces the condition so it can be alerted on
+    (startup ERROR log + ``/api/health/ratelimit``) rather than fail-open AND
+    fail-quiet.
+
+    Never raises — a probe that throws would defeat the fail-open contract.
+    Returns ``redis_reachable=None`` when Redis isn't the configured backend.
+    """
+    if not (settings.USE_REDIS_RATE_LIMIT and settings.REDIS_URL):
+        return {"configured_backend": "memory", "redis_reachable": None}
+    try:
+        import redis.asyncio as aioredis
+
+        client = aioredis.from_url(
+            settings.REDIS_URL, socket_connect_timeout=2, socket_timeout=2
+        )
+        try:
+            await client.ping()
+        finally:
+            await client.aclose()
+        return {"configured_backend": "redis", "redis_reachable": True}
+    except Exception as e:  # noqa: BLE001 — probe must never propagate
+        logger.warning("rate-limit Redis backend unreachable: %s", e)
+        return {"configured_backend": "redis", "redis_reachable": False}
+
+
 limiter = build_limiter()

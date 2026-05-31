@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.rate_limit import limiter, rate_limit_backend_status
 from uk_management_bot.config.settings import settings as _settings
 
 # Sentry error tracking with FastAPI integration (optional)
@@ -73,6 +73,23 @@ async def lifespan(app: FastAPI):
             except Exception:
                 _logger.exception("Reconciliation (requests) error")
             await asyncio.sleep(3600)  # 1 hour
+
+    # SEC-062: surface rate-limiter backend degradation loudly at startup.
+    # Fail-open is deliberate, but silent fallback to per-worker in-memory
+    # counters must be alertable — log ERROR if Redis is the configured backend
+    # yet unreachable.
+    try:
+        rl_status = await rate_limit_backend_status()
+        if rl_status["configured_backend"] == "redis" and rl_status["redis_reachable"] is False:
+            _logger.error(
+                "Rate-limit Redis backend unreachable at startup — limiter degraded "
+                "to per-worker in-memory counters (effective limit ~Nx per worker). "
+                "Check REDIS_URL / Redis availability."
+            )
+        else:
+            _logger.info("Rate-limit backend status: %s", rl_status)
+    except Exception:
+        _logger.exception("Rate-limit backend probe failed")
 
     task = None
     reconcile_task = None
@@ -176,6 +193,14 @@ async def api_health():
     # Public health, exposed via nginx as /uk/api/health (plan §4.6).
     # Intentionally minimal: no service-name, no version — reduces fingerprinting.
     return {"ok": True}
+
+
+@app.get("/api/health/ratelimit")
+async def ratelimit_health():
+    # SEC-062: rate-limiter storage backend health for monitoring/alerting.
+    # `redis_reachable: false` means the limiter has silently degraded to
+    # per-worker in-memory counters — alert on it.
+    return await rate_limit_backend_status()
 
 
 @app.get("/api/health/outbox")
