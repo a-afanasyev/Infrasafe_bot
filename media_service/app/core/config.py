@@ -31,13 +31,17 @@ class Settings(BaseSettings):
     telegram_api_hash: Optional[str] = None
 
     # === CHANNELS ===
-    channel_requests: str = "-1003091883002"  # uk_media_requests_private
-    channel_reports: str = "-1002969942316"   # uk_media_reports_private
-    channel_archive: str = "-1002725515580"   # uk_media_archive_private
-    channel_backup: str = "-1002951349061"    # uk_media_backup_private
+    # SEC-065: channel IDs are deployment config, not source constants. Default
+    # to empty and require env in production (fail-fast below). Dev/test
+    # (debug=True) tolerates empty.
+    channel_requests: str = Field(default="", validation_alias="CHANNEL_REQUESTS")
+    channel_reports: str = Field(default="", validation_alias="CHANNEL_REPORTS")
+    channel_archive: str = Field(default="", validation_alias="CHANNEL_ARCHIVE")
+    channel_backup: str = Field(default="", validation_alias="CHANNEL_BACKUP")
 
     # === SECURITY ===
-    secret_key: str = Field(default="dev_secret_key_CHANGE_IN_PRODUCTION", validation_alias="SECRET_KEY")
+    # SEC-066: empty default + fail-fast (below) when empty/dev-string in prod.
+    secret_key: str = Field(default="", validation_alias="SECRET_KEY")
     access_token_expire_minutes: int = 30
     api_keys: str = Field(default="", validation_alias="MEDIA_API_KEYS")
     allowed_origins: str = Field(default="", description="Comma-separated allowed origins. Required in production.")
@@ -76,12 +80,30 @@ class Settings(BaseSettings):
 # Глобальный экземпляр настроек
 settings = Settings()
 
-# Fail-fast: reject insecure default secret_key in production
-if not settings.debug and settings.secret_key.startswith("dev_secret_key_"):
+# SEC-066 fail-fast: reject empty or insecure-default secret_key in production.
+if not settings.debug and (
+    not settings.secret_key or settings.secret_key.startswith("dev_secret_key_")
+):
     raise RuntimeError(
         "SECRET_KEY must be set via environment variable in production. "
         "Generate with: openssl rand -hex 32"
     )
+
+# SEC-065 fail-fast: Telegram channel IDs must come from env in production —
+# they are no longer hardcoded. Required env vars: CHANNEL_REQUESTS,
+# CHANNEL_REPORTS, CHANNEL_ARCHIVE, CHANNEL_BACKUP.
+if not settings.debug:
+    _missing_channels = [
+        name
+        for name in ("channel_requests", "channel_reports", "channel_archive", "channel_backup")
+        if not getattr(settings, name)
+    ]
+    if _missing_channels:
+        raise RuntimeError(
+            "Telegram channel IDs must be set via env in production "
+            f"(missing: {', '.join(_missing_channels)}). Set CHANNEL_REQUESTS, "
+            "CHANNEL_REPORTS, CHANNEL_ARCHIVE, CHANNEL_BACKUP."
+        )
 
 
 class TelegramChannels:
