@@ -36,7 +36,14 @@ class Settings:
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     SENTRY_DSN = os.getenv("SENTRY_DSN", "")
-    
+
+    # SEC-064: optional bearer token gating operational health endpoints
+    # (/api/health/outbox, /api/health/ratelimit). Empty by default = open
+    # (dev + until ops sets it), so existing probes/curl checks keep working.
+    # When set, those endpoints require `Authorization: Bearer <token>`.
+    # Liveness probes (/health, /api/health) stay open regardless.
+    HEALTH_METRICS_TOKEN = os.getenv("HEALTH_METRICS_TOKEN", "")
+
     # Admin
     ADMIN_USER_IDS = [int(x.strip()) for x in os.getenv("ADMIN_USER_IDS", "").split(",") if x.strip()]
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
