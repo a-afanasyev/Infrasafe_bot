@@ -67,4 +67,16 @@ if "uk_management_bot.database.session" not in sys.modules:
 
     session_stub.get_db = _stub_get_db
     session_stub.get_async_db = _stub_get_async_db
+
+    from contextlib import contextmanager as _contextmanager
+
+    @_contextmanager
+    def _stub_session_scope():  # mirrors real session_scope (ARCH-013)
+        db = session_stub.SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    session_stub.session_scope = _stub_session_scope
     sys.modules["uk_management_bot.database.session"] = session_stub

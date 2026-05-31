@@ -45,6 +45,7 @@ ACCEPTANCE_TEXTS = get_acceptance_texts()
 @router.message(F.text.in_(ACCEPTANCE_TEXTS))
 async def show_pending_acceptance_requests(message: Message, db: Session = None):
     """Показать список заявок, ожидающих приёмки заявителем"""
+    own_db = db is None  # ARCH-013: закрываем только сессию, которую открыли сами (не middleware)
     try:
         telegram_id = message.from_user.id
 
@@ -123,22 +124,21 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
 
     except Exception as e:
         logger.error(f"Ошибка показа списка ожидающих приёмки заявок: {e}")
-        # Получаем язык для сообщения об ошибке
+        # Получаем язык для сообщения об ошибке (переиспользуем db, не открываем вторую сессию)
         try:
-            if not db:
-                db = next(get_db())
-            lang = get_user_language(message.from_user.id, db) if hasattr(message, 'from_user') else 'ru'
-        except:
+            lang = get_user_language(message.from_user.id, db) if (db and hasattr(message, 'from_user')) else 'ru'
+        except Exception:
             lang = 'ru'
         await message.answer(get_text("requests.error_loading_requests", language=lang))
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
 @router.callback_query(F.data.startswith("view_completed_"))
 async def view_completed_request(callback: CallbackQuery, db: Session = None, language: str = "ru"):
     """Просмотр деталей выполненной заявки заявителем"""
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         telegram_id = callback.from_user.id
         request_number = callback.data.replace("view_completed_", "")
@@ -206,13 +206,14 @@ async def view_completed_request(callback: CallbackQuery, db: Session = None, la
         lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
 @router.callback_query(F.data.startswith("view_completion_media_"))
 async def view_completion_media(callback: CallbackQuery, db: Session = None, language: str = "ru"):
     """Просмотр медиафайлов выполненной заявки"""
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         from aiogram.types import InputMediaPhoto, InputMediaDocument
 
@@ -287,7 +288,7 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
         lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=lang), show_alert=True)
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
@@ -318,6 +319,7 @@ async def accept_request(callback: CallbackQuery, language: str = "ru"):
 @router.callback_query(F.data.startswith("rate_"))
 async def save_rating(callback: CallbackQuery, db: Session = None, language: str = "ru"):
     """Сохранение оценки и принятие заявки"""
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         telegram_id = callback.from_user.id
 
@@ -409,7 +411,7 @@ async def save_rating(callback: CallbackQuery, db: Session = None, language: str
         lang = language
         await callback.answer(get_text("request_acceptance.handlers.error_saving_rating", language=lang), show_alert=True)
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
@@ -521,6 +523,7 @@ async def save_return_media(message: Message, state: FSMContext, db: Session = N
 
 async def process_return_request(telegram_id: int, state: FSMContext, db: Session = None, message_obj=None):
     """Обработка возврата заявки"""
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         data = await state.get_data()
         request_number = data.get('request_number')
@@ -626,7 +629,7 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
         if message_obj:
             await message_obj.answer(get_text("request_acceptance.handlers.error_returning_request", language="ru"))
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 

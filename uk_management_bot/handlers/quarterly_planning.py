@@ -44,6 +44,7 @@ class QuarterlyPlanningStates(StatesGroup):
 async def cmd_quarterly_planning(message: Message, state: FSMContext, db=None, language: str = "ru"):
     """Главное меню квартального планирования"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -60,12 +61,16 @@ async def cmd_quarterly_planning(message: Message, state: FSMContext, db=None, l
     except Exception as e:
         logger.error(f"Ошибка отображения меню квартального планирования: {e}")
         await message.answer(get_text("quarterly.handlers.error_loading_menu", language=lang))
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "quarterly_plan_create")
 async def start_quarterly_planning(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Начало создания квартального плана"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -85,12 +90,16 @@ async def start_quarterly_planning(callback: CallbackQuery, state: FSMContext, d
     except Exception as e:
         logger.error(f"Ошибка начала квартального планирования: {e}")
         await callback.answer(get_text("quarterly.handlers.error_init_planning", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data.startswith("quarter_"), StateFilter(QuarterlyPlanningStates.selecting_quarter))
 async def select_quarter(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Выбор квартала для планирования"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -140,12 +149,16 @@ async def select_quarter(callback: CallbackQuery, state: FSMContext, db=None, la
     except Exception as e:
         logger.error(f"Ошибка выбора квартала: {e}")
         await callback.answer(get_text("quarterly.handlers.error_select_quarter", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data.startswith("spec_"), StateFilter(QuarterlyPlanningStates.selecting_specializations))
 async def toggle_specialization(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Переключение выбора специализации"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -182,12 +195,16 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext, db=N
     except Exception as e:
         logger.error(f"Ошибка переключения специализации: {e}")
         await callback.answer(get_text("quarterly.handlers.error_generic", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "spec_confirm", StateFilter(QuarterlyPlanningStates.selecting_specializations))
 async def confirm_specializations(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Подтверждение выбора специализаций"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -257,12 +274,16 @@ async def confirm_specializations(callback: CallbackQuery, state: FSMContext, db
     except Exception as e:
         logger.error(f"Ошибка подтверждения специализаций: {e}")
         await callback.answer(get_text("quarterly.handlers.error_confirmation", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "plan_execute", StateFilter(QuarterlyPlanningStates.confirming_plan))
 async def execute_quarterly_plan(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Выполнение квартального планирования"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -333,12 +354,16 @@ async def execute_quarterly_plan(callback: CallbackQuery, state: FSMContext, db=
             ])
         )
         await callback.answer()
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "view_statistics")
 async def view_planning_statistics(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Просмотр статистики планирования"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -390,12 +415,16 @@ async def view_planning_statistics(callback: CallbackQuery, state: FSMContext, d
     except Exception as e:
         logger.error(f"Ошибка получения статистики: {e}")
         await callback.answer(get_text("quarterly.handlers.error_stats", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "transfer_management")
 async def transfer_management_menu(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Меню управления передачами смен"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -441,12 +470,16 @@ async def transfer_management_menu(callback: CallbackQuery, state: FSMContext, d
     except Exception as e:
         logger.error(f"Ошибка меню управления передачами: {e}")
         await callback.answer(get_text("quarterly.handlers.error_loading_menu", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 @router.callback_query(F.data == "auto_initiate_transfers")
 async def auto_initiate_transfers(callback: CallbackQuery, state: FSMContext, db=None, language: str = "ru"):
     """Автоматическая инициация передач"""
     lang = language
+    own_db = db is None  # ARCH-013: закрываем только свою сессию (не middleware)
     try:
         if not db:
             db = next(get_db())
@@ -488,6 +521,9 @@ async def auto_initiate_transfers(callback: CallbackQuery, state: FSMContext, db
     except Exception as e:
         logger.error(f"Ошибка автоинициации передач: {e}")
         await callback.answer(get_text("quarterly.handlers.error_auto_initiate", language=lang), show_alert=True)
+    finally:
+        if own_db and db:
+            db.close()
 
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========

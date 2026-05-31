@@ -20,7 +20,7 @@ from uk_management_bot.keyboards.shifts import (
     get_manager_active_shifts_row,
 )
 from uk_management_bot.keyboards.base import get_executor_suggestion_inline
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import get_db, session_scope
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.button_texts import (
     get_accept_shift_texts,
@@ -346,6 +346,7 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
             await callback.answer(get_text("shifts.handlers.awaiting_approval", language=language), show_alert=True)
         return
 
+    db = None  # ARCH-013: гарантируем close в finally
     try:
         shift_id = int(callback.data.split(":")[1])
         db = next(get_db())
@@ -412,6 +413,9 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
         logger.error(f"Ошибка завершения смены: {e}")
         lang = language
         await callback.answer(get_text("shifts.handlers.error_ending_shift", language=lang), show_alert=True)
+    finally:
+        if db:
+            db.close()
 
 
 @router.callback_query(F.data == "shift_end_confirm_yes")
@@ -422,25 +426,25 @@ async def end_shift_yes(callback: CallbackQuery, user_status: str | None = None,
         except Exception:
             await callback.answer("⏳ Ожидайте одобрения администратора.", show_alert=True)
         return
-    db = next(get_db())
-    service = ShiftService(db)
-    result = service.end_shift(callback.from_user.id)
-    lang = get_user_language(callback.from_user.id, db)
-    if not result.get("success"):
-        await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)
-        return
-    await callback.message.edit_text(get_text("shifts.handlers.shift_ended_simple", language=lang), reply_markup=None)
-    # async notifications
-    try:
-        from aiogram import Bot
-        bot: Bot = callback.message.bot
-        user = service._get_user_by_tg(callback.from_user.id)
-        shift = result.get("shift")
-        if user and shift:
-            await async_notify_shift_ended(bot, db, user, shift)
-    except Exception:
-        pass
-    await callback.answer()
+    with session_scope() as db:  # ARCH-013
+        service = ShiftService(db)
+        result = service.end_shift(callback.from_user.id)
+        lang = get_user_language(callback.from_user.id, db)
+        if not result.get("success"):
+            await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)
+            return
+        await callback.message.edit_text(get_text("shifts.handlers.shift_ended_simple", language=lang), reply_markup=None)
+        # async notifications
+        try:
+            from aiogram import Bot
+            bot: Bot = callback.message.bot
+            user = service._get_user_by_tg(callback.from_user.id)
+            shift = result.get("shift")
+            if user and shift:
+                await async_notify_shift_ended(bot, db, user, shift)
+        except Exception:
+            pass
+        await callback.answer()
 
 
 @router.callback_query(F.data == "suggest_executor_skip")
@@ -591,37 +595,37 @@ async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext, langu
 @router.message(F.text.in_(ACTIVE_SHIFTS_BUTTON_TEXTS))
 async def manager_active_shifts(message: Message, state: FSMContext, language: str = "ru"):
     # Здесь предполагается, что проверка роли происходит отдельно (например, через middleware)
-    db = next(get_db())
-    service = ShiftService(db)
-    shifts = service.list_shifts(status="active")
-    if not shifts:
+    with session_scope() as db:  # ARCH-013
+        service = ShiftService(db)
+        shifts = service.list_shifts(status="active")
+        if not shifts:
+            from uk_management_bot.utils.safe_localization import safe_get_text
+            lang = language
+            await message.answer(safe_get_text("shifts.no_active_shifts", language=lang))
+            return
         from uk_management_bot.utils.safe_localization import safe_get_text
         lang = language
-        await message.answer(safe_get_text("shifts.no_active_shifts", language=lang))
-        return
-    from uk_management_bot.utils.safe_localization import safe_get_text
-    lang = language
-    lines = [safe_get_text("shifts.active_shifts_list", language=lang, default="Активные смены:")]
-    for s in shifts[:10]:
-        lines.append(f"- user_id={s.user_id} с {s.start_time.strftime('%d.%m.%Y %H:%M')}")
-    await message.answer("\n".join(lines))
+        lines = [safe_get_text("shifts.active_shifts_list", language=lang, default="Активные смены:")]
+        for s in shifts[:10]:
+            lines.append(f"- user_id={s.user_id} с {s.start_time.strftime('%d.%m.%Y %H:%M')}")
+        await message.answer("\n".join(lines))
 
 
 @router.callback_query(F.data.startswith("force_end_shift_"))
 async def force_end_shift(callback: CallbackQuery, language: str = "ru"):
-    db = next(get_db())
-    service = ShiftService(db)
-    try:
-        target_tg = int(callback.data.replace("force_end_shift_", ""))
-    except ValueError:
+    with session_scope() as db:  # ARCH-013
+        service = ShiftService(db)
+        try:
+            target_tg = int(callback.data.replace("force_end_shift_", ""))
+        except ValueError:
+            lang = language
+            await callback.answer(get_text("shifts.handlers.invalid_data", language=lang), show_alert=True)
+            return
         lang = language
-        await callback.answer(get_text("shifts.handlers.invalid_data", language=lang), show_alert=True)
-        return
-    lang = language
-    result = service.force_end_shift(callback.from_user.id, target_tg)
-    if not result.get("success"):
-        await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)
-        return
-    await callback.answer(get_text("shifts.handlers.shift_ended_by_manager", language=lang))
+        result = service.force_end_shift(callback.from_user.id, target_tg)
+        if not result.get("success"):
+            await callback.answer(result.get("message", get_text("shifts.handlers.error_generic", language=lang)), show_alert=True)
+            return
+        await callback.answer(get_text("shifts.handlers.shift_ended_by_manager", language=lang))
 
 

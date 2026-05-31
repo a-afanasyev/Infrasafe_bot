@@ -209,14 +209,14 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
     # Просмотр документов (если есть документы)
     from uk_management_bot.services.user_verification_service import UserVerificationService
     from sqlalchemy.orm import Session
-    from uk_management_bot.database.session import get_db
-    
+    from uk_management_bot.database.session import session_scope
+
     try:
-        # Получаем сессию базы данных
-        db = next(get_db())
-        verification_service = UserVerificationService(db)
-        documents_summary = verification_service.get_user_documents_summary(user.id)
-        
+        # Получаем сессию базы данных (ARCH-013: контекст-менеджер гарантирует close)
+        with session_scope() as db:
+            verification_service = UserVerificationService(db)
+            documents_summary = verification_service.get_user_documents_summary(user.id)
+
         if documents_summary['total_documents'] > 0:
             # Показываем количество документов
             buttons.append([InlineKeyboardButton(
