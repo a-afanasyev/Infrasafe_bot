@@ -1,6 +1,6 @@
 """Webhook outbox — transactional outbox pattern for reliable webhook delivery."""
 from sqlalchemy import Column, Integer, String, DateTime, JSON, Text, Index
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 from uk_management_bot.database.session import Base
 
 
@@ -21,6 +21,8 @@ class WebhookOutbox(Base):
 
     __table_args__ = (
         Index("ix_webhook_outbox_status_created", "status", "created_at"),
+        # DB-053: горячий путь outbox-процессора — pending-события, oldest-first.
+        Index("ix_webhook_outbox_pending", "created_at", postgresql_where=text("status = 'pending'")),
     )
 
     def __repr__(self):
