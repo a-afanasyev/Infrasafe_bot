@@ -52,12 +52,17 @@ async def get_board_config(
 
 
 @router.put("/board-config", response_model=BoardConfigData)
+@limiter.limit("30/minute")
 async def update_board_config(
+    request: Request,
     payload: BoardConfigData,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ) -> BoardConfigData:
-    """Сохранить конфиг витрины. Только для роли manager."""
+    """Сохранить конфиг витрины. Только для роли manager.
+
+    SEC-084: write-side rate-limit (30/min per client IP) — mirrors the GET
+    limit so a stolen manager token can't churn config writes."""
     data = payload.model_dump()
 
     result = await db.execute(select(BoardConfig).where(BoardConfig.id == CONFIG_ROW_ID))

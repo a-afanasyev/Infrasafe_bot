@@ -1,7 +1,9 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+import hmac
+
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -162,6 +164,39 @@ app.add_middleware(
     expose_headers=["X-Request-ID"],
 )
 
+
+# SEC-061: baseline security headers on every response. `setdefault` lets the
+# edge proxy (Caddy) override/own a header if it already sets one — we only
+# fill gaps. The API serves JSON (never framed), so X-Frame-Options: DENY is
+# safe. HSTS is honoured only over HTTPS (the public infrasafe.uz edge); it's
+# inert on the internal HTTP hop.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+    )
+    return response
+
+
+def require_health_token(authorization: str | None = Header(default=None)):
+    """SEC-064: gate operational health endpoints (/api/health/outbox,
+    /api/health/ratelimit) which expose internal state (outbox lag, Redis
+    reachability). No-op when ``HEALTH_METRICS_TOKEN`` is unset (dev / before
+    ops opts in), so existing scrapers and the OPS-112 curl checks keep
+    working. When the token is set, require ``Authorization: Bearer <token>``
+    with a constant-time compare. Liveness probes (/health, /api/health) are
+    intentionally left open."""
+    token = settings.HEALTH_METRICS_TOKEN
+    if not token:
+        return
+    expected = f"Bearer {token}"
+    if not authorization or not hmac.compare_digest(authorization, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 # Routers
 app.include_router(auth_router, prefix="/api/v2/auth", tags=["auth"])
 app.include_router(requests_stats_router, prefix="/api/v2/requests", tags=["requests"])
@@ -195,7 +230,7 @@ async def api_health():
     return {"ok": True}
 
 
-@app.get("/api/health/ratelimit")
+@app.get("/api/health/ratelimit", dependencies=[Depends(require_health_token)])
 async def ratelimit_health():
     # SEC-062: rate-limiter storage backend health for monitoring/alerting.
     # `redis_reachable: false` means the limiter has silently degraded to
@@ -203,7 +238,7 @@ async def ratelimit_health():
     return await rate_limit_backend_status()
 
 
-@app.get("/api/health/outbox")
+@app.get("/api/health/outbox", dependencies=[Depends(require_health_token)])
 async def outbox_health():
     """Outbox lag metrics for monitoring / alerting.
 
