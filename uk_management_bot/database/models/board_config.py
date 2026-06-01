@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DateTime, JSON
+from sqlalchemy import Column, Integer, DateTime, JSON, ForeignKey
 from sqlalchemy.sql import func
 
 from uk_management_bot.database.session import Base
@@ -16,7 +16,10 @@ class BoardConfig(Base):
     id = Column(Integer, primary_key=True)
     data = Column(JSON, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    updated_by = Column(Integer, nullable=True)
+    # DB-054: FK на users (ON DELETE SET NULL) + индекс — было голым Integer.
+    updated_by = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     def __repr__(self):
         return f"<BoardConfig(id={self.id}, updated_at={self.updated_at})>"
