@@ -36,6 +36,11 @@ def _async_session():
     return AsyncSessionLocal()
 
 
+# BUG-097: sentinel so update_building can tell "GPS arg omitted" (leave as-is)
+# from "GPS passed as None" (reset the coordinate to NULL).
+_UNSET = object()
+
+
 class AddressService:
     """Сервис для управления справочником адресов и модерацией"""
 
@@ -204,20 +209,28 @@ class AddressService:
         building_id: int,
         address: Optional[str] = None,
         yard_id: Optional[int] = None,
-        gps_latitude: Optional[float] = None,
-        gps_longitude: Optional[float] = None,
+        gps_latitude: Optional[float] = _UNSET,
+        gps_longitude: Optional[float] = _UNSET,
         entrance_count: Optional[int] = None,
         floor_count: Optional[int] = None,
         description: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Tuple[Optional[Building], Optional[str]]:
-        """Обновление здания. `None`-аргументы означают «не менять поле»."""
+        """Обновление здания. `None` для большинства полей = «не менять».
+
+        BUG-097: GPS-координаты используют sentinel `_UNSET` — явный `None`
+        сбрасывает координату в NULL (core эмитит `building.updated`), а
+        опущенный аргумент оставляет значение без изменений.
+        """
         updates = {k: v for k, v in {
             "address": address, "yard_id": yard_id,
-            "gps_latitude": gps_latitude, "gps_longitude": gps_longitude,
             "entrance_count": entrance_count, "floor_count": floor_count,
             "description": description, "is_active": is_active,
         }.items() if v is not None}
+        if gps_latitude is not _UNSET:
+            updates["gps_latitude"] = gps_latitude
+        if gps_longitude is not _UNSET:
+            updates["gps_longitude"] = gps_longitude
         try:
             async with _async_session() as adb:
                 building = await _core.update_building(adb, building_id, updates)
@@ -368,6 +381,10 @@ class AddressService:
         query = query.options(
             joinedload(Apartment.building).joinedload(Building.yard)
         )
+
+        # BUG-090: bound the result set — the router caps at 50, but this
+        # service method itself must not run an unbounded fetch.
+        query = query.limit(100)
 
         result = session.execute(query)
         return result.scalars().all()

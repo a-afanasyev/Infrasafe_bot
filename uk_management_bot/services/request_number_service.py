@@ -11,6 +11,14 @@ from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
+# BUG-122: single source of truth for the request-number shape. The sequence is
+# 3+ digits so a building can roll past 999 requests/day (YYMMDD-NNN+).
+# Consumers (media proxy, cancel/view callback matchers) build their patterns
+# from REQUEST_NUMBER_CORE instead of hardcoding `\d{3}`.
+REQUEST_NUMBER_CORE = r"\d{6}-\d{3,}"
+REQUEST_NUMBER_PATTERN = rf"^{REQUEST_NUMBER_CORE}$"
+
+
 class RequestNumberService:
     """Сервис для генерации уникальных номеров заявок в формате YYMMDD-NNN"""
     
@@ -135,10 +143,9 @@ class RequestNumberService:
         if not isinstance(request_number, str):
             return False
         
-        # Format: YYMMDD-NNN (3+ digits — supports >999 requests/day)
-        pattern = r'^\d{6}-\d{3,}$'
-        
-        if not re.match(pattern, request_number):
+        # Format: YYMMDD-NNN (3+ digits — supports >999 requests/day). BUG-122:
+        # shared shape so write-validation and consumer matchers can't drift.
+        if not re.match(REQUEST_NUMBER_PATTERN, request_number):
             return False
         
         try:

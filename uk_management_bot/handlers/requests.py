@@ -10,6 +10,13 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request_assignment import RequestAssignment
+import re
+from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
+
+# BUG-122: view_/cancel_ callback matchers built from the shared request-number
+# core (\d{3,}) so 4-digit (>999/day) numbers match too — single source of truth.
+_VIEW_REQUEST_NUMBER_RE = rf"^view(?:_request)?_{REQUEST_NUMBER_CORE}$"
+_CANCEL_REQUEST_NUMBER_RE = re.compile(rf"^cancel_{REQUEST_NUMBER_CORE}$")
 from uk_management_bot.keyboards.requests import (
     get_categories_keyboard,
     get_urgency_keyboard,
@@ -1234,7 +1241,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
     # `view_request_<YYMMDD-NNN>`. Any other view_* callback (view_current_shifts,
     # view_apartment:N, view_week_schedule, etc.) is no longer hijacked here and
     # reaches its own handler in a later router.
-    F.data.regexp(r"^view(?:_request)?_\d{6}-\d{3}$")
+    F.data.regexp(_VIEW_REQUEST_NUMBER_RE)
 )
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
     """Обработка просмотра деталей заявки"""
@@ -1834,11 +1841,8 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
 
 # BUG-BOT-030: ранее использовался prefix-match `cancel_` с поддерживаемым exclusion list,
 # что приводило к anti-pattern (open-set, ловит любые новые cancel_-callback).
-# Заменено на строгий regex по формату request_number (`YYMMDD-NNN`).
-import re as _re
-_CANCEL_REQUEST_NUMBER_RE = _re.compile(r"^cancel_\d{6}-\d{3}$")
-
-
+# Заменено на строгий regex по формату request_number. BUG-122: матчер теперь
+# собран из shared REQUEST_NUMBER_CORE (\d{3,}) — определён выше, у импортов.
 @router.callback_query(F.data.regexp(_CANCEL_REQUEST_NUMBER_RE.pattern))
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
     """Обработка отмены заявки. Срабатывает только на `cancel_<YYMMDD-NNN>`."""
