@@ -8,7 +8,7 @@ ARCH-014: write-методы — тонкие async-обёртки над servic
 Read-методы по-прежнему работают на переданной sync-сессии.
 """
 import logging
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 from datetime import datetime
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import Session, joinedload
@@ -36,9 +36,19 @@ def _async_session():
     return AsyncSessionLocal()
 
 
-# BUG-097: sentinel so update_building can tell "GPS arg omitted" (leave as-is)
-# from "GPS passed as None" (reset the coordinate to NULL).
-_UNSET = object()
+# BUG-097: typed sentinel so update_building can tell "GPS arg omitted"
+# (leave as-is) from "GPS passed as None" (reset the coordinate to NULL).
+# A dedicated type (not a bare object()) keeps the parameter annotations honest.
+class _Unset:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+
+_UNSET = _Unset()
 
 
 class AddressService:
@@ -209,8 +219,8 @@ class AddressService:
         building_id: int,
         address: Optional[str] = None,
         yard_id: Optional[int] = None,
-        gps_latitude: Optional[float] = _UNSET,
-        gps_longitude: Optional[float] = _UNSET,
+        gps_latitude: Union[float, None, _Unset] = _UNSET,
+        gps_longitude: Union[float, None, _Unset] = _UNSET,
         entrance_count: Optional[int] = None,
         floor_count: Optional[int] = None,
         description: Optional[str] = None,
