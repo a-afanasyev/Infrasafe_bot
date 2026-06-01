@@ -210,11 +210,13 @@ class ShiftTransferService:
         )
         
         # Завершаем исходящую смену и активируем входящую
+        # BUG-123: пишем канонические start_time/end_time — модель Shift не имеет
+        # колонок actual_* (присваивание молча терялось, persist не происходил).
         outgoing_shift.status = "completed"
-        outgoing_shift.actual_end_time = datetime.now()
+        outgoing_shift.end_time = datetime.now()
         incoming_shift.status = "active"
-        incoming_shift.actual_start_time = datetime.now()
-        
+        incoming_shift.start_time = datetime.now()
+
         return transfer
     
     def start_transfer_process(self, transfer: ShiftTransfer, executor_id: int) -> bool:
@@ -374,14 +376,15 @@ class ShiftTransferService:
             
             if outgoing_shift:
                 outgoing_shift.status = "completed"
-                outgoing_shift.actual_end_time = datetime.now()
-                
+                # BUG-123: канонический end_time вместо unmapped actual_* поля.
+                outgoing_shift.end_time = datetime.now()
+
                 # Обновляем статистику исходящей смены
                 outgoing_shift.completed_requests = transfer.transferred_requests + transfer.failed_requests
-            
+
             if incoming_shift:
                 incoming_shift.status = "active"
-                incoming_shift.actual_start_time = datetime.now()
+                incoming_shift.start_time = datetime.now()
             
             # Создаем финальный аудит
             self._create_transfer_audit(transfer, executor_id, "completed")

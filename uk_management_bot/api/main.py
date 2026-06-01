@@ -319,7 +319,13 @@ import re
 import httpx
 from enum import Enum
 
-REQUEST_NUMBER_PATTERN = re.compile(r"^\d{6}-\d{3}$")
+# BUG-122: compile the shared request-number pattern (\d{6}-\d{3,}) instead of
+# a hardcoded 3-digit shape, so `260524-1000` (>999/day rollover) isn't rejected.
+from uk_management_bot.services.request_number_service import (
+    REQUEST_NUMBER_PATTERN as _REQUEST_NUMBER_PATTERN_STR,
+)
+
+REQUEST_NUMBER_PATTERN = re.compile(_REQUEST_NUMBER_PATTERN_STR)
 
 
 class FileCategories(str, Enum):

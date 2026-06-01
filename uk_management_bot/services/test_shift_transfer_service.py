@@ -28,8 +28,9 @@ def _make_shift(
     shift.executor_id = executor_id
     shift.planned_start_time = planned_start or datetime(2026, 4, 5, 9, 0)
     shift.planned_end_time = planned_end or datetime(2026, 4, 5, 18, 0)
-    shift.actual_start_time = None
-    shift.actual_end_time = None
+    # BUG-123: canonical actual-time columns are start_time / end_time.
+    shift.start_time = planned_start or datetime(2026, 4, 5, 9, 0)
+    shift.end_time = None
     return shift
 
 
