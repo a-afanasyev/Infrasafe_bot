@@ -277,7 +277,9 @@
     "requestNotFound": "Ariza topilmadi",
     "shiftNotFound": "Smena topilmadi",
     "endShift": "Smenani tugatishda xatolik",
-    "minChars": "Kamida {{min}} belgi ({{current}}/{{min}})"
+    "minChars": "Kamida {{min}} belgi ({{current}}/{{min}})",
+    "shiftDateRequired": "Smena sanasini koʻrsating",
+    "executorsRequired": "Kamida bitta ijrochi tanlang"
   },
   "kanban": {
     "createByCall": "Qo'ng'iroq orqali yaratish",
@@ -760,7 +762,12 @@
     "maxRequests": "Maks. arizalar",
     "priority": "Ustuvorlik",
     "autoCreateLabel": "Avto-yaratish",
-    "createAction": "Shablon yaratish"
+    "createAction": "Shablon yaratish",
+    "createShiftTitle": "Shablondan smena yaratish",
+    "shiftDate": "Smena sanasi",
+    "selectExecutors": "Ijrochilar",
+    "noExecutors": "Mavjud ijrochilar yoʻq",
+    "createShift": "Smena yaratish"
   },
   "board": {
     "ticker": {

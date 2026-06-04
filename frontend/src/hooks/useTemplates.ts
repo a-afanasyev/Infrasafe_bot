@@ -81,7 +81,7 @@ export function useDeleteTemplate() {
 export function useCreateShiftFromTemplate() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { template_id: number; date: string }) =>
+    mutationFn: (body: { template_id: number; date: string; user_ids: number[] }) =>
       apiClient.post('/api/v2/shifts/from-template', body).then(r => r.data),
     onSuccess: () => {
       toast.success(i18n.t('toast.shiftFromTemplate'))
