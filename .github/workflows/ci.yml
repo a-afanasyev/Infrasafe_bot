@@ -111,7 +111,7 @@ jobs:
           cache-to: "type=gha,mode=max"
 
   frontend:
-    name: frontend (build + lint)
+    name: frontend (build + lint + test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -134,6 +134,11 @@ jobs:
         continue-on-error: true
 
       # `npm run build` = `tsc -b && vite build` — the real typecheck + build gate.
-      # Vitest is intentionally not wired here (TEST-068); add `npm run test` once
-      # a vitest config + test script exist.
       - run: npm run build
+
+      # TEST-068: vitest + coverage. The threshold is a ratchet floor (see
+      # frontend/vitest.config.ts) raised per phase toward 80% — blocking, but
+      # it can only fail on a regression below the current floor, not on the
+      # not-yet-covered surface.
+      - name: Tests + coverage (TEST-068 ratchet)
+        run: npm run test:cov
