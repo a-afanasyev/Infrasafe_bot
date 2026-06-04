@@ -279,7 +279,8 @@
     "endShift": "Ошибка при завершении смены",
     "minChars": "Минимум {{min}} символов ({{current}}/{{min}})",
     "shiftDateRequired": "Укажите дату смены",
-    "executorsRequired": "Выберите хотя бы одного исполнителя"
+    "executorsRequired": "Выберите хотя бы одного исполнителя",
+    "updateTemplate": "Ошибка при сохранении шаблона"
   },
   "kanban": {
     "createByCall": "Создать по звонку",
@@ -777,7 +778,9 @@
     "shiftDate": "Дата смены",
     "selectExecutors": "Исполнители",
     "noExecutors": "Нет доступных исполнителей",
-    "createShift": "Создать смену"
+    "createShift": "Создать смену",
+    "editTemplateTitle": "Редактировать шаблон",
+    "saveAction": "Сохранить"
   },
   "board": {
     "ticker": {
