@@ -1,5 +1,6 @@
 import re
 import logging
+import httpx
 from datetime import datetime, timezone, date as date_type
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -36,6 +37,44 @@ router = APIRouter()
 def _escape_like(value: str) -> str:
     """Escape SQL LIKE wildcards % _ \\ to prevent injection."""
     return re.sub(r'([%_\\])', r'\\\1', value)
+
+
+async def _resolve_bot_username() -> Optional[str]:
+    """Return the bot @username used to build invite links.
+
+    The bot process (main.py) self-heals BOT_USERNAME via getMe() at startup
+    (BUG-BOT-001), but invite links are built by *this* API process, which only
+    reads os.getenv("BOT_USERNAME"). If the var is missing from the API
+    environment, the link would render as https://t.me/None. Mirror the bot's
+    behaviour here: resolve via Telegram getMe() using BOT_TOKEN and cache the
+    result back into settings so subsequent requests skip the network.
+
+    Returns None only when resolution is impossible (no token / API failure),
+    so the caller can fail loudly instead of emitting a broken link.
+    """
+    from uk_management_bot.config.settings import settings as app_settings
+
+    if app_settings.BOT_USERNAME:
+        return app_settings.BOT_USERNAME
+
+    token = app_settings.BOT_TOKEN
+    if not token:
+        logger.error("Cannot resolve bot username: BOT_USERNAME and BOT_TOKEN are both unset")
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"https://api.telegram.org/bot{token}/getMe")
+            resp.raise_for_status()
+            username = (resp.json().get("result") or {}).get("username")
+    except Exception as exc:  # network/auth issues — never crash the request
+        logger.error(f"getMe() failed while resolving bot username for invite link: {exc}")
+        return None
+
+    if username:
+        app_settings.BOT_USERNAME = username  # cache for subsequent requests
+        logger.info(f"Resolved bot username via getMe(): {username}")
+    return username
 
 def _executor_name(user: Optional[User]) -> Optional[str]:
     if user is None:
@@ -208,10 +247,18 @@ async def create_invite(
     import asyncio
     from uk_management_bot.database.session import SessionLocal
     from uk_management_bot.services.invite_service import InviteService
-    from uk_management_bot.config.settings import settings as app_settings
     from datetime import timedelta
 
     spec_str = ",".join(body.specializations) if body.specializations else None
+
+    # Resolve the bot username up front: if it can't be determined we must not
+    # generate a token only to hand back a broken https://t.me/None link.
+    bot_username = await _resolve_bot_username()
+    if not bot_username:
+        raise HTTPException(
+            status_code=503,
+            detail="Bot username unavailable — set BOT_USERNAME in the API environment.",
+        )
 
     def _generate():
         sync_db = SessionLocal()
@@ -230,7 +277,6 @@ async def create_invite(
     loop = asyncio.get_running_loop()
     token = await loop.run_in_executor(None, _generate)
 
-    bot_username = app_settings.BOT_USERNAME
     expires_at = datetime.now(timezone.utc) + timedelta(hours=body.hours)
 
     return CreateInviteResponse(
