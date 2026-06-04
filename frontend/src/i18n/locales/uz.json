@@ -279,7 +279,8 @@
     "endShift": "Smenani tugatishda xatolik",
     "minChars": "Kamida {{min}} belgi ({{current}}/{{min}})",
     "shiftDateRequired": "Smena sanasini koʻrsating",
-    "executorsRequired": "Kamida bitta ijrochi tanlang"
+    "executorsRequired": "Kamida bitta ijrochi tanlang",
+    "updateTemplate": "Shablonni saqlashda xatolik"
   },
   "kanban": {
     "createByCall": "Qo'ng'iroq orqali yaratish",
@@ -767,7 +768,9 @@
     "shiftDate": "Smena sanasi",
     "selectExecutors": "Ijrochilar",
     "noExecutors": "Mavjud ijrochilar yoʻq",
-    "createShift": "Smena yaratish"
+    "createShift": "Smena yaratish",
+    "editTemplateTitle": "Shablonni tahrirlash",
+    "saveAction": "Saqlash"
   },
   "board": {
     "ticker": {

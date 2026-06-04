@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useCreateTemplate } from '../../hooks/useTemplates'
-import type { CreateTemplatePayload } from '../../types/api'
+import { useCreateTemplate, useUpdateTemplate } from '../../hooks/useTemplates'
+import type { CreateTemplatePayload, TemplateBrief } from '../../types/api'
 import {
   Dialog,
   DialogContent,
@@ -19,15 +19,40 @@ import { SHIFT_TYPES, PRIORITIES, CYCLE_PRESETS } from '../../constants'
 interface Props {
   isOpen: boolean
   onClose: () => void
+  /** When provided, the modal works in edit mode (pre-filled + PATCH). */
+  template?: TemplateBrief | null
+}
+
+const CREATE_DEFAULTS = {
+  name: '',
+  description: '',
+  startHour: '9',
+  startMinute: '0',
+  durationHours: '8',
+  shiftType: 'regular',
+  recurrenceMode: 'weekday' as 'weekday' | 'cycle',
+  cycleDaysOn: '1',
+  cycleDaysOff: '3',
+  cycleAnchorDate: '',
+  daysOfWeek: [0, 1, 2, 3, 4] as number[],
+  specs: [] as string[],
+  minExecutors: '1',
+  maxExecutors: '5',
+  defaultMaxRequests: '10',
+  priority: '3',
+  autoCreate: false,
 }
 
 const START_MINUTES = [0, 15, 30, 45]
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const SPEC_KEYS = ['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation'] as const
 
-export default function CreateTemplateModal({ isOpen, onClose }: Props) {
+export default function CreateTemplateModal({ isOpen, onClose, template = null }: Props) {
   const { t } = useTranslation()
   const createTemplate = useCreateTemplate()
+  const updateTemplate = useUpdateTemplate()
+  const isEdit = template !== null
+  const isPending = isEdit ? updateTemplate.isPending : createTemplate.isPending
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -47,6 +72,53 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
   const [priority, setPriority] = useState('3')
   const [autoCreate, setAutoCreate] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // (Re)initialise the form each time the modal opens: from the template in
+  // edit mode, or to create-defaults otherwise. The component stays mounted
+  // (returns null when closed), so useState initialisers run only once —
+  // this effect is what actually resets/pre-fills on every open.
+  useEffect(() => {
+    if (!isOpen) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional form (re)init on open; React batches these setState calls into one commit
+    setError(null)
+    if (template) {
+      setName(template.name ?? '')
+      setDescription(template.description ?? '')
+      setStartHour(String(template.start_hour ?? 9))
+      setStartMinute(String(template.start_minute ?? 0))
+      setDurationHours(String(template.duration_hours ?? 8))
+      setShiftType(template.default_shift_type ?? 'regular')
+      setRecurrenceMode(template.recurrence_mode === 'cycle' ? 'cycle' : 'weekday')
+      setCycleDaysOn(String(template.cycle_days_on ?? 1))
+      setCycleDaysOff(String(template.cycle_days_off ?? 3))
+      setCycleAnchorDate(template.cycle_anchor_date ?? '')
+      setDaysOfWeek(Array.isArray(template.days_of_week) ? template.days_of_week : [])
+      setSelectedSpecs(Array.isArray(template.required_specializations) ? template.required_specializations : [])
+      setMinExecutors(String(template.min_executors ?? 1))
+      setMaxExecutors(String(template.max_executors ?? 5))
+      setDefaultMaxRequests(String(template.default_max_requests ?? 10))
+      setPriority(String(template.priority_level ?? 3))
+      setAutoCreate(!!template.auto_create)
+    } else {
+      setName(CREATE_DEFAULTS.name)
+      setDescription(CREATE_DEFAULTS.description)
+      setStartHour(CREATE_DEFAULTS.startHour)
+      setStartMinute(CREATE_DEFAULTS.startMinute)
+      setDurationHours(CREATE_DEFAULTS.durationHours)
+      setShiftType(CREATE_DEFAULTS.shiftType)
+      setRecurrenceMode(CREATE_DEFAULTS.recurrenceMode)
+      setCycleDaysOn(CREATE_DEFAULTS.cycleDaysOn)
+      setCycleDaysOff(CREATE_DEFAULTS.cycleDaysOff)
+      setCycleAnchorDate(CREATE_DEFAULTS.cycleAnchorDate)
+      setDaysOfWeek(CREATE_DEFAULTS.daysOfWeek)
+      setSelectedSpecs(CREATE_DEFAULTS.specs)
+      setMinExecutors(CREATE_DEFAULTS.minExecutors)
+      setMaxExecutors(CREATE_DEFAULTS.maxExecutors)
+      setDefaultMaxRequests(CREATE_DEFAULTS.defaultMaxRequests)
+      setPriority(CREATE_DEFAULTS.priority)
+      setAutoCreate(CREATE_DEFAULTS.autoCreate)
+    }
+  }, [isOpen, template])
 
   if (!isOpen) return null
 
@@ -107,29 +179,17 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
         payload.recurrence_mode = 'weekday'
         payload.days_of_week = daysOfWeek.length > 0 ? daysOfWeek : undefined
       }
-      await createTemplate.mutateAsync(payload)
+      if (isEdit && template) {
+        await updateTemplate.mutateAsync({ id: template.id, ...payload })
+      } else {
+        await createTemplate.mutateAsync(payload)
+      }
+      // The init effect re-fills/resets the form on the next open, so no
+      // manual reset is needed here.
       onClose()
-      // Reset form
-      setName('')
-      setDescription('')
-      setStartHour('9')
-      setStartMinute('0')
-      setDurationHours('8')
-      setShiftType('regular')
-      setRecurrenceMode('weekday')
-      setCycleDaysOn('1')
-      setCycleDaysOff('3')
-      setCycleAnchorDate('')
-      setDaysOfWeek([0, 1, 2, 3, 4])
-      setSelectedSpecs([])
-      setMinExecutors('1')
-      setMaxExecutors('5')
-      setDefaultMaxRequests('10')
-      setPriority('3')
-      setAutoCreate(false)
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : t('errors.createTemplate')
+        err instanceof Error ? err.message : t(isEdit ? 'errors.updateTemplate' : 'errors.createTemplate')
       setError(msg)
     }
   }
@@ -138,7 +198,7 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{t('templates.createTemplateTitle')}</DialogTitle>
+          <DialogTitle>{t(isEdit ? 'templates.editTemplateTitle' : 'templates.createTemplateTitle')}</DialogTitle>
         </DialogHeader>
 
         <form
@@ -434,9 +494,11 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
             </Button>
             <Button
               type="submit"
-              disabled={createTemplate.isPending}
+              disabled={isPending}
             >
-              {createTemplate.isPending ? t('common.creating') : t('templates.createAction')}
+              {isPending
+                ? t(isEdit ? 'common.saving' : 'common.creating')
+                : t(isEdit ? 'templates.saveAction' : 'templates.createAction')}
             </Button>
           </DialogFooter>
         </form>

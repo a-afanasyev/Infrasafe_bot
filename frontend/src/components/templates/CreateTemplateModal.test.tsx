@@ -3,9 +3,32 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { render, screen, waitFor } from '../../test/test-utils'
 import { server } from '../../test/msw/server'
+import type { TemplateBrief } from '../../types/api'
 import CreateTemplateModal from './CreateTemplateModal'
 
 function noop() {}
+
+const EDIT_TEMPLATE: TemplateBrief = {
+  id: 42,
+  name: 'Дневная электрика',
+  description: 'Плановые работы',
+  start_hour: 9,
+  start_minute: 0,
+  duration_hours: 8,
+  default_shift_type: 'regular',
+  days_of_week: [0, 1, 2, 3, 4],
+  is_active: true,
+  min_executors: 2,
+  max_executors: 3,
+  auto_create: true,
+  required_specializations: ['electrician'],
+  default_max_requests: 10,
+  priority_level: 3,
+  recurrence_mode: 'weekday',
+  cycle_days_on: null,
+  cycle_days_off: null,
+  cycle_anchor_date: null,
+}
 
 describe('CreateTemplateModal — recurrence mode', () => {
   it('shows weekday grid by default and hides cycle inputs', () => {
@@ -102,5 +125,52 @@ describe('CreateTemplateModal — recurrence mode', () => {
     })
     expect(posted).toHaveProperty('days_of_week')
     expect(posted).not.toHaveProperty('cycle_days_on')
+  })
+})
+
+describe('CreateTemplateModal — edit mode', () => {
+  it('shows the edit title and pre-fills fields from the template', () => {
+    render(<CreateTemplateModal isOpen onClose={noop} template={EDIT_TEMPLATE} />)
+    expect(screen.getByText('Редактировать шаблон')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Дневная электрика')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Плановые работы')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeInTheDocument()
+  })
+
+  it('pre-fills cycle fields when the template is a cycle template', () => {
+    render(
+      <CreateTemplateModal
+        isOpen
+        onClose={noop}
+        template={{ ...EDIT_TEMPLATE, recurrence_mode: 'cycle', cycle_days_on: 1, cycle_days_off: 3, cycle_anchor_date: '2026-06-05', days_of_week: [] }}
+      />,
+    )
+    // cycle controls visible, weekday grid hidden
+    expect(screen.getByText('Рабочих дней')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('2026-06-05')).toBeInTheDocument()
+    expect(screen.queryByText('Дни недели')).not.toBeInTheDocument()
+  })
+
+  it('PATCHes the template by id on save', async () => {
+    let patchedId: string | null = null
+    let posted: Record<string, unknown> | null = null
+    server.use(
+      http.patch('*/api/v2/shifts/templates/:id', async ({ request, params }) => {
+        patchedId = String(params.id)
+        posted = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ id: 42 })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<CreateTemplateModal isOpen onClose={noop} template={EDIT_TEMPLATE} />)
+
+    const nameInput = screen.getByDisplayValue('Дневная электрика')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Ночная электрика')
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(posted).not.toBeNull())
+    expect(patchedId).toBe('42')
+    expect(posted).toMatchObject({ name: 'Ночная электрика', recurrence_mode: 'weekday' })
   })
 })

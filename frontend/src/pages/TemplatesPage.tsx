@@ -6,6 +6,7 @@ import {
   useUpdateTemplate,
   useDeleteTemplate,
 } from '../hooks/useTemplates'
+import type { TemplateBrief } from '../hooks/useTemplates'
 import CreateTemplateModal from '../components/templates/CreateTemplateModal'
 import CreateShiftFromTemplateModal from '../components/templates/CreateShiftFromTemplateModal'
 import EmptyState from '../components/shared/EmptyState'
@@ -61,6 +62,7 @@ export default function TemplatesPage() {
   usePageTitle(t('nav.templates'))
   const { setActions, clearActions } = useTopbar()
   const [createOpen, setCreateOpen] = useState(false)
+  const [editTemplate, setEditTemplate] = useState<TemplateBrief | null>(null)
   const [shiftModal, setShiftModal] = useState<{ id: number; name: string } | null>(null)
 
   const { data: templates = [], isLoading, isError } = useTemplates()
@@ -129,6 +131,10 @@ export default function TemplatesPage() {
     const tmpl = templates.find((x) => x.id === id)
     setShiftModal({ id, name: tmpl?.name ?? '' })
   }
+
+  const handleEdit = useCallback((tmpl: TemplateBrief) => {
+    setEditTemplate(tmpl)
+  }, [])
 
   if (isLoading) return <LoadingSpinner />
 
@@ -234,6 +240,7 @@ export default function TemplatesPage() {
                     onToggleAutoCreate={handleToggleAutoCreate}
                     onDelete={handleDelete}
                     onCreateFromToday={handleCreateFromTemplate}
+                    onEdit={handleEdit}
                     createPending={false}
                   />
                 )
@@ -243,10 +250,11 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      {/* Create modal */}
+      {/* Create / edit modal (same component, edit mode when a template is passed) */}
       <CreateTemplateModal
-        isOpen={createOpen}
-        onClose={() => setCreateOpen(false)}
+        isOpen={createOpen || editTemplate !== null}
+        template={editTemplate}
+        onClose={() => { setCreateOpen(false); setEditTemplate(null) }}
       />
 
       <CreateShiftFromTemplateModal
@@ -275,7 +283,7 @@ export default function TemplatesPage() {
 }
 
 interface TemplateRowProps {
-  tmpl: import('../hooks/useTemplates').TemplateBrief
+  tmpl: TemplateBrief
   startStr: string
   endStr: string
   typeColor: string
@@ -284,6 +292,7 @@ interface TemplateRowProps {
   onToggleAutoCreate: (id: number, newValue: boolean) => void
   onDelete: (id: number) => void
   onCreateFromToday: (id: number) => void
+  onEdit: (tmpl: TemplateBrief) => void
   createPending: boolean
 }
 
@@ -297,6 +306,7 @@ function TemplateRow({
   onToggleAutoCreate,
   onDelete,
   onCreateFromToday,
+  onEdit,
   createPending,
 }: TemplateRowProps) {
   const { t } = useTranslation()
@@ -460,9 +470,8 @@ function TemplateRow({
           <Button
             variant="outline"
             size="sm"
-            disabled
-            title={t('employees.editInDev')}
-            className="text-xs opacity-60"
+            onClick={() => onEdit(tmpl)}
+            className="text-xs"
           >
             {t('templates.editBtn')}
           </Button>
