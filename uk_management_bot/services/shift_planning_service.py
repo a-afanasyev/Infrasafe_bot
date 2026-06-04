@@ -62,10 +62,9 @@ class ShiftPlanningService:
                 logger.warning(f"Шаблон {template_id} не найден или неактивен")
                 return []
             
-            # Проверяем, подходит ли день недели
-            weekday = target_date.weekday() + 1  # Понедельник = 1
-            if not template.is_day_included(weekday):
-                logger.info(f"День недели {weekday} не включен в шаблон {template_id}")
+            # Проверяем, подходит ли дата (по дням недели или по циклу)
+            if not template.is_date_included(target_date):
+                logger.info(f"Дата {target_date} не включена в шаблон {template_id}")
                 return []
             
             # Проверяем, есть ли уже смены на эту дату по этому шаблону
@@ -173,12 +172,11 @@ class ShiftPlanningService:
             for day_offset in range(7):
                 current_date = week_start + timedelta(days=day_offset)
                 day_name = current_date.strftime('%A')
-                weekday = current_date.weekday() + 1
-                
+
                 results['statistics']['shifts_by_day'][day_name] = 0
-                
+
                 for template in active_templates:
-                    if template.is_day_included(weekday):
+                    if template.is_date_included(current_date):
                         try:
                             shifts = self.create_shift_from_template(template.id, current_date)
                             if shifts:
@@ -250,8 +248,7 @@ class ShiftPlanningService:
                 day_created = 0
                 
                 for template in auto_templates:
-                    weekday = current_date.weekday() + 1
-                    if template.is_day_included(weekday):
+                    if template.is_date_included(current_date):
                         try:
                             # Проверяем, не превышаем ли advance_days
                             if day_offset <= template.advance_days:

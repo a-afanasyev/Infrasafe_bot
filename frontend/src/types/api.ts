@@ -82,6 +82,10 @@ export interface TemplateBrief {
   duration_hours: number
   default_shift_type: string
   days_of_week: number[] | null
+  recurrence_mode?: 'weekday' | 'cycle'
+  cycle_days_on?: number | null
+  cycle_days_off?: number | null
+  cycle_anchor_date?: string | null
   is_active: boolean
   min_executors: number
   max_executors: number
@@ -131,6 +135,10 @@ export interface CreateTemplatePayload {
   duration_hours: number
   default_shift_type: string
   days_of_week?: number[]
+  recurrence_mode?: 'weekday' | 'cycle'
+  cycle_days_on?: number | null
+  cycle_days_off?: number | null
+  cycle_anchor_date?: string | null
   required_specializations?: string[]
   min_executors?: number
   max_executors?: number

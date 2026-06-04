@@ -300,6 +300,37 @@ class TestCreateTemplateBody:
         body = CreateTemplateBody(**self._base(days_of_week=[0, 1, 2, 3, 4, 5, 6]))
         assert len(body.days_of_week) == 7
 
+    def test_default_recurrence_mode_is_weekday(self):
+        body = CreateTemplateBody(**self._base())
+        assert body.recurrence_mode == "weekday"
+        assert body.cycle_days_on is None
+        assert body.cycle_anchor_date is None
+
+    def test_cycle_valid(self):
+        body = CreateTemplateBody(**self._base(
+            recurrence_mode="cycle", cycle_days_on=1, cycle_days_off=3,
+            cycle_anchor_date=date(2026, 6, 5),
+        ))
+        assert body.recurrence_mode == "cycle"
+        assert body.cycle_days_on == 1
+        assert body.cycle_anchor_date == date(2026, 6, 5)
+
+    def test_cycle_missing_days_on_raises(self):
+        with pytest.raises(Exception):
+            CreateTemplateBody(**self._base(
+                recurrence_mode="cycle", cycle_anchor_date=date(2026, 6, 5),
+            ))
+
+    def test_cycle_missing_anchor_raises(self):
+        with pytest.raises(Exception):
+            CreateTemplateBody(**self._base(
+                recurrence_mode="cycle", cycle_days_on=1,
+            ))
+
+    def test_invalid_recurrence_mode_raises(self):
+        with pytest.raises(Exception):
+            CreateTemplateBody(**self._base(recurrence_mode="monthly"))
+
 
 # ---------------------------------------------------------------------------
 # UpdateTemplateBody
@@ -329,6 +360,26 @@ class TestUpdateTemplateBody:
         """Only setting min_executors with no max should not raise."""
         body = UpdateTemplateBody(min_executors=2)
         assert body.min_executors == 2
+
+    def test_cycle_update_valid(self):
+        body = UpdateTemplateBody(
+            recurrence_mode="cycle", cycle_days_on=2, cycle_days_off=2,
+            cycle_anchor_date=date(2026, 6, 5),
+        )
+        assert body.recurrence_mode == "cycle"
+        assert body.cycle_days_off == 2
+
+    def test_cycle_update_missing_anchor_raises(self):
+        with pytest.raises(Exception):
+            UpdateTemplateBody(recurrence_mode="cycle", cycle_days_on=2)
+
+    def test_cycle_update_mode_only_raises(self):
+        """PATCH sending only recurrence_mode='cycle' (no cycle_days_on / anchor)
+        must be rejected — otherwise model_dump(exclude_unset=True) would persist
+        recurrence_mode='cycle' with NULL cycle fields and is_date_included would
+        always return False."""
+        with pytest.raises(Exception):
+            UpdateTemplateBody(recurrence_mode="cycle")
 
 
 # ---------------------------------------------------------------------------

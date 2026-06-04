@@ -16,7 +16,8 @@ def _make_template(template_id=1, name="Тест", is_active=True, auto_create=T
     t.name = name
     t.is_active = is_active
     t.auto_create = auto_create
-    t.is_day_included = MagicMock(return_value=True)
+    # Production code drives generation via is_date_included(date).
+    t.is_date_included = MagicMock(return_value=True)
     return t
 
 
@@ -262,7 +263,7 @@ class TestApplyTemplateToPeriod:
         result = service.apply_template_to_period(1, date(2026, 4, 7), date(2026, 4, 9))
         assert "template_name" in result
         assert "total_created" in result
-        # apply_template called for each day where is_day_included is True
+        # apply_template called for each day where is_date_included is True
         assert service.apply_template.call_count >= 0
 
     def test_exception_returns_error(self):

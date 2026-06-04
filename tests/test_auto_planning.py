@@ -39,15 +39,15 @@ def test_auto_planning():
         # 2. Тест создания смен на завтра
         print("\n2️⃣ Тест 'Создать смены на завтра'...")
         tomorrow = date.today() + timedelta(days=1)
-        weekday_tomorrow = tomorrow.weekday() + 1
-        print(f"Завтра: {tomorrow} (день недели: {weekday_tomorrow})")
-        
+        print(f"Завтра: {tomorrow}")
+
         # Удаляем существующие смены на завтра для чистого теста
         db.query(Shift).filter(func.date(Shift.planned_start_time) == tomorrow).delete()
         db.commit()
         
         # Считаем, сколько шаблонов должно сработать
-        applicable_templates = [t for t in templates if t.is_day_included(weekday_tomorrow)]
+        # (через is_date_included — учитывает и weekday-, и cycle-режим, как в проде)
+        applicable_templates = [t for t in templates if t.is_date_included(tomorrow)]
         print(f"Применимых шаблонов для завтра: {len(applicable_templates)}")
         for template in applicable_templates:
             print(f"  - {template.name} (ожидается {template.min_executors}-{template.max_executors} смен)")

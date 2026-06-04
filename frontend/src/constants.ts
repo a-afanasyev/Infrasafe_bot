@@ -47,3 +47,11 @@ export const PRIORITIES = [
   { value: '4' },
   { value: '5' },
 ] as const
+
+/** Cycle recurrence presets (N working / M off days) for shift templates */
+export const CYCLE_PRESETS = [
+  { on: 1, off: 3 },
+  { on: 2, off: 2 },
+  { on: 3, off: 3 },
+  { on: 1, off: 2 },
+] as const
