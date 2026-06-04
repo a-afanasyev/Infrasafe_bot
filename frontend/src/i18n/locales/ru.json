@@ -277,7 +277,9 @@
     "requestNotFound": "Заявка не найдена",
     "shiftNotFound": "Смена не найдена",
     "endShift": "Ошибка при завершении смены",
-    "minChars": "Минимум {{min}} символов ({{current}}/{{min}})"
+    "minChars": "Минимум {{min}} символов ({{current}}/{{min}})",
+    "shiftDateRequired": "Укажите дату смены",
+    "executorsRequired": "Выберите хотя бы одного исполнителя"
   },
   "kanban": {
     "createByCall": "Создать по звонку",
@@ -770,7 +772,12 @@
     "maxRequests": "Макс. заявок",
     "priority": "Приоритет",
     "autoCreateLabel": "Авто-создание",
-    "createAction": "Создать шаблон"
+    "createAction": "Создать шаблон",
+    "createShiftTitle": "Создать смену из шаблона",
+    "shiftDate": "Дата смены",
+    "selectExecutors": "Исполнители",
+    "noExecutors": "Нет доступных исполнителей",
+    "createShift": "Создать смену"
   },
   "board": {
     "ticker": {

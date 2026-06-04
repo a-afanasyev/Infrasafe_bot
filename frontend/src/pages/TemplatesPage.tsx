@@ -5,9 +5,9 @@ import {
   useTemplates,
   useUpdateTemplate,
   useDeleteTemplate,
-  useCreateShiftFromTemplate,
 } from '../hooks/useTemplates'
 import CreateTemplateModal from '../components/templates/CreateTemplateModal'
+import CreateShiftFromTemplateModal from '../components/templates/CreateShiftFromTemplateModal'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { SPEC_COLORS, getSpecDisplay } from '../utils/employeeUtils'
@@ -61,12 +61,11 @@ export default function TemplatesPage() {
   usePageTitle(t('nav.templates'))
   const { setActions, clearActions } = useTopbar()
   const [createOpen, setCreateOpen] = useState(false)
-  const [pendingCreateId, setPendingCreateId] = useState<number | null>(null)
+  const [shiftModal, setShiftModal] = useState<{ id: number; name: string } | null>(null)
 
   const { data: templates = [], isLoading, isError } = useTemplates()
   const updateTemplate = useUpdateTemplate()
   const deleteTemplate = useDeleteTemplate()
-  const createFromTemplate = useCreateShiftFromTemplate()
 
   const actionsNode = useMemo(
     () => (
@@ -126,12 +125,9 @@ export default function TemplatesPage() {
     setConfirmState({ open: true, templateId: id })
   }, [])
 
-  const handleCreateFromToday = (id: number) => {
-    setPendingCreateId(id)
-    createFromTemplate.mutate(
-      { template_id: id, date: new Date().toISOString().split('T')[0] },
-      { onSettled: () => setPendingCreateId(null) },
-    )
+  const handleCreateFromTemplate = (id: number) => {
+    const tmpl = templates.find((x) => x.id === id)
+    setShiftModal({ id, name: tmpl?.name ?? '' })
   }
 
   if (isLoading) return <LoadingSpinner />
@@ -237,8 +233,8 @@ export default function TemplatesPage() {
                     executorProgress={executorProgress}
                     onToggleAutoCreate={handleToggleAutoCreate}
                     onDelete={handleDelete}
-                    onCreateFromToday={handleCreateFromToday}
-                    createPending={pendingCreateId === tmpl.id}
+                    onCreateFromToday={handleCreateFromTemplate}
+                    createPending={false}
                   />
                 )
               })}
@@ -251,6 +247,13 @@ export default function TemplatesPage() {
       <CreateTemplateModal
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
+      />
+
+      <CreateShiftFromTemplateModal
+        isOpen={shiftModal !== null}
+        onClose={() => setShiftModal(null)}
+        templateId={shiftModal?.id ?? null}
+        templateName={shiftModal?.name}
       />
 
       <ConfirmDialog
