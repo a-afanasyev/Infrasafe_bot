@@ -757,6 +757,10 @@ async def create_template(
         auto_create=body.auto_create,
         default_shift_type=body.default_shift_type,
         priority_level=body.priority_level,
+        recurrence_mode=body.recurrence_mode,
+        cycle_days_on=body.cycle_days_on,
+        cycle_days_off=body.cycle_days_off,
+        cycle_anchor_date=body.cycle_anchor_date,
         is_active=True,
     )
     db.add(tmpl)
@@ -814,6 +818,9 @@ async def create_from_template(
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
 
+    # Recurrence (days_of_week / cycle) НЕ применяется здесь намеренно: менеджер
+    # выбрал конкретную дату вручную — это осознанный разовый override правил
+    # повторения шаблона.
     target_date = body.date
 
     start_dt = datetime(

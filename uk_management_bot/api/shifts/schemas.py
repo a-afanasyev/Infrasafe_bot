@@ -166,6 +166,10 @@ class TemplateBrief(BaseModel):
     required_specializations: Optional[list]
     default_max_requests: int
     priority_level: int
+    recurrence_mode: Literal["weekday", "cycle"] = "weekday"
+    cycle_days_on: Optional[int] = None
+    cycle_days_off: Optional[int] = None
+    cycle_anchor_date: Optional[date_type] = None
 
     model_config = {"from_attributes": True}
 
@@ -184,6 +188,10 @@ class CreateTemplateBody(BaseModel):
     auto_create: bool = False
     default_shift_type: ShiftType = "regular"
     priority_level: int = Field(default=1, ge=1, le=5)
+    recurrence_mode: Literal["weekday", "cycle"] = "weekday"
+    cycle_days_on: Optional[int] = Field(default=None, ge=1, le=365)
+    cycle_days_off: Optional[int] = Field(default=None, ge=0, le=365)
+    cycle_anchor_date: Optional[date_type] = None
 
     @model_validator(mode='after')
     def check_executor_range(self):
@@ -191,6 +199,13 @@ class CreateTemplateBody(BaseModel):
             raise ValueError('min_executors cannot exceed max_executors')
         if any(d < 0 or d > 6 for d in self.days_of_week):
             raise ValueError('days_of_week values must be 0-6')
+        if self.recurrence_mode == "cycle":
+            if self.cycle_days_on is None:
+                raise ValueError('cycle_days_on is required when recurrence_mode is cycle')
+            if self.cycle_anchor_date is None:
+                raise ValueError('cycle_anchor_date is required when recurrence_mode is cycle')
+            if self.cycle_days_on + (self.cycle_days_off or 0) > 366:
+                raise ValueError('cycle_days_on + cycle_days_off cannot exceed 366')
         return self
 
 
@@ -238,6 +253,10 @@ class UpdateTemplateBody(BaseModel):
     auto_create: Optional[bool] = None
     default_shift_type: Optional[ShiftType] = None
     priority_level: Optional[int] = Field(default=None, ge=1, le=5)
+    recurrence_mode: Optional[Literal["weekday", "cycle"]] = None
+    cycle_days_on: Optional[int] = Field(default=None, ge=1, le=365)
+    cycle_days_off: Optional[int] = Field(default=None, ge=0, le=365)
+    cycle_anchor_date: Optional[date_type] = None
     # is_active removed: soft-delete must go through the DELETE endpoint
 
     @model_validator(mode='after')
@@ -248,4 +267,12 @@ class UpdateTemplateBody(BaseModel):
         if self.days_of_week is not None:
             if any(d < 0 or d > 6 for d in self.days_of_week):
                 raise ValueError('days_of_week values must be 0-6')
+        if self.recurrence_mode == "cycle":
+            if self.cycle_days_on is None:
+                raise ValueError('cycle_days_on is required when recurrence_mode is cycle')
+            if self.cycle_anchor_date is None:
+                raise ValueError('cycle_anchor_date is required when recurrence_mode is cycle')
+        if self.cycle_days_on is not None:
+            if self.cycle_days_on + (self.cycle_days_off or 0) > 366:
+                raise ValueError('cycle_days_on + cycle_days_off cannot exceed 366')
         return self

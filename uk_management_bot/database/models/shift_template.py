@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, JSON, DateTime
+from sqlalchemy import Column, Integer, String, Text, Boolean, JSON, DateTime, Date
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from datetime import date
 from uk_management_bot.database.session import Base
 
 
@@ -61,6 +62,19 @@ class ShiftTemplate(Base):
     
     # За сколько дней вперед создавать смены
     advance_days = Column(Integer, default=7, nullable=False)
+
+    # ========== ПОВТОРЕНИЕ (РЕЖИМ ЦИКЛА) ==========
+    # Режим повторения: "weekday" (по дням недели) | "cycle" (N рабочих / M выходных)
+    recurrence_mode = Column(String(20), default="weekday", server_default="weekday", nullable=False)
+
+    # Рабочих дней в цикле (≥1)
+    cycle_days_on = Column(Integer, nullable=True)
+
+    # Выходных дней в цикле (≥0)
+    cycle_days_off = Column(Integer, nullable=True)
+
+    # Первый рабочий день цикла (точка отсчёта фазы)
+    cycle_anchor_date = Column(Date, nullable=True)
     
     # ========== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ ==========
     # Активен ли шаблон
@@ -104,6 +118,22 @@ class ShiftTemplate(Base):
         if not self.days_of_week:
             return False
         return weekday in self.days_of_week
+
+    def is_date_included(self, d: date) -> bool:
+        """Проверяет, попадает ли дата в шаблон с учётом режима повторения.
+
+        Для режима "cycle" считает фазу цикла N рабочих / M выходных от якоря.
+        Для режима "weekday" — существующая логика по дням недели (конвенция 1-7).
+        """
+        if self.recurrence_mode == "cycle":
+            if not self.cycle_anchor_date or not self.cycle_days_on:
+                return False
+            length = self.cycle_days_on + (self.cycle_days_off or 0)
+            if length <= 0:
+                return False
+            offset = (d - self.cycle_anchor_date).days % length  # Python % даёт ≥0 даже до якоря
+            return offset < self.cycle_days_on
+        return self.is_day_included(d.weekday() + 1)  # существующий weekday-режим
     
     def matches_specialization(self, specializations: list) -> bool:
         """Проверяет, соответствует ли шаблон требуемым специализациям"""

@@ -243,9 +243,7 @@ class TemplateManager:
             
             current_date = start_date
             while current_date <= end_date:
-                weekday = current_date.weekday() + 1
-                
-                if template.is_day_included(weekday):
+                if template.is_date_included(current_date):
                     try:
                         shifts = self.apply_template(template_id, current_date)
                         if shifts:
@@ -617,9 +615,13 @@ class TemplateManager:
             if template.min_executors < 1:
                 errors.append('Минимальное количество исполнителей должно быть больше 0')
             
-            # Проверка дней недели
-            if template.auto_create and not template.days_of_week:
-                warnings.append('Автосоздание включено, но дни недели не указаны')
+            # Проверка повторения
+            if template.auto_create:
+                if getattr(template, 'recurrence_mode', 'weekday') == 'cycle':
+                    if not template.cycle_days_on or not template.cycle_anchor_date:
+                        warnings.append('Автосоздание включено в режиме цикла, но не заданы рабочие дни цикла или дата-якорь')
+                elif not template.days_of_week:
+                    warnings.append('Автосоздание включено, но дни недели не указаны')
             
             # Проверка специализаций
             if template.required_specializations:
@@ -740,20 +742,14 @@ class TemplateManager:
         try:
             if not template.auto_create:
                 return 0.0
-            
-            # Количество дней, когда должны были создаваться смены
-            days_with_template = len(template.days_of_week or [])
-            if days_with_template == 0:
-                return 0.0
-            
+
             # Количество дней за последний месяц
             thirty_days_ago = date.today() - timedelta(days=30)
             expected_shifts = 0
-            
+
             current_date = thirty_days_ago
             while current_date <= date.today():
-                weekday = current_date.weekday() + 1
-                if template.is_day_included(weekday):
+                if template.is_date_included(current_date):
                     expected_shifts += 1
                 current_date += timedelta(days=1)
             

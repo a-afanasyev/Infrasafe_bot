@@ -371,6 +371,54 @@ class TestCreateTemplateBody:
         )
         assert body.days_of_week == [0, 1, 2, 3, 4]
 
+    def test_default_recurrence_mode_is_weekday(self):
+        body = CreateTemplateBody(name="Morning", start_hour=8, duration_hours=8)
+        assert body.recurrence_mode == "weekday"
+        assert body.cycle_days_on is None
+        assert body.cycle_anchor_date is None
+
+    def test_cycle_valid(self):
+        body = CreateTemplateBody(
+            name="Сутки через трое", start_hour=8, duration_hours=24,
+            recurrence_mode="cycle", cycle_days_on=1, cycle_days_off=3,
+            cycle_anchor_date=date(2026, 6, 5),
+        )
+        assert body.recurrence_mode == "cycle"
+        assert body.cycle_days_on == 1
+        assert body.cycle_days_off == 3
+        assert body.cycle_anchor_date == date(2026, 6, 5)
+
+    def test_cycle_missing_days_on_raises(self):
+        with pytest.raises(ValidationError) as exc_info:
+            CreateTemplateBody(
+                name="Bad cycle", start_hour=8, duration_hours=8,
+                recurrence_mode="cycle", cycle_anchor_date=date(2026, 6, 5),
+            )
+        assert "cycle_days_on" in str(exc_info.value)
+
+    def test_cycle_missing_anchor_raises(self):
+        with pytest.raises(ValidationError) as exc_info:
+            CreateTemplateBody(
+                name="Bad cycle", start_hour=8, duration_hours=8,
+                recurrence_mode="cycle", cycle_days_on=1,
+            )
+        assert "cycle_anchor_date" in str(exc_info.value)
+
+    def test_invalid_recurrence_mode_raises(self):
+        with pytest.raises(ValidationError):
+            CreateTemplateBody(
+                name="Bad", start_hour=8, duration_hours=8,
+                recurrence_mode="monthly",
+            )
+
+    def test_cycle_days_on_below_one_raises(self):
+        with pytest.raises(ValidationError):
+            CreateTemplateBody(
+                name="Bad", start_hour=8, duration_hours=8,
+                recurrence_mode="cycle", cycle_days_on=0,
+                cycle_anchor_date=date(2026, 6, 5),
+            )
+
 
 # ═══════════════════════ UpdateTemplateBody ═══════════════════════
 
@@ -402,6 +450,31 @@ class TestUpdateTemplateBody:
     def test_none_days_of_week_no_validation(self):
         body = UpdateTemplateBody(days_of_week=None)
         assert body.days_of_week is None
+
+    def test_default_recurrence_mode_none(self):
+        body = UpdateTemplateBody()
+        assert body.recurrence_mode is None
+        assert body.cycle_days_on is None
+
+    def test_cycle_update_valid(self):
+        body = UpdateTemplateBody(
+            recurrence_mode="cycle", cycle_days_on=2, cycle_days_off=2,
+            cycle_anchor_date=date(2026, 6, 5),
+        )
+        assert body.recurrence_mode == "cycle"
+        assert body.cycle_days_on == 2
+
+    def test_cycle_update_missing_anchor_raises(self):
+        with pytest.raises(ValidationError):
+            UpdateTemplateBody(recurrence_mode="cycle", cycle_days_on=2)
+
+    def test_cycle_update_mode_only_raises(self):
+        """PATCH sending only recurrence_mode='cycle' (no cycle_days_on / anchor)
+        must be rejected — otherwise model_dump(exclude_unset=True) would persist
+        recurrence_mode='cycle' with NULL cycle fields and is_date_included would
+        always return False."""
+        with pytest.raises(ValidationError):
+            UpdateTemplateBody(recurrence_mode="cycle")
 
 
 # ═══════════════════════ DeleteEmployeeRequest ═══════════════════════

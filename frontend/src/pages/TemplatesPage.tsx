@@ -36,6 +36,12 @@ function computeEndTime(hour: number, minute: number, duration: number): string 
   return formatTime(endHour, endMinute)
 }
 
+// Format an ISO 'YYYY-MM-DD' anchor date as 'DD.MM'
+function formatAnchor(iso: string): string {
+  const [, month, day] = iso.split('-')
+  return `${day}.${month}`
+}
+
 // Subcomponent to isolate hover state for delete button
 function DeleteButton({ label, onDelete }: { label: string; onDelete: () => void }) {
   return (
@@ -340,24 +346,41 @@ function TemplateRow({
 
       {/* Days of week */}
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
-        <div className="flex gap-[3px]">
-          {DAY_KEYS.map((dayKey, dayIdx) => {
-            const active = tmpl.days_of_week?.includes(dayIdx) ?? false
-            return (
-              <div
-                key={dayIdx}
-                className={cn(
-                  'w-7 h-7 rounded-[6px] flex items-center justify-center text-[11px] font-semibold shrink-0 border',
-                  active
-                    ? 'bg-accent-dim text-accent border-border-active'
-                    : 'bg-bg-surface text-text-muted border-border-default'
-                )}
-              >
-                {t(`days.short.${dayKey}`)}
-              </div>
-            )
-          })}
-        </div>
+        {tmpl.recurrence_mode === 'cycle' &&
+        tmpl.cycle_days_on != null &&
+        tmpl.cycle_days_off != null ? (
+          <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-accent-dim text-accent border border-border-active">
+            {tmpl.cycle_anchor_date
+              ? t('templates.cycleBadge', {
+                  on: tmpl.cycle_days_on,
+                  off: tmpl.cycle_days_off,
+                  anchor: formatAnchor(tmpl.cycle_anchor_date),
+                })
+              : t('templates.cycleBadgeNoAnchor', {
+                  on: tmpl.cycle_days_on,
+                  off: tmpl.cycle_days_off,
+                })}
+          </span>
+        ) : (
+          <div className="flex gap-[3px]">
+            {DAY_KEYS.map((dayKey, dayIdx) => {
+              const active = tmpl.days_of_week?.includes(dayIdx) ?? false
+              return (
+                <div
+                  key={dayIdx}
+                  className={cn(
+                    'w-7 h-7 rounded-[6px] flex items-center justify-center text-[11px] font-semibold shrink-0 border',
+                    active
+                      ? 'bg-accent-dim text-accent border-border-active'
+                      : 'bg-bg-surface text-text-muted border-border-default'
+                  )}
+                >
+                  {t(`days.short.${dayKey}`)}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </td>
 
       {/* Specializations */}

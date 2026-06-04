@@ -44,11 +44,13 @@ def _make_template(
     t.priority_level = priority_level
     t.default_shift_type = default_shift_type
     t.advance_days = advance_days
-    # is_day_included returns True by default
+    # Production code now drives generation via is_date_included(date).
+    # included_days (if given) lists weekday numbers (1=Mon..7=Sun) for parity
+    # with the previous is_day_included semantics.
     if included_days is None:
-        t.is_day_included = MagicMock(return_value=True)
+        t.is_date_included = MagicMock(return_value=True)
     else:
-        t.is_day_included = MagicMock(side_effect=lambda d: d in included_days)
+        t.is_date_included = MagicMock(side_effect=lambda d: (d.weekday() + 1) in included_days)
     return t
 
 
@@ -175,7 +177,7 @@ class TestCreateShiftFromTemplate:
     def test_day_not_included_returns_empty(self):
         service, db = _make_service()
         template = _make_template()
-        template.is_day_included = MagicMock(return_value=False)
+        template.is_date_included = MagicMock(return_value=False)
         q = MagicMock()
         q.filter.return_value.first.return_value = template
         db.query.return_value = q

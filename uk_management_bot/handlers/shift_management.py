@@ -510,10 +510,8 @@ async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMC
         created_by_template = {}
         errors = []
 
-        weekday = tomorrow.weekday() + 1  # 1=понедельник, 7=воскресенье
-
         for template in templates:
-            if template.is_day_included(weekday):
+            if template.is_date_included(tomorrow):
                 try:
                     shifts = planning_service.create_shift_from_template(template.id, tomorrow)
                     if shifts:

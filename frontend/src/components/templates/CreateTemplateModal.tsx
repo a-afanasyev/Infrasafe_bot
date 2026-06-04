@@ -14,13 +14,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { SHIFT_TYPES, PRIORITIES, CYCLE_PRESETS } from '../../constants'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
 }
-
-import { SHIFT_TYPES, PRIORITIES } from '../../constants'
 
 const START_MINUTES = [0, 15, 30, 45]
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
@@ -36,6 +35,10 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
   const [startMinute, setStartMinute] = useState('0')
   const [durationHours, setDurationHours] = useState('8')
   const [shiftType, setShiftType] = useState('regular')
+  const [recurrenceMode, setRecurrenceMode] = useState<'weekday' | 'cycle'>('weekday')
+  const [cycleDaysOn, setCycleDaysOn] = useState('1')
+  const [cycleDaysOff, setCycleDaysOff] = useState('3')
+  const [cycleAnchorDate, setCycleAnchorDate] = useState('')
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4])
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([])
   const [minExecutors, setMinExecutors] = useState('1')
@@ -70,6 +73,16 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
       setError(t('errors.minExceedsMax'))
       return
     }
+    if (recurrenceMode === 'cycle') {
+      if (!cycleAnchorDate) {
+        setError(t('errors.cycleAnchorRequired'))
+        return
+      }
+      if (Number(cycleDaysOn) < 1) {
+        setError(t('errors.cycleDaysOnRequired'))
+        return
+      }
+    }
     try {
       const payload: CreateTemplatePayload = {
         name: name.trim(),
@@ -78,13 +91,21 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
         start_minute: Number(startMinute),
         duration_hours: Number(durationHours),
         default_shift_type: shiftType,
-        days_of_week: daysOfWeek.length > 0 ? daysOfWeek : undefined,
         min_executors: Number(minExecutors),
         max_executors: Number(maxExecutors),
         auto_create: autoCreate,
         required_specializations: selectedSpecs.length > 0 ? selectedSpecs : undefined,
         default_max_requests: Number(defaultMaxRequests),
         priority_level: Number(priority),
+      }
+      if (recurrenceMode === 'cycle') {
+        payload.recurrence_mode = 'cycle'
+        payload.cycle_days_on = Number(cycleDaysOn)
+        payload.cycle_days_off = Number(cycleDaysOff)
+        payload.cycle_anchor_date = cycleAnchorDate || null
+      } else {
+        payload.recurrence_mode = 'weekday'
+        payload.days_of_week = daysOfWeek.length > 0 ? daysOfWeek : undefined
       }
       await createTemplate.mutateAsync(payload)
       onClose()
@@ -95,6 +116,10 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
       setStartMinute('0')
       setDurationHours('8')
       setShiftType('regular')
+      setRecurrenceMode('weekday')
+      setCycleDaysOn('1')
+      setCycleDaysOff('3')
+      setCycleAnchorDate('')
       setDaysOfWeek([0, 1, 2, 3, 4])
       setSelectedSpecs([])
       setMinExecutors('1')
@@ -194,30 +219,108 @@ export default function CreateTemplateModal({ isOpen, onClose }: Props) {
             </Select>
           </div>
 
-          {/* Days of week */}
+          {/* Recurrence mode switch */}
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.daysOfWeek')}</Label>
+            <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.recurrenceMode')}</Label>
             <div className="flex gap-1.5">
-              {DAY_KEYS.map((dayKey, idx) => {
-                const active = daysOfWeek.includes(idx)
+              {(['weekday', 'cycle'] as const).map(mode => {
+                const active = recurrenceMode === mode
                 return (
                   <button
-                    key={idx}
+                    key={mode}
                     type="button"
-                    onClick={() => toggleDay(idx)}
+                    onClick={() => setRecurrenceMode(mode)}
                     className={cn(
-                      'w-9 h-9 rounded-sm text-xs font-semibold cursor-pointer border',
+                      'px-3 h-9 rounded-sm text-xs font-semibold cursor-pointer border',
                       active
                         ? 'bg-accent-dim text-accent border-border-active'
                         : 'bg-bg-surface text-text-muted border-border-default'
                     )}
                   >
-                    {t(`days.short.${dayKey}`)}
+                    {t(mode === 'weekday' ? 'templates.recurrenceModeWeekday' : 'templates.recurrenceModeCycle')}
                   </button>
                 )
               })}
             </div>
           </div>
+
+          {/* Days of week (weekday mode) */}
+          {recurrenceMode === 'weekday' && (
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.daysOfWeek')}</Label>
+              <div className="flex gap-1.5">
+                {DAY_KEYS.map((dayKey, idx) => {
+                  const active = daysOfWeek.includes(idx)
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => toggleDay(idx)}
+                      className={cn(
+                        'w-9 h-9 rounded-sm text-xs font-semibold cursor-pointer border',
+                        active
+                          ? 'bg-accent-dim text-accent border-border-active'
+                          : 'bg-bg-surface text-text-muted border-border-default'
+                      )}
+                    >
+                      {t(`days.short.${dayKey}`)}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Cycle settings (cycle mode) */}
+          {recurrenceMode === 'cycle' && (
+            <div className="space-y-3">
+              <div className="flex gap-1.5">
+                {CYCLE_PRESETS.map(preset => (
+                  <button
+                    key={`${preset.on}/${preset.off}`}
+                    type="button"
+                    onClick={() => {
+                      setCycleDaysOn(String(preset.on))
+                      setCycleDaysOff(String(preset.off))
+                    }}
+                    className="px-2.5 h-8 rounded-full text-xs font-semibold cursor-pointer border bg-bg-surface text-text-secondary border-border-default"
+                  >
+                    {preset.on}/{preset.off}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.cycleDaysOn')}</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={cycleDaysOn}
+                    onChange={e => setCycleDaysOn(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.cycleDaysOff')}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={cycleDaysOff}
+                    onChange={e => setCycleDaysOff(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('templates.cycleAnchor')}</Label>
+                <Input
+                  type="date"
+                  value={cycleAnchorDate}
+                  onChange={e => setCycleAnchorDate(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Required specializations */}
           <div className="space-y-1.5">
