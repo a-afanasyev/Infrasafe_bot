@@ -678,3 +678,84 @@ class TestSetActiveRole:
         result = await service.set_active_role(999, "executor")
 
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Trust invariant: manager/admin ⇒ verification_status = "verified"
+# ---------------------------------------------------------------------------
+
+class TestTrustVerificationInvariant:
+    """Менеджер/админ — корень доверия: при выдаче роли сразу verified,
+    чтобы они не зависали в очереди одобрения (кнопка защищена guard'ом)."""
+
+    def _db_with_user(self, user):
+        db = MagicMock()
+
+        def query_side_effect(model):
+            q = MagicMock()
+            q.filter.return_value.first.return_value = user
+            return q
+
+        db.query.side_effect = query_side_effect
+        db.execute.return_value.scalar.return_value = "2026-01-01"
+        return db
+
+    def test_assign_manager_role_marks_verified(self):
+        user = _make_user(roles='["applicant"]', active_role="applicant")
+        user.verification_status = "pending"
+        db = self._db_with_user(user)
+
+        service = AuthService(db)
+        result = service.assign_role(1, "manager", assigned_by=2)
+
+        assert result is True
+        assert user.verification_status == "verified"
+
+    def test_assign_executor_role_does_not_verify(self):
+        user = _make_user(roles='["applicant"]', active_role="applicant")
+        user.verification_status = "pending"
+        db = self._db_with_user(user)
+
+        service = AuthService(db)
+        result = service.assign_role(1, "executor", assigned_by=2)
+
+        assert result is True
+        assert user.verification_status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_invite_join_as_manager_marks_verified(self):
+        user = _make_user(roles=None, active_role=None)
+        user.verification_status = "pending"
+        service = AuthService(MagicMock())
+        service.get_or_create_user = AsyncMock(return_value=user)
+
+        result = await service.process_invite_join(100, {"role": "manager"})
+
+        assert result is user
+        assert user.verification_status == "verified"
+
+    @pytest.mark.asyncio
+    async def test_invite_join_as_executor_stays_pending(self):
+        user = _make_user(roles=None, active_role=None)
+        user.verification_status = "pending"
+        service = AuthService(MagicMock())
+        service.get_or_create_user = AsyncMock(return_value=user)
+
+        result = await service.process_invite_join(100, {"role": "executor"})
+
+        assert result is user
+        assert user.verification_status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_make_admin_by_password_marks_verified(self):
+        user = _make_user(roles='["applicant"]', active_role="applicant")
+        user.verification_status = "pending"
+        db = self._db_with_user(user)
+        service = AuthService(db)
+
+        with patch("uk_management_bot.config.settings.settings") as mock_settings:
+            mock_settings.ADMIN_PASSWORD = "secret"
+            result = await service.make_admin_by_password(100, "secret")
+
+        assert result is True
+        assert user.verification_status == "verified"

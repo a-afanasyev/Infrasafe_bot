@@ -81,7 +81,7 @@ def init_admin_user() -> bool:
                 status="approved",  # ВАЖНО: approved для доступа к боту!
                 language="ru",
                 phone="+998000000000",  # Заглушка для телефона
-                verification_status="approved"  # Администратор автоматически верифицирован
+                verification_status="verified"  # Администратор автоматически верифицирован
             )
 
             session.add(admin_user)
@@ -168,7 +168,7 @@ def init_all_admins() -> tuple[int, int]:
                         status="approved",  # ВАЖНО: approved!
                         language="ru",
                         phone="+998000000000",  # Заглушка для телефона
-                        verification_status="approved"
+                        verification_status="verified"
                     )
                     session.add(admin_user)
                     created_count += 1
