@@ -7,9 +7,17 @@ interface Props {
   files: File[]
   onChange: (files: File[]) => void
   maxFiles?: number
+  /** Accept-фильтр для input. По умолчанию изображения+видео (поведение CreatePage).
+   *  Для feedback передаётся "image/*" — видео в send_photo упало бы. */
+  accept?: string
 }
 
-export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) {
+export default function PhotoUploader({
+  files,
+  onChange,
+  maxFiles = 5,
+  accept = 'image/*,video/*',
+}: Props) {
   const { t } = useTranslation()
   const { haptic } = useTelegramSDK()
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -50,6 +58,7 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
               className="w-full h-full object-cover"
             />
             <button
+              aria-label={t('twa.photo.remove')}
               onClick={() => handleRemove(i)}
               className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"
             >
@@ -64,6 +73,7 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
                 blocks gallery selection on iOS — now two side-by-side tiles. */}
             <button
               type="button"
+              aria-label={t('twa.photo.camera')}
               onClick={() => cameraRef.current?.click()}
               className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 active:scale-95 transition-transform"
             >
@@ -72,11 +82,12 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
             </button>
             <button
               type="button"
+              aria-label={t('twa.photo.gallery')}
               onClick={() => galleryRef.current?.click()}
               className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 active:scale-95 transition-transform"
             >
               <ImageIcon size={20} />
-              <span className="text-[10px] mt-0.5">Галерея</span>
+              <span className="text-[10px] mt-0.5">{t('twa.photo.gallery')}</span>
             </button>
           </>
         )}
@@ -90,7 +101,7 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
       <input
         ref={cameraRef}
         type="file"
-        accept="image/*,video/*"
+        accept={accept}
         capture="environment"
         onChange={handleAdd}
         className="hidden"
@@ -100,8 +111,8 @@ export default function PhotoUploader({ files, onChange, maxFiles = 5 }: Props) 
       <input
         ref={galleryRef}
         type="file"
-        accept="image/*,video/*"
-        multiple
+        accept={accept}
+        multiple={maxFiles > 1}
         onChange={handleAdd}
         className="hidden"
       />

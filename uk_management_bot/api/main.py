@@ -215,6 +215,9 @@ app.include_router(webhooks_router, prefix="/api/v2/webhooks", tags=["webhooks"]
 from uk_management_bot.api.registration.router import router as registration_router
 app.include_router(registration_router, prefix="/api/v2/registration", tags=["registration"])
 
+from uk_management_bot.api.feedback.router import router as feedback_router
+app.include_router(feedback_router, prefix="/api/v2/feedback", tags=["feedback"])
+
 
 @app.get("/health")
 async def health():

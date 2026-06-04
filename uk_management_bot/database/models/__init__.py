@@ -30,6 +30,9 @@ from .invite_nonce import InviteNonce
 # Resident-board public page config
 from .board_config import BoardConfig
 
+# Обратная связь (жалобы/пожелания)
+from .feedback import Feedback
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -66,7 +69,8 @@ __all__ = [
     'UserYard',
     'WebhookOutbox',
     'InviteNonce',
-    'BoardConfig'
+    'BoardConfig',
+    'Feedback'
 ]
 
 # Добавляем модели заявок, если они доступны

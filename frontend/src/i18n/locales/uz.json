@@ -40,7 +40,8 @@
     "residentBoard": "Aholilar tablosi",
     "boardEditor": "Tablo muharriri",
     "main": "Asosiy",
-    "external": "Tashqi"
+    "external": "Tashqi",
+    "feedback": "Qayta aloqa"
   },
   "boardEditor": {
     "save": "Saqlash",
@@ -939,7 +940,22 @@
     "photo": {
       "add": "Rasm qo'shish",
       "uploading": "Yuklanmoqda...",
-      "maxFiles": "Ko'pi bilan {{count}} ta fayl"
+      "maxFiles": "Ko'pi bilan {{count}} ta fayl",
+      "camera": "Kamera",
+      "gallery": "Galereya",
+      "remove": "Rasmni o‘chirish"
+    },
+    "feedback": {
+      "title": "Qayta aloqa",
+      "typeLabel": "Murojaat turi",
+      "complaint": "Shikoyat",
+      "wish": "Taklif",
+      "descriptionLabel": "Xabar",
+      "descriptionPlaceholder": "Murojaatingizni yozing (kamida 10 ta belgi)…",
+      "photoOptional": "Rasm (ixtiyoriy)",
+      "submit": "Yuborish",
+      "success": "Rahmat! Murojaatingiz qabul qilindi.",
+      "error": "Murojaatni yuborib bo‘lmadi"
     }
   },
   "toast": {
@@ -1010,5 +1026,35 @@
     "templateDeleteFailed": "Shablonni o'chirib bo'lmadi",
     "shiftFromTemplate": "Smena shablondan yaratildi",
     "shiftFromTemplateFailed": "Shablondan smena yaratib bo'lmadi"
+  },
+  "feedback": {
+    "title": "Qayta aloqa",
+    "filterType": "Turi",
+    "filterStatus": "Holati",
+    "all": "Barchasi",
+    "complaint": "Shikoyat",
+    "wish": "Taklif",
+    "new": "Yangi",
+    "in_review": "Ko‘rib chiqilmoqda",
+    "resolved": "Hal qilindi",
+    "author": "Muallif",
+    "date": "Sana",
+    "type": "Turi",
+    "statusLabel": "Holati",
+    "message": "Xabar",
+    "photo": "Rasm",
+    "hasPhoto": "📎 rasm",
+    "reply": "Javob",
+    "replyPlaceholder": "Foydalanuvchiga javob yozing…",
+    "send": "Javob berish",
+    "changeStatus": "Holatni o‘zgartirish",
+    "replySent": "Javob yuborildi",
+    "replyFailed": "Javobni yuborib bo‘lmadi",
+    "statusChanged": "Holat yangilandi",
+    "statusChangeFailed": "Holatni o‘zgartirib bo‘lmadi",
+    "empty": "Murojaatlar yo‘q",
+    "sourceBot": "Bot",
+    "sourceTwa": "Mini App",
+    "alreadyReplied": "Javob yuborilgan"
   }
 }

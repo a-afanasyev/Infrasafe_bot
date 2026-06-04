@@ -23,6 +23,9 @@ from .my_shifts import router as my_shifts_router
 # Обработчики управления дворами пользователей
 from .user_yards_management import router as user_yards_router
 
+# Обработчик обратной связи (жалобы / пожелания)
+from .feedback import router as feedback_router
+
 # Список всех роутеров для регистрации
 __all__ = [
     "auth_router",
@@ -40,5 +43,7 @@ __all__ = [
     "shift_management_router_new",
     "my_shifts_router",
     # Роутер управления дворами
-    "user_yards_router"
+    "user_yards_router",
+    # Роутер обратной связи
+    "feedback_router"
 ]

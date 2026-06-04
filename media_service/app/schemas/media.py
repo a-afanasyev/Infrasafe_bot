@@ -27,6 +27,7 @@ class MediaCategoryEnum(str, Enum):
     PROCESS_VIDEO = "process_video"
     DOCUMENT = "document"
     ARCHIVE = "archive"
+    FEEDBACK_PHOTO = "feedback_photo"
 
 
 class MediaStatusEnum(str, Enum):

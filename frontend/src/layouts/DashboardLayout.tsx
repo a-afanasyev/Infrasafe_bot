@@ -16,6 +16,7 @@ import {
   Table2,
   MapPin,
   MonitorPlay,
+  MessageSquare,
   BookOpen,
   Sun,
   Moon,
@@ -49,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2 },
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
+  { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare },
 ]
 
 // ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────
