@@ -14,6 +14,22 @@ from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
 
 logger = logging.getLogger(__name__)
 
+# Роли — корень доверия: их выдаёт уже доверенный пользователь (инвайт/сид/пароль),
+# поэтому они не проходят гейт верификации и не должны висеть в очереди одобрения.
+TRUSTED_VERIFICATION_ROLES = {"manager", "admin"}
+
+
+def _enforce_trusted_verification(user, granted_roles) -> None:
+    """Если пользователю выданы доверенные роли — помечаем verified.
+
+    Делает состояние «manager/admin в pending» непредставимым: иначе такой
+    пользователь застрянет — кнопка одобрения в панели сотрудников защищена
+    guard'ом «нельзя менять статус менеджера/админа».
+    """
+    if TRUSTED_VERIFICATION_ROLES & set(granted_roles or []):
+        user.verification_status = "verified"
+
+
 class AuthService:
     def __init__(self, db: Session):
         self.db = db
@@ -73,6 +89,7 @@ class AuthService:
                     user.active_role = role
             except Exception:
                 pass
+            _enforce_trusted_verification(user, [role])
             self.db.commit()
             logger.info(f"Пользователь {telegram_id} одобрен с ролью {role}")
             return True
@@ -133,7 +150,10 @@ class AuthService:
             if role not in current_roles:
                 current_roles.append(role)
                 user.roles = json.dumps(current_roles)
-            
+
+            # Менеджер/админ по инвайту — корень доверия, не держим в pending
+            _enforce_trusted_verification(user, [role])
+
             # Устанавливаем специализацию для исполнителей
             if role == "executor" and invite_data.get("specialization"):
                 user.specialization = invite_data["specialization"]
@@ -362,7 +382,10 @@ class AuthService:
             old_roles = current_roles.copy()
             current_roles.append(role)
             user.roles = json.dumps(current_roles)
-            
+
+            # Назначение manager/admin — корень доверия, сразу verified
+            _enforce_trusted_verification(user, [role])
+
             # Если это первая роль или активная роль не установлена
             if not user.active_role or user.active_role not in current_roles:
                 user.active_role = role
@@ -585,6 +608,7 @@ class AuthService:
                 user.active_role = "manager"
             except Exception:
                 pass
+            _enforce_trusted_verification(user, ["manager"])
             self.db.commit()
             logger.info(f"Пользователь {telegram_id} назначен администратором по паролю")
             return True
