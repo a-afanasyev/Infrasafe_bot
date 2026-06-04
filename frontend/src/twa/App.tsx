@@ -12,6 +12,9 @@ import RoleLanding from './components/RoleLanding'
 import { Toaster } from '../components/ui/sonner'
 import '../i18n'
 
+// Shared pages
+import FeedbackPage from './pages/FeedbackPage'
+
 // Applicant pages
 import HomePage from './pages/applicant/HomePage'
 import RequestsPage from './pages/applicant/RequestsPage'
@@ -87,6 +90,9 @@ function TWAContent() {
         <Route path="/exec/tasks/:number" element={<RoleGuard required="executor"><TaskDetailPage /></RoleGuard>} />
         <Route path="/exec/shifts" element={<RoleGuard required="executor"><MyShiftsPage /></RoleGuard>} />
         <Route path="/exec/report/:number" element={<RoleGuard required="executor"><CompletionReport /></RoleGuard>} />
+
+        {/* Обратная связь — общий маршрут для обеих ролей, без таб-бара */}
+        <Route path="/feedback" element={<FeedbackPage />} />
 
         <Route path="*" element={<Navigate to="/twa/app" replace />} />
       </Routes>

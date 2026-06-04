@@ -129,6 +129,9 @@ def get_main_keyboard_for_role(
         builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
 
+    # Обратная связь — доступна всем авторизованным ролям
+    builder.add(KeyboardButton(text=get_text("main_menu.feedback", language=language)))
+
     # Кнопка выбор роли при наличии ≥2 ролей
     if len(unique_roles) > 1:
         builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))

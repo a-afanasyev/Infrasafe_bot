@@ -141,6 +141,9 @@ class FileCategories:
     COMPLETION_PHOTO = "completion_photo"
     COMPLETION_VIDEO = "completion_video"
 
+    # Обратная связь (жалобы/пожелания)
+    FEEDBACK_PHOTO = "feedback_photo"
+
     # Системные
     ARCHIVE = "archive"
     BACKUP = "backup"
@@ -154,6 +157,7 @@ class FileCategories:
         REPORT_VIDEO: TelegramChannels.REPORTS,
         COMPLETION_PHOTO: TelegramChannels.REPORTS,
         COMPLETION_VIDEO: TelegramChannels.REPORTS,
+        FEEDBACK_PHOTO: TelegramChannels.REQUESTS,
         ARCHIVE: TelegramChannels.ARCHIVE,
         BACKUP: TelegramChannels.BACKUP
     }

@@ -40,7 +40,8 @@
     "residentBoard": "Табло жителей",
     "boardEditor": "Редактор витрины",
     "main": "Основное",
-    "external": "Внешнее"
+    "external": "Внешнее",
+    "feedback": "Обратная связь"
   },
   "boardEditor": {
     "save": "Сохранить",
@@ -949,7 +950,22 @@
     "photo": {
       "add": "Добавить фото",
       "uploading": "Загрузка...",
-      "maxFiles": "Максимум {{count}} файлов"
+      "maxFiles": "Максимум {{count}} файлов",
+      "camera": "Камера",
+      "gallery": "Галерея",
+      "remove": "Удалить фото"
+    },
+    "feedback": {
+      "title": "Обратная связь",
+      "typeLabel": "Тип обращения",
+      "complaint": "Жалоба",
+      "wish": "Пожелание",
+      "descriptionLabel": "Сообщение",
+      "descriptionPlaceholder": "Опишите ваше обращение (минимум 10 символов)…",
+      "photoOptional": "Фото (необязательно)",
+      "submit": "Отправить",
+      "success": "Спасибо! Ваше обращение принято.",
+      "error": "Не удалось отправить обращение"
     }
   },
   "toast": {
@@ -1020,5 +1036,35 @@
     "templateDeleteFailed": "Не удалось удалить шаблон",
     "shiftFromTemplate": "Смена создана из шаблона",
     "shiftFromTemplateFailed": "Не удалось создать смену из шаблона"
+  },
+  "feedback": {
+    "title": "Обратная связь",
+    "filterType": "Тип",
+    "filterStatus": "Статус",
+    "all": "Все",
+    "complaint": "Жалоба",
+    "wish": "Пожелание",
+    "new": "Новое",
+    "in_review": "В работе",
+    "resolved": "Решено",
+    "author": "Автор",
+    "date": "Дата",
+    "type": "Тип",
+    "statusLabel": "Статус",
+    "message": "Сообщение",
+    "photo": "Фото",
+    "hasPhoto": "📎 фото",
+    "reply": "Ответ",
+    "replyPlaceholder": "Напишите ответ пользователю…",
+    "send": "Ответить",
+    "changeStatus": "Сменить статус",
+    "replySent": "Ответ отправлен",
+    "replyFailed": "Не удалось отправить ответ",
+    "statusChanged": "Статус обновлён",
+    "statusChangeFailed": "Не удалось изменить статус",
+    "empty": "Обращений нет",
+    "sourceBot": "Бот",
+    "sourceTwa": "Mini App",
+    "alreadyReplied": "Ответ отправлен"
   }
 }

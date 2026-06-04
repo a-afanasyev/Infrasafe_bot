@@ -7035,7 +7035,8 @@
     "my_shifts": "📋 Mening smenalarim",
     "switch_role": "🔀 Rolni tanlash",
     "admin_panel": "🔧 Admin panel",
-    "acceptance": "✅ Qabul qilish kutilmoqda"
+    "acceptance": "✅ Qabul qilish kutilmoqda",
+    "feedback": "📝 Qayta aloqa"
   },
   "validation": {
     "phone_empty": "Telefon raqami bo'sh bo'lishi mumkin emas",
@@ -8132,5 +8133,20 @@
     "confirm_yes": "✅ Ha, yaratish",
     "confirm_no": "❌ Bekor qilish",
     "cancelled": "❎ Bekor qilindi"
+  },
+  "feedback": {
+    "prompt_type": "Murojaat turini tanlang:",
+    "type_complaint": "⚠️ Shikoyat",
+    "type_wish": "💡 Taklif",
+    "prompt_text": "Murojaatingizni yozing (kamida 10 ta belgi):",
+    "validation_short": "Juda qisqa — batafsilroq yozing (kamida 10 ta belgi).",
+    "prompt_photo": "Rasm biriktiring (ixtiyoriy) yoki «O‘tkazib yuborish» tugmasini bosing.",
+    "skip_photo": "⏭ O‘tkazib yuborish",
+    "confirm": "Murojaatni yuborilsinmi?",
+    "btn_send": "✅ Yuborish",
+    "btn_cancel": "❌ Bekor qilish",
+    "success": "✅ Rahmat! Murojaatingiz qabul qilindi. Menejerlar xabardor qilindi.",
+    "cancelled": "Murojaat bekor qilindi.",
+    "reply_to_user": "💬 <b>Murojaatingizga javob</b>\n\n{reply}"
   }
 }

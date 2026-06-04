@@ -1,14 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import RoleSwitchButton from '../../components/RoleSwitchButton'
-import { Globe, Wrench, LogOut } from 'lucide-react'
+import { Globe, Wrench, LogOut, MessageSquare, ChevronRight } from 'lucide-react'
 
 export default function ExecutorProfilePage() {
   const { t, i18n } = useTranslation()
   const { haptic, close } = useTelegramSDK()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const { data: profile } = useQuery({
@@ -88,6 +90,18 @@ export default function ExecutorProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* Обратная связь */}
+      <button
+        onClick={() => { haptic('selection'); navigate('/twa/feedback') }}
+        className="w-full flex items-center justify-between bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3"
+      >
+        <span className="flex items-center gap-2">
+          <MessageSquare size={16} className="text-amber-500" />
+          <span className="font-semibold text-[13px]">{t('twa.feedback.title')}</span>
+        </span>
+        <ChevronRight size={16} className="text-gray-400" />
+      </button>
 
       <button onClick={close} className="w-full flex items-center justify-center gap-2 text-gray-400 text-[13px] py-4">
         <LogOut size={14} /> {t('twa.profile.close')}

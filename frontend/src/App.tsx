@@ -23,6 +23,7 @@ const AddressesPage = lazy(() => import('./pages/AddressesPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
                 <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
+                <Route path="feedback" element={<PageErrorBoundary><FeedbackPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Resident board - public standalone page (УК landing) */}

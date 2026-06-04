@@ -98,6 +98,11 @@ def _init_button_texts() -> dict:
         fallback_text="Create Request"
     )
 
+    button_texts['feedback'] = get_button_texts_for_all_languages(
+        "main_menu.feedback",
+        fallback_text="📝 Обратная связь"
+    )
+
     button_texts['my_requests'] = get_button_texts_for_all_languages(
         "main_menu.my_requests",
         fallback_text="My Requests"
@@ -343,11 +348,16 @@ def get_create_request_texts() -> List[str]:
 def get_my_requests_texts() -> List[str]:
     """
     Получить тексты кнопки 'Мои заявки' для всех языков.
-    
+
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
     return BUTTON_TEXTS.get('my_requests', ["My Requests"])
+
+
+def get_feedback_texts() -> List[str]:
+    """Тексты кнопки 'Обратная связь' для всех языков (для F.text.in_())."""
+    return BUTTON_TEXTS.get('feedback', ["📝 Обратная связь"])
 
 
 def get_profile_texts() -> List[str]:
