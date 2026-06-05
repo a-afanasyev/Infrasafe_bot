@@ -567,9 +567,20 @@ async def get_schedule(
         raise HTTPException(status_code=422, detail="date_to must be >= date_from")
     if (date_to - date_from).days > 90:
         raise HTTPException(status_code=422, detail="Date range cannot exceed 90 days")
+    # Overlap filter (not start_time-only): a shift belongs on every day it
+    # spans, so a 24h/overnight shift shows on both its start and end day.
+    # Ended shift overlaps [date_from, date_to) iff start < date_to AND end > date_from.
+    # Open shifts (end_time NULL — unknown end) keep the old start-in-range
+    # behaviour so a long-ago open shift doesn't leak into every future day.
     result = await db.execute(
         select(Shift)
-        .where(Shift.start_time >= date_from, Shift.start_time <= date_to)
+        .where(
+            Shift.start_time < date_to,
+            or_(
+                Shift.end_time > date_from,
+                and_(Shift.end_time.is_(None), Shift.start_time >= date_from),
+            ),
+        )
         .order_by(Shift.start_time.asc())
     )
     shifts = result.scalars().all()
