@@ -22,17 +22,18 @@ TYPE_TO_CATEGORY = {
 }
 DEFAULT_CATEGORY = "Другое"
 
-# alert.severity → UK request urgency. InfraSafe шлёт WARNING / CRITICAL.
+# alert.severity → UK request urgency (канон-ключи, TASK 17). InfraSafe шлёт WARNING / CRITICAL.
 SEVERITY_TO_URGENCY = {
-    "WARNING": "Обычная",
-    "CRITICAL": "Срочная",
+    "WARNING": "low",
+    "CRITICAL": "high",
 }
-DEFAULT_URGENCY = "Обычная"
+DEFAULT_URGENCY = "low"
 
-# Sprint 10 / INT-120 — canonical urgency ladder, used to validate
-# `uk_urgency_override` on inbound webhooks. Order matters for ops/audit but
-# not for membership checks (we only use it as a set here).
-URGENCY_LADDER = frozenset({"Обычная", "Средняя", "Срочная", "Критическая"})
+# Sprint 10 / INT-120 — канонический набор urgency-ключей. Валидация
+# `uk_urgency_override` теперь идёт через normalize_urgency (ключ|рус→ключ)
+# в inbound_alert; этот набор оставлен как канон-референс/совместимость.
+from uk_management_bot.utils.constants import URGENCY_VALUES
+URGENCY_LADDER = frozenset(URGENCY_VALUES)
 
 # Sprint 10 / INT-120 — `event=alert.engineer_required` (chain hit
 # `max_reopens_per_24h`). Per InfraSafe Sprint 10 spec §2.4 these are fixed:
@@ -40,4 +41,4 @@ URGENCY_LADDER = frozenset({"Обычная", "Средняя", "Срочная"
 # инженерную очередь. UK игнорирует `uk_urgency_override`/`severity` для этого
 # event-type — они нерелевантны при принудительном route'е.
 ENGINEER_REQUIRED_CATEGORY = "Инженерный разбор"
-ENGINEER_REQUIRED_URGENCY = "Критическая"
+ENGINEER_REQUIRED_URGENCY = "critical"  # канон-ключ (TASK 17)

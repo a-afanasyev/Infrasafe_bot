@@ -22,7 +22,7 @@ class Request(Base):
     address = Column(Text, nullable=True)  # Legacy: сохраняем для старых заявок, но делаем nullable
     description = Column(Text, nullable=False)
     apartment = Column(String(20), nullable=True)  # Legacy: заменено на apartment_id
-    urgency = Column(String(20), default="Обычная", nullable=False)
+    urgency = Column(String(20), default="low", nullable=False)  # канон-ключ (TASK 17)
     source = Column(String(20), default='bot', nullable=True)
 
     # Новая система адресов: связь с квартирой из справочника

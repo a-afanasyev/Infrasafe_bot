@@ -29,7 +29,7 @@ def _make_db():
 def _make_request(
     request_number="260401-001",
     status="Новая",
-    urgency="Обычная",
+    urgency="low",
     category="сантехника",
     address="ул. Тестовая 1",
     executor_id=None,
@@ -108,19 +108,19 @@ class TestCalculateUrgencyPriorityScore:
         self.dispatcher = SmartDispatcher(_make_db())
 
     def test_critical_is_1(self):
-        req = _make_request(urgency="Критическая")
+        req = _make_request(urgency="critical")
         assert self.dispatcher._calculate_urgency_priority_score(req) == 1.0
 
     def test_urgent_is_0_8(self):
-        req = _make_request(urgency="Срочная")
+        req = _make_request(urgency="high")
         assert self.dispatcher._calculate_urgency_priority_score(req) == pytest.approx(0.8)
 
     def test_medium_is_0_5(self):
-        req = _make_request(urgency="Средняя")
+        req = _make_request(urgency="medium")
         assert self.dispatcher._calculate_urgency_priority_score(req) == pytest.approx(0.5)
 
     def test_regular_is_0_3(self):
-        req = _make_request(urgency="Обычная")
+        req = _make_request(urgency="low")
         assert self.dispatcher._calculate_urgency_priority_score(req) == pytest.approx(0.3)
 
     def test_unknown_urgency_defaults_to_0_3(self):
@@ -374,15 +374,15 @@ class TestPrioritizeRequests:
         self.dispatcher = SmartDispatcher(_make_db())
 
     def test_critical_before_regular(self):
-        req1 = _make_request(request_number="001", urgency="Обычная")
-        req2 = _make_request(request_number="002", urgency="Критическая")
+        req1 = _make_request(request_number="001", urgency="low")
+        req2 = _make_request(request_number="002", urgency="critical")
         sorted_requests = self.dispatcher._prioritize_requests([req1, req2])
-        assert sorted_requests[0].urgency == "Критическая"
+        assert sorted_requests[0].urgency == "critical"
 
     def test_same_urgency_ordered_by_creation_time(self):
-        req1 = _make_request(request_number="001", urgency="Обычная")
+        req1 = _make_request(request_number="001", urgency="low")
         req1.created_at = datetime(2026, 4, 1, 10, 0, 0)
-        req2 = _make_request(request_number="002", urgency="Обычная")
+        req2 = _make_request(request_number="002", urgency="low")
         req2.created_at = datetime(2026, 4, 1, 9, 0, 0)  # Earlier
         sorted_requests = self.dispatcher._prioritize_requests([req1, req2])
         assert sorted_requests[0].created_at < sorted_requests[1].created_at

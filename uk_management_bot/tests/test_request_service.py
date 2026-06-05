@@ -61,14 +61,14 @@ class TestRequestService(unittest.TestCase):
             address="ул. Тестовая, 123",
             description="Не работает свет в подъезде",
             apartment="15",
-            urgency="Обычная"
+            urgency="Обычная"  # legacy-рус вход → нормализуется в ключ
         )
-        
+
         self.assertIsNotNone(request)
         self.assertEqual(request.user_id, self.test_user.id)
         self.assertEqual(request.category, "Электрика")
         self.assertEqual(request.status, "Новая")
-        self.assertEqual(request.urgency, "Обычная")
+        self.assertEqual(request.urgency, "low")  # TASK 17: канон-ключ
     
     def test_create_request_invalid_category(self):
         """Тест создания заявки с неверной категорией"""

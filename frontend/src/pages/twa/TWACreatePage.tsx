@@ -14,7 +14,7 @@ export default function TWACreatePage() {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
     category: '',
-    urgency: '\u041E\u0431\u044B\u0447\u043D\u0430\u044F',
+    urgency: 'low',
     description: '',
     address: '',
   })

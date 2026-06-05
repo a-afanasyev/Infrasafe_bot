@@ -30,10 +30,24 @@ class TestConstants:
         assert "Принято" in VALID_STATUSES
 
     def test_valid_urgencies_contains_expected(self):
-        assert "Обычная" in VALID_URGENCIES
-        assert "Средняя" in VALID_URGENCIES
-        assert "Срочная" in VALID_URGENCIES
-        assert "Критическая" in VALID_URGENCIES
+        # TASK 17: канон — внутренние ключи.
+        assert VALID_URGENCIES == ["low", "medium", "high", "critical"]
+
+    def test_create_body_accepts_key_and_legacy_russian(self):
+        # Толерантно (Phase 1 rollout): рус нормализуется в ключ.
+        assert CreateRequestBody(category="Электрика", urgency="high", description="x"*5).urgency == "high"
+        assert CreateRequestBody(category="Электрика", urgency="Срочная", description="x"*5).urgency == "high"
+
+    def test_create_body_rejects_unknown_urgency(self):
+        with pytest.raises(ValidationError):
+            CreateRequestBody(category="Электрика", urgency="nope", description="x"*5)
+
+    def test_update_body_urgency_optional_and_normalized(self):
+        assert UpdateRequestBody().urgency is None
+        assert UpdateRequestBody(urgency="critical").urgency == "critical"
+        assert UpdateRequestBody(urgency="Критическая").urgency == "critical"
+        with pytest.raises(ValidationError):
+            UpdateRequestBody(urgency="nope")
 
 
 # ═══════════════════════ RequestCard ═══════════════════════

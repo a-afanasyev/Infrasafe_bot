@@ -34,6 +34,17 @@ describe('apiMaps known values → i18n keys', () => {
     expect(tPriority('5', t)).toBe('T:priority.5')
     expect(tApprovalStatus('approved', t)).toBe('T:approvalStatus.approved')
   })
+
+  it('tUrgency dual-read: canonical keys AND legacy russian map to same i18n key (TASK 17)', () => {
+    // канон-ключи
+    expect(tUrgency('low', t)).toBe('T:urgency.normal')
+    expect(tUrgency('medium', t)).toBe('T:urgency.medium')
+    expect(tUrgency('high', t)).toBe('T:urgency.urgent')
+    expect(tUrgency('critical', t)).toBe('T:urgency.critical')
+    // legacy-рус (cached-клиенты / смешанные данные)
+    expect(tUrgency('Обычная', t)).toBe('T:urgency.normal')
+    expect(tUrgency('Срочная', t)).toBe('T:urgency.urgent')
+  })
 })
 
 describe('apiMaps unknown values → raw + console.warn', () => {

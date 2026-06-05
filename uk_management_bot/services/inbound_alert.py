@@ -21,10 +21,10 @@ from uk_management_bot.api.webhooks.mappings import (
     ENGINEER_REQUIRED_URGENCY,
     SEVERITY_TO_URGENCY,
     TYPE_TO_CATEGORY,
-    URGENCY_LADDER,
 )
 from uk_management_bot.api.webhooks.replay import is_replay
 from uk_management_bot.api.webhooks.schemas import AlertBlock, InfrasafeAlertIn
+from uk_management_bot.utils.constants import normalize_urgency
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.request import Request
@@ -108,8 +108,12 @@ async def handle_infrasafe_alert(
         # mapping. Spec §2.2 says UK *SHOULD* (not MUST) use the override —
         # graceful fallback keeps the request creatable on contract drift.
         if alert.uk_urgency_override is not None:
-            if alert.uk_urgency_override in URGENCY_LADDER:
-                urgency = alert.uk_urgency_override
+            # TASK 17: канон — ключи; на переходный период принимаем И ключ, И
+            # legacy-рус (партнёр мигрирует на ключи). normalize_urgency вернёт
+            # ключ для известного значения, иначе None → fallback на severity.
+            override_key = normalize_urgency(alert.uk_urgency_override)
+            if override_key is not None:
+                urgency = override_key
             else:
                 logger.warning(
                     "inbound alert: uk_urgency_override=%r outside canonical "

@@ -28,7 +28,14 @@ export function tStatus(apiValue: string, t: TFunction): string {
 }
 
 // === Urgencies (4 values) ===
+// TASK 17: канон — ключи. Dual-read на окно перехода: принимаем И ключ, И
+// legacy-рус (старые/cached клиенты, смешанные данные). Рус-ключи снять в Фазе 2.
 export const URGENCY_MAP = {
+  low:           'urgency.normal',
+  medium:        'urgency.medium',
+  high:          'urgency.urgent',
+  critical:      'urgency.critical',
+  // legacy-рус
   'Обычная':      'urgency.normal',
   'Средняя':      'urgency.medium',
   'Срочная':      'urgency.urgent',

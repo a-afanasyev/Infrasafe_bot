@@ -2,11 +2,14 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
+from uk_management_bot.utils.constants import URGENCY_VALUES, validate_canonical_urgency
+
 VALID_STATUSES = [
     "Новая", "В работе", "Закуп", "Уточнение",
     "Выполнена", "Исполнено", "Принято", "Отменена",
 ]
-VALID_URGENCIES = ["Обычная", "Средняя", "Срочная", "Критическая"]
+# Канон — ключи (low/medium/high/critical); валидация толерантна (см. validate_canonical_urgency).
+VALID_URGENCIES = list(URGENCY_VALUES)
 
 
 class RequestCard(BaseModel):
@@ -71,13 +74,13 @@ class CreateRequestBody(BaseModel):
     @field_validator("urgency")
     @classmethod
     def validate_urgency(cls, v: str) -> str:
-        if v not in VALID_URGENCIES:
-            raise ValueError(f"urgency must be one of: {VALID_URGENCIES}")
-        return v
+        # Толерантно (Phase 1): ключ ИЛИ legacy-рус → ключ; иначе ValueError.
+        return validate_canonical_urgency(v)
 
 
 class UpdateRequestBody(BaseModel):
     status: Optional[str] = None
+    urgency: Optional[str] = None
     executor_id: Optional[int] = None
     notes: Optional[str] = None
     completion_report: Optional[str] = None
@@ -93,6 +96,13 @@ class UpdateRequestBody(BaseModel):
         if v is not None and v not in VALID_STATUSES:
             raise ValueError(f"status must be one of: {VALID_STATUSES}")
         return v
+
+    @field_validator("urgency")
+    @classmethod
+    def validate_urgency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_canonical_urgency(v)
 
     @field_validator("rating")
     @classmethod

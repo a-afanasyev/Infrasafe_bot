@@ -85,3 +85,12 @@ class TestCallCenterCreateRequest:
     def test_missing_description_raises(self):
         with pytest.raises(ValidationError):
             CallCenterCreateRequest(category="Тест", urgency="Обычная")
+
+    def test_urgency_normalized_to_key(self):
+        # TASK 17: канон-ключ; толерантно принимает ключ и legacy-рус.
+        assert CallCenterCreateRequest(category="Электрика", urgency="high", description="x").urgency == "high"
+        assert CallCenterCreateRequest(category="Электрика", urgency="Срочная", description="x").urgency == "high"
+
+    def test_unknown_urgency_raises(self):
+        with pytest.raises(ValidationError):
+            CallCenterCreateRequest(category="Электрика", urgency="nope", description="x")

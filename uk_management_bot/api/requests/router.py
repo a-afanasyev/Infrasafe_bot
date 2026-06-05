@@ -39,6 +39,9 @@ _REQUEST_VALID_TRANSITIONS: dict[str, set[str]] = {
     "Отменена":  set(),
 }
 
+# Терминальные (финализированные) статусы — заявка заморожена для urgency-правок.
+_TERMINAL_STATUSES = {"Принято", "Отменена"}
+
 
 def _generate_request_number(today_str: str, count: int) -> str:
     """Generate request number. Format: YYMMDD-NNN (supports up to 999 per day)."""
@@ -400,9 +403,25 @@ async def update_request(
                 detail=f"Transition '{req.status}' → '{new_status}' is not allowed"
             )
 
+    # ── Urgency terminal-guard: финализированную заявку нельзя переприоритизировать.
+    # Проверяем И текущий, И целевой статус, иначе combined-PATCH
+    # {"status":"Принято","urgency":...} обошёл бы проверку только текущего.
+    if "urgency" in updates:
+        target_status = updates.get("status", req.status)
+        if req.status in _TERMINAL_STATUSES or target_status in _TERMINAL_STATUSES:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot change urgency of a finalized request",
+            )
+
     old_status = req.status
+    old_values = {f: getattr(req, f) for f in updates}
     for field, value in updates.items():
         setattr(req, field, value)
+    # Реальная смена нестатусных полей (после role-фильтрации updates) — для request.updated.
+    changed_non_status = [
+        f for f in updates if f != "status" and old_values[f] != getattr(req, f)
+    ]
 
     await db.commit()
     await db.refresh(req)
@@ -413,6 +432,11 @@ async def update_request(
         # Webhook to InfraSafe (ARCH-113: shared builder, tagged source=api)
         await emit_request_status_changed(db, request_number, old_status, req.status, source="api")
         await db.commit()
+
+    # Реалтайм для канбана при изменении нестатусного поля (вкл. urgency).
+    # Только по факту изменения — no-op и отброшенные поля события не дают.
+    if changed_non_status:
+        await publish_request_event("request.updated", {"number": request_number})
 
     return RequestCard.model_validate(req)
 

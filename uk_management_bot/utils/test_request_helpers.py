@@ -202,6 +202,14 @@ class TestFormatRequestDetails:
         result = format_request_details(req, language="ru")
         assert "Важная проблема" in result
 
+    def test_urgency_localized_not_raw_key(self):
+        # TASK 17: urgency хранится ключом, но в сообщении показывается локализованно.
+        from uk_management_bot.utils.request_helpers import format_request_details
+        req = _make_request(urgency="high", description="нет утечки ключа")
+        result = format_request_details(req, language="ru")
+        assert "Срочная" in result
+        assert "high" not in result  # сырой ключ не должен утечь
+
     def test_with_apartment(self):
         from uk_management_bot.utils.request_helpers import format_request_details
         req = _make_request(apartment="42")

@@ -309,18 +309,10 @@ class Validator:
                 error_msg = "Срочность не может быть пустой"
             return False, error_msg
         
-        # TASK 17: Проверяем внутренний ключ вместо русских строк
-        # Поддерживаем обратную совместимость с legacy данными
-        urgency_key = urgency
-        if urgency not in URGENCY_INTERNAL_KEYS:
-            # Попытка разрешить legacy текст в внутренний ключ
-            urgency_mapping = {
-                "Обычная": "low",
-                "Средняя": "medium",
-                "Срочная": "high",
-                "Критическая": "critical"
-            }
-            urgency_key = urgency_mapping.get(urgency, urgency)
+        # TASK 17: канон — внутренние ключи. legacy-рус нормализуем через
+        # единый normalize_urgency (без дублирующей мапы — см. constants).
+        from uk_management_bot.utils.constants import normalize_urgency
+        urgency_key = normalize_urgency(urgency) or urgency
         
         if urgency_key not in URGENCY_INTERNAL_KEYS:
             # Получаем список доступных срочностей на языке пользователя

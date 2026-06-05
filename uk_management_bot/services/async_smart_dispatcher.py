@@ -385,11 +385,12 @@ class AsyncSmartDispatcher:
     async def _calculate_urgency_score(self, request: Request) -> float:
         """Оценка срочности заявки (ASYNC VERSION)"""
         try:
+            # TASK 17: канон-ключи (числа сохранены: low=Обычная, high=Срочная, critical=Критическая)
             urgency_map = {
-                "Критическая": 1.0,
-                "Срочная": 0.8,
-                "Обычная": 0.5,
-                "Низкая": 0.2
+                "critical": 1.0,
+                "high": 0.8,
+                "medium": 0.5,
+                "low": 0.5,
             }
 
             return urgency_map.get(request.urgency, 0.5)

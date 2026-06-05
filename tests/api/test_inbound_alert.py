@@ -134,7 +134,7 @@ async def test_alert_created_creates_request(webhook_client, building, db_sessio
     req = await db_session.get(Request, rn)
     assert req is not None
     assert req.category == "Сантехника"          # LEAK_DETECTED → Сантехника
-    assert req.urgency == "Обычная"              # WARNING → Обычная
+    assert req.urgency == "low"                  # WARNING → low (TASK 17)
     assert req.apartment_id is None              # building-level
     assert req.address == building.address
     assert req.description == "Перегрузка трансформатора"
@@ -208,7 +208,7 @@ async def test_critical_severity_maps_to_urgent(webhook_client, building, db_ses
     r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.7"))
     assert r.status_code == 202
     req = await db_session.get(Request, r.json()["request_number"])
-    assert req.urgency == "Срочная"
+    assert req.urgency == "high"
 
 
 @pytest.mark.asyncio
@@ -284,7 +284,24 @@ async def test_uk_urgency_override_takes_precedence(
     r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.12"))
     assert r.status_code == 202
     req = await db_session.get(Request, r.json()["request_number"])
-    assert req.urgency == "Критическая"
+    assert req.urgency == "critical"
+
+
+@pytest.mark.asyncio
+async def test_uk_urgency_override_accepts_canonical_key(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """TASK 17: партнёр после миграции шлёт override ключом — UK принимает его как есть."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-override-key", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        reopen_sequence=2, uk_urgency_override="critical",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.13"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.urgency == "critical"
 
 
 @pytest.mark.asyncio
@@ -305,7 +322,7 @@ async def test_uk_urgency_override_outside_ladder_falls_back(
     assert r.status_code == 202
     req = await db_session.get(Request, r.json()["request_number"])
     # Fell back to severity mapping (CRITICAL → Срочная), NOT the bad override.
-    assert req.urgency == "Срочная"
+    assert req.urgency == "high"
 
 
 @pytest.mark.asyncio
@@ -389,7 +406,7 @@ async def test_engineer_required_routes_to_engineering_queue(
     req = await db_session.get(Request, r.json()["request_number"])
     assert req is not None
     assert req.category == "Инженерный разбор"
-    assert req.urgency == "Критическая"
+    assert req.urgency == "critical"
     # Reopen-marker prefix from sub-task #1 still works on engineer_required.
     assert req.description.startswith("Повторное обращение №4. ")
 
@@ -444,7 +461,7 @@ async def test_engineer_required_emits_outbound_request_created(
     )
     assert match is not None
     assert match.payload["request"]["category"] == "Инженерный разбор"
-    assert match.payload["request"]["urgency"] == "Критическая"
+    assert match.payload["request"]["urgency"] == "critical"  # outbound несёт ключ (TASK 17)
 
 
 # ── INT-120 #1b — uk_category_override (InfraSafe PR #56) ────────────
@@ -492,7 +509,7 @@ async def test_uk_category_override_wins_on_engineer_required(
     req = await db_session.get(Request, r.json()["request_number"])
     assert req.category == "Особый разбор"
     # Urgency hardcode still applies (no urgency override sent here).
-    assert req.urgency == "Критическая"
+    assert req.urgency == "critical"
 
 
 @pytest.mark.asyncio
