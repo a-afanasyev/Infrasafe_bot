@@ -40,6 +40,21 @@ import logging
 logger = logging.getLogger(__name__)
 router = Router()
 
+
+def _format_end_label(start_dt: Optional[datetime], end_dt: Optional[datetime]) -> str:
+    """Время конца смены 'ЧЧ:ММ'; добавляет '+N', если смена переходит на
+    следующий день(и) (например суточная 08:00→08:00 показывается как '08:00 +1').
+
+    start_dt и end_dt должны быть в одной таймзоне (берутся из одной смены —
+    start_time/end_time или planned_*), поэтому сравнение .date() согласовано.
+    """
+    if not end_dt:
+        return "—"
+    label = end_dt.strftime('%H:%M')
+    if start_dt and end_dt.date() > start_dt.date():
+        label += f" +{(end_dt.date() - start_dt.date()).days}"
+    return label
+
 # Словарь локализации специализаций
 SPECIALIZATION_TRANSLATIONS = {
     "ru": {
@@ -628,7 +643,7 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
                         template_name = template.name
 
                 start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
-                end_time = shift.planned_end_time.strftime('%H:%M') if shift.planned_end_time else "??:??"
+                end_time = _format_end_label(shift.planned_start_time, shift.planned_end_time) if shift.planned_end_time else "??:??"
 
                 status_emoji = "🟢" if shift.status == "active" else "🟡" if shift.status == "planned" else "🔴"
 
@@ -693,7 +708,7 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
             if shifts:
                 for shift in shifts:
                     start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
-                    end_time = shift.planned_end_time.strftime('%H:%M') if shift.planned_end_time else "?"
+                    end_time = _format_end_label(shift.planned_start_time, shift.planned_end_time) if shift.planned_end_time else "?"
 
                     # Цвет зависит от наличия исполнителя, а не от статуса
                     status_emoji = "🟢" if shift.user_id else "🟡"
@@ -2804,7 +2819,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
             # Форматируем время
             start_date = shift.start_time.strftime('%d.%m.%Y')
             start_time = shift.start_time.strftime('%H:%M')
-            end_time = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
+            end_time = _format_end_label(shift.start_time, shift.end_time)
             zone = shift.geographic_zone or get_text("shift_management.zone_not_specified", language=lang)
 
             shift_details += (f"{i}. <b>{start_date}</b> "

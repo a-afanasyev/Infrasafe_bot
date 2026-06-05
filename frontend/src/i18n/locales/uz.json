@@ -712,7 +712,8 @@
     "confirmEndShift": "Smenani tugatish",
     "confirmEndShiftDesc": "Smenani tugatish? Bu amalni bekor qilib bo'lmaydi.",
     "confirmEnd": "Tugatish",
-    "specializationsLabel": "Ixtisosliklar"
+    "specializationsLabel": "Ixtisosliklar",
+    "dayOffset": "+{{n}} kun"
   },
   "templates": {
     "title": "Shablonlar",

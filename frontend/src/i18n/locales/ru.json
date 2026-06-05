@@ -722,7 +722,8 @@
     "confirmEndShift": "Завершить смену",
     "confirmEndShiftDesc": "Завершить смену? Это действие нельзя отменить.",
     "confirmEnd": "Завершить",
-    "specializationsLabel": "Специализации"
+    "specializationsLabel": "Специализации",
+    "dayOffset": "+{{n}}д"
   },
   "templates": {
     "title": "Шаблоны",

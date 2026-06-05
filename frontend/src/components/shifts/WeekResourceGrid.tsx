@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent, formatTime } from '../../utils/timezone'
+import { toTashkent, formatTime, dayOffset } from '../../utils/timezone'
 import {
   executorKey,
   isSameDay,
@@ -270,9 +270,10 @@ function DayCell({
         const span = Math.max(0.5, Math.min(seg.endHour, 24) - seg.startHour)
         const widthPct = Math.max(15, Math.min(100, (span / 24) * 100))
         const leftPct = Math.max(0, Math.min(100, (seg.startHour / 24) * 100))
+        const segOffset = seg.shift.start_time && seg.shift.end_time ? dayOffset(seg.shift.start_time, seg.shift.end_time) : 0
         const label =
           seg.shift.start_time && seg.shift.end_time
-            ? `${formatTime(seg.shift.start_time)} – ${formatTime(seg.shift.end_time)}`
+            ? `${formatTime(seg.shift.start_time)} – ${formatTime(seg.shift.end_time)}${segOffset > 0 ? ` ${t('shifts.dayOffset', { n: segOffset })}` : ''}`
             : formatTime(seg.shift.start_time)
         return (
           <button
