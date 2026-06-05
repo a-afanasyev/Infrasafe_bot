@@ -338,6 +338,10 @@ function TemplateRow({
       <td className="px-3.5 py-3 align-middle border-t border-border-default">
         <div className="font-[var(--font-mono)] text-[13px] text-text-primary whitespace-nowrap">
           {startStr} — {endStr}
+          {(() => {
+            const endDays = Math.floor((tmpl.start_hour * 60 + (tmpl.start_minute || 0) + tmpl.duration_hours * 60) / 1440)
+            return endDays > 0 ? <span className="text-amber ml-1">{t('shifts.dayOffset', { n: endDays })}</span> : null
+          })()}
         </div>
         <div className="text-[11px] text-text-muted mt-0.5">
           {tmpl.duration_hours} {t('common.hours')}

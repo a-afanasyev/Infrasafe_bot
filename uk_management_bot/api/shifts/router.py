@@ -850,6 +850,10 @@ async def create_from_template(
             user_id=uid,
             start_time=start_dt,
             end_time=end_dt,
+            # planned_* mirror start/end so the bot schedule (which reads
+            # planned_start_time/planned_end_time) shows real times, not "??:??".
+            planned_start_time=start_dt,
+            planned_end_time=end_dt,
             status="planned",
             shift_type=tmpl.default_shift_type,
             max_requests=tmpl.default_max_requests,

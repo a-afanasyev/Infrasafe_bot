@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShift, useEndShift } from '../../hooks/useShifts'
-import { formatTime, formatDateTime } from '../../utils/timezone'
+import { formatTime, formatDateTime, dayOffset } from '../../utils/timezone'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import {
@@ -95,7 +95,12 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
                 {/* Time range */}
                 <div className="text-sm text-text-secondary font-[var(--font-mono)]">
                   {formatDateTime(shift.start_time)}
-                  {shift.end_time ? ` — ${formatTime(shift.end_time)}` : ` ${t('shifts.inProgress')}`}
+                  {shift.end_time
+                    ? (() => {
+                        const off = dayOffset(shift.start_time, shift.end_time)
+                        return ` — ${formatTime(shift.end_time)}${off > 0 ? ` ${t('shifts.dayOffset', { n: off })}` : ''}`
+                      })()
+                    : ` ${t('shifts.inProgress')}`}
                 </div>
               </div>
 

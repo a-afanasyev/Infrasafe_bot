@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { formatTime, toTashkent } from '../../utils/timezone'
+import { formatTime, toTashkent, dayOffset } from '../../utils/timezone'
 import {
   daysInMonth,
   executorKey,
@@ -215,7 +215,8 @@ function DayDot({ shifts, hasRightBorder, isWeekendDay, isToday, onShiftClick }:
   const tooltip = shifts
     .map(s => {
       const start = formatTime(s.start_time)
-      const end = s.end_time ? formatTime(s.end_time) : '—'
+      const off = s.end_time ? dayOffset(s.start_time, s.end_time) : 0
+      const end = s.end_time ? `${formatTime(s.end_time)}${off > 0 ? ` ${t('shifts.dayOffset', { n: off })}` : ''}` : '—'
       return `${start}–${end} (${t(`shiftStatus.${s.status}`, s.status)})`
     })
     .join('\n')
