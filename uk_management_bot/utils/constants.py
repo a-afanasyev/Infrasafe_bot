@@ -71,11 +71,39 @@ COMMENT_TYPE_PURCHASE = "purchase"
 COMMENT_TYPE_REPORT = "report"
 COMMENT_TYPES = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT]
 
-# Срочность заявок
-URGENCY_LOW = "Обычная"
-URGENCY_MEDIUM = "Средняя"
-URGENCY_HIGH = "Срочная"
-URGENCY_CRITICAL = "Критическая"
+# ─── Срочность заявок: КАНОН — внутренние ключи (TASK 17 завершён) ───
+# Хранимые значения urgency во всём стеке: low/medium/high/critical.
+# Для локализованного отображения — get_urgency_display() (keyboards/requests.py).
+URGENCY_VALUES = ("low", "medium", "high", "critical")
+URGENCY_DEFAULT = "low"
+# Ранжирование для сортировки/приоритета (чем больше — критичнее).
+URGENCY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+# Compat-мапа для legacy-входов: старые/cached фронт-клиенты И InfraSafe (переходный период).
+URGENCY_RU_TO_KEY = {
+    "Обычная": "low",
+    "Средняя": "medium",
+    "Срочная": "high",
+    "Критическая": "critical",
+}
+
+
+def normalize_urgency(value):
+    """key | legacy-рус → канонический ключ; иначе None (решает вызывающий)."""
+    if value in URGENCY_VALUES:
+        return value
+    return URGENCY_RU_TO_KEY.get(value)
+
+
+def validate_canonical_urgency(value):
+    """Толерантная валидация (Фаза 1 rollout): normalize → ключ; иначе ValueError.
+
+    Используется во всех write-схемах (Create/Update/CallCenter) и сервисах.
+    В Фазе 2 заменить на строгий key-only.
+    """
+    key = normalize_urgency(value)
+    if key is None:
+        raise ValueError(f"urgency must be one of: {list(URGENCY_VALUES)}")
+    return key
 
 # Категории заявок
 # TASK 17 Этап B: DEPRECATED - больше не используется напрямую в фильтрах и валидации
@@ -97,13 +125,8 @@ REQUEST_CATEGORIES = [
     "Интернет/ТВ"
 ]
 
-# Срочность заявок
-REQUEST_URGENCIES = [
-    URGENCY_LOW,
-    URGENCY_MEDIUM,
-    URGENCY_HIGH,
-    URGENCY_CRITICAL
-]
+# Срочность заявок — канонический список ключей (выведен из URGENCY_VALUES).
+REQUEST_URGENCIES = list(URGENCY_VALUES)
 
 # Статусы смен
 SHIFT_STATUS_ACTIVE = "active"

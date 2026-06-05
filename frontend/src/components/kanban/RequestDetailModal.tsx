@@ -6,6 +6,8 @@ import { ChevronDown } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import { tStatus, tUrgency, tCategory } from '../../i18n/apiMaps'
+import { useHasRole } from '../../hooks/useHasRole'
+import { URGENCIES, normalizeUrgency } from '../../constants'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
 import {
@@ -28,7 +30,12 @@ import { Label } from '@/components/ui/label'
 import TransitionModal, { type TransitionData } from './TransitionModal'
 import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES } from './KanbanBoard'
 
+// TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
 const URGENCY: Record<string, { bg: string; text: string }> = {
+  low:          { bg: 'bg-emerald/12',  text: 'text-emerald' },
+  medium:       { bg: 'bg-amber/12',    text: 'text-amber' },
+  high:         { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
+  critical:     { bg: 'bg-red/12',      text: 'text-red' },
   'Обычная':    { bg: 'bg-emerald/12',  text: 'text-emerald' },
   'Средняя':    { bg: 'bg-amber/12',    text: 'text-amber' },
   'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
@@ -108,6 +115,8 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     queryFn: () => apiClient.get(`/api/v2/requests/${requestNumber}/comments`).then(r => r.data),
     enabled: !!requestNumber,
   })
+
+  const isManager = useHasRole('manager')
 
   const updateRequest = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -232,11 +241,44 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                     }
                   }}
                 />
-                {urgencyStyle && (
-                  <span className={cn(
-                    'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
-                    urgencyStyle.bg, urgencyStyle.text
-                  )}>{tUrgency(request.urgency, t)}</span>
+                {request.urgency && (
+                  isManager && !FROZEN_STATUSES.has(request.status) ? (
+                    // TASK 17: менеджер меняет критичность (терминальные статусы заморожены backend-guard'ом).
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={updateRequest.isPending}
+                          className={cn(
+                            'text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1 font-[family-name:var(--font-display)]',
+                            urgencyStyle?.bg, urgencyStyle?.text
+                          )}
+                        >
+                          {tUrgency(request.urgency, t)}
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {URGENCIES.map((u) => (
+                          <DropdownMenuItem
+                            key={u}
+                            onSelect={() => {
+                              // Сравниваем по канон-ключу: legacy-рус значение (Phase 1)
+                              // не должно вызывать лишний PATCH при выборе эквивалента.
+                              if (u !== normalizeUrgency(request.urgency)) updateRequest.mutate({ urgency: u })
+                            }}
+                          >
+                            {tUrgency(u, t)}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : urgencyStyle ? (
+                    <span className={cn(
+                      'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
+                      urgencyStyle.bg, urgencyStyle.text
+                    )}>{tUrgency(request.urgency, t)}</span>
+                  ) : null
                 )}
                 {request.manager_confirmed && (
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald/12 text-emerald font-[family-name:var(--font-display)]">

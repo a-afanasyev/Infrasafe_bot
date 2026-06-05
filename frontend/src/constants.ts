@@ -20,13 +20,26 @@ export const CATEGORIES = [
 /** Request categories including "Ремонт" (used on ResidentBoardPage) */
 export const CATEGORIES_WITH_REPAIR = [...CATEGORIES, 'Ремонт'] as const
 
-/** Urgency levels — synced with backend */
+/** Urgency levels — canonical keys, synced with backend (TASK 17) */
 export const URGENCIES = [
-  'Обычная',
-  'Средняя',
-  'Срочная',
-  'Критическая',
+  'low',
+  'medium',
+  'high',
+  'critical',
 ] as const
+
+/** Legacy-рус → канон-ключ (dual-read окно перехода; снять в Фазе 2). */
+const URGENCY_RU_TO_KEY: Record<string, string> = {
+  'Обычная': 'low',
+  'Средняя': 'medium',
+  'Срочная': 'high',
+  'Критическая': 'critical',
+}
+
+/** Normalize a stored urgency (key or legacy-russian) to its canonical key. */
+export function normalizeUrgency(value: string): string {
+  return URGENCY_RU_TO_KEY[value] ?? value
+}
 
 /** Terminal statuses — requests in these statuses cannot be moved */
 export const FROZEN_STATUSES = new Set(['Принято', 'Отменена'])

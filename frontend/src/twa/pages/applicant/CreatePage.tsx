@@ -6,12 +6,12 @@ import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
+import { URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
 
 const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
-const URGENCIES = ['low', 'medium', 'high', 'critical']
-const URGENCY_API_MAP: Record<string, string> = { low: 'Обычная', medium: 'Средняя', high: 'Срочная', critical: 'Критическая' }
+// TASK 17: urgency — канон-ключи, шлём как есть (URGENCIES из общего constants).
 // Backend (settings.REQUEST_CATEGORIES) expects Russian strings — map TWA i18n keys to API values.
 const CATEGORY_API_MAP: Record<string, string> = {
   electricity: 'Электрика',
@@ -140,7 +140,7 @@ export default function CreatePage() {
         apartment_id: apartmentId,
         address,
         description,
-        urgency: URGENCY_API_MAP[urgency] || urgency,
+        urgency: urgency,
         source: 'twa',
       })
       const requestNumber: string | undefined = res.data?.request_number

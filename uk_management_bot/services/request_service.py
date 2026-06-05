@@ -11,6 +11,8 @@ from uk_management_bot.utils.validators import validate_description
 from uk_management_bot.utils.constants import (
     REQUEST_CATEGORIES,
     REQUEST_URGENCIES,
+    URGENCY_DEFAULT,
+    normalize_urgency,
     REQUEST_STATUSES,
     ROLE_APPLICANT,
     ROLE_EXECUTOR,
@@ -40,7 +42,7 @@ class RequestService:
         address: str,
         description: str,
         apartment: Optional[str] = None,
-        urgency: str = "Обычная",
+        urgency: str = URGENCY_DEFAULT,
         media_files: Optional[List[str]] = None
     ) -> Request:
         """
@@ -72,8 +74,10 @@ class RequestService:
             if category_key not in CATEGORY_INTERNAL_KEYS:
                 raise ValueError(f"Неверная категория: {category}")
             
-            if urgency not in REQUEST_URGENCIES:
-                raise ValueError(f"Неверная срочность: {urgency}")
+            # Толерантно (Phase 1 rollout): ключ ИЛИ legacy-рус → ключ
+            urgency = normalize_urgency(urgency)
+            if urgency is None:
+                raise ValueError("Неверная срочность")
 
             # Базовая валидация адреса (адреса теперь выбираются из справочника)
             if not address or len(address.strip()) < 5:

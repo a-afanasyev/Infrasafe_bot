@@ -167,7 +167,7 @@ class SmartDispatcher:
             urgent_requests = self.db.query(Request).filter(
                 and_(
                     Request.status.in_(['Новая', 'Принята']),
-                    Request.urgency.in_(['Срочная', 'Критическая']),
+                    Request.urgency.in_(['high', 'critical']),  # TASK 17: канон-ключи
                     Request.executor_id.is_(None)  # Не назначена
                 )
             ).order_by(Request.created_at.asc()).all()
@@ -374,13 +374,14 @@ class SmartDispatcher:
     
     def _prioritize_requests(self, requests: List[Request]) -> List[Request]:
         """Приоритизирует заявки для обработки"""
+        # TASK 17: канон-ключи (ранжирование = URGENCY_ORDER)
         urgency_priority = {
-            'Критическая': 4,
-            'Срочная': 3,
-            'Средняя': 2,
-            'Обычная': 1
+            'critical': 4,
+            'high': 3,
+            'medium': 2,
+            'low': 1,
         }
-        
+
         return sorted(requests, key=lambda r: (
             -urgency_priority.get(r.urgency, 1),  # Срочность (убывание)
             r.created_at                          # Время создания (возрастание)
@@ -572,11 +573,12 @@ class SmartDispatcher:
     
     def _calculate_urgency_priority_score(self, request: Request) -> float:
         """Вычисляет приоритет по срочности"""
+        # TASK 17: канон-ключи (числа сохранены: low=Обычная=0.3 ... critical=1.0)
         urgency_scores = {
-            'Критическая': 1.0,
-            'Срочная': 0.8,
-            'Средняя': 0.5,
-            'Обычная': 0.3
+            'critical': 1.0,
+            'high': 0.8,
+            'medium': 0.5,
+            'low': 0.3,
         }
         
         return urgency_scores.get(request.urgency, 0.3)

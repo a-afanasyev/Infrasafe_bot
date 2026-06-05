@@ -246,7 +246,7 @@ def format_request_details(request, locale: Dict[str, Any]) -> str:
             details += f"🏠 {locale.get('requests', {}).get('apartment', 'Квартира')}: {request.apartment}\n"
 
     details += f"""📝 {locale.get('requests', {}).get('description', 'Описание')}: {request.description}
-⚡ {locale.get('requests', {}).get('urgency', 'Срочность')}: {request.urgency}
+⚡ {locale.get('requests', {}).get('urgency', 'Срочность')}: {locale.get('urgency', {}).get(request.urgency, request.urgency)}
 📊 {locale.get('requests', {}).get('status', 'Статус')}: {request.status}
 🕐 {locale.get('requests', {}).get('created_at', 'Создана')}: {request.created_at.strftime('%d.%m.%Y %H:%M')}
 """

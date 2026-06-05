@@ -21,7 +21,7 @@ interface Props { isOpen: boolean; onClose: () => void }
 
 import { CATEGORIES, URGENCIES } from '../../constants'
 
-const INITIAL_FORM = { category: '', urgency: 'Обычная', description: '', address: '' }
+const INITIAL_FORM = { category: '', urgency: 'low', description: '', address: '' }
 
 export default function CallCenterModal({ isOpen, onClose }: Props) {
   const { t } = useTranslation()

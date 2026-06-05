@@ -491,7 +491,7 @@ class AssignmentOptimizer:
             if scope == 'urgent':
                 # Только срочные заявки
                 query = query.join(Request).filter(
-                    Request.urgency.in_(['Срочная', 'Критическая'])
+                    Request.urgency.in_(['high', 'critical'])  # TASK 17: канон-ключи
                 )
             elif scope == 'active':
                 # Только активные смены
@@ -659,7 +659,7 @@ class AssignmentOptimizer:
             
             delayed_urgent = self.db.query(Request).filter(
                 and_(
-                    Request.urgency.in_(['Срочная', 'Критическая']),
+                    Request.urgency.in_(['high', 'critical']),  # TASK 17: канон-ключи
                     Request.status == 'Новая',
                     Request.created_at < urgent_cutoff
                 )

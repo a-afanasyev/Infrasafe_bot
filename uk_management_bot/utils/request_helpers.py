@@ -104,7 +104,7 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
         Детальная информация о заявке с локализованными метками
     """
     from uk_management_bot.utils.helpers import get_text
-    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
+    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
 
     # Get localized labels
     labels = {
@@ -136,7 +136,7 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
     from uk_management_bot.utils.address_helpers import localize_address
     message_text += f"{labels['address']} {localize_address(request.address, language)}\n"
     message_text += f"{labels['description']} {request.description}\n"
-    message_text += f"{labels['urgency']} {request.urgency}\n"
+    message_text += f"{labels['urgency']} {get_urgency_display(request.urgency, language=language)}\n"
 
     if request.apartment:
         message_text += f"{labels['apartment']} {request.apartment}\n"

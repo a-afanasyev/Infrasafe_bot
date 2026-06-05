@@ -593,13 +593,14 @@ class AsyncWorkloadPredictor:
                     spec_breakdown[spec] = spec_breakdown.get(spec, 0) + 1
 
                     # Мапим срочность на числовое значение
+                    # TASK 17: канон-ключи (числа сохранены)
                     urgency_map = {
-                        "Критическая": 1.0,
-                        "Срочная": 0.8,
-                        "Обычная": 0.5,
-                        "Низкая": 0.2
+                        "critical": 1.0,
+                        "high": 0.8,
+                        "medium": 0.5,
+                        "low": 0.5,
                     }
-                    urgency = getattr(req, 'urgency', 'Обычная')
+                    urgency = getattr(req, 'urgency', 'low')
                     urgency_sum += urgency_map.get(urgency, 0.5)
 
                 avg_urgency = urgency_sum / len(day_requests) if day_requests else 0.5

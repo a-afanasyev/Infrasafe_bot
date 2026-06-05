@@ -37,7 +37,7 @@ def _make_shift(
 def _make_request(
     request_number="260405-001",
     status="В работе",
-    urgency="Обычная",
+    urgency="low",
     category="Сантехника",
     address="ул. Тестовая, 1",
     notes=None,
@@ -341,15 +341,27 @@ class TestGetRequestsForTransfer:
         items = service._get_requests_for_transfer(shift)
         assert items == []
 
-    def test_high_urgency_maps_to_high_priority(self):
-        service, db = _make_service()
+    def _priority_for(self, service, db, urgency):
         shift = _make_shift()
-        req = _make_request(urgency="Критическая")
+        req = _make_request(urgency=urgency)
         q = MagicMock()
         q.filter.return_value.order_by.return_value.all.return_value = [req]
         db.query.return_value = q
-        items = service._get_requests_for_transfer(shift)
-        assert items[0].priority == "high"
+        return service._get_requests_for_transfer(shift)[0].priority
+
+    def test_critical_maps_to_high_priority(self):
+        service, db = _make_service()
+        assert self._priority_for(service, db, "critical") == "high"
+
+    # TASK 17 behavior-fix: высокая срочность теперь даёт medium-приоритет (раньше normal).
+    def test_high_maps_to_medium_priority(self):
+        service, db = _make_service()
+        assert self._priority_for(service, db, "high") == "medium"
+
+    def test_low_and_medium_map_to_normal_priority(self):
+        service, db = _make_service()
+        assert self._priority_for(service, db, "low") == "normal"
+        assert self._priority_for(service, db, "medium") == "normal"
 
     def test_long_address_truncated(self):
         service, db = _make_service()

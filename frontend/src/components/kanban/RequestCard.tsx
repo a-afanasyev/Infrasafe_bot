@@ -6,7 +6,12 @@ import type { RequestCard as TCard } from '../../hooks/useKanban'
 import { tUrgency, tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 
+// TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
 const URGENCY: Record<string, { bg: string; text: string }> = {
+  low:          { bg: 'bg-emerald/12',   text: 'text-emerald' },
+  medium:       { bg: 'bg-amber/12',     text: 'text-[#d97706]' },
+  high:         { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
+  critical:     { bg: 'bg-red/12',       text: 'text-red' },
   'Обычная':    { bg: 'bg-emerald/12',   text: 'text-emerald' },
   'Средняя':    { bg: 'bg-amber/12',     text: 'text-[#d97706]' },
   'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },

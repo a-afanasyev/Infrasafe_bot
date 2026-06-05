@@ -5,11 +5,12 @@
 
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any, Tuple
-from sqlalchemy import and_, or_, func, desc
+from sqlalchemy import and_, or_, func, desc, case
 from sqlalchemy.orm import Session
 from dataclasses import dataclass
 from enum import Enum
 
+from uk_management_bot.utils.constants import URGENCY_ORDER
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
@@ -166,12 +167,18 @@ class ShiftTransferService:
                         shift.status == "active"  # Для активных смен берем все заявки исполнителя
                     )
                 )
-            ).order_by(Request.urgency.desc(), Request.created_at).all()
-            
+            ).order_by(
+                # TASK 17: явный CASE-порядок по канон-ключам (urgency теперь строка-ключ,
+                # лексикографическая сортировка несемантична).
+                case(URGENCY_ORDER, value=Request.urgency, else_=0).desc(),
+                Request.created_at,
+            ).all()
+
             transfer_items = []
             for request in requests:
-                # Определяем приоритет передачи
-                priority = "high" if request.urgency == "Критическая" else "medium" if request.urgency == "Высокая" else "normal"
+                # Приоритет передачи (TASK 17, явный маппинг — behavior fix:
+                # critical→high, high→medium, остальные→normal).
+                priority = {"critical": "high", "high": "medium"}.get(request.urgency, "normal")
                 
                 item = TransferItem(
                     request_number=request.request_number,
