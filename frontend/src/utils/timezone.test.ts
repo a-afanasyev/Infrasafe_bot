@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDate, formatDateTime, formatTime, toTashkent, dayOffset } from './timezone'
+import { formatDate, formatDateTime, formatTime, toTashkent, dayOffset, isoToDatetimeLocal } from './timezone'
 
 // Asia/Tashkent is a fixed UTC+5 (no DST). 09:00 UTC → 14:00 Tashkent.
 // `format(..., { timeZone })` is deterministic regardless of the runner's TZ.
@@ -44,5 +44,16 @@ describe('dayOffset', () => {
   it('is 1 for a night shift ending next morning', () => {
     // 22:00 → 08:00 next day, in Tashkent (UTC+5): 17:00Z → next 03:00Z
     expect(dayOffset('2026-06-05T17:00:00Z', '2026-06-06T03:00:00Z')).toBe(1)
+  })
+})
+
+describe('isoToDatetimeLocal', () => {
+  it('produces a Tashkent wall-clock datetime-local value', () => {
+    // 08:00Z = 13:00 Tashkent
+    expect(isoToDatetimeLocal('2026-06-05T08:00:00Z')).toBe('2026-06-05T13:00')
+  })
+  it('rolls the date forward when Tashkent offset crosses midnight', () => {
+    // 20:00Z = 01:00 Tashkent next day
+    expect(isoToDatetimeLocal('2026-06-05T20:00:00Z')).toBe('2026-06-06T01:00')
   })
 })

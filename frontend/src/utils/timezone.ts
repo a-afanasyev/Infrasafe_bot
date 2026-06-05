@@ -36,3 +36,13 @@ export function formatDateTime(isoString: string): string {
 export function formatDate(isoString: string): string {
   return format(toZonedTime(new Date(isoString), TZ), 'dd.MM.yyyy', { timeZone: TZ })
 }
+
+/**
+ * ISO instant → `YYYY-MM-DDTHH:mm` value for a <input type="datetime-local">,
+ * expressed in Tashkent wall-clock (the tz the dashboard and its users operate
+ * in). Mirrors how the create form reads datetime-local in browser-local tz,
+ * which equals Tashkent in prod/QA.
+ */
+export function isoToDatetimeLocal(isoString: string): string {
+  return format(toZonedTime(new Date(isoString), TZ), "yyyy-MM-dd'T'HH:mm", { timeZone: TZ })
+}

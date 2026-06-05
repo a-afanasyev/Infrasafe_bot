@@ -189,6 +189,31 @@ class TestUpdateShiftBody:
         body = UpdateShiftBody(max_requests=5)
         assert body.max_requests == 5
 
+    def test_new_fields_default_none(self):
+        body = UpdateShiftBody()
+        assert body.start_time is None
+        assert body.priority_level is None
+        assert body.specialization_focus is None
+
+    def test_start_time_and_specializations_accepted(self):
+        from datetime import datetime, timezone
+        body = UpdateShiftBody(
+            start_time=datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc),
+            specialization_focus=["electrician", "plumber"],
+        )
+        assert body.start_time is not None
+        assert body.specialization_focus == ["electrician", "plumber"]
+
+    def test_priority_level_out_of_range_raises(self):
+        with pytest.raises(Exception):
+            UpdateShiftBody(priority_level=6)
+        with pytest.raises(Exception):
+            UpdateShiftBody(priority_level=0)
+
+    def test_valid_priority_level(self):
+        body = UpdateShiftBody(priority_level=4)
+        assert body.priority_level == 4
+
 
 # ---------------------------------------------------------------------------
 # CreateFromTemplateBody
