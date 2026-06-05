@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent, formatTime } from '../../utils/timezone'
+import { formatTime } from '../../utils/timezone'
+import { computeBlocks, type ShiftBlock } from './shiftTimelineBlocks'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
 
@@ -36,73 +37,6 @@ function getGradient(name: string | null): string {
   if (!name) return gradients[0]
   const hash = name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
   return gradients[hash % gradients.length]
-}
-
-interface ShiftBlock {
-  shift: ShiftBrief
-  colStart: number  // 1-indexed grid column (header is col 1, hour 0 is col 2)
-  colSpan: number
-  isOvernight: boolean
-  part: 'full' | 'start' | 'end'
-}
-
-function computeBlocks(shift: ShiftBrief): ShiftBlock[] {
-  const start = toTashkent(shift.start_time)
-  const startHour = start.getHours()
-
-  if (!shift.end_time) {
-    return [{
-      shift,
-      colStart: startHour + 2,
-      colSpan: 1,
-      isOvernight: false,
-      part: 'full',
-    }]
-  }
-
-  const end = toTashkent(shift.end_time)
-  const endHour = end.getHours()
-  const endMin = end.getMinutes()
-
-  // Effective end hour cell: if minutes > 0, the shift extends into endHour cell
-  const effectiveEndHour = endMin > 0 ? endHour : Math.max(endHour - 1, startHour)
-
-  if (effectiveEndHour >= startHour) {
-    // Normal (non-overnight)
-    const colStart = Math.min(startHour + 2, 25)
-    const span = Math.max(1, Math.min(effectiveEndHour - startHour + 1, 24 - startHour))
-    const colSpan = Math.max(1, Math.min(span, 26 - colStart))
-    return [{
-      shift,
-      colStart,
-      colSpan,
-      isOvernight: false,
-      part: 'full',
-    }]
-  }
-
-  // Overnight: split into two blocks
-  const startColStart = Math.min(startHour + 2, 25)
-  const spanStart = Math.max(1, 24 - startHour)
-  const startColSpan = Math.max(1, Math.min(spanStart, 26 - startColStart))
-  const spanEnd = Math.max(1, effectiveEndHour + 1)
-  const endColSpan = Math.max(1, Math.min(spanEnd, 26 - 2))
-  return [
-    {
-      shift,
-      colStart: startColStart,
-      colSpan: startColSpan,
-      isOvernight: true,
-      part: 'start',
-    },
-    {
-      shift,
-      colStart: 2,
-      colSpan: endColSpan,
-      isOvernight: true,
-      part: 'end',
-    },
-  ]
 }
 
 export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
@@ -174,7 +108,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
         {/* Executor rows */}
         {Array.from(executorMap.entries()).map(([executorKey, executorShifts]) => {
           const displayName = executorShifts[0].executor_name ?? executorKey
-          const blocks: ShiftBlock[] = executorShifts.flatMap(computeBlocks)
+          const blocks: ShiftBlock[] = executorShifts.flatMap(s => computeBlocks(s, date))
 
           return (
             <div

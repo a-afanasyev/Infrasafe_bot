@@ -37,8 +37,12 @@ const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
 
 function toIsoLocalMidnight(d: Date): string {
-  // Match the existing convention used for day-view: YYYY-MM-DDT00:00:00Z.
-  return `${d.toISOString().split('T')[0]}T00:00:00Z`
+  // `d` is local midnight (startOf{Day,Week,Month} in the browser/Tashkent tz).
+  // Send its exact UTC instant so the backend's start_time range matches the
+  // local day boundaries. The previous `toISOString().split('T')[0]+'T00:00:00Z'`
+  // dropped the time part and yielded the WRONG UTC day for tz ahead of UTC
+  // (UTC+5 → the day view fetched the previous day's shifts).
+  return d.toISOString()
 }
 
 export default function ShiftsPage() {
