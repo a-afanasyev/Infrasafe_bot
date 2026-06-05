@@ -13,9 +13,12 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
+import type { ShiftDetail } from '../../types/api'
+
 interface Props {
   shiftId: number | null
   onClose: () => void
+  onEdit?: (shift: ShiftDetail) => void
 }
 
 const SHIFT_TYPE_COLORS: Record<string, string> = {
@@ -32,7 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending: '#f59e0b',
 }
 
-export default function ShiftDetailModal({ shiftId, onClose }: Props) {
+export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
   const { data: shift, isLoading } = useShift(shiftId)
   const endShift = useEndShift()
@@ -182,6 +185,15 @@ export default function ShiftDetailModal({ shiftId, onClose }: Props) {
 
               {/* Actions */}
               <DialogFooter>
+                {onEdit && (shift.status === 'planned' || shift.status === 'active') && (
+                  <Button
+                    variant="outline"
+                    className="mr-auto"
+                    onClick={() => onEdit(shift)}
+                  >
+                    {t('shifts.editShift')}
+                  </Button>
+                )}
                 {shift.status === 'active' && (
                   <Button
                     variant="destructive"

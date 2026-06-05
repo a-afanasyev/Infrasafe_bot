@@ -11,6 +11,7 @@ import {
   useShiftTemplates,
   useShiftsWebSocket,
 } from '../hooks/useShifts'
+import type { ShiftDetail } from '../types/api'
 import ShiftTimeline from '../components/shifts/ShiftTimeline'
 import ShiftCoverageHeatmap from '../components/shifts/ShiftCoverageHeatmap'
 import WeekResourceGrid from '../components/shifts/WeekResourceGrid'
@@ -55,6 +56,7 @@ export default function ShiftsPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null)
+  const [editShift, setEditShift] = useState<ShiftDetail | null>(null)
   // Spec filter is "month view only" but lifted to the page so switching views
   // keeps the selection sticky if the user toggles month → week → month.
   const [selectedSpec, setSelectedSpec] = useState<string | null>(null)
@@ -350,12 +352,14 @@ export default function ShiftsPage() {
 
       {/* Modals */}
       <CreateShiftModal
-        isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
+        isOpen={createModalOpen || editShift !== null}
+        shift={editShift}
+        onClose={() => { setCreateModalOpen(false); setEditShift(null) }}
       />
       <ShiftDetailModal
         shiftId={selectedShiftId}
         onClose={() => setSelectedShiftId(null)}
+        onEdit={(s) => { setSelectedShiftId(null); setEditShift(s) }}
       />
     </div>
   )

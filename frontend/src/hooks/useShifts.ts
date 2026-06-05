@@ -92,6 +92,42 @@ export function useCreateShift() {
   })
 }
 
+export function useUpdateShift() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & Record<string, unknown>) =>
+      apiClient.patch(`/api/v2/shifts/${id}`, body).then(r => r.data),
+    onSuccess: (_, variables) => {
+      toast.success(i18n.t('toast.shiftUpdated'))
+      queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['shift', variables.id] })
+    },
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.shiftUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
+export function useDeleteShift() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v2/shifts/${id}`).then(r => r.data),
+    onSuccess: (_, id) => {
+      toast.success(i18n.t('toast.shiftDeleted'))
+      queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+      queryClient.removeQueries({ queryKey: ['shift', id] })
+    },
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.shiftDeleteFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 export function useEndShift() {
   const queryClient = useQueryClient()
   return useMutation({

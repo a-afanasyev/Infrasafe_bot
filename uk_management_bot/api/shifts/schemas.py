@@ -134,9 +134,12 @@ class UpdateShiftBody(BaseModel):
     status: Optional[ShiftStatus] = None
     user_id: Optional[int] = None
     shift_type: Optional[ShiftType] = None
+    start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     notes: Optional[str] = None
     max_requests: Optional[int] = Field(default=None, ge=1)
+    priority_level: Optional[int] = Field(default=None, ge=1, le=5)
+    specialization_focus: Optional[list[str]] = None
 
 
 class CreateFromTemplateBody(BaseModel):

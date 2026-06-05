@@ -1099,8 +1099,59 @@ async def update_shift(
         if "executor" not in _parse_user_roles(new_user):
             raise HTTPException(status_code=422, detail="Target user does not have executor role")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+
+    # Content edits (anything other than a status transition) are only allowed
+    # while the shift is still editable — not after it is completed/cancelled.
+    EDITABLE_STATUSES = {"planned", "active", "paused"}
+    content = {k: v for k, v in data.items() if k != "status"}
+    if content and shift.status not in EDITABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot edit a '{shift.status}' shift",
+        )
+
+    # Normalise incoming times to tz-aware UTC so they compare/store consistently
+    # with the DB columns (DateTime(timezone=True)); a client may omit the offset.
+    for key in ("start_time", "end_time"):
+        if data.get(key) is not None and data[key].tzinfo is None:
+            data[key] = data[key].replace(tzinfo=timezone.utc)
+
+    # Validate time order against effective values (incoming or existing).
+    new_start = data.get("start_time", shift.start_time)
+    new_end = data.get("end_time", shift.end_time)
+    if new_start is not None and new_end is not None and new_end <= new_start:
+        raise HTTPException(status_code=422, detail="end_time must be after start_time")
+
+    # Prevent double-booking when the time window or executor changes
+    # (mirrors the overlap check in create_shift, excluding this shift itself).
+    if ("start_time" in data or "end_time" in data or "user_id" in data) \
+            and new_start is not None and new_end is not None:
+        target_user_id = data.get("user_id", shift.user_id)
+        overlap_result = await db.execute(
+            select(Shift).where(
+                Shift.id != shift_id,
+                Shift.user_id == target_user_id,
+                Shift.status.in_(["active", "planned"]),
+                Shift.start_time < new_end,
+                Shift.end_time > new_start,
+            )
+        )
+        if overlap_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has an active shift overlapping with the requested time range",
+            )
+
+    for field, value in data.items():
         setattr(shift, field, value)
+
+    # The bot schedule reads planned_*; keep it in sync when actual times change
+    # (mirrors create_from_template, which sets planned_* = actual start/end).
+    if "start_time" in data:
+        shift.planned_start_time = shift.start_time
+    if "end_time" in data:
+        shift.planned_end_time = shift.end_time
 
     await db.commit()
     await db.refresh(shift)
