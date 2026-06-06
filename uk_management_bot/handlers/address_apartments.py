@@ -44,9 +44,11 @@ router = Router()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_apartments_list")
-async def show_apartments_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def show_apartments_list(callback: CallbackQuery, state: FSMContext | None = None, language: str = "ru"):
     """Показать выбор здания для просмотра квартир"""
-    await state.clear()
+    # delete_apartment вызывает без FSM-состояния (state=None) — чистить нечего.
+    if state is not None:
+        await state.clear()
     lang = language
 
     db = next(get_db())
@@ -690,10 +692,10 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
 
         logger.info(f"Создана новая квартира: {apartment.apartment_number} (ID: {apartment.id}) пользователем {message.from_user.id}")
 
-    except Exception as e:
-        logger.error(f"Ошибка при создании квартиры: {e}")
+    except Exception:
+        logger.exception("create apartment handler failed")
         await message.answer(
-            get_text("address_apartments.handlers.creation_exception", language=lang).format(error=str(e)),
+            get_text("address_apartments.handlers.creation_exception", language=lang),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
@@ -906,10 +908,10 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
 
         logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
 
-    except Exception as e:
-        logger.error(f"Ошибка при обновлении площади квартиры: {e}")
+    except Exception:
+        logger.exception("update apartment area handler failed")
         await message.answer(
-            get_text("address_apartments.handlers.area_update_exception", language=lang).format(error=str(e)),
+            get_text("address_apartments.handlers.area_update_exception", language=lang),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:

@@ -11,7 +11,9 @@ import logging
 from typing import Optional, List, Dict, Any, Tuple, Union
 from datetime import datetime
 from sqlalchemy import select, and_, or_, func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment, User
@@ -75,9 +77,9 @@ class AddressService:
             return yard, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка создания двора: {e}")
-            return None, f"Ошибка создания двора: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("create_yard failed")
+            return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
     async def get_yard_by_id(session: Session, yard_id: int) -> Optional[Yard]:
@@ -135,9 +137,9 @@ class AddressService:
             return yard, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка обновления двора: {e}")
-            return None, f"Ошибка обновления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("update_yard failed")
+            return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
     async def delete_yard(session: Session, yard_id: int) -> Tuple[bool, Optional[str]]:
@@ -148,9 +150,9 @@ class AddressService:
             return True, None
         except AddressError as e:
             return False, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка удаления двора: {e}")
-            return False, f"Ошибка удаления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("delete_yard failed")
+            return False, "Не удалось выполнить удаление. Попробуйте позже."
 
     # ============= BUILDING MANAGEMENT =============
 
@@ -178,9 +180,9 @@ class AddressService:
             return building, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка создания здания: {e}")
-            return None, f"Ошибка создания здания: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("create_building failed")
+            return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
     async def get_building_by_id(
@@ -247,9 +249,9 @@ class AddressService:
             return building, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка обновления здания: {e}")
-            return None, f"Ошибка обновления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("update_building failed")
+            return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
     async def delete_building(session: Session, building_id: int) -> Tuple[bool, Optional[str]]:
@@ -260,9 +262,9 @@ class AddressService:
             return True, None
         except AddressError as e:
             return False, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка удаления здания: {e}")
-            return False, f"Ошибка удаления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("delete_building failed")
+            return False, "Не удалось выполнить удаление. Попробуйте позже."
 
     # ============= APARTMENT MANAGEMENT =============
 
@@ -289,9 +291,9 @@ class AddressService:
             return apartment, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка создания квартиры: {e}")
-            return None, f"Ошибка создания квартиры: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("create_apartment failed")
+            return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
     async def bulk_create_apartments(
@@ -323,9 +325,9 @@ class AddressService:
                 )
         except AddressError as e:
             return 0, 0, [str(e)]
-        except Exception as e:
-            logger.error(f"Ошибка массового создания квартир: {e}")
-            return 0, 0, [f"Критическая ошибка: {str(e)}"]
+        except SQLAlchemyError:
+            logger.exception("bulk_create_apartments failed")
+            return 0, 0, ["Не удалось создать квартиры. Попробуйте позже."]
 
     @staticmethod
     async def get_apartment_by_id(
@@ -424,9 +426,9 @@ class AddressService:
             return apartment, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка обновления квартиры: {e}")
-            return None, f"Ошибка обновления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("update_apartment failed")
+            return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
     async def delete_apartment(session: Session, apartment_id: int) -> Tuple[bool, Optional[str]]:
@@ -437,9 +439,9 @@ class AddressService:
             return True, None
         except AddressError as e:
             return False, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка удаления квартиры: {e}")
-            return False, f"Ошибка удаления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("delete_apartment failed")
+            return False, "Не удалось выполнить удаление. Попробуйте позже."
 
     # ============= USER-APARTMENT MANAGEMENT =============
 
@@ -461,9 +463,9 @@ class AddressService:
             return ua, None
         except AddressError as e:
             return None, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка запроса квартиры: {e}")
-            return None, f"Ошибка создания заявки: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("request_apartment failed")
+            return None, "Не удалось создать заявку. Попробуйте позже."
 
     @staticmethod
     async def approve_apartment_request(
@@ -482,9 +484,9 @@ class AddressService:
             return True, None
         except AddressError as e:
             return False, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка подтверждения заявки: {e}")
-            return False, f"Ошибка подтверждения: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("approve_apartment_request failed")
+            return False, "Не удалось обработать заявку. Попробуйте позже."
 
     @staticmethod
     async def reject_apartment_request(
@@ -503,9 +505,9 @@ class AddressService:
             return True, None
         except AddressError as e:
             return False, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка отклонения заявки: {e}")
-            return False, f"Ошибка отклонения: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("reject_apartment_request failed")
+            return False, "Не удалось обработать заявку. Попробуйте позже."
 
     @staticmethod
     async def get_pending_requests(
@@ -585,9 +587,9 @@ class AddressService:
             return True, None
         except AddressError as e:
             return False, str(e)
-        except Exception as e:
-            logger.error(f"Ошибка удаления связи: {e}")
-            return False, f"Ошибка удаления: {str(e)}"
+        except SQLAlchemyError:
+            logger.exception("remove_user_from_apartment failed")
+            return False, "Не удалось выполнить удаление. Попробуйте позже."
 
     # ============= STATISTICS =============
 
@@ -630,9 +632,11 @@ class AddressService:
 
             return stats
 
-        except Exception as e:
-            logger.error(f"Ошибка получения статистики: {e}")
-            return {}
+        except SQLAlchemyError:
+            # Не глотать DB-ошибку: сессия в failed-transaction, пусть откатит
+            # вызывающий слой (middleware), иначе следующий commit упадёт.
+            logger.exception("get_statistics failed")
+            raise
 
     # ============= USER APARTMENTS FOR REQUEST CREATION =============
 
@@ -679,9 +683,11 @@ class AddressService:
             logger.info(f"Найдено {len(apartments)} одобренных квартир для пользователя {user_telegram_id}")
             return list(apartments)
 
-        except Exception as e:
-            logger.error(f"Ошибка получения одобренных квартир пользователя {user_telegram_id}: {e}")
-            return []
+        except SQLAlchemyError:
+            logger.exception(
+                "get_user_approved_apartments_sync failed for user %s", user_telegram_id
+            )
+            raise
 
     @staticmethod
     async def get_user_approved_apartments(session: Session, user_telegram_id: int) -> List[Apartment]:
@@ -708,8 +714,16 @@ class AddressService:
         Returns:
             str: Отформатированный адрес (например: "Квартира 42, ул. Ленина 10 (Двор А)")
         """
+        # Захватываем номер ДО доступа к relationships: у detached-объекта
+        # обращение к relationship кинет DetachedInstanceError, и тогда fallback
+        # не должен повторно трогать ORM-атрибуты (они тоже могут быть expired).
         try:
-            address_parts = [f"Квартира {apartment.apartment_number}"]
+            number = apartment.apartment_number
+        except (AttributeError, DetachedInstanceError):
+            number = "?"
+
+        try:
+            address_parts = [f"Квартира {number}"]
 
             if apartment.building:
                 address_parts.append(apartment.building.address)
@@ -719,9 +733,9 @@ class AddressService:
 
             return ", ".join(address_parts)
 
-        except Exception as e:
-            logger.error(f"Ошибка форматирования адреса квартиры {apartment.id}: {e}")
-            return f"Квартира {apartment.apartment_number}"
+        except (AttributeError, DetachedInstanceError):
+            logger.exception("format_apartment_address failed")
+            return f"Квартира {number}"
 
     # ============= STEPWISE ADDRESS SELECTION FOR REQUEST CREATION =============
 
@@ -797,9 +811,11 @@ class AddressService:
             )
             return list(yards)
 
-        except Exception as e:
-            logger.error(f"Ошибка получения доступных дворов для пользователя {user_telegram_id}: {e}")
-            return []
+        except SQLAlchemyError:
+            logger.exception(
+                "get_user_available_yards failed for user %s", user_telegram_id
+            )
+            raise
 
     @staticmethod
     def get_user_available_buildings(session: Session, user_telegram_id: int, yard_id: int) -> List['Building']:
@@ -848,9 +864,11 @@ class AddressService:
             logger.info(f"Найдено {len(buildings)} доступных зданий в дворе {yard_id} для пользователя {user_telegram_id}")
             return list(buildings)
 
-        except Exception as e:
-            logger.error(f"Ошибка получения доступных зданий для пользователя {user_telegram_id}: {e}")
-            return []
+        except SQLAlchemyError:
+            logger.exception(
+                "get_user_available_buildings failed for user %s", user_telegram_id
+            )
+            raise
 
     @staticmethod
     def get_user_available_apartments(session: Session, user_telegram_id: int, building_id: int) -> List[Apartment]:
@@ -897,9 +915,11 @@ class AddressService:
             logger.info(f"Найдено {len(apartments)} доступных квартир в здании {building_id} для пользователя {user_telegram_id}")
             return list(apartments)
 
-        except Exception as e:
-            logger.error(f"Ошибка получения доступных квартир для пользователя {user_telegram_id}: {e}")
-            return []
+        except SQLAlchemyError:
+            logger.exception(
+                "get_user_available_apartments failed for user %s", user_telegram_id
+            )
+            raise
 
     # ============= USER ADDITIONAL YARDS MANAGEMENT =============
 
@@ -963,9 +983,11 @@ class AddressService:
             logger.info(f"Добавлен дополнительный двор {yard_id} для пользователя {user_telegram_id}")
             return True
 
-        except Exception as e:
+        except SQLAlchemyError:
             session.rollback()
-            logger.error(f"Ошибка добавления двора {yard_id} пользователю {user_telegram_id}: {e}")
+            logger.exception(
+                "add_user_yard failed (yard=%s user=%s)", yard_id, user_telegram_id
+            )
             return False
 
     @staticmethod
@@ -1013,9 +1035,11 @@ class AddressService:
             logger.info(f"Удален дополнительный двор {yard_id} у пользователя {user_telegram_id}")
             return True
 
-        except Exception as e:
+        except SQLAlchemyError:
             session.rollback()
-            logger.error(f"Ошибка удаления двора {yard_id} у пользователя {user_telegram_id}: {e}")
+            logger.exception(
+                "remove_user_yard failed (yard=%s user=%s)", yard_id, user_telegram_id
+            )
             return False
 
     @staticmethod
@@ -1059,6 +1083,8 @@ class AddressService:
             logger.info(f"Найдено {len(yards)} дополнительных дворов для пользователя {user_telegram_id}")
             return list(yards)
 
-        except Exception as e:
-            logger.error(f"Ошибка получения дополнительных дворов для пользователя {user_telegram_id}: {e}")
-            return []
+        except SQLAlchemyError:
+            logger.exception(
+                "get_user_additional_yards failed for user %s", user_telegram_id
+            )
+            raise
