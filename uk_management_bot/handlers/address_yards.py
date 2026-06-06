@@ -159,9 +159,11 @@ async def show_address_stats(callback: CallbackQuery, state: FSMContext, languag
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_yards_list")
-async def show_yards_list(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def show_yards_list(callback: CallbackQuery, state: FSMContext | None, language: str = "ru"):
     """Показать список всех дворов"""
-    await state.clear()
+    # delete_yard вызывает без FSM-состояния (state=None) — чистить нечего.
+    if state is not None:
+        await state.clear()
 
     db = next(get_db())
     try:
@@ -405,10 +407,10 @@ async def process_yard_gps(message: Message, state: FSMContext, language: str = 
 
         logger.info(f"Создан новый двор: {yard.name} (ID: {yard.id}) пользователем {message.from_user.id}")
 
-    except Exception as e:
-        logger.error(f"Ошибка при создании двора: {e}")
+    except Exception:
+        logger.exception("create yard handler failed")
         await message.answer(
-            get_text("address_yards.handlers.yard_creation_error", language=lang).format(error=str(e)),
+            get_text("address_yards.handlers.operation_failed", language=lang),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
@@ -479,9 +481,11 @@ async def process_new_yard_name(message: Message, state: FSMContext, language: s
 
         logger.info(f"Двор {yard_id} переименован в '{new_name}' пользователем {message.from_user.id}")
 
-    except Exception as e:
-        logger.error(f"Ошибка при обновлении названия двора: {e}")
-        await message.answer(f"❌ {str(e)}")
+    except Exception:
+        logger.exception("update yard name handler failed")
+        await message.answer(
+            get_text("address_yards.handlers.operation_failed", language=lang)
+        )
     finally:
         db.close()
         await state.clear()
@@ -591,9 +595,9 @@ async def delete_yard(callback: CallbackQuery, language: str = "ru"):
         # Показываем список дворов
         await show_yards_list(callback, None)
 
-    except Exception as e:
-        logger.error(f"Ошибка при удалении двора: {e}")
-        await callback.answer(get_text("address_yards.handlers.error_deletion", language=lang), show_alert=True)
+    except Exception:
+        logger.exception("delete yard handler failed")
+        await callback.answer(get_text("address_yards.handlers.error_deletion", language=language), show_alert=True)
     finally:
         db.close()
 

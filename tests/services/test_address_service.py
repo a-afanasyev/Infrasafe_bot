@@ -9,8 +9,14 @@ side effects (session.commit/add/rollback, queue_webhook_sync) that no longer
 apply, so they were retired. Only the read-method tests remain — read methods
 still operate on the caller's sync Session and are unchanged.
 """
+import json
+from pathlib import Path
+
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 
 class _FakeYard:
@@ -173,3 +179,179 @@ class TestGetApartmentById:
 
         result = await AddressService.get_apartment_by_id(session, 999)
         assert result is None
+
+
+# ===========================================================================
+# BUG-028 — exception hardening (no schema leak to UI)
+# ===========================================================================
+
+# Recognizable internal text that must NEVER reach the user-facing message.
+_LEAK_MARKER = 'duplicate key value violates unique constraint "apartment_uk"'
+
+
+def _integrity_error() -> IntegrityError:
+    return IntegrityError("INSERT INTO apartments ...", {}, Exception(_LEAK_MARKER))
+
+
+def _operational_error() -> OperationalError:
+    return OperationalError("SELECT ...", {}, Exception("server closed the connection"))
+
+
+class _FakeAsyncCM:
+    """Minimal async context manager so `async with _async_session() as adb:` works."""
+
+    def __init__(self, session):
+        self._session = session
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _patch_core(method: str, exc: Exception):
+    """Patch a core coroutine to raise `exc`, and stub _async_session."""
+    return (
+        patch(
+            f"uk_management_bot.services.address_service._core.{method}",
+            new=AsyncMock(side_effect=exc),
+        ),
+        patch(
+            "uk_management_bot.services.address_service._async_session",
+            new=lambda: _FakeAsyncCM(MagicMock()),
+        ),
+    )
+
+
+class TestWriteMethodsDoNotLeakOnDbError:
+    """Group A/B/C write-adapters: DB error -> contract shape + opaque message."""
+
+    @pytest.mark.asyncio
+    async def test_create_yard_db_error_returns_opaque(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        p_core, p_sess = _patch_core("create_yard", _integrity_error())
+        with p_core, p_sess:
+            yard, error = await AddressService.create_yard(MagicMock(), "Двор", 1)
+
+        assert yard is None
+        assert error is not None
+        assert _LEAK_MARKER not in error
+        assert "INSERT" not in error
+
+    @pytest.mark.asyncio
+    async def test_delete_building_db_error_returns_opaque(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        p_core, p_sess = _patch_core("delete_building", _integrity_error())
+        with p_core, p_sess:
+            ok, error = await AddressService.delete_building(MagicMock(), 1)
+
+        assert ok is False
+        assert error is not None
+        assert _LEAK_MARKER not in error
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_apartments_db_error_returns_opaque(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        p_core, p_sess = _patch_core("bulk_create_apartments", _integrity_error())
+        with p_core, p_sess:
+            created, skipped, errors = await AddressService.bulk_create_apartments(
+                MagicMock(), 1, ["1", "2"], 1
+            )
+
+        assert (created, skipped) == (0, 0)
+        assert len(errors) == 1
+        assert _LEAK_MARKER not in errors[0]
+
+    @pytest.mark.asyncio
+    async def test_non_db_exception_propagates(self):
+        """Не-DB исключение больше не глотается (раньше уходило строкой юзеру)."""
+        from uk_management_bot.services.address_service import AddressService
+
+        p_core, p_sess = _patch_core("create_yard", ValueError("boom"))
+        with p_core, p_sess, pytest.raises(ValueError):
+            await AddressService.create_yard(MagicMock(), "Двор", 1)
+
+
+class TestReadMethodsPropagateDbError:
+    """Read methods must NOT swallow a DB error into []/{} (poisoned session)."""
+
+    @pytest.mark.asyncio
+    async def test_get_statistics_reraises(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        session = MagicMock()
+        session.execute.side_effect = _operational_error()
+
+        with pytest.raises(OperationalError):
+            await AddressService.get_statistics(session)
+
+    def test_get_user_available_yards_reraises(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        session = MagicMock()
+        session.execute.side_effect = _operational_error()
+
+        with pytest.raises(OperationalError):
+            AddressService.get_user_available_yards(session, 12345)
+
+
+class TestFormatApartmentAddressDetached:
+    def test_detached_building_falls_back_without_reaccess(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        class _DetachedApartment:
+            apartment_number = "42"
+
+            @property
+            def building(self):
+                raise DetachedInstanceError("detached")
+
+        result = AddressService.format_apartment_address(_DetachedApartment())
+        assert result == "Квартира 42"
+
+    def test_detached_number_falls_back_to_placeholder(self):
+        from uk_management_bot.services.address_service import AddressService
+
+        class _FullyDetached:
+            @property
+            def apartment_number(self):
+                raise DetachedInstanceError("detached")
+
+            @property
+            def building(self):
+                raise DetachedInstanceError("detached")
+
+        result = AddressService.format_apartment_address(_FullyDetached())
+        assert result == "Квартира ?"
+
+
+class TestSanitizedLocaleKeysHaveNoErrorPlaceholder:
+    """Regression guard: exception-path keys must not interpolate {error}."""
+
+    _LOCALES = Path(__file__).resolve().parents[2] / "uk_management_bot" / "config" / "locales"
+    _KEYS = [
+        "address_apartments.handlers.creation_exception",
+        "address_apartments.handlers.area_update_exception",
+        "address_moderation.handlers.approve_exception",
+        "address_moderation.handlers.reject_exception",
+        "address_yards.handlers.operation_failed",
+        "address_buildings.handlers.operation_failed",
+    ]
+
+    @staticmethod
+    def _resolve(data: dict, dotted: str) -> str:
+        node = data
+        for part in dotted.split("."):
+            node = node[part]
+        return node
+
+    @pytest.mark.parametrize("lang", ["ru", "uz"])
+    def test_no_error_placeholder(self, lang):
+        data = json.loads((self._LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+        for key in self._KEYS:
+            value = self._resolve(data, key)
+            assert "{error}" not in value, f"{lang}:{key} still leaks {{error}}"

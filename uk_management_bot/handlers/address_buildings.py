@@ -442,10 +442,10 @@ async def process_building_gps(message: Message, state: FSMContext, language: st
 
         logger.info(f"Создано новое здание: {building.address} (ID: {building.id}) пользователем {message.from_user.id}")
 
-    except Exception as e:
-        logger.error(f"Ошибка при создании здания: {e}")
+    except Exception:
+        logger.exception("create building handler failed")
         await message.answer(
-            get_text("address_buildings.handlers.building_creation_error", language=lang).format(error=str(e)),
+            get_text("address_buildings.handlers.operation_failed", language=lang),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
@@ -573,9 +573,9 @@ async def delete_building(callback: CallbackQuery, language: str = "ru"):
         # Показываем список зданий
         await show_buildings_list(callback, None)
 
-    except Exception as e:
-        logger.error(f"Ошибка при удалении здания: {e}")
-        await callback.answer(get_text("address_buildings.handlers.error_deletion", language=lang), show_alert=True)
+    except Exception:
+        logger.exception("delete building handler failed")
+        await callback.answer(get_text("address_buildings.handlers.error_deletion", language=language), show_alert=True)
     finally:
         db.close()
 

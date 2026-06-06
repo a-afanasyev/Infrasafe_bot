@@ -281,10 +281,10 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
 
         logger.info(f"Заявка {user_apartment_id} подтверждена администратором {reviewer.telegram_id} (DB ID: {reviewer.id})")
 
-    except Exception as e:
-        logger.error(f"Ошибка при подтверждении заявки: {e}")
+    except Exception:
+        logger.exception("approve apartment request handler failed")
         await message.answer(
-            get_text("address_moderation.handlers.approve_exception", language=lang).format(error=str(e)),
+            get_text("address_moderation.handlers.approve_exception", language=lang),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
@@ -405,10 +405,10 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
 
         logger.info(f"Заявка {user_apartment_id} отклонена администратором {reviewer.telegram_id} (DB ID: {reviewer.id})")
 
-    except Exception as e:
-        logger.error(f"Ошибка при отклонении заявки: {e}")
+    except Exception:
+        logger.exception("reject apartment request handler failed")
         await message.answer(
-            get_text("address_moderation.handlers.reject_exception", language=lang).format(error=str(e)),
+            get_text("address_moderation.handlers.reject_exception", language=lang),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
