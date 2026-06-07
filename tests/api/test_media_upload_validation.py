@@ -21,6 +21,19 @@ def _file_part(name: str = "evidence.jpg", content: bytes = b"\xff\xd8\xff\xe0te
     return ("file", (name, io.BytesIO(content), "image/jpeg"))
 
 
+def _bypass_request_access(monkeypatch):
+    """The proxy gates uploads on check_request_access (request ownership).
+    These tests target the validation/forward layer, not access control, and
+    don't seed a request row — stub the access check to a no-op so we reach
+    the code under test instead of a 404."""
+    from uk_management_bot.api import main as api_main
+
+    async def _noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(api_main, "check_request_access", _noop)
+
+
 @pytest.mark.asyncio
 async def test_invalid_request_number_rejected_before_media_service_call(client):
     """Path-traversal request_number is rejected at the proxy boundary."""
@@ -90,6 +103,7 @@ async def test_well_formed_request_passes_validation_layer(client, monkeypatch):
     monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
     # MEDIA_SERVICE_URL must be set for the proxy to not 503.
     monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
+    _bypass_request_access(monkeypatch)
 
     resp = await client.post(
         "/api/v2/media/upload",
@@ -103,3 +117,83 @@ async def test_well_formed_request_passes_validation_layer(client, monkeypatch):
     # Enum-valued category is forwarded as its string value, not the enum repr.
     assert _StubClient.last_data["category"] == "completion_photo"
     assert _StubClient.last_data["request_number"] == "260524-001"
+
+
+@pytest.mark.asyncio
+async def test_spoofed_content_rejected_by_magic_bytes(client, monkeypatch):
+    """H2: bytes that aren't a real media file are rejected even with a valid
+    image Content-Type header, BEFORE any outbound media-service call."""
+    from uk_management_bot.api import main as api_main
+
+    called = {"n": 0}
+
+    class _StubClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            called["n"] += 1
+            raise AssertionError("media service must not be called for spoofed content")
+
+    monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
+    monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
+    _bypass_request_access(monkeypatch)
+
+    resp = await client.post(
+        "/api/v2/media/upload",
+        files=[("file", ("x.jpg", io.BytesIO(b"<html><script>alert(1)</script>"), "image/jpeg"))],
+        data={"request_number": "260524-001", "category": "completion_photo"},
+    )
+    assert resp.status_code == 422, resp.text
+    assert called["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_forwarded_content_type_is_sniffed_not_client(client, monkeypatch):
+    """H2: the proxy forwards a server-derived content_type (from magic bytes),
+    not the client-supplied header — a client lying image/png over JPEG bytes
+    is relayed as image/jpeg."""
+    from uk_management_bot.api import main as api_main
+
+    captured = {}
+
+    class _StubResp:
+        status_code = 200
+        text = "ok"
+
+        @staticmethod
+        def json():
+            return {"ok": True}
+
+    class _StubClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, headers=None, files=None, data=None):
+            captured["files"] = files
+            return _StubResp()
+
+    monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
+    monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
+    _bypass_request_access(monkeypatch)
+
+    resp = await client.post(
+        "/api/v2/media/upload",
+        files=[("file", ("x.png", io.BytesIO(b"\xff\xd8\xff\xe0jpegdata"), "image/png"))],
+        data={"request_number": "260524-001", "category": "request_photo"},
+    )
+    assert resp.status_code == 200, resp.text
+    # files["file"] == (filename, bytes, content_type)
+    assert captured["files"]["file"][2] == "image/jpeg"

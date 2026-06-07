@@ -344,6 +344,31 @@ class FileCategories(str, Enum):
     COMPLETION_DOCUMENT = "completion_document"
 
 
+# H2 (SEC): the downstream Media Service trusts the client-supplied
+# Content-Type (its allowed_file_types check runs against the header, not the
+# bytes). Verify real content via magic bytes at the proxy boundary and
+# forward a *server-derived* content_type, so a crafted authenticated upload
+# can't smuggle HTML/SVG/JS bytes labelled as image/* and have them served
+# back later with a spoofed type. Allowlist mirrors media_service
+# settings.allowed_file_types (jpeg/png/gif/mp4/mov).
+_MEDIA_MAX_BYTES = 50 * 1024 * 1024  # mirrors media_service max_file_size
+
+
+def _sniff_media_mime(data: bytes) -> "str | None":
+    """Return a server-trusted MIME from magic bytes, or None if the content is
+    not an allowed media type."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    # ISO BMFF (mp4 / mov): 'ftyp' box at bytes 4..8, brand at 8..12.
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return "video/mov" if data[8:10] == b"qt" else "video/mp4"
+    return None
+
+
 from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.api.dependencies_access import check_request_access
 from uk_management_bot.database.models.user import User
@@ -386,11 +411,23 @@ async def proxy_media_upload(
     if settings.MEDIA_SERVICE_API_KEY:
         headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
 
+    # H2: read once, enforce size, verify real content type via magic bytes,
+    # and forward the sniffed type (never the client-supplied content_type).
+    file_bytes = await file.read()
+    if len(file_bytes) > _MEDIA_MAX_BYTES:
+        raise HTTPException(status_code=422, detail="File too large (max 50MB)")
+    sniffed_ct = _sniff_media_mime(file_bytes)
+    if sniffed_ct is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported file content (allowed: JPEG, PNG, GIF, MP4, MOV)",
+        )
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"{media_url}/api/v1/media/upload",
             headers=headers,
-            files={"file": (file.filename, await file.read(), file.content_type)},
+            files={"file": (file.filename, file_bytes, sniffed_ct)},
             data={
                 "request_number": request_number,
                 "category": category.value,
