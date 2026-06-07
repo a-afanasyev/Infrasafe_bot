@@ -1,9 +1,53 @@
 import os
+import ipaddress
 from dotenv import load_dotenv
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Загружаем переменные окружения
 load_dotenv()
+
+# Local / internal hostnames for which plaintext http is acceptable (dev & test
+# stubs, trusted-network services). The SEC-063 risk is plaintext to a *public*
+# host, not to loopback / docker-internal.
+_LOCAL_HOSTNAMES = {"localhost", "host.docker.internal"}
+
+
+def _is_local_host(host: str) -> bool:
+    h = (host or "").lower()
+    if h in _LOCAL_HOSTNAMES or h.endswith(".local") or h.endswith(".internal"):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+        return ip.is_loopback or ip.is_private or ip.is_link_local
+    except ValueError:
+        return False
+
+
+def _require_safe_outbound_url(name: str, url: str) -> None:
+    """SEC-063: outbound InfraSafe URLs must be http(s) with a real host, and
+    plaintext http is tolerated only for local/internal targets.
+
+    A misconfigured or injected env value (wrong scheme, no host, or plaintext
+    http to a public host) would otherwise silently redirect our HMAC-signed
+    webhook payloads / reconciliation polls to an arbitrary or eavesdroppable
+    target. Empty is allowed — the integration is simply unconfigured; we only
+    validate a URL that is actually set.
+    """
+    if not url:
+        return
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if parsed.scheme not in ("http", "https") or not host:
+        raise ValueError(
+            f"{name} must be an http(s) URL with a host "
+            f"(got scheme='{parsed.scheme}', host='{host or ''}')"
+        )
+    if parsed.scheme == "http" and not _is_local_host(host):
+        raise ValueError(
+            f"{name} must use https for non-local hosts (got plaintext http to '{host}')"
+        )
+
 
 class Settings:
     # Telegram Bot
@@ -202,6 +246,12 @@ class Settings:
             raise ValueError("JWT_SECRET and INVITE_SECRET must be different in production")
         if not REDIS_URL or "redis://" not in REDIS_URL:
             raise ValueError("Valid REDIS_URL required in production")
+        # SEC-063: outbound InfraSafe URLs (signed webhook target + buildings
+        # metrics share INFRASAFE_WEBHOOK_URL; reconciliation inventory uses
+        # INFRASAFE_REQUESTS_INVENTORY_URL) must be http(s) with a host, and
+        # plaintext http only for local/internal targets.
+        _require_safe_outbound_url("INFRASAFE_WEBHOOK_URL", INFRASAFE_WEBHOOK_URL)
+        _require_safe_outbound_url("INFRASAFE_REQUESTS_INVENTORY_URL", INFRASAFE_REQUESTS_INVENTORY_URL)
 
 # Создаем экземпляр настроек
 settings = Settings()
