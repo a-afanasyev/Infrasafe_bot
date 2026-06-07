@@ -40,8 +40,10 @@ async def fetch_infrasafe_uk_request_numbers() -> set[str]:
         GET INFRASAFE_REQUESTS_INVENTORY_URL?limit=5000
         → {"data": [{"uk_request_number": "260523-004", ...}, ...], "total": N}
 
-    Extra fields (status / building_external_id / infrasafe_alert_id / updated_at)
-    are returned for debugging; we only consume uk_request_number for the set-diff.
+    Extra fields (status / building_external_id / updated_at) are returned for
+    debugging; we only consume uk_request_number for the set-diff.
+    (InfraSafe dropped infrasafe_alert_id from this endpoint 2026-06-07, SEC-19;
+    we never read it.)
     """
     base = settings.INFRASAFE_REQUESTS_INVENTORY_URL.rstrip("/")
     if not base:
