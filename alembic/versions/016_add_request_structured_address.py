@@ -15,14 +15,21 @@ CREATE INDEX CONCURRENTLY, возобновляемый батч-backfill, NOT V
   3. SET NOT NULL на address_type + CHECK(тип↔FK);
   4. FK building_id/yard_id → ON DELETE RESTRICT.
 
-Существующий apartment_id FK остаётся ON DELETE SET NULL (миграция 007): для
-немигрированных/legacy строк (address_type IS NULL) обнуление безопасно, а для
-address_type='apartment' CHECK сам блокирует обнуление; от каскадного удаления
-дополнительно защищает purge-гард на уровне приложения (addresses/router).
+Существующий apartment_id FK НАМЕРЕННО остаётся ON DELETE SET NULL (миграция
+007 / FIX-003 / DB-111 — это покрыто test_apartment_purge и переводить его на
+RESTRICT нельзя, сломает документированную семантику):
+  * для legacy/немигрированных строк (address_type IS NULL) cascade SET NULL
+    безопасен — толерантная NULL-ветка CHECK проходит;
+  * для address_type='apartment' cascade SET NULL обнулит apartment_id и тогда
+    CHECK даст ОШИБКУ (не «молча блокирует» — именно отклонит весь DELETE),
+    что предотвращает осиротевшую apartment-level заявку.
+Нормальный путь удаления квартиры защищён purge-гардом на уровне приложения
+(addresses/router: блокирует hard-delete при ссылках из requests → чистый 409),
+поэтому CHECK-ошибка возможна лишь при прямом DB-DELETE в обход API (админ/
+миграция). Это приемлемо: оба слоя не дают осиротить заявку.
 
 Тесты схему строят через Base.metadata.create_all (CHECK живёт и в модели),
 поэтому эта миграция исполняется только в api-контейнере/на проде (Postgres).
-SQLite-fallback оставлен для совместимости с возможным replay миграций.
 
 Revision ID: 016
 Revises: 015
@@ -57,10 +64,6 @@ BACKFILL_SQL = (
     "ELSE 'legacy' END "
     "WHERE address_type IS NULL"
 )
-
-
-def _is_postgres() -> bool:
-    return op.get_bind().dialect.name == 'postgresql'
 
 
 def upgrade() -> None:

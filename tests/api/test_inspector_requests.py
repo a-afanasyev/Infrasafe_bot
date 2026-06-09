@@ -152,6 +152,34 @@ async def test_resolver_nonexistent_422(db_session, applicant):
 
 
 @pytest.mark.asyncio
+async def test_resolver_foreign_yard_403(db_session, applicant, addr_tree):
+    # Чужой двор (активен, но нет approved-квартиры жителя и нет UserYard) → 403.
+    # Регресс на некоррелированный EXISTS: applicant с квартирой в дворе А не
+    # должен резолвить чужой двор Б.
+    foreign_yard = Yard(name="Двор Чужой", is_active=True)
+    db_session.add(foreign_yard)
+    await db_session.commit()
+    with pytest.raises(AddressResolutionError) as e:
+        await resolve_request_address_async(db_session, applicant.id, "applicant", "yard", foreign_yard.id)
+    assert e.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_resolver_foreign_building_403(db_session, applicant, addr_tree):
+    # Чужой дом в чужом дворе → 403 (нет approved-квартиры жителя в нём).
+    foreign_yard = Yard(name="Двор Чужой 2", is_active=True)
+    db_session.add(foreign_yard)
+    await db_session.flush()
+    foreign_building = Building(address="ул. Чужая 9", yard_id=foreign_yard.id, is_active=True,
+                               entrance_count=1, floor_count=3)
+    db_session.add(foreign_building)
+    await db_session.commit()
+    with pytest.raises(AddressResolutionError) as e:
+        await resolve_request_address_async(db_session, applicant.id, "applicant", "building", foreign_building.id)
+    assert e.value.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_resolver_inspector_building_no_membership(db_session, inspector, addr_tree):
     r = await resolve_request_address_async(db_session, inspector.id, "inspector", "building", addr_tree["building"].id)
     assert r.building_id == addr_tree["building"].id
@@ -405,3 +433,28 @@ def test_role_layer_inspector_registered():
     assert "inspector" in USER_ROLES
     assert UserRole.INSPECTOR.db_value == "inspector"
     assert UserRole.from_db("inspector") is UserRole.INSPECTOR
+
+
+# ─────────────────── контракт-валидация (code-review follow-ups) ────────
+
+
+@pytest.mark.asyncio
+async def test_callcenter_invalid_category_422(make_client, manager_user):
+    # Менеджер не должен заводить заявку с произвольной категорией.
+    async with make_client(manager_user) as ac:
+        r = await ac.post(
+            "/api/v2/callcenter/requests",
+            json={"category": "ВыдуманнаяКатегория", "urgency": "low",
+                  "description": "x", "address": "ул. Х"},
+        )
+    assert r.status_code == 422
+
+
+def test_inspector_schema_matches_resolver_allowed_levels():
+    # Инвариант: building-only заперт И в схеме (Literal), И в резолвере. Если
+    # кто-то расширит одно без другого — этот тест упадёт.
+    from uk_management_bot.api.requests.schemas import CreateInspectorRequestBody
+    from uk_management_bot.services.request_address import ROLE_ALLOWED_LEVELS
+
+    schema_levels = set(CreateInspectorRequestBody.model_fields["address_type"].annotation.__args__)
+    assert schema_levels == set(ROLE_ALLOWED_LEVELS["inspector"]) == {"building"}

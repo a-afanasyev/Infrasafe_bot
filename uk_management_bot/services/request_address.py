@@ -148,7 +148,11 @@ def _member_stmt(address_type: str, address_id: int, user_id: int):
     """Сущность по id, доступная пользователю (принадлежность + активность).
 
     Membership через коррелированный EXISTS — не дублирует строки и сохраняет
-    contains_eager-загрузку родителей для канонического адреса.
+    contains_eager-загрузку родителей для канонического адреса. `.correlate(...)`
+    задан ЯВНО (не полагаемся на авто-корреляцию): EXISTS привязан к внешней
+    сущности (Yard/Building/Apartment), иначе подзапрос стал бы декартовым и мог
+    бы пропустить любой ресурс, где у юзера есть доступ к ДРУГОМУ. Регресс
+    покрыт test_resolver_foreign_yard_403 / test_resolver_foreign_building_403.
     """
     if address_type == "yard":
         via_apartment = exists().where(
@@ -161,10 +165,10 @@ def _member_stmt(address_type: str, address_id: int, user_id: int):
                 UserApartment.user_id == user_id,
                 UserApartment.status == "approved",
             )
-        )
+        ).correlate(Yard)
         via_user_yard = exists().where(
             and_(UserYard.yard_id == Yard.id, UserYard.user_id == user_id)
-        )
+        ).correlate(Yard)
         return (
             select(Yard)
             .where(Yard.id == address_id, Yard.is_active.is_(True))
@@ -179,7 +183,7 @@ def _member_stmt(address_type: str, address_id: int, user_id: int):
                 UserApartment.user_id == user_id,
                 UserApartment.status == "approved",
             )
-        )
+        ).correlate(Building)
         return (
             select(Building)
             .join(Building.yard)
@@ -198,7 +202,7 @@ def _member_stmt(address_type: str, address_id: int, user_id: int):
             UserApartment.user_id == user_id,
             UserApartment.status == "approved",
         )
-    )
+    ).correlate(Apartment)
     return (
         select(Apartment)
         .join(Apartment.building)
@@ -297,10 +301,10 @@ def _available_yards_stmt(user_id: int):
             UserApartment.user_id == user_id,
             UserApartment.status == "approved",
         )
-    )
+    ).correlate(Yard)
     via_user_yard = exists().where(
         and_(UserYard.yard_id == Yard.id, UserYard.user_id == user_id)
-    )
+    ).correlate(Yard)
     return (
         select(Yard)
         .where(Yard.is_active.is_(True))
@@ -318,7 +322,7 @@ def _available_buildings_stmt(user_id: int):
             UserApartment.user_id == user_id,
             UserApartment.status == "approved",
         )
-    )
+    ).correlate(Building)
     return (
         select(Building)
         .join(Building.yard)
@@ -336,7 +340,7 @@ def _available_apartments_stmt(user_id: int):
             UserApartment.user_id == user_id,
             UserApartment.status == "approved",
         )
-    )
+    ).correlate(Apartment)
     return (
         select(Apartment)
         .join(Apartment.building)

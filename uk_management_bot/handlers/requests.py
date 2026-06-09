@@ -282,18 +282,23 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     try:
         user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
         # Approved-applicant гейт (план «Обходчик»): applicant-flow стал
-        # role-gated. Менеджер/обходчик заводят заявки своими путями.
-        if user is not None:
-            from uk_management_bot.api.dependencies import _parse_user_roles
-            user_roles = _parse_user_roles(user)
-            if "applicant" not in user_roles or user.status != "approved":
-                await message.answer(get_text("requests.applicant_only", language=lang))
-                return
-        if user and not user.phone:
+        # role-gated. Менеджер/обходчик заводят заявки своими путями. Гейт —
+        # ЖЁСТКИЙ: при отсутствии юзера/ошибке БД не входим в FSM (fail-closed).
+        if user is None:
+            await message.answer(get_text("requests.applicant_only", language=lang))
+            return
+        from uk_management_bot.api.dependencies import _parse_user_roles
+        user_roles = _parse_user_roles(user)
+        if "applicant" not in user_roles or user.status != "approved":
+            await message.answer(get_text("requests.applicant_only", language=lang))
+            return
+        if not user.phone:
             await message.answer(get_text("requests.phone_required", language=lang))
             return
     except Exception as e:
-        logger.error(f"Ошибка проверки телефона пользователя {message.from_user.id}: {e}")
+        logger.error(f"Ошибка проверки доступа пользователя {message.from_user.id}: {e}", exc_info=True)
+        await message.answer(get_text("errors.default", language=lang))
+        return
     finally:
         db.close()
 
@@ -647,7 +652,9 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
         data = await state.get_data()
 
         # Сохраняем заявку в базу данных
-        request_number = await save_request(data, message.from_user.id, db, message.bot)
+        request_number = await save_request(
+            data, message.from_user.id, db, message.bot, source="bot", role="applicant"
+        )
 
         if request_number:
             await state.clear()
@@ -689,8 +696,8 @@ async def save_request(
     bot: Bot = None,
     source: str = "bot",
     role: str = "applicant",
-) -> bool:
-    """Сохранение заявки в базу данных.
+) -> Optional[str]:
+    """Сохранение заявки в базу данных. Возвращает номер заявки (str) или None.
 
     План «Обходчик»: адрес НЕ доверяем FSM-данным — re-резолвим выбранный
     `(address_type, address_id)` через resolve_request_address_sync (проверка
@@ -703,14 +710,15 @@ async def save_request(
         logger.info(f"[SAVE_REQUEST] Данные FSM: {data.keys()}")
         logger.debug(f"[SAVE_REQUEST] Полные данные: {data}")
 
-        # Валидация обязательных полей (адрес считает сервер из address_type+id)
+        # Валидация обязательных полей (адрес считает сервер из address_type+id).
+        # `is None` (а не truthiness) — address_id=0 теоретически валиден.
         required_fields = ['category', 'address_type', 'address_id', 'description', 'urgency']
-        missing_fields = [field for field in required_fields if not data.get(field)]
+        missing_fields = [field for field in required_fields if data.get(field) is None]
 
         if missing_fields:
             logger.error(f"[SAVE_REQUEST] Отсутствуют обязательные поля: {missing_fields}")
             logger.error(f"[SAVE_REQUEST] Доступные поля: {list(data.keys())}")
-            return False
+            return None
 
         # Получаем пользователя из базы данных по telegram_id
         from uk_management_bot.database.models.user import User
@@ -718,7 +726,7 @@ async def save_request(
 
         if not user:
             logger.error(f"[SAVE_REQUEST] Пользователь с telegram_id {user_id} не найден в базе данных")
-            return False
+            return None
 
         logger.info(f"[SAVE_REQUEST] Пользователь найден: {user.username} (ID: {user.id})")
 
@@ -987,7 +995,9 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 
             # Создаем заявку в базе данных
             db_session = next(get_db())
-            request_number = await save_request(data, callback.from_user.id, db_session, callback.bot)
+            request_number = await save_request(
+                data, callback.from_user.id, db_session, callback.bot, source="bot", role="applicant"
+            )
 
             if request_number:
                 # Get localized display values for category and urgency

@@ -287,54 +287,52 @@ async def _persist_request(
 ) -> RequestModel:
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
-    Транзакц. граница: INSERT(request)+enqueue outbox в одном commit (нет заявки
-    без webhook). Конфликт номера (IntegrityError по request_number) → пересчёт
-    и повтор. Адрес/FK/source приходят из резолвера — клиентский ввод не доверяем.
+    Транзакц. граница (ARCH-113): INSERT(request) + enqueue outbox эмитятся в
+    ОДНОМ commit (нет заявки без webhook-события). Конфликт номера (IntegrityError
+    по request_number) → пересчёт + повтор со СВЕЖИМ объектом (переиспользование
+    detached-инстанса после rollback ненадёжно). Адрес/FK/source — из резолвера.
     """
     today = date.today().strftime("%y%m%d")
-    count_result = await db.execute(
-        select(func.count(RequestModel.request_number)).where(
-            RequestModel.request_number.like(f"{today}-%")
-        )
-    )
-    count = count_result.scalar() or 0
 
-    req = RequestModel(
-        request_number=_generate_request_number(today, count),
-        user_id=user_id,
-        category=category,
-        urgency=urgency,
-        description=description,
-        address=resolved.canonical_address,
-        apartment_id=resolved.apartment_id,
-        building_id=resolved.building_id,
-        yard_id=resolved.yard_id,
-        address_type=resolved.address_type,
-        status="Новая",
-        source=source,
-        media_files=media_files or [],
-    )
-    try:
-        db.add(req)
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        count_result = await db.execute(
+    async def _next_count() -> int:
+        res = await db.execute(
             select(func.count(RequestModel.request_number)).where(
                 RequestModel.request_number.like(f"{today}-%")
             )
         )
-        count = count_result.scalar() or 0
-        req.request_number = _generate_request_number(today, count)
-        db.add(req)
-        await db.commit()
-    await db.refresh(req)
+        return res.scalar() or 0
 
+    async def _attempt(number: str) -> RequestModel:
+        req = RequestModel(
+            request_number=number,
+            user_id=user_id,
+            category=category,
+            urgency=urgency,
+            description=description,
+            address=resolved.canonical_address,
+            apartment_id=resolved.apartment_id,
+            building_id=resolved.building_id,
+            yard_id=resolved.yard_id,
+            address_type=resolved.address_type,
+            status="Новая",
+            source=source,
+            media_files=media_files or [],
+        )
+        db.add(req)
+        # Outbox в той же транзакции (source-тег в метаданные, НЕ в wire-payload).
+        await emit_request_created(db, req, source=webhook_tag)
+        await db.commit()
+        await db.refresh(req)
+        return req
+
+    try:
+        req = await _attempt(_generate_request_number(today, await _next_count()))
+    except IntegrityError:
+        await db.rollback()
+        req = await _attempt(_generate_request_number(today, await _next_count()))
+
+    # Redis pub/sub — best-effort, уже после durable-commit.
     await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))
-    # Webhook to InfraSafe (ARCH-113: shared builder). source-тег НЕ уходит в
-    # wire-payload (контракт InfraSafe), только в outbox-метаданные.
-    await emit_request_created(db, req, source=webhook_tag)
-    await db.commit()
     return req
 
 
