@@ -1,4 +1,3 @@
-from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
@@ -6,7 +5,7 @@ from sqlalchemy import select, or_, func
 from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
 from uk_management_bot.api.callcenter.schemas import ResidentSearchResult, CallCenterCreateRequest
 from uk_management_bot.api.requests.schemas import RequestCard
-from uk_management_bot.api.requests.router import _generate_request_number
+from uk_management_bot.services.request_number_service import RequestNumberService
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
     AddressResolutionError,
@@ -129,14 +128,9 @@ async def create_call_center_request(
         apartment_id = None
         address_type = "legacy"
 
-    today = date.today().strftime("%y%m%d")
-    count_result = await db.execute(
-        select(func.count(Request.request_number)).where(
-            Request.request_number.like(f"{today}-%")
-        )
-    )
-    count = count_result.scalar() or 0
-    request_number = _generate_request_number(today, count)
+    # PR5: атомарный счётчик дня (раньше COUNT(*)+1 без retry — коллизия
+    # после удаления строки роняла запрос 500-кой).
+    request_number = await RequestNumberService.next_number_async(db)
 
     notes = None
     if body.caller_name or body.caller_phone:

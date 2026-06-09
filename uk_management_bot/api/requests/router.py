@@ -1,8 +1,7 @@
 from typing import Optional
-from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
@@ -29,6 +28,7 @@ from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.services.redis_pubsub import publish_request_event
+from uk_management_bot.services.request_number_service import RequestNumberService
 from uk_management_bot.api.rate_limit import limiter
 
 router = APIRouter()
@@ -48,11 +48,6 @@ _REQUEST_VALID_TRANSITIONS: dict[str, set[str]] = {
 
 # Терминальные (финализированные) статусы — заявка заморожена для urgency-правок.
 _TERMINAL_STATUSES = {"Принято", "Отменена"}
-
-
-def _generate_request_number(today_str: str, count: int) -> str:
-    """Generate request number. Format: YYMMDD-NNN (supports up to 999 per day)."""
-    return f"{today_str}-{(count + 1):03d}"
 
 
 def _format_executor_name(user) -> Optional[str]:
@@ -288,19 +283,14 @@ async def _persist_request(
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
     Транзакц. граница (ARCH-113): INSERT(request) + enqueue outbox эмитятся в
-    ОДНОМ commit (нет заявки без webhook-события). Конфликт номера (IntegrityError
-    по request_number) → пересчёт + повтор со СВЕЖИМ объектом (переиспользование
-    detached-инстанса после rollback ненадёжно). Адрес/FK/source — из резолвера.
+    ОДНОМ commit (нет заявки без webhook-события). PR5: номер — атомарный
+    счётчик дня (RequestNumberService.next_number_async, та же транзакция;
+    прежний COUNT(*)+1 переиспользовал номер после удаления строки). Retry на
+    IntegrityError сохранён как defense-in-depth (rollback отменяет и
+    counter-инкремент → повтор с чистой транзакцией и СВЕЖИМ объектом —
+    переиспользование detached-инстанса после rollback ненадёжно).
+    Адрес/FK/source — из резолвера.
     """
-    today = date.today().strftime("%y%m%d")
-
-    async def _next_count() -> int:
-        res = await db.execute(
-            select(func.count(RequestModel.request_number)).where(
-                RequestModel.request_number.like(f"{today}-%")
-            )
-        )
-        return res.scalar() or 0
 
     async def _attempt(number: str) -> RequestModel:
         req = RequestModel(
@@ -326,10 +316,10 @@ async def _persist_request(
         return req
 
     try:
-        req = await _attempt(_generate_request_number(today, await _next_count()))
+        req = await _attempt(await RequestNumberService.next_number_async(db))
     except IntegrityError:
         await db.rollback()
-        req = await _attempt(_generate_request_number(today, await _next_count()))
+        req = await _attempt(await RequestNumberService.next_number_async(db))
 
     # Redis pub/sub — best-effort, уже после durable-commit.
     await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))

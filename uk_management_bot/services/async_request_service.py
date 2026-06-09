@@ -288,11 +288,11 @@ class AsyncRequestService:
             if not validate_description(description):
                 raise ValueError("Описание слишком короткое или длинное")
 
-            # Генерируем уникальный номер заявки (RequestNumberService работает с sync Session)
-            # Используем временное sync подключение для генерации номера
-            from uk_management_bot.database.session import SessionLocal
-            with SessionLocal() as sync_db:
-                request_number = Request.generate_request_number(sync_db)
+            # PR5: номер — в ТОЙ ЖЕ async-транзакции, что и INSERT (раньше
+            # генерился в отдельной sync-сессии, закрытой до вставки → счётчик
+            # и вставка были в разных транзакциях).
+            from uk_management_bot.services.request_number_service import RequestNumberService
+            request_number = await RequestNumberService.next_number_async(self.db)
 
             # Создание заявки.
             # ВНИМАНИЕ (план «Обходчик»): низкоуровневый async-конструктор на

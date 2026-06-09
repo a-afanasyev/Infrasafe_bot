@@ -7,10 +7,9 @@ and records the event in `webhook_inbox` for durable dedup + audit.
 """
 import logging
 from dataclasses import dataclass
-from datetime import date
 
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -233,14 +232,11 @@ async def _create_request(
     План «Обходчик»: пишем структурный building_id + address_type='building'
     (раньше InfraSafe-заявка несла только текстовый address с apartment_id=NULL).
     """
-    today = date.today().strftime("%y%m%d")
+    # PR5: атомарный счётчик дня вместо COUNT(*)+1 (переиспользовал номер
+    # после удаления строки). Retry сохранён как defense-in-depth.
+    from uk_management_bot.services.request_number_service import RequestNumberService
     for attempt in range(2):
-        count = await db.scalar(
-            select(func.count(Request.request_number)).where(
-                Request.request_number.like(f"{today}-%")
-            )
-        ) or 0
-        request_number = f"{today}-{count + 1:03d}"
+        request_number = await RequestNumberService.next_number_async(db)
         req = Request(
             request_number=request_number, user_id=user_id, category=category,
             urgency=urgency, description=description, address=address,

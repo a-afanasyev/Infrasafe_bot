@@ -743,26 +743,13 @@ async def save_request(
             logger.warning(f"[SAVE_REQUEST] Резолв адреса отклонён ({e.status_code}): {e.message}")
             return None
 
-        # Генерируем уникальный номер заявки
+        # Генерируем уникальный номер заявки (PR5: атомарный счётчик дня;
+        # row-lock счётчика держится до commit → НИКАКОГО сетевого I/O до
+        # commit — media upload перенесён ПОСЛЕ него).
         request_number = Request.generate_request_number(db)
         logger.info(f"[SAVE_REQUEST] Сгенерирован номер заявки: {request_number}")
 
-        # Загружаем медиа-файлы в Media Service (если есть)
         media_file_ids = data.get('media_files', [])
-        if media_file_ids and bot:
-            logger.info(f"[SAVE_REQUEST] Начало загрузки {len(media_file_ids)} файлов в Media Service")
-            from uk_management_bot.utils.media_helpers import upload_multiple_telegram_files
-            try:
-                uploaded_files = await upload_multiple_telegram_files(
-                    bot=bot,
-                    file_ids=media_file_ids,
-                    request_number=request_number,
-                    uploaded_by=user.id
-                )
-                logger.info(f"[SAVE_REQUEST] Загружено {len(uploaded_files)} файлов в Media Service для заявки {request_number}")
-            except Exception as e:
-                logger.error(f"[SAVE_REQUEST] Ошибка загрузки файлов в Media Service: {e}", exc_info=True)
-                # Продолжаем создание заявки даже если загрузка не удалась
 
         logger.info(f"[SAVE_REQUEST] Создание объекта заявки...")
         request = Request(
@@ -796,6 +783,27 @@ async def save_request(
         db.commit()
 
         logger.info(f"[SAVE_REQUEST] ✅ Заявка {request_number} успешно сохранена")
+
+        # PR5: загрузка медиа в Media Service — ПОСЛЕ commit (раньше шла между
+        # генерацией номера и INSERT, удерживая блокировки на время сетевого
+        # I/O). Результат upload'а в Request не сохраняется (media_files несёт
+        # telegram file_ids как backup), поэтому перенос ничего не меняет в
+        # данных; заявка уже durable, ошибка upload — как и раньше не фатальна.
+        if media_file_ids and bot:
+            logger.info(f"[SAVE_REQUEST] Начало загрузки {len(media_file_ids)} файлов в Media Service")
+            from uk_management_bot.utils.media_helpers import upload_multiple_telegram_files
+            try:
+                uploaded_files = await upload_multiple_telegram_files(
+                    bot=bot,
+                    file_ids=media_file_ids,
+                    request_number=request_number,
+                    uploaded_by=user.id
+                )
+                logger.info(f"[SAVE_REQUEST] Загружено {len(uploaded_files)} файлов в Media Service для заявки {request_number}")
+            except Exception as e:
+                logger.error(f"[SAVE_REQUEST] Ошибка загрузки файлов в Media Service: {e}", exc_info=True)
+                # Заявка уже сохранена; недогруженные медиа не блокируют создание
+
         return request_number
     except Exception as e:
         logger.error(f"[SAVE_REQUEST] ❌ Ошибка сохранения заявки: {e}", exc_info=True)

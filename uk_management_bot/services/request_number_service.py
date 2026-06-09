@@ -1,15 +1,56 @@
 """
 Сервис генерации и управления номерами заявок в формате YYMMDD-NNN
+
+PR5 (SSOT-кластер #1): единственный генератор номера — атомарный
+UPSERT…RETURNING по счётчику дня (request_number_counters). Заменяет три
+расходившиеся стратегии (лексикографический MAX — ломался после 999;
+COUNT(*)+1 в API/callcenter/inbound_alert — переиспользовал номер после
+удаления строки). Счётчик монотонен и gap-safe.
+
+Timezone дневного префикса зафиксирована ЯВНО: Asia/Tashkent (бизнес-дата,
+номер видят жители). Раньше date.today() зависел от tz сервера.
 """
 import re
 import logging
 from datetime import date, datetime
 from typing import Optional, Dict, Any, List
-from sqlalchemy import func, text
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+# Бизнес-tz дневного префикса YYMMDD (явно; не зависит от tz сервера/контейнера)
+BUSINESS_TZ = ZoneInfo("Asia/Tashkent")
+
+
+def business_today() -> date:
+    """Текущая бизнес-дата (Asia/Tashkent) для префикса номера заявки."""
+    return datetime.now(BUSINESS_TZ).date()
+
+
+# Атомарный счётчик дня. Self-seed: при отсутствии строки дня стартуем с
+# ЧИСЛОВОГО MAX(suffix) существующих заявок (+1) — покрывает заявки, созданные
+# старым кодом до переключения генератора (суффикс начинается с 8-й позиции:
+# префикс 'YYMMDD-' = 7 символов). Дальше — чистый инкремент: удаление заявки
+# с MAX-суффиксом НЕ приводит к повторной выдаче номера.
+# Работает на Postgres и SQLite (3.35+: ON CONFLICT + RETURNING).
+_NEXT_SEQ_SQL = text("""
+    INSERT INTO request_number_counters (day_prefix, last_seq)
+    VALUES (
+        :prefix,
+        COALESCE((
+            SELECT MAX(CAST(SUBSTR(request_number, 8) AS INTEGER))
+            FROM requests
+            WHERE request_number LIKE :pattern
+        ), 0) + 1
+    )
+    ON CONFLICT (day_prefix)
+    DO UPDATE SET last_seq = request_number_counters.last_seq + 1
+    RETURNING last_seq
+""")
 
 # BUG-122: single source of truth for the request-number shape. The sequence is
 # 3+ digits so a building can roll past 999 requests/day (YYMMDD-NNN+).
@@ -26,63 +67,51 @@ class RequestNumberService:
         self.db = db
     
     @staticmethod
-    def generate_next_number(creation_date: Optional[date] = None, db: Optional[Session] = None) -> str:
+    def _format(prefix: str, seq: int) -> str:
+        # Padding до 3 цифр; после 999 растёт естественно (BUG-122: формат 3+)
+        return f"{prefix}-{seq:03d}"
+
+    @staticmethod
+    def _params(creation_date: Optional[date]) -> tuple[str, dict]:
+        prefix = (creation_date or business_today()).strftime("%y%m%d")
+        return prefix, {"prefix": prefix, "pattern": f"{prefix}-%"}
+
+    @staticmethod
+    def next_number(db: Session, creation_date: Optional[date] = None) -> str:
+        """Следующий номер заявки (sync). Вызывать в ТОЙ ЖЕ транзакции, что
+        и INSERT заявки, без сетевого I/O до commit — row-lock счётчика дня
+        держится до конца транзакции.
+
+        Никаких fallback'ов: ошибка БД — это ошибка (time-fallback старой
+        версии выдавал коллизионные номера и удалён).
         """
-        Генерирует следующий номер заявки в формате YYMMDD-NNN
-        
-        Args:
-            creation_date: Дата создания заявки (по умолчанию - сегодня)
-            db: Сессия базы данных
-            
-        Returns:
-            Строка с номером заявки (например: "250917-001")
-        """
-        if creation_date is None:
-            creation_date = date.today()
-        
-        # Формируем префикс YYMMDD
-        date_prefix = creation_date.strftime("%y%m%d")
-        
         if db is None:
-            logger.warning("DB session not provided to generate_next_number")
-            return f"{date_prefix}-001"
-        
-        try:
-            # Atomic: SELECT FOR UPDATE to prevent race conditions
-            result = db.execute(
-                text("""
-                    SELECT request_number
-                    FROM requests
-                    WHERE request_number LIKE :pattern
-                    ORDER BY request_number DESC
-                    LIMIT 1
-                    FOR UPDATE
-                """),
-                {"pattern": f"{date_prefix}-%"}
-            ).fetchone()
-            
-            if result:
-                # Извлекаем номер из найденной записи
-                last_number = result[0]
-                sequence = int(last_number.split('-')[1])
-                next_sequence = sequence + 1
-            else:
-                # Первая заявка за день
-                next_sequence = 1
-            
-            # Формируем новый номер с padding до 3 цифр
-            new_number = f"{date_prefix}-{next_sequence:03d}"
-            
-            logger.info(f"Generated request number: {new_number}")
-            return new_number
-            
-        except Exception as e:
-            logger.error(f"Error generating request number: {e}")
-            # Fallback - генерируем номер на основе времени
-            timestamp = datetime.now().strftime("%H%M%S")
-            fallback_number = f"{date_prefix}-{timestamp[-3:]}"
-            logger.warning(f"Using fallback number: {fallback_number}")
-            return fallback_number
+            raise ValueError("next_number requires a database session")
+        prefix, params = RequestNumberService._params(creation_date)
+        seq = db.execute(_NEXT_SEQ_SQL, params).scalar_one()
+        number = RequestNumberService._format(prefix, seq)
+        logger.info(f"Generated request number: {number}")
+        return number
+
+    @staticmethod
+    async def next_number_async(db: AsyncSession, creation_date: Optional[date] = None) -> str:
+        """Async-вариант next_number — в переданной AsyncSession-транзакции."""
+        if db is None:
+            raise ValueError("next_number_async requires a database session")
+        prefix, params = RequestNumberService._params(creation_date)
+        result = await db.execute(_NEXT_SEQ_SQL, params)
+        number = RequestNumberService._format(prefix, result.scalar_one())
+        logger.info(f"Generated request number: {number}")
+        return number
+
+    @staticmethod
+    def generate_next_number(creation_date: Optional[date] = None, db: Optional[Session] = None) -> str:
+        """Deprecated alias → next_number (сохранён для существующих call-sites).
+
+        db ОБЯЗАТЕЛЕН: ветка db=None старой версии возвращала константный
+        '-001' и создавала коллизии.
+        """
+        return RequestNumberService.next_number(db, creation_date)
     
     @staticmethod
     def parse_request_number(request_number: str) -> Dict[str, Any]:
