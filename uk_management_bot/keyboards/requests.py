@@ -527,6 +527,49 @@ def get_request_actions_keyboard(request_number: str, language: str = "ru") -> I
 # КЛАВИАТУРА ПОШАГОВОГО ВЫБОРА АДРЕСА
 # =====================================
 
+PAGE_SIZE_ADDR = 8
+
+
+def build_request_address_inline_keyboard(addresses: dict, page: int = 0, language: str = "ru") -> InlineKeyboardMarkup:
+    """Inline-кнопки выбора адреса заявки (callback `addr:<type>:<id>`).
+
+    План «Обходчик»: вместо свободного текста (глобальный поиск по неуникальному
+    `Building.address` мог попасть в чужой дом) — кнопки строго из набора жителя
+    (`list_available_request_addresses_sync`). Плоский пагинированный список
+    квартиры→дома→дворы; адрес валидируется сервером по id при выборе И при
+    сохранении.
+    """
+    items: list[tuple[str, int, str]] = []
+    for a in addresses.get("apartments", []):
+        items.append(("apartment", a["id"], f"🏠 {a['label']}"))
+    for b in addresses.get("buildings", []):
+        items.append(("building", b["id"], f"🏢 {b['label']}"))
+    for y in addresses.get("yards", []):
+        items.append(("yard", y["id"], f"🏘️ {y['label']}"))
+
+    total = len(items)
+    pages = max(1, (total + PAGE_SIZE_ADDR - 1) // PAGE_SIZE_ADDR)
+    page = max(0, min(page, pages - 1))
+    chunk = items[page * PAGE_SIZE_ADDR:(page + 1) * PAGE_SIZE_ADDR]
+
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=f"addr:{atype}:{aid}")]
+        for atype, aid, label in chunk
+    ]
+    if pages > 1:
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="◀️", callback_data=f"addr_page:{page - 1}"))
+        nav.append(InlineKeyboardButton(text=f"{page + 1}/{pages}", callback_data="addr_page_noop"))
+        if page < pages - 1:
+            nav.append(InlineKeyboardButton(text="▶️", callback_data=f"addr_page:{page + 1}"))
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(
+        text=get_text("buttons.cancel", language=language), callback_data="cancel_create"
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def get_yard_selection_keyboard(user_id: int, language: str = "ru") -> ReplyKeyboardMarkup:
     """
     Создать клавиатуру выбора двора для пользователя (шаг 1)

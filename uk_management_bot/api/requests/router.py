@@ -6,15 +6,22 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
-from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
+from uk_management_bot.api.dependencies import (
+    get_db, get_current_user, require_roles, require_approved_roles, _parse_user_roles,
+)
 from uk_management_bot.api.dependencies_access import check_request_access, require_active_shift, is_assigned_executor
 from uk_management_bot.services.webhook_payloads import (
     emit_request_created,
     emit_request_status_changed,
 )
+from uk_management_bot.services.request_address import (
+    resolve_request_address_async,
+    AddressResolutionError,
+    ResolvedAddress,
+)
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
-    CreateRequestBody, UpdateRequestBody,
+    CreateRequestBody, CreateInspectorRequestBody, UpdateRequestBody,
     CommentBody, CommentOut,
 )
 from uk_management_bot.database.models.request import Request as RequestModel
@@ -266,14 +273,24 @@ async def get_request(
     return _make_request_card(req, exec_user, inbox_row=inbox_row)
 
 
-@router.post("", response_model=RequestCard, status_code=201)
-@limiter.limit("20/minute")
-async def create_request(
-    request: Request,
-    body: CreateRequestBody,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
+async def _persist_request(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    category: str,
+    urgency: str,
+    description: str,
+    media_files: Optional[list],
+    source: str,
+    resolved: ResolvedAddress,
+    webhook_tag: str,
+) -> RequestModel:
+    """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
+
+    Транзакц. граница: INSERT(request)+enqueue outbox в одном commit (нет заявки
+    без webhook). Конфликт номера (IntegrityError по request_number) → пересчёт
+    и повтор. Адрес/FK/source приходят из резолвера — клиентский ввод не доверяем.
+    """
     today = date.today().strftime("%y%m%d")
     count_result = await db.execute(
         select(func.count(RequestModel.request_number)).where(
@@ -281,19 +298,21 @@ async def create_request(
         )
     )
     count = count_result.scalar() or 0
-    request_number = _generate_request_number(today, count)
 
     req = RequestModel(
-        request_number=request_number,
-        user_id=user.id,
-        category=body.category,
-        urgency=body.urgency,
-        description=body.description,
-        apartment_id=body.apartment_id,
-        address=body.address,
+        request_number=_generate_request_number(today, count),
+        user_id=user_id,
+        category=category,
+        urgency=urgency,
+        description=description,
+        address=resolved.canonical_address,
+        apartment_id=resolved.apartment_id,
+        building_id=resolved.building_id,
+        yard_id=resolved.yard_id,
+        address_type=resolved.address_type,
         status="Новая",
-        source=body.source,
-        media_files=body.media_files or [],
+        source=source,
+        media_files=media_files or [],
     )
     try:
         db.add(req)
@@ -312,9 +331,75 @@ async def create_request(
     await db.refresh(req)
 
     await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))
-    # Webhook to InfraSafe (ARCH-113: shared builder, tagged source=api)
-    await emit_request_created(db, req, source="api")
+    # Webhook to InfraSafe (ARCH-113: shared builder). source-тег НЕ уходит в
+    # wire-payload (контракт InfraSafe), только в outbox-метаданные.
+    await emit_request_created(db, req, source=webhook_tag)
     await db.commit()
+    return req
+
+
+@router.post("", response_model=RequestCard, status_code=201)
+@limiter.limit("20/minute")
+async def create_request(
+    request: Request,
+    body: CreateRequestBody,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_approved_roles("applicant")),
+):
+    """Заявка жителя: структурный {address_type, address_id} (любой из 3 уровней).
+
+    Принадлежность+активность проверяет resolve_request_address по матрице
+    applicant (свои двор/дом/квартира). Адрес и source ставит сервер.
+    """
+    try:
+        resolved = await resolve_request_address_async(
+            db, user.id, "applicant", body.address_type, body.address_id
+        )
+    except AddressResolutionError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    req = await _persist_request(
+        db,
+        user_id=user.id,
+        category=body.category,
+        urgency=body.urgency,
+        description=body.description,
+        media_files=body.media_files,
+        source="twa",
+        resolved=resolved,
+        webhook_tag="twa",
+    )
+    return RequestCard.model_validate(req)
+
+
+@router.post("/inspector", response_model=RequestCard, status_code=201)
+@limiter.limit("20/minute")
+async def create_inspector_request(
+    request: Request,
+    body: CreateInspectorRequestBody,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_approved_roles("inspector")),
+):
+    """Заявка обходчика: building-only. Любой активный дом (двор активен),
+    принадлежность не требуется. yard/apartment отсечены схемой (422)."""
+    try:
+        resolved = await resolve_request_address_async(
+            db, user.id, "inspector", body.address_type, body.address_id
+        )
+    except AddressResolutionError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    req = await _persist_request(
+        db,
+        user_id=user.id,
+        category=body.category,
+        urgency=body.urgency,
+        description=body.description,
+        media_files=body.media_files,
+        source="inspector",
+        resolved=resolved,
+        webhook_tag="inspector",
+    )
     return RequestCard.model_validate(req)
 
 

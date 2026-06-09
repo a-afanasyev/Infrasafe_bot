@@ -27,10 +27,13 @@ class TestCreateRequestBodyCategoryValidation:
     ]
 
     def _make_body(self, category: str) -> dict:
+        # Структурный контракт (план «Обходчик»): address_type + address_id обязательны.
         return {
             "category": category,
             "urgency": "Обычная",
             "description": "test description",
+            "address_type": "apartment",
+            "address_id": 1,
         }
 
     @patch("uk_management_bot.config.settings.Settings")

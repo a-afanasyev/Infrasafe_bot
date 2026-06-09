@@ -10,9 +10,23 @@ interface ProfileResponse {
   roles?: string[] | null
 }
 
+type SwitchRole = 'applicant' | 'executor' | 'inspector'
+
+const ROLE_ROUTE: Record<SwitchRole, string> = {
+  applicant: '/twa/app',
+  executor: '/twa/exec',
+  inspector: '/twa/inspector',
+}
+
+const ROLE_SWITCH_LABEL: Record<SwitchRole, string> = {
+  applicant: 'twa.roleSwitch.toApplicant',
+  executor: 'twa.roleSwitch.toExecutor',
+  inspector: 'twa.roleSwitch.toInspector',
+}
+
 interface Props {
   /** Role/section to switch INTO. Renders only if the user holds this role. */
-  to: 'applicant' | 'executor'
+  to: SwitchRole
 }
 
 /**
@@ -38,7 +52,7 @@ export default function RoleSwitchButton({ to }: Props) {
     onSuccess: () => {
       haptic('notification')
       queryClient.invalidateQueries({ queryKey: ['profile'] })
-      navigate(to === 'executor' ? '/twa/exec' : '/twa/app', { replace: true })
+      navigate(ROLE_ROUTE[to], { replace: true })
     },
     onError: (err: unknown) => notifyError(err),
   })
@@ -53,7 +67,7 @@ export default function RoleSwitchButton({ to }: Props) {
       className="w-full flex items-center justify-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl py-3 text-[13px] font-semibold text-emerald-600 disabled:opacity-50 mb-3"
     >
       <Repeat size={16} />
-      {t(to === 'executor' ? 'twa.roleSwitch.toExecutor' : 'twa.roleSwitch.toApplicant')}
+      {t(ROLE_SWITCH_LABEL[to])}
     </button>
   )
 }

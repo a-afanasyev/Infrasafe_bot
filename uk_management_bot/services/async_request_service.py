@@ -294,7 +294,11 @@ class AsyncRequestService:
             with SessionLocal() as sync_db:
                 request_number = Request.generate_request_number(sync_db)
 
-            # Создание заявки
+            # Создание заявки.
+            # ВНИМАНИЕ (план «Обходчик»): низкоуровневый async-конструктор на
+            # сыром тексте address/apartment; прод-путями создания НЕ вызывается
+            # (проверено грепом 2026-06). Пишет address_type='legacy' (структурные
+            # FK не заполняются). Новые пути обязаны идти через resolve_request_address.
             request = Request(
                 request_number=request_number,
                 user_id=user_id,
@@ -304,7 +308,8 @@ class AsyncRequestService:
                 apartment=apartment,
                 urgency=urgency,
                 media_files=media_files or [],
-                status="Новая"
+                status="Новая",
+                address_type="legacy",
             )
 
             self.db.add(request)

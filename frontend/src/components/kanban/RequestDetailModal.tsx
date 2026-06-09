@@ -65,7 +65,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 const SOURCE_ICON: Record<string, string> = {
-  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞',
+  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶',
 }
 
 interface Props {

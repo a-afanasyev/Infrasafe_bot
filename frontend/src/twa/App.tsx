@@ -23,6 +23,9 @@ import AcceptancePage from './pages/applicant/AcceptancePage'
 import ProfilePage from './pages/applicant/ProfilePage'
 import RequestDetailPage from './pages/applicant/RequestDetailPage'
 
+// Inspector pages
+import InspectorCreatePage from './pages/inspector/CreatePage'
+
 // Executor pages
 import TasksPage from './pages/executor/TasksPage'
 import ShiftPage from './pages/executor/ShiftPage'
@@ -71,13 +74,18 @@ function TWAContent() {
       <Routes>
         <Route path="/" element={<RoleLanding />} />
 
-        {/* Applicant routes */}
-        <Route path="/app" element={<><HomePage /><ApplicantTabs /></>} />
-        <Route path="/app/requests" element={<><RequestsPage /><ApplicantTabs /></>} />
-        <Route path="/app/create" element={<><CreatePage /><ApplicantTabs /></>} />
-        <Route path="/app/acceptance" element={<><AcceptancePage /><ApplicantTabs /></>} />
-        <Route path="/app/profile" element={<><ProfilePage /><ApplicantTabs /></>} />
-        <Route path="/app/requests/:number" element={<RequestDetailPage />} />
+        {/* Applicant routes — wrapped in RoleGuard (план «Обходчик») so a
+            non-applicant (e.g. inspector) deep-linking here is bounced to
+            RoleLanding (fallback="/twa") instead of seeing applicant UI 403. */}
+        <Route path="/app" element={<RoleGuard required="applicant" fallback="/twa"><HomePage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/requests" element={<RoleGuard required="applicant" fallback="/twa"><RequestsPage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/create" element={<RoleGuard required="applicant" fallback="/twa"><CreatePage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/acceptance" element={<RoleGuard required="applicant" fallback="/twa"><AcceptancePage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/profile" element={<RoleGuard required="applicant" fallback="/twa"><ProfilePage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/requests/:number" element={<RoleGuard required="applicant" fallback="/twa"><RequestDetailPage /></RoleGuard>} />
+
+        {/* Inspector route — building-level заявка с обхода (двор→дом). */}
+        <Route path="/inspector" element={<RoleGuard required="inspector" fallback="/twa"><InspectorCreatePage /></RoleGuard>} />
 
         {/* Executor routes — wrapped in RoleGuard (TWA-12) so an applicant
             opening /twa/exec/* gets sent back to /twa/app rather than seeing

@@ -197,7 +197,7 @@ class Settings:
     ]
     
     # User Roles
-    USER_ROLES = ["applicant", "executor", "manager"]
+    USER_ROLES = ["applicant", "executor", "manager", "inspector"]
     
     # Languages
     SUPPORTED_LANGUAGES = ["ru", "uz"]

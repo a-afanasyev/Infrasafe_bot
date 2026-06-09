@@ -1477,7 +1477,7 @@ async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContex
     # Извлекаем роль из callback_data
     role = callback.data.replace("invite_role_", "")
     
-    if role not in ["applicant", "executor", "manager"]:
+    if role not in ["applicant", "executor", "manager", "inspector"]:
         await callback.answer(get_text("admin.handlers.invalid_role", language=lang))
         return
     

@@ -89,7 +89,12 @@ class RequestService:
             # Генерируем уникальный номер заявки
             request_number = Request.generate_request_number(self.db)
             
-            # Создание заявки
+            # Создание заявки.
+            # ВНИМАНИЕ (план «Обходчик»): этот sync-конструктор принимает сырой
+            # текст address/apartment и НЕ вызывается ни одним прод-путём создания
+            # заявки (проверено грепом 2026-06). Оставлен как legacy/system-helper;
+            # пишет address_type='legacy' (структурные FK не заполняются). Новые
+            # пути создания обязаны идти через resolve_request_address.
             request = Request(
                 request_number=request_number,
                 user_id=user_id,
@@ -99,7 +104,8 @@ class RequestService:
                 apartment=apartment,
                 urgency=urgency,
                 media_files=media_files or [],
-                status="Новая"
+                status="Новая",
+                address_type="legacy",
             )
             
             self.db.add(request)

@@ -759,6 +759,7 @@
       "role_applicant": "👤 Ariza beruvchi",
       "role_executor": "🛠️ Ijrochi",
       "role_manager": "👨‍💼 Menejer",
+      "role_inspector": "🚶 Nazoratchi",
       "cancel": "❌ Bekor qilish",
       "spec_plumber": "🔧 Santexnik",
       "spec_electrician": "⚡ Elektrik",
@@ -1220,6 +1221,7 @@
     "keyboards": {
       "role_executor": "Ijrochi",
       "role_manager": "Menejer",
+      "role_inspector": "Nazoratchi",
       "role_applicant": "Ariza beruvchi",
       "spec_plumber": "Santexnik",
       "spec_electrician": "Elektrik",
@@ -5971,6 +5973,10 @@
     "yard_not_found": "⚠️ Hovli topilmadi. Taklif qilingan variantlardan manzilni tanlang:",
     "select_from_list": "⚠️ Iltimos, taklif qilingan variantlardan manzilni tanlang",
     "choose_address_prompt": "Manzilni tanlang:",
+    "applicant_only": "⚠️ Ariza yaratish faqat yashovchilar uchun. Menejerlar arizalarni dashboard/call-markaz orqali yaratadi.",
+    "no_available_addresses": "Ariza yaratish uchun mavjud manzilingiz yo'q. Kvartirani bog'lash uchun menejerga murojaat qiling.",
+    "address_not_available": "❌ Bu manzil mavjud emas yoki faol emas. Ro'yxatdan tanlang.",
+    "address_selected": "✅ Manzil: {address}",
     "building_prefix": "Uy: {address}",
     "yard_prefix": "Hovli: {name}",
     "address_needs_improvement": "⚠️ Manzil yaxshilashga muhtoj:\n{suggestions}\n\nQayta urinib ko'ring:",
@@ -6138,6 +6144,7 @@
     "applicant": "Ariza beruvchi",
     "executor": "Ijrochi",
     "manager": "Menejer",
+    "inspector": "Nazoratchi",
     "none": "Rollar tayinlanmagan"
   },
   "search": {
@@ -7024,8 +7031,18 @@
     "yard_remove_failed": "❌ Hovlini o'chirib bo'lmadi"
   },
   "welcome": "Ariza boshqaruvi tizimiga xush kelibsiz! 🏠",
+  "inspector": {
+    "only_approved": "⚠️ Aylanishdan ariza yaratish faqat tasdiqlangan nazoratchilar uchun.",
+    "no_yards": "Ariza yaratish uchun faol hovlilar yo'q.",
+    "no_buildings": "Bu hovlida faol uylar yo'q.",
+    "starting": "📝 Aylanishdan ariza. Hovli va uyni tanlang.",
+    "select_yard": "🏘️ Hovlini tanlang:",
+    "select_building": "🏢 Uyni tanlang:",
+    "confirm_summary": "Arizani tekshiring:\n\n📍 Manzil: {address}\n📂 Toifa: {category}\n⚡ Shoshilinchlik: {urgency}\n📝 Tavsif: {description}\n\nYaratilsinmi?"
+  },
   "main_menu": {
     "create_request": "📝 Ariza yaratish",
+    "inspector_create": "📝 Ariza (aylanish)",
     "my_requests": "📋 Mening arizalarim",
     "profile": "👤 Profil",
     "help": "ℹ️ Yordam",
@@ -7808,6 +7825,7 @@
       "phone_updated": "✅ Telefon yangilandi: {phone}",
       "error_updating_phone": "Telefon yangilashda xatolik yuz berdi",
       "current_roles": "Joriy rollar: {roles}",
+      "cannot_remove_last_role": "❌ Oxirgi rolni olib bo'lmaydi — foydalanuvchida kamida bitta rol qolishi kerak.",
       "no_roles": "Rollar yo'q",
       "no_specializations": "Ixtisosliklar yo'q",
       "specialization_stats_title": "🛠️ Xodimlar ixtisoslik statistikasi:",

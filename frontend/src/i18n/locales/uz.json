@@ -190,7 +190,8 @@
   },
   "role": {
     "executor": "Ijrochi",
-    "manager": "Menejer"
+    "manager": "Menejer",
+    "inspector": "Nazoratchi"
   },
   "approvalStatus": {
     "approved": "Tasdiqlangan",
@@ -867,7 +868,17 @@
       "addressLabel": "Manzil",
       "descriptionLabel": "Tavsif",
       "urgencyLabel": "Shoshilinchlik",
-      "submit": "Ariza yuborish"
+      "submit": "Ariza yuborish",
+      "submitted": "Ariza yaratildi",
+      "submitFailed": "Ariza yaratib bo'lmadi",
+      "addressChanged": "Manzil o'zgardi — qaytadan tanlang",
+      "noAddresses": "Mavjud manzillar yo'q. Menejerga murojaat qiling."
+    },
+    "inspector": {
+      "selectYard": "Hovlini tanlang",
+      "selectBuilding": "Uyni tanlang",
+      "noYards": "Faol hovlilar yo'q",
+      "noBuildings": "Bu hovlida faol uylar yo'q"
     },
     "acceptance": {
       "title": "Ishni qabul qilish",
@@ -960,11 +971,18 @@
     },
     "offline": "Tarmoqqa ulanish yo'q",
     "roleGuard": {
-      "executorOnly": "Bo'lim faqat ijrochilar uchun"
+      "executorOnly": "Bo'lim faqat ijrochilar uchun",
+      "applicantOnly": "Bo'lim faqat yashovchilar uchun",
+      "managerOnly": "Bo'lim faqat menejerlar uchun",
+      "inspectorOnly": "Bo'lim faqat nazoratchilar uchun"
+    },
+    "roleLanding": {
+      "unavailable": "Bu bo'lim sizning rolingiz uchun mini-ilovada mavjud emas. Veb-dashboarddan foydalaning."
     },
     "roleSwitch": {
       "toExecutor": "Ijrochi rejimiga o'tish",
-      "toApplicant": "Yashovchi rejimiga o'tish"
+      "toApplicant": "Yashovchi rejimiga o'tish",
+      "toInspector": "Nazoratchi rejimiga o'tish"
     },
     "photo": {
       "add": "Rasm qo'shish",

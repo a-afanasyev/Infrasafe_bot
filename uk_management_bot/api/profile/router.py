@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles, _parse_user_roles
 from uk_management_bot.database.models.user import User
 from uk_management_bot.api.rate_limit import limiter
 from pydantic import BaseModel
@@ -170,7 +170,14 @@ async def get_my_apartments(
         .join(UserApartment, UserApartment.apartment_id == Apartment.id)
         .join(Building, Apartment.building_id == Building.id)
         .join(Yard, Building.yard_id == Yard.id)
-        .where(UserApartment.user_id == user.id, UserApartment.status == "approved")
+        .where(
+            UserApartment.user_id == user.id,
+            UserApartment.status == "approved",
+            # Активная цепочка квартира→дом→двор (план «Обходчик»).
+            Apartment.is_active.is_(True),
+            Building.is_active.is_(True),
+            Yard.is_active.is_(True),
+        )
     )
     rows = result.all()
     return [
@@ -183,3 +190,45 @@ async def get_my_apartments(
         }
         for apt, bld_addr, yard_name in rows
     ]
+
+
+class RequestAddressYard(BaseModel):
+    id: int
+    label: str
+
+
+class RequestAddressBuilding(BaseModel):
+    id: int
+    label: str
+    yard_id: int
+
+
+class RequestAddressApartment(BaseModel):
+    id: int
+    label: str
+    building_id: int
+    yard_id: int
+
+
+class RequestAddressesOut(BaseModel):
+    yards: list[RequestAddressYard]
+    buildings: list[RequestAddressBuilding]
+    apartments: list[RequestAddressApartment]
+
+
+@router.get("/request-addresses", response_model=RequestAddressesOut)
+async def get_request_addresses(
+    user: User = Depends(require_approved_roles("applicant")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Три набора доступных жителю уровней адреса для создания заявки.
+
+    Множественные наборы (из ВСЕХ approved-квартир + UserYard, только активная
+    цепочка). yard_id/building_id обязательны (каскад в UI). Единый источник
+    правил — resolve_request_address.list_available_request_addresses_async.
+    """
+    from uk_management_bot.services.request_address import (
+        list_available_request_addresses_async,
+    )
+
+    return await list_available_request_addresses_async(db, user.id)

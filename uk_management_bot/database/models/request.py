@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -6,7 +6,23 @@ from uk_management_bot.services.request_number_service import RequestNumberServi
 
 class Request(Base):
     __tablename__ = "requests"
-    
+
+    # Инвариант дискриминатор↔FK (план «Обходчик»). Толерантен к address_type IS
+    # NULL (немигрированные/legacy строки и существующие тест-фикстуры проходят);
+    # как только уровень задан — ровно один соответствующий FK заполнен, прочие
+    # NULL. Прод-миграция дополнительно навешивает NOT NULL на address_type.
+    __table_args__ = (
+        CheckConstraint(
+            "address_type IS NULL OR ("
+            " (address_type = 'apartment' AND apartment_id IS NOT NULL AND building_id IS NULL AND yard_id IS NULL)"
+            " OR (address_type = 'building' AND building_id IS NOT NULL AND apartment_id IS NULL AND yard_id IS NULL)"
+            " OR (address_type = 'yard' AND yard_id IS NOT NULL AND apartment_id IS NULL AND building_id IS NULL)"
+            " OR (address_type = 'legacy' AND apartment_id IS NULL AND building_id IS NULL AND yard_id IS NULL)"
+            ")",
+            name="ck_requests_address_type_fk",
+        ),
+    )
+
     # НОВЫЙ PRIMARY KEY - номер заявки в формате YYMMDD-NNN
     request_number = Column(String(15), primary_key=True, index=True)
     
@@ -27,7 +43,19 @@ class Request(Base):
 
     # Новая система адресов: связь с квартирой из справочника
     apartment_id = Column(Integer, ForeignKey("apartments.id"), nullable=True, index=True)
-    
+
+    # 3-уровневый структурированный адрес (план «Обходчик», 2026-06):
+    # заявка может быть привязана к двору / дому / квартире. Ровно один из
+    # apartment_id/building_id/yard_id заполнен (кроме legacy), уровень фиксирует
+    # дискриминатор address_type. Инвариант (тип↔FK) — CHECK в миграции.
+    # FK ON DELETE RESTRICT: SET NULL обнулил бы FK при сохранённом address_type
+    # → нарушение CHECK; от каскадного удаления защищает purge-гард (addresses).
+    building_id = Column(Integer, ForeignKey("buildings.id", ondelete="RESTRICT"), nullable=True, index=True)
+    yard_id = Column(Integer, ForeignKey("yards.id", ondelete="RESTRICT"), nullable=True, index=True)
+    address_type = Column(String(20), nullable=True)  # legacy|yard|building|apartment
+    building_obj = relationship("Building", foreign_keys=[building_id])
+    yard_obj = relationship("Yard", foreign_keys=[yard_id])
+
     # Медиафайлы (JSON массив с file_ids)
     media_files = Column(JSON, default=list)
     

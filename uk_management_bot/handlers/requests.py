@@ -229,6 +229,34 @@ class RequestStates(StatesGroup):
 # BUG-3 FIX: /start FSM reset now handled globally by start_router in base.py
 # (registered first in dispatcher, catches /start from ANY FSM state)
 
+
+def _load_user_request_addresses(telegram_id: int):
+    """Наборы доступных жителю уровней адреса (по telegram_id → user.id).
+
+    Единый источник правил — resolve_request_address. Возвращает dict
+    {yards, buildings, apartments} или None, если пользователь не найден.
+    """
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.services.request_address import (
+        list_available_request_addresses_sync,
+    )
+
+    db = next(get_db())
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            return None
+        return list_available_request_addresses_sync(db, user.id)
+    finally:
+        db.close()
+
+
+def _has_any_address(addresses: Optional[dict]) -> bool:
+    return bool(
+        addresses
+        and (addresses.get("apartments") or addresses.get("buildings") or addresses.get("yards"))
+    )
+
 # Начало создания заявки
 # Использует единый источник правды для поддержки всех языков из SUPPORTED_LANGUAGES
 # ВАЖНО: Этот handler должен быть зарегистрирован ДО handlers с FSM состояниями
@@ -253,6 +281,14 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     db = next(get_db())
     try:
         user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
+        # Approved-applicant гейт (план «Обходчик»): applicant-flow стал
+        # role-gated. Менеджер/обходчик заводят заявки своими путями.
+        if user is not None:
+            from uk_management_bot.api.dependencies import _parse_user_roles
+            user_roles = _parse_user_roles(user)
+            if "applicant" not in user_roles or user.status != "approved":
+                await message.answer(get_text("requests.applicant_only", language=lang))
+                return
         if user and not user.phone:
             await message.answer(get_text("requests.phone_required", language=lang))
             return
@@ -341,159 +377,114 @@ async def process_category_other_inputs(message: Message, state: FSMContext):
     )
 
 # Обработка выбора адреса (обновленная логика)
+@router.callback_query(F.data.startswith("addr:"), RequestStates.address)
+async def handle_address_selection(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None):
+    """Выбор адреса заявки по callback addr:<type>:<id>.
+
+    Резолв через resolve_request_address_sync (принадлежность+активность). Чужой
+    адрес → отказ; неактивный/несуществующий → отказ. id, а не текст — поэтому
+    неуникальный Building.address больше не уводит в чужой дом (R17).
+    """
+    lang = await _get_user_language(callback=callback)
+    if await _deny_if_pending_callback(callback, user_status):
+        return
+    try:
+        _, atype, raw_id = callback.data.split(":", 2)
+        address_id = int(raw_id)
+    except (ValueError, AttributeError):
+        await callback.answer(get_text("errors.default", language=lang), show_alert=True)
+        return
+
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.services.request_address import (
+        resolve_request_address_sync,
+        AddressResolutionError,
+    )
+
+    db = next(get_db())
+    try:
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer(get_text("errors.default", language=lang), show_alert=True)
+            return
+        try:
+            resolved = resolve_request_address_sync(db, user.id, "applicant", atype, address_id)
+        except AddressResolutionError:
+            await callback.answer(
+                get_text("requests.address_not_available", language=lang), show_alert=True
+            )
+            return
+    finally:
+        db.close()
+
+    await state.update_data(
+        address=resolved.canonical_address,
+        address_type=resolved.address_type,
+        address_id=address_id,
+        apartment_id=resolved.apartment_id,
+        building_id=resolved.building_id,
+        yard_id=resolved.yard_id,
+    )
+    await state.set_state(RequestStates.description)
+    try:
+        await callback.message.edit_text(
+            get_text("requests.address_selected", language=lang, address=resolved.canonical_address)
+        )
+    except Exception:
+        pass
+    await callback.message.answer(
+        get_text("requests.description", language=lang),
+        reply_markup=get_cancel_keyboard(language=lang),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("addr_page:"), RequestStates.address)
+async def handle_address_page(callback: CallbackQuery, state: FSMContext):
+    """Пагинация inline-списка адресов."""
+    lang = await _get_user_language(callback=callback)
+    try:
+        page = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer()
+        return
+    from uk_management_bot.keyboards.requests import build_request_address_inline_keyboard
+
+    addresses = _load_user_request_addresses(callback.from_user.id)
+    if not _has_any_address(addresses):
+        await callback.answer()
+        return
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=build_request_address_inline_keyboard(addresses, page=page, language=lang)
+        )
+    except Exception:
+        pass
+    await callback.answer()
+
+
+@router.callback_query(F.data == "addr_page_noop")
+async def handle_address_page_noop(callback: CallbackQuery):
+    await callback.answer()
+
+
 @router.message(RequestStates.address)
 async def process_address(message: Message, state: FSMContext):
-    """
-    Обработка выбора адреса
-
-    ОБНОВЛЕНО: Поддержка выбора квартир из справочника адресов
-    """
+    """Адрес выбирается ТОЛЬКО inline-кнопками (addr:<type>:<id>). Свободный
+    текст отклоняем и переотправляем кнопки — глобальный поиск по тексту убран
+    (R17: неуникальный Building.address мог увести в чужой дом)."""
     lang = await _get_user_language(message=message)
-    user_id = message.from_user.id
-    selected_text = message.text
+    from uk_management_bot.keyboards.requests import build_request_address_inline_keyboard
 
-    # Улучшенное логирование с контекстом
-    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id}: '{selected_text}'")
-    logger.info(f"[ADDRESS_SELECTION] Время: {datetime.now()}")
-    logger.info(f"[ADDRESS_SELECTION] Состояние FSM: {await state.get_state()}")
-
-    try:
-        from uk_management_bot.services.address_service import AddressService
-
-        # НОВАЯ ЛОГИКА: Проверка типа выбранного адреса
-
-        # 1. КВАРТИРА (🏠) - для проблем в квартире
-        if selected_text.startswith("🏠 "):
-            address_text = selected_text[2:].strip()
-            db = next(get_db())
-            try:
-                apartments = await AddressService.get_user_approved_apartments(db, user_id)
-
-                selected_apartment = None
-                for apartment in apartments:
-                    formatted_address = AddressService.format_apartment_address(apartment)
-                    if formatted_address == address_text or formatted_address.startswith(address_text.replace("...", "")):
-                        selected_apartment = apartment
-                        break
-
-                if selected_apartment:
-                    full_address = AddressService.format_apartment_address(selected_apartment)
-                    await state.update_data(
-                        address=full_address,
-                        apartment_id=selected_apartment.id,
-                        building_id=selected_apartment.building_id if selected_apartment.building else None,
-                        yard_id=selected_apartment.building.yard_id if selected_apartment.building and selected_apartment.building.yard else None,
-                        address_type='apartment'
-                    )
-                    await state.set_state(RequestStates.description)
-
-                    await message.answer(
-                        get_text("requests.apartment_saved", language=lang, address=full_address),
-                        reply_markup=get_cancel_keyboard(language=lang)
-                    )
-
-                    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал квартиру: {full_address}")
-                    return
-                else:
-                    logger.warning(f"[ADDRESS_SELECTION] Квартира не найдена: '{address_text}'")
-                    await message.answer(
-                        get_text("requests.apartment_not_found", language=lang),
-                        reply_markup=get_address_selection_keyboard(user_id, language=lang)
-                    )
-                    return
-            finally:
-                db.close()
-
-        # 2. ДОМ/ЗДАНИЕ (🏢) - для общедомовых проблем
-        elif selected_text.startswith("🏢 "):
-            address_text = selected_text[2:].strip()
-            db = next(get_db())
-            try:
-                from uk_management_bot.database.models import Building
-
-                # Находим здание по адресу
-                building = db.query(Building).filter(Building.address == address_text).first()
-
-                if building:
-                    await state.update_data(
-                        address=get_text("requests.building_prefix", language=lang, address=building.address),
-                        apartment_id=None,
-                        building_id=building.id,
-                        yard_id=building.yard_id if building.yard else None,
-                        address_type='building'
-                    )
-                    await state.set_state(RequestStates.description)
-
-                    await message.answer(
-                        get_text("requests.building_saved", language=lang, address=building.address),
-                        reply_markup=get_cancel_keyboard(language=lang)
-                    )
-
-                    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал дом: {building.address}")
-                    return
-                else:
-                    logger.warning(f"[ADDRESS_SELECTION] Здание не найдено: '{address_text}'")
-                    await message.answer(
-                        get_text("requests.building_not_found", language=lang),
-                        reply_markup=get_address_selection_keyboard(user_id, language=lang)
-                    )
-                    return
-            finally:
-                db.close()
-
-        # 3. ДВОР (🏘️) - для проблем во дворе
-        elif selected_text.startswith("🏘️ "):
-            address_text = selected_text[2:].strip()
-            db = next(get_db())
-            try:
-                from uk_management_bot.database.models import Yard
-
-                # Находим двор по названию
-                yard = db.query(Yard).filter(Yard.name == address_text).first()
-
-                if yard:
-                    await state.update_data(
-                        address=get_text("requests.yard_prefix", language=lang, name=yard.name),
-                        apartment_id=None,
-                        building_id=None,
-                        yard_id=yard.id,
-                        address_type='yard'
-                    )
-                    await state.set_state(RequestStates.description)
-
-                    await message.answer(
-                        get_text("requests.yard_saved", language=lang, address=yard.name),
-                        reply_markup=get_cancel_keyboard(language=lang)
-                    )
-
-                    logger.info(f"[ADDRESS_SELECTION] Пользователь {user_id} выбрал двор: {yard.name}")
-                    return
-                else:
-                    logger.warning(f"[ADDRESS_SELECTION] Двор не найден: '{address_text}'")
-                    await message.answer(
-                        get_text("requests.yard_not_found", language=lang),
-                        reply_markup=get_address_selection_keyboard(user_id, language=lang)
-                    )
-                    return
-            finally:
-                db.close()
-
-        # Если дошли сюда - неизвестный формат адреса
-        logger.warning(f"[ADDRESS_SELECTION] Неизвестный формат адреса: '{selected_text}' от пользователя {user_id}")
-        await message.answer(
-            get_text("requests.select_from_list", language=lang)
-        )
-        # Показываем клавиатуру снова
-        try:
-            keyboard = get_address_selection_keyboard(user_id, language=lang)
-            await message.answer(get_text("requests.choose_address_prompt", language=lang), reply_markup=keyboard)
-        except Exception as keyboard_error:
-            logger.error(f"[ADDRESS_SELECTION] Ошибка создания клавиатуры: {keyboard_error}")
-            await graceful_fallback(message, "keyboard_error")
-
-    except Exception as e:
-        logger.error(f"[ADDRESS_SELECTION] Критическая ошибка обработки выбора адреса: {e}")
-        await graceful_fallback(message, "critical_error")
+    addresses = _load_user_request_addresses(message.from_user.id)
+    if not _has_any_address(addresses):
+        await message.answer(get_text("requests.no_available_addresses", language=lang))
+        await state.clear()
+        return
+    await message.answer(
+        get_text("requests.choose_address_prompt", language=lang),
+        reply_markup=build_request_address_inline_keyboard(addresses, page=0, language=lang),
+    )
 
 # Обработка ввода описания
 @router.message(RequestStates.description)
@@ -691,16 +682,30 @@ async def cancel_request(message: Message, state: FSMContext, roles: list = None
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
 
 # Сохранение заявки в базу данных
-async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -> bool:
-    """Сохранение заявки в базу данных"""
+async def save_request(
+    data: dict,
+    user_id: int,
+    db: Session,
+    bot: Bot = None,
+    source: str = "bot",
+    role: str = "applicant",
+) -> bool:
+    """Сохранение заявки в базу данных.
+
+    План «Обходчик»: адрес НЕ доверяем FSM-данным — re-резолвим выбранный
+    `(address_type, address_id)` через resolve_request_address_sync (проверка
+    принадлежности+активности повторно при сохранении). `source` задаёт
+    доверенный call-site (applicant-бот → "bot", обходчик → "inspector"),
+    а НЕ FSM/клиент.
+    """
     try:
         logger.info(f"[SAVE_REQUEST] Начало сохранения заявки для пользователя {user_id}")
         logger.info(f"[SAVE_REQUEST] Данные FSM: {data.keys()}")
         logger.debug(f"[SAVE_REQUEST] Полные данные: {data}")
 
-        # Валидация обязательных полей
-        required_fields = ['category', 'address', 'description', 'urgency']
-        missing_fields = [field for field in required_fields if field not in data]
+        # Валидация обязательных полей (адрес считает сервер из address_type+id)
+        required_fields = ['category', 'address_type', 'address_id', 'description', 'urgency']
+        missing_fields = [field for field in required_fields if not data.get(field)]
 
         if missing_fields:
             logger.error(f"[SAVE_REQUEST] Отсутствуют обязательные поля: {missing_fields}")
@@ -716,6 +721,19 @@ async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -
             return False
 
         logger.info(f"[SAVE_REQUEST] Пользователь найден: {user.username} (ID: {user.id})")
+
+        # Re-резолв адреса при сохранении (принадлежность+активность ещё раз).
+        from uk_management_bot.services.request_address import (
+            resolve_request_address_sync,
+            AddressResolutionError,
+        )
+        try:
+            resolved = resolve_request_address_sync(
+                db, user.id, role, data['address_type'], int(data['address_id'])
+            )
+        except AddressResolutionError as e:
+            logger.warning(f"[SAVE_REQUEST] Резолв адреса отклонён ({e.status_code}): {e.message}")
+            return None
 
         # Генерируем уникальный номер заявки
         request_number = Request.generate_request_number(db)
@@ -742,15 +760,19 @@ async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -
         request = Request(
             request_number=request_number,
             category=data['category'],
-            address=data['address'],
+            # Адрес и FK — из резолвера (сервер), а не из FSM/клиента.
+            address=resolved.canonical_address,
             description=data['description'],
             urgency=data['urgency'],
-            apartment=data.get('apartment'),  # Legacy field
-            apartment_id=data.get('apartment_id'),  # NEW: Link to address directory
+            apartment_id=resolved.apartment_id,
+            building_id=resolved.building_id,
+            yard_id=resolved.yard_id,
+            address_type=resolved.address_type,
             # В модели media_files ожидается JSON (список), поэтому сохраняем список
             # Теперь храним file_ids как backup, основное хранилище - Media Service
             media_files=list(media_file_ids),
             user_id=user.id,  # Используем id пользователя из базы данных
+            source=source,
             status='Новая'
         )
 
@@ -759,8 +781,9 @@ async def save_request(data: dict, user_id: int, db: Session, bot: Bot = None) -
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan
         # requests (request row durable but outbox row missing on commit failure).
+        # source задаёт доверенный call-site (не FSM): applicant→"bot", обходчик→"inspector".
         from uk_management_bot.services.webhook_payloads import emit_request_created_sync
-        emit_request_created_sync(db, request, source="bot")
+        emit_request_created_sync(db, request, source=source)
 
         db.commit()
 
@@ -817,25 +840,35 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext, 
             get_text("requests.category_selected", language=lang, category=category_display)
         )
 
-        # Отправляем новое сообщение с ReplyKeyboardMarkup для выбора адреса
+        # Отправляем inline-кнопки выбора адреса (callback addr:<type>:<id>),
+        # строго из набора жителя. Свободный текст/глобальный поиск убран (R17).
         try:
-            keyboard = get_address_selection_keyboard(callback.from_user.id, language=lang)
+            from uk_management_bot.keyboards.requests import build_request_address_inline_keyboard
+
+            addresses = _load_user_request_addresses(callback.from_user.id)
+            if not _has_any_address(addresses):
+                await callback.message.answer(
+                    get_text("requests.no_available_addresses", language=lang)
+                )
+                await state.clear()
+                await callback.answer()
+                return
+            # Прячем ReplyKeyboard главного меню на время выбора.
             await callback.message.answer(
                 get_text("requests.select_address", language=lang),
-                reply_markup=keyboard
-            )
-            logger.info(f"Клавиатура адресов отправлена пользователю {callback.from_user.id}")
-        except Exception as keyboard_error:
-            logger.error(f"Ошибка создания клавиатуры адресов: {keyboard_error}")
-            # Fallback - показываем простую клавиатуру с отменой
-            fallback_keyboard = ReplyKeyboardMarkup(
-                keyboard=[[KeyboardButton(text=get_text("buttons.cancel", language=lang))]],
-                resize_keyboard=True
+                reply_markup=ReplyKeyboardRemove(),
             )
             await callback.message.answer(
-                get_text("requests.enter_address_manually", language=lang),
-                reply_markup=fallback_keyboard
+                get_text("requests.choose_address_prompt", language=lang),
+                reply_markup=build_request_address_inline_keyboard(addresses, page=0, language=lang),
             )
+            logger.info(f"Inline-клавиатура адресов отправлена пользователю {callback.from_user.id}")
+        except Exception as keyboard_error:
+            logger.error(f"Ошибка создания клавиатуры адресов: {keyboard_error}", exc_info=True)
+            await callback.message.answer(get_text("errors.default", language=lang))
+            await state.clear()
+            await callback.answer()
+            return
 
         await callback.answer()  # Убираем "часики" на кнопке
         logger.info(f"Пользователь {callback.from_user.id} выбрал категорию: {category_internal_key}")

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_roles, require_approved_roles, _parse_user_roles
 from uk_management_bot.api.addresses.schemas import (
     YardOut, YardCreate, YardUpdate,
     BuildingOut, BuildingCreate, BuildingUpdate,
@@ -23,6 +23,11 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.addresses import core
 
 router = APIRouter()
+
+
+def _is_manager(user: User) -> bool:
+    """Менеджер сохраняет доступ к неактивным дворам/домам; обходчик — нет."""
+    return "manager" in _parse_user_roles(user)
 
 
 def _yard_dict(y) -> dict:
@@ -87,8 +92,12 @@ async def get_stats(
 async def list_yards(
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_approved_roles("manager", "inspector")),
 ):
+    # Обходчик без manager-роли видит ТОЛЬКО активные дворы (для создания заявок);
+    # менеджер сохраняет доступ к неактивным через include_inactive.
+    if not _is_manager(user):
+        include_inactive = False
     query = select(Yard)
     if not include_inactive:
         query = query.where(Yard.is_active == True)  # noqa: E712
@@ -199,16 +208,30 @@ async def purge_yard(
             detail=f"Cannot purge yard: {active_buildings} active building(s) still attached",
         )
 
-    linked_requests = (await db.execute(
-        select(func.count(Request.request_number))
-        .join(Apartment, Apartment.id == Request.apartment_id)
+    # Ссылки заявок на двор — на ВСЕХ трёх уровнях (план «Обходчик»): прямой
+    # yard_id (yard-level), building_id домов двора (building-level) и apartment_id
+    # квартир двора. INNER JOIN по apartment_id «терял» building/yard-level заявки
+    # с apartment_id=NULL → двор можно было снести с висящим FK. IN-подзапросы
+    # ловят все три, а ON DELETE RESTRICT — последний рубеж.
+    yard_building_ids = select(Building.id).where(Building.yard_id == yard_id)
+    yard_apartment_ids = (
+        select(Apartment.id)
         .join(Building, Building.id == Apartment.building_id)
         .where(Building.yard_id == yard_id)
+    )
+    linked_requests = (await db.execute(
+        select(func.count(Request.request_number)).where(
+            or_(
+                Request.yard_id == yard_id,
+                Request.building_id.in_(yard_building_ids),
+                Request.apartment_id.in_(yard_apartment_ids),
+            )
+        )
     )).scalar() or 0
     if linked_requests > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot purge yard: {linked_requests} request(s) reference its apartments",
+            detail=f"Cannot purge yard: {linked_requests} request(s) reference it",
         )
 
     await db.delete(yard)
@@ -259,13 +282,21 @@ async def list_buildings(
     yard_id: int,
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_approved_roles("manager", "inspector")),
 ):
     # Verify yard exists
     yard_result = await db.execute(select(Yard).where(Yard.id == yard_id))
     yard = yard_result.scalar_one_or_none()
     if not yard:
         raise HTTPException(status_code=404, detail="Yard not found")
+
+    # Обходчик без manager-роли: только активные дома активного двора. Неактивный
+    # двор для него — недоступный ресурс (422 по общему контракту), даже если он
+    # существует. Менеджер сохраняет доступ к неактивным.
+    if not _is_manager(user):
+        include_inactive = False
+        if not yard.is_active:
+            raise HTTPException(status_code=422, detail="Yard is not active")
 
     query = select(Building).where(Building.yard_id == yard_id)
     if not include_inactive:
@@ -378,17 +409,23 @@ async def purge_building(
             detail="Cannot purge an active building. Soft-delete it first via DELETE /buildings/{id}.",
         )
 
-    # requests.apartment_id has no ON DELETE CASCADE — cascade-delete via
-    # apartments would crash on FK. Refuse loudly with a count instead.
+    # Ссылки заявок на дом — building-level (Request.building_id) И apartment-level
+    # (apartment_id квартир дома). INNER JOIN по apartment_id «терял» building-level
+    # заявки (apartment_id=NULL) → дом можно было снести с висящим FK. ON DELETE
+    # RESTRICT на building_id — последний рубеж (план «Обходчик»).
+    building_apartment_ids = select(Apartment.id).where(Apartment.building_id == building_id)
     linked_requests = (await db.execute(
-        select(func.count(Request.request_number))
-        .join(Apartment, Apartment.id == Request.apartment_id)
-        .where(Apartment.building_id == building_id)
+        select(func.count(Request.request_number)).where(
+            or_(
+                Request.building_id == building_id,
+                Request.apartment_id.in_(building_apartment_ids),
+            )
+        )
     )).scalar() or 0
     if linked_requests > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot purge building: {linked_requests} request(s) reference its apartments",
+            detail=f"Cannot purge building: {linked_requests} request(s) reference it",
         )
 
     await db.delete(building)

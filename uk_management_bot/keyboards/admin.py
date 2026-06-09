@@ -82,6 +82,7 @@ def get_invite_role_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_applicant", language=language), callback_data="invite_role_applicant"))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_executor", language=language), callback_data="invite_role_executor"))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_manager", language=language), callback_data="invite_role_manager"))
+    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_inspector", language=language), callback_data="invite_role_inspector"))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.cancel", language=language), callback_data="invite_cancel"))
     builder.adjust(1)
     return builder.as_markup()
