@@ -12,7 +12,8 @@ CREATE INDEX CONCURRENTLY, возобновляемый батч-backfill, NOT V
 (`docker compose stop app api`) и делает всё разом:
   1. ADD COLUMN building_id / yard_id / address_type (nullable) + индексы;
   2. inline-backfill address_type одним UPDATE (writers стоят, строк мало);
-  3. SET NOT NULL на address_type + CHECK(тип↔FK);
+  3. CHECK(тип↔FK) — толерантный к address_type IS NULL (NOT NULL НЕ ставим,
+     чтобы схема create_all (локальные тесты) и схема миграции совпадали);
   4. FK building_id/yard_id → ON DELETE RESTRICT.
 
 Существующий apartment_id FK НАМЕРЕННО остаётся ON DELETE SET NULL (миграция
@@ -96,12 +97,13 @@ def upgrade() -> None:
     # перезаписывает уже проставленные; на пустой CI-базе — no-op).
     op.execute(BACKFILL_SQL)
 
-    # NOT NULL на address_type — только если сейчас nullable.
-    insp = sa.inspect(conn)
-    addr_col = {c["name"]: c for c in insp.get_columns("requests")}.get("address_type", {})
-    if addr_col.get("nullable", True):
-        op.alter_column('requests', 'address_type', nullable=False)
-
+    # ВНИМАНИЕ: address_type ОСТАЁТСЯ nullable (НЕ SET NOT NULL). Это намеренно —
+    # модель тоже объявляет его nullable, а инвариант обеспечивает толерантный
+    # CHECK (`address_type IS NULL OR (тип↔FK)`). NOT NULL создавал бы дивергенцию
+    # схемы: локально тесты строят БД через create_all (nullable), а CI/прод —
+    # через эту миграцию; SET NOT NULL ломал бы фикстуры, создающие Request без
+    # address_type (напр. test_apartment_purge). Все прод-пути создания заявки
+    # address_type проставляют; NULL допустим лишь для legacy/немигрированных.
     checks = {c["name"] for c in insp.get_check_constraints("requests")}
     if CHECK_NAME not in checks:
         op.create_check_constraint(CHECK_NAME, 'requests', CHECK_SQL)
