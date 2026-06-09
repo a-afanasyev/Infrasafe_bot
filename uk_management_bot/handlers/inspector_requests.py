@@ -32,6 +32,7 @@ from uk_management_bot.keyboards.requests import (
     CATEGORY_KEYS,
     URGENCY_KEYS,
     get_cancel_keyboard,
+    get_media_keyboard,
 )
 from uk_management_bot.services.request_address import (
     resolve_request_address_sync,
@@ -57,6 +58,7 @@ class InspectorRequestStates(StatesGroup):
     category = State()
     description = State()
     urgency = State()
+    media = State()
     confirm = State()
 
 
@@ -294,17 +296,64 @@ async def inspector_urgency_selected(callback: CallbackQuery, state: FSMContext)
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
         return
     await state.update_data(urgency=urgency_key)
-    await state.set_state(InspectorRequestStates.confirm)
-    data = await state.get_data()
-    summary = get_text(
-        "inspector.confirm_summary", language=lang,
-        address=data.get("address", ""),
-        category=get_text(CATEGORY_KEYS.get(data.get("category"), ""), language=lang),
-        urgency=get_text(URGENCY_KEYS.get(urgency_key, ""), language=lang),
-        description=data.get("description", ""),
+    # Шаг медиа (паритет с applicant-flow): фото/видео до 5, затем «Продолжить».
+    await state.set_state(InspectorRequestStates.media)
+    await callback.message.edit_text(
+        get_text("requests.select_urgency", language=lang) + " ✅"
     )
-    await callback.message.edit_text(summary, reply_markup=_confirm_keyboard(lang))
+    await callback.message.answer(
+        get_text("requests.send_photo_or_video", language=lang),
+        reply_markup=get_media_keyboard(language=lang),
+    )
     await callback.answer()
+
+
+@router.message(InspectorRequestStates.media, F.photo | F.video)
+async def inspector_media(message: Message, state: FSMContext):
+    lang = await _lang(message)
+    data = await state.get_data()
+    media_files = data.get("media_files", [])
+    if len(media_files) >= 5:
+        await message.answer(get_text("requests.max_5_files", language=lang))
+        return
+    file_id = message.photo[-1].file_id if message.photo else message.video.file_id
+    media_files.append(file_id)
+    await state.update_data(media_files=media_files)
+    await message.answer(
+        get_text("requests.file_added", language=lang).replace("{...}", str(len(media_files))),
+        reply_markup=get_media_keyboard(language=lang),
+    )
+
+
+@router.message(InspectorRequestStates.media)
+async def inspector_media_text(message: Message, state: FSMContext):
+    lang = await _lang(message)
+    if message.text == get_text("buttons.cancel", language=lang):
+        await _cancel(message, state, lang)
+        return
+    if message.text == get_text("buttons.continue", language=lang):
+        await state.set_state(InspectorRequestStates.confirm)
+        data = await state.get_data()
+        media_count = len(data.get("media_files", []))
+        summary = get_text(
+            "inspector.confirm_summary", language=lang,
+            address=data.get("address", ""),
+            category=get_text(CATEGORY_KEYS.get(data.get("category"), ""), language=lang),
+            urgency=get_text(URGENCY_KEYS.get(data.get("urgency"), ""), language=lang),
+            description=data.get("description", ""),
+        )
+        if media_count:
+            summary += f"\n📸 Файлов: {media_count}"
+        # Убираем reply-клавиатуру медиа и показываем inline-подтверждение.
+        await message.answer(summary, reply_markup=ReplyKeyboardRemove())
+        await message.answer(
+            get_text("buttons.confirm", language=lang) + "?", reply_markup=_confirm_keyboard(lang)
+        )
+        return
+    await message.answer(
+        get_text("requests.send_photo_or_video", language=lang),
+        reply_markup=get_media_keyboard(language=lang),
+    )
 
 
 @router.callback_query(F.data == "insp_confirm_yes", InspectorRequestStates.confirm)

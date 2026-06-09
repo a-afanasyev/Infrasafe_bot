@@ -7,6 +7,7 @@ import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
 import { URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
+import PhotoUploader from '../../components/PhotoUploader'
 import RoleSwitchButton from '../../components/RoleSwitchButton'
 
 const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
@@ -72,6 +73,9 @@ export default function InspectorCreatePage() {
   const [category, setCategory] = useState<string>(draft.category ?? '')
   const [description, setDescription] = useState<string>(draft.description ?? '')
   const [urgency, setUrgency] = useState<string>(draft.urgency ?? 'low')
+  // Фото (File[]) не сериализуются в draft — живут только в текущей сессии.
+  const [photos, setPhotos] = useState<File[]>([])
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
 
   const goBack = useCallback(() => {
     if (step > 0) setStep(s => s - 1)
@@ -108,7 +112,31 @@ export default function InspectorCreatePage() {
     setCategory('')
     setDescription('')
     setUrgency('low')
+    setPhotos([])
+    setUploadProgress(null)
     try { sessionStorage.removeItem(DRAFT_KEY) } catch {}
+  }
+
+  // Загрузка фото через прокси (как в applicant-flow): последовательно, любой
+  // сбой отдельного файла репортится, но не откатывает уже созданную заявку.
+  async function uploadPhotos(requestNumber: string): Promise<number[]> {
+    const failedIdx: number[] = []
+    setUploadProgress({ done: 0, total: photos.length })
+    for (let i = 0; i < photos.length; i++) {
+      const form = new FormData()
+      form.append('file', photos[i])
+      form.append('request_number', requestNumber)
+      form.append('category', 'request_photo')
+      try {
+        await twaClient.post('/api/v2/media/upload', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      } catch {
+        failedIdx.push(i + 1)
+      }
+      setUploadProgress({ done: i + 1, total: photos.length })
+    }
+    return failedIdx
   }
 
   const createMutation = useMutation({
@@ -120,15 +148,27 @@ export default function InspectorCreatePage() {
         description,
         urgency,
       })
-      return res.data?.request_number as string | undefined
+      const requestNumber = res.data?.request_number as string | undefined
+      let photoFailures: number[] = []
+      if (requestNumber && photos.length > 0) {
+        photoFailures = await uploadPhotos(requestNumber)
+      }
+      return { requestNumber, photoFailures }
     },
-    onSuccess: () => {
+    onSuccess: ({ photoFailures }) => {
       haptic('notification')
-      toast.success(t('twa.create.submitted'))
+      if (photoFailures.length > 0) {
+        toast.warning(`Заявка создана, не загрузились фото №${photoFailures.join(', ')}`)
+      } else {
+        toast.success(t('twa.create.submitted'))
+      }
       // Остаёмся на /twa/inspector — просто сбрасываем форму для следующей заявки.
       resetForm()
     },
-    onError: (err: unknown) => notifyError(err, t('twa.create.submitFailed')),
+    onError: (err: unknown) => {
+      setUploadProgress(null)
+      notifyError(err, t('twa.create.submitFailed'))
+    },
   })
 
   const steps = [
@@ -197,7 +237,16 @@ export default function InspectorCreatePage() {
         </button>
       ))}
     </div>,
-    // Step 5: Confirm
+    // Step 5: Photos (optional)
+    <div key="photos">
+      <h2 className="font-semibold text-[15px] mb-3">{t('twa.photo.add')}</h2>
+      <PhotoUploader files={photos} onChange={setPhotos} maxFiles={5} />
+      <button
+        onClick={() => setStep(6)}
+        className="w-full mt-3 bg-emerald-500 text-white py-3 rounded-xl font-medium"
+      >{t('twa.create.next')}</button>
+    </div>,
+    // Step 6: Confirm
     <div key="confirm">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.confirm')}</h2>
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-[13px]">
@@ -205,12 +254,20 @@ export default function InspectorCreatePage() {
         <div><span className="text-gray-500">{t('twa.create.addressLabel')}:</span> 🏢 {buildingLabel}</div>
         <div><span className="text-gray-500">{t('twa.create.descriptionLabel')}:</span> {description}</div>
         <div><span className="text-gray-500">{t('twa.create.urgencyLabel')}:</span> {t(`twa.create.urgency.${urgency}`)}</div>
+        {photos.length > 0 && (
+          <div><span className="text-gray-500">📸:</span> {photos.length}</div>
+        )}
       </div>
       <button
         onClick={() => createMutation.mutate()}
         disabled={createMutation.isPending || buildingId == null}
         className="w-full mt-4 bg-emerald-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
+      {uploadProgress && uploadProgress.total > 0 && (
+        <div className="mt-3 text-center text-[12px] text-gray-500 dark:text-gray-400">
+          Загрузка фото {uploadProgress.done}/{uploadProgress.total}
+        </div>
+      )}
       {createMutation.isError && (
         <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
           {(() => {
