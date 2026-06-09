@@ -67,38 +67,84 @@ BACKFILL_SQL = (
 
 
 def upgrade() -> None:
-    # 1. Колонки (nullable) + индексы.
-    op.add_column('requests', sa.Column('building_id', sa.Integer(), nullable=True))
-    op.add_column('requests', sa.Column('yard_id', sa.Integer(), nullable=True))
-    op.add_column('requests', sa.Column('address_type', sa.String(length=20), nullable=True))
-    op.create_index('ix_requests_building_id', 'requests', ['building_id'])
-    op.create_index('ix_requests_yard_id', 'requests', ['yard_id'])
+    # ИДЕМПОТЕНТНО (важно): бутстрап проекта/CI = create_all + stamp 006 + upgrade
+    # head. После create_all таблица requests уже приходит из модели С колонками
+    # building_id/yard_id/address_type, индексами, CHECK и FK (они объявлены в
+    # модели). Поэтому каждый объект добавляем ТОЛЬКО если его ещё нет — иначе на
+    # create_all-базе будет duplicate-column/constraint. На свежем проде (rev 015,
+    # ничего нет) применяется всё. Паттерн — как в миграции 014.
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    if "requests" not in insp.get_table_names():
+        return  # no-op: таблицу создаст create_all уже со всем содержимым
 
-    # 2. Inline-backfill дискриминатора (строго WHERE address_type IS NULL —
-    #    чтобы не перезаписать уже проставленные значения при повторном прогоне).
+    cols = {c["name"] for c in insp.get_columns("requests")}
+    if "building_id" not in cols:
+        op.add_column('requests', sa.Column('building_id', sa.Integer(), nullable=True))
+    if "yard_id" not in cols:
+        op.add_column('requests', sa.Column('yard_id', sa.Integer(), nullable=True))
+    if "address_type" not in cols:
+        op.add_column('requests', sa.Column('address_type', sa.String(length=20), nullable=True))
+
+    idx = {i["name"] for i in insp.get_indexes("requests")}
+    if "ix_requests_building_id" not in idx:
+        op.create_index('ix_requests_building_id', 'requests', ['building_id'])
+    if "ix_requests_yard_id" not in idx:
+        op.create_index('ix_requests_yard_id', 'requests', ['yard_id'])
+
+    # Inline-backfill дискриминатора (строго WHERE address_type IS NULL — не
+    # перезаписывает уже проставленные; на пустой CI-базе — no-op).
     op.execute(BACKFILL_SQL)
 
-    # 3. NOT NULL на address_type + CHECK(тип↔FK).
-    op.alter_column('requests', 'address_type', nullable=False)
-    op.create_check_constraint(CHECK_NAME, 'requests', CHECK_SQL)
+    # NOT NULL на address_type — только если сейчас nullable.
+    insp = sa.inspect(conn)
+    addr_col = {c["name"]: c for c in insp.get_columns("requests")}.get("address_type", {})
+    if addr_col.get("nullable", True):
+        op.alter_column('requests', 'address_type', nullable=False)
 
-    # 4. FK building_id/yard_id → ON DELETE RESTRICT.
-    op.create_foreign_key(
-        'requests_building_id_fkey', 'requests', 'buildings',
-        ['building_id'], ['id'], ondelete='RESTRICT',
-    )
-    op.create_foreign_key(
-        'requests_yard_id_fkey', 'requests', 'yards',
-        ['yard_id'], ['id'], ondelete='RESTRICT',
-    )
+    checks = {c["name"] for c in insp.get_check_constraints("requests")}
+    if CHECK_NAME not in checks:
+        op.create_check_constraint(CHECK_NAME, 'requests', CHECK_SQL)
+
+    fks = {f["name"] for f in insp.get_foreign_keys("requests") if f.get("name")}
+    if "requests_building_id_fkey" not in fks:
+        op.create_foreign_key(
+            'requests_building_id_fkey', 'requests', 'buildings',
+            ['building_id'], ['id'], ondelete='RESTRICT',
+        )
+    if "requests_yard_id_fkey" not in fks:
+        op.create_foreign_key(
+            'requests_yard_id_fkey', 'requests', 'yards',
+            ['yard_id'], ['id'], ondelete='RESTRICT',
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint('requests_yard_id_fkey', 'requests', type_='foreignkey')
-    op.drop_constraint('requests_building_id_fkey', 'requests', type_='foreignkey')
-    op.drop_constraint(CHECK_NAME, 'requests', type_='check')
-    op.drop_index('ix_requests_yard_id', table_name='requests')
-    op.drop_index('ix_requests_building_id', table_name='requests')
-    op.drop_column('requests', 'address_type')
-    op.drop_column('requests', 'yard_id')
-    op.drop_column('requests', 'building_id')
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    if "requests" not in insp.get_table_names():
+        return
+
+    fks = {f["name"] for f in insp.get_foreign_keys("requests") if f.get("name")}
+    if "requests_yard_id_fkey" in fks:
+        op.drop_constraint('requests_yard_id_fkey', 'requests', type_='foreignkey')
+    if "requests_building_id_fkey" in fks:
+        op.drop_constraint('requests_building_id_fkey', 'requests', type_='foreignkey')
+
+    checks = {c["name"] for c in insp.get_check_constraints("requests")}
+    if CHECK_NAME in checks:
+        op.drop_constraint(CHECK_NAME, 'requests', type_='check')
+
+    idx = {i["name"] for i in insp.get_indexes("requests")}
+    if "ix_requests_yard_id" in idx:
+        op.drop_index('ix_requests_yard_id', table_name='requests')
+    if "ix_requests_building_id" in idx:
+        op.drop_index('ix_requests_building_id', table_name='requests')
+
+    cols = {c["name"] for c in insp.get_columns("requests")}
+    if "address_type" in cols:
+        op.drop_column('requests', 'address_type')
+    if "yard_id" in cols:
+        op.drop_column('requests', 'yard_id')
+    if "building_id" in cols:
+        op.drop_column('requests', 'building_id')
