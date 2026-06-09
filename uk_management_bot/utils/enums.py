@@ -90,6 +90,7 @@ class UserRole(IntEnum):
     APPLICANT = 1
     EXECUTOR = 2
     MANAGER = 3
+    INSPECTOR = 4
 
     @property
     def db_value(self) -> str:
@@ -104,6 +105,7 @@ _ROLE_TO_DB = {
     UserRole.APPLICANT: "applicant",
     UserRole.EXECUTOR: "executor",
     UserRole.MANAGER: "manager",
+    UserRole.INSPECTOR: "inspector",
 }
 
 _ROLE_DB_TO_ENUM = {v: k for k, v in _ROLE_TO_DB.items()}

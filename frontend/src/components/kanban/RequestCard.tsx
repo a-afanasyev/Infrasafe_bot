@@ -19,7 +19,7 @@ const URGENCY: Record<string, { bg: string; text: string }> = {
 }
 
 const SOURCE_ICON: Record<string, string> = {
-  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞',
+  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶',
 }
 
 import { FROZEN_STATUSES } from '../../constants'

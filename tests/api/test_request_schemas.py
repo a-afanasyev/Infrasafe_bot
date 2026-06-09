@@ -10,10 +10,14 @@ from uk_management_bot.api.requests.schemas import (
     KanbanColumn,
     KanbanResponse,
     CreateRequestBody,
+    CreateInspectorRequestBody,
     UpdateRequestBody,
     CommentBody,
     CommentOut,
 )
+
+# Структурный контракт (план «Обходчик»): обязательны address_type + address_id.
+_ADDR = {"address_type": "apartment", "address_id": 1}
 
 
 # ═══════════════════════ Constants ═══════════════════════
@@ -35,12 +39,12 @@ class TestConstants:
 
     def test_create_body_accepts_key_and_legacy_russian(self):
         # Толерантно (Phase 1 rollout): рус нормализуется в ключ.
-        assert CreateRequestBody(category="Электрика", urgency="high", description="x"*5).urgency == "high"
-        assert CreateRequestBody(category="Электрика", urgency="Срочная", description="x"*5).urgency == "high"
+        assert CreateRequestBody(category="Электрика", urgency="high", description="x"*5, **_ADDR).urgency == "high"
+        assert CreateRequestBody(category="Электрика", urgency="Срочная", description="x"*5, **_ADDR).urgency == "high"
 
     def test_create_body_rejects_unknown_urgency(self):
         with pytest.raises(ValidationError):
-            CreateRequestBody(category="Электрика", urgency="nope", description="x"*5)
+            CreateRequestBody(category="Электрика", urgency="nope", description="x"*5, **_ADDR)
 
     def test_update_body_urgency_optional_and_normalized(self):
         assert UpdateRequestBody().urgency is None
@@ -121,11 +125,11 @@ class TestCreateRequestBody:
 
     def test_valid_minimal(self):
         body = CreateRequestBody(
-            category="Электрика", urgency="Обычная", description="Не горит свет"
+            category="Электрика", urgency="Обычная", description="Не горит свет", **_ADDR
         )
         assert body.category == "Электрика"
-        assert body.source == "web"
-        assert body.apartment_id is None
+        assert body.address_type == "apartment"
+        assert body.address_id == 1
         assert body.media_files is None
 
     def test_valid_full(self):
@@ -133,35 +137,67 @@ class TestCreateRequestBody:
             category="Сантехника",
             urgency="Срочная",
             description="Прорвало трубу",
-            apartment_id=10,
-            address="ул. Мира 5",
-            source="twa",
+            address_type="building",
+            address_id=10,
             media_files=["photo1.jpg", "photo2.jpg"],
         )
-        assert body.source == "twa"
+        assert body.address_type == "building"
+        assert body.address_id == 10
         assert body.media_files == ["photo1.jpg", "photo2.jpg"]
 
     @pytest.mark.parametrize("urgency", VALID_URGENCIES)
     def test_all_valid_urgencies(self, urgency: str):
         body = CreateRequestBody(
-            category="Электрика", urgency=urgency, description="Описание"
+            category="Электрика", urgency=urgency, description="Описание", **_ADDR
         )
         assert body.urgency == urgency
 
     def test_invalid_urgency_raises(self):
         with pytest.raises(ValidationError) as exc_info:
             CreateRequestBody(
-                category="Тест", urgency="НеверныйУровень", description="Описание"
+                category="Тест", urgency="НеверныйУровень", description="Описание", **_ADDR
             )
         assert "urgency" in str(exc_info.value)
 
     def test_missing_category_raises(self):
         with pytest.raises(ValidationError):
-            CreateRequestBody(urgency="Обычная", description="Описание")
+            CreateRequestBody(urgency="Обычная", description="Описание", **_ADDR)
 
     def test_missing_description_raises(self):
         with pytest.raises(ValidationError):
-            CreateRequestBody(category="Тест", urgency="Обычная")
+            CreateRequestBody(category="Тест", urgency="Обычная", **_ADDR)
+
+    def test_missing_address_raises(self):
+        # Структурный контракт: без address_type/address_id — ошибка.
+        with pytest.raises(ValidationError):
+            CreateRequestBody(category="Электрика", urgency="low", description="Описание")
+
+    def test_unsupported_address_type_raises(self):
+        with pytest.raises(ValidationError):
+            CreateRequestBody(
+                category="Электрика", urgency="low", description="Описание",
+                address_type="planet", address_id=1,
+            )
+
+
+class TestCreateInspectorRequestBody:
+
+    def test_building_only_ok(self):
+        body = CreateInspectorRequestBody(
+            category="Электрика", urgency="low", description="Описание",
+            address_type="building", address_id=7,
+        )
+        assert body.address_type == "building"
+        assert body.address_id == 7
+
+    @pytest.mark.parametrize("bad_type", ["yard", "apartment", "planet"])
+    def test_non_building_rejected(self, bad_type: str):
+        # building-only: yard/apartment отсекаются схемой (422 на уровне API).
+        with pytest.raises(ValidationError):
+            CreateInspectorRequestBody(
+                category="Электрика", urgency="low", description="Описание",
+                address_type=bad_type, address_id=1,
+            )
 
 
 # ═══════════════════════ UpdateRequestBody ═══════════════════════

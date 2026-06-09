@@ -49,7 +49,7 @@ class InviteService:
             Токен в формате invite_v1:{payload}.{signature}
         """
         # Валидация входных данных
-        if role not in ['applicant', 'executor', 'manager']:
+        if role not in ['applicant', 'executor', 'manager', 'inspector']:
             raise ValueError(f"Invalid role: {role}")
             
         if role == 'executor' and not specialization:
@@ -207,7 +207,7 @@ class InviteService:
                 if field not in payload:
                     raise ValueError(f"Token missing required field: {field}")
 
-            if payload['role'] not in ['applicant', 'executor', 'manager']:
+            if payload['role'] not in ['applicant', 'executor', 'manager', 'inspector']:
                 raise ValueError("Invalid role in token")
 
             # Atomically consume the nonce if mark_used_by is set.

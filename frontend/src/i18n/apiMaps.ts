@@ -179,10 +179,11 @@ export function tAnalyticsEvent(apiValue: string, t: TFunction): string {
   return t(key)
 }
 
-// === Roles (2 values — English keys) ===
+// === Roles (English keys) ===
 export const ROLE_MAP = {
-  'executor': 'role.executor',
-  'manager':  'role.manager',
+  'executor':  'role.executor',
+  'manager':   'role.manager',
+  'inspector': 'role.inspector',
 } as const
 
 export type ApiRole = keyof typeof ROLE_MAP

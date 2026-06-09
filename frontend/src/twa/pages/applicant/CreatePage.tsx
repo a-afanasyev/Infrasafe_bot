@@ -26,21 +26,37 @@ const CATEGORY_API_MAP: Record<string, string> = {
   other: 'Другое',
 }
 
+type AddressType = 'yard' | 'building' | 'apartment'
+
+interface AddressItem {
+  id: number
+  label: string
+}
+interface RequestAddresses {
+  yards: AddressItem[]
+  buildings: AddressItem[]
+  apartments: AddressItem[]
+}
+
+const EMPTY_ADDRESSES: RequestAddresses = { yards: [], buildings: [], apartments: [] }
+
 export default function CreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { haptic, showBackButton } = useTelegramSDK()
 
-  // TWA-13: restore wizard state from sessionStorage so a user who minimised
-  // the Telegram WebApp mid-flow doesn't have to start over. Photos (File[])
-  // can't survive serialisation; only text fields persist.
-  const DRAFT_KEY = 'twa.create.draft'
+  // TWA-13 + план «Обходчик»: draft версионирован (v2) — структурный
+  // {addressType, addressId} несовместим со старым {apartmentId, address}.
+  // Старый ключ не читаем; восстановленный адрес ревалидируем по
+  // /profile/request-addresses.
+  const DRAFT_KEY = 'twa.create.draft.v2'
   type Draft = {
     step: number
     category: string
-    apartmentId: number | null
-    address: string
+    addressType: AddressType | null
+    addressId: number | null
+    addressLabel: string
     description: string
     urgency: string
   }
@@ -66,8 +82,9 @@ export default function CreatePage() {
     if (step > 0) return showBackButton(goBack)
   }, [step, showBackButton, goBack])
   const [category, setCategory] = useState<string>(draft.category ?? '')
-  const [apartmentId, setApartmentId] = useState<number | null>(draft.apartmentId ?? null)
-  const [address, setAddress] = useState<string>(draft.address ?? '')
+  const [addressType, setAddressType] = useState<AddressType | null>(draft.addressType ?? null)
+  const [addressId, setAddressId] = useState<number | null>(draft.addressId ?? null)
+  const [addressLabel, setAddressLabel] = useState<string>(draft.addressLabel ?? '')
   const [description, setDescription] = useState<string>(draft.description ?? '')
   const [urgency, setUrgency] = useState<string>(draft.urgency ?? 'low')
   const [photos, setPhotos] = useState<File[]>([])
@@ -78,41 +95,46 @@ export default function CreatePage() {
     try {
       sessionStorage.setItem(
         DRAFT_KEY,
-        JSON.stringify({ step, category, apartmentId, address, description, urgency } satisfies Draft)
+        JSON.stringify({ step, category, addressType, addressId, addressLabel, description, urgency } satisfies Draft)
       )
     } catch {}
-  }, [step, category, apartmentId, address, description, urgency])
-  // TWA-16: track per-photo upload progress so the user sees "Загрузка фото
-  // 2/5" instead of staring at an unchanging spinner while we POST each file
-  // sequentially through the proxy.
+  }, [step, category, addressType, addressId, addressLabel, description, urgency])
+  // TWA-16: track per-photo upload progress.
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
 
-  const { data: apartments = [], isSuccess: apartmentsLoaded } = useQuery({
-    queryKey: ['my-apartments'],
-    queryFn: () => twaClient.get('/api/v2/profile/apartments').then(r => r.data),
+  const { data: addresses = EMPTY_ADDRESSES, isSuccess: addressesLoaded } = useQuery<RequestAddresses>({
+    queryKey: ['request-addresses'],
+    queryFn: () => twaClient.get('/api/v2/profile/request-addresses').then(r => r.data),
   })
 
-  // TWA-22: a draft restored from sessionStorage may reference an apartment
-  // the user no longer belongs to (removed between sessions). Once the fresh
-  // apartments list loads, drop a stale apartmentId and bounce the wizard
-  // back to address selection so the user can't reach submit with an
-  // invalid address that would 422 server-side.
+  // TWA-22 + план «Обходчик»: draft, восстановленный из sessionStorage, может
+  // ссылаться на адрес, к которому житель больше не имеет доступа (изменился
+  // между сессиями). Как только свежие наборы загрузились — сбрасываем
+  // невалидный выбор и возвращаем мастер к шагу адреса.
   useEffect(() => {
-    if (!apartmentsLoaded || apartmentId == null) return
-    const stillValid = apartments.some((a: any) => a.apartment_id === apartmentId)
+    if (!addressesLoaded || addressType == null || addressId == null) return
+    const pool: AddressItem[] =
+      addressType === 'apartment' ? addresses.apartments
+      : addressType === 'building' ? addresses.buildings
+      : addresses.yards
+    const stillValid = pool.some((a) => a.id === addressId)
     if (!stillValid) {
-      setApartmentId(null)
-      setAddress('')
+      setAddressType(null)
+      setAddressId(null)
+      setAddressLabel('')
       setStep(s => Math.min(s, 1))
-      toast.info('Адрес изменился — выберите заново')
+      toast.info(t('twa.create.addressChanged'))
     }
-  }, [apartmentsLoaded, apartments, apartmentId])
+  }, [addressesLoaded, addresses, addressType, addressId, t])
 
-  // TWA-02: upload each photo through the API proxy to media-service.
-  // The proxy lives at POST /api/v2/media/upload, requires the auth Bearer
-  // (already on twaClient) and validates request_number + category against
-  // FileCategories enum server-side. Photos are uploaded sequentially; any
-  // per-photo failure is reported but doesn't roll back the created request.
+  function selectAddress(type: AddressType, item: AddressItem) {
+    setAddressType(type)
+    setAddressId(item.id)
+    setAddressLabel(item.label)
+    haptic('selection')
+    setStep(2)
+  }
+
   async function uploadPhotos(requestNumber: string): Promise<number[]> {
     const failedIdx: number[] = []
     setUploadProgress({ done: 0, total: photos.length })
@@ -135,13 +157,14 @@ export default function CreatePage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      // Структурный контракт: сервер сам формирует адрес/FK/source по
+      // {address_type, address_id}. Клиент address/source НЕ шлёт.
       const res = await twaClient.post('/api/v2/requests', {
         category: CATEGORY_API_MAP[category] || category,
-        apartment_id: apartmentId,
-        address,
+        address_type: addressType,
+        address_id: addressId,
         description,
         urgency: urgency,
-        source: 'twa',
       })
       const requestNumber: string | undefined = res.data?.request_number
       let photoFailures: number[] = []
@@ -172,6 +195,20 @@ export default function CreatePage() {
     },
   })
 
+  const hasAnyAddress = addresses.apartments.length > 0 || addresses.buildings.length > 0 || addresses.yards.length > 0
+
+  const addressSection = (type: AddressType, emoji: string, items: AddressItem[]) =>
+    items.length > 0 && (
+      <div className="space-y-2">
+        {items.map((a) => (
+          <button key={`${type}-${a.id}`} onClick={() => selectAddress(type, a)}
+            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] text-left active:scale-[0.97] transition-transform">
+            {emoji} {a.label}
+          </button>
+        ))}
+      </div>
+    )
+
   const steps = [
     // Step 0: Category
     <div key="cat" className="space-y-2">
@@ -185,15 +222,15 @@ export default function CreatePage() {
         ))}
       </div>
     </div>,
-    // Step 1: Address
-    <div key="addr" className="space-y-2">
+    // Step 1: Address (3 levels: apartments → buildings → yards)
+    <div key="addr" className="space-y-3">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectAddress')}</h2>
-      {apartments.map((a: any) => (
-        <button key={a.apartment_id} onClick={() => { setApartmentId(a.apartment_id); setAddress(a.full_address); haptic('selection'); setStep(2) }}
-          className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] text-left active:scale-[0.97] transition-transform">
-          {a.full_address}
-        </button>
-      ))}
+      {!hasAnyAddress && (
+        <div className="text-[13px] text-gray-500 dark:text-gray-400">{t('twa.create.noAddresses')}</div>
+      )}
+      {addressSection('apartment', '🏠', addresses.apartments)}
+      {addressSection('building', '🏢', addresses.buildings)}
+      {addressSection('yard', '🏘️', addresses.yards)}
     </div>,
     // Step 2: Description
     <div key="desc">
@@ -236,13 +273,13 @@ export default function CreatePage() {
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.confirm')}</h2>
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-[13px]">
         <div><span className="text-gray-500">{t('twa.create.categoryLabel')}:</span> {tCategory(category, t)}</div>
-        <div><span className="text-gray-500">{t('twa.create.addressLabel')}:</span> {address}</div>
+        <div><span className="text-gray-500">{t('twa.create.addressLabel')}:</span> {addressLabel}</div>
         <div><span className="text-gray-500">{t('twa.create.descriptionLabel')}:</span> {description}</div>
         <div><span className="text-gray-500">{t('twa.create.urgencyLabel')}:</span> {t(`twa.create.urgency.${urgency}`)}</div>
       </div>
       <button
         onClick={() => createMutation.mutate()}
-        disabled={createMutation.isPending}
+        disabled={createMutation.isPending || addressId == null}
         className="w-full mt-4 bg-emerald-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
       {uploadProgress && uploadProgress.total > 0 && (

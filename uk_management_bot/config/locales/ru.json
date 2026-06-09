@@ -759,6 +759,7 @@
       "role_applicant": "👤 Заявитель",
       "role_executor": "🛠️ Исполнитель",
       "role_manager": "👨‍💼 Менеджер",
+      "role_inspector": "🚶 Обходчик",
       "cancel": "❌ Отмена",
       "spec_plumber": "🔧 Сантехник",
       "spec_electrician": "⚡ Электрик",
@@ -1220,6 +1221,7 @@
     "keyboards": {
       "role_executor": "Исполнитель",
       "role_manager": "Менеджер",
+      "role_inspector": "Обходчик",
       "role_applicant": "Заявитель",
       "spec_plumber": "Сантехник",
       "spec_electrician": "Электрик",
@@ -5971,6 +5973,10 @@
     "yard_not_found": "⚠️ Двор не найден. Выберите адрес из предложенных вариантов:",
     "select_from_list": "⚠️ Пожалуйста, выберите адрес из предложенных вариантов",
     "choose_address_prompt": "Выберите адрес:",
+    "applicant_only": "⚠️ Создание заявки доступно только жителям. Менеджеры заводят заявки через дашборд/колл-центр.",
+    "no_available_addresses": "У вас нет доступных адресов для создания заявки. Обратитесь к менеджеру для привязки квартиры.",
+    "address_not_available": "❌ Этот адрес недоступен или неактивен. Выберите из списка.",
+    "address_selected": "✅ Адрес: {address}",
     "building_prefix": "Дом: {address}",
     "yard_prefix": "Двор: {name}",
     "address_needs_improvement": "⚠️ Адрес требует доработки:\n{suggestions}\n\nПопробуйте еще раз:",
@@ -6138,6 +6144,7 @@
     "applicant": "Заявитель",
     "executor": "Исполнитель",
     "manager": "Менеджер",
+    "inspector": "Обходчик",
     "none": "Роли не назначены"
   },
   "search": {
@@ -7024,8 +7031,18 @@
     "yard_remove_failed": "❌ Не удалось удалить двор"
   },
   "welcome": "Добро пожаловать в систему управления заявками! 🏠",
+  "inspector": {
+    "only_approved": "⚠️ Создание заявок с обхода доступно только подтверждённым обходчикам.",
+    "no_yards": "Нет активных дворов для создания заявки.",
+    "no_buildings": "В этом дворе нет активных домов.",
+    "starting": "📝 Заявка с обхода. Выберите двор и дом.",
+    "select_yard": "🏘️ Выберите двор:",
+    "select_building": "🏢 Выберите дом:",
+    "confirm_summary": "Проверьте заявку:\n\n📍 Адрес: {address}\n📂 Категория: {category}\n⚡ Срочность: {urgency}\n📝 Описание: {description}\n\nСоздать?"
+  },
   "main_menu": {
     "create_request": "📝 Создать заявку",
+    "inspector_create": "📝 Заявка (обход)",
     "my_requests": "📋 Мои заявки",
     "profile": "👤 Профиль",
     "help": "ℹ️ Помощь",
@@ -7807,6 +7824,7 @@
       "phone_updated": "✅ Телефон обновлен: {phone}",
       "error_updating_phone": "Произошла ошибка при обновлении телефона",
       "current_roles": "Текущие роли: {roles}",
+      "cannot_remove_last_role": "❌ Нельзя снять последнюю роль — у пользователя должна остаться хотя бы одна роль.",
       "no_roles": "Нет ролей",
       "no_specializations": "Нет специализаций",
       "specialization_stats_title": "🛠️ Статистика специализаций сотрудников:",

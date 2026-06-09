@@ -260,8 +260,9 @@ def format_user_info(user, locale: Dict[str, Any]) -> str:
     """Форматирование информации о пользователе"""
     role_names = {
         "applicant": "Заявитель",
-        "executor": "Исполнитель", 
-        "manager": "Менеджер"
+        "executor": "Исполнитель",
+        "manager": "Менеджер",
+        "inspector": "Обходчик"
     }
     
     status_names = {

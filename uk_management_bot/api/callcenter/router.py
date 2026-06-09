@@ -1,12 +1,16 @@
 from datetime import date
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
 from uk_management_bot.api.callcenter.schemas import ResidentSearchResult, CallCenterCreateRequest
 from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.api.requests.router import _generate_request_number
+from uk_management_bot.services.request_address import (
+    resolve_request_address_async,
+    AddressResolutionError,
+)
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 
@@ -44,6 +48,13 @@ async def search_resident(
             User.phone,
             count_subq.label("requests_count"),
         ).where(
+            # Только approved-жители: менеджер не должен выбрать того, кому потом
+            # нельзя создать заявку (план «Обходчик», R52).
+            User.status == "approved",
+            or_(
+                User.roles.like('%"applicant"%'),
+                User.role == "applicant",
+            ),
             or_(
                 User.phone.ilike(pattern),
                 User.first_name.ilike(pattern),
@@ -71,6 +82,53 @@ async def create_call_center_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
+    """Менеджер заводит заявку (call-центр) — от имени жителя или от себя.
+
+    Модель доступа (план «Обходчик»):
+      * apartment_id без user_id → 422;
+      * несуществующий target user → 404; не-житель → 422;
+      * квартира должна принадлежать именно target user (approved+активна) → иначе
+        422 (resolver-ветка проверяет принадлежность к target user_id, не к актору);
+      * при выбранной квартире клиентский address игнорируется → канонический;
+      * без квартиры свободный address обязателен и непустой → address_type='legacy';
+      * без user_id владелец — сам менеджер (legacy-адрес).
+    """
+    # apartment_id без выбранного жителя — некому принадлежать.
+    if body.apartment_id is not None and body.user_id is None:
+        raise HTTPException(status_code=422, detail="apartment_id requires user_id")
+
+    owner_id = user.id  # по умолчанию владелец — актор-менеджер
+    resolved = None
+    if body.user_id is not None:
+        target = await db.get(User, body.user_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="target user not found")
+        if "applicant" not in _parse_user_roles(target):
+            raise HTTPException(status_code=422, detail="target user is not an applicant")
+        owner_id = target.id
+        if body.apartment_id is not None:
+            try:
+                # Принадлежность к TARGET user_id (не к менеджеру-актору).
+                resolved = await resolve_request_address_async(
+                    db, target.id, "applicant", "apartment", body.apartment_id
+                )
+            except AddressResolutionError as e:
+                # Для call-центра «чужая/неактивная/несуществующая» квартира —
+                # некорректный ввод менеджера → всегда 422 (не 403).
+                raise HTTPException(status_code=422, detail=e.message)
+
+    if resolved is not None:
+        address = resolved.canonical_address
+        apartment_id = resolved.apartment_id
+        address_type = "apartment"
+    else:
+        # Без квартиры — свободный адрес обязателен и непуст → legacy.
+        if not body.address or not body.address.strip():
+            raise HTTPException(status_code=422, detail="address required when no apartment")
+        address = body.address.strip()
+        apartment_id = None
+        address_type = "legacy"
+
     today = date.today().strftime("%y%m%d")
     count_result = await db.execute(
         select(func.count(Request.request_number)).where(
@@ -86,12 +144,13 @@ async def create_call_center_request(
 
     req = Request(
         request_number=request_number,
-        user_id=body.user_id or user.id,
+        user_id=owner_id,
         category=body.category,
         urgency=body.urgency,
         description=body.description,
-        apartment_id=body.apartment_id,
-        address=body.address,
+        apartment_id=apartment_id,
+        address=address,
+        address_type=address_type,
         status="Новая",
         source="call_center",
         notes=notes,

@@ -25,6 +25,14 @@ class CallCenterCreateRequest(BaseModel):
     caller_phone: Optional[str] = None
     address: Optional[str] = None
 
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        # Та же валидация, что у applicant/inspector — менеджер не должен заводить
+        # заявку с произвольной категорией (полонит Kanban/аналитику/webhook).
+        from uk_management_bot.api.requests.schemas import _validate_request_category
+        return _validate_request_category(v)
+
     @field_validator("urgency")
     @classmethod
     def validate_urgency(cls, v: str) -> str:

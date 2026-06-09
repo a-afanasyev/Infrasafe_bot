@@ -80,11 +80,12 @@ class UserManagementService:
                 )
             ).count()
             
-            # Подсчет сотрудников (executor или manager)
+            # Подсчет сотрудников (executor, manager или inspector)
             staff_count = self.db.query(User).filter(
                 or_(
                     User.roles.contains('executor'),
-                    User.roles.contains('manager')
+                    User.roles.contains('manager'),
+                    User.roles.contains('inspector')
                 )
             ).count()
             
@@ -130,8 +131,10 @@ class UserManagementService:
                     or_(
                         User.roles.like('%"executor"%'),
                         User.roles.like('%"manager"%'),
+                        User.roles.like('%"inspector"%'),
                         User.role == 'executor',
-                        User.role == 'manager'
+                        User.role == 'manager',
+                        User.role == 'inspector'
                     )
                 )
             ).count()
@@ -143,8 +146,10 @@ class UserManagementService:
                     or_(
                         User.roles.like('%"executor"%'),
                         User.roles.like('%"manager"%'),
+                        User.roles.like('%"inspector"%'),
                         User.role == 'executor',
-                        User.role == 'manager'
+                        User.role == 'manager',
+                        User.role == 'inspector'
                     )
                 )
             ).count()
@@ -156,8 +161,10 @@ class UserManagementService:
                     or_(
                         User.roles.like('%"executor"%'),
                         User.roles.like('%"manager"%'),
+                        User.roles.like('%"inspector"%'),
                         User.role == 'executor',
-                        User.role == 'manager'
+                        User.role == 'manager',
+                        User.role == 'inspector'
                     )
                 )
             ).count()
@@ -303,12 +310,13 @@ class UserManagementService:
         try:
             offset = (page - 1) * limit
             
-            # Запрос сотрудников (executor или manager)
+            # Запрос сотрудников (executor, manager или inspector)
             # Включаем всех сотрудников, независимо от других ролей
             query = self.db.query(User).filter(
                 or_(
                     User.roles.contains('executor'),
-                    User.roles.contains('manager')
+                    User.roles.contains('manager'),
+                    User.roles.contains('inspector')
                 )
             )
             
@@ -591,22 +599,23 @@ class UserManagementService:
                 return False
             
             roles = json.loads(user.roles)
-            return 'executor' in roles or 'manager' in roles
-            
+            return 'executor' in roles or 'manager' in roles or 'inspector' in roles
+
         except (json.JSONDecodeError, Exception):
             return False
-    
+
     def is_user_employee(self, user: User) -> bool:
-        """Проверить, является ли пользователь сотрудником (executor или manager)"""
+        """Проверить, является ли пользователь сотрудником (executor, manager или inspector)"""
         try:
             if not user.roles:
                 return False
-            
+
             # Проверяем через LIKE для JSON
             return (
                 user.roles and (
-                    '"executor"' in user.roles or 
-                    '"manager"' in user.roles
+                    '"executor"' in user.roles or
+                    '"manager"' in user.roles or
+                    '"inspector"' in user.roles
                 )
             )
             
@@ -643,14 +652,16 @@ class UserManagementService:
             Dict с данными сотрудников и пагинацией
         """
         try:
-            # Базовый запрос для сотрудников (executor или manager)
+            # Базовый запрос для сотрудников (executor, manager или inspector)
             # Проверяем оба поля: role (старая система) и roles (новая система)
             base_query = self.db.query(User).filter(
                 or_(
                     User.roles.like('%"executor"%'),
                     User.roles.like('%"manager"%'),
+                    User.roles.like('%"inspector"%'),
                     User.role == 'executor',
-                    User.role == 'manager'
+                    User.role == 'manager',
+                    User.role == 'inspector'
                 )
             )
 
@@ -726,11 +737,13 @@ class UserManagementService:
                 or_(
                     User.roles.like('%"executor"%'),
                     User.roles.like('%"manager"%'),
+                    User.roles.like('%"inspector"%'),
                     User.role == 'executor',
-                    User.role == 'manager'
+                    User.role == 'manager',
+                    User.role == 'inspector'
                 )
             )
-            
+
             # Поиск по имени, фамилии, username или телефону
             search_query = base_query.filter(
                 or_(

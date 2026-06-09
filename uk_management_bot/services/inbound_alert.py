@@ -151,7 +151,7 @@ async def handle_infrasafe_alert(
     # Create request + emit request.created + record inbox — one transaction.
     request_number = await _create_request(
         db, user_id=system_user_id, category=category, urgency=urgency,
-        description=description, address=building.address,
+        description=description, address=building.address, building_id=building.id,
     )
     await queue_webhook(db, "request.created", REQUEST_WEBHOOK_ENDPOINT, {
         "request_number": request_number,
@@ -187,13 +187,22 @@ async def handle_infrasafe_alert(
 
 
 async def _resolve_building(db: AsyncSession, external_id: str) -> Building | None:
-    """Find the active building whose deterministic external_id matches.
+    """Find the active building (with active parent yard) whose deterministic
+    external_id matches.
 
     UK does not store external_id — it computes it (see _expected_external_id).
-    Full-scan is fine: the building set is small.
+    Full-scan is fine: the building set is small. Активность родительского двора
+    обязательна (план «Обходчик», R50): активный дом в неактивном дворе — отказ,
+    как и для inspector/applicant-путей.
     """
+    from uk_management_bot.database.models.yard import Yard
+
     buildings = (
-        await db.execute(select(Building).where(Building.is_active.is_(True)))
+        await db.execute(
+            select(Building)
+            .join(Yard, Yard.id == Building.yard_id)
+            .where(Building.is_active.is_(True), Yard.is_active.is_(True))
+        )
     ).scalars().all()
     for building in buildings:
         if _expected_external_id(building.id) == external_id:
@@ -217,9 +226,13 @@ async def _system_user_id(db: AsyncSession) -> int:
 
 async def _create_request(
     db: AsyncSession, *, user_id: int, category: str, urgency: str,
-    description: str, address: str,
+    description: str, address: str, building_id: int,
 ) -> str:
-    """Insert a building-level request. Retries once on request_number collision."""
+    """Insert a building-level request. Retries once on request_number collision.
+
+    План «Обходчик»: пишем структурный building_id + address_type='building'
+    (раньше InfraSafe-заявка несла только текстовый address с apartment_id=NULL).
+    """
     today = date.today().strftime("%y%m%d")
     for attempt in range(2):
         count = await db.scalar(
@@ -231,7 +244,8 @@ async def _create_request(
         req = Request(
             request_number=request_number, user_id=user_id, category=category,
             urgency=urgency, description=description, address=address,
-            apartment_id=None, status="Новая", source="infrasafe", media_files=[],
+            apartment_id=None, building_id=building_id, address_type="building",
+            status="Новая", source="infrasafe", media_files=[],
         )
         try:
             # SAVEPOINT: a request_number collision rolls back only this insert,

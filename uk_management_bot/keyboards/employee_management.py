@@ -230,6 +230,7 @@ def get_roles_management_keyboard(selected_roles: list = None, language: str = '
     roles = [
         ('executor', '🛠️', get_text('employee_management.keyboards.role_executor', language=language)),
         ('manager', '👨‍💼', get_text('employee_management.keyboards.role_manager', language=language)),
+        ('inspector', '🚶', get_text('employee_management.keyboards.role_inspector', language=language)),
         ('applicant', '👤', get_text('employee_management.keyboards.role_applicant', language=language))
     ]
 

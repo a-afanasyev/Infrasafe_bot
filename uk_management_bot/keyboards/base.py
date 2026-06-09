@@ -119,10 +119,20 @@ def get_main_keyboard_for_role(
         # Быстрый доступ к сменам отдельной кнопкой
         builder.add(KeyboardButton(text=get_text("main_menu.shift", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.my_shifts", language=language)))
+    elif active_role == "inspector":
+        # Клавиатура обходчика: одноцелевая роль — завести заявку с обхода
+        # (двор→дом, building-level). Создание доступно только approved-обходчику.
+        if user_status != "pending":
+            builder.add(KeyboardButton(text=get_text("main_menu.inspector_create", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
     else:
         # Базовые кнопки для заявителя/других ролей
-        # Не показываем кнопку "Создать заявку" для пользователей на модерации
-        if user_status != "pending":
+        # Кнопку "Создать заявку" (applicant-flow) НЕ показываем:
+        #  - пользователям на модерации (pending);
+        #  - менеджеру/админу (applicant-flow стал role-gated; менеджер заводит
+        #    заявки через call-центр/дашборд — план «Обходчик»).
+        if user_status != "pending" and active_role not in ("manager", "admin"):
             builder.add(KeyboardButton(text=get_text("main_menu.create_request", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.my_requests", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.acceptance", language=language)))  # Кнопка для приёмки выполненных заявок
@@ -135,11 +145,6 @@ def get_main_keyboard_for_role(
     # Кнопка выбор роли при наличии ≥2 ролей
     if len(unique_roles) > 1:
         builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))
-
-    # NOTE: Manager intentionally inherits applicant buttons (create request,
-    # my requests, acceptance) so managers in small teams can also submit
-    # maintenance requests. If role separation is needed later, remove these
-    # buttons from the manager keyboard and create a separate "submit as manager" flow.
 
     # Кнопки менеджера (только для активных ролей admin/manager)
     if active_role in ["admin", "manager"]:

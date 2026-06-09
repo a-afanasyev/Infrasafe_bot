@@ -118,28 +118,31 @@ class TestKanbanResponse:
 # ---------------------------------------------------------------------------
 
 class TestCreateRequestBody:
+    # Структурный контракт (план «Обходчик»): address_type + address_id обязательны.
+    _ADDR = {"address_type": "apartment", "address_id": 1}
+
     def test_valid_minimal(self):
         body = CreateRequestBody(
             category="Электрика",
             urgency="Обычная",
             description="Нет света",
+            **self._ADDR,
         )
-        assert body.source == "web"
+        assert body.address_type == "apartment"
+        assert body.address_id == 1
         assert body.media_files is None
-        assert body.apartment_id is None
 
     def test_valid_with_all_fields(self):
         body = CreateRequestBody(
             category="Сантехника",
             urgency="Срочная",
             description="Потоп",
-            apartment_id=5,
-            address="ул. Ленина 1",
-            source="bot",
+            address_type="building",
+            address_id=5,
             media_files=["file1.jpg"],
         )
-        assert body.apartment_id == 5
-        assert body.source == "bot"
+        assert body.address_type == "building"
+        assert body.address_id == 5
         assert len(body.media_files) == 1
 
     def test_invalid_urgency_raises(self):
@@ -148,6 +151,7 @@ class TestCreateRequestBody:
                 category="electricity",
                 urgency="INVALID",
                 description="test",
+                **self._ADDR,
             )
 
     @pytest.mark.parametrize("urgency", VALID_URGENCIES)
@@ -156,16 +160,21 @@ class TestCreateRequestBody:
             category="Электрика",
             urgency=urgency,
             description="test",
+            **self._ADDR,
         )
         assert body.urgency == urgency
 
     def test_missing_required_category_raises(self):
         with pytest.raises(Exception):
-            CreateRequestBody(urgency="Обычная", description="test")
+            CreateRequestBody(urgency="Обычная", description="test", **self._ADDR)
 
     def test_missing_required_description_raises(self):
         with pytest.raises(Exception):
-            CreateRequestBody(category="electricity", urgency="Обычная")
+            CreateRequestBody(category="electricity", urgency="Обычная", **self._ADDR)
+
+    def test_missing_address_raises(self):
+        with pytest.raises(Exception):
+            CreateRequestBody(category="Электрика", urgency="low", description="test")
 
 
 # ---------------------------------------------------------------------------

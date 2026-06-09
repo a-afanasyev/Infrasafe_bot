@@ -90,3 +90,22 @@ def require_roles(*roles: str):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return user
     return checker
+
+
+def require_approved_roles(*roles: str):
+    """Like ``require_roles`` but ALSO requires ``user.status == 'approved'``.
+
+    План «Обходчик» (R3/P0): ``get_current_user`` блокирует только ``blocked``,
+    поэтому pending-пользователь со старым токеном иначе прошёл бы на создание
+    заявки/адресные GET. Эта зависимость вешается ТОЛЬКО на целевые пути
+    (create + адресные GET). Не внутри ``require_roles`` — иначе затронула бы
+    ~68 эндпоинтов, где pending-доступ легитимен (онбординг).
+    """
+    async def checker(user: User = Depends(get_current_user)) -> User:
+        user_roles = _parse_user_roles(user)
+        if not any(r in user_roles for r in roles):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        if user.status != "approved":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not approved")
+        return user
+    return checker

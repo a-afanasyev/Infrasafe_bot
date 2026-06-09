@@ -10,8 +10,18 @@ interface ProfileResponse {
   active_role?: string | null
 }
 
+type GuardRole = 'applicant' | 'executor' | 'manager' | 'inspector'
+
+/** Role-aware "denied" copy, so an inspector-only route doesn't say "executors only". */
+const ROLE_DENIED_MESSAGE: Record<GuardRole, string> = {
+  applicant: 'twa.roleGuard.applicantOnly',
+  executor: 'twa.roleGuard.executorOnly',
+  manager: 'twa.roleGuard.managerOnly',
+  inspector: 'twa.roleGuard.inspectorOnly',
+}
+
 interface Props {
-  required: 'applicant' | 'executor' | 'manager'
+  required: GuardRole
   /** Where to send users that don't have the role. Default: /twa/app */
   fallback?: string
   children: React.ReactNode
@@ -49,7 +59,7 @@ export default function RoleGuard({ required, fallback = '/twa/app', children }:
 
   const roles = data?.roles ?? (data?.active_role ? [data.active_role] : [])
   if (!roles.includes(required)) {
-    return <DeniedRedirect fallback={fallback} message={t('twa.roleGuard.executorOnly')} />
+    return <DeniedRedirect fallback={fallback} message={t(ROLE_DENIED_MESSAGE[required])} />
   }
 
   return <>{children}</>

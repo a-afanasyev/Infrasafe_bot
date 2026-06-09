@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -21,6 +21,10 @@ class RequestCard(BaseModel):
     description: Optional[str] = None
     address: Optional[str] = None
     apartment_id: Optional[int] = None
+    # 3-уровневый структурированный адрес (план «Обходчик»).
+    building_id: Optional[int] = None
+    yard_id: Optional[int] = None
+    address_type: Optional[str] = None
     executor_id: Optional[int] = None
     executor_name: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -42,6 +46,22 @@ class RequestCard(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @model_validator(mode="after")
+    def _project_address_type(self) -> "RequestCard":
+        # Defensive-coalesce: если address_type не задан (немигрированная/legacy
+        # строка), проецируем его по заполненному FK — иначе старые квартирные
+        # заявки показались бы как legacy. Контракт карточки стабилен сразу.
+        if self.address_type is None:
+            if self.apartment_id is not None:
+                self.address_type = "apartment"
+            elif self.building_id is not None:
+                self.address_type = "building"
+            elif self.yard_id is not None:
+                self.address_type = "yard"
+            else:
+                self.address_type = "legacy"
+        return self
+
 
 class KanbanColumn(BaseModel):
     status: str
@@ -53,28 +73,59 @@ class KanbanResponse(BaseModel):
     columns: List[KanbanColumn]
 
 
+def _validate_request_category(v: str) -> str:
+    from uk_management_bot.config.settings import settings
+    valid = settings.REQUEST_CATEGORIES
+    if v not in valid:
+        raise ValueError(f"category must be one of: {valid}")
+    return v
+
+
 class CreateRequestBody(BaseModel):
+    """Структурный контракт жителя (план «Обходчик», пилот — один шаг).
+
+    Клиент передаёт уровень + id записи; адрес/FK/source считает сервер через
+    resolve_request_address. Legacy-поля (apartment_id/address/source в body)
+    исключены — под пилот без переходного окна.
+    """
+
     category: str
     urgency: str
     description: str
-    apartment_id: Optional[int] = None
-    address: Optional[str] = None
-    source: str = "web"
+    address_type: Literal["yard", "building", "apartment"]
+    address_id: int
     media_files: Optional[List[str]] = None
 
     @field_validator("category")
     @classmethod
     def validate_category(cls, v: str) -> str:
-        from uk_management_bot.config.settings import settings
-        valid = settings.REQUEST_CATEGORIES
-        if v not in valid:
-            raise ValueError(f"category must be one of: {valid}")
-        return v
+        return _validate_request_category(v)
 
     @field_validator("urgency")
     @classmethod
     def validate_urgency(cls, v: str) -> str:
         # Толерантно (Phase 1): ключ ИЛИ legacy-рус → ключ; иначе ValueError.
+        return validate_canonical_urgency(v)
+
+
+class CreateInspectorRequestBody(BaseModel):
+    """Контракт обходчика — building-only (двор/квартира → 422 на уровне схемы)."""
+
+    category: str
+    urgency: str
+    description: str
+    address_type: Literal["building"]
+    address_id: int
+    media_files: Optional[List[str]] = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        return _validate_request_category(v)
+
+    @field_validator("urgency")
+    @classmethod
+    def validate_urgency(cls, v: str) -> str:
         return validate_canonical_urgency(v)
 
 

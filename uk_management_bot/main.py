@@ -18,6 +18,7 @@ if settings.SENTRY_DSN:
 from uk_management_bot.database.session import engine, SessionLocal
 from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.requests import router as requests_router
+from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
 from uk_management_bot.handlers.shifts import router as shifts_router
 from uk_management_bot.handlers.admin import router as admin_router
 from uk_management_bot.handlers.auth import router as auth_router
@@ -335,6 +336,9 @@ async def main():
     
     # ВАЖНО: requests_router должен быть раньше onboarding_router для правильной работы Entry Handler
     # Это обеспечивает, что handler создания заявки срабатывает до handlers онбординга
+    # inspector_requests_router — ПЕРЕД requests_router: его insp_* + StateFilter не
+    # пересекаются с глобальными (не-стейт-фильтрованными) category_*/confirm_* applicant-flow.
+    dp.include_router(inspector_requests_router)  # обходчик: заявка с обхода (building-level)
     dp.include_router(requests_router)  # requests раньше для Entry Handler (создание заявки)
     
     dp.include_router(onboarding_router)

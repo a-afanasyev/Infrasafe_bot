@@ -28,7 +28,8 @@ USER_STATUS_BLOCKED = "blocked"
 ROLE_APPLICANT = "applicant"
 ROLE_EXECUTOR = "executor"
 ROLE_MANAGER = "manager"
-USER_ROLES = [ROLE_APPLICANT, ROLE_EXECUTOR, ROLE_MANAGER]
+ROLE_INSPECTOR = "inspector"
+USER_ROLES = [ROLE_APPLICANT, ROLE_EXECUTOR, ROLE_MANAGER, ROLE_INSPECTOR]
 
 # Статусы заявок
 # Обновлено 16.10.2025: синхронизировано с settings.py и request_service.py

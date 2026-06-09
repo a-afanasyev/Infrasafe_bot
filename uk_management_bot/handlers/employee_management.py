@@ -1250,7 +1250,15 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
         data = await state.get_data()
         target_employee_id = data.get('target_employee_id')
         current_roles = data.get('current_roles', [])
-        
+
+        # Запрет снятия последней роли (паритет с AuthService.remove_role):
+        # roles=[] недопустимо — у пользователя всегда должна быть хотя бы одна роль.
+        if not current_roles:
+            lang = language
+            await message.answer(get_text("employee_mgmt.handlers.cannot_remove_last_role", language=lang))
+            await state.clear()
+            return
+
         logger.debug(f" Обработка комментария ролей. target_employee_id={target_employee_id}, current_roles={current_roles}")
         
         # Получаем ID пользователя, который вносит изменения
@@ -1279,6 +1287,10 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
             user.roles = json.dumps(current_roles)
             if current_roles:
                 user.role = current_roles[0]  # Первая роль как основная
+                # Инвариант: active_role всегда ∈ roles. Если активная роль
+                # больше не входит в набор (или не задана) — переводим на первую.
+                if not user.active_role or user.active_role not in current_roles:
+                    user.active_role = current_roles[0]
             
             # Создаем запись в аудит логе
             try:

@@ -178,12 +178,13 @@ class TestGetEmployeeRolesManagementKeyboard:
             result = get_roles_management_keyboard(["executor"])
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_three_role_buttons_plus_save_cancel(self):
+    def test_role_buttons_plus_save_cancel(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.employee_management import get_roles_management_keyboard
             result = get_roles_management_keyboard([])
-        # executor + manager + applicant + save + cancel = 5
-        assert len(_flat_texts(result)) == 5
+        # executor + manager + inspector + applicant + save + cancel = 6
+        # (inspector добавлен — план «Обходчик»).
+        assert len(_flat_texts(result)) == 6
 
     def test_selected_role_has_checkmark(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
