@@ -55,8 +55,9 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Switch to executor mode (only for dual-role users) */}
+      {/* Switch to executor / inspector mode (only shown for users who hold the role) */}
       <RoleSwitchButton to="executor" />
+      <RoleSwitchButton to="inspector" />
 
       {/* Apartments */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">

@@ -58,8 +58,9 @@ export default function ExecutorProfilePage() {
         </div>
       )}
 
-      {/* Switch to applicant mode (only for dual-role users) */}
+      {/* Switch to applicant / inspector mode (only shown for users who hold the role) */}
       <RoleSwitchButton to="applicant" />
+      <RoleSwitchButton to="inspector" />
 
       {specializations.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 mb-3">
