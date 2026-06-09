@@ -165,3 +165,74 @@ def test_queue_webhook_sync_propagates_coords_to_outbox(sync_session, webhook_en
     row = sync_session.query(WebhookOutbox).first()
     assert row.payload["building"]["latitude"] == 41.111
     assert row.payload["building"]["longitude"] == 69.222
+
+
+# ===== PR6 (SSOT cluster #1): async/sync parity via shared outbox builder =====
+
+from unittest.mock import MagicMock  # noqa: E402
+
+import uk_management_bot.services.webhook_sender as ws  # noqa: E402
+from uk_management_bot.services.webhook_sender import queue_webhook  # noqa: E402
+
+
+def _normalize(record: WebhookOutbox) -> dict:
+    """Record fields + payload без недетерминированных event_id/timestamp."""
+    payload = dict(record.payload)
+    payload.pop("event_id", None)
+    payload.pop("timestamp", None)
+    return {
+        "event": record.event,
+        "endpoint": record.endpoint,
+        "status": record.status,
+        "payload": payload,
+        "event_id_matches_payload": record.event_id == record.payload["event_id"],
+    }
+
+
+async def _capture_async_record(event, endpoint, data) -> WebhookOutbox:
+    db = MagicMock()
+    await queue_webhook(db, event, endpoint, data)
+    db.add.assert_called_once()
+    return db.add.call_args.args[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event,endpoint,data",
+    [
+        ("building.created", "/api/webhooks/uk/building",
+         {"id": 1, "address": "A", "yard_name": "Y"}),
+        ("request.status_changed", "/api/webhooks/uk/request",
+         {"request_number": "260610-001", "old_status": "В работе",
+          "new_status": "Выполнена"}),
+        # generic-ветка (не building.*/request.*)
+        ("shift.opened", "/api/webhooks/uk/shift", {"shift_id": 7}),
+    ],
+)
+async def test_async_sync_outbox_parity(sync_session, webhook_enabled,
+                                        event, endpoint, data):
+    """queue_webhook и queue_webhook_sync строят ИДЕНТИЧНЫЕ outbox-записи.
+
+    Раньше builder был скопирован в обе функции с комментарием «keep in
+    sync» — этот тест ловит расхождение, если копии разъедутся (а после
+    PR6 закрепляет общий _build_outbox_record).
+    """
+    async_record = await _capture_async_record(event, endpoint, data)
+
+    queue_webhook_sync(sync_session, event, endpoint, data)
+    sync_record = sync_session.query(WebhookOutbox).first() or \
+        [o for o in sync_session.new if isinstance(o, WebhookOutbox)][0]
+
+    assert _normalize(async_record) == _normalize(sync_record)
+
+
+def test_both_queue_functions_use_shared_builder():
+    """PR6: обе queue_webhook* должны звать единый _build_outbox_record
+    (никаких скопированных builder'ов с 'keep in sync')."""
+    import inspect
+
+    assert hasattr(ws, "_build_outbox_record"), \
+        "shared _build_outbox_record helper must exist (PR6)"
+    for fn in (ws.queue_webhook, ws.queue_webhook_sync):
+        assert "_build_outbox_record" in inspect.getsource(fn), \
+            f"{fn.__name__} must delegate to _build_outbox_record"
