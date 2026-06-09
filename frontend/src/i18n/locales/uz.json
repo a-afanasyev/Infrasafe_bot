@@ -329,6 +329,8 @@
     "forceAcceptReason": "Aholisiz qabul qilish sababi",
     "forceAcceptPlaceholder": "Kamida 10 belgi — masalan: aholi 3 kun davomida aloqaga chiqmadi, ishlar vizual qabul qilindi",
     "history": "Tarix",
+    "photos": "Surat",
+    "mediaError": "Yuklab bo'lmadi",
     "managerNote": "Menejer eslatmasi",
     "addNote": "Eslatma qo'shish...",
     "reopenBadge": "Takroriy murojaat №{{n}}",

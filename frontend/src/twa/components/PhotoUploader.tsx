@@ -1,7 +1,7 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
-import { Camera, Image as ImageIcon, X } from 'lucide-react'
+import { Camera, Image as ImageIcon, X, Film } from 'lucide-react'
 
 interface Props {
   files: File[]
@@ -23,12 +23,32 @@ export default function PhotoUploader({
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
 
-  // Stable blob URLs tied to file identity; revoked on file removal or unmount
-  // (TWA-10). Avoids inline URL.createObjectURL on every render.
-  const urls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files])
+  // Site-wide CSP (infrasafe-nginx on /uk/*) disallows blob: in img-src, so a
+  // URL.createObjectURL preview is silently blocked inside the Telegram WebView
+  // (mirrors MediaGallery/FeedbackDetailModal). Read each image File into a
+  // data: URL (allowed by img-src) instead. Videos aren't rendered in <img>
+  // anyway → skip the (heavy) base64 read and show a placeholder tile.
+  const [previews, setPreviews] = useState<string[]>([])
   useEffect(() => {
-    return () => urls.forEach((u) => URL.revokeObjectURL(u))
-  }, [urls])
+    let cancelled = false
+    Promise.all(
+      files.map((f) =>
+        f.type.startsWith('image/')
+          ? new Promise<string>((resolve) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+              reader.onerror = () => resolve('')
+              reader.readAsDataURL(f)
+            })
+          : Promise.resolve('')
+      )
+    ).then((urls) => {
+      if (!cancelled) setPreviews(urls)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [files])
 
   const handleAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files || [])
@@ -52,11 +72,17 @@ export default function PhotoUploader({
       <div className="flex flex-wrap gap-2 mb-2">
         {files.map((_, i) => (
           <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-            <img
-              src={urls[i]}
-              alt=""
-              className="w-full h-full object-cover"
-            />
+            {previews[i] ? (
+              <img
+                src={previews[i]}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-400">
+                <Film size={20} />
+              </div>
+            )}
             <button
               aria-label={t('twa.photo.remove')}
               onClick={() => handleRemove(i)}

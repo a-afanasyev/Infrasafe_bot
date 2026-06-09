@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ImageOff, X as XIcon } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import { tStatus, tUrgency, tCategory } from '../../i18n/apiMaps'
@@ -346,6 +346,9 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 </p>
               )}
 
+              {/* Media (фото/видео заявки). Раздел скрывается, если медиа нет. */}
+              <RequestMedia requestNumber={request.request_number} />
+
               {/* Meta */}
               <div className="flex flex-col gap-1">
                 <div className="text-xs text-text-secondary">
@@ -585,6 +588,134 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
       />
     )}
     </>
+  )
+}
+
+interface MediaItem {
+  id: number
+  file_type: string
+  mime_type: string
+  category?: string | null
+}
+
+// Site-wide CSP (infrasafe-nginx) запрещает blob: в img-src → грузим байты
+// через apiClient (Bearer) и конвертируем в data: URL (как FeedbackDetailModal /
+// twa/MediaGallery). Без этого фото к заявке не отображались на канбане вовсе —
+// раздела медиа в модалке просто не было.
+async function fetchMediaDataUrl(mediaId: number): Promise<string> {
+  const r = await apiClient.get(`/api/v2/media/${mediaId}/file`, { responseType: 'blob' })
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => (typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('bad')))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(r.data as Blob)
+  })
+}
+
+function RequestMedia({ requestNumber }: { requestNumber: string }) {
+  const { t } = useTranslation()
+  const [lightboxId, setLightboxId] = useState<number | null>(null)
+
+  const { data: items = [] } = useQuery<MediaItem[]>({
+    queryKey: ['request-media', requestNumber],
+    queryFn: () => apiClient.get(`/api/v2/media/request/${requestNumber}`).then(r => r.data),
+    enabled: !!requestNumber,
+    staleTime: 60_000,
+  })
+
+  if (items.length === 0) return null
+
+  return (
+    <div>
+      <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
+        {t('kanban.photos')}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((m) => (
+          <MediaThumb key={m.id} id={m.id} isVideo={m.file_type === 'video'} onOpen={() => setLightboxId(m.id)} />
+        ))}
+      </div>
+      {lightboxId !== null && (
+        <MediaLightbox key={lightboxId} id={lightboxId} onClose={() => setLightboxId(null)} />
+      )}
+    </div>
+  )
+}
+
+function MediaThumb({ id, isVideo, onOpen }: { id: number; isVideo: boolean; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const [url, setUrl] = useState<string | null>(null)
+  const [errored, setErrored] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchMediaDataUrl(id)
+      .then((d) => { if (!cancelled) setUrl(d) })
+      .catch(() => { if (!cancelled) setErrored(true) })
+    return () => { cancelled = true }
+  }, [id])
+
+  if (errored) {
+    return (
+      <div className="w-20 h-20 rounded-lg border border-border-default bg-bg-surface flex items-center justify-center text-text-secondary" title={t('kanban.mediaError')}>
+        <ImageOff size={18} />
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="relative w-20 h-20 rounded-lg overflow-hidden border border-border-default bg-bg-surface"
+    >
+      {url ? (
+        isVideo ? (
+          <video src={url} className="w-full h-full object-cover" muted />
+        ) : (
+          <img src={url} alt="" className="w-full h-full object-cover" />
+        )
+      ) : (
+        <div className="w-full h-full animate-pulse bg-bg-surface" />
+      )}
+      {isVideo && (
+        <span className="absolute inset-0 flex items-center justify-center text-white text-lg drop-shadow">▶</span>
+      )}
+    </button>
+  )
+}
+
+function MediaLightbox({ id, onClose }: { id: number; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [isVideo, setIsVideo] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchMediaDataUrl(id)
+      .then((d) => { if (!cancelled) { setUrl(d); setIsVideo(d.startsWith('data:video')) } })
+      .catch(() => { if (!cancelled) onClose() })
+    return () => { cancelled = true }
+  }, [id, onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/15 text-white flex items-center justify-center"
+      >
+        <XIcon size={18} />
+      </button>
+      {url && (
+        isVideo ? (
+          <video src={url} controls autoPlay className="max-w-full max-h-[85vh] rounded-lg" onClick={(e) => e.stopPropagation()} />
+        ) : (
+          <img src={url} alt="" className="max-w-full max-h-[85vh] rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+        )
+      )}
+    </div>
   )
 }
 
