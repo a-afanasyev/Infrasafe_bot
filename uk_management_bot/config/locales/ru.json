@@ -7847,6 +7847,7 @@
     "handlers": {
       "request_not_found": "Заявка не найдена",
       "not_your_request": "Это не ваша заявка",
+      "not_awaiting_acceptance": "Заявка не ожидает приёмки",
       "request_title": "Заявка",
       "category": "Категория",
       "address": "Адрес",
