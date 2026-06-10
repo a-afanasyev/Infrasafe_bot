@@ -102,16 +102,32 @@ def collect_read_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 
 
 # ---------------------------------------------------------------------------
-# BASELINE — зафиксировано PR2-pre/1 (2026-06-10). Миграция чтений на парные
-# предикаты (PR2-pre/2) СЖИМАЕТ список; цель перед PR2a — пусто (кроме
-# ALLOWLIST_FILES, исключённых сканом).
+# BASELINE — PR2-pre/1 (2026-06-10), сжат в PR2-pre/2 (2026-06-10).
+#
+# PR2-pre/2 мигрировал на парные предикаты ВСЮ composite-flag поверхность
+# (manager_confirmed/is_returned) — единственное, что ломается при canonical-
+# write модели A (Выполнена+confirmed → Исполнено). Это admin.py (dashboard-
+# счётчики/списки + keyboard-блок) и unaccepted_requests.py (полностью).
+#
+# Оставшиеся записи — ОСОЗНАННО сырые, по категориям:
+#   • FALSE-POSITIVE — receiver не заявка (User/resident/membership/shift),
+#     помечены инлайн;
+#   • status-фильтры, НЕ затрагиваемые нормализацией A (NEW/active/Уточнение/
+#     Отменена/closed-наборы, навигация, дисптч/оптимизаторы/метрики) —
+#     значения статусов сохраняются по обе стороны cutover;
+#   • DEFER→PR2a — request_reports.py (status==Исполнено): под каноном смысл
+#     «Исполнено» раздваивается, решение принимается с writer'ом;
+#   • API-ответы/reconciliation — проекция project_*_status ОТЛОЖЕНА до
+#     cutover (PR3/PR4): отличается от identity только для статуса «Возвращена»,
+#     а он не пишется в БД до backfill → сейчас инертна (решение 2026-06-10).
 # ---------------------------------------------------------------------------
 
 BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/api/dependencies_access.py', 'cmp:request', 'status'),
     ('uk_management_bot/api/public/router.py', 'cmp:RequestModel', 'status'),
     ('uk_management_bot/api/public/router.py', 'in_:RequestModel', 'status'),
-    # false-positive кандидат: existing = User (status пользователя) — разобрать в PR2-pre/2
+    # FALSE-POSITIVE (подтверждено PR2-pre/2): existing = User, status "blocked"/
+    # "approved" (router.py:50,52) — не workflow заявки.
     ('uk_management_bot/api/registration/router.py', 'cmp:existing', 'status'),
     ('uk_management_bot/api/requests/router.py', 'cmp:RequestModel', 'status'),
     ('uk_management_bot/api/requests/router.py', 'cmp:r', 'status'),
@@ -121,18 +137,26 @@ BASELINE: set[tuple[str, str, str]] = {
     # одноразовый migration-скрипт (write-гейт уже фиксирует его update())
     ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'cmp:Request', 'manager_confirmed'),
     ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'cmp:Request', 'status'),
+    # FALSE-POSITIVE/вне scope (подтверждено PR2-pre/2): self.request.status in
+    # ["completed","cancelled"] (shift_assignment.py:212) — non-canon значения,
+    # подсистема смен (вне scope), фактически всегда False.
     ('uk_management_bot/database/models/shift_assignment.py', 'cmp:request', 'status'),
-    # false-positive кандидат: r = apartment/иное — разобрать в PR2-pre/2
+    # FALSE-POSITIVE (подтверждено PR2-pre/2): r = resident (UserApartment),
+    # status 'approved'/'pending'/'rejected' (address_apartments.py:377-379).
     ('uk_management_bot/handlers/address_apartments.py', 'cmp:r', 'status'),
-    ('uk_management_bot/handlers/admin.py', 'cmp:Request', 'is_returned'),
-    ('uk_management_bot/handlers/admin.py', 'cmp:Request', 'manager_confirmed'),
+    # PR2-pre/2: composite-флаги (manager_confirmed/is_returned) admin.py
+    # мигрированы на предикаты awaiting_manager/awaiting_applicant/returned_for_review.
+    # Остаются простые status-фильтры, НЕ затрагиваемые канон-нормализацией A
+    # (NEW/active-навигация :853-884) + display-маркер возврата (:882/:1167).
     ('uk_management_bot/handlers/admin.py', 'cmp:Request', 'status'),
     ('uk_management_bot/handlers/admin.py', 'cmp:r', 'status'),
     ('uk_management_bot/handlers/admin.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/admin.py', 'if:r', 'is_returned'),
-    ('uk_management_bot/handlers/admin.py', 'if:request', 'manager_confirmed'),
     ('uk_management_bot/handlers/admin.py', 'in_:Request', 'status'),
     ('uk_management_bot/handlers/clarification_replies.py', 'cmp:request', 'status'),
+    # DEFER→PR2a: status==Исполнено (request_reports.py:118,239) — под каноном
+    # «Исполнено» раздваивается (confirmed-awaiting vs returned); продуктовое
+    # решение принимается вместе с canonical-writer.
     ('uk_management_bot/handlers/request_reports.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/request_status_management.py', 'in_:Request', 'status'),
     ('uk_management_bot/handlers/requests.py', 'cmp:r', 'status'),
@@ -140,12 +164,10 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/handlers/requests.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/requests.py', 'in_:Request', 'status'),
     ('uk_management_bot/handlers/shifts.py', 'in_:Request', 'status'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'cmp:Request', 'is_returned'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'cmp:Request', 'manager_confirmed'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'cmp:request', 'status'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'if:request', 'is_returned'),
-    # false-positive кандидат: existing = адресная сущность
+    # PR2-pre/2: unaccepted_requests.py ПОЛНОСТЬЮ мигрирован на
+    # is_awaiting_applicant / awaiting_applicant_clause — сырых чтений не осталось.
+    # FALSE-POSITIVE (подтверждено PR2-pre/2): existing = членство в адресе,
+    # status "pending"/"approved"/"rejected" (addresses/core.py:483-487).
     ('uk_management_bot/services/addresses/core.py', 'cmp:existing', 'status'),
     ('uk_management_bot/services/assignment_optimizer.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/async_request_service.py', 'cmp:Request', 'status'),
