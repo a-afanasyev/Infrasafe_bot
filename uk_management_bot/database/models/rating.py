@@ -1,11 +1,17 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
 
 class Rating(Base):
     __tablename__ = "ratings"
-    
+
+    # Constraints-фаза SSOT (миграция 018): одна оценка на заявку — DB-гарантия
+    # идемпотентности приёмки (повторный APPLICANT_ACCEPT не создаст дубль).
+    __table_args__ = (
+        UniqueConstraint("request_number", name="uq_ratings_request_number"),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     
     # Связь с заявкой

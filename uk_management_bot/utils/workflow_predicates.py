@@ -90,3 +90,43 @@ def can_accept(request, user, approved_apartment_ids: Iterable[int]) -> bool:
 def can_return(request, user) -> bool:
     """Вернуть может ТОЛЬКО владелец заявки."""
     return request.user_id == user.id
+
+
+# ---------------------------------------------------------------------------
+# PR2-pre: полный набор парных предикатов (Python-форма + SQL-clause).
+# Каждое ИМЕНОВАННОЕ состояние читается только через пару — сырые сравнения
+# status/manager_confirmed/is_returned в чтениях ловит read-инвентаризация
+# (tests/services/test_workflow_read_inventory.py).
+# ---------------------------------------------------------------------------
+
+def is_awaiting_manager(request) -> bool:
+    """Ждёт проверки менеджером: Выполнена и НЕ подтверждена.
+
+    Канон-записи (canonical-write, PR2a-c) выглядят так же: MANAGER_CONFIRM
+    сразу продвигает в Исполнено, поэтому Выполнена всегда «ждёт менеджера».
+    """
+    return (request.status == REQUEST_STATUS_EXECUTED
+            and not bool(getattr(request, "manager_confirmed", False)))
+
+
+def awaiting_manager_clause() -> ColumnElement:
+    return and_(
+        Request.status == REQUEST_STATUS_EXECUTED,
+        Request.manager_confirmed.is_(False),
+    )
+
+
+def is_returned_for_review(request) -> bool:
+    """Канон «Возвращена»: возвращена заявителем, ждёт разбора менеджером.
+
+    Legacy-кодировка (до cutover): Исполнено + is_returned=True.
+    """
+    return (request.status == REQUEST_STATUS_COMPLETED
+            and bool(getattr(request, "is_returned", False)))
+
+
+def returned_for_review_clause() -> ColumnElement:
+    return and_(
+        Request.status == REQUEST_STATUS_COMPLETED,
+        Request.is_returned.is_(True),
+    )
