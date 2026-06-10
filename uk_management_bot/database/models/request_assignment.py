@@ -3,7 +3,7 @@
 Обеспечивает систему назначения заявок группам и конкретным исполнителям
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -11,9 +11,22 @@ from uk_management_bot.database.session import Base
 
 class RequestAssignment(Base):
     """Модель назначений заявок"""
-    
+
     __tablename__ = "request_assignments"
-    
+
+    # Constraints-фаза SSOT (миграция 018): не более ОДНОГО активного
+    # назначения на заявку. Partial-unique (WHERE status='active'), а не
+    # unique-по-заявке — история cancelled/completed назначений сохраняется.
+    __table_args__ = (
+        Index(
+            "uq_request_assignments_active",
+            "request_number",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
     # Основные поля
     id = Column(Integer, primary_key=True, index=True)
     request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
