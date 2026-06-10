@@ -311,12 +311,12 @@ class TestCancel:
         assert "отменено менеджером" in (req.notes or "")
         s.close()
 
-    def test_cancel_requires_reason(self, factory):
-        from uk_management_bot.utils.request_workflow import PayloadInvalid
+    def test_bare_cancel_succeeds(self, factory):
+        """PR2b: reason опционален — дашборд-drag в «Отменена» шлёт голый статус."""
         SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
-        with pytest.raises(PayloadInvalid):
-            run_command_sync(SF, "260610-001", _mgr(),
-                             ActionCommand("c", Action.CANCEL, {}))
+        out = run_command_sync(SF, "260610-001", _mgr(),
+                               ActionCommand("c", Action.CANCEL, {}))
+        assert out.new_status == C.REQUEST_STATUS_CANCELLED
 
 
 class TestManagerComplete:
@@ -379,9 +379,17 @@ class TestClarifyRequest:
         assert "вопрос менеджера" in (req.notes or "")
         s.close()
 
-    def test_rejected_from_purchase(self, factory):
-        from uk_management_bot.utils.request_workflow import InvalidTransition
+    def test_allowed_from_purchase(self, factory):
+        """PR2b: канон расширен — Закуп→Уточнение разрешён менеджеру (дашборд-ребро)."""
         SF = _seed(factory, status=C.REQUEST_STATUS_PURCHASE)
+        out = run_command_sync(SF, "260610-001", _mgr(),
+                               ActionCommand("c", Action.CLARIFY_REQUEST,
+                                             {"question": "q"}))
+        assert out.new_status == C.REQUEST_STATUS_CLARIFICATION
+
+    def test_rejected_from_executed(self, factory):
+        from uk_management_bot.utils.request_workflow import InvalidTransition
+        SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED)
         with pytest.raises(InvalidTransition):
             run_command_sync(SF, "260610-001", _mgr(),
                              ActionCommand("c", Action.CLARIFY_REQUEST,
@@ -393,6 +401,50 @@ class TestClarifyRequest:
             run_command_sync(SF, "260610-001", _owner(),
                              ActionCommand("c", Action.CLARIFY_REQUEST,
                                            {"question": "q"}))
+
+
+class TestManagerPurchase:
+    """PR2b: менеджерский MANAGER_PURCHASE → Закуп (дашборд-рёбра Новая/В работе→Закуп).
+    requested_materials опционален (Kanban-drag шлёт только статус)."""
+
+    def test_writes_purchase_from_new(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+        out = run_command_sync(SF, "260610-001", _mgr(),
+                               ActionCommand("c", Action.MANAGER_PURCHASE, {}))
+        assert out.new_status == C.REQUEST_STATUS_PURCHASE
+
+    def test_writes_purchase_from_in_progress_with_materials(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        run_command_sync(SF, "260610-001", _mgr(),
+                         ActionCommand("c", Action.MANAGER_PURCHASE,
+                                       {"requested_materials": "трубы"}))
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.status == C.REQUEST_STATUS_PURCHASE
+        assert req.requested_materials == "трубы"
+        s.close()
+
+    def test_non_manager_rejected(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+        with pytest.raises(NotAuthorized):
+            run_command_sync(SF, "260610-001", _owner(),
+                             ActionCommand("c", Action.MANAGER_PURCHASE, {}))
+
+
+class TestManagerReturnToWork:
+    """PR2b: канон расширен — Исполнено→В работе менеджером (re-open подтверждённой)."""
+
+    def test_return_from_completed_clears_confirmed(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED, manager_confirmed=True)
+        out = run_command_sync(SF, "260610-001", _mgr(),
+                               ActionCommand("c", Action.MANAGER_RETURN_TO_WORK, {}))
+        assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.status == C.REQUEST_STATUS_IN_PROGRESS
+        assert req.manager_confirmed is False
+        assert req.is_returned is False
+        s.close()
 
 
 class TestRunnerContract:
@@ -416,10 +468,46 @@ class TestRunnerContract:
 
 
 # ---------------------------------------------------------------------------
-# Parity sync/async — только на Postgres (async-движок требует asyncpg)
+# Parity sync/async — общий чистый _decide гарантирует эквивалентность; тест
+# защищает от расхождения ORM-I/O обёрток. Async-движок прогоняется на
+# in-memory aiosqlite (StaticPool — общая БД между сессиями factory).
 # ---------------------------------------------------------------------------
 
+async def _async_run(status, command):
+    """Поднять async aiosqlite-движок, засеять заявку, прогнать run_command_async."""
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with AF() as s:
+        s.add(User(id=3, telegram_id=3, first_name="Mgr", roles='["manager"]',
+                   active_role="manager", status="approved", language="ru"))
+        s.add(Request(request_number="260610-001", user_id=2, category="c",
+                      description="d", urgency="low", status=status))
+        await s.commit()
+    try:
+        return await run_command_async(AF, "260610-001", _mgr(), command)
+    finally:
+        await engine.dispose()
+
+
 class TestParity:
-    @pytest.mark.skip(reason="async-движок требует Postgres/asyncpg — проверяется в PR2b")
-    def test_sync_async_parity(self):
-        ...
+    def test_sync_async_parity(self, factory):
+        """Один и тот же MANAGER_CONFIRM через sync и async → идентичный outcome."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED)
+        sync_out = run_command_sync(SF, "260610-001", _mgr(),
+                                    ActionCommand("c", Action.MANAGER_CONFIRM, {}))
+        async_out = asyncio.run(
+            _async_run(C.REQUEST_STATUS_EXECUTED,
+                       ActionCommand("c", Action.MANAGER_CONFIRM, {})))
+        assert async_out.new_status == sync_out.new_status
+        assert async_out.new_canon_status == sync_out.new_canon_status
+        assert async_out.public_status == sync_out.public_status
+        assert async_out.no_op == sync_out.no_op
+        assert {i.kind for i in async_out.post_commit_intents} == \
+               {i.kind for i in sync_out.post_commit_intents}
