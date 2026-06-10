@@ -28,6 +28,13 @@ from uk_management_bot.services.notification_service import async_notify_request
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_EXECUTED, REQUEST_STATUS_COMPLETED, REQUEST_STATUS_APPROVED,
 )
+from uk_management_bot.utils.workflow_predicates import (
+    awaiting_applicant_clause,
+    can_accept,
+    can_return,
+    get_approved_apartment_ids,
+    is_awaiting_applicant,
+)
 
 import logging
 
@@ -80,11 +87,14 @@ async def show_pending_acceptance_requests(message: Message, db: Session = None)
         if user_apartment_ids:
             ownership_filter.append(Request.apartment_id.in_(user_apartment_ids))
 
+        # HF-0: dual-filter — обе живые кодировки «ожидает приёмки»
+        # (web: Исполнено; telegram: Выполнена+manager_confirmed), возвращённые
+        # исключены (ждут reconfirm менеджера, а не приёмки).
         requests = (
             db.query(Request)
             .filter(
                 or_(*ownership_filter),
-                Request.status == REQUEST_STATUS_COMPLETED,
+                awaiting_applicant_clause(),
             )
             .order_by(Request.updated_at.desc())
             .limit(10)
@@ -154,9 +164,14 @@ async def view_completed_request(callback: CallbackQuery, db: Session = None, la
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем, что это заявка этого пользователя
+        # HF-0: смотреть может владелец или одобренный сосед (та же семантика,
+        # что у списка приёмки — иначе сосед из списка получает отказ).
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if request.user_id != user.id:
+        if not user:
+            lang = language
+            await callback.answer(get_text("request_acceptance.handlers.user_not_found", language=lang), show_alert=True)
+            return
+        if not can_accept(request, user, get_approved_apartment_ids(db, user.id)):
             lang = language
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=lang), show_alert=True)
             return
@@ -339,18 +354,32 @@ async def save_rating(callback: CallbackQuery, db: Session = None, language: str
             await callback.answer(get_text("request_acceptance.handlers.user_not_found", language=lang), show_alert=True)
             return
 
-        # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        # HF-0: загрузка под FOR UPDATE (защита от гонки с параллельным
+        # изменением статуса; на SQLite — no-op).
+        request = (
+            db.query(Request)
+            .filter(Request.request_number == request_number)
+            .with_for_update()
+            .first()
+        )
 
         if not request:
             lang = language
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем, что это заявка этого пользователя
-        if request.user_id != user.id:
+        # HF-0: принять может владелец или одобренный сосед.
+        if not can_accept(request, user, get_approved_apartment_ids(db, user.id)):
             lang = language
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=lang), show_alert=True)
+            return
+
+        # HF-0: guard состояния — принять можно только заявку, ожидающую
+        # приёмки (Исполнено или Выполнена+manager_confirmed; возвращённые
+        # ждут reconfirm менеджера). Закрывает поддельные callback'и.
+        if not is_awaiting_applicant(request):
+            lang = language
+            await callback.answer(get_text("request_acceptance.handlers.not_awaiting_acceptance", language=lang), show_alert=True)
             return
 
         # Создаём оценку
@@ -541,12 +570,31 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
                 await message_obj.answer(get_text("request_acceptance.handlers.user_not_found", language="ru"))
             return
 
-        # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        # HF-0: загрузка под FOR UPDATE (на SQLite — no-op).
+        request = (
+            db.query(Request)
+            .filter(Request.request_number == request_number)
+            .with_for_update()
+            .first()
+        )
 
         if not request:
             if message_obj:
                 await message_obj.answer(get_text("request_acceptance.handlers.request_not_found", language="ru"))
+            return
+
+        # HF-0: вернуть может ТОЛЬКО владелец (сосед может принять, но не вернуть).
+        if not can_return(request, user):
+            if message_obj:
+                await message_obj.answer(get_text("request_acceptance.handlers.not_your_request", language="ru"))
+            return
+
+        # HF-0: guard состояния — вернуть можно только заявку, ожидающую
+        # приёмки; уже возвращённая ждёт reconfirm менеджера (повторный
+        # возврат запрещён).
+        if not is_awaiting_applicant(request):
+            if message_obj:
+                await message_obj.answer(get_text("request_acceptance.handlers.not_awaiting_acceptance", language="ru"))
             return
 
         # Устанавливаем флаг возврата

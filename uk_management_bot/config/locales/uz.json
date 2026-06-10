@@ -7848,6 +7848,7 @@
     "handlers": {
       "request_not_found": "Buyurtma topilmadi",
       "not_your_request": "Bu sizning buyurtmangiz emas",
+      "not_awaiting_acceptance": "Buyurtma qabul qilishni kutmayapti",
       "request_title": "Buyurtma",
       "category": "Kategoriya",
       "address": "Manzil",
