@@ -19,7 +19,11 @@ from uk_management_bot.keyboards.admin import get_manager_main_keyboard, get_man
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_EXECUTED, REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_APPROVED,
+)
+from uk_management_bot.utils.workflow_predicates import (
+    is_awaiting_applicant,
+    awaiting_applicant_clause,
 )
 from uk_management_bot.utils.helpers import get_text
 
@@ -59,8 +63,8 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
             await callback.answer(get_text("unaccepted.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем что заявка действительно непринята
-        if request.status != REQUEST_STATUS_EXECUTED or not request.manager_confirmed or request.is_returned:
+        # Проверяем что заявка действительно непринята (ожидает приёмки заявителем)
+        if not is_awaiting_applicant(request):
             await callback.answer(get_text("unaccepted.handlers.request_already_processed", language=lang), show_alert=True)
             return
 
@@ -138,8 +142,8 @@ async def handle_manager_accept_request(callback: CallbackQuery, state: FSMConte
             await callback.answer(get_text("unaccepted.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем что заявка действительно непринята
-        if request.status != REQUEST_STATUS_EXECUTED or not request.manager_confirmed or request.is_returned:
+        # Проверяем что заявка действительно непринята (ожидает приёмки заявителем)
+        if not is_awaiting_applicant(request):
             await callback.answer(get_text("unaccepted.handlers.request_already_processed", language=lang), show_alert=True)
             return
 
@@ -188,8 +192,8 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
             await state.clear()
             return
 
-        # Проверяем что заявка всё ещё непринята
-        if request.status != REQUEST_STATUS_EXECUTED or not request.manager_confirmed or request.is_returned:
+        # Проверяем что заявка всё ещё непринята (ожидает приёмки заявителем)
+        if not is_awaiting_applicant(request):
             await message.answer(get_text("unaccepted.handlers.request_already_processed", language=lang))
             await state.clear()
             return
@@ -303,11 +307,7 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, db: Session, r
         # Получаем список непринятых заявок
         q = (
             db.query(Request)
-            .filter(
-                Request.status == REQUEST_STATUS_EXECUTED,
-                Request.manager_confirmed == True,
-                Request.is_returned == False
-            )
+            .filter(awaiting_applicant_clause())
             .order_by(
                 Request.completed_at.desc().nullslast(),
                 Request.updated_at.desc().nullslast(),

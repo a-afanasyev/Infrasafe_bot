@@ -40,6 +40,13 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CANCELLED,
 )
+from uk_management_bot.utils.workflow_predicates import (
+    is_awaiting_applicant,
+    is_awaiting_manager,
+    awaiting_applicant_clause,
+    awaiting_manager_clause,
+    returned_for_review_clause,
+)
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 import logging
@@ -359,8 +366,8 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             get_unaccepted_request_actions_keyboard
         )
 
-        # Для исполненных, но непринятых заявок - специальная клавиатура
-        if request.status == REQUEST_STATUS_EXECUTED and request.manager_confirmed and not request.is_returned:
+        # Для исполненных, но непринятых заявок (ожидают приёмки заявителем) - специальная клавиатура
+        if is_awaiting_applicant(request):
             # Добавляем информацию о времени ожидания принятия
             from datetime import datetime, timezone
             completed_at = request.completed_at if request.completed_at else request.updated_at
@@ -392,8 +399,8 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
                 rows.insert(-1, [InlineKeyboardButton(text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{request.request_number}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
-        # Для исполненных заявок (ожидающих подтверждения) - специальная клавиатура
-        elif request.status == REQUEST_STATUS_EXECUTED:
+        # Для заявок, ожидающих подтверждения менеджером - специальная клавиатура
+        elif is_awaiting_manager(request):
             actions_kb = get_manager_completed_request_actions_keyboard(request.request_number, is_returned=request.is_returned)
 
             # Добавляем кнопку медиа если есть
@@ -1102,26 +1109,14 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
         return
 
     # Получаем статистику
-    # "Всего исполненных" = заявки ожидающие подтверждения менеджером (manager_confirmed = False)
-    total_completed = db.query(Request).filter(
-        Request.status == REQUEST_STATUS_EXECUTED,
-        Request.manager_confirmed == False
-    ).count()
+    # "Всего исполненных" = заявки, ожидающие подтверждения менеджером
+    total_completed = db.query(Request).filter(awaiting_manager_clause()).count()
 
-    # Возвращённые = те, что были отправлены обратно исполнителю
-    # Статус "Исполнено" - когда заявка возвращена заявителем на доработку
-    returned_count = db.query(Request).filter(
-        Request.status == REQUEST_STATUS_COMPLETED,
-        Request.is_returned == True,
-        Request.manager_confirmed == False  # Ещё не подтверждены после возврата
-    ).count()
+    # Возвращённые = заявка возвращена заявителем на доработку (ждёт разбора менеджером)
+    returned_count = db.query(Request).filter(returned_for_review_clause()).count()
 
     # Не принятые = подтверждены менеджером, но не приняты заявителем
-    unaccepted_count = db.query(Request).filter(
-        Request.status == REQUEST_STATUS_EXECUTED,
-        Request.manager_confirmed == True,
-        Request.is_returned == False
-    ).count()
+    unaccepted_count = db.query(Request).filter(awaiting_applicant_clause()).count()
 
     stats_text = get_text("admin.handlers.completed_requests_stats", language=lang).format(
         total_completed=total_completed,
@@ -1149,10 +1144,7 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
     # (ожидают проверки и подтверждения менеджером)
     q = (
         db.query(Request)
-        .filter(
-            Request.status == REQUEST_STATUS_EXECUTED,
-            Request.manager_confirmed == False  # Только НЕподтверждённые менеджером
-        )
+        .filter(awaiting_manager_clause())  # Только НЕподтверждённые менеджером
         .order_by(
             Request.is_returned.desc(),  # Возвратные заявки показываем первыми
             Request.updated_at.desc().nullslast(),
@@ -1196,10 +1188,7 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
     # Статус "Исполнено" - когда заявка возвращена заявителем на доработку
     q = (
         db.query(Request)
-        .filter(
-            Request.status == REQUEST_STATUS_COMPLETED,
-            Request.is_returned == True
-        )
+        .filter(returned_for_review_clause())
         .order_by(
             Request.returned_at.desc().nullslast(),
             Request.updated_at.desc().nullslast(),
@@ -1254,11 +1243,7 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
     from datetime import datetime, timezone
     q = (
         db.query(Request)
-        .filter(
-            Request.status == REQUEST_STATUS_EXECUTED,
-            Request.manager_confirmed == True,  # Подтверждено менеджером
-            Request.is_returned == False  # Исключаем возвращённые
-        )
+        .filter(awaiting_applicant_clause())  # Подтверждено менеджером, не принято заявителем
         .order_by(
             Request.completed_at.desc().nullslast(),
             Request.updated_at.desc().nullslast(),
