@@ -244,6 +244,18 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
+        # SEC: медиа выполненной заявки = потенциальный PII (интерьер квартиры,
+        # данные жителя). Доступ — только владелец или одобренный сосед (та же
+        # семантика, что view_completed_request); иначе любой по request_number
+        # вытянет чужие медиафайлы.
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer(get_text("request_acceptance.handlers.user_not_found", language=language), show_alert=True)
+            return
+        if not can_accept(request, user, get_approved_apartment_ids(db, user.id)):
+            await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=language), show_alert=True)
+            return
+
         completion_media = request.completion_media if request.completion_media else []
 
         if not completion_media:
@@ -341,7 +353,16 @@ async def save_rating(callback: CallbackQuery, db: Session = None, language: str
         # Парсим данные: rate_251013-001_5
         parts = callback.data.replace("rate_", "").split("_")
         request_number = parts[0]
-        rating_value = int(parts[1])
+        # SEC: оценка приходит из callback_data — клиент может прислать любое
+        # значение мимо кнопок 1–5. Валидируем тип и диапазон до записи в БД.
+        try:
+            rating_value = int(parts[1])
+        except (IndexError, ValueError):
+            await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=language), show_alert=True)
+            return
+        if not (1 <= rating_value <= 5):
+            await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=language), show_alert=True)
+            return
 
         if not db:
             db = next(get_db())
@@ -354,72 +375,50 @@ async def save_rating(callback: CallbackQuery, db: Session = None, language: str
             await callback.answer(get_text("request_acceptance.handlers.user_not_found", language=lang), show_alert=True)
             return
 
-        # HF-0: загрузка под FOR UPDATE (защита от гонки с параллельным
-        # изменением статуса; на SQLite — no-op).
-        request = (
-            db.query(Request)
-            .filter(Request.request_number == request_number)
-            .with_for_update()
-            .first()
-        )
-
-        if not request:
-            lang = language
+        # Канонический переход (PR2a-3): APPLICANT_ACCEPT (Исполнено→Принято)
+        # через единый layer. run_command сам грузит под FOR UPDATE, грузит
+        # ActorContext (вкл. одобренное соседство), авторизует (owner|сосед),
+        # проверяет state и создаёт Rating + audit + outbox в одной tx.
+        # HF-0-guard'ы (can_accept / is_awaiting_applicant / FOR UPDATE) теперь
+        # внутри run_command; здесь — только маппинг ошибок на сообщения.
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef,
+            NotAuthorized, InvalidTransition, RepeatRejected, RepeatConflict,
+            WorkflowError)
+        lang = language
+        try:
+            outcome = run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(callback.id, Action.APPLICANT_ACCEPT,
+                              {"rating": rating_value}),
+            )
+        except RequestNotFound:
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
-
-        # HF-0: принять может владелец или одобренный сосед.
-        if not can_accept(request, user, get_approved_apartment_ids(db, user.id)):
-            lang = language
+        except NotAuthorized:
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=lang), show_alert=True)
             return
-
-        # HF-0: guard состояния — принять можно только заявку, ожидающую
-        # приёмки (Исполнено или Выполнена+manager_confirmed; возвращённые
-        # ждут reconfirm менеджера). Закрывает поддельные callback'и.
-        if not is_awaiting_applicant(request):
-            lang = language
+        except (InvalidTransition, RepeatRejected, RepeatConflict):
             await callback.answer(get_text("request_acceptance.handlers.not_awaiting_acceptance", language=lang), show_alert=True)
             return
+        except WorkflowError as e:
+            logger.error(f"APPLICANT_ACCEPT отклонён для {request_number}: {e}")
+            await callback.answer(get_text("request_acceptance.handlers.error_saving_rating", language=lang), show_alert=True)
+            return
 
-        # Создаём оценку
-        rating = Rating(
-            request_number=request_number,
-            user_id=user.id,
-            rating=rating_value
-        )
-        db.add(rating)
-
-        # Изменяем статус заявки на "Принято"
-        old_status = request.status
-        request.status = REQUEST_STATUS_APPROVED  # "Принято"
-        request.completed_at = datetime.now()
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_APPROVED,
-                "actor": "applicant_accept",
-                "rating": rating_value,
-            }
-        ))
-
-        db.commit()
-
-        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
+        # Best-effort post-commit (PR0 Р7): уведомление + правка сообщения.
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         try:
             bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_APPROVED)
+            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 
         # Формируем текст с звёздами
-        lang = language
         stars = "⭐" * rating_value
 
         await callback.message.edit_text(
@@ -570,62 +569,53 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
                 await message_obj.answer(get_text("request_acceptance.handlers.user_not_found", language="ru"))
             return
 
-        # HF-0: загрузка под FOR UPDATE (на SQLite — no-op).
-        request = (
-            db.query(Request)
-            .filter(Request.request_number == request_number)
-            .with_for_update()
-            .first()
-        )
-
-        if not request:
+        # Канонический возврат (PR2a-3): APPLICANT_RETURN (Исполнено→Возвращена,
+        # legacy-кодировка Исполнено+is_returned). run_command грузит под
+        # FOR UPDATE, авторизует (ТОЛЬКО owner), проверяет state и пишет
+        # is_returned/return_*/manager_confirmed + audit в одной tx. HF-0-guard'ы
+        # (can_return / is_awaiting_applicant / FOR UPDATE) теперь внутри runner.
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef,
+            NotAuthorized, InvalidTransition, RepeatRejected, RepeatConflict,
+            WorkflowError)
+        try:
+            outcome = run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(
+                    f"return-{user.id}-{request_number}",
+                    Action.APPLICANT_RETURN,
+                    {"return_reason": return_reason, "return_media": return_media},
+                ),
+            )
+        except RequestNotFound:
             if message_obj:
                 await message_obj.answer(get_text("request_acceptance.handlers.request_not_found", language="ru"))
             return
-
-        # HF-0: вернуть может ТОЛЬКО владелец (сосед может принять, но не вернуть).
-        if not can_return(request, user):
+        except NotAuthorized:
             if message_obj:
                 await message_obj.answer(get_text("request_acceptance.handlers.not_your_request", language="ru"))
             return
-
-        # HF-0: guard состояния — вернуть можно только заявку, ожидающую
-        # приёмки; уже возвращённая ждёт reconfirm менеджера (повторный
-        # возврат запрещён).
-        if not is_awaiting_applicant(request):
+        except (InvalidTransition, RepeatRejected, RepeatConflict):
             if message_obj:
                 await message_obj.answer(get_text("request_acceptance.handlers.not_awaiting_acceptance", language="ru"))
             return
+        except WorkflowError as e:
+            logger.error(f"APPLICANT_RETURN отклонён для {request_number}: {e}")
+            if message_obj:
+                await message_obj.answer(get_text("request_acceptance.handlers.error_returning_request", language="ru"))
+            return
 
-        # Устанавливаем флаг возврата
-        old_status = request.status
-        request.is_returned = True
-        request.return_reason = return_reason
-        request.return_media = return_media
-        request.returned_by = user.id
-        request.returned_at = datetime.now()
-        request.status = REQUEST_STATUS_COMPLETED  # Возвращаем в статус "Исполнено" для повторной проверки менеджером
-        request.manager_confirmed = False  # Сбрасываем подтверждение менеджера
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_COMPLETED,
-                "actor": "applicant_return",
-            }
-        ))
-
-        db.commit()
+        # Best-effort post-commit (PR0 Р7): перечитываем заявку свежей.
+        request = db.query(Request).filter(Request.request_number == request_number).first()
 
         # Уведомление через сервис (отправит исполнителю и в канал)
         try:
             bot = message_obj.bot
-            await async_notify_request_status_changed(bot, db, request, old_status, "Исполнено (возвращена)")
+            await async_notify_request_status_changed(bot, db, request, outcome.old_status, "Исполнено (возвращена)")
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 

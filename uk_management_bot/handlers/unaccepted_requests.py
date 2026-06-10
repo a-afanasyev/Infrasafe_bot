@@ -26,22 +26,14 @@ from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
 )
 from uk_management_bot.utils.helpers import get_text
+# 2a-final fix D: используем канонический has_admin_access (читает user.roles
+# JSON), вместо локального shadow на устаревшем user.role.
+from uk_management_bot.utils.auth_helpers import has_admin_access
 
 import logging
 
 router = Router()
 logger = logging.getLogger(__name__)
-
-
-def has_admin_access(roles: list = None, user: User = None) -> bool:
-    """Проверка прав администратора/менеджера"""
-    if not roles and not user:
-        return False
-    if roles and ("admin" in roles or "manager" in roles):
-        return True
-    if user and (user.role in ["admin", "manager"]):
-        return True
-    return False
 
 
 @router.callback_query(F.data.startswith("unaccepted_remind_"))
@@ -206,14 +198,12 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
             )
             return
 
-        # Принимаем заявку от имени менеджера
-        old_status = request.status
-        request.status = REQUEST_STATUS_APPROVED
-        request.manager_confirmed = True
-        request.manager_confirmed_by = user.id if user else None
-        request.manager_confirmed_at = datetime.now(timezone.utc)
-
-        # Добавляем комментарий менеджера (БЕЗ звёзд)
+        # Канонический force-accept (PR2a-4): MANAGER_FORCE_ACCEPT
+        # (Исполнено/Возвращена → Принято) через единый layer. Под каноном
+        # (модель A) статус «Принято» сам по себе истина — manager_confirmed
+        # больше не выставляем (исторические поля, PR0 Р6). Форматированный
+        # комментарий менеджера дописывается в manager_confirmation_notes
+        # внутри run_command (Op.APPEND).
         manager_comment = (
             f"\n\n--- ПРИНЯТО МЕНЕДЖЕРОМ {datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')} ---\n"
             f"👨‍💼 Менеджер: {user.first_name or 'Unknown'} {user.last_name or ''}\n"
@@ -221,25 +211,37 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
             f"⚠️ Заявка принята без оценки заявителя"
         )
 
-        if request.manager_confirmation_notes:
-            request.manager_confirmation_notes += manager_comment
-        else:
-            request.manager_confirmation_notes = manager_comment
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id if user else None,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_APPROVED,
-                "actor": "manager_accept_for_applicant",
-            }
-        ))
-
-        db.commit()
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef,
+            NotAuthorized, InvalidTransition, RepeatRejected, RepeatConflict,
+            WorkflowError)
+        try:
+            run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=(user.id if user else None),
+                             source="telegram"),
+                ActionCommand(
+                    f"force-accept-{request_number}",
+                    Action.MANAGER_FORCE_ACCEPT,
+                    {"reason": comment, "confirmation_notes": manager_comment},
+                ),
+            )
+        except RequestNotFound:
+            await message.answer(get_text("unaccepted.handlers.request_not_found", language=lang))
+            await state.clear()
+            return
+        except (NotAuthorized, InvalidTransition, RepeatRejected, RepeatConflict):
+            await message.answer(get_text("unaccepted.handlers.request_already_processed", language=lang))
+            await state.clear()
+            return
+        except WorkflowError as e:
+            logger.error(f"MANAGER_FORCE_ACCEPT отклонён для {request_number}: {e}")
+            await message.answer(get_text("unaccepted.handlers.error_accepting_request", language=lang))
+            await state.clear()
+            return
 
         # Уведомляем заявителя
         applicant = db.query(User).filter(User.id == request.user_id).first()

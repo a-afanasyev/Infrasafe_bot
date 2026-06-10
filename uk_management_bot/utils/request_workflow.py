@@ -102,7 +102,15 @@ class Action(str, Enum):
     MANAGER_PURCHASE_DONE = "manager_purchase_done"
     CLARIFY_REQUEST = "clarify_request"
     CLARIFY_RESOLVED = "clarify_resolved"
+    # Исполнитель сам возобновляет работу после закупа/уточнения (Закуп/Уточнение
+    # → В работе). Продуктовое решение 2026-06-10: помимо менеджерских
+    # MANAGER_PURCHASE_DONE/CLARIFY_RESOLVED исполнителю разрешён self-resume.
+    EXECUTOR_RESUME = "executor_resume"
     EXECUTOR_COMPLETE = "executor_complete"
+    # Менеджер завершает работу за исполнителя (В работе/Закуп/Уточнение →
+    # Выполнена). Продуктовое решение 2026-06-10: менеджерский shortcut-аналог
+    # EXECUTOR_COMPLETE; authorize=_is_manager, репорт/медиа не собираются в UX.
+    MANAGER_COMPLETE = "manager_complete"
     MANAGER_CONFIRM = "manager_confirm"
     MANAGER_RETURN_TO_WORK = "manager_return_to_work"
     APPLICANT_ACCEPT = "applicant_accept"
@@ -294,18 +302,26 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         required={"requested_materials": str}),
     Action.MANAGER_PURCHASE_DONE: PayloadSchema(
         optional={"manager_materials_comment": str}),
-    Action.CLARIFY_REQUEST: PayloadSchema(required={"question": str}),
+    Action.CLARIFY_REQUEST: PayloadSchema(
+        required={"question": str}, optional={"notes": str}),
     Action.CLARIFY_RESOLVED: PayloadSchema(),
+    Action.EXECUTOR_RESUME: PayloadSchema(),
     Action.EXECUTOR_COMPLETE: PayloadSchema(
+        optional={"completion_report": str, "completion_media": list}),
+    Action.MANAGER_COMPLETE: PayloadSchema(
         optional={"completion_report": str, "completion_media": list}),
     Action.MANAGER_CONFIRM: PayloadSchema(
         optional={"confirmation_notes": str}),
-    Action.MANAGER_RETURN_TO_WORK: PayloadSchema(required={"reason": str}),
+    # reason опционален: Telegram-кнопка «вернуть в работу» причину не собирает
+    # (и patch её не пишет — только audit). API при желании может прислать.
+    Action.MANAGER_RETURN_TO_WORK: PayloadSchema(optional={"reason": str}),
     Action.APPLICANT_ACCEPT: PayloadSchema(required={"rating": int}),
     Action.APPLICANT_RETURN: PayloadSchema(
         required={"return_reason": str}, optional={"return_media": list}),
-    Action.MANAGER_FORCE_ACCEPT: PayloadSchema(optional={"reason": str}),
-    Action.CANCEL: PayloadSchema(required={"reason": str}),
+    Action.MANAGER_FORCE_ACCEPT: PayloadSchema(
+        optional={"reason": str, "confirmation_notes": str}),
+    Action.CANCEL: PayloadSchema(
+        required={"reason": str}, optional={"notes": str}),
 }
 
 
@@ -391,9 +407,18 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.CLARIFY_RESOLVED: ActionSpec(
         frozenset({REQUEST_STATUS_CLARIFICATION}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+    Action.EXECUTOR_RESUME: ActionSpec(
+        frozenset({REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION}),
+        REQUEST_STATUS_IN_PROGRESS,
+        _executor_can_work, RepeatPolicy.REJECT),
     Action.EXECUTOR_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_EXECUTED,
         _executor_can_work, RepeatPolicy.REPEATABLE),
+    Action.MANAGER_COMPLETE: ActionSpec(
+        frozenset({REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE,
+                   REQUEST_STATUS_CLARIFICATION}),
+        REQUEST_STATUS_EXECUTED,
+        lambda s, a: _is_manager(a), RepeatPolicy.REPEATABLE),
     Action.MANAGER_CONFIRM: ActionSpec(
         frozenset({REQUEST_STATUS_EXECUTED}), REQUEST_STATUS_COMPLETED,
         lambda s, a: _is_manager(a), RepeatPolicy.NO_OP_IF_SAME),
@@ -469,13 +494,17 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
         if payload.get("manager_materials_comment") is not None:
             ops += [("manager_materials_comment", Op.SET,
                      payload["manager_materials_comment"])]
-    elif action == Action.EXECUTOR_COMPLETE:
+    elif action in (Action.EXECUTOR_COMPLETE, Action.MANAGER_COMPLETE):
         if payload.get("completion_report") is not None:
             ops += [("completion_report", Op.SET, payload["completion_report"])]
         if payload.get("completion_media") is not None:
             ops += [("completion_media", Op.SET, payload["completion_media"])]
         # Повтор после возврата: пользовательский цикл очищает флаг возврата
         ops += [("is_returned", Op.SET, False)]
+    elif action == Action.CLARIFY_REQUEST:
+        # текст уточнения дописывается в notes (форматирование — на адаптере)
+        if payload.get("notes") is not None:
+            ops += [("notes", Op.APPEND, payload["notes"])]
     elif action == Action.MANAGER_CONFIRM:
         ops += [("manager_confirmed", Op.SET, True),
                 ("manager_confirmed_by", Op.SET_ACTOR, None),
@@ -499,8 +528,15 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
     elif action == Action.MANAGER_FORCE_ACCEPT:
         ops += [("completed_at", Op.SET_NOW, None),
                 ("is_returned", Op.SET, False)]
+        # «принято за заявителя»: комментарий менеджера дописывается в историю
+        # подтверждения (форматирование — на стороне адаптера).
+        if payload.get("confirmation_notes") is not None:
+            ops += [("manager_confirmation_notes", Op.APPEND,
+                     payload["confirmation_notes"])]
     elif action == Action.CANCEL:
-        pass
+        # причина отмены дописывается в notes (форматирование — на адаптере)
+        if payload.get("notes") is not None:
+            ops += [("notes", Op.APPEND, payload["notes"])]
     return tuple(ops)
 
 
@@ -515,6 +551,12 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
     return ()
 
 
+# Ключи payload, допустимые в audit (PII-гигиена): структурные значения +
+# короткие причины. `question` (текст уточнения менеджера) — НАМЕРЕННО включён:
+# это вопрос самого менеджера, аудит-след «что спросили» легитимен, а таблица
+# audit_logs доступна только привилегированным ролям. Свободный текст/медиа
+# заявителя/исполнителя (completion_report, notes, return_reason/_media,
+# confirmation_notes) сюда НЕ попадают.
 _SAFE_PAYLOAD_KEYS = frozenset({
     "rating", "executor_id", "group", "reason", "question",
 })
@@ -650,8 +692,10 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
     _PRIORITY = {
         Action.APPLICANT_ACCEPT: 0, Action.APPLICANT_RETURN: 0,
         Action.EXECUTOR_COMPLETE: 0, Action.EXECUTOR_PURCHASE: 0,
+        Action.EXECUTOR_RESUME: 0,
         Action.MANAGER_CONFIRM: 1, Action.MANAGER_ASSIGN: 1,
         Action.MANAGER_RETURN_TO_WORK: 1, Action.MANAGER_PURCHASE_DONE: 1,
+        Action.MANAGER_COMPLETE: 1,
         Action.CLARIFY_REQUEST: 1, Action.CLARIFY_RESOLVED: 1,
         Action.MANAGER_FORCE_ACCEPT: 2, Action.CANCEL: 2,
     }

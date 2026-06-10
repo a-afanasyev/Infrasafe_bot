@@ -142,31 +142,27 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_by'),
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_group'),
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assignment_type'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'completed_at'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'is_returned'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'manager_confirmed'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'manager_confirmed_at'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'manager_confirmed_by'),
+    # PR2a-1/2a-2: confirm/reconfirm(→force_accept)/return_to_work переведены на
+    # run_command → manager_confirmed/_by/_at и is_returned в admin.py больше не
+    # мутируются сырьём (сняты из baseline). PR2a-7: handle_complete_request →
+    # MANAGER_COMPLETE (completed_at больше не пишется сырьём — снят из baseline);
+    # handle_clarification_text → CLARIFY_REQUEST (status-write убран). Остаются
+    # status/requested_materials/assigned_* у НЕ конвертированных accept/
+    # return_to_work(закуп) — отложены в PR2c (assignment-флоу + bookkeeping закупа).
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'requested_materials'),
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'status'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'completed_at'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'is_returned'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'manager_confirmed'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'return_media'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'return_reason'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'returned_at'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'returned_by'),
-    ('uk_management_bot/handlers/request_acceptance.py', 'attr:request', 'status'),
+    # PR2a-3: save_rating (APPLICANT_ACCEPT) + process_return_request
+    # (APPLICANT_RETURN) переведены на run_command → request_acceptance.py
+    # больше НЕ мутирует workflow-поля сырьём (весь файл снят из baseline).
     ('uk_management_bot/handlers/request_status_management.py', 'attr:request', 'completion_report'),
     ('uk_management_bot/handlers/request_status_management.py', 'attr:request', 'requested_materials'),
-    ('uk_management_bot/handlers/requests.py', 'attr:request', 'completion_media'),
-    ('uk_management_bot/handlers/requests.py', 'attr:request', 'status'),
+    # PR2a-5: executor-хендлеры requests.py (purchase/complete/resume) → run_command
+    # (EXECUTOR_PURCHASE/COMPLETE/RESUME) → status/completion_media сырьём больше
+    # не пишутся. ctor:Request (save_request, create-путь) остаётся до PR5/create-фабрики.
     ('uk_management_bot/handlers/requests.py', 'ctor:Request', 'status'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'attr:request', 'manager_confirmation_notes'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'attr:request', 'manager_confirmed'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'attr:request', 'manager_confirmed_at'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'attr:request', 'manager_confirmed_by'),
-    ('uk_management_bot/handlers/unaccepted_requests.py', 'attr:request', 'status'),
+    # PR2a-4: process_manager_acceptance_comment → MANAGER_FORCE_ACCEPT →
+    # unaccepted_requests.py больше не мутирует workflow-поля сырьём
+    # (весь файл снят из baseline).
     ('uk_management_bot/services/assignment_optimizer.py', 'attr:req_assignment', 'executor_id'),
     ('uk_management_bot/services/assignment_optimizer.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assigned_at'),
