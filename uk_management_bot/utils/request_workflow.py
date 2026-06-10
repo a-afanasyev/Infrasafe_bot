@@ -551,6 +551,12 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
     return ()
 
 
+# Ключи payload, допустимые в audit (PII-гигиена): структурные значения +
+# короткие причины. `question` (текст уточнения менеджера) — НАМЕРЕННО включён:
+# это вопрос самого менеджера, аудит-след «что спросили» легитимен, а таблица
+# audit_logs доступна только привилегированным ролям. Свободный текст/медиа
+# заявителя/исполнителя (completion_report, notes, return_reason/_media,
+# confirmation_notes) сюда НЕ попадают.
 _SAFE_PAYLOAD_KEYS = frozenset({
     "rating", "executor_id", "group", "reason", "question",
 })

@@ -26,22 +26,14 @@ from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
 )
 from uk_management_bot.utils.helpers import get_text
+# 2a-final fix D: используем канонический has_admin_access (читает user.roles
+# JSON), вместо локального shadow на устаревшем user.role.
+from uk_management_bot.utils.auth_helpers import has_admin_access
 
 import logging
 
 router = Router()
 logger = logging.getLogger(__name__)
-
-
-def has_admin_access(roles: list = None, user: User = None) -> bool:
-    """Проверка прав администратора/менеджера"""
-    if not roles and not user:
-        return False
-    if roles and ("admin" in roles or "manager" in roles):
-        return True
-    if user and (user.role in ["admin", "manager"]):
-        return True
-    return False
 
 
 @router.callback_query(F.data.startswith("unaccepted_remind_"))
