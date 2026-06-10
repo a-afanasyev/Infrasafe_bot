@@ -390,3 +390,66 @@ class TestReturnGuard:
 
         db.refresh(req)
         assert req.is_returned is False
+
+
+# ---------------------------------------------------------------------------
+# Media-view guard (view_completion_media) — 2a-final fix A: медиа выполненной
+# заявки = PII, доступ только владелец/одобренный сосед (как view_completed).
+# ---------------------------------------------------------------------------
+
+def _mk_media_callback(request_number, telegram_id):
+    cb = MagicMock()
+    cb.from_user.id = telegram_id
+    cb.data = f"view_completion_media_{request_number}"
+    cb.message = MagicMock()
+    cb.message.answer = AsyncMock()
+    cb.message.answer_photo = AsyncMock()
+    cb.message.answer_document = AsyncMock()
+    cb.message.answer_media_group = AsyncMock()
+    cb.answer = AsyncMock()
+    return cb
+
+
+class TestMediaViewGuard:
+    @pytest.mark.asyncio
+    async def test_stranger_cannot_view_media(self, db):
+        """Чужой пользователь по request_number НЕ получает медиа (PII-гейт)."""
+        from uk_management_bot.handlers.request_acceptance import view_completion_media
+
+        req = _mk_request(db, "260610-401", REQUEST_STATUS_COMPLETED)
+        req.completion_media = ["file_id_1"]
+        db.commit()
+        cb = _mk_media_callback(req.request_number, STRANGER_TG)
+        await view_completion_media(cb, db=db)
+
+        cb.message.answer.assert_not_awaited()
+        cb.message.answer_photo.assert_not_awaited()
+        cb.message.answer_media_group.assert_not_awaited()
+        cb.answer.assert_awaited()
+        assert cb.answer.await_args.kwargs.get("show_alert") is True
+
+    @pytest.mark.asyncio
+    async def test_owner_can_view_media(self, db):
+        from uk_management_bot.handlers.request_acceptance import view_completion_media
+
+        req = _mk_request(db, "260610-402", REQUEST_STATUS_COMPLETED)
+        req.completion_media = ["file_id_1"]
+        db.commit()
+        cb = _mk_media_callback(req.request_number, OWNER_TG)
+        await view_completion_media(cb, db=db)
+
+        cb.message.answer.assert_awaited()      # заголовок отправлен → гейт пройден
+        cb.message.answer_photo.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_approved_neighbor_can_view_media(self, db):
+        from uk_management_bot.handlers.request_acceptance import view_completion_media
+
+        req = _mk_request(db, "260610-403", REQUEST_STATUS_COMPLETED)
+        req.completion_media = ["file_id_1"]
+        db.commit()
+        cb = _mk_media_callback(req.request_number, NEIGHBOR_TG)
+        await view_completion_media(cb, db=db)
+
+        cb.message.answer.assert_awaited()
+        cb.message.answer_photo.assert_awaited()

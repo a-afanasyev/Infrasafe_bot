@@ -244,6 +244,18 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
             await callback.answer(get_text("request_acceptance.handlers.request_not_found", language=lang), show_alert=True)
             return
 
+        # SEC: медиа выполненной заявки = потенциальный PII (интерьер квартиры,
+        # данные жителя). Доступ — только владелец или одобренный сосед (та же
+        # семантика, что view_completed_request); иначе любой по request_number
+        # вытянет чужие медиафайлы.
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer(get_text("request_acceptance.handlers.user_not_found", language=language), show_alert=True)
+            return
+        if not can_accept(request, user, get_approved_apartment_ids(db, user.id)):
+            await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=language), show_alert=True)
+            return
+
         completion_media = request.completion_media if request.completion_media else []
 
         if not completion_media:
