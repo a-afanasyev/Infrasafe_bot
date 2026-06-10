@@ -24,6 +24,9 @@ from .user_yard import UserYard
 # Webhook integration
 from .webhook_outbox import WebhookOutbox
 
+# Счётчик номеров заявок (PR5: gap-safe генерация YYMMDD-NNN)
+from .request_number_counter import RequestNumberCounter
+
 # Invite nonce tracking
 from .invite_nonce import InviteNonce
 

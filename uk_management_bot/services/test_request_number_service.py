@@ -1,9 +1,22 @@
-"""Unit tests for RequestNumberService."""
+"""Unit tests for RequestNumberService.
+
+PR5: генератор переведён на атомарный счётчик дня (request_number_counters,
+UPSERT…RETURNING) — тесты генерации идут против реальной SQLite-схемы
+(create_all), а не моков: важна семантика (self-seed, монотонность,
+отсутствие переиспользования после удаления), а не форма SQL.
+"""
 import pytest
 from datetime import date
 from unittest.mock import MagicMock
 
-from uk_management_bot.services.request_number_service import RequestNumberService
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from uk_management_bot.services.request_number_service import (
+    BUSINESS_TZ,
+    RequestNumberService,
+    business_today,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -52,96 +65,113 @@ class TestValidateRequestNumberFormat:
 
 
 # ---------------------------------------------------------------------------
-# generate_next_number
+# next_number / generate_next_number (counter-backed, PR5)
 # ---------------------------------------------------------------------------
 
-class TestGenerateNextNumber:
-    def test_no_db_returns_001(self):
-        target = date(2026, 4, 2)
-        result = RequestNumberService.generate_next_number(creation_date=target, db=None)
-        assert result == "260402-001"
+@pytest.fixture()
+def db():
+    from uk_management_bot.database.session import Base
+    # Модели регистрируются в Base.metadata при импорте пакета моделей
+    import uk_management_bot.database.models  # noqa: F401
+    from uk_management_bot.database.models.user import User
 
-    def test_format_yymmdd_nnn(self):
-        """Result must match YYMMDD-NNN pattern."""
-        target = date(2025, 9, 17)
-        result = RequestNumberService.generate_next_number(creation_date=target, db=None)
-        assert result == "250917-001"
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(bind=engine)()
+    session.add(User(id=1, telegram_id=1, first_name="U",
+                     role="applicant", status="approved", language="ru"))
+    session.commit()
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
-    def test_with_db_no_existing_returns_001(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = None
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        assert result == "260402-001"
+def _insert_request(db, number):
+    from uk_management_bot.database.models.request import Request
+    db.add(Request(request_number=number, user_id=1, category="c",
+                   description="d", urgency="low", status="Новая"))
+    db.commit()
 
-    def test_with_db_increments_from_last(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = ("260402-005",)
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        assert result == "260402-006"
+TARGET = date(2026, 4, 2)
 
-    def test_padding_single_digit(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = None
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        # Sequence must be zero-padded to 3 digits
-        seq_part = result.split("-")[1]
-        assert len(seq_part) == 3
-        assert seq_part == "001"
+class TestNextNumber:
+    def test_first_of_day_is_001(self, db):
+        assert RequestNumberService.next_number(db, TARGET) == "260402-001"
 
-    def test_padding_two_digit_sequence(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = ("260402-009",)
+    def test_sequential_increments(self, db):
+        assert RequestNumberService.next_number(db, TARGET) == "260402-001"
+        assert RequestNumberService.next_number(db, TARGET) == "260402-002"
+        assert RequestNumberService.next_number(db, TARGET) == "260402-003"
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        assert result == "260402-010"
+    def test_self_seed_from_existing_requests(self, db):
+        """Нет строки счётчика, но заявки дня существуют (созданы старым
+        кодом) → стартуем с числового MAX(suffix)+1, не с 001."""
+        _insert_request(db, "260402-007")
+        assert RequestNumberService.next_number(db, TARGET) == "260402-008"
 
-    def test_padding_three_digit_sequence(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = ("260402-099",)
+    def test_self_seed_numeric_not_lexicographic(self, db):
+        """MAX должен быть ЧИСЛОВЫМ: '260402-1000' > '260402-999' (лексикографически наоборот)."""
+        _insert_request(db, "260402-999")
+        _insert_request(db, "260402-1000")
+        assert RequestNumberService.next_number(db, TARGET) == "260402-1001"
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        assert result == "260402-100"
+    def test_rollover_999_to_1000(self, db):
+        _insert_request(db, "260402-999")
+        assert RequestNumberService.next_number(db, TARGET) == "260402-1000"
 
-    def test_sequence_overflow_beyond_999(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = ("260402-999",)
+    def test_no_reuse_after_deleting_max_row(self, db):
+        """Gap-safe: удаление заявки с MAX-суффиксом не приводит к повторной
+        выдаче того же номера (COUNT(*)+1 и MAX+1 здесь ломались)."""
+        from uk_management_bot.database.models.request import Request
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        assert result == "260402-1000"
+        n1 = RequestNumberService.next_number(db, TARGET)
+        _insert_request(db, n1)
+        n2 = RequestNumberService.next_number(db, TARGET)
+        _insert_request(db, n2)
+        db.query(Request).filter(Request.request_number == n2).delete()
+        db.commit()
 
-    def test_db_exception_fallback(self):
-        db = MagicMock()
-        db.execute.side_effect = Exception("DB connection error")
+        n3 = RequestNumberService.next_number(db, TARGET)
+        assert n3 == "260402-003", f"deleted {n2} must NOT be reissued, got {n3}"
 
-        result = RequestNumberService.generate_next_number(
-            creation_date=date(2026, 4, 2), db=db
-        )
-        # Fallback format: YYMMDD-<timestamp-based suffix>
-        assert result.startswith("260402-")
+    def test_independent_days(self, db):
+        assert RequestNumberService.next_number(db, date(2026, 4, 2)) == "260402-001"
+        assert RequestNumberService.next_number(db, date(2026, 4, 3)) == "260403-001"
+        assert RequestNumberService.next_number(db, date(2026, 4, 2)) == "260402-002"
 
-    def test_default_date_is_today(self):
-        """With no creation_date, uses today's date."""
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = None
+    def test_padding_three_digits(self, db):
+        n = RequestNumberService.next_number(db, TARGET)
+        assert len(n.split("-")[1]) == 3
 
-        result = RequestNumberService.generate_next_number(db=db)
-        today_prefix = date.today().strftime("%y%m%d")
-        assert result.startswith(today_prefix)
+    def test_no_db_raises(self):
+        """Ветка db=None удалена: раньше возвращала константный '-001' (коллизии)."""
+        with pytest.raises(ValueError):
+            RequestNumberService.next_number(None, TARGET)
+        with pytest.raises(ValueError):
+            RequestNumberService.generate_next_number(creation_date=TARGET, db=None)
+
+    def test_deprecated_alias_delegates(self, db):
+        assert RequestNumberService.generate_next_number(
+            creation_date=TARGET, db=db
+        ) == "260402-001"
+
+    def test_default_date_is_business_today(self, db):
+        """Без creation_date — бизнес-дата Asia/Tashkent (не серверная tz)."""
+        result = RequestNumberService.next_number(db)
+        assert result.startswith(business_today().strftime("%y%m%d"))
+        assert str(BUSINESS_TZ) == "Asia/Tashkent"
+
+    def test_counter_rolls_back_with_transaction(self, db):
+        """Счётчик инкрементится в транзакции вызывающего: rollback отменяет
+        и инкремент (retry в _persist_request получает чистое состояние)."""
+        n1 = RequestNumberService.next_number(db, TARGET)
+        assert n1 == "260402-001"
+        db.rollback()
+        assert RequestNumberService.next_number(db, TARGET) == "260402-001"
 
 
 # ---------------------------------------------------------------------------
