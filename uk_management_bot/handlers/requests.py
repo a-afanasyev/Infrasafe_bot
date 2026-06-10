@@ -2589,6 +2589,38 @@ async def executor_view_media(callback: CallbackQuery):
             db_session.close()
 
 
+def _run_executor_command(request_number: str, user_id, action, payload: dict,
+                          command_id: str):
+    """PR2a-5: исполнительский переход через единый layer (canonical-write).
+
+    run_command сам грузит под FOR UPDATE, авторизует (assigned + активная
+    смена), пишет patch+audit+outbox в одной tx. Возвращает (outcome, error_key):
+    error_key=None при успехе, иначе ключ локали для ответа пользователю.
+    """
+    from uk_management_bot.database.session import SessionLocal
+    from uk_management_bot.services.workflow_runner import (
+        run_command_sync, RequestNotFound)
+    from uk_management_bot.utils.request_workflow import (
+        ActionCommand, PrincipalRef,
+        NotAuthorized, InvalidTransition, RepeatRejected, RepeatConflict,
+        WorkflowError)
+    try:
+        outcome = run_command_sync(
+            SessionLocal, request_number,
+            PrincipalRef(kind="user", user_id=user_id, source="telegram"),
+            ActionCommand(command_id, action, payload),
+        )
+        return outcome, None
+    except RequestNotFound:
+        return None, "requests.request_not_found"
+    except NotAuthorized:
+        return None, "requests.executor_not_authorized"
+    except (InvalidTransition, RepeatRejected, RepeatConflict):
+        return None, "requests.executor_status_conflict"
+    except WorkflowError:
+        return None, "common.error"
+
+
 @router.callback_query(F.data.startswith("executor_purchase_"))
 async def executor_request_purchase(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Закуп'"""
@@ -2634,24 +2666,31 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
             await state.clear()
             return
 
-        # Обновляем статус и добавляем комментарий
-        old_status = request.status
-        request.status = "Закуп"
+        # Канонический переход (PR2a-5): EXECUTOR_PURCHASE (В работе→Закуп)
+        # через единый layer. Комментарий исполнителя → requested_materials
+        # (канон-поле). Активную смену + назначение проверяет run_command.
+        from uk_management_bot.database.models.user import User as _User
+        from uk_management_bot.utils.request_workflow import Action
+        actor = db_session.query(_User).filter(_User.telegram_id == message.from_user.id).first()
+        outcome, err = _run_executor_command(
+            request_number, actor.id if actor else None,
+            Action.EXECUTOR_PURCHASE, {"requested_materials": message.text},
+            command_id=f"exec-purchase-{request_number}-{message.message_id}",
+        )
+        if err:
+            await message.answer(get_text(err, language=lang))
+            await state.clear()
+            return
 
-        # Добавляем комментарий в notes
-        executor_label = get_text("requests.executor_label", language=lang)
-        purchase_label = get_text("requests.purchase_required_label", language=lang)
-        purchase_note = f"\n[{executor_label}] {purchase_label}: {message.text}"
-        request.notes = (request.notes or "") + purchase_note
-        request.updated_at = db_session.query(Request).filter(Request.request_number == request_number).first().updated_at
-
-        db_session.commit()
-
-        # Отправляем уведомление
+        # Best-effort post-commit: уведомление + ответ. run_command коммитит в
+        # отдельной сессии → expire_all сбрасывает identity-map middleware-сессии,
+        # иначе повторный query вернёт устаревший объект (не свежий).
+        db_session.expire_all()
+        request = db_session.query(Request).filter(Request.request_number == request_number).first()
         from uk_management_bot.services.notification_service import async_notify_request_status_changed
         try:
             bot = message.bot
-            await async_notify_request_status_changed(bot, db_session, request, old_status, "Закуп")
+            await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
 
@@ -2845,34 +2884,33 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
                 except Exception as e:
                     logger.error(f"Ошибка загрузки файла #{idx} в Media Service: {e}")
 
-        # Обновляем статус
-        old_status = request.status
-        request.status = "Выполнена"
+        # Канонический переход (PR2a-5): EXECUTOR_COMPLETE (В работе→Выполнена)
+        # через единый layer. Медиа уже загружены в Media Service ВЫШЕ (сетевой
+        # I/O — вне транзакции). Отчёт → completion_report, файлы →
+        # completion_media (list; ридеры принимают и list, и json-строку).
+        from uk_management_bot.database.models.user import User as _User
+        from uk_management_bot.utils.request_workflow import Action
+        actor = db_session.query(_User).filter(_User.telegram_id == callback.from_user.id).first()
+        media_payload = media_service_files if media_service_files else completion_media
+        outcome, err = _run_executor_command(
+            request_number, actor.id if actor else None,
+            Action.EXECUTOR_COMPLETE,
+            {"completion_report": completion_comment or "",
+             "completion_media": media_payload or []},
+            command_id=f"exec-complete-{request_number}-{callback.id}",
+        )
+        if err:
+            await callback.answer(get_text(err, language=lang), show_alert=True)
+            await state.clear()
+            return
 
-        # Добавляем комментарий
-        executor_label = get_text("requests.executor_label", language=lang)
-        work_completed_label = get_text("requests.work_completed_label", language=lang)
-        completion_note = f"\n[{executor_label}] {work_completed_label}: {completion_comment}"
-        request.notes = (request.notes or "") + completion_note
-
-        # Сохраняем медиа (и Telegram file_id, и Media Service IDs)
-        if media_service_files:
-            import json
-            # Сохраняем информацию о файлах в Media Service
-            request.completion_media = json.dumps(media_service_files)
-            logger.info(f"Сохранено {len(media_service_files)} файлов в completion_media")
-        elif completion_media:
-            # Если загрузка в Media Service не удалась, сохраняем хотя бы Telegram file_id
-            import json
-            request.completion_media = json.dumps(completion_media)
-            logger.warning(f"Сохранены только Telegram file_id, без Media Service")
-
-        db_session.commit()
-
-        # Отправляем уведомление
+        # Best-effort post-commit: уведомление. expire_all сбрасывает identity-map
+        # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
+        db_session.expire_all()
+        request = db_session.query(Request).filter(Request.request_number == request_number).first()
         from uk_management_bot.services.notification_service import async_notify_request_status_changed
         try:
-            await async_notify_request_status_changed(callback.bot, db_session, request, old_status, "Выполнена")
+            await async_notify_request_status_changed(callback.bot, db_session, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
 
@@ -2908,21 +2946,30 @@ async def executor_return_to_work(callback: CallbackQuery):
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
 
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+        # Канонический переход (PR2a-5): EXECUTOR_RESUME (Закуп/Уточнение→
+        # В работе) через единый layer. Исполнителю разрешён self-resume
+        # (продуктовое решение 2026-06-10); активную смену+назначение проверяет
+        # run_command.
+        from uk_management_bot.database.models.user import User as _User
+        from uk_management_bot.utils.request_workflow import Action
+        actor = db_session.query(_User).filter(_User.telegram_id == callback.from_user.id).first()
+        outcome, err = _run_executor_command(
+            request_number, actor.id if actor else None,
+            Action.EXECUTOR_RESUME, {},
+            command_id=f"exec-resume-{request_number}-{callback.id}",
+        )
+        if err:
+            await callback.answer(get_text(err, language=lang), show_alert=True)
             return
 
-        old_status = request.status
-        request.status = "В работе"
-        db_session.commit()
-
-        # Отправляем уведомление
+        # Best-effort post-commit: уведомление. expire_all сбрасывает identity-map
+        # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
+        db_session.expire_all()
+        request = db_session.query(Request).filter(Request.request_number == request_number).first()
         from uk_management_bot.services.notification_service import async_notify_request_status_changed
         try:
             bot = callback.bot
-            await async_notify_request_status_changed(bot, db_session, request, old_status, "В работе")
+            await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления: {e}")
 

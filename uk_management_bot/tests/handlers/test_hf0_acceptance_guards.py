@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from uk_management_bot.database.session import Base
 from uk_management_bot.database.models.request import Request
@@ -45,9 +46,20 @@ APARTMENT_ID = 10
 
 @pytest.fixture()
 def db():
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    # PR2a-3: save_rating/process_return_request теперь пишут через
+    # run_command (свежая сессия из SessionLocal). Чтобы handler-guard-тесты
+    # видели те же данные, что фикстура: общий in-memory engine (StaticPool —
+    # одно соединение на все сессии) + патч SessionLocal на фабрику этого
+    # engine. Так runner и фикстура работают в одной БД.
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
     Base.metadata.create_all(bind=engine)
-    session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
+    SF = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    session = SF()
     session.add_all([
         User(id=1, telegram_id=OWNER_TG, first_name="Owner",
              role="applicant", roles='["applicant"]', status="approved", language="ru"),
@@ -59,9 +71,11 @@ def db():
         UserApartment(user_id=2, apartment_id=APARTMENT_ID, status="approved"),
     ])
     session.commit()
-    yield session
+    with patch("uk_management_bot.database.session.SessionLocal", SF):
+        yield session
     session.close()
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()
 
 
 def _mk_request(db, number, status, *, manager_confirmed=False, is_returned=False,

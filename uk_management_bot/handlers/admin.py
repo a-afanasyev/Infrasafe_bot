@@ -577,42 +577,42 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
             return
 
         request_number = callback.data.replace("confirm_completed_", "")
-        request = db.query(Request).filter(Request.request_number == request_number).first()
 
-        if not request:
+        # Канонический переход через единый layer (PR2a): run_command владеет
+        # своей транзакцией (свежая сессия + FOR UPDATE + ActorContext из БД +
+        # patch/audit/outbox в одной tx). Пишет СРАЗУ канон: Выполнена→Исполнено.
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        try:
+            outcome = run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(callback.id, Action.MANAGER_CONFIRM, {}),
+            )
+        except RequestNotFound:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
+        except WorkflowError as e:
+            logger.info(f"MANAGER_CONFIRM отклонён для {request_number}: {e}")
+            await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
+            return
 
-        # Подтверждаем выполнение
-        old_status = request.status
-        request.status = REQUEST_STATUS_EXECUTED
-        request.manager_confirmed = True
-        request.manager_confirmed_by = user.id
-        request.manager_confirmed_at = datetime.now()
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_EXECUTED,
-                "actor": "manager_confirm",
-            }
-        ))
-        db.commit()
+        # Best-effort post-commit (потеря допустима, PR0 Р7): уведомления + правка.
+        # run_command работал в своей сессии → перечитываем заявку свежей.
+        request = db.query(Request).filter(Request.request_number == request_number).first()
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
             bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_EXECUTED)
+            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 
         # Дополнительное уведомление заявителю с инструкцией
-        applicant = request.user
+        applicant = request.user if request else None
         if applicant and applicant.telegram_id:
             try:
                 bot = callback.bot
@@ -622,15 +622,15 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
                 )
 
                 await bot.send_message(applicant.telegram_id, notification_text)
-                logger.info(f"✅ Уведомление о подтверждении заявки {request.request_number} отправлено заявителю {applicant.telegram_id}")
+                logger.info(f"✅ Уведомление о подтверждении заявки {request_number} отправлено заявителю {applicant.telegram_id}")
             except Exception as e:
                 logger.error(f"Ошибка при отправке уведомления заявителю: {e}")
 
         await callback.message.edit_text(
-            get_text("admin.handlers.request_confirmed", language=lang).format(request_number=request.request_number)
+            get_text("admin.handlers.request_confirmed", language=lang).format(request_number=request_number)
         )
 
-        logger.info(f"Заявка {request.request_number} подтверждена менеджером {user.id}")
+        logger.info(f"Заявка {request_number} подтверждена менеджером {user.id} (canon)")
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения выполнения заявки: {e}")
@@ -655,43 +655,43 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
             return
 
         request_number = callback.data.replace("reconfirm_completed_", "")
-        request = db.query(Request).filter(Request.request_number == request_number).first()
 
-        if not request:
+        # PR2a-2: под каноном (модель A) у статуса «Возвращена» нет ребра
+        # обратно в «Исполнено». Кнопка reconfirm = MANAGER_FORCE_ACCEPT
+        # (продуктовое решение 2026-06-10): менеджер отклоняет возврат →
+        # заявка принимается терминально (Возвращена→Принято), повторной
+        # приёмки заявителем больше нет.
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        try:
+            outcome = run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(callback.id, Action.MANAGER_FORCE_ACCEPT, {}),
+            )
+        except RequestNotFound:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
+        except WorkflowError as e:
+            logger.info(f"MANAGER_FORCE_ACCEPT (reconfirm) отклонён для {request_number}: {e}")
+            await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
+            return
 
-        # Сбрасываем флаг возврата и повторно подтверждаем
-        old_status = request.status
-        request.status = REQUEST_STATUS_EXECUTED
-        request.is_returned = False  # Снимаем флаг возврата
-        request.manager_confirmed = True
-        request.manager_confirmed_by = user.id
-        request.manager_confirmed_at = datetime.now()
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_EXECUTED,
-                "actor": "manager_reconfirm",
-            }
-        ))
-        db.commit()
+        # Best-effort post-commit (PR0 Р7): уведомления + правка сообщения.
+        request = db.query(Request).filter(Request.request_number == request_number).first()
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
             bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_EXECUTED)
+            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 
-        # Дополнительное уведомление заявителю с инструкцией
-        applicant = request.user
+        # Дополнительное уведомление заявителю: возврат рассмотрен, заявка принята
+        applicant = request.user if request else None
         if applicant and applicant.telegram_id:
             try:
                 bot = callback.bot
@@ -701,15 +701,15 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
                 )
 
                 await bot.send_message(applicant.telegram_id, notification_text)
-                logger.info(f"✅ Уведомление о повторном подтверждении заявки {request.request_number} отправлено заявителю {applicant.telegram_id}")
+                logger.info(f"✅ Уведомление о принятии возвратной заявки {request_number} отправлено заявителю {applicant.telegram_id}")
             except Exception as e:
                 logger.error(f"Ошибка при отправке уведомления заявителю: {e}")
 
         await callback.message.edit_text(
-            get_text("admin.handlers.request_reconfirmed", language=lang).format(request_number=request.request_number)
+            get_text("admin.handlers.request_reconfirmed", language=lang).format(request_number=request_number)
         )
 
-        logger.info(f"Возвратная заявка {request.request_number} подтверждена повторно менеджером {user.id}")
+        logger.info(f"Возврат по заявке {request_number} отклонён, принято менеджером {user.id} (canon force-accept)")
 
     except Exception as e:
         logger.error(f"Ошибка повторного подтверждения заявки: {e}")
@@ -731,44 +731,40 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
             return
 
         request_number = callback.data.replace("return_to_work_", "")
-        request = db.query(Request).filter(Request.request_number == request_number).first()
 
-        if not request:
+        # Канонический переход (PR2a-2): Выполнена/Возвращена → В работе.
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        try:
+            outcome = run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(callback.id, Action.MANAGER_RETURN_TO_WORK, {}),
+            )
+        except RequestNotFound:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
+        except WorkflowError as e:
+            logger.info(f"MANAGER_RETURN_TO_WORK отклонён для {request_number}: {e}")
+            await callback.answer(get_text("admin.handlers.error_changing_status", language=lang), show_alert=True)
+            return
 
-        # Возвращаем в работу
-        old_status = request.status
-        request.status = REQUEST_STATUS_IN_PROGRESS
-        request.is_returned = False  # Снимаем флаг возврата если был
-        request.manager_confirmed = False
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_IN_PROGRESS,
-                "actor": "manager_return_to_work",
-            }
-        ))
-        db.commit()
-
-        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
+        # Best-effort post-commit (PR0 Р7): уведомление + правка сообщения.
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         try:
             bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, old_status, REQUEST_STATUS_IN_PROGRESS)
+            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления через сервис: {e}")
 
         await callback.message.edit_text(
-            get_text("admin.handlers.request_returned_to_work", language=lang).format(request_number=request.request_number)
+            get_text("admin.handlers.request_returned_to_work", language=lang).format(request_number=request_number)
         )
 
-        logger.info(f"Заявка {request.request_number} возвращена в работу менеджером {user.id}")
+        logger.info(f"Заявка {request_number} возвращена в работу менеджером {user.id} (canon)")
 
     except Exception as e:
         logger.error(f"Ошибка возврата заявки в работу: {e}")
@@ -1932,7 +1928,12 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
 
 @router.callback_query(F.data.startswith("mgr_complete_"))
 async def handle_complete_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Обработка завершения заявки менеджером"""
+    """Завершение заявки менеджером (канон PR2a-7: MANAGER_COMPLETE → Выполнена).
+
+    Менеджерский shortcut-аналог EXECUTOR_COMPLETE: единый layer владеет
+    транзакцией (status→Выполнена, is_returned=False, audit, webhook). Допустим
+    из В работе/Закуп/Уточнение; из прочих статусов run_command отклонит.
+    """
     try:
         lang = language
         logger.info(f"Обработка завершения заявки менеджером {callback.from_user.id}")
@@ -1944,39 +1945,41 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
 
         request_number = callback.data.replace("mgr_complete_", "")
 
-        # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, NotAuthorized, WorkflowError)
+        try:
+            run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=(user.id if user else None),
+                             source="telegram"),
+                ActionCommand(
+                    f"mgr-complete-{request_number}",
+                    Action.MANAGER_COMPLETE, {},
+                ),
+            )
+        except RequestNotFound:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
-        
-        # Обновляем статус
-        old_status = request.status
-        request.status = REQUEST_STATUS_EXECUTED
-        request.completed_at = datetime.now()
-        request.updated_at = datetime.now()
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id if user else None,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_EXECUTED,
-                "actor": "manager_complete",
-            }
-        ))
-        db.commit()
+        except NotAuthorized:
+            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+            return
+        except WorkflowError as e:
+            logger.info(f"MANAGER_COMPLETE отклонён для {request_number}: {e}")
+            await callback.answer(get_text("admin.handlers.cannot_complete_status", language=lang), show_alert=True)
+            return
 
         await callback.answer(get_text("admin.handlers.request_marked_completed", language=lang))
-        
-        # Возвращаемся к списку заявок
+
+        # run_command коммитит в отдельной сессии — сбрасываем кэш middleware-сессии
+        # перед перечитыванием списка заявок.
+        db.expire_all()
         await handle_manager_back_to_list(callback, db, roles, active_role, user)
-        
+
         logger.info(f"Заявка {request_number} отмечена как выполненная менеджером {callback.from_user.id}")
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки завершения заявки менеджером: {e}")
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
@@ -2078,39 +2081,59 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         if not manager_name:
             manager_name = get_text("admin.handlers.manager_by_id", language=lang).format(telegram_id=user.telegram_id)
 
-        # Добавляем уточнение в примечания заявки
+        # Формируем форматированное примечание уточнения
         timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
         new_note = get_text("admin.handlers.clarification_note_header", language=lang).format(timestamp=timestamp) + "\n"
         new_note += f"👨‍💼 {manager_name}:\n"
         new_note += f"{clarification_text}"
-        
-        # Обновляем примечания
-        if request.notes and request.notes.strip():
-            request.notes = request.notes.strip() + "\n\n" + new_note
+
+        # Каноническая проводка (PR2a-7): из Новая/В работе уточнение —
+        # переход CLARIFY_REQUEST через единый layer (status→Уточнение, notes
+        # APPEND, audit, webhook в одной транзакции). Из прочих статусов
+        # канон-ребра нет — дописываем только примечание, статус не трогаем
+        # (раньше он ошибочно сбрасывался в «Уточнение», затирая Закуп/возврат).
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, NotAuthorized, WorkflowError)
+        if request.status in (REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS):
+            from uk_management_bot.database.session import SessionLocal
+            from uk_management_bot.services.workflow_runner import (
+                run_command_sync, RequestNotFound)
+            try:
+                run_command_sync(
+                    SessionLocal, request_number,
+                    PrincipalRef(kind="user", user_id=(user.id if user else None),
+                                 source="telegram"),
+                    ActionCommand(
+                        f"clarify-{request_number}",
+                        Action.CLARIFY_REQUEST,
+                        {"question": clarification_text, "notes": "\n\n" + new_note},
+                    ),
+                )
+            except RequestNotFound:
+                await message.answer(get_text("admin.handlers.request_not_found", language=lang))
+                await state.clear()
+                return
+            except NotAuthorized:
+                await message.answer(get_text("admin.handlers.no_access_actions", language=lang))
+                await state.clear()
+                return
+            except WorkflowError as e:
+                logger.info(f"CLARIFY_REQUEST отклонён для {request_number}: {e}")
+                await message.answer(get_text("admin.handlers.error_sending_clarification", language=lang))
+                await state.clear()
+                return
+            # run_command коммитит в отдельной сессии — сбрасываем кэш middleware
+            db.expire_all()
         else:
-            request.notes = new_note
-        
-        # Обновляем статус на "Уточнение" если он еще не такой
-        old_status = request.status
-        if request.status != REQUEST_STATUS_CLARIFICATION:
-            request.status = REQUEST_STATUS_CLARIFICATION
+            # вне канон-перехода: дописываем только примечание, статус не меняем
+            if request.notes and request.notes.strip():
+                request.notes = request.notes.strip() + "\n\n" + new_note
+            else:
+                request.notes = new_note
+            request.updated_at = datetime.now()
+            db.commit()
 
-            # Аудит
-            from uk_management_bot.database.models.audit import AuditLog
-            db.add(AuditLog(
-                user_id=user.id if user else None,
-                action="request_status_changed",
-                details={
-                    "request_number": request.request_number,
-                    "old_status": old_status,
-                    "new_status": REQUEST_STATUS_CLARIFICATION,
-                    "actor": "manager_clarification",
-                }
-            ))
 
-        request.updated_at = datetime.now()
-        db.commit()
-        
         # Отправляем уведомление заявителю
         try:
             from uk_management_bot.services.notification_service import send_to_user
@@ -2195,34 +2218,39 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
         if not manager_name:
             manager_name = get_text("admin.handlers.manager_by_id", language=lang).format(telegram_id=user.telegram_id)
 
-        # Обновляем статус и добавляем примечание
-        old_status = request.status
-        request.status = REQUEST_STATUS_CANCELLED
+        # Каноническая отмена (PR2a-6): CANCEL через единый layer. Причина →
+        # audit (reason); форматированное примечание дописывается в notes
+        # (Op.APPEND) внутри run_command.
         cancel_note = get_text("admin.handlers.cancel_note_text", language=lang).format(
             manager_name=manager_name,
             cancel_date=datetime.now().strftime('%d.%m.%Y %H:%M'),
             cancel_reason=cancel_reason
         )
-        
-        if request.notes and request.notes.strip():
-            request.notes = request.notes.strip() + "\n\n" + cancel_note
-        else:
-            request.notes = cancel_note
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id if user else None,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_CANCELLED,
-                "actor": "manager_cancel",
-            }
-        ))
-
-        request.updated_at = datetime.now()
-        db.commit()
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        try:
+            run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=(user.id if user else None),
+                             source="telegram"),
+                ActionCommand(
+                    f"cancel-{request_number}",
+                    Action.CANCEL,
+                    {"reason": cancel_reason, "notes": "\n\n" + cancel_note},
+                ),
+            )
+        except RequestNotFound:
+            await message.answer(get_text("admin.handlers.request_not_found", language=lang))
+            await state.clear()
+            return
+        except WorkflowError as e:
+            logger.info(f"CANCEL отклонён для {request_number}: {e}")
+            await message.answer(get_text("admin.handlers.error_denying_request", language=lang))
+            await state.clear()
+            return
 
         await message.answer(
             get_text("admin.handlers.request_denied", language=lang).format(

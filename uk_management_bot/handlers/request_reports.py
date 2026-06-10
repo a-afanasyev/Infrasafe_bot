@@ -21,6 +21,7 @@ from uk_management_bot.keyboards.request_reports import (
 )
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import check_user_role
+from uk_management_bot.utils.workflow_predicates import is_awaiting_applicant
 from uk_management_bot.utils.constants import (
     ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,
     REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_COMPLETED,
@@ -114,8 +115,10 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db:
             await callback.answer(get_text("request_reports.handlers.only_own_requests", language=language), show_alert=True)
             return
 
-        # Проверяем, что заявка выполнена
-        if request.status != REQUEST_STATUS_COMPLETED:
+        # PR2a-6: заявка ожидает решения заявителя (Исполнено, не возвращена) —
+        # канон-предикат вместо сырого status==Исполнено (возвращённые ждут
+        # менеджера и в отчёт/доработку заявителем не идут).
+        if not is_awaiting_applicant(request):
             await callback.answer(get_text("request_reports.handlers.only_completed_requests", language=language), show_alert=True)
             return
         
@@ -235,8 +238,10 @@ async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db
             await callback.answer(get_text("request_reports.handlers.only_own_revision", language=language), show_alert=True)
             return
 
-        # Проверяем, что заявка выполнена
-        if request.status != REQUEST_STATUS_COMPLETED:
+        # PR2a-6: заявка ожидает решения заявителя (Исполнено, не возвращена) —
+        # канон-предикат вместо сырого status==Исполнено (возвращённые ждут
+        # менеджера и в отчёт/доработку заявителем не идут).
+        if not is_awaiting_applicant(request):
             await callback.answer(get_text("request_reports.handlers.only_completed_revision", language=language), show_alert=True)
             return
         
