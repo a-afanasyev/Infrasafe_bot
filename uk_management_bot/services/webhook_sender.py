@@ -84,17 +84,26 @@ def build_request_payload(event: str, data: dict) -> dict:
     return payload
 
 
-async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict) -> None:
-    """Write a webhook outbox record within the caller's transaction (no commit)."""
-    if not settings.INFRASAFE_WEBHOOK_ENABLED:
-        logger.warning(
-            "queue_webhook SKIPPED: INFRASAFE_WEBHOOK_ENABLED=False "
-            "(event=%s endpoint=%s) — event will be LOST. "
-            "Reconciliation will replay it within 1h if it's a building/request.",
-            event, endpoint,
-        )
-        return
+def _skip_if_disabled(caller: str, event: str, endpoint: str) -> bool:
+    """Общий skip-guard: True → outbox-запись не пишется (webhook выключен)."""
+    if settings.INFRASAFE_WEBHOOK_ENABLED:
+        return False
+    logger.warning(
+        "%s SKIPPED: INFRASAFE_WEBHOOK_ENABLED=False "
+        "(event=%s endpoint=%s) — event will be LOST. "
+        "Reconciliation will replay it within 1h if it's a building/request.",
+        caller, event, endpoint,
+    )
+    return True
 
+
+def _build_outbox_record(event: str, endpoint: str, data: dict) -> WebhookOutbox:
+    """Единый builder outbox-записи (PR6, SSOT-кластер #1).
+
+    Единственное место, где payload-диспетчеризация (building.*/request.*/
+    generic) превращается в WebhookOutbox — queue_webhook и queue_webhook_sync
+    оба делегируют сюда, копий «keep in sync» больше нет.
+    """
     if event.startswith("building."):
         payload = build_building_payload(event, data)
     elif event.startswith("request."):
@@ -107,14 +116,20 @@ async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict)
             "data": data,
         }
 
-    record = WebhookOutbox(
+    return WebhookOutbox(
         event_id=payload["event_id"],
         event=event,
         endpoint=endpoint,
         payload=payload,
         status="pending",
     )
-    db.add(record)
+
+
+async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict) -> None:
+    """Write a webhook outbox record within the caller's transaction (no commit)."""
+    if _skip_if_disabled("queue_webhook", event, endpoint):
+        return
+    db.add(_build_outbox_record(event, endpoint, data))
 
 
 def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) -> None:
@@ -130,38 +145,12 @@ def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) 
     revisited for removal.
 
     Same semantics: writes to webhook_outbox in the caller's transaction
-    (no commit). Keep this in sync with `queue_webhook` — if the async version
-    changes payload shape, validation, or skip behaviour, mirror it here.
+    (no commit). Payload shape/skip behaviour shared with `queue_webhook`
+    via _skip_if_disabled/_build_outbox_record (PR6) — расходиться нечему.
     """
-    if not settings.INFRASAFE_WEBHOOK_ENABLED:
-        logger.warning(
-            "queue_webhook_sync SKIPPED: INFRASAFE_WEBHOOK_ENABLED=False "
-            "(event=%s endpoint=%s) — event will be LOST. "
-            "Reconciliation will replay it within 1h if it's a building/request.",
-            event, endpoint,
-        )
+    if _skip_if_disabled("queue_webhook_sync", event, endpoint):
         return
-
-    if event.startswith("building."):
-        payload = build_building_payload(event, data)
-    elif event.startswith("request."):
-        payload = build_request_payload(event, data)
-    else:
-        payload = {
-            "event_id": str(uuid.uuid4()),
-            "event": event,
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "data": data,
-        }
-
-    record = WebhookOutbox(
-        event_id=payload["event_id"],
-        event=event,
-        endpoint=endpoint,
-        payload=payload,
-        status="pending",
-    )
-    session.add(record)
+    session.add(_build_outbox_record(event, endpoint, data))
 
 
 async def send_webhook(
