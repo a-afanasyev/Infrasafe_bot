@@ -22,6 +22,7 @@ afterEach(() => vi.restoreAllMocks())
 describe('apiMaps known values → i18n keys', () => {
   it('maps every category surface (RU + EN keys)', () => {
     expect(tStatus('В работе', t)).toBe('T:status.in_progress')
+    expect(tStatus('Возвращена', t)).toBe('T:status.returned') // PR7: канон-статус возврата
     expect(tUrgency('Критическая', t)).toBe('T:urgency.critical')
     expect(tCategory('Электрика', t)).toBe('T:category.electrical')
     expect(tCategory('plumbing', t)).toBe('T:category.plumbing') // EN key from bot

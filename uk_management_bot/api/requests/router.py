@@ -45,13 +45,14 @@ from uk_management_bot.utils.request_workflow import (
     EditForbidden,
     WorkflowError,
     project_public_status,
+    normalize_status,
 )
 from uk_management_bot.utils import constants as C
 from uk_management_bot.api.rate_limit import limiter
 
 router = APIRouter()
 
-KANBAN_STATUSES = ["Новая", "В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Принято", "Отменена"]
+KANBAN_STATUSES = ["Новая", "В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Возвращена", "Принято", "Отменена"]
 
 # Терминальные (финализированные) статусы — заявка заморожена для urgency-правок.
 # (PR2b: статус-переходы валидирует канон ACTION_TABLE через run_command; прежняя
@@ -77,11 +78,14 @@ def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
     their query cost identical to pre-INT-120 baseline.
     """
     card = RequestCard.model_validate(req)
-    # Проекция наружу (PR4 contract): канон-статус «Возвращена» отдаётся
-    # клиентам (Kanban/TWA/мобайл) как «Исполнено» — фронт не знает канон до
-    # PR7. project_public_status читает .status/.is_returned/.manager_confirmed
-    # ORM-объекта; для не-возвращённых заявок — identity.
-    card.status = project_public_status(req)
+    # PR7: аутентифицированные app-потребители (Kanban/список/детали/TWA) видят
+    # КАНОН-статус, включая «Возвращена» — менеджер должен отличать возврат,
+    # чтобы запустить return-to-work / force-accept. Проекция в «Исполнено»
+    # осталась ТОЛЬКО на публичной витрине и в InfraSafe (отдельные пути,
+    # project_public_status / project_infrasafe_status). normalize_status —
+    # dual-read: читает .status/.is_returned/.manager_confirmed ORM-объекта,
+    # сворачивает legacy-кодировку в канон; для канон-строк — identity.
+    card.status = normalize_status(req)
     card.executor_name = _format_executor_name(exec_user)
     if inbox_row is not None:
         alert = (inbox_row.payload or {}).get("alert", {}) or {}
@@ -138,9 +142,9 @@ async def get_kanban(
     result = await db.execute(query.order_by(RequestModel.created_at.desc()).limit(500))
     rows = result.all()
 
-    # Карты строятся с проекцией статуса (card.status уже спроецирован в
-    # _make_request_card), поэтому группируем по card.status: канон-«Возвращена»
-    # попадает в колонку «Исполнено», как и до cutover.
+    # Карты несут канон-статус (PR7: _make_request_card нормализует, не
+    # проецирует), поэтому группируем по card.status: канон-«Возвращена»
+    # попадает в одноимённую колонку, а не сворачивается в «Исполнено».
     all_cards = [_make_request_card(r, eu) for r, eu in rows]
     columns = []
     for st in KANBAN_STATUSES:
@@ -516,7 +520,8 @@ async def update_request(
             if ev.kind == "realtime":
                 await publish_request_event("request.status_changed", {
                     "number": request_number,
-                    "old_status": project_public_status(outcome.old_state),
+                    # Канал канбана — app-аудитория (PR7): канон-статус, как в карточке.
+                    "old_status": normalize_status(outcome.old_state),
                     "new_status": ev.data.get("status"),
                 })
 
@@ -588,8 +593,8 @@ async def update_request(
     if changed:
         await publish_request_event("request.updated", {"number": request_number})
 
-    # _make_request_card проецирует статус (канон-«Возвращена» → «Исполнено»):
-    # edit-путь может вернуть возвращённую заявку (правка urgency/rating).
+    # _make_request_card отдаёт канон-статус (PR7): edit-путь может вернуть
+    # возвращённую заявку (правка urgency/rating) — менеджер видит «Возвращена».
     return _make_request_card(req)
 
 

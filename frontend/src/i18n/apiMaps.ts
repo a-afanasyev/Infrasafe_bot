@@ -4,7 +4,10 @@
  */
 import type { TFunction } from 'i18next'
 
-// === Statuses (8 values) ===
+// === Statuses (9 values) ===
+// PR7: «Возвращена» — канон-статус возврата заявителем (SSOT-кластер #1).
+// Менеджерский дашборд и TWA видят его напрямую; публичная витрина и InfraSafe
+// получают спроецированное «Исполнено» (бэкенд project_public_status).
 export const STATUS_MAP = {
   'Новая':      'status.new',
   'В работе':   'status.in_progress',
@@ -12,6 +15,7 @@ export const STATUS_MAP = {
   'Уточнение':  'status.clarification',
   'Выполнена':  'status.executed',
   'Исполнено':  'status.completed',
+  'Возвращена': 'status.returned',
   'Принято':    'status.approved',
   'Отменена':   'status.cancelled',
 } as const
