@@ -89,6 +89,13 @@ jobs:
       # together with the postgres unit suite. BLOCKING — these gates protect
       # the request-workflow SSOT write/read path and the public API contract.
       - name: Run API + integration/gate suite (tests/api, tests/services)
+        # The outbox/webhook gate tests assert that a status change queues an
+        # InfraSafe webhook — that emission is gated on INFRASAFE_WEBHOOK_ENABLED
+        # (default false). dev/prod containers set it true; enable it here too so
+        # the gate exercises the real emission path. Step-scoped so the unit
+        # suite above keeps running with webhooks disabled.
+        env:
+          INFRASAFE_WEBHOOK_ENABLED: "true"
         run: pytest -q tests/api tests/services
 
   images-build:
