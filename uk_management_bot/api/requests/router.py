@@ -77,6 +77,11 @@ def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
     their query cost identical to pre-INT-120 baseline.
     """
     card = RequestCard.model_validate(req)
+    # Проекция наружу (PR4 contract): канон-статус «Возвращена» отдаётся
+    # клиентам (Kanban/TWA/мобайл) как «Исполнено» — фронт не знает канон до
+    # PR7. project_public_status читает .status/.is_returned/.manager_confirmed
+    # ORM-объекта; для не-возвращённых заявок — identity.
+    card.status = project_public_status(req)
     card.executor_name = _format_executor_name(exec_user)
     if inbox_row is not None:
         alert = (inbox_row.payload or {}).get("alert", {}) or {}
@@ -133,9 +138,13 @@ async def get_kanban(
     result = await db.execute(query.order_by(RequestModel.created_at.desc()).limit(500))
     rows = result.all()
 
+    # Карты строятся с проекцией статуса (card.status уже спроецирован в
+    # _make_request_card), поэтому группируем по card.status: канон-«Возвращена»
+    # попадает в колонку «Исполнено», как и до cutover.
+    all_cards = [_make_request_card(r, eu) for r, eu in rows]
     columns = []
     for st in KANBAN_STATUSES:
-        st_cards = [_make_request_card(r, eu) for r, eu in rows if r.status == st]
+        st_cards = [c for c in all_cards if c.status == st]
         columns.append(KanbanColumn(status=st, count=len(st_cards), requests=st_cards))
     return KanbanResponse(columns=columns)
 
@@ -579,7 +588,9 @@ async def update_request(
     if changed:
         await publish_request_event("request.updated", {"number": request_number})
 
-    return RequestCard.model_validate(req)
+    # _make_request_card проецирует статус (канон-«Возвращена» → «Исполнено»):
+    # edit-путь может вернуть возвращённую заявку (правка urgency/rating).
+    return _make_request_card(req)
 
 
 @router.get("/{request_number}/comments", response_model=list[CommentOut])

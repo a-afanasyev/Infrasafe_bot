@@ -130,7 +130,9 @@ BASELINE: set[tuple[str, str, str]] = {
     # "approved" (router.py:50,52) — не workflow заявки.
     ('uk_management_bot/api/registration/router.py', 'cmp:existing', 'status'),
     ('uk_management_bot/api/requests/router.py', 'cmp:RequestModel', 'status'),
-    ('uk_management_bot/api/requests/router.py', 'cmp:r', 'status'),
+    # PR4 cutover: kanban-группировка переведена с сырого `r.status == st` на
+    # проецированный `card.status == st` (project_public_status в
+    # _make_request_card) → 'cmp:r' status в этом файле исчез.
     ('uk_management_bot/api/requests/router.py', 'cmp:req', 'status'),
     ('uk_management_bot/api/requests/stats_router.py', 'in_:Request', 'status'),
     ('uk_management_bot/api/shifts/router.py', 'in_:Request', 'status'),

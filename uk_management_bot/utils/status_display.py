@@ -9,6 +9,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_EXECUTED, REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED,
+    REQUEST_STATUS_RETURNED,
 )
 
 STATUS_DISPLAY_KEYS = {
@@ -18,6 +19,9 @@ STATUS_DISPLAY_KEYS = {
     REQUEST_STATUS_CLARIFICATION: "statuses.clarification",
     REQUEST_STATUS_EXECUTED: "statuses.executed",
     REQUEST_STATUS_COMPLETED: "statuses.completed",
+    # «Возвращена» — канон cutover (PR3+4); внутренний рендер бота (менеджер
+    # видит канон-статус). Наружу (API/TWA) проецируется как «Исполнено».
+    REQUEST_STATUS_RETURNED: "statuses.returned",
     REQUEST_STATUS_APPROVED: "statuses.approved",
     REQUEST_STATUS_CANCELLED: "statuses.cancelled",
 }
@@ -29,6 +33,7 @@ STATUS_EMOJI = {
     REQUEST_STATUS_CLARIFICATION: "❓",
     REQUEST_STATUS_EXECUTED: "✅",
     REQUEST_STATUS_COMPLETED: "⭐",
+    REQUEST_STATUS_RETURNED: "↩️",
     REQUEST_STATUS_APPROVED: "✔️",
     REQUEST_STATUS_CANCELLED: "❌",
 }

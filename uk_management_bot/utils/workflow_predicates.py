@@ -30,6 +30,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_EXECUTED,
+    REQUEST_STATUS_RETURNED,
 )
 
 
@@ -119,14 +120,20 @@ def awaiting_manager_clause() -> ColumnElement:
 def is_returned_for_review(request) -> bool:
     """Канон «Возвращена»: возвращена заявителем, ждёт разбора менеджером.
 
-    Legacy-кодировка (до cutover): Исполнено + is_returned=True.
+    После cutover (PR3+4): status == «Возвращена» напрямую.
+    Legacy-кодировка (до cutover, страховка): Исполнено + is_returned=True.
     """
+    if request.status == REQUEST_STATUS_RETURNED:
+        return True
     return (request.status == REQUEST_STATUS_COMPLETED
             and bool(getattr(request, "is_returned", False)))
 
 
 def returned_for_review_clause() -> ColumnElement:
-    return and_(
-        Request.status == REQUEST_STATUS_COMPLETED,
-        Request.is_returned.is_(True),
+    return or_(
+        Request.status == REQUEST_STATUS_RETURNED,
+        and_(
+            Request.status == REQUEST_STATUS_COMPLETED,
+            Request.is_returned.is_(True),
+        ),
     )

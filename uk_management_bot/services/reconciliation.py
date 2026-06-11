@@ -20,6 +20,7 @@ from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.webhook_payloads import emit_request_status_changed
 from uk_management_bot.services.webhook_sender import queue_webhook
+from uk_management_bot.utils.request_workflow import project_infrasafe_status
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,12 @@ async def reconcile_requests() -> dict:
             # 1. UK side: every request — including terminal. InfraSafe's
             #    inventory returns everything (per Q6 of the spec); we mirror
             #    that so the diff is symmetric.
-            uk_stmt = select(Request.request_number, Request.status)
+            # is_returned/manager_confirmed нужны для проекции наружу
+            # (канон-«Возвращена» → InfraSafe видит «Исполнено» до PR7).
+            uk_stmt = select(
+                Request.request_number, Request.status,
+                Request.is_returned, Request.manager_confirmed,
+            )
             uk_rows = (await db.execute(uk_stmt)).all()
             uk_by_number = {r.request_number: r for r in uk_rows}
             uk_set = set(uk_by_number.keys())
@@ -239,8 +245,9 @@ async def reconcile_requests() -> dict:
             enqueued = 0
             for rn in sorted(missing_in_is)[:REPLAY_CAP]:
                 row = uk_by_number[rn]
+                projected = project_infrasafe_status(row)
                 await emit_request_status_changed(
-                    db, rn, row.status, row.status, source="reconcile",
+                    db, rn, projected, projected, source="reconcile",
                 )
                 enqueued += 1
 

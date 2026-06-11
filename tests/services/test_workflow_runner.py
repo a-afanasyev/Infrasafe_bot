@@ -228,7 +228,7 @@ class TestApplicantAccept:
 
 
 # ---------------------------------------------------------------------------
-# APPLICANT_RETURN — канон «Возвращена» (legacy storage: Исполнено+is_returned)
+# APPLICANT_RETURN — канон «Возвращена» (после cutover PR3+4 пишется напрямую)
 # ---------------------------------------------------------------------------
 
 class TestApplicantReturn:
@@ -240,11 +240,12 @@ class TestApplicantReturn:
                           {"return_reason": "не доделано"}),
         )
         assert out.new_canon_status == "Возвращена"
-        assert out.new_status == C.REQUEST_STATUS_COMPLETED  # legacy-кодировка
+        assert out.new_status == "Возвращена"  # canonical-write (cutover PR4)
         assert out.public_status == C.REQUEST_STATUS_COMPLETED  # проекция наружу
         s = SF()
         req = s.query(Request).filter_by(request_number="260610-001").first()
-        assert req.is_returned is True
+        assert req.status == "Возвращена"  # хранится канон напрямую
+        assert req.is_returned is True      # исторический флаг сохранён
         assert req.return_reason == "не доделано"
         assert req.returned_by == 2
         s.close()

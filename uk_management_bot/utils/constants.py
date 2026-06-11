@@ -42,6 +42,12 @@ REQUEST_STATUS_EXECUTED = "Выполнена"     # Выполнена испо
 REQUEST_STATUS_COMPLETED = "Исполнено"    # Проверена менеджером, отправлена заявителю
 REQUEST_STATUS_APPROVED = "Принято"       # Принята заявителем (финальный статус)
 REQUEST_STATUS_CANCELLED = "Отменена"     # Отменена
+# SSOT-кластер #1 cutover (PR3+4): канон-статус «Возвращена» (возвращена
+# заявителем, ждёт повторного разбора менеджером). НАМЕРЕННО вне REQUEST_STATUSES
+# — это не клиентский входной статус (его ставит только APPLICANT_RETURN через
+# canonical-writer), наружу проецируется как «Исполнено» (project_public_status)
+# до PR7. Источник истины: utils/request_workflow.STATUS_RETURNED.
+REQUEST_STATUS_RETURNED = "Возвращена"
 
 REQUEST_STATUSES = [
     REQUEST_STATUS_NEW,
