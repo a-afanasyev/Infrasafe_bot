@@ -34,11 +34,11 @@
 - **Состав:** FE-01 (`WeekResourceGrid.tsx:133` — поднять `useMemo` над early-return :109-117), FE-02 (удалить дубль `useShiftStats` из `useShifts.ts:61`, оставить `useAnalytics.ts:17`).
 - **DoD:** build+vitest; смоук смены ветки рендера WeekResourceGrid (пусто↔данные) без runtime-ошибки.
 
-#### PR-2 — react-router-dom CVE (S)
+#### ~~PR-2 — react-router-dom CVE (S)~~ ✅ DONE 2026-06-12 (PR #60, `ec11761`, прод)
 - **Состав:** DEP-01 — `npm audit fix` (в пределах 7.x; 3 high + 1 moderate: open redirect, XSS×2, DoS).
 - **DoD:** `npm audit` без high; build+vitest.
 
-#### PR-3 — Backend CVE-пины (S)
+#### ~~PR-3 — Backend CVE-пины (S)~~ ✅ DONE 2026-06-12 (PR #61, `b7fb70b`, прод: starlette 1.0.1; aiohttp — defer, CVE неэксплуатируемы, ждём aiogram c aiohttp≥3.14)
 - **Состав:** DEP-02 — aiohttp→3.14.0; starlette→**1.0.1 = минимальный patched** (актуальная 1.2.0 — поднять до неё, если оба pytest-набора подтверждают совместимость, иначе 1.0.1); перегенерация hash-pinned `requirements.txt`.
 - **DoD:** оба набора в пересобранном контейнере; pip-audit без CVE-2026-34993/47265/PYSEC-2026-161; прод-смоук после деплоя (login + создание заявки + outbox-доставка).
 - **Риск:** starlette — ядро FastAPI; гейт — полный CI + контейнерный прогон.
