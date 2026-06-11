@@ -58,14 +58,10 @@ export function useShiftTransfers() {
   })
 }
 
-export function useShiftStats(period: string = '7d') {
-  return useQuery<ShiftStatsOut>({
-    queryKey: ['shift-stats', period],
-    queryFn: () =>
-      apiClient.get('/api/v2/shifts/stats', { params: { period } }).then(r => r.data),
-    staleTime: 30_000,
-  })
-}
+// FE-02: единственная реализация useShiftStats живёт в useAnalytics.ts.
+// Здесь был дубль на тот же queryKey ['shift-stats', period] с другими
+// опциями (без keepPreviousData) — два хука делили кэш и конфликтовали.
+export { useShiftStats } from './useAnalytics'
 
 export function useShiftTemplates() {
   return useQuery<TemplateBrief[]>({
