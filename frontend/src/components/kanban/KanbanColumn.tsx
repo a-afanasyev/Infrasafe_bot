@@ -22,6 +22,7 @@ const STATUS_DOT: Record<string, string> = {
   'Уточнение': 'bg-[#22d3ee]',
   'Выполнена': 'bg-[#34d399]',
   'Исполнено': 'bg-accent',
+  'Возвращена': 'bg-[#fb923c]',
   'Принято':   'bg-[#4ade80]',
   'Отменена':  'bg-[#f87171]',
 }
@@ -33,6 +34,7 @@ const STATUS_GLOW: Record<string, string> = {
   'Уточнение': 'shadow-[inset_0_0_32px_rgba(34,211,238,0.1)]',
   'Выполнена': 'shadow-[inset_0_0_32px_rgba(52,211,153,0.1)]',
   'Исполнено': 'shadow-[inset_0_0_32px_rgba(0,212,170,0.1)]',
+  'Возвращена': 'shadow-[inset_0_0_32px_rgba(251,146,60,0.1)]',
   'Принято':   'shadow-[inset_0_0_32px_rgba(74,222,128,0.1)]',
   'Отменена':  'shadow-[inset_0_0_32px_rgba(248,113,113,0.1)]',
 }
@@ -44,6 +46,7 @@ const STATUS_BORDER_ACTIVE: Record<string, string> = {
   'Уточнение': 'border-[#22d3ee]/40',
   'Выполнена': 'border-[#34d399]/40',
   'Исполнено': 'border-accent/40',
+  'Возвращена': 'border-[#fb923c]/40',
   'Принято':   'border-[#4ade80]/40',
   'Отменена':  'border-[#f87171]/40',
 }
@@ -55,6 +58,7 @@ const PLACEHOLDER_BORDER: Record<string, string> = {
   'Уточнение': 'border-[#22d3ee]/25',
   'Выполнена': 'border-[#34d399]/25',
   'Исполнено': 'border-accent/25',
+  'Возвращена': 'border-[#fb923c]/25',
   'Принято':   'border-[#4ade80]/25',
   'Отменена':  'border-[#f87171]/25',
 }
@@ -66,6 +70,7 @@ const PLACEHOLDER_BG: Record<string, string> = {
   'Уточнение': 'bg-[#22d3ee]/[0.04]',
   'Выполнена': 'bg-[#34d399]/[0.04]',
   'Исполнено': 'bg-accent/[0.04]',
+  'Возвращена': 'bg-[#fb923c]/[0.04]',
   'Принято':   'bg-[#4ade80]/[0.04]',
   'Отменена':  'bg-[#f87171]/[0.04]',
 }
