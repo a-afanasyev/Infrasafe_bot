@@ -30,7 +30,7 @@
 
 ### Волна 0 — P0 + CVE (4 PR, независимы)
 
-#### PR-1 — Frontend P0 (S)
+#### ~~PR-1 — Frontend P0 (S)~~ ✅ DONE 2026-06-12 (PR #59, merge `741e9ed`, прод задеплоен)
 - **Состав:** FE-01 (`WeekResourceGrid.tsx:133` — поднять `useMemo` над early-return :109-117), FE-02 (удалить дубль `useShiftStats` из `useShifts.ts:61`, оставить `useAnalytics.ts:17`).
 - **DoD:** build+vitest; смоук смены ветки рендера WeekResourceGrid (пусто↔данные) без runtime-ошибки.
 
