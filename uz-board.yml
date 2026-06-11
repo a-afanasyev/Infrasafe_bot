@@ -1,0 +1,307 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - complementary [ref=e3]:
+    - generic [ref=e5]:
+      - img "InfraSafe" [ref=e6]
+      - generic [ref=e7]:
+        - generic [ref=e8]: Сервисная панель
+        - generic [ref=e9]: management system
+    - navigation [ref=e10]:
+      - generic [ref=e11]: Основное
+      - link "Аналитика" [ref=e12] [cursor=pointer]:
+        - /url: /uk/dashboard/analytics
+        - img [ref=e13]
+        - text: Аналитика
+      - link "Заявки" [ref=e18] [cursor=pointer]:
+        - /url: /uk/dashboard
+        - img [ref=e19]
+        - text: Заявки
+      - link "Сотрудники" [ref=e22] [cursor=pointer]:
+        - /url: /uk/dashboard/employees
+        - img [ref=e23]
+        - text: Сотрудники
+      - link "Смены" [ref=e28] [cursor=pointer]:
+        - /url: /uk/dashboard/shifts
+        - img [ref=e29]
+        - text: Смены
+      - link "Шаблоны" [ref=e32] [cursor=pointer]:
+        - /url: /uk/dashboard/templates
+        - img [ref=e33]
+        - text: Шаблоны
+      - link "Адреса" [ref=e35] [cursor=pointer]:
+        - /url: /uk/dashboard/addresses
+        - img [ref=e36]
+        - text: Адреса
+      - link "Редактор витрины" [ref=e39] [cursor=pointer]:
+        - /url: /uk/dashboard/board-editor
+        - img [ref=e40]
+        - text: Редактор витрины
+      - link "Обратная связь" [ref=e43] [cursor=pointer]:
+        - /url: /uk/dashboard/feedback
+        - img [ref=e44]
+        - text: Обратная связь
+      - generic [ref=e46]: Внешнее
+      - link "Табло жителей" [ref=e47] [cursor=pointer]:
+        - /url: /uk/resident-board
+        - img [ref=e48]
+        - text: Табло жителей
+    - button "U User manager" [ref=e51]:
+      - generic [ref=e52]: U
+      - generic [ref=e53]:
+        - generic [ref=e54]: User
+        - generic [ref=e55]: manager
+      - img [ref=e57]
+    - button "Свернуть меню" [ref=e60]:
+      - img
+      - generic [ref=e61]: Свернуть
+  - banner [ref=e62]:
+    - generic [ref=e63]:
+      - button "Создать по звонку" [ref=e64]:
+        - img
+        - text: Создать по звонку
+      - button "O'zb" [active] [ref=e399]
+      - button "Тёмная тема" [ref=e66]:
+        - img
+  - main [ref=e67]:
+    - generic [ref=e68]:
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - generic [ref=e72]:
+            - generic [ref=e75]: Новая
+            - generic [ref=e76]: "4"
+          - generic [ref=e77]:
+            - button "260522-001 Электрика Smoke Phase 2 Критическая" [ref=e80] [cursor=pointer]:
+              - generic [ref=e82]: 260522-001
+              - generic [ref=e83]: Электрика
+              - generic [ref=e84]: Smoke Phase 2
+              - generic [ref=e86]: Критическая
+            - button "260412-001 🤖 Электрика Не работает розетка в прихожей, искрит при включении Средняя" [ref=e89] [cursor=pointer]:
+              - generic [ref=e90]:
+                - generic [ref=e91]: 260412-001
+                - generic [ref=e92]: 🤖
+              - generic [ref=e93]: Электрика
+              - generic [ref=e94]: Не работает розетка в прихожей, искрит при включении
+              - generic [ref=e96]: Средняя
+            - button "260403-001 🤖 Электрика Тестовая заявка — не работает розетка в прихожей 👤 User User Обычная" [ref=e99] [cursor=pointer]:
+              - generic [ref=e100]:
+                - generic [ref=e101]: 260403-001
+                - generic [ref=e102]: 🤖
+              - generic [ref=e103]: Электрика
+              - generic [ref=e104]: Тестовая заявка — не работает розетка в прихожей
+              - generic [ref=e105]:
+                - generic [ref=e106]: 👤
+                - generic [ref=e107]: User User
+              - generic [ref=e109]: Обычная
+            - button "260323-007 🤖 Сантехника Kran oqyapti Обычная" [ref=e112] [cursor=pointer]:
+              - generic [ref=e113]:
+                - generic [ref=e114]: 260323-007
+                - generic [ref=e115]: 🤖
+              - generic [ref=e116]: Сантехника
+              - generic [ref=e117]: Kran oqyapti
+              - generic [ref=e119]: Обычная
+        - generic [ref=e121]:
+          - generic [ref=e122]:
+            - generic [ref=e125]: В работе
+            - generic [ref=e126]: "4"
+          - generic [ref=e127]:
+            - button "260323-008 🤖 Электрика Rozetkada tok yo'q, 2-xonada 👤 Марат Усманов Обычная" [ref=e130] [cursor=pointer]:
+              - generic [ref=e131]:
+                - generic [ref=e132]: 260323-008
+                - generic [ref=e133]: 🤖
+              - generic [ref=e134]: Электрика
+              - generic [ref=e135]: Rozetkada tok yo'q, 2-xonada
+              - generic [ref=e136]:
+                - generic [ref=e137]: 👤
+                - generic [ref=e138]: Марат Усманов
+              - generic [ref=e140]: Обычная
+            - button "260322-003 🤖 Сантехника Течет труба в подвале, нужна замена 👤 User User Обычная" [ref=e143] [cursor=pointer]:
+              - generic [ref=e144]:
+                - generic [ref=e145]: 260322-003
+                - generic [ref=e146]: 🤖
+              - generic [ref=e147]: Сантехника
+              - generic [ref=e148]: Течет труба в подвале, нужна замена
+              - generic [ref=e149]:
+                - generic [ref=e150]: 👤
+                - generic [ref=e151]: User User
+              - generic [ref=e153]: Обычная
+            - button "260322-002 🤖 Электрика Не работает освещение в подъезде, лампочки перегорели на 3 этаже 👤 User User Средняя" [ref=e156] [cursor=pointer]:
+              - generic [ref=e157]:
+                - generic [ref=e158]: 260322-002
+                - generic [ref=e159]: 🤖
+              - generic [ref=e160]: Электрика
+              - generic [ref=e161]: Не работает освещение в подъезде, лампочки перегорели на 3 этаже
+              - generic [ref=e162]:
+                - generic [ref=e163]: 👤
+                - generic [ref=e164]: User User
+              - generic [ref=e166]: Средняя
+            - button "260311-221 🌐 Благоустройство Нужен ремонт асфальта 👤 Администратор Обычная" [ref=e169] [cursor=pointer]:
+              - generic [ref=e170]:
+                - generic [ref=e171]: 260311-221
+                - generic [ref=e172]: 🌐
+              - generic [ref=e173]: Благоустройство
+              - generic [ref=e174]: Нужен ремонт асфальта
+              - generic [ref=e175]:
+                - generic [ref=e176]: 👤
+                - generic [ref=e177]: Администратор
+              - generic [ref=e179]: Обычная
+        - generic [ref=e181]:
+          - generic [ref=e182]:
+            - generic [ref=e185]: Закуп
+            - generic [ref=e186]: "1"
+          - button "260311-203 🌐 Сантехника Протечка в ванной комнате 👤 Фарход Абдуллаев Средняя" [ref=e190] [cursor=pointer]:
+            - generic [ref=e191]:
+              - generic [ref=e192]: 260311-203
+              - generic [ref=e193]: 🌐
+            - generic [ref=e194]: Сантехника
+            - generic [ref=e195]: Протечка в ванной комнате
+            - generic [ref=e196]:
+              - generic [ref=e197]: 👤
+              - generic [ref=e198]: Фарход Абдуллаев
+            - generic [ref=e200]: Средняя
+        - generic [ref=e202]:
+          - generic [ref=e203]:
+            - generic [ref=e206]: Уточнение
+            - generic [ref=e207]: "3"
+          - generic [ref=e208]:
+            - button "260329-001 🤖 Электрика Тестовая заявка для полного QA тестирования Обычная" [ref=e211] [cursor=pointer]:
+              - generic [ref=e212]:
+                - generic [ref=e213]: 260329-001
+                - generic [ref=e214]: 🤖
+              - generic [ref=e215]: Электрика
+              - generic [ref=e216]: Тестовая заявка для полного QA тестирования
+              - generic [ref=e218]: Обычная
+            - button "260321-005 🤖 Уборка На детской площадке мусор и битое стекло. Опасно для детей, нужна уборка территории. Критическая" [ref=e221] [cursor=pointer]:
+              - generic [ref=e222]:
+                - generic [ref=e223]: 260321-005
+                - generic [ref=e224]: 🤖
+              - generic [ref=e225]: Уборка
+              - generic [ref=e226]: На детской площадке мусор и битое стекло. Опасно для детей, нужна уборка территории.
+              - generic [ref=e228]: Критическая
+            - button "260310-076 🌐 Сантехника Нет горячей воды в квартире Обычная" [ref=e231] [cursor=pointer]:
+              - generic [ref=e232]:
+                - generic [ref=e233]: 260310-076
+                - generic [ref=e234]: 🌐
+              - generic [ref=e235]: Сантехника
+              - generic [ref=e236]: Нет горячей воды в квартире
+              - generic [ref=e238]: Обычная
+        - generic [ref=e240]:
+          - generic [ref=e241]:
+            - generic [ref=e244]: Выполнена
+            - generic [ref=e245]: "2"
+          - generic [ref=e246]:
+            - button "260321-004 🤖 Лифт Лифт застревает между 5 и 6 этажом, двери не открываются. Жильцы вынуждены ходить пешком. 👤 Фарход Абдуллаев Срочная" [ref=e249] [cursor=pointer]:
+              - generic [ref=e250]:
+                - generic [ref=e251]: 260321-004
+                - generic [ref=e252]: 🤖
+              - generic [ref=e253]: Лифт
+              - generic [ref=e254]: Лифт застревает между 5 и 6 этажом, двери не открываются. Жильцы вынуждены ходить пешком.
+              - generic [ref=e255]:
+                - generic [ref=e256]: 👤
+                - generic [ref=e257]: Фарход Абдуллаев
+              - generic [ref=e259]: Срочная
+            - button "260310-205 🤖 Вентиляция Запах с вентиляционного канала 👤 Дмитрий Козлов Средняя" [ref=e262] [cursor=pointer]:
+              - generic [ref=e263]:
+                - generic [ref=e264]: 260310-205
+                - generic [ref=e265]: 🤖
+              - generic [ref=e266]: Вентиляция
+              - generic [ref=e267]: Запах с вентиляционного канала
+              - generic [ref=e268]:
+                - generic [ref=e269]: 👤
+                - generic [ref=e270]: Дмитрий Козлов
+              - generic [ref=e272]: Средняя
+        - generic [ref=e274]:
+          - generic [ref=e275]:
+            - generic [ref=e278]: Исполнено
+            - generic [ref=e279]: "1"
+          - button "260305-054 🤖 Безопасность Посторонние на территории ЖК 👤 Камол Ёқубов Обычная" [ref=e283] [cursor=pointer]:
+            - generic [ref=e284]:
+              - generic [ref=e285]: 260305-054
+              - generic [ref=e286]: 🤖
+            - generic [ref=e287]: Безопасность
+            - generic [ref=e288]: Посторонние на территории ЖК
+            - generic [ref=e289]:
+              - generic [ref=e290]: 👤
+              - generic [ref=e291]: Камол Ёқубов
+            - generic [ref=e293]: Обычная
+        - generic [ref=e295]:
+          - generic [ref=e296]:
+            - generic [ref=e299]: Принято
+            - generic [ref=e300]: "5"
+          - generic [ref=e301]:
+            - button "260328-002 🤖 Электрика лампочка не горит 👤 Марат Усманов Срочная ✓ Подтверждено" [disabled] [ref=e304]:
+              - generic [ref=e305]:
+                - generic [ref=e306]: 260328-002
+                - generic [ref=e307]: 🤖
+              - generic [ref=e308]: Электрика
+              - generic [ref=e309]: лампочка не горит
+              - generic [ref=e310]:
+                - generic [ref=e311]: 👤
+                - generic [ref=e312]: Марат Усманов
+              - generic [ref=e313]:
+                - generic [ref=e314]: Срочная
+                - generic [ref=e315]: ✓ Подтверждено
+            - button "260328-001 🤖 Сантехника Vannada kran oqyapti, tezda tuzating iltimos 👤 Жасур Тошматов Средняя ✓ Подтверждено" [disabled] [ref=e318]:
+              - generic [ref=e319]:
+                - generic [ref=e320]: 260328-001
+                - generic [ref=e321]: 🤖
+              - generic [ref=e322]: Сантехника
+              - generic [ref=e323]: Vannada kran oqyapti, tezda tuzating iltimos
+              - generic [ref=e324]:
+                - generic [ref=e325]: 👤
+                - generic [ref=e326]: Жасур Тошматов
+              - generic [ref=e327]:
+                - generic [ref=e328]: Средняя
+                - generic [ref=e329]: ✓ Подтверждено
+            - button "260311-222 🤖 Благоустройство Нужна обрезка деревьев во дворе Критическая ✓ Подтверждено" [disabled] [ref=e332]:
+              - generic [ref=e333]:
+                - generic [ref=e334]: 260311-222
+                - generic [ref=e335]: 🤖
+              - generic [ref=e336]: Благоустройство
+              - generic [ref=e337]: Нужна обрезка деревьев во дворе
+              - generic [ref=e338]:
+                - generic [ref=e339]: Критическая
+                - generic [ref=e340]: ✓ Подтверждено
+            - button "260311-129 🤖 Лифт Лифт застрял между этажами 👤 Темур Маҳмудов Средняя ✓ Подтверждено" [disabled] [ref=e343]:
+              - generic [ref=e344]:
+                - generic [ref=e345]: 260311-129
+                - generic [ref=e346]: 🤖
+              - generic [ref=e347]: Лифт
+              - generic [ref=e348]: Лифт застрял между этажами
+              - generic [ref=e349]:
+                - generic [ref=e350]: 👤
+                - generic [ref=e351]: Темур Маҳмудов
+              - generic [ref=e352]:
+                - generic [ref=e353]: Средняя
+                - generic [ref=e354]: ✓ Подтверждено
+            - button "260310-060 🤖 Лифт Не работает кнопка вызова лифта 👤 Сардор Рустамов Средняя ✓ Подтверждено" [disabled] [ref=e357]:
+              - generic [ref=e358]:
+                - generic [ref=e359]: 260310-060
+                - generic [ref=e360]: 🤖
+              - generic [ref=e361]: Лифт
+              - generic [ref=e362]: Не работает кнопка вызова лифта
+              - generic [ref=e363]:
+                - generic [ref=e364]: 👤
+                - generic [ref=e365]: Сардор Рустамов
+              - generic [ref=e366]:
+                - generic [ref=e367]: Средняя
+                - generic [ref=e368]: ✓ Подтверждено
+        - generic [ref=e370]:
+          - generic [ref=e371]:
+            - generic [ref=e374]: Отменена
+            - generic [ref=e375]: "2"
+          - generic [ref=e376]:
+            - button "260306-151 🤖 Лифт Не закрываются двери лифта Обычная" [disabled] [ref=e379]:
+              - generic [ref=e380]:
+                - generic [ref=e381]: 260306-151
+                - generic [ref=e382]: 🤖
+              - generic [ref=e383]: Лифт
+              - generic [ref=e384]: Не закрываются двери лифта
+              - generic [ref=e386]: Обычная
+            - button "260301-152 🤖 Отопление Течь в системе отопления Обычная" [disabled] [ref=e389]:
+              - generic [ref=e390]:
+                - generic [ref=e391]: 260301-152
+                - generic [ref=e392]: 🤖
+              - generic [ref=e393]: Отопление
+              - generic [ref=e394]: Течь в системе отопления
+              - generic [ref=e396]: Обычная
+      - status [ref=e398]
