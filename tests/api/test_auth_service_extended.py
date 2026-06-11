@@ -94,8 +94,15 @@ class TestTokenCreation:
 
     def test_tampered_token_returns_none(self):
         token = create_access_token(user_id=1, roles=["applicant"])
-        # Tamper with the last character
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        # Tamper a character in the MIDDLE of the signature segment. Flipping
+        # the LAST base64 char is non-deterministic: trailing bits can be
+        # redundant, so the mutated char may decode to the same signature bytes
+        # → token still valid → flaky failure. A middle char always maps to
+        # real bytes, so the signature is guaranteed to change.
+        header, payload, sig = token.split(".")
+        i = len(sig) // 2
+        sig = sig[:i] + ("A" if sig[i] != "A" else "B") + sig[i + 1:]
+        tampered = ".".join([header, payload, sig])
         assert verify_access_token(tampered) is None
 
 

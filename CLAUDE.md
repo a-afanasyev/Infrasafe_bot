@@ -24,7 +24,7 @@ docker-compose.yml       — dev-окружение (bot, api, frontend, postgre
 
 - **Язык общения**: русский, если не указано иное.
 - **Контейнеры**: бот = `uk-management-bot`, API = `uk-management-api`, фронт = `uk-frontend`, БД = `uk-postgres`, кэш = `uk-redis`.
-- **Тесты бота**: только внутри контейнера: `docker exec uk-management-bot pytest`.
+- **Тесты бота**: только внутри контейнера: `docker exec uk-management-bot pytest`. Два набора (оба в CI): unit/handlers/services — `pytest -q` (testpaths=`uk_management_bot/`); API + интеграция/SSOT-гейты — `pytest -q tests/api tests/services` (sqlite-conftest'ы). Корневой top-level `tests/*.py` удалён (был заброшенный legacy).
 - **Тесты фронта**: `cd frontend && npm test` (или `npx vitest`).
 - **Rebuild бота**: `docker compose build uk-management-bot && docker compose up -d uk-management-bot`.
 - **Локализация бота**: файлы `config/locales/ru.json`, `config/locales/uz.json`. Функция `get_text(key, language=lang)`. Статусы через `utils/status_display.py`. Адреса через `utils/address_helpers.py:localize_address()`.

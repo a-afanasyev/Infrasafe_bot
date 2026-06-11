@@ -127,3 +127,24 @@ def _reset_public_board_cache():
     public_router._board_cache = None
     yield
     public_router._board_cache = None
+
+
+# ── Reset the slowapi rate-limiter between tests ────────────────────
+# The limiter is a module-level singleton with shared counters (Redis in
+# the dev container, in-memory in CI). Without a reset, per-IP counters
+# accumulate across tests — all requests share one client identity — so a
+# test asserting a first-request 200 flakes into 429 once an earlier test
+# has spent the quota. Reset both before and after to isolate every test.
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    from uk_management_bot.api.rate_limit import limiter
+    try:
+        limiter.reset()
+    except Exception:
+        pass
+    yield
+    try:
+        limiter.reset()
+    except Exception:
+        pass

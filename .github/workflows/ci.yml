@@ -77,10 +77,26 @@ jobs:
           python -m alembic stamp 006
           python -m alembic upgrade head
 
-      # pyproject.toml drives the run: testpaths=[uk_management_bot] (root tests/
-      # legacy tree excluded), asyncio_mode=auto, --import-mode=importlib.
-      - name: Run tests
+      # pyproject.toml drives the run: testpaths=[uk_management_bot] (colocated
+      # unit/handlers/service suite), asyncio_mode=auto, --import-mode=importlib.
+      - name: Run unit suite (uk_management_bot)
         run: pytest -q
+
+      # API + integration/SSOT-gate suite. Lives under tests/ with its own
+      # sqlite conftests (tests/api → in-memory aiosqlite + dependency
+      # overrides; tests/services → DATABASE_URL=sqlite). Run as a separate
+      # invocation (not in testpaths) so the sqlite suite isn't collected
+      # together with the postgres unit suite. BLOCKING — these gates protect
+      # the request-workflow SSOT write/read path and the public API contract.
+      - name: Run API + integration/gate suite (tests/api, tests/services)
+        # The outbox/webhook gate tests assert that a status change queues an
+        # InfraSafe webhook — that emission is gated on INFRASAFE_WEBHOOK_ENABLED
+        # (default false). dev/prod containers set it true; enable it here too so
+        # the gate exercises the real emission path. Step-scoped so the unit
+        # suite above keeps running with webhooks disabled.
+        env:
+          INFRASAFE_WEBHOOK_ENABLED: "true"
+        run: pytest -q tests/api tests/services
 
   images-build:
     name: images-build (docker)
