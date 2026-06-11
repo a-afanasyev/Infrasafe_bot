@@ -114,10 +114,13 @@ class TestNormalize:
         (REQUEST_STATUS_EXECUTED, False, False, REQUEST_STATUS_EXECUTED),
         # Telegram-композит → канон Исполнено
         (REQUEST_STATUS_EXECUTED, True, False, REQUEST_STATUS_COMPLETED),
-        # возврат (обе платформы) → канон Возвращена
+        # возврат (legacy-кодировка до cutover) → канон Возвращена
         (REQUEST_STATUS_COMPLETED, False, True, STATUS_RETURNED),
         (REQUEST_STATUS_COMPLETED, True, True, STATUS_RETURNED),
         (REQUEST_STATUS_COMPLETED, False, False, REQUEST_STATUS_COMPLETED),
+        # канон-хранилище (после cutover): «Возвращена» → identity
+        (STATUS_RETURNED, False, True, STATUS_RETURNED),
+        (STATUS_RETURNED, False, False, STATUS_RETURNED),
         # странный legacy-промежуток (Выполнена+conf+returned) — НЕ сворачиваем
         (REQUEST_STATUS_EXECUTED, True, True, REQUEST_STATUS_EXECUTED),
         (REQUEST_STATUS_APPROVED, True, False, REQUEST_STATUS_APPROVED),
@@ -253,16 +256,28 @@ class TestPlanTransition:
         assert res.new_canon_status == REQUEST_STATUS_APPROVED
 
     def test_applicant_return_storage_encoding(self):
-        """Возвращена в legacy-хранилище = Исполнено + is_returned=True."""
+        """После cutover (PR3+4) «Возвращена» пишется в хранилище НАПРЯМУЮ;
+        is_returned=True остаётся как исторический флаг."""
         res = _plan(_snap(REQUEST_STATUS_COMPLETED), Action.APPLICANT_RETURN,
                     OWNER, {"return_reason": "не починили"},
                     principal=PrincipalRef("user", OWNER_ID, "telegram"))
         f = _patch_fields(res)
         assert res.new_canon_status == STATUS_RETURNED
-        assert f["status"] == (Op.SET, REQUEST_STATUS_COMPLETED)
+        assert f["status"] == (Op.SET, STATUS_RETURNED)   # canonical-write
         assert f["is_returned"] == (Op.SET, True)
         assert f["return_reason"] == (Op.SET, "не починили")
         assert f["returned_by"][0] == Op.SET_ACTOR
+
+    def test_canon_returned_snapshot_allows_manager_actions(self):
+        """Канон-снимок (status=Возвращена напрямую) разрешает менеджеру
+        re-open и force-accept — without dual-read encoding."""
+        snap = _snap(STATUS_RETURNED)
+        acts = allowed_actions(snap, MANAGER)
+        assert Action.MANAGER_RETURN_TO_WORK in acts
+        assert Action.MANAGER_FORCE_ACCEPT in acts
+        res = _plan(snap, Action.MANAGER_RETURN_TO_WORK, MANAGER,
+                    {"reason": "доделать"})
+        assert res.new_canon_status == REQUEST_STATUS_IN_PROGRESS
 
     def test_return_emits_no_status_webhook(self):
         """Наружу Возвращена проецируется как Исполнено: public-статус не

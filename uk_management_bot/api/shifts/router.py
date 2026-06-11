@@ -370,7 +370,10 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "unblocked"}
 
 
-ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено"}
+# «Возвращена» (канон cutover PR3+4) — активная (ждёт разбора менеджером);
+# до cutover кодировалась как «Исполнено», поэтому добавлена рядом с ним для
+# сохранения прежней классификации (наружу проецируется как «Исполнено»).
+ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Возвращена"}
 
 
 @router.get("/employees/{user_id}/active-requests-count", response_model=ActiveRequestsCount)

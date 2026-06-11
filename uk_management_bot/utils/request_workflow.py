@@ -34,17 +34,19 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_NEW,
     REQUEST_STATUS_PURCHASE,
+    REQUEST_STATUS_RETURNED,
     ROLE_APPLICANT,
     ROLE_EXECUTOR,
     ROLE_MANAGER,
 )
 
 # ---------------------------------------------------------------------------
-# Канон-статусы (модель A). «Возвращена» существует только в канон-модели до
-# cutover; в legacy-хранилище ей соответствует Исполнено+is_returned=True.
+# Канон-статусы (модель A). После cutover (PR3+4) «Возвращена» пишется в БД
+# напрямую (см. _storage_status); наружу проецируется как «Исполнено» до PR7.
+# Единый источник строки — constants.REQUEST_STATUS_RETURNED.
 # ---------------------------------------------------------------------------
 
-STATUS_RETURNED = "Возвращена"
+STATUS_RETURNED = REQUEST_STATUS_RETURNED
 
 CANON_STATUSES = (
     REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE,
@@ -487,15 +489,15 @@ def allowed_actions(snap: WorkflowSnapshot, actor: ActorContext) -> frozenset[Ac
 
 
 # ---------------------------------------------------------------------------
-# Патчи per-action (legacy-кодировка хранения до cutover; канон — после).
-# До PR3/4 «Возвращена» кодируется как Исполнено+is_returned=True, а
-# MANAGER_CONFIRM пишет Исполнено напрямую (canonical-write PR2a-c, dual-read
-# уже понимает обе кодировки).
+# Патчи per-action. После cutover (PR3+4) канон пишется в БД НАПРЯМУЮ:
+# «Возвращена» хранится как «Возвращена» (раньше — Исполнено+is_returned=True).
+# _storage_status стала identity; backfill (миграция 019) уже привёл legacy-
+# строки к канону, dual-read оставлен в normalize_status как страховка.
 # ---------------------------------------------------------------------------
 
 def _storage_status(canon: str) -> str:
-    """Канон-статус → статус в legacy-хранилище (до contract)."""
-    return REQUEST_STATUS_COMPLETED if canon == STATUS_RETURNED else canon
+    """Канон-статус → статус в хранилище. После contract (PR4) — identity."""
+    return canon
 
 
 def _build_patch(action: Action, to_canon: str, actor: ActorContext,

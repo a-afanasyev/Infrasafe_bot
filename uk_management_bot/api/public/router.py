@@ -18,6 +18,10 @@ from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_COMPLETED,
+    REQUEST_STATUS_RETURNED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +33,9 @@ ALL_STATUSES = [
 ]
 # 6 columns of the resident board, in flow order.
 PIPELINE_STATUSES = ["Новая", "В работе", "Закуп", "Уточнение", "Выполнена", "Принято"]
-CLOSED_STATUSES = ["Выполнена", "Исполнено", "Принято", "Отменена"]
+# «Возвращена» (канон cutover PR3+4) добавлена рядом с «Исполнено» (до cutover
+# так кодировалась) для сохранения прежней классификации closed-набора.
+CLOSED_STATUSES = ["Выполнена", "Исполнено", "Возвращена", "Принято", "Отменена"]
 # Cards shown per status column — at most 10, newest first.
 PER_STATUS_LIMIT = 10
 
@@ -86,6 +92,14 @@ async def get_public_board(
         .group_by(RequestModel.status)
     )
     counts_raw = {status: count for status, count in counts_result.all()}
+    # Проекция наружу (PR4 contract): канон «Возвращена» сворачивается в
+    # «Исполнено» — публичный борт не знает канон-статус (как и до cutover,
+    # когда возврат хранился как Исполнено+is_returned).
+    if REQUEST_STATUS_RETURNED in counts_raw:
+        counts_raw[REQUEST_STATUS_COMPLETED] = (
+            counts_raw.get(REQUEST_STATUS_COMPLETED, 0)
+            + counts_raw.pop(REQUEST_STATUS_RETURNED)
+        )
     status_counts = {status: counts_raw.get(status, 0) for status in ALL_STATUSES}
 
     # --- active_requests: up to PER_STATUS_LIMIT per pipeline status ---
