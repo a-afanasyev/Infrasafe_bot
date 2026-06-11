@@ -27,26 +27,35 @@ from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
+from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.request_number_service import RequestNumberService
+from uk_management_bot.services.workflow_runner import (
+    run_command_async,
+    RequestNotFound,
+)
+from uk_management_bot.utils.request_workflow import (
+    LegacyStatusIntent,
+    PrincipalRef,
+    NotAuthorized,
+    InvalidTransition,
+    RepeatRejected,
+    RepeatConflict,
+    PayloadInvalid,
+    EditForbidden,
+    WorkflowError,
+    project_public_status,
+)
+from uk_management_bot.utils import constants as C
 from uk_management_bot.api.rate_limit import limiter
 
 router = APIRouter()
 
 KANBAN_STATUSES = ["Новая", "В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Принято", "Отменена"]
 
-_REQUEST_VALID_TRANSITIONS: dict[str, set[str]] = {
-    "Новая":     {"В работе", "Закуп", "Уточнение", "Отменена"},
-    "В работе":  {"Закуп", "Уточнение", "Выполнена", "Отменена"},
-    "Закуп":     {"В работе", "Уточнение", "Отменена"},
-    "Уточнение": {"В работе", "Отменена"},
-    "Выполнена": {"Исполнено", "В работе"},
-    "Исполнено": {"Принято", "В работе"},
-    "Принято":   set(),
-    "Отменена":  set(),
-}
-
 # Терминальные (финализированные) статусы — заявка заморожена для urgency-правок.
+# (PR2b: статус-переходы валидирует канон ACTION_TABLE через run_command; прежняя
+# матрица _REQUEST_VALID_TRANSITIONS удалена — единый источник правды в request_workflow.)
 _TERMINAL_STATUSES = {"Принято", "Отменена"}
 
 
@@ -391,6 +400,59 @@ async def create_inspector_request(
     return RequestCard.model_validate(req)
 
 
+# Транспортный маппер (PR2b, риск #20/#43): сырые/deprecated поля схемы PATCH →
+# payload канонического движка, ключ — целевой статус. resolve_command под локом
+# выбирает конкретный Action; здесь только перевод имён полей. Контракт сохраняется
+# до contract-фазы (PR4), затем deprecated-поля удаляются из схемы.
+def _build_workflow_payload(target_status: str, updates: dict) -> dict:
+    p: dict = {}
+    if target_status == C.REQUEST_STATUS_PURCHASE:
+        # MANAGER_PURCHASE — материалы опциональны (drag шлёт только статус).
+        if updates.get("requested_materials") is not None:
+            p["requested_materials"] = updates["requested_materials"]
+    elif target_status == C.REQUEST_STATUS_CLARIFICATION:
+        # CLARIFY_REQUEST: дашборд кладёт текст уточнения в `notes` → движок ждёт
+        # `question` (обязателен, идёт в audit) + дописывает текст в notes-поле.
+        text = updates.get("notes")
+        if text:
+            p["question"] = text
+            p["notes"] = "\n\n" + text
+    elif target_status == C.REQUEST_STATUS_EXECUTED:
+        # EXECUTOR_COMPLETE / MANAGER_COMPLETE
+        if updates.get("completion_report") is not None:
+            p["completion_report"] = updates["completion_report"]
+    elif target_status == C.REQUEST_STATUS_COMPLETED:
+        # MANAGER_CONFIRM — deprecated manager_confirmation_notes → confirmation_notes.
+        if updates.get("manager_confirmation_notes") is not None:
+            p["confirmation_notes"] = updates["manager_confirmation_notes"]
+    elif target_status == C.REQUEST_STATUS_APPROVED:
+        # APPLICANT_ACCEPT (владелец → rating) | MANAGER_FORCE_ACCEPT (менеджер →
+        # confirmation_notes). Поля дизъюнктны по актору; лишнее отвергнет схема.
+        if updates.get("rating") is not None:
+            p["rating"] = updates["rating"]
+        if updates.get("manager_confirmation_notes") is not None:
+            p["confirmation_notes"] = updates["manager_confirmation_notes"]
+    elif target_status == C.REQUEST_STATUS_IN_PROGRESS:
+        # MANAGER_ASSIGN (executor_id) | RETURN_TO_WORK (return_reason → reason) |
+        # MANAGER_PURCHASE_DONE / CLARIFY_RESOLVED (без payload).
+        if updates.get("executor_id") is not None:
+            p["executor_id"] = updates["executor_id"]
+        if updates.get("return_reason") is not None:
+            p["reason"] = updates["return_reason"]
+    elif target_status == C.REQUEST_STATUS_CANCELLED:
+        # CANCEL — reason опционален.
+        if updates.get("return_reason") is not None:
+            p["reason"] = updates["return_reason"]
+    return p
+
+
+# Поля, которые менеджер правит вне workflow (прямая запись в живой сессии).
+# executor_id-only переназначение — канонизация (assignment_service) отложена в PR2c.
+_MANAGER_EDIT_FIELDS = {"urgency", "notes", "description", "category", "executor_id"}
+# Контент-поля исполнителя без смены статуса.
+_EXECUTOR_EDIT_FIELDS = {"completion_report", "requested_materials", "notes"}
+
+
 @router.patch("/{request_number}", response_model=RequestCard)
 @limiter.limit("30/minute")
 async def update_request(
@@ -400,6 +462,67 @@ async def update_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager", "applicant", "executor")),
 ):
+    updates = body.model_dump(exclude_unset=True)
+
+    # Триггер workflow-перехода: явный status ИЛИ deprecated manager_confirmed:true
+    # (старый клиент подтверждал заявку флагом → канон MANAGER_CONFIRM, target Исполнено).
+    target_status = updates.get("status")
+    if target_status is None and updates.get("manager_confirmed") is True:
+        target_status = C.REQUEST_STATUS_COMPLETED
+
+    # ═══════════════════ WORKFLOW-переход → единый canonical-writer ═══════════════════
+    if target_status is not None:
+        # Комбинированный PATCH (переход + edit) запрещён: атомарность гарантируется
+        # только внутри run_command, urgency туда не входит (план, риск #28).
+        if "urgency" in updates:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot combine a status transition with an urgency edit",
+            )
+        payload = _build_workflow_payload(target_status, updates)
+        principal = PrincipalRef(kind="user", user_id=user.id, source="api")
+        intent = LegacyStatusIntent(
+            command_id=f"api:{request_number}:{target_status}",
+            target_status=target_status,
+            payload=payload,
+        )
+        try:
+            outcome = await run_command_async(
+                AsyncSessionLocal, request_number, principal, intent
+            )
+        except RequestNotFound:
+            raise HTTPException(status_code=404, detail="Request not found")
+        except NotAuthorized:
+            raise HTTPException(status_code=403, detail="Not permitted for this transition")
+        except (InvalidTransition, RepeatRejected, RepeatConflict,
+                PayloadInvalid, EditForbidden) as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except WorkflowError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+        # Webhook + audit уже эмитированы внутри транзакции run_command. Здесь —
+        # только best-effort realtime для канбана (intent emit'ится лишь при смене
+        # внешней проекции; flag-only без смены проекции событий не даёт).
+        for ev in outcome.post_commit_intents:
+            if ev.kind == "realtime":
+                await publish_request_event("request.status_changed", {
+                    "number": request_number,
+                    "old_status": project_public_status(outcome.old_state),
+                    "new_status": ev.data.get("status"),
+                })
+
+        # Свежая карточка из живой сессии (run_command коммитнул в своей сессии и
+        # закрыл её; READ COMMITTED → новый SELECT видит коммит).
+        ExecutorUser = aliased(User)
+        row = (await db.execute(
+            select(RequestModel, ExecutorUser)
+            .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
+            .where(RequestModel.request_number == request_number)
+        )).first()
+        req, exec_user = row
+        return _make_request_card(req, exec_user)
+
+    # ═══════════════════ EDIT-ветка (без смены статуса) ═══════════════════
     result = await db.execute(
         select(RequestModel).where(RequestModel.request_number == request_number).with_for_update()
     )
@@ -408,107 +531,52 @@ async def update_request(
         raise HTTPException(status_code=404, detail="Request not found")
 
     user_roles = set(_parse_user_roles(user))
-    updates = body.model_dump(exclude_unset=True)
 
-    # ── Executor path ──
+    # ── Executor path: контент-поля своей заявки ──
     if "executor" in user_roles and "manager" not in user_roles:
-        # Check assignment (RequestAssignment OR executor_id fallback)
         from uk_management_bot.database.models.request_assignment import RequestAssignment
-        assignments_result = await db.execute(
+        assignments = (await db.execute(
             select(RequestAssignment).where(
                 RequestAssignment.request_number == request_number,
             )
-        )
-        assignments = assignments_result.scalars().all()
+        )).scalars().all()
         if not is_assigned_executor(req, user, assignments):
             raise HTTPException(status_code=403, detail="Not assigned to this request")
-        # Require active shift for status changes
-        new_status = updates.get("status")
-        if new_status:
-            await require_active_shift(db, user)
-            executor_transitions = {
-                "Новая": {"В работе"},
-                "В работе": {"Закуп", "Уточнение", "Выполнена"},
-                "Закуп": {"В работе"},
-                "Уточнение": {"В работе"},
-            }
-            allowed = executor_transitions.get(req.status, set())
-            if new_status not in allowed:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Executor cannot transition from '{req.status}' to '{new_status}'",
-                )
-        # Executor can only update specific fields
-        executor_fields = {"status", "completion_report", "requested_materials", "notes"}
         for field in list(updates.keys()):
-            if field not in executor_fields:
+            if field not in _EXECUTOR_EDIT_FIELDS:
                 del updates[field]
 
-    # ── Applicant path ──
+    # ── Applicant path: владелец правит только rating своей заявки ──
     elif "applicant" in user_roles and "manager" not in user_roles:
-        is_owner = req.user_id == user.id
-        # Apartment co-resident can accept (Исполнено → Принято) only
-        is_apartment_resident = False
-        if not is_owner and req.apartment_id and req.status == "Исполнено":
-            from uk_management_bot.database.models.user_apartment import UserApartment
-            res = await db.execute(
-                select(UserApartment).where(
-                    UserApartment.user_id == user.id,
-                    UserApartment.apartment_id == req.apartment_id,
-                    UserApartment.status == "approved",
-                )
-            )
-            is_apartment_resident = res.scalar_one_or_none() is not None
-        if not is_owner and not is_apartment_resident:
+        if req.user_id != user.id:
             raise HTTPException(status_code=403, detail="Cannot update another user's request")
-        allowed_fields = {"status", "rating"}
-        unset_fields = set(updates.keys())
-        if not unset_fields.issubset(allowed_fields):
+        if not set(updates.keys()).issubset({"rating"}):
             raise HTTPException(status_code=403, detail="Applicants can only update status and rating")
 
-    # ── Status transition validation (all roles) ──
-    new_status = updates.get("status")
-    if new_status and new_status != req.status:
-        allowed = _REQUEST_VALID_TRANSITIONS.get(req.status, set())
-        if new_status not in allowed:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Transition '{req.status}' → '{new_status}' is not allowed"
-            )
+    # ── Manager path: только не-workflow поля (deprecated workflow-поля дропаем —
+    # их место в status-переходе через layer, не прямой записью) ──
+    else:
+        for field in list(updates.keys()):
+            if field not in _MANAGER_EDIT_FIELDS:
+                del updates[field]
 
-    # ── Urgency terminal-guard: финализированную заявку нельзя переприоритизировать.
-    # Проверяем И текущий, И целевой статус, иначе combined-PATCH
-    # {"status":"Принято","urgency":...} обошёл бы проверку только текущего.
-    if "urgency" in updates:
-        target_status = updates.get("status", req.status)
-        if req.status in _TERMINAL_STATUSES or target_status in _TERMINAL_STATUSES:
-            raise HTTPException(
-                status_code=422,
-                detail="Cannot change urgency of a finalized request",
-            )
+    # Urgency terminal-guard: финализированную заявку нельзя переприоритизировать.
+    if "urgency" in updates and req.status in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail="Cannot change urgency of a finalized request",
+        )
 
-    old_status = req.status
     old_values = {f: getattr(req, f) for f in updates}
     for field, value in updates.items():
         setattr(req, field, value)
-    # Реальная смена нестатусных полей (после role-фильтрации updates) — для request.updated.
-    changed_non_status = [
-        f for f in updates if f != "status" and old_values[f] != getattr(req, f)
-    ]
+    changed = [f for f in updates if old_values[f] != getattr(req, f)]
 
     await db.commit()
     await db.refresh(req)
 
-    if old_status != req.status:
-        event_data = {"number": request_number, "old_status": old_status, "new_status": req.status}
-        await publish_request_event("request.status_changed", event_data)
-        # Webhook to InfraSafe (ARCH-113: shared builder, tagged source=api)
-        await emit_request_status_changed(db, request_number, old_status, req.status, source="api")
-        await db.commit()
-
-    # Реалтайм для канбана при изменении нестатусного поля (вкл. urgency).
-    # Только по факту изменения — no-op и отброшенные поля события не дают.
-    if changed_non_status:
+    # Реалтайм для канбана при реальном изменении поля.
+    if changed:
         await publish_request_event("request.updated", {"number": request_number})
 
     return RequestCard.model_validate(req)

@@ -99,6 +99,12 @@ class Action(str, Enum):
     SYSTEM_DISPATCH_ASSIGN = "system_dispatch_assign"
     MANAGER_ASSIGN = "manager_assign"
     EXECUTOR_PURCHASE = "executor_purchase"
+    # Менеджер сам переводит заявку в Закуп (Новая/В работе → Закуп). Продуктовое
+    # решение 2026-06-11 (PR2b): дашборд-матрица предлагала менеджеру эти drag-рёбра
+    # (Новая→Закуп, В работе→Закуп) напрямую; канон расширен под них. В отличие от
+    # EXECUTOR_PURCHASE (исполнитель обязан указать материалы) — requested_materials
+    # опционален (Kanban-drag присылает только статус).
+    MANAGER_PURCHASE = "manager_purchase"
     MANAGER_PURCHASE_DONE = "manager_purchase_done"
     CLARIFY_REQUEST = "clarify_request"
     CLARIFY_RESOLVED = "clarify_resolved"
@@ -300,6 +306,8 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         optional={"executor_id": int, "group": str}),
     Action.EXECUTOR_PURCHASE: PayloadSchema(
         required={"requested_materials": str}),
+    Action.MANAGER_PURCHASE: PayloadSchema(
+        optional={"requested_materials": str}),
     Action.MANAGER_PURCHASE_DONE: PayloadSchema(
         optional={"manager_materials_comment": str}),
     Action.CLARIFY_REQUEST: PayloadSchema(
@@ -320,8 +328,11 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         required={"return_reason": str}, optional={"return_media": list}),
     Action.MANAGER_FORCE_ACCEPT: PayloadSchema(
         optional={"reason": str, "confirmation_notes": str}),
+    # reason опционален: бот всегда присылает причину, но дашборд-drag в «Отменена»
+    # шлёт голый статус (PR2b). reason — audit-only (в patch не пишется), поэтому
+    # необязательность совпадает с прежним поведением API (прямой setattr без reason).
     Action.CANCEL: PayloadSchema(
-        required={"reason": str}, optional={"notes": str}),
+        optional={"reason": str, "notes": str}),
 }
 
 
@@ -397,11 +408,17 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.EXECUTOR_PURCHASE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_PURCHASE,
         _executor_can_work, RepeatPolicy.REJECT),
+    Action.MANAGER_PURCHASE: ActionSpec(
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        REQUEST_STATUS_PURCHASE,
+        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
     Action.MANAGER_PURCHASE_DONE: ActionSpec(
         frozenset({REQUEST_STATUS_PURCHASE}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
     Action.CLARIFY_REQUEST: ActionSpec(
-        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        # +Закуп (PR2b): дашборд предлагал менеджеру drag Закуп→Уточнение.
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS,
+                   REQUEST_STATUS_PURCHASE}),
         REQUEST_STATUS_CLARIFICATION,
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
     Action.CLARIFY_RESOLVED: ActionSpec(
@@ -423,7 +440,11 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_EXECUTED}), REQUEST_STATUS_COMPLETED,
         lambda s, a: _is_manager(a), RepeatPolicy.NO_OP_IF_SAME),
     Action.MANAGER_RETURN_TO_WORK: ActionSpec(
-        frozenset({REQUEST_STATUS_EXECUTED, STATUS_RETURNED}),
+        # +Исполнено (PR2b): дашборд предлагал менеджеру drag Исполнено→В работе
+        # (повторное открытие уже подтверждённой заявки). Patch чистит
+        # manager_confirmed/is_returned → корректно для re-open из любого из трёх.
+        frozenset({REQUEST_STATUS_EXECUTED, STATUS_RETURNED,
+                   REQUEST_STATUS_COMPLETED}),
         REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
     Action.APPLICANT_ACCEPT: ActionSpec(
@@ -490,6 +511,9 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
             ops += [("assigned_by", Op.SET_ACTOR, None)]
     elif action == Action.EXECUTOR_PURCHASE:
         ops += [("requested_materials", Op.SET, payload["requested_materials"])]
+    elif action == Action.MANAGER_PURCHASE:
+        if payload.get("requested_materials") is not None:
+            ops += [("requested_materials", Op.SET, payload["requested_materials"])]
     elif action == Action.MANAGER_PURCHASE_DONE:
         if payload.get("manager_materials_comment") is not None:
             ops += [("manager_materials_comment", Op.SET,
@@ -695,6 +719,7 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
         Action.EXECUTOR_RESUME: 0,
         Action.MANAGER_CONFIRM: 1, Action.MANAGER_ASSIGN: 1,
         Action.MANAGER_RETURN_TO_WORK: 1, Action.MANAGER_PURCHASE_DONE: 1,
+        Action.MANAGER_PURCHASE: 1,
         Action.MANAGER_COMPLETE: 1,
         Action.CLARIFY_REQUEST: 1, Action.CLARIFY_RESOLVED: 1,
         Action.MANAGER_FORCE_ACCEPT: 2, Action.CANCEL: 2,

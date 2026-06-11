@@ -162,7 +162,8 @@ class TestPrincipal:
 class TestAllowedActions:
     def test_manager_on_new(self):
         acts = allowed_actions(_snap(REQUEST_STATUS_NEW), MANAGER)
-        assert acts == {Action.MANAGER_ASSIGN, Action.CLARIFY_REQUEST, Action.CANCEL}
+        assert acts == {Action.MANAGER_ASSIGN, Action.MANAGER_PURCHASE,
+                        Action.CLARIFY_REQUEST, Action.CANCEL}
 
     def test_owner_applicant_on_new_can_only_cancel(self):
         assert allowed_actions(_snap(REQUEST_STATUS_NEW), OWNER) == {Action.CANCEL}
