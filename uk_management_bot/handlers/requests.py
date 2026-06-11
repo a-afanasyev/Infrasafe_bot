@@ -1940,26 +1940,25 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("approve_") & ~F.data.startswith("approve_employee_") & ~F.data.startswith("approve_user_"))
 async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
-    """Подтверждение выполненной заявки заявителем -> 'Принято'"""
+    """Подтверждение выполненной заявки заявителем.
+
+    SSOT-кластер #1, PR2c: канон требует оценку при приёмке (APPLICANT_ACCEPT
+    с rating, только из «Исполнено»). Прежняя прямая запись «Принято» без
+    рейтинга снята — кнопка теперь ведёт в канонический rated-accept: показываем
+    клавиатуру оценки 1–5★, дальнейшую приёмку выполняет
+    request_acceptance.save_rating через run_command(APPLICANT_ACCEPT).
+    """
     db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("approve_", "")
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
 
-        service = RequestService(db_session)
-        result = service.update_status_by_actor(
-            request_number=request_number,
-            new_status="Принято",
-            actor_telegram_id=callback.from_user.id,
-        )
-        if not result.get("success"):
-            error_msg = result.get("message", get_text("common.error", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            return
+        from uk_management_bot.keyboards.admin import get_rating_keyboard
         await callback.message.edit_text(
-            get_text("requests.request_approved", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard(language=lang)
+            get_text("request_acceptance.handlers.rate_request", language=lang),
+            reply_markup=get_rating_keyboard(request_number),
+            parse_mode="HTML",
         )
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения заявки: {e}")

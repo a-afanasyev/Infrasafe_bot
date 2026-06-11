@@ -307,6 +307,26 @@ class TestPlanTransition:
         assert audit.data["principal_kind"] == "system"
         assert audit.data["principal_id"] == "dispatcher"
 
+    def test_manager_assign_empty_payload_is_status_only(self):
+        # PR2c: менеджер «берёт» Новую→В работе без выбора исполнителя.
+        # Пустой payload ⇒ только status; ни create_assignment, ни assigned_*.
+        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER)
+        f = _patch_fields(res)
+        assert f["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+        assert "assigned_at" not in f and "assigned_by" not in f
+        assert "executor_id" not in f and "assigned_group" not in f
+        assert res.domain_ops == ()
+
+    def test_manager_assign_with_executor_creates_assignment(self):
+        # С executor_id ⇒ полное назначение (assigned_* + create_assignment).
+        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN,
+                    MANAGER, {"executor_id": EXECUTOR_ID})
+        f = _patch_fields(res)
+        assert f["executor_id"] == (Op.SET, EXECUTOR_ID)
+        assert f["assigned_at"][0] == Op.SET_NOW
+        assert f["assigned_by"][0] == Op.SET_ACTOR
+        assert any(d.kind == "create_assignment" for d in res.domain_ops)
+
     def test_cancel_cancels_assignments(self):
         res = _plan(_snap(REQUEST_STATUS_IN_PROGRESS), Action.CANCEL,
                     MANAGER, {"reason": "дубль"})

@@ -1683,30 +1683,34 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
 
         request_number = callback.data.replace("accept_", "")
 
-        # Получаем заявку
+        # Канон-переход Новая→В работе через единый layer (PR2c). Менеджер
+        # «берёт» заявку без выбора исполнителя (пустой payload ⇒ status-only,
+        # без assigned_*/assignment-строки); назначение — отдельным шагом ниже.
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        try:
+            run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(callback.id, Action.MANAGER_ASSIGN, {}),
+            )
+        except RequestNotFound:
+            await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
+            return
+        except WorkflowError as e:
+            logger.info(f"MANAGER_ASSIGN (accept) отклонён для {request_number}: {e}")
+            await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
+        # run_command работал в своей сессии → перечитываем свежей для отрисовки.
+        db.expire_all()
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
-
-        # Обновляем статус на "В работе"
-        old_status = request.status
-        request.status = REQUEST_STATUS_IN_PROGRESS
-        request.updated_at = datetime.now()
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id if user else None,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_IN_PROGRESS,
-                "actor": "manager_assign",
-            }
-        ))
-        db.commit()
 
         # Показываем выбор типа назначения
         await callback.message.edit_text(
@@ -2337,56 +2341,64 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем, что заявка в статусе "Закуп"
+        # Проверяем, что заявка в статусе "Закуп" (UX-предчек; канон ре-валидирует)
         if request.status != REQUEST_STATUS_PURCHASE:
             await callback.answer(get_text("admin.handlers.request_not_in_purchase", language=lang), show_alert=True)
             return
 
-        # Добавляем разделитель закупки к списку материалов
+        # PR2c: разделитель «--закуплено DATE--» в requested_materials (workflow-
+        # поле канона) вычисляем ЛОКАЛЬНО и передаём в payload; purchase_history
+        # (вне workflow-полей) пишем post-commit. Итог-статус Закуп→В работе —
+        # канон MANAGER_PURCHASE_DONE.
+        final_materials = None
+        history_entry = None
         if request.requested_materials:
             current_date = datetime.now().strftime('%d.%m.%Y %H:%M')
             procurement_separator = f"--закуплено {current_date}--"
-            
-            # Добавляем разделитель к существующим материалам
-            request.requested_materials += f"\n{procurement_separator}\n"
-            
-            # Сохраняем информацию в историю для отчетности
-            if request.manager_materials_comment:
-                manager_comment = request.manager_materials_comment
-            else:
-                manager_comment = get_text("admin.handlers.no_comments", language=lang)
+            final_materials = request.requested_materials + f"\n{procurement_separator}\n"
 
-            materials_val = request.requested_materials.split(f'{procurement_separator}')[0].strip()
+            manager_comment = (request.manager_materials_comment
+                               or get_text("admin.handlers.no_comments", language=lang))
+            materials_val = final_materials.split(f'{procurement_separator}')[0].strip()
             history_entry = (
                 get_text("admin.handlers.purchase_history_completed_header", language=lang) + "\n"
                 + get_text("admin.handlers.purchase_history_materials_label", language=lang).format(materials=materials_val) + "\n"
                 + get_text("admin.handlers.purchase_history_comment_label", language=lang).format(comment=manager_comment) + "\n"
                 + get_text("admin.handlers.purchase_history_date_label", language=lang).format(date=current_date)
             )
-            
+
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        payload = {}
+        if final_materials is not None:
+            payload["requested_materials"] = final_materials
+        try:
+            run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
+                ActionCommand(callback.id, Action.MANAGER_PURCHASE_DONE, payload),
+            )
+        except RequestNotFound:
+            await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
+            return
+        except WorkflowError as e:
+            logger.info(f"MANAGER_PURCHASE_DONE отклонён для {request_number}: {e}")
+            await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
+        # Post-commit: purchase_history (вне workflow-полей). run_command писал
+        # в своей сессии → перечитываем свежей.
+        db.expire_all()
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if request is not None and history_entry is not None:
             if request.purchase_history:
                 request.purchase_history += f"\n\n===\n\n{history_entry}"
             else:
                 request.purchase_history = history_entry
-        
-        # Обновляем статус на "В работе"
-        old_status = request.status
-        request.status = REQUEST_STATUS_IN_PROGRESS
-        request.updated_at = datetime.now()
-
-        # Аудит
-        from uk_management_bot.database.models.audit import AuditLog
-        db.add(AuditLog(
-            user_id=user.id if user else None,
-            action="request_status_changed",
-            details={
-                "request_number": request.request_number,
-                "old_status": old_status,
-                "new_status": REQUEST_STATUS_IN_PROGRESS,
-                "actor": "manager_approve_purchase",
-            }
-        ))
-        db.commit()
+            db.commit()
 
         await callback.answer(get_text("admin.handlers.request_returned_to_work_short", language=lang))
 

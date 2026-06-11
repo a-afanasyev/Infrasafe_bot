@@ -347,63 +347,61 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
 
         # Используем номер заявки
         request_id = request_number
-        
-        # Изменяем статус на "Закуп"
-        result = request_service.update_status_by_actor(
-            request_number=request_number,
-            new_status=REQUEST_STATUS_PURCHASE,
-            actor_telegram_id=message.from_user.id
-        )
-        if not result["success"]:
-            await message.answer(f"❌ {result['message']}")
-            await state.clear()
-            return
 
-        # Проверяем, есть ли история закупок для восстановления данных
-        if request.purchase_history and not request.requested_materials:
-            # Если есть история, но нет текущих данных - это повторный переход в закуп
-            # Извлекаем последние данные из истории для восстановления
+        # PR2c: requested_materials — workflow-поле канона. Итоговый список
+        # (восстановление из purchase_history при повторном заходе в Закуп +
+        # докладка нового) вычисляем ЛОКАЛЬНО (только чтение) и передаём в
+        # payload канон-команды; прямую ORM-запись requested_materials убрали.
+        restored_comment = None
+        base_materials = request.requested_materials
+        if request.purchase_history and not base_materials:
             history_lines = request.purchase_history.split('\n')
             last_requested = None
             last_comment = None
-            
-            # Ищем последние данные в истории (идем с конца)
             for i in range(len(history_lines) - 1, -1, -1):
                 line = history_lines[i].strip()
                 if line.startswith("Запрошенные материалы:"):
                     last_requested = line.replace("Запрошенные материалы:", "").strip()
                 elif line.startswith("Комментарий менеджера:") and not last_comment:
                     last_comment = line.replace("Комментарий менеджера:", "").strip()
-                
-                # Если нашли оба поля, можем остановиться
                 if last_requested and last_comment:
                     break
-            
-            # Восстанавливаем данные из истории
             if last_requested and last_requested != "Не указано":
-                request.requested_materials = last_requested
+                base_materials = last_requested
             if last_comment and last_comment != "Без комментариев":
-                request.manager_materials_comment = last_comment
-        
-        # Добавляем новые материалы к существующему списку
-        if request.requested_materials:
-            # Если уже есть материалы, добавляем новые к существующим
-            request.requested_materials += f"\n{materials}"
-        else:
-            # Если это первый переход в закуп - сохраняем новые материалы
-            request.requested_materials = materials
-        
-        # Для обратной совместимости также сохраняем в старое поле
-        request.purchase_materials = materials
-        
-        # Добавляем комментарий о закупке
+                restored_comment = last_comment
+
+        final_materials = f"{base_materials}\n{materials}" if base_materials else materials
+
+        # Канон-переход В работе→Закуп с материалами в payload
+        # (EXECUTOR_PURCHASE / MANAGER_PURCHASE). requested_materials пишет
+        # run_command (SET) в своей tx.
+        result = request_service.update_status_by_actor(
+            request_number=request_number,
+            new_status=REQUEST_STATUS_PURCHASE,
+            actor_telegram_id=message.from_user.id,
+            requested_materials=final_materials,
+        )
+        if not result["success"]:
+            await message.answer(f"❌ {result['message']}")
+            await state.clear()
+            return
+
+        # Post-commit: НЕ-workflow поля (legacy-зеркало + восстановленный
+        # комментарий) + комментарий-лог. run_command писал в своей сессии →
+        # перечитываем заявку свежей.
+        request = db.query(Request).filter(Request.request_number == request_number).first()
+        if restored_comment:
+            request.manager_materials_comment = restored_comment
+        request.purchase_materials = materials  # legacy-зеркало (вне workflow-полей)
+
         if user:
             comment_service.add_purchase_comment(
                 request_number=request_number,
                 user_id=user.id,
                 materials=materials
             )
-        
+
         db.commit()
         
         # Показываем подтверждение с текущими данными
@@ -561,24 +559,27 @@ async def handle_completion_report_input(message: Message, state: FSMContext, db
             await message.answer(get_text("request_status_mgmt.handlers.request_not_found", language=lang))
             return
 
-        # Изменяем статус на "Выполнена"
+        # Отчёт (completion_report — workflow-поле канона, PR2c): собираем текст
+        # ЛОКАЛЬНО и передаём в payload канон-команды; прямую ORM-запись убрали.
+        full_report = report
+        if report_media:
+            full_report += "\n" + get_text("request_status_mgmt.handlers.attached_files", language=lang).format(count=len(report_media))
+
+        # Канон-переход →Выполнена (EXECUTOR_COMPLETE / MANAGER_COMPLETE);
+        # completion_report пишет run_command.
         result = request_service.update_status_by_actor(
             request_number=request_number,
             new_status=REQUEST_STATUS_EXECUTED,
-            actor_telegram_id=message.from_user.id
+            actor_telegram_id=message.from_user.id,
+            completion_report=full_report,
         )
         if not result["success"]:
             await message.answer(get_text("request_status_mgmt.handlers.work_completion_failed", language=lang).format(message=result['message']))
             await state.clear()
             return
 
-        # Сохраняем отчет в заявке
-        full_report = report
-        if report_media:
-            full_report += "\n" + get_text("request_status_mgmt.handlers.attached_files", language=lang).format(count=len(report_media))
-        request.completion_report = full_report
-
-        # Добавляем комментарий с отчетом
+        # Post-commit: комментарий-лог (run_command писал в своей сессии).
+        request = db.query(Request).filter(Request.request_number == request_number).first()
         if user:
             comment_service.add_completion_report_comment(
                 request_number=request_number,

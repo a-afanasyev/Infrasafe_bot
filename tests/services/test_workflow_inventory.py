@@ -138,24 +138,27 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
+    # PR2c: assigned_* остаются — их пишет auto_assign_request_by_category
+    # (admin.py:111, ЖИВАЯ: вызывается из handle_assign_by_category :2578).
+    # Это assignment-домен (создаёт RequestAssignment + пишет assigned_*),
+    # отложен в PR2d вместе с Группой II (smart_dispatcher/optimizer/
+    # async_assignment_service); целевой allowlist — assignment_service.
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_at'),
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_by'),
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_group'),
     ('uk_management_bot/handlers/admin.py', 'attr:request', 'assignment_type'),
     # PR2a-1/2a-2: confirm/reconfirm(→force_accept)/return_to_work переведены на
     # run_command → manager_confirmed/_by/_at и is_returned в admin.py больше не
-    # мутируются сырьём (сняты из baseline). PR2a-7: handle_complete_request →
-    # MANAGER_COMPLETE (completed_at больше не пишется сырьём — снят из baseline);
-    # handle_clarification_text → CLARIFY_REQUEST (status-write убран). Остаются
-    # status/requested_materials/assigned_* у НЕ конвертированных accept/
-    # return_to_work(закуп) — отложены в PR2c (assignment-флоу + bookkeeping закупа).
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'requested_materials'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'status'),
+    # мутируются сырьём. PR2a-7: handle_complete_request → MANAGER_COMPLETE;
+    # handle_clarification_text → CLARIFY_REQUEST. PR2c: handle_accept_request
+    # (shadowed accept_) → MANAGER_ASSIGN, handle_return_to_work (purchase_return_
+    # to_work_) → MANAGER_PURCHASE_DONE (requested_materials-разделитель в payload,
+    # purchase_history — вне workflow-полей). status/requested_materials СНЯТЫ.
     # PR2a-3: save_rating (APPLICANT_ACCEPT) + process_return_request
     # (APPLICANT_RETURN) переведены на run_command → request_acceptance.py
     # больше НЕ мутирует workflow-поля сырьём (весь файл снят из baseline).
-    ('uk_management_bot/handlers/request_status_management.py', 'attr:request', 'completion_report'),
-    ('uk_management_bot/handlers/request_status_management.py', 'attr:request', 'requested_materials'),
+    # PR2c: request_status_management.py (handle_materials_input/completion_report)
+    # → поля прокинуты в payload update_status_by_actor-шима → весь файл снят.
     # PR2a-5: executor-хендлеры requests.py (purchase/complete/resume) → run_command
     # (EXECUTOR_PURCHASE/COMPLETE/RESUME) → status/completion_media сырьём больше
     # не пишутся. ctor:Request (save_request, create-путь) остаётся до PR5/create-фабрики.
@@ -175,14 +178,27 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_group'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assignment_type'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'executor_id'),
+    # async_request_service.py — pre-migration stubs (0 production-вызовов,
+    # update_request_status/update_status_by_actor async). PR2d: удалить или
+    # шим над run_command_async, когда появятся async-хендлеры.
     ('uk_management_bot/services/async_request_service.py', 'attr:request', 'completed_at'),
     ('uk_management_bot/services/async_request_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/async_request_service.py', 'attr:request', 'status'),
     ('uk_management_bot/services/async_request_service.py', 'ctor:Request', 'status'),
+    # Группа II (PR2d): async_smart_dispatcher — SYSTEM-auto-assign. Упирается в
+    # RequestAssignment.created_by NOT NULL (нужен nullable-миграция/synthetic
+    # SYSTEM-user) + рассинхрон sync(status НЕ ставит)/async(ставит «В работе»).
     ('uk_management_bot/services/async_smart_dispatcher.py', 'attr:request', 'assigned_at'),
     ('uk_management_bot/services/async_smart_dispatcher.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/async_smart_dispatcher.py', 'attr:request', 'status'),
     ('uk_management_bot/services/inbound_alert.py', 'ctor:Request', 'status'),
+    # PR2c: update_status_by_actor → тонкий шим над run_command_sync (главный
+    # live status-writer бота: accept/purchase/cancel/complete/clarify/generic).
+    # Прямой setattr ушёл ВНУТРЬ run_command (динамический → AST-невидим). Здесь
+    # остаются: update_request_status (sync, actor-less legacy report-approval —
+    # request_reports view-report/revision) + create_request (ctor, create-путь).
+    # update_request_status → PR2d (консолидация legacy report-approval в
+    # канонический rated-accept request_acceptance.py).
     ('uk_management_bot/services/request_service.py', 'attr:request', 'completed_at'),
     ('uk_management_bot/services/request_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/request_service.py', 'attr:request', 'status'),

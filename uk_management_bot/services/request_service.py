@@ -404,115 +404,136 @@ class RequestService:
         request_number: str,
         new_status: str,
         actor_telegram_id: int,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        requested_materials: Optional[str] = None,
+        completion_report: Optional[str] = None,
+        completion_media: Optional[list] = None,
     ) -> Dict[str, Any]:
-        """Безопасное обновление статуса с проверкой ролей и допустимых переходов.
+        """Обновление статуса заявки актором (бот).
+
+        SSOT-кластер #1, PR2c: тонкий адаптер над `run_command_sync` —
+        единым каноническим writer'ом workflow-переходов. Прежняя матрица
+        переходов (`is_transition_allowed`) и ролей (`is_role_allowed_for_
+        transition`) больше НЕ используются здесь: авторизацию, допустимость
+        перехода, смену и repeat-политику решает канон (utils/request_workflow)
+        ПОД локом, внутри своей транзакции. Сигнатура и форма ответа
+        ({success, message, request}) сохранены для совместимости вызывающих.
+
+        Доп.поля (requested_materials/completion_report/completion_media)
+        прокидываются исполнительскими хендлерами (PR2c-2) в payload команды
+        вместо прямой записи в ORM.
 
         Returns dict with keys: success(bool), message(str), request(Optional[Request])
         """
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            LegacyStatusIntent, PrincipalRef,
+            NotAuthorized, InvalidTransition, RepeatRejected, RepeatConflict,
+            PayloadInvalid, WorkflowError)
         try:
-            # Валидация статуса
             if new_status not in REQUEST_STATUSES:
                 return {"success": False, "message": f"Неверный статус: {new_status}", "request": None}
-
-            # Получаем заявку и актера
-            request: Optional[Request] = self.get_request_by_number(request_number)
-            if not request:
-                return {"success": False, "message": "Заявка не найдена", "request": None}
 
             actor: Optional[User] = self.get_user_by_telegram_id(actor_telegram_id)
             if not actor:
                 return {"success": False, "message": "Пользователь не найден", "request": None}
 
-            # Запрет для обычных пользователей управлять своими заявками
-            # Но разрешаем менеджерам и администраторам управлять своими заявками
-            active_role = actor.active_role if actor.active_role else actor.role
-            if (request.user_id == actor.id and
-                new_status in ["В работе", "Выполнена"] and
-                active_role not in ["manager", "admin"]):
-                return {"success": False, "message": "Нельзя управлять собственной заявкой", "request": None}
-
-            # Если статус не меняется, но есть примечание — просто дополняем notes без проверки матрицы
-            if new_status == request.status:
+            # Same-status notes-append: канон не моделирует «дописать примечание
+            # без перехода». Сохраняем прежнее поведение прямой записью в notes
+            # (notes — не workflow-поле, вне SSOT-владения).
+            current = self.get_request_by_number(request_number)
+            if current is None:
+                return {"success": False, "message": "Заявка не найдена", "request": None}
+            if new_status == current.status:
                 if notes:
-                    existing = (request.notes or "").strip()
-                    request.notes = (existing + "\n" if existing else "") + notes
+                    existing = (current.notes or "").strip()
+                    current.notes = (existing + "\n" if existing else "") + notes
                     self.db.commit()
-                    self.db.refresh(request)
-                    return {"success": True, "message": "Примечание добавлено", "request": request}
-                else:
-                    return {"success": True, "message": "Статус не изменён", "request": request}
+                    self.db.refresh(current)
+                    return {"success": True, "message": "Примечание добавлено", "request": current}
+                return {"success": True, "message": "Статус не изменён", "request": current}
 
-            # Проверяем допустимость перехода
-            if not self.is_transition_allowed(request.status, new_status):
-                return {"success": False, "message": "Недопустимый переход статуса", "request": None}
+            payload = self._build_status_payload(
+                new_status, notes=notes, requested_materials=requested_materials,
+                completion_report=completion_report, completion_media=completion_media)
 
-            # Проверяем права роли
-            if not self.is_role_allowed_for_transition(actor, request, new_status):
-                return {"success": False, "message": "Недостаточно прав для изменения статуса", "request": None}
-
-            # Проверяем активную смену для исполнителя
-            active_role = actor.active_role if actor.active_role else actor.role
-            if active_role == ROLE_EXECUTOR:
-                shift_service = ShiftService(self.db)
-                if not shift_service.is_user_in_active_shift(actor.telegram_id):
-                    return {"success": False, "message": "Вы не в смене. Смена необходима для выполнения этого действия", "request": None}
-
-            old_status = request.status
-            request.status = new_status
-
-            # Назначаем исполнителя при переходе в работу, если еще не назначен
-            if new_status == "В работе" and not request.executor_id:
-                request.executor_id = actor.id
-
-            if notes:
-                request.notes = notes
-
-            if new_status == "Выполнена":
-                request.completed_at = datetime.now()
-
-            # ARCH-113: emit request.status_changed webhook (same txn as the status update)
-            emit_request_status_changed_sync(self.db, request.request_number, old_status, new_status, source="bot")
-
-            self.db.commit()
-            self.db.refresh(request)
-
-            # Аудит
             try:
-                audit = AuditLog(
-                    user_id=actor.id,
-                    telegram_user_id=request.user.telegram_id if request.user else None,  # Telegram ID создателя заявки
-                    action=AUDIT_ACTION_REQUEST_STATUS_CHANGED,
-                    details={
-                        "request_number": request.request_number,
-                        "old_status": old_status,
-                        "new_status": new_status,
-                        "notes": notes,
-                        "actor_role": actor.role,
-                    },
+                outcome = run_command_sync(
+                    SessionLocal, request_number,
+                    PrincipalRef(kind="user", user_id=actor.id, source="telegram"),
+                    LegacyStatusIntent(
+                        command_id=f"svc:{actor.id}:{request_number}",
+                        target_status=new_status, payload=payload),
                 )
-                self.db.add(audit)
-                self.db.commit()
-            except Exception as e:
-                self.db.rollback()
-                logger.error(f"Ошибка записи аудита смены статуса для заявки {request_number}: {e}")
+            except RequestNotFound:
+                return {"success": False, "message": "Заявка не найдена", "request": None}
+            except NotAuthorized:
+                return {"success": False, "message": "Недостаточно прав для изменения статуса", "request": None}
+            except (InvalidTransition, RepeatRejected, RepeatConflict):
+                return {"success": False, "message": "Недопустимый переход статуса", "request": None}
+            except PayloadInvalid as e:
+                logger.info(f"PayloadInvalid update_status_by_actor {request_number}: {e}")
+                return {"success": False, "message": "Ошибка при обновлении статуса", "request": None}
+            except WorkflowError as e:
+                logger.info(f"WorkflowError update_status_by_actor {request_number}: {e}")
+                return {"success": False, "message": "Ошибка при обновлении статуса", "request": None}
 
-            # Уведомления (best-effort)
+            # run_command работал в своей сессии → перечитываем заявку свежей
+            # (identity-map вызывающей сессии устарел).
+            self.db.expire_all()
+            request = self.get_request_by_number(request_number)
+
+            # Уведомления (best-effort, post-commit; durable audit/outbox уже в tx)
             try:
-                # sync лог
-                notify_status_changed(self.db, request, old_status, new_status)
-                # попытка async (если в контексте есть bot, вызывать из хэндлеров можно напрямую)
+                notify_status_changed(self.db, request, outcome.old_status, outcome.new_status)
             except Exception as e:
                 logger.error(f"Ошибка отправки уведомления о смене статуса для заявки {request_number}: {e}")
             logger.info(
-                f"Пользователь {actor.id} ({actor.role}) изменил статус заявки {request_number} "
-                f"с '{old_status}' на '{new_status}'"
-            )
+                f"Пользователь {actor.id} изменил статус заявки {request_number} "
+                f"с '{outcome.old_status}' на '{outcome.new_status}' (canon)")
+            if outcome.no_op:
+                return {"success": True, "message": "Статус не изменён", "request": request}
             return {"success": True, "message": "Статус обновлен", "request": request}
         except Exception as e:
             self.db.rollback()
             logger.error(f"Ошибка update_status_by_actor для заявки {request_number}: {e}")
             return {"success": False, "message": "Ошибка при обновлении статуса", "request": None}
+
+    @staticmethod
+    def _build_status_payload(
+        new_status: str, *, notes: Optional[str] = None,
+        requested_materials: Optional[str] = None,
+        completion_report: Optional[str] = None,
+        completion_media: Optional[list] = None,
+    ) -> Dict[str, Any]:
+        """Транспортный маппер: status-вход бота → payload канон-команды.
+
+        Ключ — целевой статус (как в API _build_workflow_payload, PR2b).
+        Кладёт только те ключи, которые принимает действие, разрешающее
+        переход в этот статус (см. PAYLOAD_SCHEMAS). Для статусов без доп.
+        данных (В работе/Новая/Принято) — пустой payload (канон решит сам).
+        """
+        from uk_management_bot.utils.constants import (
+            REQUEST_STATUS_PURCHASE, REQUEST_STATUS_EXECUTED,
+            REQUEST_STATUS_CLARIFICATION, REQUEST_STATUS_CANCELLED)
+        payload: Dict[str, Any] = {}
+        if new_status == REQUEST_STATUS_PURCHASE:
+            if requested_materials is not None:
+                payload["requested_materials"] = requested_materials
+        elif new_status == REQUEST_STATUS_EXECUTED:
+            if completion_report is not None:
+                payload["completion_report"] = completion_report
+            if completion_media is not None:
+                payload["completion_media"] = completion_media
+        elif new_status == REQUEST_STATUS_CLARIFICATION:
+            if notes:
+                payload["question"] = notes
+        elif new_status == REQUEST_STATUS_CANCELLED:
+            if notes:
+                payload["reason"] = notes
+        return payload
     
     def search_requests(
         self,
