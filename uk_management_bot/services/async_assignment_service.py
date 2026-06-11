@@ -213,6 +213,28 @@ class AsyncAssignmentService:
             logger.error(f"[ASYNC] Ошибка назначения заявки исполнителю: {e}")
             raise
 
+    async def reassign_executor(self, request_number: str, new_executor_id: int) -> bool:
+        """Лёгкая переброска исполнителя (SSOT PR2d, ASYNC).
+
+        Для массовой переброски активных заявок (напр. удаление сотрудника):
+        обновляем executor_id активного индивидуального RequestAssignment +
+        request.executor_id IN PLACE — без cancel/recreate, без уведомлений,
+        БЕЗ commit (вызывающий владеет транзакцией). executor_id пишется внутри
+        allowlist-слоя, а не сырьём в роутере.
+        """
+        request = await self._get_request_by_number(request_number)
+        if not request:
+            return False
+        active = (await self.db.execute(
+            select(RequestAssignment).where(
+                RequestAssignment.request_number == request_number,
+                RequestAssignment.status == ASSIGNMENT_STATUS_ACTIVE,
+            ))).scalar_one_or_none()
+        if active is not None and active.assignment_type == ASSIGNMENT_TYPE_INDIVIDUAL:
+            active.executor_id = new_executor_id
+        request.executor_id = new_executor_id
+        return True
+
     async def get_executor_assignments(
         self,
         executor_id: int,

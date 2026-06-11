@@ -328,72 +328,9 @@ class AsyncRequestService:
             logger.error(f"[ASYNC] Ошибка создания заявки: {e}")
             raise
 
-    async def update_request_status(
-        self,
-        request_number: str,
-        new_status: str,
-        executor_id: Optional[int] = None,
-        notes: Optional[str] = None
-    ) -> Optional[Request]:
-        """
-        Обновление статуса заявки (ASYNC VERSION)
-
-        Args:
-            request_number: Номер заявки
-            new_status: Новый статус
-            executor_id: ID исполнителя (опционально)
-            notes: Примечания (опционально)
-
-        Returns:
-            Optional[Request]: Обновленная заявка или None
-        """
-        try:
-            if new_status not in REQUEST_STATUSES:
-                raise ValueError(f"Неверный статус: {new_status}")
-
-            request = await self.get_request_by_number(request_number)
-            if not request:
-                return None
-
-            old_status = request.status
-
-            # Разрешаем no-op обновление (тот же статус) для добавления примечаний
-            if new_status == old_status:
-                if notes:
-                    request.notes = (request.notes or "").strip()
-                    request.notes = (request.notes + "\n" if request.notes else "") + notes
-                await self.db.flush()
-                await self.db.refresh(request)
-                logger.info(f"[ASYNC] Обновлены примечания заявки {request_number} при неизменном статусе '{old_status}'")
-                return request
-
-            request.status = new_status
-
-            if executor_id:
-                request.executor_id = executor_id
-
-            if notes:
-                existing_notes = (request.notes or "").strip()
-                request.notes = (existing_notes + "\n" if existing_notes else "") + notes
-
-            # Если заявка завершена, устанавливаем время завершения
-            if new_status == "Выполнена":
-                request.completed_at = datetime.now()
-
-            # ARCH-113: emit request.status_changed webhook (same txn)
-            from uk_management_bot.services.webhook_payloads import emit_request_status_changed
-            await emit_request_status_changed(self.db, request_number, old_status, new_status, source="bot")
-
-            await self.db.flush()
-            await self.db.refresh(request)
-
-            logger.info(f"[ASYNC] Статус заявки {request_number} изменен с '{old_status}' на '{new_status}'")
-            return request
-
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"[ASYNC] Ошибка обновления статуса заявки {request_number}: {e}")
-            return None
+    # SSOT-кластер #1, PR2d: async update_request_status удалён — мёртвый
+    # pre-migration stub (0 production-вызовов), raw-writer status/executor_id/
+    # completed_at. Канонический async write-path — run_command_async.
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[User]:
         """Получение пользователя по Telegram ID"""
@@ -485,113 +422,10 @@ class AsyncRequestService:
 
         return False
 
-    async def update_status_by_actor(
-        self,
-        request_number: str,
-        new_status: str,
-        actor_telegram_id: int,
-        notes: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Безопасное обновление статуса с проверкой ролей и допустимых переходов (ASYNC VERSION)
-
-        Returns dict with keys: success(bool), message(str), request(Optional[Request])
-        """
-        try:
-            # Валидация статуса
-            if new_status not in REQUEST_STATUSES:
-                return {"success": False, "message": f"Неверный статус: {new_status}", "request": None}
-
-            # Получаем заявку и актера
-            request: Optional[Request] = await self.get_request_by_number(request_number)
-            if not request:
-                return {"success": False, "message": "Заявка не найдена", "request": None}
-
-            actor: Optional[User] = await self.get_user_by_telegram_id(actor_telegram_id)
-            if not actor:
-                return {"success": False, "message": "Пользователь не найден", "request": None}
-
-            # Запрет для обычных пользователей управлять своими заявками
-            active_role = actor.active_role if actor.active_role else actor.role
-            if (request.user_id == actor.id and
-                new_status in ["В работе", "Выполнена"] and
-                active_role not in ["manager", "admin"]):
-                return {"success": False, "message": "Нельзя управлять собственной заявкой", "request": None}
-
-            # Если статус не меняется, но есть примечание — просто дополняем notes без проверки матрицы
-            if new_status == request.status:
-                if notes:
-                    existing = (request.notes or "").strip()
-                    request.notes = (existing + "\n" if existing else "") + notes
-                    await self.db.flush()
-                    await self.db.refresh(request)
-                    return {"success": True, "message": "Примечание добавлено", "request": request}
-                else:
-                    return {"success": True, "message": "Статус не изменён", "request": request}
-
-            # Проверяем допустимость перехода
-            if not self.is_transition_allowed(request.status, new_status):
-                return {"success": False, "message": "Недопустимый переход статуса", "request": None}
-
-            # Проверяем права роли
-            if not self.is_role_allowed_for_transition(actor, request, new_status):
-                return {"success": False, "message": "Недостаточно прав для изменения статуса", "request": None}
-
-            # Проверяем активную смену для исполнителя
-            # NOTE: ShiftService еще не мигрирован на async, используем временное решение
-            if active_role == ROLE_EXECUTOR:
-                from uk_management_bot.database.session import SessionLocal
-                from uk_management_bot.services.shift_service import ShiftService
-                with SessionLocal() as sync_db:
-                    shift_service = ShiftService(sync_db)
-                    if not shift_service.is_user_in_active_shift(actor.telegram_id):
-                        return {"success": False, "message": "Вы не в смене. Смена необходима для выполнения этого действия", "request": None}
-
-            old_status = request.status
-            request.status = new_status
-
-            # Назначаем исполнителя при переходе в работу, если еще не назначен
-            if new_status == "В работе" and not request.executor_id:
-                request.executor_id = actor.id
-
-            if notes:
-                request.notes = notes
-
-            if new_status == "Выполнена":
-                request.completed_at = datetime.now()
-
-            await self.db.flush()
-            await self.db.refresh(request)
-
-            # Аудит
-            try:
-                audit = AuditLog(
-                    user_id=actor.id,
-                    telegram_user_id=request.user.telegram_id if request.user else None,
-                    action=AUDIT_ACTION_REQUEST_STATUS_CHANGED,
-                    details={
-                        "request_number": request.request_number,
-                        "old_status": old_status,
-                        "new_status": new_status,
-                        "notes": notes,
-                        "actor_role": actor.role,
-                    },
-                )
-                self.db.add(audit)
-                await self.db.flush()
-            except Exception as e:
-                await self.db.rollback()
-                logger.error(f"[ASYNC] Ошибка записи аудита смены статуса для заявки {request_number}: {e}")
-
-            logger.info(
-                f"[ASYNC] Пользователь {actor.id} ({actor.role}) изменил статус заявки {request_number} "
-                f"с '{old_status}' на '{new_status}'"
-            )
-            return {"success": True, "message": "Статус обновлен", "request": request}
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"[ASYNC] Ошибка update_status_by_actor для заявки {request_number}: {e}")
-            return {"success": False, "message": "Ошибка при обновлении статуса", "request": None}
+    # SSOT-кластер #1, PR2d: async update_status_by_actor удалён — мёртвый
+    # pre-migration stub (0 production-вызовов), raw-writer status/executor_id/
+    # completed_at со своей матрицей переходов/ролей. Канонический async
+    # write-path — run_command_async (utils/request_workflow + workflow_runner).
 
     async def get_request_statistics(self, user_id: Optional[int] = None) -> Dict[str, Any]:
         """

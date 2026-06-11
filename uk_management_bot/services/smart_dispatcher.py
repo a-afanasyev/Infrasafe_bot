@@ -415,9 +415,39 @@ class SmartDispatcher:
             return None
     
     def _execute_assignment(self, assignment: AssignmentScore) -> bool:
-        """Выполняет назначение заявки на смену"""
+        """Выполняет назначение заявки на смену.
+
+        SSOT-кластер #1, PR2d: workflow-поля заявки (status/executor_id/
+        assigned_*) пишет канонический SYSTEM_DISPATCH_ASSIGN (Новая→В работе +
+        назначение исполнителя + RequestAssignment в одной tx, created_by=
+        seeded system-user). Прямые ORM-записи request.* убраны. ShiftAssignment
+        — метаданные планирования смены (вне workflow-полей) — остаётся.
+        """
         try:
-            # Создаем запись назначения
+            shift = self.db.query(Shift).filter(Shift.id == assignment.shift_id).first()
+            if not shift or not shift.user_id:
+                logger.warning(f"Авто-назначение {assignment.request_number}: смена {assignment.shift_id} без исполнителя")
+                return False
+
+            from uk_management_bot.database.session import SessionLocal
+            from uk_management_bot.services.workflow_runner import (
+                run_command_sync, RequestNotFound)
+            from uk_management_bot.utils.request_workflow import (
+                Action, ActionCommand, PrincipalRef, WorkflowError)
+            try:
+                run_command_sync(
+                    SessionLocal, assignment.request_number,
+                    PrincipalRef(kind="system", user_id=None,
+                                 source="dispatcher", system_actor="dispatcher"),
+                    ActionCommand(f"dispatch:{assignment.request_number}",
+                                  Action.SYSTEM_DISPATCH_ASSIGN,
+                                  {"executor_id": shift.user_id}),
+                )
+            except (RequestNotFound, WorkflowError) as e:
+                logger.warning(f"Авто-назначение {assignment.request_number} пропущено: {e}")
+                return False
+
+            # ShiftAssignment — планирование смены (вне SSOT workflow-полей)
             shift_assignment = ShiftAssignment(
                 shift_id=assignment.shift_id,
                 request_number=assignment.request_number,
@@ -427,25 +457,14 @@ class SmartDispatcher:
                 assignment_reason=f"Автоназначение (оценка: {assignment.total_score:.2f})",
                 factors_json=json.dumps(assignment.factors)
             )
-            
             self.db.add(shift_assignment)
-            
-            # Обновляем заявку
-            request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
-            if request:
-                shift = self.db.query(Shift).filter(Shift.id == assignment.shift_id).first()
-                if shift:
-                    request.executor_id = shift.user_id
-                    request.assigned_at = datetime.now()
-                    request.assignment_type = 'individual'
-            
             self.db.commit()
-            
+
             logger.info(f"Назначена заявка {assignment.request_number} на смену {assignment.shift_id} "
                        f"с оценкой {assignment.total_score:.2f}")
-            
+
             return True
-            
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"Ошибка выполнения назначения: {e}")
@@ -684,13 +703,14 @@ class SmartDispatcher:
             assignment.shift_id = new_shift_id
             assignment.assignment_reason += f" (перераспределено с смены {old_shift_id})"
             
-            # Обновляем заявку
-            request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
-            if request:
-                new_shift = self.db.query(Shift).filter(Shift.id == new_shift_id).first()
-                if new_shift:
-                    request.executor_id = new_shift.user_id
-            
+            # Обновляем исполнителя заявки через allowlist-слой (PR2d):
+            # executor_id пишет assignment_service, не диспетчер сырьём.
+            new_shift = self.db.query(Shift).filter(Shift.id == new_shift_id).first()
+            if new_shift and new_shift.user_id:
+                from uk_management_bot.services.assignment_service import AssignmentService
+                AssignmentService(self.db).reassign_executor(
+                    assignment.request_number, new_shift.user_id)
+
             # Обновляем счетчики нагрузки
             self._update_shift_workload(old_shift_id, -1)
             self._update_shift_workload(new_shift_id, 1)

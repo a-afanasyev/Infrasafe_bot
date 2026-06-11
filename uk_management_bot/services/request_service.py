@@ -225,77 +225,11 @@ class RequestService:
         logger.warning(f"Using deprecated get_request_by_id({request_id})")
         return None
     
-    def update_request_status(
-        self,
-        request_number: str,
-        new_status: str,
-        executor_id: Optional[int] = None,
-        notes: Optional[str] = None
-    ) -> Optional[Request]:
-        """
-        Обновление статуса заявки
-        
-        Args:
-            request_number: Номер заявки
-            new_status: Новый статус
-            executor_id: ID исполнителя (опционально)
-            notes: Примечания (опционально)
-            
-        Returns:
-            Optional[Request]: Обновленная заявка или None
-        """
-        try:
-            if new_status not in REQUEST_STATUSES:
-                raise ValueError(f"Неверный статус: {new_status}")
-            
-            request = self.get_request_by_number(request_number)
-            if not request:
-                return None
-            
-            old_status = request.status
-            # Разрешаем no-op обновление (тот же статус) для добавления примечаний
-            if new_status == old_status:
-                if notes:
-                    request.notes = (request.notes or "").strip()
-                    request.notes = (request.notes + "\n" if request.notes else "") + notes
-                self.db.commit()
-                self.db.refresh(request)
-                logger.info(f"Обновлены примечания заявки {request_number} при неизменном статусе '{old_status}'")
-                return request
-            request.status = new_status
-            
-            if executor_id:
-                request.executor_id = executor_id
-            
-            if notes:
-                existing_notes = (request.notes or "").strip()
-                request.notes = (existing_notes + "\n" if existing_notes else "") + notes
-            
-            # Если заявка завершена, устанавливаем время завершения
-            if new_status == "Выполнена":
-                request.completed_at = datetime.now()
-
-            # ARCH-113: emit request.status_changed webhook (same txn as the status update)
-            emit_request_status_changed_sync(self.db, request_number, old_status, new_status, source="bot")
-
-            self.db.commit()
-            self.db.refresh(request)
-
-            # Синхронизация с Google Sheets
-            changes = {"status": new_status}
-            if executor_id:
-                changes["executor_id"] = executor_id
-            if notes:
-                changes["comments"] = notes
-            # await self._sync_request_to_sheets(request, "update", changes)  # Временно отключено
-            
-            logger.info(f"Статус заявки {request_number} изменен с '{old_status}' на '{new_status}'")
-            return request
-            
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Ошибка обновления статуса заявки {request_number}: {e}")
-            return None
+    # SSOT-кластер #1, PR2d: update_request_status удалён. Это был actor-less
+    # raw-writer статуса (status/executor_id/completed_at), которым пользовался
+    # только legacy report-approval (request_reports). Тот переведён на канон
+    # (APPLICANT_ACCEPT через rated-accept / APPLICANT_RETURN). Единый writer —
+    # update_status_by_actor (шим над run_command, PR2c).
 
     # === Новая логика: обновление статуса с учетом ролей и допустимых переходов ===
     def get_user_by_telegram_id(self, telegram_id: int) -> Optional[User]:

@@ -429,28 +429,42 @@ class AsyncSmartDispatcher:
         request: Request,
         shift_id: int
     ) -> bool:
-        """Выполнение назначения (ASYNC VERSION)"""
-        try:
-            # Получаем смену
-            query = select(Shift).where(Shift.id == shift_id)
-            result = await self.db.execute(query)
-            shift = result.scalar_one_or_none()
+        """Выполнение назначения (ASYNC VERSION).
 
+        SSOT-кластер #1, PR2d: workflow-поля (status/executor_id/assigned_*)
+        пишет канонический SYSTEM_DISPATCH_ASSIGN (Новая→В работе + назначение +
+        RequestAssignment, created_by=seeded system-user) в своей tx. Прямые
+        ORM-записи request.* убраны; рассинхрон sync/async (sync статус не
+        ставил) устранён — оба теперь канонически переводят в «В работе».
+        """
+        try:
+            shift = (await self.db.execute(
+                select(Shift).where(Shift.id == shift_id))).scalar_one_or_none()
             if not shift or not shift.user_id:
                 return False
 
-            # Назначаем исполнителя
-            request.executor_id = shift.user_id
-            request.status = "В работе"
-            request.assigned_at = datetime.now()
-
-            await self.db.flush()
+            from uk_management_bot.database.session import AsyncSessionLocal
+            from uk_management_bot.services.workflow_runner import (
+                run_command_async, RequestNotFound)
+            from uk_management_bot.utils.request_workflow import (
+                Action, ActionCommand, PrincipalRef, WorkflowError)
+            try:
+                await run_command_async(
+                    AsyncSessionLocal, request.request_number,
+                    PrincipalRef(kind="system", user_id=None,
+                                 source="dispatcher", system_actor="dispatcher"),
+                    ActionCommand(f"dispatch:{request.request_number}",
+                                  Action.SYSTEM_DISPATCH_ASSIGN,
+                                  {"executor_id": shift.user_id}),
+                )
+            except (RequestNotFound, WorkflowError) as e:
+                logger.warning(f"[ASYNC] Авто-назначение {request.request_number} пропущено: {e}")
+                return False
 
             return True
 
         except Exception as e:
             logger.error(f"[ASYNC] Ошибка выполнения назначения: {e}")
-            await self.db.rollback()
             return False
 
     # ========== BATCH OPTIMIZATION METHODS (Phase 2B) ==========

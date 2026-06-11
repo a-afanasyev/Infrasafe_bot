@@ -203,36 +203,15 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             return
 
         logger.info(f"[AUTO_ASSIGN] Назначений для заявки {request.request_number} не найдено, создаем новое групповое назначение")
-        
-        # Создаем групповое назначение
-        logger.info(f"[AUTO_ASSIGN] Создание группового назначения для заявки {request.request_number}")
 
-        assignment = RequestAssignment(
-            request_number=request.request_number,
-            assignment_type="group",
-            group_specialization=specialization,
-            status="active",
-            created_by=manager.id
-        )
-
-        db.add(assignment)
-        logger.info(f"[AUTO_ASSIGN] Объект RequestAssignment добавлен в сессию (request_number={assignment.request_number}, type={assignment.assignment_type})")
-
-        # Обновляем поля заявки
-        request.assignment_type = "group"
-        request.assigned_group = specialization
-        request.assigned_at = datetime.now()
-        request.assigned_by = manager.id
-        logger.info(f"[AUTO_ASSIGN] Поля заявки обновлены (assignment_type={request.assignment_type}, assigned_group={request.assigned_group})")
-
-        # ВАЖНО: Сохраняем изменения в базу данных
-        logger.info(f"[AUTO_ASSIGN] Выполнение db.commit()...")
-        db.commit()
-        logger.info(f"[AUTO_ASSIGN] db.commit() успешно выполнен")
-
-        db.refresh(assignment)
+        # SSOT-кластер #1, PR2d: запись назначения (RequestAssignment +
+        # request.assignment_type/assigned_group/assigned_at/assigned_by) через
+        # allowlist-слой assignment_service вместо сырого ORM в хендлере.
+        # _notify_group_assignment (in-app) — внутри сервиса; кастомный
+        # on-shift Telegram-дути-нотифай ниже сохранён (другой канал/таргетинг).
+        from uk_management_bot.services.assignment_service import AssignmentService
+        AssignmentService(db).assign_to_group(request.request_number, specialization, manager.id)
         db.refresh(request)
-        logger.info(f"[AUTO_ASSIGN] Объекты обновлены из базы (assignment.id={assignment.id})")
 
         logger.info(f"[AUTO_ASSIGN] ✅ Заявка {request.request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
 

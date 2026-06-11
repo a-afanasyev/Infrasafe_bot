@@ -239,7 +239,14 @@ def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -
             RequestAssignment.status == "active",
         ).update({"status": "cancelled"}, synchronize_session=False)
     elif dop.kind == "create_assignment":
-        # SYSTEM-актор (created_by NOT NULL) — отдельная обработка в PR2c.
+        # SYSTEM-актор (created_by NOT NULL): переиспользуем seeded system-user
+        # (PR2d) — у авто-диспетчера нет человека, но «кто» фиксируется
+        # принципалом в audit. У user-актора created_by = его id.
+        if actor.kind == "user":
+            created_by = actor.user_id
+        else:
+            from uk_management_bot.utils.system_user import get_system_user_id_sync
+            created_by = get_system_user_id_sync(db)
         db.query(RequestAssignment).filter(
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active",
@@ -249,7 +256,7 @@ def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -
             assignment_type=("group" if dop.data.get("group") else "individual"),
             group_specialization=dop.data.get("group"),
             executor_id=dop.data.get("executor_id"),
-            created_by=actor.user_id,
+            created_by=created_by,
             status="active",
         ))
 
@@ -361,6 +368,11 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active").values(status="cancelled"))
     elif dop.kind == "create_assignment":
+        if actor.kind == "user":
+            created_by = actor.user_id
+        else:
+            from uk_management_bot.utils.system_user import get_system_user_id_async
+            created_by = await get_system_user_id_async(db)
         await db.execute(sa_update(RequestAssignment).where(
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active").values(status="cancelled"))
@@ -369,7 +381,7 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
             assignment_type=("group" if dop.data.get("group") else "individual"),
             group_specialization=dop.data.get("group"),
             executor_id=dop.data.get("executor_id"),
-            created_by=actor.user_id,
+            created_by=created_by,
             status="active",
         ))
 

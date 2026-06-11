@@ -239,74 +239,9 @@ class TestGetRequestByNumber:
         assert result is req
 
 
-# ---------------------------------------------------------------------------
-# update_request_status  (async)
-# ---------------------------------------------------------------------------
-
-class TestUpdateRequestStatus:
-    @pytest.mark.asyncio
-    async def test_returns_none_for_invalid_status(self):
-        db = AsyncMock()
-        service = AsyncRequestService(db)
-        result = await service.update_request_status("260401-001", "InvalidStatus")
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_returns_none_when_request_not_found(self):
-        db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        db.execute = AsyncMock(return_value=mock_result)
-
-        service = AsyncRequestService(db)
-        result = await service.update_request_status("260401-001", "В работе")
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_updates_status_successfully(self):
-        req = _make_request(status="Новая")
-        db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = req
-        db.execute = AsyncMock(return_value=mock_result)
-        db.flush = AsyncMock()
-        db.refresh = AsyncMock()
-
-        service = AsyncRequestService(db)
-        result = await service.update_request_status("260401-001", "В работе")
-
-        assert req.status == "В работе"
-
-    @pytest.mark.asyncio
-    async def test_no_op_update_with_notes_appends_note(self):
-        req = _make_request(status="Новая", notes=None)
-        db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = req
-        db.execute = AsyncMock(return_value=mock_result)
-        db.flush = AsyncMock()
-        db.refresh = AsyncMock()
-
-        service = AsyncRequestService(db)
-        await service.update_request_status("260401-001", "Новая", notes="Extra info")
-
-        assert "Extra info" in req.notes
-
-    @pytest.mark.asyncio
-    async def test_sets_completed_at_when_completed(self):
-        req = _make_request(status="В работе")
-        req.completed_at = None
-        db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = req
-        db.execute = AsyncMock(return_value=mock_result)
-        db.flush = AsyncMock()
-        db.refresh = AsyncMock()
-
-        service = AsyncRequestService(db)
-        await service.update_request_status("260401-001", "Выполнена")
-
-        assert req.completed_at is not None
+# SSOT-кластер #1, PR2d: TestUpdateRequestStatus удалён вместе с async
+# update_request_status (мёртвый stub). Канонический async write-path —
+# run_command_async (tests/services/test_workflow_runner.py).
 
 
 # ---------------------------------------------------------------------------
