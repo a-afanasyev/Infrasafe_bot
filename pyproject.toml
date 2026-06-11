@@ -1,5 +1,10 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# testpaths = the colocated unit/handlers/service suite. The API + integration/
+# SSOT-gate suite under tests/api and tests/services has its own sqlite
+# conftests and is run as a SEPARATE pytest invocation in CI (see ci.yml) so
+# the sqlite suite isn't collected together with this one. A bare `pytest`
+# therefore runs only the unit suite; CI runs both.
 testpaths = ["uk_management_bot"]
 # uk_management_bot/ has no top-level __init__.py and tests are colocated with
 # source (e.g. services/test_*.py), so prepend import-mode derives clashing
