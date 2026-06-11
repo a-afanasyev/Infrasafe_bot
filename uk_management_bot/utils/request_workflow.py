@@ -308,8 +308,11 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         required={"requested_materials": str}),
     Action.MANAGER_PURCHASE: PayloadSchema(
         optional={"requested_materials": str}),
+    # requested_materials опционален (PR2c): менеджерский возврат из закупа
+    # (admin.handle_return_to_work) дописывает в список материалов разделитель
+    # «--закуплено DATE--»; итог приходит готовым и пишется как SET.
     Action.MANAGER_PURCHASE_DONE: PayloadSchema(
-        optional={"manager_materials_comment": str}),
+        optional={"manager_materials_comment": str, "requested_materials": str}),
     Action.CLARIFY_REQUEST: PayloadSchema(
         required={"question": str}, optional={"notes": str}),
     Action.CLARIFY_RESOLVED: PayloadSchema(),
@@ -501,14 +504,21 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
         ("status", Op.SET, _storage_status(to_canon)),
     ]
     if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
+        # PR2c: assigned_*/create_assignment эмитятся ТОЛЬКО при фактическом
+        # назначении (executor_id/group в payload). Пустой payload = чистый
+        # переход Новая→В работе (менеджер «берёт» заявку, исполнителя выбирает
+        # отдельным шагом через assignment_service). Без placeholder-строк.
+        has_assignment = (payload.get("executor_id") is not None
+                          or payload.get("group") is not None)
         if payload.get("executor_id") is not None:
             ops += [("executor_id", Op.SET, payload["executor_id"])]
         if payload.get("group") is not None:
             ops += [("assigned_group", Op.SET, payload["group"]),
                     ("assignment_type", Op.SET, "group")]
-        ops += [("assigned_at", Op.SET_NOW, None)]
-        if actor.kind == "user":
-            ops += [("assigned_by", Op.SET_ACTOR, None)]
+        if has_assignment:
+            ops += [("assigned_at", Op.SET_NOW, None)]
+            if actor.kind == "user":
+                ops += [("assigned_by", Op.SET_ACTOR, None)]
     elif action == Action.EXECUTOR_PURCHASE:
         ops += [("requested_materials", Op.SET, payload["requested_materials"])]
     elif action == Action.MANAGER_PURCHASE:
@@ -518,6 +528,8 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
         if payload.get("manager_materials_comment") is not None:
             ops += [("manager_materials_comment", Op.SET,
                      payload["manager_materials_comment"])]
+        if payload.get("requested_materials") is not None:
+            ops += [("requested_materials", Op.SET, payload["requested_materials"])]
     elif action in (Action.EXECUTOR_COMPLETE, Action.MANAGER_COMPLETE):
         if payload.get("completion_report") is not None:
             ops += [("completion_report", Op.SET, payload["completion_report"])]
@@ -571,7 +583,11 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
     if action == Action.CANCEL:
         return (DomainOp("cancel_active_assignments"),)
     if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
-        return (DomainOp("create_assignment", dict(payload)),)
+        # PR2c: строку RequestAssignment создаём только при фактическом
+        # назначении исполнителя/группы (см. _build_patch).
+        if payload.get("executor_id") is not None or payload.get("group") is not None:
+            return (DomainOp("create_assignment", dict(payload)),)
+        return ()
     return ()
 
 
