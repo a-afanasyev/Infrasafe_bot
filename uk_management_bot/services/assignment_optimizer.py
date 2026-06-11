@@ -880,23 +880,14 @@ class AssignmentOptimizer:
             if new_shift:
                 new_shift.current_request_count += 1
 
-                # Обновляем исполнителя заявки через RequestAssignment
-                from uk_management_bot.database.models.request_assignment import RequestAssignment
-                request = self.db.query(Request).filter(Request.request_number == assignment.request_number).first()
-                if request:
-                    # Обновляем активное назначение, если оно есть
-                    req_assignment = self.db.query(RequestAssignment).filter(
-                        RequestAssignment.request_number == assignment.request_number,
-                        RequestAssignment.status == "active"
-                    ).first()
+                # Переброска исполнителя через allowlist-слой (PR2d):
+                # executor_id активного RequestAssignment + request.executor_id
+                # пишет assignment_service, не оптимизатор сырьём.
+                if new_shift.user_id:
+                    from uk_management_bot.services.assignment_service import AssignmentService
+                    AssignmentService(self.db).reassign_executor(
+                        assignment.request_number, new_shift.user_id)
 
-                    if req_assignment and req_assignment.assignment_type == "individual":
-                        req_assignment.executor_id = new_shift.user_id
-                        logger.info(f"Обновлен исполнитель RequestAssignment для {assignment.request_number}: {new_shift.user_id}")
-
-                    # Обновляем также старое поле для совместимости
-                    request.executor_id = new_shift.user_id
-            
             self.db.commit()
             return True
             

@@ -130,41 +130,11 @@ class TestRequestService(unittest.TestCase):
         self.assertIsNotNone(found_request)
         self.assertEqual(found_request.request_number, created_request.request_number)
     
-    def test_update_request_status(self):
-        """Тест обновления статуса заявки"""
-        request = self.request_service.create_request(
-            user_id=self.test_user.id,
-            category="Электрика",
-            address="ул. Тестовая, 123",
-            description="Тестовая заявка для обновления"
-        )
-        
-        updated_request = self.request_service.update_request_status(
-            request_number=request.request_number,
-            new_status="В работе",
-            notes="Начата работа"
-        )
-        
-        self.assertIsNotNone(updated_request)
-        self.assertEqual(updated_request.status, "В работе")
-        self.assertEqual(updated_request.notes, "Начата работа")
-    
-    def test_update_request_status_invalid(self):
-        """Тест обновления статуса с неверным статусом"""
-        request = self.request_service.create_request(
-            user_id=self.test_user.id,
-            category="Электрика",
-            address="ул. Тестовая, 123",
-            description="Тестовая заявка для проверки"
-        )
-        
-        updated_request = self.request_service.update_request_status(
-            request_number=request.request_number,
-            new_status="Неверный статус"
-        )
-        
-        self.assertIsNone(updated_request)
-    
+    # SSOT-кластер #1, PR2d: тесты update_request_status удалены вместе с самим
+    # методом (actor-less raw-writer статуса). Канонический write-path —
+    # update_status_by_actor (шим над run_command, покрыт в tests/services/
+    # test_workflow_runner.py + tests/api/test_update_request_workflow.py).
+
     @unittest.skip("RequestNumberService uses SELECT ... FOR UPDATE (Postgres row-lock); on sqlite it falls back to a colliding number, so creating >1 request fails. Covered by Postgres-backed tests.")
     def test_search_requests(self):
         """Тест поиска заявок"""

@@ -159,12 +159,35 @@ class AssignmentService:
             
             logger.info(f"Заявка {request_number} назначена исполнителю {executor_id} пользователем {assigned_by}")
             return assignment
-            
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"Ошибка назначения заявки исполнителю: {e}")
             raise
-    
+
+    def reassign_executor(self, request_number: str, new_executor_id: int) -> bool:
+        """Лёгкая переброска исполнителя при ребалансировке смен (SSOT PR2d).
+
+        Системная оптимизация (smart_dispatcher.balance_workload /
+        assignment_optimizer), а НЕ новое назначение: обновляем executor_id
+        активного индивидуального RequestAssignment + request.executor_id
+        IN PLACE — без cancel/recreate строки, без уведомлений. Коммит — на
+        вызывающем (метод вызывается внутри его транзакции/сессии). Так
+        executor_id пишется внутри allowlist-слоя (assignment_service), а не
+        сырьём в диспетчере/оптимизаторе.
+        """
+        request = self._get_request_by_number(request_number)
+        if not request:
+            return False
+        active = self.db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == request_number,
+            RequestAssignment.status == ASSIGNMENT_STATUS_ACTIVE,
+        ).first()
+        if active is not None and active.assignment_type == ASSIGNMENT_TYPE_INDIVIDUAL:
+            active.executor_id = new_executor_id
+        request.executor_id = new_executor_id
+        return True
+
     def get_executor_assignments(self, executor_id: int, status: str = ASSIGNMENT_STATUS_ACTIVE) -> List[RequestAssignment]:
         """
         Получение назначений исполнителя

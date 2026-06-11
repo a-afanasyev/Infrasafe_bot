@@ -436,7 +436,12 @@ async def delete_employee(
         if target_user.deleted_at is not None:
             raise HTTPException(status_code=422, detail="Cannot reassign to a deleted employee")
 
-        # Bulk update executor_id on active requests
+        # SSOT-кластер #1, PR2d: переброска executor_id активных заявок через
+        # allowlist-слой async_assignment_service (обновляет и активный
+        # RequestAssignment), а не сырым ORM в роутере. Без commit — общая tx
+        # хендлера (soft-delete + завершение смен) коммитится ниже.
+        from uk_management_bot.services.async_assignment_service import AsyncAssignmentService
+        _assignment_svc = AsyncAssignmentService(db)
         active_requests_result = await db.execute(
             select(Request).where(
                 Request.executor_id == user_id,
@@ -444,7 +449,7 @@ async def delete_employee(
             )
         )
         for req in active_requests_result.scalars().all():
-            req.executor_id = body.reassign_to
+            await _assignment_svc.reassign_executor(req.request_number, body.reassign_to)
 
     # Soft-delete the user
     user.deleted_at = datetime.now(timezone.utc)

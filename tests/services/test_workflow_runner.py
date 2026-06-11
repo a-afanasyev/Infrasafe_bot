@@ -94,6 +94,37 @@ def _owner():
 
 
 # ---------------------------------------------------------------------------
+# SYSTEM_DISPATCH_ASSIGN — авто-диспетчер (PR2d): created_by = seeded system-user
+# ---------------------------------------------------------------------------
+
+class TestSystemDispatch:
+    def test_creates_assignment_with_system_user_created_by(self, factory):
+        from uk_management_bot.config.settings import settings
+        SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+        # seed system-user (created_by для SYSTEM-назначений, PR2d)
+        s = SF()
+        s.add(User(id=1, telegram_id=settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID,
+                   first_name="System", roles='["manager"]', active_role="manager",
+                   status="approved", language="ru"))
+        s.commit()
+        s.close()
+        sysp = PrincipalRef(kind="system", user_id=None,
+                            source="dispatcher", system_actor="dispatcher")
+        out = run_command_sync(
+            SF, "260610-001", sysp,
+            ActionCommand("sys-1", Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": 4}))
+        assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS  # Новая→В работе
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.executor_id == 4
+        ra = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").first()
+        assert ra is not None
+        assert ra.created_by == 1  # seeded system-user, НЕ None (created_by NOT NULL)
+        s.close()
+
+
+# ---------------------------------------------------------------------------
 # MANAGER_CONFIRM — первый canonical-writer
 # ---------------------------------------------------------------------------
 

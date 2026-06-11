@@ -114,103 +114,63 @@ def collect_write_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 
 
 # ---------------------------------------------------------------------------
-# BASELINE — текущее фактическое состояние (зафиксировано PR1, 2026-06-10).
-# PR2a-c переводят сайты на mutation-layer и СЖИМАЮТ этот список; целевое
-# ядро-allowlist = mutation-layer + assignment-сервис + create-фабрика.
+# BASELINE — ALLOWLIST-ЯДРО (достигнуто в PR2d, 2026-06-11). После PR2a-2d ВСЕ
+# workflow-переходы заявки идут через канонический writer run_command
+# (utils/request_workflow + services/workflow_runner; динамический setattr —
+# AST-невидим). Здесь остаётся только ЯДРО-allowlist:
 #
-# Группы:
-#   - shift_*-файлы и database/models/shift_*: поля СМЕН (completed_at/
-#     assigned_at на Shift/ShiftTransfer) — машина статусов смен вне scope
-#     кластера #1, останутся вне layer заявок (одноимённые поля, фиксируем
-#     как шум-инвариант);
-#   - database/migrations/fix_manager_confirmed_legacy.py: одноразовый
-#     migration-скрипт (план, риск №30) — allowlist с обоснованием;
-#   - остальное — write-сайты заявки, мигрируют в PR2a (handlers), PR2b
-#     (api), PR2c (services/dispatcher).
+#   1. CREATE-фабрика: ctor:Request/RequestModel со status — создание заявки
+#      (status="Новая") в callcenter/requests/request_service/async_request_
+#      service/inbound_alert. Это не переход, а рождение записи.
+#   2. ASSIGNMENT-mutation-layer: assignment_service / async_assignment_service —
+#      единственный санкционированный writer полей назначения (executor_id/
+#      assigned_*/RequestAssignment). Диспетчер/оптимизатор/admin-auto-assign/
+#      delete_employee (PR2d) теперь пишут ТОЛЬКО через него (assign_to_*/
+#      reassign_executor); сам сервис — allowlist. attr:active executor_id —
+#      reassign_executor (обновление активного RequestAssignment in place).
+#   3. SHIFT-машина (вне scope кластера #1): Shift/ShiftTransfer/ShiftAssignment
+#      (completed_at/assigned_at) + shift_assignment_service/shift_transfer_
+#      service + api/shifts transfer.assigned_at — отдельная машина статусов
+#      смен, одноимённые поля (шум-инвариант).
+#   4. ONE-OFF migration: fix_manager_confirmed_legacy.py (план, риск №30).
+#
+# Любой НОВЫЙ кортеж = либо новый сырой writer (должен идти через run_command/
+# assignment_service), либо осознанное расширение ядра с обоснованием здесь.
 # ---------------------------------------------------------------------------
 
 BASELINE: set[tuple[str, str, str]] = {
+    # 1. CREATE-фабрика (создание заявки, status="Новая")
     ('uk_management_bot/api/callcenter/router.py', 'ctor:Request', 'status'),
     ('uk_management_bot/api/requests/router.py', 'ctor:RequestModel', 'status'),
-    ('uk_management_bot/api/shifts/router.py', 'attr:req', 'executor_id'),
-    ('uk_management_bot/api/shifts/router.py', 'attr:transfer', 'assigned_at'),
-    ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'update()', 'manager_confirmed'),
-    ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
-    ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
-    ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
-    # PR2c: assigned_* остаются — их пишет auto_assign_request_by_category
-    # (admin.py:111, ЖИВАЯ: вызывается из handle_assign_by_category :2578).
-    # Это assignment-домен (создаёт RequestAssignment + пишет assigned_*),
-    # отложен в PR2d вместе с Группой II (smart_dispatcher/optimizer/
-    # async_assignment_service); целевой allowlist — assignment_service.
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_at'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_by'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'assigned_group'),
-    ('uk_management_bot/handlers/admin.py', 'attr:request', 'assignment_type'),
-    # PR2a-1/2a-2: confirm/reconfirm(→force_accept)/return_to_work переведены на
-    # run_command → manager_confirmed/_by/_at и is_returned в admin.py больше не
-    # мутируются сырьём. PR2a-7: handle_complete_request → MANAGER_COMPLETE;
-    # handle_clarification_text → CLARIFY_REQUEST. PR2c: handle_accept_request
-    # (shadowed accept_) → MANAGER_ASSIGN, handle_return_to_work (purchase_return_
-    # to_work_) → MANAGER_PURCHASE_DONE (requested_materials-разделитель в payload,
-    # purchase_history — вне workflow-полей). status/requested_materials СНЯТЫ.
-    # PR2a-3: save_rating (APPLICANT_ACCEPT) + process_return_request
-    # (APPLICANT_RETURN) переведены на run_command → request_acceptance.py
-    # больше НЕ мутирует workflow-поля сырьём (весь файл снят из baseline).
-    # PR2c: request_status_management.py (handle_materials_input/completion_report)
-    # → поля прокинуты в payload update_status_by_actor-шима → весь файл снят.
-    # PR2a-5: executor-хендлеры requests.py (purchase/complete/resume) → run_command
-    # (EXECUTOR_PURCHASE/COMPLETE/RESUME) → status/completion_media сырьём больше
-    # не пишутся. ctor:Request (save_request, create-путь) остаётся до PR5/create-фабрики.
     ('uk_management_bot/handlers/requests.py', 'ctor:Request', 'status'),
-    # PR2a-4: process_manager_acceptance_comment → MANAGER_FORCE_ACCEPT →
-    # unaccepted_requests.py больше не мутирует workflow-поля сырьём
-    # (весь файл снят из baseline).
-    ('uk_management_bot/services/assignment_optimizer.py', 'attr:req_assignment', 'executor_id'),
-    ('uk_management_bot/services/assignment_optimizer.py', 'attr:request', 'executor_id'),
+    ('uk_management_bot/services/request_service.py', 'ctor:Request', 'status'),
+    ('uk_management_bot/services/async_request_service.py', 'ctor:Request', 'status'),
+    ('uk_management_bot/services/inbound_alert.py', 'ctor:Request', 'status'),
+    # 2. ASSIGNMENT mutation-layer (allowlist): единственный writer назначений.
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assigned_at'),
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assigned_by'),
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assigned_group'),
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assignment_type'),
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'executor_id'),
+    ('uk_management_bot/services/assignment_service.py', 'attr:active', 'executor_id'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_at'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_by'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_group'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assignment_type'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'executor_id'),
-    # async_request_service.py — pre-migration stubs (0 production-вызовов,
-    # update_request_status/update_status_by_actor async). PR2d: удалить или
-    # шим над run_command_async, когда появятся async-хендлеры.
-    ('uk_management_bot/services/async_request_service.py', 'attr:request', 'completed_at'),
-    ('uk_management_bot/services/async_request_service.py', 'attr:request', 'executor_id'),
-    ('uk_management_bot/services/async_request_service.py', 'attr:request', 'status'),
-    ('uk_management_bot/services/async_request_service.py', 'ctor:Request', 'status'),
-    # Группа II (PR2d): async_smart_dispatcher — SYSTEM-auto-assign. Упирается в
-    # RequestAssignment.created_by NOT NULL (нужен nullable-миграция/synthetic
-    # SYSTEM-user) + рассинхрон sync(status НЕ ставит)/async(ставит «В работе»).
-    ('uk_management_bot/services/async_smart_dispatcher.py', 'attr:request', 'assigned_at'),
-    ('uk_management_bot/services/async_smart_dispatcher.py', 'attr:request', 'executor_id'),
-    ('uk_management_bot/services/async_smart_dispatcher.py', 'attr:request', 'status'),
-    ('uk_management_bot/services/inbound_alert.py', 'ctor:Request', 'status'),
-    # PR2c: update_status_by_actor → тонкий шим над run_command_sync (главный
-    # live status-writer бота: accept/purchase/cancel/complete/clarify/generic).
-    # Прямой setattr ушёл ВНУТРЬ run_command (динамический → AST-невидим). Здесь
-    # остаются: update_request_status (sync, actor-less legacy report-approval —
-    # request_reports view-report/revision) + create_request (ctor, create-путь).
-    # update_request_status → PR2d (консолидация legacy report-approval в
-    # канонический rated-accept request_acceptance.py).
-    ('uk_management_bot/services/request_service.py', 'attr:request', 'completed_at'),
-    ('uk_management_bot/services/request_service.py', 'attr:request', 'executor_id'),
-    ('uk_management_bot/services/request_service.py', 'attr:request', 'status'),
-    ('uk_management_bot/services/request_service.py', 'ctor:Request', 'status'),
+    ('uk_management_bot/services/async_assignment_service.py', 'attr:active', 'executor_id'),
+    # 3. SHIFT-машина (вне scope; одноимённые поля Shift/ShiftTransfer)
+    ('uk_management_bot/api/shifts/router.py', 'attr:transfer', 'assigned_at'),
+    ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
+    ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
+    ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/services/shift_assignment_service.py', 'attr:shift', 'assigned_at'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'assigned_at'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'assigned_by'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:transfer', 'completed_at'),
-    ('uk_management_bot/services/smart_dispatcher.py', 'attr:request', 'assigned_at'),
-    ('uk_management_bot/services/smart_dispatcher.py', 'attr:request', 'assignment_type'),
-    ('uk_management_bot/services/smart_dispatcher.py', 'attr:request', 'executor_id'),
+    # 4. ONE-OFF migration-скрипт (план, риск №30)
+    ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'update()', 'manager_confirmed'),
 }
 
 

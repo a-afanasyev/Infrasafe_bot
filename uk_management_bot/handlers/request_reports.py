@@ -164,38 +164,20 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         if not request_number:
             await callback.answer(get_text("request_reports.handlers.request_data_not_found", language=language), show_alert=True)
             return
-        
-        # Создаем сервисы
-        request_service = RequestService(db)
-        comment_service = CommentService(db)
-        
-        # Изменяем статус на "Принято"
-        updated_request = request_service.update_request_status(
-            request_number=request_number,
-            new_status=REQUEST_STATUS_APPROVED,
-        )
 
-        # Добавляем комментарий о принятии
-        comment_service.add_status_change_comment(
-            request_id=request_number,
-            user_id=callback.from_user.id,
-            previous_status=current_status,
-            new_status=REQUEST_STATUS_APPROVED,
-            additional_comment="Заявка принята заявителем"
-        )
-        
-        # Показываем сообщение об успехе
-        lang = language
-        success_text = get_text("reports.approval_success", language=lang).format(
-            request_id=request_number
-        )
-        
-        await callback.message.edit_text(success_text)
-        
-        # Очищаем состояние
+        # SSOT-кластер #1, PR2d: приёмка заявителем = канонический rated-accept
+        # (APPLICANT_ACCEPT с оценкой). Прежний прямой перевод в «Принято» без
+        # рейтинга через update_request_status снят. Редирект на канон:
+        # показываем клавиатуру оценки 1–5★, приёмку выполнит
+        # request_acceptance.save_rating → run_command(APPLICANT_ACCEPT).
+        from uk_management_bot.keyboards.admin import get_rating_keyboard
         await state.clear()
-        
-        await callback.answer(get_text("request_reports.handlers.request_approved_toast", language=lang))
+        await callback.message.edit_text(
+            get_text("request_acceptance.handlers.rate_request", language=language),
+            reply_markup=get_rating_keyboard(request_number),
+            parse_mode="HTML",
+        )
+        await callback.answer()
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения принятия: {e}")
@@ -285,22 +267,42 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         data = await state.get_data()
         request_number = data.get("request_number")
         
-        # Создаем сервисы
-        request_service = RequestService(db)
         comment_service = CommentService(db)
-        
+
         # Получаем текущую заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
             await message.answer(get_text("request_reports.handlers.request_not_found", language=language))
             return
 
-        # Изменяем статус на "В работе" (возвращаем к доработке)
-        updated_request = request_service.update_request_status(
-            request_number=request_number,
-            new_status=REQUEST_STATUS_IN_PROGRESS,
-        )
-        
+        # SSOT-кластер #1, PR2d: доработка заявителем = канонический возврат
+        # (APPLICANT_RETURN, Исполнено→Возвращена; дальше разбирает менеджер).
+        # Прежний прямой перевод в «В работе» через update_request_status снят
+        # (у заявителя нет канон-ребра Исполнено→В работе).
+        from uk_management_bot.database.session import SessionLocal
+        from uk_management_bot.services.workflow_runner import (
+            run_command_sync, RequestNotFound)
+        from uk_management_bot.utils.request_workflow import (
+            Action, ActionCommand, PrincipalRef, WorkflowError)
+        actor = db.query(User).filter(User.telegram_id == message.from_user.id).first()
+        if not actor:
+            await message.answer(get_text("request_reports.handlers.request_not_found", language=language))
+            return
+        try:
+            run_command_sync(
+                SessionLocal, request_number,
+                PrincipalRef(kind="user", user_id=actor.id, source="telegram"),
+                ActionCommand(f"revision:{request_number}", Action.APPLICANT_RETURN,
+                              {"return_reason": revision_reason}),
+            )
+        except RequestNotFound:
+            await message.answer(get_text("request_reports.handlers.request_not_found", language=language))
+            return
+        except WorkflowError as e:
+            logger.error(f"APPLICANT_RETURN (доработка) отклонён для {request_number}: {e}")
+            await message.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)))
+            return
+
         # Добавляем комментарий о доработке
         comment_service.add_clarification_comment(
             request_id=request_number,
