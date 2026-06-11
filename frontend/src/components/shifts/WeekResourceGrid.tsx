@@ -106,19 +106,6 @@ function getGradient(name: string | null): string {
 export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: Props) {
   const { t } = useTranslation()
 
-  if (shifts.length === 0) {
-    return (
-      <EmptyState
-        icon={'\u{1F4C5}'}
-        title={t('shifts.empty.week')}
-        subtitle={t('shifts.noShiftsDesc')}
-      />
-    )
-  }
-
-  const days = weekDays(weekAnchor)
-  const today = new Date()
-
   // Group shifts by executor; preserve insertion order so the same shift list
   // produces a stable row order across re-renders (sorted by first start_time).
   // Memoize the heavy bucket-and-segment work — `useShiftsWebSocket` triggers
@@ -154,6 +141,21 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
       (a, b) => a.firstStartMs - b.firstStartMs,
     )
   }, [shifts])
+
+  // Early return AFTER all hooks — a conditional return above useMemo broke
+  // the Rules of Hooks (hook count changed between empty/non-empty renders).
+  if (shifts.length === 0) {
+    return (
+      <EmptyState
+        icon={'\u{1F4C5}'}
+        title={t('shifts.empty.week')}
+        subtitle={t('shifts.noShiftsDesc')}
+      />
+    )
+  }
+
+  const days = weekDays(weekAnchor)
+  const today = new Date()
 
   return (
     <div className="overflow-x-auto">

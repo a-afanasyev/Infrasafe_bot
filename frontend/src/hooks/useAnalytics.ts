@@ -9,8 +9,9 @@ import type {
   ShiftStatsOut,
 } from '../types/api'
 
-// Note: ShiftStatsOut and useShiftStats are also exported from useShifts.ts.
-// Here we re-export the type alias and provide a typed wrapper using AnalyticsPeriod.
+// Canonical useShiftStats lives HERE (FE-02): useShifts.ts re-exports it.
+// Keep a single hook per queryKey — a second implementation with different
+// options silently shares/clobbers the same cache entry.
 
 export type { AnalyticsPeriod, DayStats, ExecutorStat, ActivityItem, RequestStatsOut, ShiftStatsOut }
 
