@@ -48,9 +48,16 @@ class TestAppSetup:
         routes = [r.path for r in app.routes]
         assert any("/api/v2/callcenter" in r for r in routes)
 
-    def test_notifications_routes_registered(self):
+    def test_notifications_routes_not_registered(self):
+        """DEAD-08 (PR-11): api/notifications удалён — роуты не должны
+        регистрироваться; мёртвый эндпоинт не возвращается молча."""
         routes = [r.path for r in app.routes]
-        assert any("/api/v2/notifications" in r for r in routes)
+        assert not any("/api/v2/notifications" in r for r in routes)
+
+    def test_profile_documents_route_not_registered(self):
+        """DEAD-07 (PR-11): POST /profile/documents удалён."""
+        routes = [r.path for r in app.routes]
+        assert not any("/api/v2/profile/documents" in r for r in routes)
 
     def test_websocket_routes_registered(self):
         routes = [r.path for r in app.routes]
