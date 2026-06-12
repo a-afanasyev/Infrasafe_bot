@@ -137,8 +137,6 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/api/requests/stats_router.py', 'in_:Request', 'status'),
     ('uk_management_bot/api/shifts/router.py', 'in_:Request', 'status'),
     # одноразовый migration-скрипт (write-гейт уже фиксирует его update())
-    ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'cmp:Request', 'manager_confirmed'),
-    ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'cmp:Request', 'status'),
     # FALSE-POSITIVE/вне scope (подтверждено PR2-pre/2): self.request.status in
     # ["completed","cancelled"] (shift_assignment.py:212) — non-canon значения,
     # подсистема смен (вне scope), фактически всегда False.
@@ -170,10 +168,6 @@ BASELINE: set[tuple[str, str, str]] = {
     # status "pending"/"approved"/"rejected" (addresses/core.py:483-487).
     ('uk_management_bot/services/addresses/core.py', 'cmp:existing', 'status'),
     ('uk_management_bot/services/assignment_optimizer.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/services/async_request_service.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/services/async_request_service.py', 'cmp:request', 'status'),
-    ('uk_management_bot/services/async_shift_assignment_service.py', 'in_:Request', 'status'),
-    ('uk_management_bot/services/async_smart_dispatcher.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/geo_optimizer.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/metrics_manager.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/recommendation_engine.py', 'cmp:Request', 'status'),

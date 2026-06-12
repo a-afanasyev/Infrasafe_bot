@@ -1182,67 +1182,8 @@ async def handle_request_documents(callback: CallbackQuery, state: FSMContext, d
         )
 
 
-# ВРЕМЕННО ОТКЛЮЧЕН - КОНФЛИКТ С НОВЫМИ ОБРАБОТЧИКАМИ ГАЛОЧЕК
-# @router.callback_query(F.data.startswith("request_document_"))
-# async def handle_document_type_selection(callback: CallbackQuery, state: FSMContext, db: Session, 
-#                                        roles: list = None, active_role: str = None, user: User = None):
-#     """Обработать выбор типа документа для запроса"""
-#     lang = language
-#     
-#     logger.info(f"🔍 HANDLE_DOCUMENT_TYPE_SELECTION: Вызван обработчик для {callback.data}")
-#     logger.info(f"🔍 HANDLE_DOCUMENT_TYPE_SELECTION: Это старый обработчик, который не должен вызываться!")
-#     
-#     # Проверяем права доступа через утилитарную функцию
-#     has_access = has_admin_access(roles=roles, user=user)
-#     
-#     if not has_access:
-#         await callback.answer(
-#             get_text('errors.permission_denied', language=lang),
-#             show_alert=True
-#         )
-#         return
-#     
-#     try:
-#         # Парсим данные: request_document_{user_id}_{document_type}
-#         parts = callback.data.split('_')
-#         target_user_id = int(parts[2])
-#         document_type = parts[3]
-#         
-#         # Получаем внутренний ID менеджера из базы данных
-#         manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-#         if not manager:
-#             await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
-#             return
-#             
-#         await state.update_data({
-#             'action': 'request_specific_document',
-#             'target_user_id': target_user_id,
-#             'manager_id': manager.id,
-#             'document_type': document_type
-#         })
-#         
-#         await state.set_state(UserManagementStates.waiting_for_document_request)
-#         
-#         # Получаем название типа документа
-#         from uk_management_bot.database.models.user_verification import DocumentType
-#         doc_type_name = get_text(f'verification.document_types.{document_type}', language=lang)
-#         logger.info(f"🔍 DOCUMENT_TYPE_SELECTION: Тип документа: {document_type}, Название: {doc_type_name}")
-#         
-#         await callback.message.edit_text(
-#             get_text('moderation.enter_document_request_specific', language=lang).format(
-#                 document_type=doc_type_name
-#             ),
-#             reply_markup=get_cancel_keyboard(lang)
-#         )
-#         
-#         await callback.answer()
-#         
-#     except Exception as e:
-#         logger.error(f"Ошибка обработки выбора типа документа: {e}")
-#         await callback.answer(
-#             get_text('errors.unknown_error', language=lang),
-#             show_alert=True
-#         )
+# DEAD-16 (PR-8): «ВРЕМЕННО ОТКЛЮЧЕННЫЙ» handle_document_type_selection
+# (61 строка комментариев) удалён — заменён обработчиками галочек ниже.
 
 
 # ═══ ОБРАБОТКА ГАЛОЧЕК ДОКУМЕНТОВ ═══

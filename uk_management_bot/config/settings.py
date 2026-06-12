@@ -68,14 +68,8 @@ class Settings:
         f"sqlite:///{_default_db_path}",  # будет вида sqlite:////absolute/path
     )
     
-    # Google Sheets Real-time Sync
-    GOOGLE_SHEETS_CREDENTIALS_FILE = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
-    GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID")
-    GOOGLE_SHEETS_SYNC_ENABLED = os.getenv("GOOGLE_SHEETS_SYNC_ENABLED", "False").lower() == "true"
-    GOOGLE_SHEETS_SYNC_INTERVAL = int(os.getenv("GOOGLE_SHEETS_SYNC_INTERVAL", "30"))  # секунды
-    GOOGLE_SHEETS_MAX_RETRIES = int(os.getenv("GOOGLE_SHEETS_MAX_RETRIES", "3"))
-    GOOGLE_SHEETS_RETRY_DELAY = int(os.getenv("GOOGLE_SHEETS_RETRY_DELAY", "60"))  # секунды
-    
+    # DEAD-13 (PR-8): GOOGLE_SHEETS_* флаги удалены вместе с sheets_utils (DEAD-04).
+
     # Application
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -169,9 +163,8 @@ class Settings:
     INFRASAFE_REQUESTS_INVENTORY_URL = os.getenv("INFRASAFE_REQUESTS_INVENTORY_URL", "")
     RECONCILE_REQUESTS_ENABLED = os.getenv("RECONCILE_REQUESTS_ENABLED", "false").lower() == "true"
 
-    # Notifications
+    # Notifications (DEAD-13: NOTIFICATION_RETRY_COUNT удалён — 0 чтений)
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
-    NOTIFICATION_RETRY_COUNT = int(os.getenv("NOTIFICATION_RETRY_COUNT", "3"))
     
     # Request Categories
     REQUEST_CATEGORIES = [

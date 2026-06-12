@@ -2,7 +2,7 @@
 
 Single source of truth for payload shape — used by both API
 (api/requests/router.py) and bot paths (request_service,
-async_request_service, handlers/requests.py). The wrappers tag the
+handlers/requests.py). The wrappers tag the
 emit-log with `source ∈ {api, bot}`; the wire payload stays unchanged
 so existing InfraSafe verifier keeps working.
 """
