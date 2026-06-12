@@ -67,16 +67,16 @@
 
 ### Волна 1 — security/корректность S (3 PR)
 
-#### PR-6a — Security-фиксы (S/M)
+#### ~~PR-6a — Security-фиксы (S/M)~~ ✅ DONE 2026-06-12 (PR #64, `3d45cb1`, прод; live-лок /admin на 6-й попытке)
 - **Состав:** SEC-01 (rate-limit `/admin`-пароля: `is_rate_limited(f"admin_pwd:{tg_id}", 5, 300)` — утилита готова), SEC-05 (`pydantic.EmailStr` в `api/profile/router.py:78`), SEC-06 (`/admin` → только `["manager"]`), SEC-08 (убрать `token[:8]` из `handlers/auth.py:178`), INV-087 (`hmac.digest`), ARCH-04 (узкие except + warning в auth/role-парсинге).
 - **DoD:** тест на каждый фикс (lockout, email-валидация, roles-выдача); MCP-смоук: `/admin` 6 неверных паролей → лок.
 - **Риск:** SEC-06 меняет выдачу ролей — проверить, что существующие admin-пользователи не теряют доступ.
 
-#### PR-6b — Корректность/cleanup auth-слоя (M)
+#### ~~PR-6b — Корректность/cleanup auth-слоя (M)~~ ✅ DONE 2026-06-12 (PR #65→#68, `846f855`, прод; SQL-тесты CODE-05/10)
 - **Состав:** CODE-02 (двойная загрузка User), CODE-03 (auto-commit `get_async_db`), CODE-05 (`'resident'`→`'applicant'` + тест), CODE-06 (мёртвый in-memory лимит), CODE-07 (мёртвый `json_pattern`), CODE-08 (мёртвые «admin»-ветки), CODE-10 (roles-массив как в `process_invite_join`), CODE-11 (лог в auth-middleware), CODE-12 (`import json`), ARCH-08 (ложный комментарий settings).
 - **DoD:** тесты CODE-05 (выборка applicant) и CODE-10 (roles-консистентность); оба набора зелёные.
 
-#### PR-7 — Frontend auth-гигиена (S)
+#### ~~PR-7 — Frontend auth-гигиена (S)~~ ✅ DONE 2026-06-12 (PR #66, `1a8b02d`, прод; live: inline-ошибка без редиректа, мусорный onTelegramAuth → 0 запросов)
 - **Состав:** FE-04 (валидация `window.onTelegramAuth`: интерфейс + обязательные `id`/`hash`), FE-05 (isError+retry в TWA-auth), FE-06 (логировать `err.message`), FE-047 (login через `publicClient` без 401-interceptor).
 - **DoD:** vitest на FE-04/05; смоук: неверный логин → inline-ошибка без редиректа.
 
@@ -84,7 +84,7 @@
 
 **Усиленный DoD всей волны:** оба pytest-набора в пересобранном контейнере + frontend build/vitest + **callback/router-инвентаризация**: дамп зарегистрированных aiogram-роутеров/callback-паттернов и FastAPI-routes до/после, diff = только осознанно удалённое; бот стартует, MCP-смоук главного меню.
 
-#### PR-8 — Мёртвый Python (M, −~9.5k строк)
+#### ~~PR-8 — Мёртвый Python (M, −10 685 строк факт)~~ ✅ DONE 2026-06-12 (PR #67, `e8de38c`, прод; routes/handlers-инвентаризация идентична, −22 пакета из lock; JOIN_RATE_LIMIT_* живы — оставлены)
 - **Состав:** DEAD-01 (6 async-сервисов + тесты), DEAD-02 (**после grep-подтверждения**: цепочка `smart_assign_request`/`get_assignment_recommendations`; `reassign_executor` сохранить — жив в `api/shifts/router.py:447`), DEAD-03 (quarterly-кластер; таблица `quarterly_plan` — отдельное решение; закрывает CODE-13), DEAD-04 (`sheets_utils.py` + structlog), DEAD-05 (pre-alembic `database/migrations/` — **закрывает SEC-023**), DEAD-11 (8 позиций requirements.in; passlib→bcrypt), DEAD-13 (мёртвые settings-флаги), DEAD-16 (закомментированные блоки `handlers/requests.py:322-364`, `user_management.py:1185-1245`).
 - **DoD волны** + grep «0 импортов» на каждое удаление зафиксирован в PR-описании.
 
