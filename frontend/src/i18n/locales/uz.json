@@ -1006,7 +1006,9 @@
       "submit": "Yuborish",
       "success": "Rahmat! Murojaatingiz qabul qilindi.",
       "error": "Murojaatni yuborib bo‘lmadi"
-    }
+    },
+    "authError": "Telegram orqali kirish muvaffaqiyatsiz tugadi. Ulanishni tekshirib, qaytadan urinib ko'ring.",
+    "retry": "Qaytadan urinish"
   },
   "toast": {
     "requestUpdated": "Ariza yangilandi",

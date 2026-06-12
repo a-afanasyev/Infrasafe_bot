@@ -14,6 +14,15 @@ export const apiClient = axios.create({
   withCredentials: true, // sends uk_access / uk_refresh cookies on Path=/uk/
 })
 
+// FE-047: клиент БЕЗ 401-interceptor — для auth-эндпоинтов страницы логина.
+// apiClient на 401 пытается refresh → при неудаче редиректит на /login,
+// что на самой странице логина перезагружало её и стирало inline-ошибку
+// («неверный пароль» выглядел как молчаливый сброс формы).
+export const publicClient = axios.create({
+  baseURL: BASE_URL,
+  withCredentials: true, // login/verify-otp ставят auth-cookies в ответе
+})
+
 let refreshPromise: Promise<void> | null = null
 
 apiClient.interceptors.response.use(
