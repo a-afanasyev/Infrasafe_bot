@@ -22,7 +22,6 @@ STATE_MODULES = [
     "uk_management_bot.states.my_shifts",
     "uk_management_bot.states.onboarding",
     "uk_management_bot.states.profile_editing",
-    "uk_management_bot.states.quarterly_planning",
     "uk_management_bot.states.registration",
     "uk_management_bot.states.request_acceptance",
     "uk_management_bot.states.request_assignment",

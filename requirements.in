@@ -10,19 +10,8 @@ asyncpg>=0.29.0  # Async PostgreSQL driver for SQLAlchemy
 # Redis for rate limiting and caching
 redis>=5.0.0
 
-# Google Sheets Integration
-google-api-python-client>=2.100.0
-google-auth>=2.23.0
-google-auth-oauthlib>=1.1.0
-
 # Configuration and Environment
 python-dotenv>=1.0.0
-
-# File handling
-aiofiles>=23.0.0
-
-# Async support
-asyncio-mqtt>=0.16.0
 
 # Task Scheduling
 apscheduler>=3.10.0
@@ -31,24 +20,17 @@ apscheduler>=3.10.0
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 
-# Logging
-structlog>=23.1.0
-
-# HTTP requests (for healthcheck)
-requests>=2.31.0
-
 # Async HTTP client (for Media Service integration)
 httpx>=0.25.0
 
 # Web Framework for invite registration
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-jinja2>=3.1.0
 python-multipart>=0.0.6
 
 # JWT + Auth
 python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0  # DEAD-11: код использует `import bcrypt` напрямую, passlib не нужен
 
 # Rate limiting
 slowapi>=0.1.9

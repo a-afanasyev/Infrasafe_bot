@@ -319,49 +319,9 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
 
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
 
-# REMOVED: Text-based category filter (TASK 17 Issue #2)
-# This handler was blocking Uzbek users because REQUEST_CATEGORIES contains only Russian text.
-# When Uzbek users selected a category button showing "Elektrik", "Santexnika", etc.,
-# this filter only accepted Russian text, causing users to get stuck in RequestStates.category.
-#
-# The callback-based handler below (line 874: handle_category_selection) already handles
-# category selection correctly for all languages using internal category IDs (language-independent).
-# Users always use inline buttons (not manual text input), making this text filter redundant.
-#
-# The catch-all handler at line 430 (process_category_other_inputs) handles any unexpected
-# text input and provides helpful feedback to users.
-#
-# @router.message(RequestStates.category, F.text.in_(REQUEST_CATEGORIES))
-# async def process_category(message: Message, state: FSMContext):
-#     """Обработка выбора категории с улучшенной интеграцией"""
-#     lang = await _get_user_language(message=message)
-#     user_id = message.from_user.id
-#     category_text = message.text
-#
-#     logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id}: '{category_text}'")
-#
-#     if category_text == get_text("buttons.cancel", language=lang):
-#         await cancel_request(message, state, lang=lang)
-#         return
-#
-#     # Сохраняем категорию и переходим к выбору адреса
-#     await state.update_data(category=category_text)
-#     await state.set_state(RequestStates.address)
-#
-#     # Показываем единую клавиатуру с квартирами, домами и дворами
-#     try:
-#         logger.info(f"[CATEGORY_SELECTION] Создание клавиатуры выбора адреса для пользователя {user_id}")
-#         keyboard = get_address_selection_keyboard(user_id, language=lang)
-#         logger.info(f"[CATEGORY_SELECTION] Клавиатура адресов создана, отправка пользователю {user_id}")
-#
-#         await message.answer(
-#             get_text("requests.select_address_help", language=lang),
-#             reply_markup=keyboard
-#         )
-#         logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} выбрал категорию '{category_text}', переходит к выбору адреса")
-#     except Exception as e:
-#         logger.error(f"[CATEGORY_SELECTION] Ошибка создания клавиатуры выбора адреса: {e}")
-#         await graceful_fallback(message, "keyboard_error", language=lang)
+# DEAD-16 (PR-8): закомментированный text-based category filter (43 строки,
+# отключён в TASK 17 — ломал узбекскую локаль) удалён; категория выбирается
+# callback-хендлером handle_category_selection (language-independent IDs).
 
 # Игнор/подсказка для любых других текстов в состоянии выбора категории
 @router.message(RequestStates.category)

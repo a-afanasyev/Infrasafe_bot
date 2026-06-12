@@ -7,7 +7,6 @@ Async версия AssignmentService для неблокирующей рабо�
 Функциональность:
 - Назначение заявок группам и индивидуальным исполнителям
 - Управление активными назначениями
-- Интеграция с AI-сервисами (SmartDispatcher, AssignmentOptimizer, GeoOptimizer)
 - Уведомления и аудит
 
 Performance: +40-60% throughput в async handlers
@@ -15,7 +14,6 @@ Performance: +40-60% throughput в async handlers
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, desc, func
-from sqlalchemy.orm import joinedload
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
@@ -24,7 +22,6 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.utils.constants import (
     ASSIGNMENT_TYPE_GROUP,
     ASSIGNMENT_TYPE_INDIVIDUAL,
@@ -37,22 +34,9 @@ from uk_management_bot.utils.constants import (
 
 logger = logging.getLogger(__name__)
 
-# Интеграция с AI-сервисами (Phase 2A - Async SmartDispatcher)
-try:
-    from uk_management_bot.services.async_smart_dispatcher import AsyncSmartDispatcher
-    ASYNC_SMART_DISPATCHER_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"[ASYNC] AsyncSmartDispatcher недоступен: {e}")
-    ASYNC_SMART_DISPATCHER_AVAILABLE = False
-
-# Sync fallback для сложных алгоритмов (Phase 2B)
-try:
-    from uk_management_bot.services.assignment_optimizer import AssignmentOptimizer
-    from uk_management_bot.services.geo_optimizer import GeoOptimizer
-    ADVANCED_ASSIGNMENT_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"[ASYNC] Расширенные сервисы назначения недоступны: {e}")
-    ADVANCED_ASSIGNMENT_AVAILABLE = False
+# DEAD-02 (PR-8): условные импорты AsyncSmartDispatcher / AssignmentOptimizer /
+# GeoOptimizer удалены вместе с мёртвыми AI-методами (smart_assign_request,
+# get_assignment_recommendations).
 
 
 class AsyncAssignmentService:
@@ -416,138 +400,9 @@ class AsyncAssignmentService:
         except Exception as e:
             logger.warning(f"[ASYNC] Не удалось отправить уведомление исполнителю: {e}")
 
-    # Методы интеграции с AI-сервисами (NOTE: AI-сервисы будут мигрированы в Phase 2)
-
-    async def smart_assign_request(self, request_number: str, assigned_by: int) -> Optional[RequestAssignment]:
-        """
-        Умное назначение заявки с использованием ИИ (ASYNC VERSION - Phase 2A)
-
-        UPDATED 19.10.2025:
-        Теперь использует AsyncSmartDispatcher для полностью async операций.
-        Sync fallback удален - все core assignment логика async.
-
-        Args:
-            request_number: Номер заявки
-            assigned_by: ID пользователя, который назначает
-
-        Returns:
-            Optional[RequestAssignment]: Созданное назначение или None
-        """
-        if not ASYNC_SMART_DISPATCHER_AVAILABLE:
-            logger.warning("[ASYNC] AsyncSmartDispatcher недоступен, используем базовый метод")
-            return None
-
-        try:
-            request = await self._get_request_by_number(request_number)
-            if not request:
-                raise ValueError(f"Заявка с номером {request_number} не найдена")
-
-            # Используем AsyncSmartDispatcher (Phase 2A)
-            dispatcher = AsyncSmartDispatcher(self.db)
-            assignment_result = await dispatcher.auto_assign_request(request_number)
-
-            if assignment_result and assignment_result.success:
-                logger.info(
-                    f"[ASYNC] Заявка {request_number} успешно назначена через AsyncSmartDispatcher "
-                    f"(score: {assignment_result.score:.2f}, shift: {assignment_result.shift_id})"
-                )
-                return await self.get_active_assignment(request_number)
-            else:
-                logger.warning(
-                    f"[ASYNC] AsyncSmartDispatcher не смог назначить заявку {request_number}: "
-                    f"{assignment_result.message if assignment_result else 'Unknown error'}"
-                )
-                return None
-
-        except Exception as e:
-            logger.error(f"[ASYNC] Ошибка умного назначения заявки {request_number}: {e}")
-            return None
-
-    async def get_assignment_recommendations(self, request_number: str) -> List[Dict[str, Any]]:
-        """
-        Получение рекомендаций по назначению заявки (ASYNC VERSION - Phase 2A)
-
-        UPDATED 19.10.2025:
-        Теперь использует AsyncSmartDispatcher для параллельного расчета scores.
-        Производительность: +50% за счет параллельной обработки через asyncio.gather.
-
-        Args:
-            request_number: Номер заявки
-
-        Returns:
-            List[Dict[str, Any]]: Список рекомендаций отсортированных по убыванию балла
-        """
-        if not ASYNC_SMART_DISPATCHER_AVAILABLE:
-            logger.warning("[ASYNC] AsyncSmartDispatcher недоступен, рекомендации недоступны")
-            return []
-
-        try:
-            request = await self._get_request_by_number(request_number)
-            if not request:
-                return []
-
-            # Получаем активные смены с eager loading
-            query = (
-                select(Shift)
-                .options(joinedload(Shift.user))
-                .where(Shift.status.in_(['active', 'planned']))
-            )
-            result = await self.db.execute(query)
-            shifts = list(result.scalars().all())
-
-            if not shifts:
-                logger.info(f"[ASYNC] Нет доступных смен для рекомендаций по заявке {request_number}")
-                return []
-
-            # Используем AsyncSmartDispatcher для параллельного расчета scores
-            dispatcher = AsyncSmartDispatcher(self.db)
-
-            # Вычисляем scores для всех смен параллельно
-            import asyncio
-            score_tasks = [
-                dispatcher.calculate_assignment_score(request, shift)
-                for shift in shifts
-            ]
-
-            scores = await asyncio.gather(*score_tasks, return_exceptions=True)
-
-            # Формируем рекомендации
-            recommendations = []
-            for shift, score_result in zip(shifts, scores):
-                if isinstance(score_result, Exception):
-                    logger.warning(f"[ASYNC] Ошибка расчета score для смены {shift.id}: {score_result}")
-                    continue
-
-                recommendations.append({
-                    "shift_id": shift.id,
-                    "executor_id": shift.user_id,
-                    "executor_name": shift.user.full_name if shift.user else "Неизвестно",
-                    "total_score": score_result.total_score,
-                    "specialization_score": score_result.specialization_score,
-                    "geography_score": score_result.geography_score,
-                    "workload_score": score_result.workload_score,
-                    "rating_score": score_result.rating_score,
-                    "urgency_score": score_result.urgency_score,
-                    "recommended": score_result.recommended,
-                    "recommendation_reason": (
-                        f"Общий балл: {score_result.total_score:.2f} "
-                        f"({'✅ Рекомендуется' if score_result.recommended else '⚠️ Ниже порога'})"
-                    )
-                })
-
-            # Сортируем по убыванию общего балла
-            recommendations.sort(key=lambda x: x["total_score"], reverse=True)
-
-            logger.info(
-                f"[ASYNC] Сформировано {len(recommendations)} рекомендаций для заявки {request_number} "
-                f"(лучший балл: {recommendations[0]['total_score']:.2f})"
-            )
-
-            return recommendations
-
-        except Exception as e:
-            logger.error(f"[ASYNC] Ошибка получения рекомендаций для заявки {request_number}: {e}")
-            return []
+    # DEAD-02 (PR-8): smart_assign_request / get_assignment_recommendations
+    # удалены — 0 call-sites; класс жив только ради reassign_executor
+    # (api/shifts/router.py).
 
     async def _get_request_by_number(self, request_number: str) -> Optional[Request]:
         """Возвращает заявку по её номеру (ASYNC VERSION)"""

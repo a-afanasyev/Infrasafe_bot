@@ -28,7 +28,6 @@ HANDLER_MODULES = [
     "uk_management_bot.handlers.address_buildings",
     "uk_management_bot.handlers.address_apartments",
     "uk_management_bot.handlers.address_moderation",
-    # "uk_management_bot.handlers.quarterly_planning",  # broken import: SPECIALIZATION_CONFIGS
     "uk_management_bot.handlers.user_management",
     "uk_management_bot.handlers.user_apartments",
     "uk_management_bot.handlers.user_apartment_selection",

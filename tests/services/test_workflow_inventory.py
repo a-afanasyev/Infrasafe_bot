@@ -144,7 +144,6 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/api/requests/router.py', 'ctor:RequestModel', 'status'),
     ('uk_management_bot/handlers/requests.py', 'ctor:Request', 'status'),
     ('uk_management_bot/services/request_service.py', 'ctor:Request', 'status'),
-    ('uk_management_bot/services/async_request_service.py', 'ctor:Request', 'status'),
     ('uk_management_bot/services/inbound_alert.py', 'ctor:Request', 'status'),
     # 2. ASSIGNMENT mutation-layer (allowlist): единственный writer назначений.
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assigned_at'),
@@ -170,7 +169,6 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:transfer', 'completed_at'),
     # 4. ONE-OFF migration-скрипт (план, риск №30)
-    ('uk_management_bot/database/migrations/fix_manager_confirmed_legacy.py', 'update()', 'manager_confirmed'),
 }
 
 
