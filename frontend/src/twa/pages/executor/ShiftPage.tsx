@@ -13,7 +13,7 @@ export default function ShiftPage() {
   const [elapsed, setElapsed] = useState('')
 
   const { data: currentShift } = useQuery({
-    queryKey: ['current-shift'],
+    queryKey: ['twa', 'current-shift'],
     queryFn: () => twaClient.get('/api/v2/executor/shifts/current').then(r => r.data),
     refetchInterval: 30_000,
   })
@@ -38,8 +38,8 @@ export default function ShiftPage() {
     mutationFn: () => twaClient.post('/api/v2/executor/shifts/start', {}),
     onSuccess: () => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['current-shift'] })
-      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'current-shift'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'my-shifts'] })
     },
     onError: (err: unknown) => {
       haptic('notification')
@@ -51,8 +51,8 @@ export default function ShiftPage() {
     mutationFn: (id: number) => twaClient.post(`/api/v2/executor/shifts/${id}/end`),
     onSuccess: () => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['current-shift'] })
-      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'current-shift'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'my-shifts'] })
     },
     onError: (err: unknown) => {
       haptic('notification')

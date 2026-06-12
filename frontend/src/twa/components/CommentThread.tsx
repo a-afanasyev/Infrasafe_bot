@@ -34,7 +34,7 @@ export default function CommentThread({ requestNumber }: Props) {
   const [text, setText] = useState('')
 
   const { data: comments = [] } = useQuery<Comment[]>({
-    queryKey: ['comments', requestNumber],
+    queryKey: ['twa', 'comments', requestNumber],
     queryFn: () => twaClient.get(`/api/v2/requests/${requestNumber}/comments`).then((r) => r.data),
     enabled: !!requestNumber,
     // Poll so the other party's reply shows up without a manual refresh —
@@ -43,7 +43,7 @@ export default function CommentThread({ requestNumber }: Props) {
   })
 
   const { data: profile } = useQuery<Profile>({
-    queryKey: ['profile'],
+    queryKey: ['twa', 'profile'],
     queryFn: () => twaClient.get('/api/v2/profile').then((r) => r.data),
     staleTime: 60_000,
   })
@@ -54,7 +54,7 @@ export default function CommentThread({ requestNumber }: Props) {
     onSuccess: () => {
       haptic('selection')
       setText('')
-      queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'comments', requestNumber] })
     },
     onError: (err: unknown) => notifyError(err),
   })

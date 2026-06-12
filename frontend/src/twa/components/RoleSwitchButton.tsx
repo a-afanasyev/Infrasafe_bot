@@ -42,7 +42,7 @@ export default function RoleSwitchButton({ to }: Props) {
   const { haptic } = useTelegramSDK()
 
   const { data } = useQuery<ProfileResponse>({
-    queryKey: ['profile'],
+    queryKey: ['twa', 'profile'],
     queryFn: () => twaClient.get('/api/v2/profile').then((r) => r.data),
     staleTime: 60_000,
   })
@@ -51,7 +51,7 @@ export default function RoleSwitchButton({ to }: Props) {
     mutationFn: () => twaClient.patch('/api/v2/profile/role', { active_role: to }),
     onSuccess: () => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'profile'] })
       navigate(ROLE_ROUTE[to], { replace: true })
     },
     onError: (err: unknown) => notifyError(err),

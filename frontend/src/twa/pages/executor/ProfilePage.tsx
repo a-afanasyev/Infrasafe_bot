@@ -14,7 +14,7 @@ export default function ExecutorProfilePage() {
   const queryClient = useQueryClient()
 
   const { data: profile } = useQuery({
-    queryKey: ['profile'],
+    queryKey: ['twa', 'profile'],
     queryFn: () => twaClient.get('/api/v2/profile').then(r => r.data),
   })
 
@@ -22,7 +22,7 @@ export default function ExecutorProfilePage() {
     mutationFn: (lang: string) => twaClient.patch('/api/v2/profile', { language: lang }),
     onSuccess: (_, lang) => {
       i18n.changeLanguage(lang)
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'profile'] })
       haptic('notification')
     },
     onError: (err: unknown) => {

@@ -18,7 +18,7 @@ export default function AcceptancePage() {
   const [ratings, setRatings] = useState<Record<string, number>>({})
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: ['acceptance'],
+    queryKey: ['twa', 'acceptance'],
     queryFn: () => twaClient.get('/api/v2/requests/acceptance').then(r => r.data),
     staleTime: 30_000,
   })
@@ -30,7 +30,7 @@ export default function AcceptancePage() {
     }),
     onSuccess: () => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['acceptance'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'acceptance'] })
       setExpanded(null)
     },
     onError: (err: unknown) => {
@@ -44,7 +44,7 @@ export default function AcceptancePage() {
     }),
     onSuccess: () => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['acceptance'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'acceptance'] })
       setExpanded(null)
     },
     onError: (err: unknown) => {
@@ -53,7 +53,7 @@ export default function AcceptancePage() {
   })
 
   return (
-    <PullToRefresh queryKeys={[['acceptance']]}>
+    <PullToRefresh queryKeys={[['twa', 'acceptance']]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.acceptance.title')}</h1>
 

@@ -94,12 +94,12 @@ export default function InspectorCreatePage() {
   }, [step, yardId, buildingId, buildingLabel, category, description, urgency])
 
   const { data: yards = [] } = useQuery<Yard[]>({
-    queryKey: ['inspector-yards'],
+    queryKey: ['twa', 'inspector-yards'],
     queryFn: () => twaClient.get('/api/v2/addresses/yards').then(r => r.data),
   })
 
   const { data: buildings = [] } = useQuery<Building[]>({
-    queryKey: ['inspector-buildings', yardId],
+    queryKey: ['twa', 'inspector-buildings', yardId],
     queryFn: () => twaClient.get(`/api/v2/addresses/yards/${yardId}/buildings`).then(r => r.data),
     enabled: yardId != null,
   })

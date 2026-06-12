@@ -23,6 +23,5 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 })
 
-// @twa-dev/sdk is pulled in transitively by some excluded TWA modules; noop it
-// so importing those paths never tries to touch a real Telegram runtime.
-vi.mock('@twa-dev/sdk', () => ({ default: {}, WebApp: {} }))
+// @twa-dev/sdk удалён из зависимостей (DEAD-12, PR-4): 0 импортов в src —
+// TWA-код работает напрямую через window.Telegram.WebApp.

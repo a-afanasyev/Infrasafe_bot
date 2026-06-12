@@ -12,7 +12,7 @@ export default function TWAHomePage() {
   const navigate = useNavigate()
 
   const { data: requests } = useQuery({
-    queryKey: ['my-requests'],
+    queryKey: ['twa', 'my-requests'],
     queryFn: () => apiClient.get('/api/v2/requests?limit=10').then(r => r.data),
     enabled: isAuthenticated,
   })

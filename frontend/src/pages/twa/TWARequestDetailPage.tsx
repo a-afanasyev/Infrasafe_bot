@@ -32,13 +32,13 @@ export default function TWARequestDetailPage() {
   const [submitError, setSubmitError] = useState('')
 
   const { data: request } = useQuery({
-    queryKey: ['request', number],
+    queryKey: ['twa', 'request', number],
     queryFn: () => apiClient.get(`/api/v2/requests/${number}`).then(r => r.data),
     enabled: isAuthenticated && !!number,
   })
 
   const { data: comments } = useQuery({
-    queryKey: ['comments', number],
+    queryKey: ['twa', 'comments', number],
     queryFn: () => apiClient.get(`/api/v2/requests/${number}/comments`).then(r => r.data),
     enabled: isAuthenticated && !!number,
   })
@@ -51,7 +51,7 @@ export default function TWARequestDetailPage() {
     try {
       await apiClient.post(`/api/v2/requests/${number}/comments`, { text: message })
       setMessage('')
-      queryClient.invalidateQueries({ queryKey: ['comments', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'comments', number] })
     } finally {
       setSending(false)
     }
@@ -65,7 +65,7 @@ export default function TWARequestDetailPage() {
       const payload: Record<string, unknown> = { status: '\u041F\u0440\u0438\u043D\u044F\u0442\u043E' }
       if (rating > 0) payload.rating = rating
       await apiClient.patch(`/api/v2/requests/${number}`, payload)
-      queryClient.invalidateQueries({ queryKey: ['request', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
       navigate('/twa')
     } catch {
       setSubmitError(t('errors.saveFailed'))
@@ -84,7 +84,7 @@ export default function TWARequestDetailPage() {
         status: '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435',
         return_reason: returnReason.trim(),
       })
-      queryClient.invalidateQueries({ queryKey: ['request', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
       navigate('/twa')
     } catch {
       setSubmitError(t('errors.saveFailed'))

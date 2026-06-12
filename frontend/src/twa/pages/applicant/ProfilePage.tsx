@@ -14,12 +14,12 @@ export default function ProfilePage() {
   const queryClient = useQueryClient()
 
   const { data: profile } = useQuery({
-    queryKey: ['profile'],
+    queryKey: ['twa', 'profile'],
     queryFn: () => twaClient.get('/api/v2/profile').then(r => r.data),
   })
 
   const { data: apartments = [] } = useQuery({
-    queryKey: ['my-apartments'],
+    queryKey: ['twa', 'my-apartments'],
     queryFn: () => twaClient.get('/api/v2/profile/apartments').then(r => r.data),
   })
 
@@ -27,7 +27,7 @@ export default function ProfilePage() {
     mutationFn: (lang: string) => twaClient.patch('/api/v2/profile', { language: lang }),
     onSuccess: (_, lang) => {
       i18n.changeLanguage(lang)
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'profile'] })
       haptic('notification')
     },
     onError: (err: unknown) => {

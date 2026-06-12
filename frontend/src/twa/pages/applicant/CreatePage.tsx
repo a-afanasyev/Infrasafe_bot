@@ -103,7 +103,7 @@ export default function CreatePage() {
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
 
   const { data: addresses = EMPTY_ADDRESSES, isSuccess: addressesLoaded } = useQuery<RequestAddresses>({
-    queryKey: ['request-addresses'],
+    queryKey: ['twa', 'request-addresses'],
     queryFn: () => twaClient.get('/api/v2/profile/request-addresses').then(r => r.data),
   })
 
@@ -175,7 +175,7 @@ export default function CreatePage() {
     },
     onSuccess: ({ photoFailures }) => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['my-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'my-requests'] })
       if (photoFailures.length > 0) {
         toast.warning(
           `Заявка создана, но не загрузились фото №${photoFailures.join(', ')}`

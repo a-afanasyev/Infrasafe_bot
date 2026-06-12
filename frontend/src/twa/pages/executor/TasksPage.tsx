@@ -11,7 +11,7 @@ export default function TasksPage() {
   const navigate = useNavigate()
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: ['executor-tasks'],
+    queryKey: ['twa', 'executor-tasks'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { scope: 'my', limit: 50 }
     }).then(r => r.data),
@@ -29,7 +29,7 @@ export default function TasksPage() {
   }, {})
 
   return (
-    <PullToRefresh queryKeys={[['executor-tasks']]}>
+    <PullToRefresh queryKeys={[['twa', 'executor-tasks']]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.exec.tasks.title')}</h1>
 

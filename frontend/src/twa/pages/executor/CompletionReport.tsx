@@ -51,9 +51,9 @@ export default function CompletionReport() {
     },
     onSuccess: ({ failures }) => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['request', number] })
-      queryClient.invalidateQueries({ queryKey: ['media', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'media', number] })
       if (failures.length > 0) {
         toast.warning(`Заявка завершена, но не загрузились фото №${failures.join(', ')}`)
       }

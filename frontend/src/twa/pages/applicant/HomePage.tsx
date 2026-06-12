@@ -7,13 +7,13 @@ import PullToRefresh from '../../components/PullToRefresh'
 export default function HomePage() {
   const { t } = useTranslation()
   const { data } = useQuery({
-    queryKey: ['announcements'],
+    queryKey: ['twa', 'announcements'],
     queryFn: () => twaClient.get('/api/v2/announcements').then(r => r.data),
     staleTime: 60_000,
   })
 
   return (
-    <PullToRefresh queryKeys={[['announcements']]}>
+    <PullToRefresh queryKeys={[['twa', 'announcements']]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.home.title')}</h1>
 
