@@ -19,7 +19,7 @@ const STATUS_ORDER = [
 
 export default function TWARequestDetailPage() {
   const { t } = useTranslation()
-  const { isAuthenticated } = useTWAAuth()
+  const { isAuthenticated, isError, retry } = useTWAAuth()
   const { number } = useParams<{ number: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -44,6 +44,20 @@ export default function TWARequestDetailPage() {
   })
 
   if (!number) return <div className="p-4 text-red-500">{t('errors.requestNotFound')}</div>
+
+  // FE-05: сбой TWA-аутентификации — ошибка + retry вместо пустого экрана.
+  if (isError && !isAuthenticated) {
+    return (
+      <div className="p-4 min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center">
+        <p className="text-[40px] mb-3">⚠️</p>
+        <p className="text-gray-500 text-sm mb-4">{t('twa.authError')}</p>
+        <button onClick={retry}
+          className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-medium">
+          {t('twa.retry')}
+        </button>
+      </div>
+    )
+  }
 
   const sendMessage = async () => {
     if (!message.trim()) return

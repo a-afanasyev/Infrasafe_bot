@@ -36,8 +36,10 @@ export function useTWAAuth() {
       const { data } = await axios.post(`${BASE_URL}/api/v2/auth/twa`, { init_data: initData })
       setAccessToken(data.access_token)
       setTwaRefreshToken(data.refresh_token)
-    } catch (err) {
-      console.error('TWA auth failed:', err)
+    } catch (err: unknown) {
+      // FE-06: только message — axios-err содержит config.data с initData,
+      // целиком его в консоль (даже dev) не пишем.
+      console.error('TWA auth failed:', err instanceof Error ? err.message : String(err))
     } finally {
       setIsLoading(false)
     }

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { apiClient } from '../api/client'
+import { publicClient } from '../api/client'
+import { isValidTelegramAuth } from '../utils/telegramAuth'
 import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
@@ -24,11 +25,17 @@ export default function LoginPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    ;(window as any).onTelegramAuth = async (tgUser: Record<string, unknown>) => {
+    ;(window as any).onTelegramAuth = async (tgUser: unknown) => {
+      // FE-04: внешний payload от Telegram-виджета — валидируем до POST.
+      if (!isValidTelegramAuth(tgUser)) {
+        setError(t('login.telegramError'))
+        return
+      }
       setError('')
       setLoading(true)
       try {
-        await apiClient.post('/api/v2/auth/telegram-widget', tgUser)
+        // FE-047: publicClient — без 401-interceptor (refresh→redirect стирал ошибку)
+        await publicClient.post('/api/v2/auth/telegram-widget', tgUser)
         await login()
         navigate('/dashboard')
       } catch {
@@ -70,14 +77,16 @@ export default function LoginPage() {
     return () => {
       delete (window as any).onTelegramAuth
     }
-  }, [login, navigate])
+  }, [login, navigate, t])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const { data } = await apiClient.post('/api/v2/auth/login', { email, password })
+      // FE-047: publicClient — 401 (неверный логин) показывает inline-ошибку,
+      // а не уходит в refresh→redirect, перетирающий setError.
+      const { data } = await publicClient.post('/api/v2/auth/login', { email, password })
       if (data.mfa_required) {
         setMfaToken(data.mfa_token)
         setOtpTimer(300)
@@ -101,7 +110,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await apiClient.post('/api/v2/auth/login/verify-otp', {
+      await publicClient.post('/api/v2/auth/login/verify-otp', {
         mfa_token: mfaToken,
         code: otpCode,
       })
@@ -118,7 +127,7 @@ export default function LoginPage() {
   const handleResendOtp = async () => {
     if (!canResend || !mfaToken) return
     try {
-      await apiClient.post('/api/v2/auth/login/resend-otp', { mfa_token: mfaToken })
+      await publicClient.post('/api/v2/auth/login/resend-otp', { mfa_token: mfaToken })
       setCanResend(false)
       setOtpTimer(300)
       setTimeout(() => setCanResend(true), 60000)
