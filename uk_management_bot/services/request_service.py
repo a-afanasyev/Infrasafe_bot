@@ -298,8 +298,9 @@ class RequestService:
                 parsed_roles = json.loads(actor.roles)
                 if isinstance(parsed_roles, list):
                     user_roles = parsed_roles
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
+            logger.warning(f"is_role_allowed_for_transition: битый JSON в user.roles (user_id={actor.id}), fallback к user.role")
         
         # Fallback к старому полю role если новая система не настроена
         if not user_roles and actor.role:

@@ -3,7 +3,6 @@
 Реализует статлес токены с HMAC подписью
 """
 import hmac
-import hashlib
 import json
 import base64
 import time
@@ -70,12 +69,12 @@ class InviteService:
         payload_json = json.dumps(payload, separators=(',', ':'), sort_keys=True)
         payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).decode().rstrip('=')
         
-        # Создаем HMAC подпись
-        signature = hmac.new(
-            self.secret, 
-            payload_b64.encode(), 
-            hashlib.sha256
-        ).hexdigest()
+        # Создаем HMAC подпись (INV-087: hmac.digest — one-shot)
+        signature = hmac.digest(
+            self.secret,
+            payload_b64.encode(),
+            "sha256"
+        ).hex()
         
         token = f"invite_v1:{payload_b64}.{signature}"
         
@@ -174,11 +173,11 @@ class InviteService:
             payload_b64, signature = token_body.rsplit('.', 1)
 
             # Проверяем HMAC подпись
-            expected_signature = hmac.new(
+            expected_signature = hmac.digest(
                 self.secret,
                 payload_b64.encode(),
-                hashlib.sha256
-            ).hexdigest()
+                "sha256"
+            ).hex()
 
             if not hmac.compare_digest(signature, expected_signature):
                 raise ValueError("Invalid token signature")

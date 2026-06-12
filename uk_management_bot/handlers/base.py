@@ -526,7 +526,18 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
         await state.clear()
         await message.answer(safe_get_text("errors.cancelled", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
         return
-    
+
+    # SEC-01: rate-limit на перебор пароля — 5 попыток за 5 минут с аккаунта.
+    from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
+    if await is_rate_limited(f"admin_pwd:{message.from_user.id}", 5, 300):
+        await state.clear()
+        logger.warning(f"Rate-limit на ввод admin-пароля для пользователя {message.from_user.id}")
+        await message.answer(
+            safe_get_text("admin.too_many_attempts", language=lang),
+            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        )
+        return
+
     # Проверяем пароль и назначаем администратора
     success = await auth_service.make_admin_by_password(
         telegram_id=message.from_user.id,

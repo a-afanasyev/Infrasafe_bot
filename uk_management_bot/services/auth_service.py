@@ -82,13 +82,10 @@ class AuthService:
             user.status = "approved"
             user.role = role
             # Инициализируем новые поля ролей для совместимости
-            try:
-                if not user.roles or user.roles.strip() == "":
-                    user.roles = f'["{role}"]'
-                if not user.active_role or user.active_role.strip() == "":
-                    user.active_role = role
-            except Exception:
-                pass
+            if not user.roles or user.roles.strip() == "":
+                user.roles = f'["{role}"]'
+            if not user.active_role or user.active_role.strip() == "":
+                user.active_role = role
             _enforce_trusted_verification(user, [role])
             self.db.commit()
             logger.info(f"Пользователь {telegram_id} одобрен с ролью {role}")
@@ -535,9 +532,10 @@ class AuthService:
                 if isinstance(parsed_roles, list):
                     # Админ и менеджер имеют права менеджера
                     return any(role in ["admin", "manager"] for role in parsed_roles)
-        except Exception:
-            pass
-            
+        except (ValueError, TypeError):
+            # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
+            logger.warning(f"is_user_manager: битый JSON в user.roles (telegram_id={telegram_id}), fallback к user.role")
+
         # Fallback к старому формату
         return user.role in ["admin", "manager"]
     
@@ -558,9 +556,10 @@ class AuthService:
                 parsed_roles = json.loads(user.roles)
                 if isinstance(parsed_roles, list) and "executor" in parsed_roles:
                     return True
-        except Exception:
-            pass
-            
+        except (ValueError, TypeError):
+            # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
+            logger.warning(f"is_user_executor: битый JSON в user.roles (telegram_id={telegram_id}), fallback к user.role")
+
         # Fallback к старому полю
         return user.role == "executor"
     
@@ -602,12 +601,10 @@ class AuthService:
         if user:
             user.role = "manager"
             user.status = "approved"
-            # Инициализируем новые поля ролей для совместимости
-            try:
-                user.roles = '["applicant", "executor", "manager"]'
-                user.active_role = "manager"
-            except Exception:
-                pass
+            # SEC-06 (least privilege): /admin выдаёт только manager,
+            # а не весь набор ролей скопом.
+            user.roles = '["manager"]'
+            user.active_role = "manager"
             _enforce_trusted_verification(user, ["manager"])
             self.db.commit()
             logger.info(f"Пользователь {telegram_id} назначен администратором по паролю")

@@ -594,3 +594,57 @@ class TestHandleRestartBot:
 
         cb.message.answer.assert_called_once()
         cb.answer.assert_called_once()
+
+
+# ─── process_admin_password (SEC-01) ─────────────────────────────────────────
+
+class TestProcessAdminPasswordRateLimit:
+    """SEC-01: rate-limit на перебор /admin-пароля (5 попыток / 5 минут)."""
+
+    @pytest.mark.asyncio
+    async def test_rate_limited_blocks_password_check(self):
+        """При сработавшем лимите пароль НЕ проверяется, FSM очищается."""
+        from uk_management_bot.handlers.base import process_admin_password
+
+        msg = _make_message(text="some-password", user_id=555)
+        state = _make_state()
+        db = _make_db()
+
+        mock_service = MagicMock()
+        mock_service.make_admin_by_password = AsyncMock(return_value=True)
+
+        with patch("uk_management_bot.handlers.base.AuthService", return_value=mock_service), \
+             patch("uk_management_bot.utils.redis_rate_limiter.is_rate_limited",
+                   new=AsyncMock(return_value=True)) as mock_limit, \
+             patch("uk_management_bot.handlers.base.get_user_contextual_keyboard",
+                   return_value=MagicMock()):
+            await process_admin_password(msg, state, db)
+
+        mock_limit.assert_awaited_once_with("admin_pwd:555", 5, 300)
+        mock_service.make_admin_by_password.assert_not_called()
+        state.clear.assert_called_once()
+        msg.answer.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_not_rate_limited_checks_password(self):
+        """Без лимита пароль проверяется как раньше."""
+        from uk_management_bot.handlers.base import process_admin_password
+
+        msg = _make_message(text="wrong-password", user_id=555)
+        state = _make_state()
+        db = _make_db()
+
+        mock_service = MagicMock()
+        mock_service.make_admin_by_password = AsyncMock(return_value=False)
+
+        with patch("uk_management_bot.handlers.base.AuthService", return_value=mock_service), \
+             patch("uk_management_bot.utils.redis_rate_limiter.is_rate_limited",
+                   new=AsyncMock(return_value=False)), \
+             patch("uk_management_bot.handlers.base.get_user_contextual_keyboard",
+                   return_value=MagicMock()):
+            await process_admin_password(msg, state, db)
+
+        mock_service.make_admin_by_password.assert_awaited_once_with(
+            telegram_id=555, password="wrong-password"
+        )
+        state.clear.assert_called_once()

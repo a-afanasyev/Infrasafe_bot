@@ -4,7 +4,7 @@ from sqlalchemy import select
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles, _parse_user_roles
 from uk_management_bot.database.models.user import User
 from uk_management_bot.api.rate_limit import limiter
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 router = APIRouter()
@@ -49,7 +49,8 @@ class ProfileOut(BaseModel):
 
 class UpdateProfileBody(BaseModel):
     language: Optional[str] = None
-    email: Optional[str] = None
+    # SEC-05: полноценная RFC-валидация вместо `"@" not in email`.
+    email: Optional[EmailStr] = None
 
 
 @router.get("", response_model=ProfileOut)
@@ -75,9 +76,8 @@ async def update_profile(
         db_user.language = body.language
 
     if body.email is not None:
-        if body.email and "@" not in body.email:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
-        db_user.email = body.email
+        # Валидация формата — pydantic EmailStr (422 на невалидном).
+        db_user.email = str(body.email)
 
     await db.commit()
     return {"ok": True}

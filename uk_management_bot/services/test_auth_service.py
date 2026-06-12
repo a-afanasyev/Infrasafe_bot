@@ -614,6 +614,28 @@ class TestStatusChecks:
         service = AuthService(db)
         assert await service.is_user_executor(100) is False
 
+    @pytest.mark.asyncio
+    async def test_is_user_manager_broken_roles_json_warns_and_falls_back(self, caplog):
+        """ARCH-04: битый JSON ролей — warning + fallback к user.role, не молча."""
+        user = _make_user(status="approved", role="manager", roles="{broken json", active_role=None)
+        db = _make_db(user=user)
+
+        service = AuthService(db)
+        with caplog.at_level("WARNING"):
+            assert await service.is_user_manager(100) is True
+        assert any("битый JSON" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_is_user_executor_broken_roles_json_warns_and_falls_back(self, caplog):
+        """ARCH-04: то же для is_user_executor."""
+        user = _make_user(status="approved", role="executor", roles="{broken json", active_role=None)
+        db = _make_db(user=user)
+
+        service = AuthService(db)
+        with caplog.at_level("WARNING"):
+            assert await service.is_user_executor(100) is True
+        assert any("битый JSON" in r.message for r in caplog.records)
+
 
 # ---------------------------------------------------------------------------
 # get_all_users / get_users_by_role  (async)
@@ -759,3 +781,20 @@ class TestTrustVerificationInvariant:
 
         assert result is True
         assert user.verification_status == "verified"
+
+    @pytest.mark.asyncio
+    async def test_make_admin_by_password_grants_only_manager(self):
+        """SEC-06 (least privilege): /admin выдаёт только ["manager"],
+        а не весь набор ролей скопом."""
+        user = _make_user(roles='["applicant"]', active_role="applicant")
+        user.verification_status = "pending"
+        db = self._db_with_user(user)
+        service = AuthService(db)
+
+        with patch("uk_management_bot.config.settings.settings") as mock_settings:
+            mock_settings.ADMIN_PASSWORD = "secret"
+            result = await service.make_admin_by_password(100, "secret")
+
+        assert result is True
+        assert user.roles == '["manager"]'
+        assert user.active_role == "manager"

@@ -1,6 +1,5 @@
 """Webhook sender service — transactional outbox pattern for reliable delivery."""
 import asyncio
-import hashlib
 import hmac
 import json
 import logging
@@ -25,7 +24,8 @@ def sign_payload(body: str, secret: str) -> str:
     """Return HMAC-SHA256 signature header: t=<unix>,v1=<hex>."""
     timestamp = str(int(time.time()))
     message = f"{timestamp}.{body}"
-    sig = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    # INV-087: hmac.digest — one-shot, стабильнее при апгрейдах stdlib.
+    sig = hmac.digest(secret.encode(), message.encode(), "sha256").hex()
     return f"t={timestamp},v1={sig}"
 
 

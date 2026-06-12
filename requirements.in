@@ -53,6 +53,9 @@ passlib[bcrypt]>=1.7.4
 # Rate limiting
 slowapi>=0.1.9
 
+# Email validation for pydantic EmailStr (SEC-05)
+email-validator>=2.0.0
+
 # Error Tracking
 sentry-sdk[fastapi]>=2.0.0
 
