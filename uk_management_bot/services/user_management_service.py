@@ -43,7 +43,6 @@ class UserManagementService:
                     User.status == 'pending',
                     or_(
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident'),
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
                             User.role == 'applicant'
@@ -57,7 +56,6 @@ class UserManagementService:
                     User.status == 'approved',
                     or_(
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident'),
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
                             User.role == 'applicant'
@@ -71,7 +69,6 @@ class UserManagementService:
                     User.status == 'blocked',
                     or_(
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident'),
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
                             User.role == 'applicant'
@@ -223,7 +220,8 @@ class UserManagementService:
         try:
             offset = (page - 1) * limit
             
-            # Базовый запрос: только жители (applicant или resident)
+            # Базовый запрос: только жители (applicant)
+            # CODE-05: роли 'resident' не существует в USER_ROLES — мёртвая ветка удалена.
             # Исключаем пользователей, которые являются только сотрудниками
             # Поддерживаем как новую систему ролей (JSON), так и старую (role поле)
             query = self.db.query(User).filter(
@@ -232,7 +230,6 @@ class UserManagementService:
                     or_(
                         # Новая система ролей (JSON поле roles)
                         User.roles.contains('applicant'),
-                        User.roles.contains('resident'),
                         # Старая система ролей (поле role) - для обратной совместимости
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),

@@ -4,7 +4,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from uk_management_bot.config.settings import settings
-from typing import AsyncGenerator
 
 # ==============================================
 # SYNC DATABASE ENGINE (legacy, постепенно мигрируем)
@@ -96,23 +95,7 @@ def session_scope():
         db.close()
 
 
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Получение асинхронной сессии базы данных (РЕКОМЕНДУЕТСЯ)
-
-    Usage в handlers:
-    ```python
-    async def handler(message: Message, db: AsyncSession = Depends(get_async_db)):
-        service = AsyncRequestService(db)
-        result = await service.get_request(request_number)
-    ```
-    """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+# CODE-03: get_async_db() удалена — не имела потребителей (API использует свой
+# get_db в api/dependencies.py), а auto-commit на выходе был миной двойного
+# коммита для кода, который коммитит явно. Async-сессии брать напрямую:
+# `async with AsyncSessionLocal() as session: ...`

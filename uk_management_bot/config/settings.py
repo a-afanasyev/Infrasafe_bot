@@ -154,9 +154,8 @@ class Settings:
     INFRASAFE_OUTBOX_LEASE_SECONDS = int(os.getenv("INFRASAFE_OUTBOX_LEASE_SECONDS", "200"))
 
     # InfraSafe -> UK webhook receiver (plan §4.4). Verifier accepts OLD || NEW
-    # for grace-window swaps. Currently no inbound webhook router lives in this
-    # repo (planned, see docs/superpowers/specs/2026-05-14-uk-infrasafe-web-integration-plan.md
-    # §1, §4.4); env keys exist now so a future PR can read them without a settings change.
+    # for grace-window swaps. ARCH-08: inbound-роутер живёт в api/webhooks/
+    # (подключён в api/main.py); эти ключи читает его верификатор подписи.
     UK_WEBHOOK_SECRET = os.getenv("UK_WEBHOOK_SECRET", "")
     UK_WEBHOOK_SECRET_NEXT = os.getenv("UK_WEBHOOK_SECRET_NEXT", "")
     # FIX-007 Phase 2: requests created from inbound InfraSafe alerts are owned by

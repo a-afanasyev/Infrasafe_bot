@@ -3,12 +3,9 @@ from sqlalchemy import func
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.config.settings import settings
-from uk_management_bot.utils.constants import MAX_ADDRESS_LENGTH
 from typing import List
 import logging
-import re
 import secrets
-import time
 import json
 from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
 
@@ -32,16 +29,10 @@ def _enforce_trusted_verification(user, granted_roles) -> None:
 
 class AuthService:
     def __init__(self, db: Session):
+        # CODE-06: in-memory rate-limit словарь удалён — реальный лимит
+        # смены ролей идёт через Redis (try_set_active_role_with_rate_limit).
         self.db = db
-        # Простое in-memory хранилище таймстампов для rate-limit переключений.
-        # Ключ: telegram_id, Значение: float (epoch seconds)
-        # В проде/горизонтали это стоит вынести в Redis.
-        global _ROLE_SWITCH_RATE_LIMIT_TS
-        try:
-            _ROLE_SWITCH_RATE_LIMIT_TS
-        except NameError:
-            _ROLE_SWITCH_RATE_LIMIT_TS = {}
-    
+
     async def get_or_create_user(self, telegram_id: int, username: str = None, 
                                 first_name: str = None, last_name: str = None) -> User:
         """Получить или создать пользователя"""
@@ -81,9 +72,19 @@ class AuthService:
         if user:
             user.status = "approved"
             user.role = role
-            # Инициализируем новые поля ролей для совместимости
-            if not user.roles or user.roles.strip() == "":
-                user.roles = f'["{role}"]'
+            # CODE-10: добавляем роль в roles-массив и при непустом
+            # (логика как в process_invite_join), а не только при пустом.
+            current_roles = []
+            if user.roles:
+                try:
+                    current_roles = json.loads(user.roles)
+                    if not isinstance(current_roles, list):
+                        current_roles = []
+                except json.JSONDecodeError:
+                    current_roles = []
+            if role not in current_roles:
+                current_roles.append(role)
+                user.roles = json.dumps(current_roles)
             if not user.active_role or user.active_role.strip() == "":
                 user.active_role = role
             _enforce_trusted_verification(user, [role])
@@ -201,15 +202,11 @@ class AuthService:
             old_status = user.status
             user.status = 'approved'
             
-            # Получаем telegram_id пользователей для аудита
-            approver = self.db.query(User).filter(User.id == approved_by).first()
-            target_user = self.db.query(User).filter(User.id == user_id).first()
-            
-            # Создаем запись в аудит логе
+            # CODE-02: переиспользуем уже загруженный user — без повторных SELECT
             audit = AuditLog(
                 action="user_approved",
                 user_id=approved_by,
-                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID одобряемого пользователя
+                telegram_user_id=user.telegram_id,  # Telegram ID одобряемого пользователя
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
@@ -255,14 +252,11 @@ class AuthService:
             old_status = user.status
             user.status = 'blocked'
             
-            # Получаем telegram_id пользователя для аудита
-            target_user = self.db.query(User).filter(User.id == user_id).first()
-            
-            # Создаем запись в аудит логе
+            # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(
                 action="user_blocked",
                 user_id=blocked_by,
-                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID блокируемого пользователя
+                telegram_user_id=user.telegram_id,  # Telegram ID блокируемого пользователя
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
@@ -308,14 +302,11 @@ class AuthService:
             old_status = user.status
             user.status = 'approved'  # Разблокированные пользователи автоматически одобряются
             
-            # Получаем telegram_id пользователя для аудита
-            target_user = self.db.query(User).filter(User.id == user_id).first()
-            
-            # Создаем запись в аудит логе
+            # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(
                 action="user_unblocked",
                 user_id=unblocked_by,
-                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID разблокируемого пользователя
+                telegram_user_id=user.telegram_id,  # Telegram ID разблокируемого пользователя
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
@@ -387,14 +378,11 @@ class AuthService:
             if not user.active_role or user.active_role not in current_roles:
                 user.active_role = role
             
-            # Получаем telegram_id пользователя для аудита
-            target_user = self.db.query(User).filter(User.id == user_id).first()
-            
-            # Создаем запись в аудит логе
+            # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(
                 action="role_assigned",
                 user_id=assigned_by,
-                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID пользователя, которому назначается роль
+                telegram_user_id=user.telegram_id,  # Telegram ID пользователя, которому назначается роль
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_roles": old_roles,
@@ -463,14 +451,11 @@ class AuthService:
             if user.active_role == role:
                 user.active_role = current_roles[0] if current_roles else 'applicant'
             
-            # Получаем telegram_id пользователя для аудита
-            target_user = self.db.query(User).filter(User.id == user_id).first()
-            
-            # Создаем запись в аудит логе
+            # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(
                 action="role_removed",
                 user_id=removed_by,
-                telegram_user_id=target_user.telegram_id if target_user else None,  # Telegram ID пользователя, у которого удаляется роль
+                telegram_user_id=user.telegram_id,  # Telegram ID пользователя, у которого удаляется роль
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_roles": old_roles,
@@ -525,19 +510,18 @@ class AuthService:
             return False
             
         # Проверяем роли в новом формате
+        # CODE-08: роль "admin" никто не выдаёт — проверяем только "manager".
         try:
             if user.roles:
-                import json
                 parsed_roles = json.loads(user.roles)
                 if isinstance(parsed_roles, list):
-                    # Админ и менеджер имеют права менеджера
-                    return any(role in ["admin", "manager"] for role in parsed_roles)
+                    return "manager" in parsed_roles
         except (ValueError, TypeError):
             # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
             logger.warning(f"is_user_manager: битый JSON в user.roles (telegram_id={telegram_id}), fallback к user.role")
 
         # Fallback к старому формату
-        return user.role in ["admin", "manager"]
+        return user.role == "manager"
     
     async def is_user_executor(self, telegram_id: int) -> bool:
         """Проверить, является ли пользователь исполнителем"""
@@ -552,7 +536,6 @@ class AuthService:
         # Проверяем наличие роли в списке ролей
         try:
             if user.roles:
-                import json
                 parsed_roles = json.loads(user.roles)
                 if isinstance(parsed_roles, list) and "executor" in parsed_roles:
                     return True
@@ -574,11 +557,8 @@ class AuthService:
         in the JSON array stored in User.roles TEXT column.
         """
         from sqlalchemy import or_
-        # Match exact role in JSON array: look for "role" as array element
-        # Handles both cases: ["role"] and [..., "role", ...]
-        json_pattern = f'"%{role}%"'  # would false-match substrings
-        # More precise: match "role" preceded by [ or , and followed by ] or ,
-        # But SQLite LIKE doesn't support regex. Use exact element match instead.
+        # CODE-07: матчим точный элемент JSON-массива — "role" в кавычках
+        # (ловит и ["role"], и [..., "role", ...], не ловит подстроки).
         exact_match = f'"{role}"'
         return self.db.query(User).filter(
             User.status == "approved",
@@ -623,7 +603,6 @@ class AuthService:
         roles_list = []
         try:
             if user.roles:
-                import json
                 parsed = json.loads(user.roles)
                 if isinstance(parsed, list):
                     roles_list = [str(r) for r in parsed if isinstance(r, str)]

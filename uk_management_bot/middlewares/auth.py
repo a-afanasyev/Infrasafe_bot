@@ -49,7 +49,9 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
             data["user"] = None
             data["user_status"] = None
             return await handler(event, data)
-    except Exception:
+    except Exception as e:
+        # CODE-11: не глотать молча — debug-лог для расследований.
+        logger.debug(f"auth-middleware: не удалось извлечь telegram_id из события {type(event).__name__}: {e}")
         data["user"] = None
         data["user_status"] = None
         return await handler(event, data)
