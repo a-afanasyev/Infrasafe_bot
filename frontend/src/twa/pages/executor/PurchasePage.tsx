@@ -15,7 +15,7 @@ export default function PurchasePage() {
   const { haptic } = useTelegramSDK()
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: ['executor-tasks'],
+    queryKey: ['twa', 'executor-tasks'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { scope: 'my', limit: 50 }
     }).then(r => r.data),
@@ -29,7 +29,7 @@ export default function PurchasePage() {
     mutationFn: (num: string) => twaClient.patch(`/api/v2/requests/${num}`, { status: 'В работе' }),
     onSuccess: () => {
       haptic('notification')
-      queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
     },
     onError: (err: unknown) => {
       haptic('notification')

@@ -33,7 +33,7 @@ const MANAGER_FALLBACK_PRIORITY = ['inspector', 'applicant', 'executor'] as cons
 export default function RoleLanding() {
   const { t } = useTranslation()
   const { data, isLoading, isError } = useQuery<ProfileResponse>({
-    queryKey: ['profile'],
+    queryKey: ['twa', 'profile'],
     queryFn: () => twaClient.get('/api/v2/profile').then((r) => r.data),
     staleTime: 60_000,
   })

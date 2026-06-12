@@ -44,7 +44,7 @@ export default function MediaGallery({ requestNumber, kind, title, onLightboxCha
   const [lightboxId, setLightboxId] = useState<number | null>(null)
 
   const { data: items = [], isLoading } = useQuery<MediaItem[]>({
-    queryKey: ['media', requestNumber],
+    queryKey: ['twa', 'media', requestNumber],
     queryFn: () =>
       twaClient
         .get(`/api/v2/media/request/${requestNumber}`)

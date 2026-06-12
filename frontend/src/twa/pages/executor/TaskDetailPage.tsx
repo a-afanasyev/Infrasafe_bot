@@ -57,7 +57,7 @@ export default function TaskDetailPage() {
   }, [showBackButton, navigate, sheet])
 
   const { data: request, isLoading } = useQuery({
-    queryKey: ['request', number],
+    queryKey: ['twa', 'request', number],
     queryFn: () => twaClient.get(`/api/v2/requests/${number}`).then(r => r.data),
     enabled: !!number,
   })
@@ -69,8 +69,8 @@ export default function TaskDetailPage() {
       haptic('notification')
       setSheet(null)
       setSheetText('')
-      queryClient.invalidateQueries({ queryKey: ['request', number] })
-      queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
     },
     onError: (err: unknown) => {
       haptic('notification')
@@ -89,9 +89,9 @@ export default function TaskDetailPage() {
       haptic('notification')
       setSheet(null)
       setSheetText('')
-      queryClient.invalidateQueries({ queryKey: ['request', number] })
-      queryClient.invalidateQueries({ queryKey: ['executor-tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['comments', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['twa', 'comments', number] })
     },
     onError: (err: unknown) => {
       haptic('notification')

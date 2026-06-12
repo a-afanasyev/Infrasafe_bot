@@ -13,7 +13,7 @@ export default function RequestsPage() {
   const [filter, setFilter] = useState<'active' | 'archive'>('active')
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: ['my-requests'],
+    queryKey: ['twa', 'my-requests'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { scope: 'my', limit: 50 }
     }).then(r => r.data),
@@ -28,7 +28,7 @@ export default function RequestsPage() {
   )
 
   return (
-    <PullToRefresh queryKeys={[['my-requests']]}>
+    <PullToRefresh queryKeys={[['twa', 'my-requests']]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">{t('twa.requests.title')}</h1>
 

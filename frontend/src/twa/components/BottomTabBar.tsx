@@ -58,7 +58,7 @@ export function ApplicantTabs() {
   // Self-fetch the acceptance count (shared cache with AcceptancePage) so the
   // tab badge reflects requests actually awaiting acceptance.
   const { data: acceptance = [] } = useQuery({
-    queryKey: ['acceptance'],
+    queryKey: ['twa', 'acceptance'],
     queryFn: () => twaClient.get('/api/v2/requests/acceptance').then((r) => r.data),
     staleTime: 30_000,
   })

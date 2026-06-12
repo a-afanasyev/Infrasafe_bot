@@ -24,7 +24,7 @@ export default function MyShiftsPage() {
   }, [showBackButton, navigate])
 
   const { data: shifts = [], isLoading } = useQuery({
-    queryKey: ['my-shifts'],
+    queryKey: ['twa', 'my-shifts'],
     queryFn: () => twaClient.get('/api/v2/executor/shifts/me', { params: { limit: SHIFTS_LIMIT } }).then(r => r.data),
   })
 

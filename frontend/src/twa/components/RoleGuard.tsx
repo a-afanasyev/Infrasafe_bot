@@ -38,7 +38,7 @@ interface Props {
 export default function RoleGuard({ required, fallback = '/twa/app', children }: Props) {
   const { t } = useTranslation()
   const { data, isLoading, isError } = useQuery<ProfileResponse>({
-    queryKey: ['profile'],
+    queryKey: ['twa', 'profile'],
     queryFn: () => twaClient.get('/api/v2/profile').then((r) => r.data),
     staleTime: 60_000,
   })

@@ -38,7 +38,7 @@ export default function RequestDetailPage() {
   }, [showBackButton, navigate])
 
   const { data: request, isLoading } = useQuery({
-    queryKey: ['request', number],
+    queryKey: ['twa', 'request', number],
     queryFn: () => twaClient.get(`/api/v2/requests/${number}`).then(r => r.data),
     enabled: !!number,
   })
