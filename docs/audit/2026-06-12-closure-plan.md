@@ -47,7 +47,7 @@
 - **Состав:** FE-03 — **полный sweep**: ВСЕ query-ключи TWA-страниц/хуков (инвентаризировать grep'ом по `frontend/src/twa/` и `pages/twa/`, не только `TWARequestDetailPage.tsx:35`) получают префикс `['twa', …]`; dashboard **намеренно остаётся** на `['request', n]` и пр. + DEAD-12 (`@twa-dev/sdk`, `@radix-ui/react-select` — 0 импортов).
 - **DoD:** grep-инвентаризация ключей до/после в PR-описании; **vitest-тест непересечения**: множества queryKey TWA-поддерева и dashboard дизъюнктны; build+vitest.
 
-### PR-5 — Outbox: claim/lease вместо длинного лока (L, отдельный дизайн-PR)
+### ~~PR-5 — Outbox: claim/lease вместо длинного лока (L)~~ ✅ DONE 2026-06-12 (PR #63, `e5a428c`, прод live-verified)
 
 - **Состав:** CODE-01 (`webhook_sender.py:241-288`) + REFACTOR-091 (lock-scope>commit в reconciliation) + ARCH-011-остаток (oldest-first вместо sort-by-hash).
 
