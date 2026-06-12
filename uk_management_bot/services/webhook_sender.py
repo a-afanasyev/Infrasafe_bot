@@ -1,4 +1,5 @@
 """Webhook sender service — transactional outbox pattern for reliable delivery."""
+import asyncio
 import hashlib
 import hmac
 import json
@@ -8,7 +9,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 import httpx
-from sqlalchemy import select, or_
+from sqlalchemy import select, update, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -208,8 +209,69 @@ def _active_signing_secret() -> str:
     return settings.INFRASAFE_WEBHOOK_SECRET
 
 
+def _claimable_stmt(now: datetime, lease_cutoff: datetime, batch: int):
+    """SELECT claim-кандидатов: pending (готовые к ретраю) + протухшие in_flight.
+
+    FOR UPDATE SKIP LOCKED — два воркера берут дизъюнктные срезы. Лок живёт
+    только до commit'а claim-фазы (миллисекунды), НЕ на время HTTP (CODE-01).
+    """
+    return (
+        select(WebhookOutbox)
+        .where(
+            or_(
+                and_(
+                    WebhookOutbox.status == "pending",
+                    or_(
+                        WebhookOutbox.retry_after.is_(None),
+                        WebhookOutbox.retry_after <= now,
+                    ),
+                ),
+                # Reclaim: lease протух — владелец упал между claim и финализацией.
+                # Redelivery того же event_id (at-least-once, получатель
+                # идемпотентен); retry-budget НЕ расходуется.
+                and_(
+                    WebhookOutbox.status == "in_flight",
+                    WebhookOutbox.claimed_at < lease_cutoff,
+                ),
+            ),
+        )
+        .order_by(WebhookOutbox.created_at)
+        .limit(batch)
+        .with_for_update(skip_locked=True)
+    )
+
+
+async def _finalize(db, record_id: int, claim_token: str, values: dict) -> bool:
+    """Compare-and-set финализация: применяется ТОЛЬКО если запись всё ещё
+    принадлежит этой попытке (тот же claim_token, статус in_flight). rowcount=0
+    означает, что lease протух и запись reclaim'нул другой воркер — наша
+    устаревшая попытка молча отбрасывается (стейл-финализация запрещена)."""
+    upd = (
+        update(WebhookOutbox)
+        .where(
+            WebhookOutbox.id == record_id,
+            WebhookOutbox.claim_token == claim_token,
+            WebhookOutbox.status == "in_flight",
+        )
+        .values(**values)
+    )
+    result = await db.execute(upd)
+    return result.rowcount > 0
+
+
 async def process_outbox() -> None:
-    """Poll pending outbox records, attempt delivery, mark sent or failed."""
+    """Claim/lease-доставка outbox (PR-5, CODE-01).
+
+    Фазы: (1) claim — короткая транзакция под FOR UPDATE SKIP LOCKED помечает
+    маленький батч in_flight (uuid claim_token per-запись) и коммитит;
+    (2) HTTP — вне транзакции, bounded concurrency; (3) финализация — новая
+    транзакция, compare-and-set по claim_token.
+
+    Семантика attempts: инкремент ТОЛЬКО на подтверждённом неуспешном
+    HTTP-результате (таймаут = подтверждённый неуспех); `failed` — только по
+    результату последней разрешённой попытки. Crash/неизвестный результат →
+    reclaim после lease, redelivery того же event_id, budget не расходуется.
+    """
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
         return
 
@@ -225,72 +287,151 @@ async def process_outbox() -> None:
         return
 
     max_retries = settings.INFRASAFE_WEBHOOK_MAX_RETRIES
-    now = datetime.now(timezone.utc)
+    batch_size = settings.INFRASAFE_OUTBOX_CLAIM_BATCH
+    lease = timedelta(seconds=settings.INFRASAFE_OUTBOX_LEASE_SECONDS)
+    # Паритет пропускной способности со старым LIMIT 50: до 5 claim-батчей
+    # за цикл, каждый — собственный короткий лок.
+    max_batches = max(1, 50 // max(batch_size, 1))
 
-    async with AsyncSessionLocal() as db:
-        stmt = (
-            select(WebhookOutbox)
-            .where(
-                WebhookOutbox.status == "pending",
-                or_(
-                    WebhookOutbox.retry_after.is_(None),
-                    WebhookOutbox.retry_after <= now,
-                ),
-            )
-            .order_by(WebhookOutbox.created_at)
-            .limit(50)
-            # FOR UPDATE SKIP LOCKED: under --workers 2 each worker grabs a
-            # disjoint slice of pending rows instead of racing on the same set.
-            # Lock is held until db.commit() at end of function.
-            .with_for_update(skip_locked=True)
-        )
-        result = await db.execute(stmt)
-        records = result.scalars().all()
+    total = {"claimed": 0, "sent": 0, "failed": 0, "retried": 0, "stale": 0}
 
-        if not records:
-            return
+    for _ in range(max_batches):
+        now = datetime.now(timezone.utc)
+        lease_cutoff = now - lease
 
-        async with httpx.AsyncClient() as client:
-            for record in records:
-                full_url = f"{base_url}{record.endpoint}"
-                success, error, retryable, retry_after_seconds = await send_webhook(
-                    full_url, record.payload, secret, client
+        # ── Фаза 1: claim (короткая транзакция, лок снимается на commit) ──
+        claims: list[dict] = []
+        async with AsyncSessionLocal() as db:
+            records = (await db.execute(
+                _claimable_stmt(now, lease_cutoff, batch_size)
+            )).scalars().all()
+            if not records:
+                break
+            for r in records:
+                if r.status == "in_flight":
+                    logger.warning(
+                        "process_outbox: reclaiming stale in_flight "
+                        "event_id=%s claim_count=%d (worker crash?)",
+                        r.event_id, r.claim_count,
+                    )
+                token = str(uuid.uuid4())
+                r.status = "in_flight"
+                r.claimed_at = now
+                r.claim_token = token
+                r.claim_count += 1
+                claims.append({
+                    "id": r.id,
+                    "token": token,
+                    "endpoint": r.endpoint,
+                    "payload": r.payload,
+                    "attempts": r.attempts,
+                    "event_id": r.event_id,
+                    "event": r.event,
+                })
+            await db.commit()
+        total["claimed"] += len(claims)
+
+        # ── Фаза 2: HTTP вне транзакции, bounded concurrency ──
+        semaphore = asyncio.Semaphore(max(1, settings.INFRASAFE_OUTBOX_CONCURRENCY))
+
+        async def _deliver(claim: dict, client: httpx.AsyncClient):
+            async with semaphore:
+                return await send_webhook(
+                    f"{base_url}{claim['endpoint']}", claim["payload"], secret, client
                 )
 
-                if success:
-                    record.attempts += 1
-                    record.status = "sent"
-                    record.sent_at = datetime.now(timezone.utc)
-                    record.last_error = None
-                    logger.info("Webhook sent: event_id=%s event=%s", record.event_id, record.event)
-                else:
-                    record.attempts += 1
-                    record.last_error = error
+        async with httpx.AsyncClient() as client:
+            results = await asyncio.gather(
+                *(_deliver(c, client) for c in claims), return_exceptions=True
+            )
 
-                    if not retryable or record.attempts >= max_retries:
-                        record.status = "failed"
-                        logger.error(
-                            "Webhook failed permanently: event_id=%s attempts=%d error=%s",
-                            record.event_id, record.attempts, error,
+        # ── Фаза 3: финализация новой транзакцией, CAS по claim_token ──
+        async with AsyncSessionLocal() as db:
+            for claim, outcome in zip(claims, results):
+                if isinstance(outcome, BaseException):
+                    # Неизвестный результат (внутренняя ошибка до/во время HTTP):
+                    # НЕ расходуем budget — вернуть в pending для ретрая.
+                    logger.exception(
+                        "process_outbox: delivery raised for event_id=%s",
+                        claim["event_id"], exc_info=outcome,
+                    )
+                    applied = await _finalize(db, claim["id"], claim["token"], {
+                        "status": "pending",
+                        "claim_token": None,
+                        "claimed_at": None,
+                        "last_error": f"internal: {outcome}",
+                    })
+                    total["retried" if applied else "stale"] += 1
+                    continue
+
+                success, error, retryable, retry_after_seconds = outcome
+                if success:
+                    applied = await _finalize(db, claim["id"], claim["token"], {
+                        "status": "sent",
+                        "sent_at": datetime.now(timezone.utc),
+                        "last_error": None,
+                        "claim_token": None,
+                        "claimed_at": None,
+                    })
+                    if applied:
+                        total["sent"] += 1
+                        logger.info(
+                            "Webhook sent: event_id=%s event=%s",
+                            claim["event_id"], claim["event"],
                         )
                     else:
-                        delay_idx = min(record.attempts - 1, len(_BACKOFF_DELAYS) - 1)
-                        if retry_after_seconds > 0:
-                            record.retry_after = datetime.now(timezone.utc) + timedelta(seconds=retry_after_seconds)
-                        else:
-                            backoff = _BACKOFF_DELAYS[delay_idx]
-                            record.retry_after = datetime.now(timezone.utc) + timedelta(seconds=backoff)
+                        total["stale"] += 1
                         logger.warning(
-                            "Webhook retryable failure: event_id=%s attempts=%d error=%s retry_after=%s",
-                            record.event_id, record.attempts, error, record.retry_after,
+                            "process_outbox: stale finalize discarded (sent) "
+                            "event_id=%s — reclaimed by another worker",
+                            claim["event_id"],
                         )
+                    continue
 
-        await db.commit()
+                # Подтверждённый неуспех — единственное место расхода attempts.
+                new_attempts = claim["attempts"] + 1
+                values: dict = {
+                    "attempts": new_attempts,
+                    "last_error": error,
+                    "claim_token": None,
+                    "claimed_at": None,
+                }
+                if not retryable or new_attempts >= max_retries:
+                    values["status"] = "failed"
+                else:
+                    values["status"] = "pending"
+                    if retry_after_seconds > 0:
+                        delay = retry_after_seconds
+                    else:
+                        delay = _BACKOFF_DELAYS[min(new_attempts - 1, len(_BACKOFF_DELAYS) - 1)]
+                    values["retry_after"] = datetime.now(timezone.utc) + timedelta(seconds=delay)
 
-        sent = sum(1 for r in records if r.status == "sent")
-        failed = sum(1 for r in records if r.status == "failed")
-        retried = len(records) - sent - failed
+                applied = await _finalize(db, claim["id"], claim["token"], values)
+                if not applied:
+                    total["stale"] += 1
+                    logger.warning(
+                        "process_outbox: stale finalize discarded (failure) event_id=%s",
+                        claim["event_id"],
+                    )
+                elif values["status"] == "failed":
+                    total["failed"] += 1
+                    logger.error(
+                        "Webhook failed permanently: event_id=%s attempts=%d error=%s",
+                        claim["event_id"], new_attempts, error,
+                    )
+                else:
+                    total["retried"] += 1
+                    logger.warning(
+                        "Webhook retryable failure: event_id=%s attempts=%d error=%s retry_after=%s",
+                        claim["event_id"], new_attempts, error, values.get("retry_after"),
+                    )
+            await db.commit()
+
+        if len(claims) < batch_size:
+            break
+
+    if total["claimed"]:
         logger.info(
-            "process_outbox cycle: fetched=%d sent=%d failed=%d retried=%d",
-            len(records), sent, failed, retried,
+            "process_outbox cycle: claimed=%d sent=%d failed=%d retried=%d stale=%d",
+            total["claimed"], total["sent"], total["failed"], total["retried"], total["stale"],
         )

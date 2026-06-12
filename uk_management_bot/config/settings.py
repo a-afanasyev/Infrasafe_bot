@@ -146,6 +146,12 @@ class Settings:
     INFRASAFE_USE_NEXT_SECRET = os.getenv("INFRASAFE_USE_NEXT_SECRET", "false").lower() == "true"
     INFRASAFE_WEBHOOK_TIMEOUT = int(os.getenv("INFRASAFE_WEBHOOK_TIMEOUT", "10"))
     INFRASAFE_WEBHOOK_MAX_RETRIES = int(os.getenv("INFRASAFE_WEBHOOK_MAX_RETRIES", "3"))
+    # PR-5 claim/lease-доставка outbox: размер claim-батча, параллелизм HTTP
+    # внутри батча и lease. Инвариант: LEASE >= BATCH × TIMEOUT × 2 — хвост
+    # батча не должен протухнуть, пока воркер ещё жив (default 10×10×2=200s).
+    INFRASAFE_OUTBOX_CLAIM_BATCH = int(os.getenv("INFRASAFE_OUTBOX_CLAIM_BATCH", "10"))
+    INFRASAFE_OUTBOX_CONCURRENCY = int(os.getenv("INFRASAFE_OUTBOX_CONCURRENCY", "5"))
+    INFRASAFE_OUTBOX_LEASE_SECONDS = int(os.getenv("INFRASAFE_OUTBOX_LEASE_SECONDS", "200"))
 
     # InfraSafe -> UK webhook receiver (plan §4.4). Verifier accepts OLD || NEW
     # for grace-window swaps. Currently no inbound webhook router lives in this

@@ -4,6 +4,18 @@ Shared fixtures for API tests.
 Uses an in-memory aiosqlite database and overrides FastAPI dependencies
 so that tests run without Docker / PostgreSQL / JWT tokens.
 """
+import os
+
+# PR-5: сохранить реальный postgres-DATABASE_URL процесса для PG-гонок
+# (test_webhook_outbox_pg_concurrency) ДО того, как tests/services/conftest.py
+# перетрёт env на sqlite. Conftest'ы аргументов импортируются в порядке
+# аргументов — при каноническом `pytest tests/api tests/services` этот файл
+# грузится первым. Пробрасываем через отдельную env-переменную (tests/api —
+# НЕ пакет, импортировать conftest напрямую нельзя); POSTGRES_TEST_URL можно
+# задать и снаружи как явный override.
+if "POSTGRES_TEST_URL" not in os.environ and os.getenv("DATABASE_URL", "").startswith("postgresql"):
+    os.environ["POSTGRES_TEST_URL"] = os.environ["DATABASE_URL"]
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport

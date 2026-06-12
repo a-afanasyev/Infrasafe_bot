@@ -31,6 +31,7 @@ async def test_outbox_health_disabled(monkeypatch):
         "pending": 0,
         "oldest_pending_age_sec": 0,
         "failed_last_24h": 0,
+        "stuck_in_flight": 0,
     }
 
 

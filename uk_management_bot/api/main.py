@@ -253,7 +253,7 @@ async def outbox_health():
     from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
 
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
-        return {"enabled": False, "pending": 0, "oldest_pending_age_sec": 0, "failed_last_24h": 0}
+        return {"enabled": False, "pending": 0, "oldest_pending_age_sec": 0, "failed_last_24h": 0, "stuck_in_flight": 0}
 
     from uk_management_bot.database.session import AsyncSessionLocal
     if AsyncSessionLocal is None:
@@ -277,6 +277,18 @@ async def outbox_health():
                     WebhookOutbox.created_at > now - timedelta(hours=24),
                 )
             ) or 0
+            # PR-5: in_flight старше lease = владелец упал и запись ждёт
+            # reclaim. Стабильно >0 — признак crash-loop'а воркера (алерт).
+            lease_cutoff = now - timedelta(
+                seconds=settings.INFRASAFE_OUTBOX_LEASE_SECONDS
+            )
+            stuck_in_flight = await db.scalar(
+                select(func.count(WebhookOutbox.id))
+                .where(
+                    WebhookOutbox.status == "in_flight",
+                    WebhookOutbox.claimed_at < lease_cutoff,
+                )
+            ) or 0
         # SQLite returns naive datetimes; Postgres returns tz-aware. Normalise
         # so the subtraction below never raises on a naive/aware mismatch.
         if oldest is not None and oldest.tzinfo is None:
@@ -286,6 +298,7 @@ async def outbox_health():
             "pending": pending,
             "oldest_pending_age_sec": (now - oldest).total_seconds() if oldest else 0,
             "failed_last_24h": failed_24h,
+            "stuck_in_flight": stuck_in_flight,
         }
     except Exception:
         _logger.exception("outbox_health failed")

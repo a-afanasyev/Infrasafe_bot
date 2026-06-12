@@ -123,8 +123,14 @@ async def test_drift_replays_only_missing_buildings(_wired):
 
 @pytest.mark.asyncio
 async def test_skips_when_advisory_lock_held(_wired):
-    """pg_try_advisory_lock returns false → another worker owns the cycle."""
+    """pg_try_advisory_lock returns false → another worker owns the cycle.
+
+    REFACTOR-091 (PR-5): внешний HTTP-фетч теперь идёт ДО лока (лок не должен
+    висеть на время сети), поэтому fetch ВЫЗЫВАЕТСЯ; гарантия lock'а — что под
+    ним ничего не enqueue'ится и цикл скипается.
+    """
     monkeypatch, mock_fetch, mock_queue = _wired
+    mock_fetch.return_value = set()
     monkeypatch.setattr(
         reconciliation, "AsyncSessionLocal", lambda: _FakeSession(False, [])
     )
@@ -132,7 +138,7 @@ async def test_skips_when_advisory_lock_held(_wired):
     result = await reconciliation.reconcile_buildings()
 
     assert result == {"skipped": "lock_held"}
-    mock_fetch.assert_not_called()
+    mock_fetch.assert_called_once()
     mock_queue.assert_not_called()
 
 
@@ -325,8 +331,12 @@ async def test_requests_orphan_logged_no_replay(_wired_requests, caplog):
 
 @pytest.mark.asyncio
 async def test_requests_skipped_when_lock_held(_wired_requests):
-    """pg_try_advisory_lock returns false → another worker owns the cycle."""
+    """pg_try_advisory_lock returns false → another worker owns the cycle.
+
+    REFACTOR-091 (PR-5): fetch идёт до лока и вызывается; под локом — ничего.
+    """
     monkeypatch, mock_fetch, mock_emit = _wired_requests
+    mock_fetch.return_value = set()
     monkeypatch.setattr(
         reconciliation, "AsyncSessionLocal", lambda: _FakeSession(False, [])
     )
@@ -334,7 +344,7 @@ async def test_requests_skipped_when_lock_held(_wired_requests):
     result = await reconciliation.reconcile_requests()
 
     assert result == {"skipped": "lock_held"}
-    mock_fetch.assert_not_called()
+    mock_fetch.assert_called_once()
     mock_emit.assert_not_called()
 
 
