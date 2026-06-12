@@ -43,7 +43,7 @@
 - **DoD:** оба набора в пересобранном контейнере; pip-audit без CVE-2026-34993/47265/PYSEC-2026-161; прод-смоук после деплоя (login + создание заявки + outbox-доставка).
 - **Риск:** starlette — ядро FastAPI; гейт — полный CI + контейнерный прогон.
 
-#### PR-4 — TWA namespace sweep + мёртвые npm-deps (S)
+#### ~~PR-4 — TWA namespace sweep + мёртвые npm-deps (S)~~ ✅ DONE 2026-06-12 (PR #62, `48eff95`, прод)
 - **Состав:** FE-03 — **полный sweep**: ВСЕ query-ключи TWA-страниц/хуков (инвентаризировать grep'ом по `frontend/src/twa/` и `pages/twa/`, не только `TWARequestDetailPage.tsx:35`) получают префикс `['twa', …]`; dashboard **намеренно остаётся** на `['request', n]` и пр. + DEAD-12 (`@twa-dev/sdk`, `@radix-ui/react-select` — 0 импортов).
 - **DoD:** grep-инвентаризация ключей до/после в PR-описании; **vitest-тест непересечения**: множества queryKey TWA-поддерева и dashboard дизъюнктны; build+vitest.
 
