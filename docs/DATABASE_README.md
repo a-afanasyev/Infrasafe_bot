@@ -200,7 +200,7 @@ See [uk_management_bot/database/migrations/](uk_management_bot/database/migratio
 
 ```bash
 # Stop all containers and remove volumes
-docker-compose -f docker-compose.unified.yml down -v
+docker compose down -v
 
 # Initialize environment
 make init
@@ -209,10 +209,10 @@ make init
 make start
 
 # Verify everything is running
-docker-compose -f docker-compose.unified.yml ps
+docker compose ps
 
 # Check logs
-docker-compose -f docker-compose.unified.yml logs bot | grep -E "(Database|Admin|✅)"
+docker compose logs bot | grep -E "(Database|Admin|✅)"
 ```
 
 **Expected output**:
@@ -229,7 +229,7 @@ docker-compose -f docker-compose.unified.yml logs bot | grep -E "(Database|Admin
 
 ```bash
 # In Docker container
-docker-compose -f docker-compose.unified.yml exec bot python /app/scripts/export_schema.py
+docker compose exec app python /app/scripts/export_schema.py
 
 # Copy to host
 docker cp uk-bot:/app/DATABASE_SCHEMA_ACTUAL.md ./
@@ -240,7 +240,7 @@ docker cp uk-bot:/app/database_schema_actual.sql ./
 
 ```bash
 # Method 1: SQLAlchemy (Recommended - used by make start)
-docker-compose -f docker-compose.unified.yml exec bot python -c "
+docker compose exec app python -c "
 from uk_management_bot.database.session import Base, engine
 import uk_management_bot.database.models
 Base.metadata.create_all(bind=engine)
@@ -248,14 +248,14 @@ print('✅ Database created!')
 "
 
 # Method 2: SQL DDL
-docker-compose -f docker-compose.unified.yml exec -T postgres psql -U uk_bot -d uk_management < database_schema_actual.sql
+docker compose exec -T postgres psql -U uk_bot -d uk_management < database_schema_actual.sql
 ```
 
 ### Verify Admin User After Startup
 
 ```bash
 # Connect to database
-docker-compose -f docker-compose.unified.yml exec postgres psql -U uk_bot -d uk_management
+docker compose exec postgres psql -U uk_bot -d uk_management
 
 # Check admin user
 SELECT id, telegram_id, username, status, roles, active_role, verification_status
@@ -388,7 +388,7 @@ git add DATABASE_SCHEMA_ACTUAL.md database_schema_actual.sql
 **Manual**:
 ```bash
 # After modifying models
-docker-compose -f docker-compose.unified.yml exec bot python /app/scripts/export_schema.py
+docker compose exec app python /app/scripts/export_schema.py
 docker cp uk-bot:/app/DATABASE_SCHEMA_ACTUAL.md ./
 docker cp uk-bot:/app/database_schema_actual.sql ./
 git add DATABASE_SCHEMA_ACTUAL.md database_schema_actual.sql
@@ -492,7 +492,7 @@ FROM users WHERE telegram_id = 48617336;
 
 **Environment check**:
 ```bash
-docker-compose -f docker-compose.unified.yml exec bot env | grep ADMIN_USER_IDS
+docker compose exec app env | grep ADMIN_USER_IDS
 # Should output: ADMIN_USER_IDS=48617336
 ```
 
@@ -530,7 +530,7 @@ POSTGRES_DB=uk_management
 
 **Restart with clean volumes** if passwords were changed:
 ```bash
-docker-compose -f docker-compose.unified.yml down -v
+docker compose down -v
 make start
 ```
 

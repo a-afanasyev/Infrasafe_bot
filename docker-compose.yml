@@ -203,3 +203,6 @@ volumes:
 networks:
   uk-network:
     driver: bridge
+    # Реконсиляция прод-дрейфа (PR-10): фиксированное имя сети — без префикса
+    # каталога compose-проекта; так сеть называется на проде.
+    name: uk-network

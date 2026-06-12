@@ -19,6 +19,9 @@ services:
     volumes:
       # Монтируем код для hot-reload
       - ./uk_management_bot:/app/uk_management_bot
+      # OPS-110: миграции тоже hot-reload — новая ревизия видна без rebuild
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - ./requirements.txt:/app/requirements.txt
       # Монтируем .env файл
       - ./.env:/app/.env

@@ -145,7 +145,7 @@ UK/
 ├── Dockerfile                 # Образ приложения
 ├── docker-compose.yml         # Основная конфигурация сервисов
 ├── docker-compose.dev.yml     # Development конфигурация (SQLite)
-├── docker-compose.prod.yml    # Production конфигурация (PostgreSQL)
+├── docker-compose.media.yml   # Override: media-service (прод)
 ├── .dockerignore             # Исключения для Docker
 ├── env.example               # Пример переменных окружения (PostgreSQL)
 ├── env.dev.example           # Пример переменных окружения (SQLite)
@@ -415,7 +415,7 @@ docker-compose exec app netstat -tulpn
 cp env.example .env.production
 
 # Используйте production конфигурацию
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.media.yml up -d  # прод; БЕЗ --remove-orphans
 ```
 
 ## 📚 Дополнительные ресурсы
