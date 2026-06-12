@@ -56,6 +56,15 @@ async def reconcile_buildings() -> dict:
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
         return {"skipped": "disabled"}
 
+    # REFACTOR-091 (PR-5): внешний HTTP-фетч — ДО advisory-лока. Лок защищает
+    # только diff+enqueue+commit; раньше он удерживался на всё время сетевого
+    # вызова (lock-scope > работа — тот же анти-паттерн, что CODE-01 в outbox).
+    try:
+        is_externals = await fetch_infrasafe_external_buildings()
+    except Exception:
+        logger.exception("reconcile_buildings: failed to fetch InfraSafe state")
+        return {"error": "infrasafe_fetch_failed"}
+
     async with AsyncSessionLocal() as db:
         locked = await db.scalar(
             text("SELECT pg_try_advisory_lock(:k)"),
@@ -80,13 +89,6 @@ async def reconcile_buildings() -> dict:
                 .where(Building.is_active == True)  # noqa: E712 — SQLAlchemy needs ==
             )
             uk_rows = (await db.execute(uk_stmt)).all()
-
-            # 2. InfraSafe side: external_ids it already knows.
-            try:
-                is_externals = await fetch_infrasafe_external_buildings()
-            except Exception:
-                logger.exception("reconcile_buildings: failed to fetch InfraSafe state")
-                return {"error": "infrasafe_fetch_failed"}
 
             # 3. Compute drift — precise set diff via deterministic external_id.
             #    InfraSafe derives external_id deterministically from UK id
@@ -126,7 +128,12 @@ async def reconcile_buildings() -> dict:
             #    picks them up within 10s. Receiver is idempotent (event_id UUID4
             #    + isDuplicateEvent check on InfraSafe side).
             enqueued = 0
-            for missing_external_id in sorted(missing_in_is)[:REPLAY_CAP]:
+            # ARCH-011 (PR-5): oldest-first по UK id (порядок создания) вместо
+            # сортировки по hash-производному external_id — при дрейфе больше
+            # REPLAY_CAP старейшие здания доезжают первыми, без голодания.
+            for missing_external_id in sorted(
+                missing_in_is, key=lambda ext: expected_by_uk[ext].id
+            )[:REPLAY_CAP]:
                 row = expected_by_uk[missing_external_id]
                 await queue_webhook(
                     db,
@@ -183,6 +190,13 @@ async def reconcile_requests() -> dict:
         logger.warning("reconcile_requests: INFRASAFE_REQUESTS_INVENTORY_URL not set")
         return {"skipped": "no_inventory_url"}
 
+    # REFACTOR-091 (PR-5): HTTP-фетч до advisory-лока (см. reconcile_buildings).
+    try:
+        is_set = await fetch_infrasafe_uk_request_numbers()
+    except Exception:
+        logger.exception("reconcile_requests: failed to fetch InfraSafe state")
+        return {"error": "infrasafe_fetch_failed"}
+
     async with AsyncSessionLocal() as db:
         locked = await db.scalar(
             text("SELECT pg_try_advisory_lock(:k)"),
@@ -206,13 +220,7 @@ async def reconcile_requests() -> dict:
             uk_by_number = {r.request_number: r for r in uk_rows}
             uk_set = set(uk_by_number.keys())
 
-            # 2. InfraSafe side: every uk_request_number it has in ARM.
-            try:
-                is_set = await fetch_infrasafe_uk_request_numbers()
-            except Exception:
-                logger.exception("reconcile_requests: failed to fetch InfraSafe state")
-                return {"error": "infrasafe_fetch_failed"}
-
+            # 2. InfraSafe side (is_set) зафетчен до лока — REFACTOR-091.
             missing_in_is = uk_set - is_set
             extra_in_is = is_set - uk_set
 
