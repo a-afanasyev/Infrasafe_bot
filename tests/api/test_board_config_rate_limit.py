@@ -35,8 +35,15 @@ async def test_put_board_config_rate_limited_at_30_per_minute(client):
 
 @pytest.mark.asyncio
 async def test_put_board_config_per_ip_isolation(client):
-    ip_a = {"X-Real-IP": _unique_ip(40)}
-    ip_b = {"X-Real-IP": _unique_ip(110)}
+    # Один снимок времени → два гарантированно РАЗНЫХ октета. Раньше два
+    # независимых вызова _unique_ip() могли вернуть одинаковый IP: база
+    # (monotonic_ns >> 4) & 0xFF заворачивается каждые ~4 мкс, и сдвиг
+    # солей 40/110 компенсировался дрейфом базы между вызовами (flaky CI).
+    base = (time.monotonic_ns() >> 4) & 0xFF
+    octet_a = base % 250 + 2          # 2..251
+    octet_b = octet_a + 1 if octet_a < 251 else 2
+    ip_a = {"X-Real-IP": f"203.0.113.{octet_a}"}
+    ip_b = {"X-Real-IP": f"203.0.113.{octet_b}"}
     assert ip_a["X-Real-IP"] != ip_b["X-Real-IP"]
 
     for _ in range(30):
