@@ -175,7 +175,8 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
             f"{invite_info}\n\n{get_text('auth.enter_full_name', language=lang)}"
         )
         
-        logger.info(f"Пользователь {telegram_id} получил ссылку на веб-регистрацию с токеном {token[:8]}…")
+        # SEC-08: токен (даже префикс) в логи не пишем — см. test_invite_token_logging.py
+        logger.info(f"Пользователь {telegram_id} получил ссылку на веб-регистрацию по инвайт-токену")
         
     except Exception as e:
         logger.error(f"Ошибка обработки /join от {telegram_id}: {e}")

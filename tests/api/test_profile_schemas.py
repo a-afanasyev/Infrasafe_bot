@@ -122,6 +122,24 @@ class TestUpdateProfileBody:
         body = UpdateProfileBody(email="new@example.com")
         assert body.email == "new@example.com"
 
+    # SEC-05: EmailStr вместо `"@" not in email`
+    @pytest.mark.parametrize("bad", [
+        "not-an-email",
+        "@no-local-part.com",
+        "no-domain@",
+        "spaces in@local.com",
+        "double@@at.com",
+        "",
+    ])
+    def test_invalid_email_rejected(self, bad):
+        with pytest.raises(ValidationError):
+            UpdateProfileBody(email=bad)
+
+    def test_valid_email_normalized(self):
+        body = UpdateProfileBody(email="User@Example.COM")
+        # email-validator нормализует домен в lowercase
+        assert str(body.email) == "User@example.com"
+
 
 # ═══════════════════════ RoleSwitchBody / RoleSwitchOut ═══════════════════════
 

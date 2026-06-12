@@ -291,23 +291,14 @@ class TestUpdateProfile:
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_invalid_email_raises_400(self):
-        from fastapi import HTTPException
-        from uk_management_bot.api.profile.router import update_profile, UpdateProfileBody
+    async def test_invalid_email_rejected_by_schema(self):
+        """SEC-05: невалидный email отклоняется pydantic EmailStr на уровне
+        схемы (FastAPI вернёт 422), а не ручной проверкой в хендлере."""
+        from pydantic import ValidationError
+        from uk_management_bot.api.profile.router import UpdateProfileBody
 
-        user = _make_user()
-        mock_db = AsyncMock()
-        db_user = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one.return_value = db_user
-        mock_db.execute = AsyncMock(return_value=mock_result)
-
-        body = UpdateProfileBody(email="notanemail")
-
-        with pytest.raises(HTTPException) as exc_info:
-            await update_profile(body=body, db=mock_db, user=user)
-
-        assert exc_info.value.status_code == 400
+        with pytest.raises(ValidationError):
+            UpdateProfileBody(email="notanemail")
 
     @pytest.mark.asyncio
     async def test_valid_language_updates_db_user(self):

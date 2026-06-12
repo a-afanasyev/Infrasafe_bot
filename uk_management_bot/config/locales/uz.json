@@ -740,6 +740,7 @@
     "электрика": "Elektr",
     "assigned_successfully": "✅ **Muvaffaqiyatli!**\n\nSiz tizim administratori etib tayinlandingiz.\nEndi sizda arizalarni va foydalanuvchilarni boshqarish uchun menejer huquqlari bor.",
     "assignment_failed": "❌ **Xatolik!**\n\nAdministrator paroli noto'g'ri.\nQaytadan urinib ko'ring yoki ishlab chiquvchiga murojaat qiling.",
+    "too_many_attempts": "🚫 Parol kiritish urinishlari juda ko'p. 5 daqiqadan keyin urinib ko'ring.",
     "keyboards": {
       "new_requests": "🆕 Yangi arizalar",
       "active_requests": "🔄 Faol arizalar",

@@ -134,15 +134,11 @@ async def test_join_handler_masks_token_in_log(caplog):
         f"Full invite token leaked in FIX-006 log line: {target_text!r}"
     )
 
-    # A masked reference should still be present so operators can
-    # correlate logs with a token without recovering it. `token[:8]` of
-    # "invite_v1:ABC..." is the 8-char prefix "invite_v" followed by an
-    # ellipsis.
-    assert "invite_v" in target_text, (
-        f"Expected masked invite_v prefix in FIX-006 log line but got: {target_text!r}"
-    )
-    assert "…" in target_text, (
-        f"Expected ellipsis marking truncation in FIX-006 log line but got: {target_text!r}"
+    # SEC-08: токен не пишем в лог вообще — даже маскированный префикс
+    # (token[:8] статичен для всех invite_v1-токенов и бесполезен для
+    # корреляции, а привычка логировать фрагменты токена опасна).
+    assert "invite_v" not in target_text, (
+        f"Token fragment leaked in FIX-006 log line: {target_text!r}"
     )
 
 
