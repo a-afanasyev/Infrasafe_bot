@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { apiClient } from '../api/client'
+import { apiClient, publicClient } from '../api/client'
 
 // One-time migration purge: builds before the cookie-auth switch (§6.5)
 // stored access_token / refresh_token in localStorage. The current code never
@@ -20,20 +20,51 @@ localStorage.removeItem('auth-store')
 interface AuthState {
   user: { id: number; roles: string[]; first_name?: string } | null
   isAuthenticated: boolean
+  // True until the cold-start cookie probe (bootstrap) resolves. Route guards
+  // render a spinner while hydrating instead of bouncing to /login, so a fresh
+  // tab with a valid (shared) httpOnly cookie isn't wrongly treated as logged out.
+  hydrating: boolean
+  bootstrap: () => Promise<void>
   login: (access_token?: string) => Promise<void>
   logout: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
+      hydrating: true,
+      // Cold-start session recovery. The UI auth flag lives in sessionStorage
+      // (SEC-018, per-tab), but the httpOnly cookies are shared across tabs — so a
+      // new tab (e.g. an InfraSafe "Открыть в УК" deep-link opened via target=_blank)
+      // starts with no flag yet a live session. Probe /profile with the cookie to
+      // recover it. Uses publicClient (no 401-redirect interceptor) and a manual
+      // refresh fallback so a merely-expired access cookie doesn't drop the session,
+      // and a genuine no-session case fails quietly → guards redirect to /login.
+      bootstrap: async () => {
+        if (get().isAuthenticated) {
+          set({ hydrating: false })
+          return
+        }
+        try {
+          const { data } = await publicClient.get('/api/v2/profile')
+          set({ user: data, isAuthenticated: true, hydrating: false })
+        } catch {
+          try {
+            await publicClient.post('/api/v2/auth/refresh')
+            const { data } = await publicClient.get('/api/v2/profile')
+            set({ user: data, isAuthenticated: true, hydrating: false })
+          } catch {
+            set({ hydrating: false })
+          }
+        }
+      },
       login: async () => {
         // Cookies are already set by POST /api/v2/auth/login response;
         // fetch profile to materialise UI-facing identity.
         const { data } = await apiClient.get('/api/v2/profile')
-        set({ user: data, isAuthenticated: true })
+        set({ user: data, isAuthenticated: true, hydrating: false })
       },
       logout: async () => {
         // Server clears uk_access / uk_refresh cookies; no body needed.

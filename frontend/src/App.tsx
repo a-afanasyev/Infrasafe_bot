@@ -1,10 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import { isTWA } from './utils/isTWA'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
 import PageErrorBoundary from './components/shared/PageErrorBoundary'
@@ -42,8 +42,16 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuthStore()
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  const { isAuthenticated, user, hydrating } = useAuthStore()
+  const location = useLocation()
+  // Wait for the cold-start cookie probe before deciding — otherwise a fresh tab
+  // with a valid shared cookie would be bounced to /login on the first paint.
+  if (hydrating) return <LoadingSpinner />
+  if (!isAuthenticated) {
+    // Preserve the original deep-link so login returns the user to it (return-to).
+    const next = encodeURIComponent(location.pathname + location.search)
+    return <Navigate to={`/login?next=${next}`} replace />
+  }
   if (allowedRoles && !user?.roles?.some((r: string) => allowedRoles.includes(r))) {
     return <Navigate to="/resident-board" replace />
   }
@@ -53,13 +61,22 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
 // Root entry: anonymous visitors land on the public board (УК main page),
 // authenticated staff go to the dashboard, TWA users to the Mini App.
 function RootRedirect() {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, hydrating } = useAuthStore()
   if (isTWA()) return <Navigate to="/twa" replace />
+  if (hydrating) return <LoadingSpinner />
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
   return <Navigate to="/resident-board" replace />
 }
 
 export default function App() {
+  const bootstrap = useAuthStore((s) => s.bootstrap)
+  // Recover a shared-cookie session on cold start (new tab / deep-link). Always
+  // runs so `hydrating` is resolved even on TWA/public routes (a no-session probe
+  // just 401s and clears the flag); the web guards depend on it being resolved.
+  useEffect(() => {
+    bootstrap()
+  }, [bootstrap])
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* FE-046: global offline banner (shared with TWA) */}
