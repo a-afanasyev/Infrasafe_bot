@@ -17,6 +17,11 @@ from uk_management_bot.services.request_number_service import REQUEST_NUMBER_COR
 # core (\d{3,}) so 4-digit (>999/day) numbers match too — single source of truth.
 _VIEW_REQUEST_NUMBER_RE = rf"^view(?:_request)?_{REQUEST_NUMBER_CORE}$"
 _CANCEL_REQUEST_NUMBER_RE = re.compile(rf"^cancel_{REQUEST_NUMBER_CORE}$")
+# BUG-BOT-037: edit_/approve_ owner-action callbacks bound to the shared
+# request-number core (strict regex) instead of open-set startswith+exclusion
+# lists, so future edit_*/approve_* callbacks aren't swallowed by these handlers.
+_EDIT_REQUEST_NUMBER_RE = rf"^edit_{REQUEST_NUMBER_CORE}$"
+_APPROVE_REQUEST_NUMBER_RE = rf"^approve_{REQUEST_NUMBER_CORE}$"
 from uk_management_bot.keyboards.requests import (
     get_categories_keyboard,
     get_urgency_keyboard,
@@ -1685,7 +1690,7 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
         if db_session:
             db_session.close()
 
-@router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_employee_") & ~F.data.startswith("edit_profile") & ~F.data.startswith("edit_first_name") & ~F.data.startswith("edit_last_name"))
+@router.callback_query(F.data.regexp(_EDIT_REQUEST_NUMBER_RE))
 async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
     """Обработка редактирования заявки"""
     db_session = None          # ARCH-013: гарантируем close в finally
@@ -1736,64 +1741,12 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
 # регистрируется раньше admin_router) и к тому же удалял заявку без подтверждения.
 # Удалён — см. test_bug_duty_assign_routing::test_admin_router_owns_mgr_delete.
 
-@router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
-async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
-    """Обработка принятия заявки менеджером - показывает выбор типа назначения"""
-    db_session = None          # ARCH-013: гарантируем close в finally
-    try:
-        logger.info(f"Обработка принятия заявки менеджером для пользователя {callback.from_user.id}")
-        # Проверяем, что действие выполняет менеджер
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        auth = AuthService(db_session)
-        if not await auth.is_user_manager(callback.from_user.id):
-            await callback.answer(get_text("requests.manager_only", language=lang), show_alert=True)
-            return
-
-        request_number = callback.data.replace("accept_", "")
-
-        # Получаем заявку для отображения информации
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
-
-        # Изменяем статус на "В работе"
-        service = RequestService(db_session)
-        result = service.update_status_by_actor(
-            request_number=request_number,
-            new_status="В работе",
-            actor_telegram_id=callback.from_user.id,
-        )
-
-        if not result.get("success"):
-            error_msg = result.get("message", get_text("common.error", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            return
-
-        # Показываем выбор типа назначения
-        from uk_management_bot.keyboards.admin import get_assignment_type_keyboard
-
-        await callback.message.edit_text(
-            get_text("requests.request_accepted", language=lang).format(
-                request_number=request_number,
-                category=request.category,
-                address=request.address
-            ),
-            reply_markup=get_assignment_type_keyboard(request_number),
-            parse_mode="HTML"
-        )
-
-        logger.info(f"Заявка {request_number} принята в работу менеджером {callback.from_user.id}, ожидание выбора типа назначения")
-
-    except Exception as e:
-        logger.error(f"Ошибка обработки принятия заявки: {e}")
-        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
+# BUG-BOT-034/PR-25: менеджерское «Принять» (`accept_<NNN>`) живёт в
+# handlers/admin.py::handle_accept_request (канон-переход через workflow_runner
+# MANAGER_ASSIGN + has_admin_access). Прежний bare-`accept_` handler здесь —
+# ручной `update_status_by_actor("В работе")` — затенял админский (requests_router
+# раньше admin_router). Удалён; admin теперь единственный владелец строгого
+# `^accept_\d{6}-\d{3,}$`. См. test_bug_duty_assign_routing::test_admin_router_owns_accept.
 
 # Менеджерское завершение заявки перенесено на префикс `mgr_complete_` и живёт в
 # handlers/admin.py::handle_complete_request (статус EXECUTED + AuditLog). Прежний
@@ -1813,41 +1766,13 @@ async def handle_accept_request(callback: CallbackQuery, state: FSMContext):
 # Дубликат удалён — теперь клик корректно попадает в admin-handler.
 
 
-@router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))
-async def handle_purchase_request(callback: CallbackQuery, state: FSMContext):
-    """Обработка перевода заявки в статус 'Закуп'"""
-    db_session = None          # ARCH-013: гарантируем close в finally
-    try:
-        # Только менеджер
-        request_number = callback.data.replace("purchase_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-
-        auth = AuthService(db_session)
-        if not await auth.is_user_manager(callback.from_user.id):
-            await callback.answer(get_text("requests.manager_only", language=lang), show_alert=True)
-            return
-        service = RequestService(db_session)
-        result = service.update_status_by_actor(
-            request_number=request_number,
-            new_status="Закуп",
-            actor_telegram_id=callback.from_user.id,
-        )
-        if not result.get("success"):
-            error_msg = result.get("message", get_text("common.error", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            return
-        await callback.message.edit_text(
-            get_text("requests.request_purchase_status", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard(language=lang)
-        )
-    except Exception as e:
-        logger.error(f"Ошибка обработки перевода в 'Закуп': {e}")
-        lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
+# BUG-BOT-034/PR-25: менеджерский «Закуп» (`purchase_<NNN>`) живёт в
+# handlers/admin.py::handle_purchase_request (открывает ввод материалов через
+# RequestStatusStates.waiting_for_materials, статус НЕ меняет до ввода). Прежний
+# bare-`purchase_` handler здесь преждевременно ставил «Закуп» без ввода материалов
+# и затенял админский (requests_router раньше admin_router). Удалён; admin —
+# единственный владелец строгого `^purchase_\d{6}-\d{3,}$`.
+# См. test_bug_duty_assign_routing::test_admin_router_owns_purchase.
 
 
 # BUG-BOT-030: ранее использовался prefix-match `cancel_` с поддерживаемым exclusion list,
@@ -1898,7 +1823,7 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
 # Удалён — см. test_bug_duty_assign_routing::test_admin_router_owns_mgr_deny.
 
 
-@router.callback_query(F.data.startswith("approve_") & ~F.data.startswith("approve_employee_") & ~F.data.startswith("approve_user_"))
+@router.callback_query(F.data.regexp(_APPROVE_REQUEST_NUMBER_RE))
 async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
     """Подтверждение выполненной заявки заявителем.
 

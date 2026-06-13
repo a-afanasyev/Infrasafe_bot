@@ -305,7 +305,8 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru"):
         residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
         pending_count = apartment.pending_requests_count if hasattr(apartment, 'pending_requests_count') else 0
 
-        text = f"🏠 <b>{get_text('apartment.details_title', language=lang).format(number=apartment.apartment_number)}</b>\n\n"
+        # MGR-08: локаль `apartment.details_title` уже содержит 🏠 — не дублируем эмодзи в шаблоне.
+        text = f"<b>{get_text('apartment.details_title', language=lang).format(number=apartment.apartment_number)}</b>\n\n"
 
         if apartment.building:
             text += f"<b>{get_text('apartment.address_label', language=lang)}</b> {apartment.building.address}\n"

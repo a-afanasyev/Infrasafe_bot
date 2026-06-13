@@ -357,6 +357,55 @@ class TestSendToUser:
         bot.send_message.side_effect = Exception("User blocked bot")
         await send_to_user(bot, 12345, "text")  # should not raise
 
+    # BUG-BOT-036: send_to_user reports delivery via bool so callers can
+    # distinguish a real send from a swallowed failure.
+    @pytest.mark.asyncio
+    async def test_returns_true_on_success(self):
+        bot = AsyncMock()
+        assert await send_to_user(bot, 12345, "Hello") is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_bot_exception(self):
+        bot = AsyncMock()
+        bot.send_message.side_effect = Exception("User blocked bot")
+        assert await send_to_user(bot, 12345, "text") is False
+
+
+class TestNotifyUserAsync:
+    """BUG-BOT-036: async delivery variant returning a real delivered bool."""
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_delivered(self):
+        user = MagicMock()
+        user.id, user.telegram_id = 1, 555
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = user
+        bot = AsyncMock()
+        svc = NotificationService(db=db, bot=bot)
+
+        assert await svc.notify_user_async(1, "Hello", "World") is True
+        bot.send_message.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_send_fails(self):
+        user = MagicMock()
+        user.id, user.telegram_id = 1, 555
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = user
+        bot = AsyncMock()
+        bot.send_message.side_effect = Exception("403 bot blocked")
+        svc = NotificationService(db=db, bot=bot)
+
+        assert await svc.notify_user_async(1, "Hello", "World") is False
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_user_missing(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        svc = NotificationService(db=db, bot=AsyncMock())
+
+        assert await svc.notify_user_async(999, "t", "m") is False
+
 
 # ---------------------------------------------------------------------------
 # async_notify_shift_started / async_notify_shift_ended

@@ -272,25 +272,19 @@ def get_specializations_selection_keyboard(selected_specializations: list = None
         selected_specializations = []
     
     buttons = []
-    
-    # Специализации с галочками
-    specializations = [
-        ('plumber', '🔧', get_text('employee_management.keyboards.spec_plumber', language=language)),
-        ('electrician', '⚡', get_text('employee_management.keyboards.spec_electrician', language=language)),
-        ('hvac', '🌡️', get_text('employee_management.keyboards.spec_hvac', language=language)),
-        ('cleaning', '🧹', get_text('employee_management.keyboards.spec_cleaning', language=language)),
-        ('security', '🔒', get_text('employee_management.keyboards.spec_security', language=language)),
-        ('maintenance', '🔧', get_text('employee_management.keyboards.spec_maintenance', language=language)),
-        ('landscaping', '🌳', get_text('employee_management.keyboards.spec_landscaping', language=language)),
-        ('repair', '🔨', get_text('employee_management.keyboards.spec_repair', language=language)),
-        ('installation', '📦', get_text('employee_management.keyboards.spec_installation', language=language))
-    ]
 
-    for spec_key, spec_emoji, spec_name in specializations:
+    # MGR-07: единый источник специализаций — SpecializationService.AVAILABLE_SPECIALIZATIONS
+    # (10 ключей, вкл. 'general') + namespace specializations.{spec}, как в
+    # keyboards/user_management.py. Раньше здесь был отдельный хардкод из 9 (без
+    # 'general') с namespace employee_management.keyboards.spec_* — рассинхрон меток.
+    from uk_management_bot.services.specialization_service import SpecializationService
+
+    for spec_key in SpecializationService.AVAILABLE_SPECIALIZATIONS:
         is_selected = spec_key in selected_specializations
         checkbox = "✅" if is_selected else "⬜"
+        spec_name = get_text(f"specializations.{spec_key}", language=language)
         buttons.append([InlineKeyboardButton(
-            text=f"{checkbox} {spec_emoji} {spec_name}",
+            text=f"{checkbox} {spec_name}",
             callback_data=f"spec_toggle_{spec_key}"
         )])
     

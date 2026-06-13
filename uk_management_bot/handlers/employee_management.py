@@ -38,58 +38,56 @@ def _format_employee_name(employee) -> str:
         return f"ID: {employee.telegram_id}"
 
 
-async def _return_to_employee_info(callback: CallbackQuery, db: Session, employee_id: int, language: str = "ru"):
-    """Вернуться к информации о сотруднике (без проверки прав)"""
-    try:
-        lang = language
-        
-        # Получаем сотрудника
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
-        
-        if not employee:
-            await callback.answer(
-                get_text('errors.user_not_found', language=lang),
-                show_alert=True
-            )
-            return
-        
-        # Формируем информацию о сотруднике
-        employee_info = f"👤 {get_text('employee_management.employee_info', language=lang)}\n\n"
-        
-        # Формируем имя из доступных полей
-        if employee.first_name and employee.last_name:
-            full_name = f"{employee.first_name} {employee.last_name}"
-        elif employee.first_name:
-            full_name = employee.first_name
-        elif employee.username:
-            full_name = f"@{employee.username}"
-        else:
-            full_name = f"ID: {employee.telegram_id}"
-            
-        employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
-        employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {employee.role or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {employee.status or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
-        
-        if employee.specialization:
-            employee_info += f"🛠️ {get_text('employee_management.specialization', language=lang)}: {employee.specialization}\n"
-        
-        employee_info += f"📅 {get_text('employee_management.created_at', language=lang)}: {employee.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-        
-        await callback.message.edit_text(
-            employee_info,
-            reply_markup=get_employee_actions_keyboard(employee_id, employee.status, lang)
-        )
-        
-        await callback.answer()
-        
-    except Exception as e:
-        logger.error(f"Ошибка возврата к информации о сотруднике: {e}")
-        await callback.answer(
-            get_text('errors.unknown_error', language=lang),
-            show_alert=True
-        )
+async def _return_to_employee_info(callback: CallbackQuery, db: Session, employee_id: int, language: str = "ru") -> bool:
+    """MGR-05: render-only карточка сотрудника по employee_id.
+
+    НЕ проверяет права и НЕ вызывает callback.answer() ни на одном пути — это
+    ответственность caller'а (он отвечает ровно один раз). Возвращает True при
+    успешном рендере, False если сотрудник не найден. Может бросить исключение —
+    caller оборачивает.
+
+    Локализует роли/статус/специализацию через employee_display (BUG-BOT-023/
+    MGR-06) и читает employee.roles (не deprecated employee.role).
+    """
+    lang = language
+    from uk_management_bot.utils.employee_display import (
+        format_user_status,
+        format_roles,
+        format_specializations,
+    )
+
+    employee = UserManagementService(db).get_user_by_id(employee_id)
+    if not employee:
+        return False
+
+    employee_info = f"👤 {get_text('employee_management.employee_info', language=lang)}\n\n"
+
+    # Формируем имя из доступных полей
+    if employee.first_name and employee.last_name:
+        full_name = f"{employee.first_name} {employee.last_name}"
+    elif employee.first_name:
+        full_name = employee.first_name
+    elif employee.username:
+        full_name = f"@{employee.username}"
+    else:
+        full_name = f"ID: {employee.telegram_id}"
+
+    not_specified = get_text('employee_mgmt.handlers.not_specified', language=lang)
+    employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
+    employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or not_specified}\n"
+    employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {format_roles(employee.roles, lang)}\n"
+    employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {format_user_status(employee.status, lang)}\n"
+
+    if employee.specialization:
+        employee_info += f"🛠️ {get_text('employee_management.specialization', language=lang)}: {format_specializations(employee.specialization, lang)}\n"
+
+    employee_info += f"📅 {get_text('employee_management.created_at', language=lang)}: {employee.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+
+    await callback.message.edit_text(
+        employee_info,
+        reply_markup=get_employee_actions_keyboard(employee_id, employee.status, lang)
+    )
+    return True
 from uk_management_bot.keyboards.employee_management import (
     get_employee_management_main_keyboard,
     get_employee_list_keyboard,
@@ -97,7 +95,8 @@ from uk_management_bot.keyboards.employee_management import (
     get_roles_management_keyboard,
     get_specializations_selection_keyboard,
     get_cancel_keyboard,
-    get_confirmation_keyboard
+    get_confirmation_keyboard,
+    get_employee_edit_keyboard,
 )
 from uk_management_bot.states.employee_management import EmployeeManagementStates
 from uk_management_bot.utils.helpers import get_text
@@ -503,9 +502,14 @@ async def block_employee(callback: CallbackQuery, db: Session, roles: list = Non
                 get_text('employee_management.employee_blocked', language=lang),
                 show_alert=True
             )
-            
-            # Возвращаемся к списку
-            await show_employee_list(callback, db, roles, active_role, user)
+
+            # MGR-05: ре-рендер карточки на месте (актуальный статус «Заблокирован»
+            # + кнопка «Разблокировать») вместо ухода в список. callback уже отвечен
+            # выше — ошибка рендера только логируется, без повторного answer.
+            try:
+                await _return_to_employee_info(callback, db, employee_id, lang)
+            except Exception as render_err:
+                logger.error(f"Ошибка ре-рендера карточки после блокировки {employee_id}: {render_err}")
         else:
             await callback.answer(
                 get_text('errors.unknown_error', language=lang),
@@ -573,6 +577,44 @@ async def unblock_employee(callback: CallbackQuery, db: Session, roles: list = N
 
 
 # ═══ РЕДАКТИРОВАНИЕ СОТРУДНИКОВ ═══
+
+@router.callback_query(F.data.regexp(r"^edit_employee_\d+$"))
+async def edit_employee_entry(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+    """MGR-03: вход в редактирование сотрудника (кнопка `edit_employee_<id>`).
+
+    Раньше кнопка была no-op — листовые `edit_employee_name_`/`edit_employee_phone_`
+    есть, а входного хендлера не было. Строгий regex `^edit_employee_\\d+$` не
+    перехватывает листовые (после id у них идёт `_name_`/`_phone_`).
+    """
+    lang = language
+
+    # Проверяем права доступа (как в листовых хендлерах)
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
+
+    try:
+        employee_id = int(callback.data.split('_')[2])
+
+        user_mgmt_service = UserManagementService(db)
+        employee = user_mgmt_service.get_user_by_id(employee_id)
+        if not employee:
+            await callback.answer(get_text('errors.user_not_found', language=lang), show_alert=True)
+            return
+
+        await callback.message.edit_text(
+            get_text("employee_mgmt.handlers.edit_menu", language=lang).format(
+                employee_name=_format_employee_name(employee)
+            ),
+            reply_markup=get_employee_edit_keyboard(employee_id, lang),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Ошибка открытия меню редактирования сотрудника: {e}")
+        await callback.answer(get_text('errors.unknown_error', language=lang), show_alert=True)
+
 
 @router.callback_query(F.data.startswith("edit_employee_name_"))
 async def edit_employee_name(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
@@ -813,7 +855,12 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: S
         user_name = _format_employee_name(employee)
         message_text = f"🎯 {get_text('employee_management.change_role', language=lang)}: {user_name}\n\n"
         no_roles_text = get_text("employee_mgmt.handlers.no_roles", language=lang)
-        message_text += get_text("employee_mgmt.handlers.current_roles", language=lang).format(roles=', '.join(user_roles) if user_roles else no_roles_text)
+        # MGR-06: локализуем роли через канон-helper (roles.* namespace) вместо
+        # сырых DB-значений ('executor' → 'Исполнитель').
+        from uk_management_bot.utils.employee_display import format_roles
+        message_text += get_text("employee_mgmt.handlers.current_roles", language=lang).format(
+            roles=format_roles(user_roles, lang) if user_roles else no_roles_text
+        )
         
         # Показываем меню выбора ролей
         from uk_management_bot.keyboards.employee_management import get_roles_management_keyboard
@@ -1232,10 +1279,15 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: S
         target_employee_id = data.get('target_employee_id')
         
         await state.clear()
-        
-        # Возвращаемся к информации о сотруднике
-        await _return_to_employee_info(callback, db, target_employee_id)
-        
+
+        # Возвращаемся к информации о сотруднике (render-only helper не отвечает
+        # на callback — отвечаем здесь ровно один раз).
+        rendered = await _return_to_employee_info(callback, db, target_employee_id, language)
+        if rendered:
+            await callback.answer()
+        else:
+            await callback.answer(get_text('errors.user_not_found', language=language), show_alert=True)
+
     except Exception as e:
         logger.error(f"Ошибка отмены редактирования ролей: {e}")
         lang = language
@@ -1412,10 +1464,15 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
         target_employee_id = data.get('target_employee_id')
         
         await state.clear()
-        
-        # Возвращаемся к информации о сотруднике
-        await _return_to_employee_info(callback, db, target_employee_id)
-        
+
+        # Возвращаемся к информации о сотруднике (render-only helper не отвечает
+        # на callback — отвечаем здесь ровно один раз).
+        rendered = await _return_to_employee_info(callback, db, target_employee_id, language)
+        if rendered:
+            await callback.answer()
+        else:
+            await callback.answer(get_text('errors.user_not_found', language=language), show_alert=True)
+
     except Exception as e:
         logger.error(f"Ошибка отмены редактирования специализаций: {e}")
         lang = language

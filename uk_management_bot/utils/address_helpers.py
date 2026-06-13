@@ -40,16 +40,18 @@ def localize_address(address: str, language: str) -> str:
     if not address:
         return address
 
+    if language == "ru":
+        # RU: адрес уже в русском формате — отдаём как есть.
+        # BUG-BOT-039: i18n-lookup'ы apt_short/bld_short нужны только UZ-ветке,
+        # поэтому делаем их ПОСЛЕ этого short-circuit (раньше — безусловно,
+        # dead work на каждом RU-рендере).
+        return address
+
     # Импорт внутри функции, чтобы избежать циклов
     from uk_management_bot.utils.helpers import get_text
 
     apt_short = get_text("address.apartment_short", language=language)
     bld_short = get_text("address.building_short", language=language)
-
-    if language == "ru":
-        # RU: нормализуем формат сокращений, если ключи определены явно
-        # (на случай если в БД хранится альтернативный регистр/пробелы).
-        return address
 
     # Префиксы — только в начале строки
     if address.startswith("Дом: "):

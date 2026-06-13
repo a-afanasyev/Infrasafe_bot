@@ -6893,6 +6893,10 @@
     "main_title": "👥 Foydalanuvchilarni boshqarish paneli",
     "new_users": "Yangi foydalanuvchilar",
     "no_users_found": "Foydalanuvchilar topilmadi",
+    "search_instructions": "🔍 Qidiruv so'rovini kiriting (aholi ismi, familiyasi yoki telefoni):",
+    "search_empty_query": "🔍 Qidiruv so'rovini kiriting, masalan ism yoki telefon.",
+    "search_not_found": "❌ Aholilar topilmadi. Boshqa so'rovni sinab ko'ring.",
+    "search_results_header": "🔍 Topilgan aholilar:",
     "pending_users": "📝 Yangi aholilar",
     "search": "Qidirish",
     "specializations": "Mutaxassisliklar",
@@ -7139,46 +7143,6 @@
   "user_by_telegram_id": {},
   "added_statuses": {},
   "removed_status": {},
-  "status_transitions": {
-    "Yangi": [
-      "Ishda",
-      "Xarid",
-      "Aniqlashtirish",
-      "Bekor qilindi"
-    ],
-    "Ishda": [
-      "Aniqlashtirish",
-      "Xarid",
-      "Bajarildi",
-      "Bekor qilindi"
-    ],
-    "Aniqlashtirish": [
-      "Ishda",
-      "Xarid",
-      "Bajarildi",
-      "Bekor qilindi"
-    ],
-    "Xarid": [
-      "Ishda",
-      "Aniqlashtirish",
-      "Bajarildi",
-      "Bekor qilindi"
-    ],
-    "Bajarildi": [
-      "Qabul qilindi",
-      "Ishda",
-      "Bekor qilindi"
-    ],
-    "Qabul qilindi": [],
-    "Bekor qilindi": [],
-    "new_to_in_progress": "Yangi → Ishda",
-    "in_progress_to_executed": "Ishda → Bajarildi",
-    "executed_to_approved": "Bajarildi → Qabul qilindi",
-    "executed_to_completed": "Bajarildi → Ijro etildi",
-    "completed_to_executed": "Ijro etildi → Bajarildi",
-    "in_progress_to_clarification": "Ishda → Aniqlashtirish",
-    "purchase_to_in_progress": "Xarid → Ishda"
-  },
   "statuses": {
     "new": "Yangi",
     "in_progress": "Ishda",
@@ -7819,6 +7783,7 @@
   },
   "employee_mgmt": {
     "handlers": {
+      "edit_menu": "📝 <b>Xodimni tahrirlash</b>\n\n{employee_name}\n\nO'zgartirish uchun maydonni tanlang:",
       "enter_new_name": "📝 {employee_name} uchun yangi FIO kiriting:\n\nJoriy FIO: {current_name}",
       "enter_new_phone": "📱 {employee_name} uchun yangi telefon raqamini kiriting:\n\nJoriy telefon: {current_phone}",
       "not_specified": "Ko'rsatilmagan",

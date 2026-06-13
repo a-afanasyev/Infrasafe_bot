@@ -103,11 +103,16 @@ async def send_to_channel(bot, text: str) -> None:
         logger.warning(f"Не удалось отправить сообщение в канал: {e}")
 
 
-async def send_to_user(bot, user_telegram_id: int, text: str) -> None:
+async def send_to_user(bot, user_telegram_id: int, text: str) -> bool:
+    """Отправить сообщение пользователю. Возвращает True при успешной доставке,
+    False при ошибке (Telegram 403/400, network) — BUG-BOT-036: caller'ы должны
+    различать фактическую доставку и проглоченный сбой."""
     try:
         await bot.send_message(user_telegram_id, text)
+        return True
     except Exception as e:
         logger.warning(f"Не удалось отправить сообщение пользователю {user_telegram_id}: {e}")
+        return False
 
 
 async def async_notify_shift_started(bot, db: Session, user: User, shift: Shift) -> None:
@@ -499,6 +504,25 @@ class NotificationService:
                 asyncio.run(send_to_user(bot, user.telegram_id, text))
         except Exception as e:
             logger.warning(f"notify_user: ошибка отправки user_id={user_id}: {e}")
+
+    async def notify_user_async(self, user_id: int, title: str, message: str) -> bool:
+        """BUG-BOT-036: async-вариант notify_user с реальным признаком доставки.
+
+        Ожидает завершения отправки и возвращает True только если сообщение
+        фактически доставлено (False — пользователь не найден или send_to_user
+        вернул False). Используется планировщиком, которому нужны delivered-метрики;
+        sync `notify_user` остаётся для fire-and-forget вызовов.
+        """
+        from uk_management_bot.database.models.user import User
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.warning(f"notify_user_async: пользователь user_id={user_id} не найден")
+            return False
+
+        text = f"{title}\n{message}" if title else message
+        bot = self._get_bot()
+        return await send_to_user(bot, user.telegram_id, text)
 
     async def send_system_notification(self, title: str, message: str) -> None:
         """

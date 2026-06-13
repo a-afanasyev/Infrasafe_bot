@@ -7,7 +7,7 @@ the transaction and returns the expected counter dict.
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -131,6 +131,100 @@ class TestProcessExpiredTransfers:
 
         assert result["errors"] >= 1
         assert db.rollback.called
+
+    # ------------------------------------------------------------------
+    # BUG-BOT-036: scheduled vs delivered counters; delivery strictly after
+    # commit, per-job isolated, processed_count tied to commit success.
+    # ------------------------------------------------------------------
+
+    async def test_delivered_less_than_scheduled_on_send_failure(self):
+        """notify_user_async returning False (real send failure) ⇒ delivered < scheduled."""
+        from uk_management_bot.services.shift_transfer_service import ShiftTransferService
+
+        now = datetime.utcnow()
+        rows = [
+            _make_transfer(30, "pending", now - timedelta(hours=48), from_executor_id=1),
+            _make_transfer(31, "pending", now - timedelta(hours=48), from_executor_id=2),
+        ]
+        db = _make_db_with_rows(rows)
+
+        with patch(
+            "uk_management_bot.services.shift_transfer_service.NotificationService"
+        ) as mock_notify_cls:
+            mock_notify_cls.return_value.notify_user_async = AsyncMock(return_value=False)
+            service = ShiftTransferService(db)
+            result = await service.process_expired_transfers(hours_threshold=24)
+
+        assert result["scheduled_count"] == 2
+        assert result["delivered_count"] == 0
+        assert result["notified_count"] == result["delivered_count"]
+        assert result["delivered_count"] < result["scheduled_count"]
+        assert result["processed_count"] == 2
+
+    async def test_delivered_equals_scheduled_on_success(self):
+        from uk_management_bot.services.shift_transfer_service import ShiftTransferService
+
+        now = datetime.utcnow()
+        rows = [_make_transfer(40, "pending", now - timedelta(hours=48))]
+        db = _make_db_with_rows(rows)
+
+        with patch(
+            "uk_management_bot.services.shift_transfer_service.NotificationService"
+        ) as mock_notify_cls:
+            mock_notify_cls.return_value.notify_user_async = AsyncMock(return_value=True)
+            service = ShiftTransferService(db)
+            result = await service.process_expired_transfers(hours_threshold=24)
+
+        assert result["scheduled_count"] == 1
+        assert result["delivered_count"] == 1
+        assert result["notified_count"] == 1
+
+    async def test_commit_failure_sends_nothing_and_zeroes_counts(self):
+        """commit raising ⇒ rollback, no delivery attempted, all counts zero."""
+        from uk_management_bot.services.shift_transfer_service import ShiftTransferService
+
+        now = datetime.utcnow()
+        rows = [_make_transfer(50, "pending", now - timedelta(hours=48))]
+        db = _make_db_with_rows(rows)
+        db.commit.side_effect = RuntimeError("commit failed")
+
+        with patch(
+            "uk_management_bot.services.shift_transfer_service.NotificationService"
+        ) as mock_notify_cls:
+            send = AsyncMock(return_value=True)
+            mock_notify_cls.return_value.notify_user_async = send
+            service = ShiftTransferService(db)
+            result = await service.process_expired_transfers(hours_threshold=24)
+
+        send.assert_not_awaited()  # delivery never runs without a committed change
+        assert result["processed_count"] == 0
+        assert result["scheduled_count"] == 0
+        assert result["delivered_count"] == 0
+        assert db.rollback.called
+
+    async def test_per_job_isolation_first_raises_second_delivers(self):
+        """A delivery raising must not abort the rest; processed_count preserved."""
+        from uk_management_bot.services.shift_transfer_service import ShiftTransferService
+
+        now = datetime.utcnow()
+        rows = [
+            _make_transfer(60, "pending", now - timedelta(hours=48), from_executor_id=1),
+            _make_transfer(61, "pending", now - timedelta(hours=48), from_executor_id=2),
+        ]
+        db = _make_db_with_rows(rows)
+
+        with patch(
+            "uk_management_bot.services.shift_transfer_service.NotificationService"
+        ) as mock_notify_cls:
+            mock_notify_cls.return_value.notify_user_async = AsyncMock(
+                side_effect=[RuntimeError("boom"), True]
+            )
+            service = ShiftTransferService(db)
+            result = await service.process_expired_transfers(hours_threshold=24)
+
+        assert result["processed_count"] == 2
+        assert result["scheduled_count"] == 2
+        assert result["delivered_count"] == 1
 
     async def test_signature_matches_scheduler_contract(self):
         """Scheduler calls service.process_expired_transfers(hours_threshold=24).

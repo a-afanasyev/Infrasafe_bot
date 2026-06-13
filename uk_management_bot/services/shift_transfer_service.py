@@ -570,14 +570,32 @@ class ShiftTransferService:
 
         Returns:
             Dict с ключами:
-              - processed_count: количество помеченных как expired записей
-              - notified_count: количество отправленных уведомлений инициаторам
+              - processed_count: количество помеченных как expired записей (по факту commit)
+              - scheduled_count: количество сформированных уведомлений (после commit)
+              - delivered_count: количество фактически доставленных уведомлений
+              - notified_count: алиас delivered_count (фактически доставлено)
               - errors: количество ошибок при обработке отдельных записей
+
+        BUG-BOT-036: отправка уведомлений выполняется строго ПОСЛЕ успешного
+        commit (чтобы не уведомлять об истечении передачи, которая не сохранилась),
+        с per-job изоляцией; delivered отражает реальную доставку, не scheduling.
         """
         processed_count = 0
-        notified_count = 0
+        scheduled_count = 0
+        delivered_count = 0
         errors = 0
+        jobs: list[tuple[int, str, str]] = []
 
+        def _result() -> Dict[str, Any]:
+            return {
+                "processed_count": processed_count,
+                "scheduled_count": scheduled_count,
+                "delivered_count": delivered_count,
+                "notified_count": delivered_count,
+                "errors": errors,
+            }
+
+        # --- Фаза 1+2: мутация записей + commit (под rollback-guard) ---
         try:
             cutoff = datetime.utcnow() - timedelta(hours=hours_threshold)
 
@@ -588,11 +606,7 @@ class ShiftTransferService:
 
             if not expired_rows:
                 logger.info("Истёкших передач не обнаружено")
-                return {
-                    "processed_count": 0,
-                    "notified_count": 0,
-                    "errors": 0,
-                }
+                return _result()
 
             now = datetime.utcnow()
             for transfer in expired_rows:
@@ -605,24 +619,12 @@ class ShiftTransferService:
                         + f"\n[{now.strftime('%Y-%m-%d %H:%M')}] Истекло автоматически (>{hours_threshold}ч без ответа)"
                     ).strip()
                     processed_count += 1
-
-                    # Лучшее усилие: уведомить инициатора. Ошибка не должна
-                    # ломать обработку остальных записей.
-                    try:
-                        self.notification_service.notify_user(
-                            transfer.from_executor_id,
-                            "Передача смены истекла",
-                            f"Передача смены #{transfer.id} помечена как истёкшая после "
-                            f"{hours_threshold} ч без ответа.",
-                        )
-                        notified_count += 1
-                    except Exception as notify_err:  # pragma: no cover - defensive
-                        logger.warning(
-                            "Ошибка уведомления инициатора %s по передаче %s: %s",
-                            transfer.from_executor_id,
-                            transfer.id,
-                            notify_err,
-                        )
+                    jobs.append((
+                        transfer.from_executor_id,
+                        "Передача смены истекла",
+                        f"Передача смены #{transfer.id} помечена как истёкшая после "
+                        f"{hours_threshold} ч без ответа.",
+                    ))
                 except Exception as row_err:
                     logger.error(
                         "Ошибка обработки истёкшей передачи %s: %s",
@@ -632,27 +634,36 @@ class ShiftTransferService:
                     errors += 1
 
             self.db.commit()
-            logger.info(
-                "Обработано истёкших передач: %s (уведомлений: %s, ошибок: %s)",
-                processed_count,
-                notified_count,
-                errors,
-            )
-
-            return {
-                "processed_count": processed_count,
-                "notified_count": notified_count,
-                "errors": errors,
-            }
-
         except Exception as e:
             logger.error(f"Ошибка обработки истёкших передач: {e}")
             self.db.rollback()
-            return {
-                "processed_count": processed_count,
-                "notified_count": notified_count,
-                "errors": errors + 1,
-            }
+            # Откат => ничего не обработано и не отправлено.
+            processed_count = 0
+            scheduled_count = 0
+            delivered_count = 0
+            errors += 1
+            return _result()
+
+        # --- Фаза 3: доставка ПОСЛЕ успешного commit, вне rollback-guard,
+        # с изоляцией каждого job (ошибка доставки не трогает processed_count). ---
+        scheduled_count = len(jobs)
+        for user_id, title, message in jobs:
+            try:
+                if await self.notification_service.notify_user_async(user_id, title, message):
+                    delivered_count += 1
+            except Exception as notify_err:
+                logger.warning(
+                    "Ошибка уведомления инициатора %s: %s", user_id, notify_err
+                )
+
+        logger.info(
+            "Обработано истёкших передач: %s (scheduled: %s, delivered: %s, ошибок: %s)",
+            processed_count,
+            scheduled_count,
+            delivered_count,
+            errors,
+        )
+        return _result()
 
     # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
     
