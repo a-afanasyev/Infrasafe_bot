@@ -11,6 +11,20 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   build: {
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // FE-042: split heavy vendors out of the entry chunk (was ~720 kB).
+        // AnalyticsPage is already React.lazy'd; this carves shared libs into
+        // cacheable vendor chunks so the main bundle drops < 400 kB.
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'query-vendor': ['@tanstack/react-query'],
+          'dnd-vendor': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          'i18n-vendor': ['i18next', 'react-i18next'],
+          'ui-vendor': ['lucide-react', 'sonner'],
+        },
+      },
+    },
   },
   ...(mode === 'production' && {
     esbuild: {
