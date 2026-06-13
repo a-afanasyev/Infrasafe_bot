@@ -8,6 +8,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import LanguageSwitcher from '@/components/shared/LanguageSwitcher'
+import ChangePasswordModal from '@/components/shared/ChangePasswordModal'
 import {
   LayoutGrid,
   ListChecks,
@@ -25,6 +26,7 @@ import {
   PanelLeftOpen,
   User,
   LogOut,
+  KeyRound,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react'
@@ -127,6 +129,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [pwdOpen, setPwdOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
 
@@ -208,6 +211,17 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
             <User size={14} />
             {t('common.profile')}
           </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              setPwdOpen(true)
+            }}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-primary font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
+          >
+            <KeyRound size={14} />
+            {t('changePassword.menuItem')}
+          </button>
           <div className="mx-3 h-px bg-border-default" />
           <button
             role="menuitem"
@@ -223,6 +237,8 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
           </button>
         </div>
       )}
+
+      <ChangePasswordModal open={pwdOpen} onClose={() => setPwdOpen(false)} />
     </div>
   )
 }

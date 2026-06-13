@@ -30,6 +30,19 @@
     "tryAgain": "Qayta urinish",
     "goHome": "Bosh sahifaga"
   },
+  "changePassword": {
+    "menuItem": "Parolni o'zgartirish",
+    "title": "Parolni o'zgartirish",
+    "description": "Yangi parolni kiriting. Kamida 8 ta belgi.",
+    "newPassword": "Yangi parol",
+    "confirmPassword": "Parolni tasdiqlash",
+    "submit": "Parolni yangilash",
+    "submitting": "Yangilanmoqda...",
+    "success": "Parol yangilandi",
+    "mismatch": "Parollar mos kelmaydi",
+    "tooShort": "Parol juda qisqa (kamida 8 ta belgi)",
+    "genericError": "Parolni o'zgartirib bo'lmadi"
+  },
   "nav": {
     "analytics": "Analitika",
     "requests": "Arizalar",
