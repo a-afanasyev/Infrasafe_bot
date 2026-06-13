@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { publicClient } from '../api/client'
@@ -7,6 +7,7 @@ import { isValidTelegramAuth } from '../utils/telegramAuth'
 import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
+import { safeNextPath } from '../utils/safeNextPath'
 
 const BOT_USERNAME = 'infrasafebot'
 
@@ -23,6 +24,9 @@ export default function LoginPage() {
   const [canResend, setCanResend] = useState(false)
   const { login } = useAuthStore()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // Deep-link return-to set by ProtectedRoute (e.g. /login?next=%2Fdashboard%3Frequest%3D...).
+  const next = safeNextPath(searchParams.get('next'))
 
   useEffect(() => {
     ;(window as any).onTelegramAuth = async (tgUser: unknown) => {
@@ -37,7 +41,7 @@ export default function LoginPage() {
         // FE-047: publicClient — без 401-interceptor (refresh→redirect стирал ошибку)
         await publicClient.post('/api/v2/auth/telegram-widget', tgUser)
         await login()
-        navigate('/dashboard')
+        navigate(next)
       } catch {
         setError(t('login.telegramError'))
         toast.error(t('login.loginError'), { description: t('login.telegramError') })
@@ -77,7 +81,7 @@ export default function LoginPage() {
     return () => {
       delete (window as any).onTelegramAuth
     }
-  }, [login, navigate, t])
+  }, [login, navigate, t, next])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,7 +98,7 @@ export default function LoginPage() {
         setTimeout(() => setCanResend(true), 60000)
       } else {
         await login()
-        navigate('/dashboard')
+        navigate(next)
       }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
