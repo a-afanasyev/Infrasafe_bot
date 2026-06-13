@@ -162,7 +162,7 @@ function YardsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title={t('addressModals.confirmDeleteYard', { name: confirmDelete.name })}
+        title={t('addressModals.deleteYardTitle')}
         description={t('addressModals.confirmDeleteYard', { name: confirmDelete.name })}
         confirmLabel={t('common.delete')}
         onConfirm={() => {
@@ -274,7 +274,7 @@ function BuildingsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title={t('addressModals.confirmDeleteBuilding', { name: confirmDelete.address })}
+        title={t('addressModals.deleteBuildingTitle')}
         description={t('addressModals.confirmDeleteBuilding', { name: confirmDelete.address })}
         confirmLabel={t('common.delete')}
         onConfirm={() => {
@@ -386,7 +386,7 @@ function ApartmentsTable({
       <ConfirmDialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete(prev => ({ ...prev, open }))}
-        title={t('addressModals.confirmDeleteApartment', { name: confirmDelete.number })}
+        title={t('addressModals.deleteApartmentTitle')}
         description={t('addressModals.confirmDeleteApartment', { name: confirmDelete.number })}
         confirmLabel={t('common.delete')}
         onConfirm={() => {

@@ -288,6 +288,7 @@
   },
   "kanban": {
     "createByCall": "Qo'ng'iroq orqali yaratish",
+    "emptyColumn": "Arizalar yo'q",
     "confirmed": "Tasdiqlangan",
     "onShift": "Smenada",
     "transitionTo": "\"{{status}}\" ga o'tkazish",
@@ -521,6 +522,9 @@
     "bulkPlaceholder": "Raqamlar vergul bilan: 1, 2, 3...",
     "confirmDeleteYard": "\"{{name}}\" hovlini o'chirish?",
     "confirmDeleteBuilding": "\"{{name}}\" binoni o'chirish?",
+    "deleteYardTitle": "Hovlini o'chirish?",
+    "deleteBuildingTitle": "Binoni o'chirish?",
+    "deleteApartmentTitle": "Kvartirani o'chirish?",
     "confirmPurgeBuilding": "\"{{name}}\" binoni BUTUNLAY o'chirish? Uning barcha kvartiralari ham o'chiriladi. Bekor qilib bo'lmaydi.",
     "confirmPurgeYard": "\"{{name}}\" hovlini BUTUNLAY o'chirish? Uning barcha binolari va kvartiralari ham o'chiriladi. Bekor qilib bo'lmaydi.",
     "confirmPurgeApartment": "\"{{name}}\" kvartirani BUTUNLAY o'chirish? Bekor qilib bo'lmaydi.",

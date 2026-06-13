@@ -9,6 +9,7 @@ import { lazy, Suspense } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
 import PageErrorBoundary from './components/shared/PageErrorBoundary'
+import OfflineIndicator from './components/shared/OfflineIndicator'
 import { Toaster } from './components/ui/sonner'
 
 const TWAApp = lazy(() => import('./twa/App'))
@@ -59,6 +60,8 @@ function RootRedirect() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      {/* FE-046: global offline banner (shared with TWA) */}
+      <OfflineIndicator />
       <Toaster position="bottom-right" richColors />
       <GlobalErrorBoundary>
         <BrowserRouter basename={import.meta.env.BASE_URL}>

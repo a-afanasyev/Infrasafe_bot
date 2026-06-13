@@ -170,6 +170,13 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
             status={column.status}
             visible={placeholderIndex === column.requests.length}
           />
+          {/* FE-045: empty-state hint when the column has no cards and nothing
+              is being dragged (suppressed mid-drag so the drop zone reads clean). */}
+          {column.requests.length === 0 && !activeDragStatus && (
+            <div className="flex items-center justify-center py-6 text-[11px] text-text-muted select-none">
+              {t('kanban.emptyColumn')}
+            </div>
+          )}
         </SortableContext>
       </div>
     </div>
