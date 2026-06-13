@@ -78,6 +78,20 @@ async def lifespan(app: FastAPI):
                 _logger.exception("Reconciliation (requests) error")
             await asyncio.sleep(3600)  # 1 hour
 
+    async def _outbox_retention_loop():
+        # OPS-105: purge old 'sent' outbox records daily. Sleep first so we
+        # don't run a DELETE during startup churn.
+        from uk_management_bot.services.outbox_retention import purge_old_sent_outbox
+
+        await asyncio.sleep(600)  # 10 min warmup
+        while True:
+            try:
+                result = await purge_old_sent_outbox()
+                _logger.info("Outbox retention cycle: %s", result)
+            except Exception:
+                _logger.exception("Outbox retention error")
+            await asyncio.sleep(86400)  # 24 hours
+
     # SEC-062: surface rate-limiter backend degradation loudly at startup.
     # Fail-open is deliberate, but silent fallback to per-worker in-memory
     # counters must be alertable — log ERROR if Redis is the configured backend
@@ -97,14 +111,17 @@ async def lifespan(app: FastAPI):
 
     task = None
     reconcile_task = None
+    retention_task = None
     if settings.INFRASAFE_WEBHOOK_ENABLED:
         task = asyncio.create_task(_outbox_loop())
         _logger.info("Webhook outbox processor started (10s interval)")
         reconcile_task = asyncio.create_task(_reconciliation_loop())
         _logger.info("Reconciliation loop started (1h interval, advisory-lock guarded)")
+        retention_task = asyncio.create_task(_outbox_retention_loop())
+        _logger.info("Outbox retention loop started (24h interval, 30-day window)")
     yield
     # shutdown
-    for bg_task in (task, reconcile_task):
+    for bg_task in (task, reconcile_task, retention_task):
         if bg_task:
             bg_task.cancel()
             try:
@@ -242,13 +259,9 @@ async def ratelimit_health():
     return await rate_limit_backend_status()
 
 
-@app.get("/api/health/outbox", dependencies=[Depends(require_health_token)])
-async def outbox_health():
-    """Outbox lag metrics for monitoring / alerting.
-
-    Returns 200 always (so HTTP probes don't flap); the consumer (Prometheus
-    scrape, alert rule) decides thresholds.
-    """
+async def _compute_outbox_metrics() -> dict:
+    """Shared outbox lag metrics for `/api/health/outbox` (JSON) and `/metrics`
+    (Prometheus). Never raises — returns an `error` key on failure."""
     from sqlalchemy import select, func
     from datetime import datetime, timedelta, timezone
     from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
@@ -302,8 +315,55 @@ async def outbox_health():
             "stuck_in_flight": stuck_in_flight,
         }
     except Exception:
-        _logger.exception("outbox_health failed")
+        _logger.exception("outbox metrics computation failed")
         return {"enabled": True, "error": "internal_error"}
+
+
+@app.get("/api/health/outbox", dependencies=[Depends(require_health_token)])
+async def outbox_health():
+    """Outbox lag metrics for monitoring / alerting.
+
+    Returns 200 always (so HTTP probes don't flap); the consumer (Prometheus
+    scrape, alert rule) decides thresholds.
+    """
+    return await _compute_outbox_metrics()
+
+
+@app.get("/metrics", dependencies=[Depends(require_health_token)])
+async def prometheus_metrics():
+    """OPS-105: Prometheus exposition of outbox lag gauges.
+
+    Token-gated like the other health endpoints (SEC-064) — Prometheus scrapes
+    with a bearer token. Gauges are recomputed per scrape from the same source
+    as `/api/health/outbox`. When webhooks are disabled or DB is unavailable
+    the gauges are simply absent (consumer treats missing as 0/unknown).
+    """
+    from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, generate_latest
+
+    metrics = await _compute_outbox_metrics()
+    registry = CollectorRegistry()
+
+    if metrics.get("enabled") and "error" not in metrics:
+        Gauge("uk_outbox_pending", "Pending webhook_outbox records", registry=registry).set(
+            metrics["pending"]
+        )
+        Gauge(
+            "uk_outbox_oldest_pending_age_seconds",
+            "Age of the oldest pending outbox record (seconds)",
+            registry=registry,
+        ).set(metrics["oldest_pending_age_sec"])
+        Gauge(
+            "uk_outbox_failed_last_24h",
+            "Outbox records that ended in 'failed' in the last 24h",
+            registry=registry,
+        ).set(metrics["failed_last_24h"])
+        Gauge(
+            "uk_outbox_stuck_in_flight",
+            "in_flight outbox records older than the claim lease (worker crash-loop signal)",
+            registry=registry,
+        ).set(metrics["stuck_in_flight"])
+
+    return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 
 # ── Stub: Announcements (TWA A1) ─────────────────────────

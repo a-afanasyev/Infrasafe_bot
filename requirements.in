@@ -38,6 +38,9 @@ slowapi>=0.1.9
 # Email validation for pydantic EmailStr (SEC-05)
 email-validator>=2.0.0
 
+# Prometheus /metrics exposition (OPS-105: outbox observability)
+prometheus-client>=0.20.0
+
 # Error Tracking
 sentry-sdk[fastapi]>=2.0.0
 
