@@ -20,6 +20,7 @@ from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment, UserApartmentStatus
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.addresses import core
 
 router = APIRouter()
@@ -188,7 +189,11 @@ async def purge_yard(
         apartment_id is FK without ON DELETE CASCADE; cascade-delete would
         violate the constraint. Refuse loudly instead of crashing.
     """
-    yard = (await db.execute(select(Yard).where(Yard.id == yard_id))).scalar_one_or_none()
+    # NICE-076: lock the parent row for the txn so a concurrent child-insert /
+    # purge can't race between the COUNT-guards below and the DELETE.
+    yard = (await db.execute(
+        select(Yard).where(Yard.id == yard_id).with_for_update()
+    )).scalar_one_or_none()
     if not yard:
         raise HTTPException(status_code=404, detail="Yard not found")
     if yard.is_active:
@@ -234,6 +239,12 @@ async def purge_yard(
             detail=f"Cannot purge yard: {linked_requests} request(s) reference it",
         )
 
+    # NICE-081: audit the hard-delete before it happens (irreversible op).
+    db.add(AuditLog(
+        user_id=user.id,
+        action="address.purge.yard",
+        details={"yard_id": yard_id, "name": yard.name},
+    ))
     await db.delete(yard)
     await db.commit()
     return {"ok": True, "detail": "Yard purged"}
@@ -398,7 +409,10 @@ async def purge_building(
     Building.apartments. InfraSafe was already notified by the prior soft-
     delete, so no webhook fires here.
     """
-    result = await db.execute(select(Building).where(Building.id == building_id))
+    # NICE-076: lock the parent row for the txn (race-free guards → delete).
+    result = await db.execute(
+        select(Building).where(Building.id == building_id).with_for_update()
+    )
     building = result.scalar_one_or_none()
     if not building:
         raise HTTPException(status_code=404, detail="Building not found")
@@ -428,6 +442,12 @@ async def purge_building(
             detail=f"Cannot purge building: {linked_requests} request(s) reference it",
         )
 
+    # NICE-081: audit the irreversible hard-delete before it happens.
+    db.add(AuditLog(
+        user_id=user.id,
+        action="address.purge.building",
+        details={"building_id": building_id, "address": building.address},
+    ))
     await db.delete(building)
     await db.commit()
     return {"ok": True, "detail": "Building purged"}
@@ -596,8 +616,9 @@ async def purge_apartment(
       - user_apartments rows are removed via the relationship's
         `cascade='all, delete-orphan'` (pending/rejected get cleaned up too).
     """
+    # NICE-076: lock the parent row for the txn (race-free guards → delete).
     apartment = (await db.execute(
-        select(Apartment).where(Apartment.id == apartment_id)
+        select(Apartment).where(Apartment.id == apartment_id).with_for_update()
     )).scalar_one_or_none()
     if not apartment:
         raise HTTPException(status_code=404, detail="Apartment not found")
@@ -628,6 +649,12 @@ async def purge_apartment(
             detail=f"Cannot purge apartment: {linked_requests} request(s) reference it",
         )
 
+    # NICE-081: audit the irreversible hard-delete before it happens.
+    db.add(AuditLog(
+        user_id=user.id,
+        action="address.purge.apartment",
+        details={"apartment_id": apartment_id, "number": apartment.apartment_number},
+    ))
     await db.delete(apartment)
     await db.commit()
     return {"ok": True, "detail": "Apartment purged"}

@@ -83,14 +83,14 @@ class AddressService:
             return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
-    async def get_yard_by_id(session: Session, yard_id: int) -> Optional[Yard]:
+    def get_yard_by_id(session: Session, yard_id: int) -> Optional[Yard]:
         """Получение двора по ID"""
         return session.execute(
             select(Yard).where(Yard.id == yard_id)
         ).scalar_one_or_none()
 
     @staticmethod
-    async def get_all_yards(
+    def get_all_yards(
         session: Session,
         only_active: bool = True,
         include_stats: bool = False
@@ -122,16 +122,24 @@ class AddressService:
         yard_id: int,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        gps_latitude: Optional[float] = None,
-        gps_longitude: Optional[float] = None,
+        gps_latitude: Union[float, None, _Unset] = _UNSET,
+        gps_longitude: Union[float, None, _Unset] = _UNSET,
         is_active: Optional[bool] = None
     ) -> Tuple[Optional[Yard], Optional[str]]:
-        """Обновление двора. `None`-аргументы означают «не менять поле»."""
+        """Обновление двора. `None` для большинства полей = «не менять».
+
+        BUG-127: GPS-координаты используют sentinel `_UNSET` (зеркало BUG-097
+        для update_building) — явный `None` сбрасывает координату в NULL,
+        опущенный аргумент оставляет значение без изменений.
+        """
         updates = {k: v for k, v in {
             "name": name, "description": description,
-            "gps_latitude": gps_latitude, "gps_longitude": gps_longitude,
             "is_active": is_active,
         }.items() if v is not None}
+        if gps_latitude is not _UNSET:
+            updates["gps_latitude"] = gps_latitude
+        if gps_longitude is not _UNSET:
+            updates["gps_longitude"] = gps_longitude
         try:
             async with _async_session() as adb:
                 yard = await _core.update_yard(adb, yard_id, updates)
@@ -186,7 +194,7 @@ class AddressService:
             return None, "Не удалось сохранить изменения. Попробуйте позже."
 
     @staticmethod
-    async def get_building_by_id(
+    def get_building_by_id(
         session: Session,
         building_id: int,
         include_yard: bool = False
@@ -200,7 +208,7 @@ class AddressService:
         return session.execute(query).scalar_one_or_none()
 
     @staticmethod
-    async def get_buildings_by_yard(
+    def get_buildings_by_yard(
         session: Session,
         yard_id: int,
         only_active: bool = True
@@ -331,7 +339,7 @@ class AddressService:
             return 0, 0, ["Не удалось создать квартиры. Попробуйте позже."]
 
     @staticmethod
-    async def get_apartment_by_id(
+    def get_apartment_by_id(
         session: Session,
         apartment_id: int,
         include_building: bool = False
@@ -347,7 +355,7 @@ class AddressService:
         return session.execute(query).scalar_one_or_none()
 
     @staticmethod
-    async def get_apartments_by_building(
+    def get_apartments_by_building(
         session: Session,
         building_id: int,
         only_active: bool = True
@@ -357,6 +365,10 @@ class AddressService:
 
         if only_active:
             query = query.where(Apartment.is_active == True)
+
+        # BUG-126: bound the fetch (parallel к BUG-090 на search_apartments) —
+        # здание с большим числом квартир иначе тянет всё в память.
+        query = query.limit(500)
 
         result = session.execute(query)
         apartments = result.scalars().all()
@@ -372,7 +384,7 @@ class AddressService:
         return sorted(apartments, key=sort_key)
 
     @staticmethod
-    async def search_apartments(
+    def search_apartments(
         session: Session,
         query_text: str,
         only_active: bool = True
@@ -511,7 +523,7 @@ class AddressService:
             return False, "Не удалось обработать заявку. Попробуйте позже."
 
     @staticmethod
-    async def get_pending_requests(
+    def get_pending_requests(
         session: Session,
         limit: int = 50
     ) -> List[UserApartment]:
@@ -531,7 +543,7 @@ class AddressService:
         return result.scalars().all()
 
     @staticmethod
-    async def get_user_apartments(
+    def get_user_apartments(
         session: Session,
         user_id: int,
         only_approved: bool = False
@@ -554,7 +566,7 @@ class AddressService:
         return result.scalars().all()
 
     @staticmethod
-    async def get_apartment_residents(
+    def get_apartment_residents(
         session: Session,
         apartment_id: int,
         only_approved: bool = False
@@ -595,43 +607,41 @@ class AddressService:
     # ============= STATISTICS =============
 
     @staticmethod
-    async def get_statistics(session: Session) -> Dict[str, Any]:
-        """Получение общей статистики по справочнику адресов"""
-        try:
-            stats = {
-                'yards': {
-                    'total': session.execute(select(func.count(Yard.id))).scalar(),
-                    'active': session.execute(
-                        select(func.count(Yard.id)).where(Yard.is_active == True)
-                    ).scalar()
-                },
-                'buildings': {
-                    'total': session.execute(select(func.count(Building.id))).scalar(),
-                    'active': session.execute(
-                        select(func.count(Building.id)).where(Building.is_active == True)
-                    ).scalar()
-                },
-                'apartments': {
-                    'total': session.execute(select(func.count(Apartment.id))).scalar(),
-                    'active': session.execute(
-                        select(func.count(Apartment.id)).where(Apartment.is_active == True)
-                    ).scalar()
-                },
-                'residents': {
-                    'total': session.execute(select(func.count(UserApartment.id))).scalar(),
-                    'approved': session.execute(
-                        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.APPROVED)
-                    ).scalar(),
-                    'pending': session.execute(
-                        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.PENDING)
-                    ).scalar(),
-                    'rejected': session.execute(
-                        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.REJECTED)
-                    ).scalar()
-                }
-            }
+    def get_statistics(session: Session) -> Dict[str, Any]:
+        """Получение общей статистики по справочнику адресов.
 
-            return stats
+        PERF-093: один запрос на сущность через conditional aggregates
+        (`count(...) FILTER (WHERE ...)`) — 4 SELECT'а вместо 10.
+        """
+        try:
+            y_total, y_active = session.execute(select(
+                func.count(Yard.id),
+                func.count(Yard.id).filter(Yard.is_active == True),
+            )).one()
+            b_total, b_active = session.execute(select(
+                func.count(Building.id),
+                func.count(Building.id).filter(Building.is_active == True),
+            )).one()
+            a_total, a_active = session.execute(select(
+                func.count(Apartment.id),
+                func.count(Apartment.id).filter(Apartment.is_active == True),
+            )).one()
+            r_total, r_approved, r_pending, r_rejected = session.execute(select(
+                func.count(UserApartment.id),
+                func.count(UserApartment.id).filter(UserApartment.status == UserApartmentStatus.APPROVED),
+                func.count(UserApartment.id).filter(UserApartment.status == UserApartmentStatus.PENDING),
+                func.count(UserApartment.id).filter(UserApartment.status == UserApartmentStatus.REJECTED),
+            )).one()
+
+            return {
+                'yards': {'total': y_total, 'active': y_active},
+                'buildings': {'total': b_total, 'active': b_active},
+                'apartments': {'total': a_total, 'active': a_active},
+                'residents': {
+                    'total': r_total, 'approved': r_approved,
+                    'pending': r_pending, 'rejected': r_rejected,
+                },
+            }
 
         except SQLAlchemyError:
             # Не глотать DB-ошибку: сессия в failed-transaction, пусть откатит
@@ -691,7 +701,7 @@ class AddressService:
             raise
 
     @staticmethod
-    async def get_user_approved_apartments(session: Session, user_telegram_id: int) -> List[Apartment]:
+    def get_user_approved_apartments(session: Session, user_telegram_id: int) -> List[Apartment]:
         """
         Получить список одобренных квартир пользователя для создания заявок (async обертка)
 

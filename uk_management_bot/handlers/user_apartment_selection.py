@@ -41,7 +41,7 @@ async def start_apartment_selection(message: Message, state: FSMContext, languag
     """
     db = next(get_db())
     try:
-        yards = await AddressService.get_all_yards(db, only_active=True)
+        yards = AddressService.get_all_yards(db, only_active=True)
 
         if not yards:
             lang = language
@@ -85,14 +85,14 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext, lan
 
     db = next(get_db())
     try:
-        yard = await AddressService.get_yard_by_id(db, yard_id)
+        yard = AddressService.get_yard_by_id(db, yard_id)
         lang = language
         if not yard or not yard.is_active:
             await callback.answer(get_text("user_apt_selection.handlers.yard_not_found", language=lang), show_alert=True)
             return
 
         # Получаем здания этого двора
-        buildings = await AddressService.get_buildings_by_yard(db, yard_id, only_active=True)
+        buildings = AddressService.get_buildings_by_yard(db, yard_id, only_active=True)
 
         if not buildings:
             await callback.answer(
@@ -134,14 +134,14 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext,
 
     db = next(get_db())
     try:
-        building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
+        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
         lang = language
         if not building or not building.is_active:
             await callback.answer(get_text("user_apt_selection.handlers.building_not_found", language=lang), show_alert=True)
             return
 
         # Получаем квартиры этого здания
-        apartments = await AddressService.get_apartments_by_building(db, building_id, only_active=True)
+        apartments = AddressService.get_apartments_by_building(db, building_id, only_active=True)
 
         if not apartments:
             await callback.answer(
@@ -196,7 +196,7 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
             await callback.answer(get_text("user_apt_selection.handlers.user_not_found", language=lang), show_alert=True)
             return
 
-        apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
         if not apartment or not apartment.is_active:
             await callback.answer(get_text("user_apt_selection.handlers.apartment_not_found", language=lang), show_alert=True)
             return
@@ -298,7 +298,7 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, 
             return
 
         # Получаем данные для уведомления
-        apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
         full_address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
 
         await callback.message.edit_text(
@@ -461,7 +461,7 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
 
     db = next(get_db())
     try:
-        yards = await AddressService.get_all_yards(db, only_active=True)
+        yards = AddressService.get_all_yards(db, only_active=True)
 
         if not yards:
             lang = language

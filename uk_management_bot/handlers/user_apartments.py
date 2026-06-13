@@ -49,7 +49,7 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext, languag
             return
 
         # Получаем все квартиры пользователя (одобренные, ожидающие, отклоненные)
-        user_apartments = await AddressService.get_user_apartments(
+        user_apartments = AddressService.get_user_apartments(
             session=db,
             user_id=user.id,
             only_approved=False
@@ -410,7 +410,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
                 return
 
             # Получаем все квартиры пользователя
-            user_apartments = await AddressService.get_user_apartments(
+            user_apartments = AddressService.get_user_apartments(
                 session=db,
                 user_id=user.id,
                 only_approved=False

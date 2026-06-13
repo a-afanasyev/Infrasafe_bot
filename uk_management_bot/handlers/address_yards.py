@@ -167,7 +167,7 @@ async def show_yards_list(callback: CallbackQuery, state: FSMContext | None, lan
 
     db = next(get_db())
     try:
-        yards = await AddressService.get_all_yards(db, only_active=False, include_stats=True)
+        yards = AddressService.get_all_yards(db, only_active=False, include_stats=True)
 
         if not yards:
             lang = language
@@ -202,7 +202,7 @@ async def show_yards_page(callback: CallbackQuery, language: str = "ru"):
 
     db = next(get_db())
     try:
-        yards = await AddressService.get_all_yards(db, only_active=False, include_stats=True)
+        yards = AddressService.get_all_yards(db, only_active=False, include_stats=True)
 
         lang = language
         text = get_text("address_yards.handlers.yards_list_page", language=lang).format(page=page + 1, total=len(yards))
@@ -231,7 +231,7 @@ async def show_yard_details(callback: CallbackQuery, language: str = "ru"):
 
     db = next(get_db())
     try:
-        yard = await AddressService.get_yard_by_id(db, yard_id)
+        yard = AddressService.get_yard_by_id(db, yard_id)
 
         lang = language
         if not yard:
@@ -499,7 +499,7 @@ async def toggle_yard_status(callback: CallbackQuery, language: str = "ru"):
     db = next(get_db())
     try:
         lang = language
-        yard = await AddressService.get_yard_by_id(db, yard_id)
+        yard = AddressService.get_yard_by_id(db, yard_id)
         if not yard:
             await callback.answer(get_text("address_yards.handlers.yard_not_found", language=lang), show_alert=True)
             return
@@ -540,7 +540,7 @@ async def confirm_yard_deletion(callback: CallbackQuery, language: str = "ru"):
     db = next(get_db())
     try:
         lang = language
-        yard = await AddressService.get_yard_by_id(db, yard_id)
+        yard = AddressService.get_yard_by_id(db, yard_id)
         if not yard:
             await callback.answer(get_text("address_yards.handlers.yard_not_found", language=lang), show_alert=True)
             return

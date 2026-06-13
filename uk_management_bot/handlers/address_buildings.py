@@ -132,12 +132,12 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru"):
     db = next(get_db())
     try:
         lang = language
-        yard = await AddressService.get_yard_by_id(db, yard_id)
+        yard = AddressService.get_yard_by_id(db, yard_id)
         if not yard:
             await callback.answer(get_text("address_buildings.handlers.yard_not_found", language=lang), show_alert=True)
             return
 
-        buildings = await AddressService.get_buildings_by_yard(db, yard_id, only_active=False)
+        buildings = AddressService.get_buildings_by_yard(db, yard_id, only_active=False)
 
         text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard.name, total=len(buildings))
 
@@ -168,7 +168,7 @@ async def show_building_details(callback: CallbackQuery, language: str = "ru"):
     db = next(get_db())
     try:
         lang = language
-        building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
+        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
 
         if not building:
             await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
@@ -214,7 +214,7 @@ async def start_building_creation(callback: CallbackQuery, state: FSMContext, la
 
     db = next(get_db())
     try:
-        yards = await AddressService.get_all_yards(db, only_active=True)
+        yards = AddressService.get_all_yards(db, only_active=True)
 
         lang = language
         if not yards:
@@ -246,7 +246,7 @@ async def process_building_yard_selection(callback: CallbackQuery, state: FSMCon
     db = next(get_db())
     try:
         lang = language
-        yard = await AddressService.get_yard_by_id(db, yard_id)
+        yard = AddressService.get_yard_by_id(db, yard_id)
         yard_name = yard.name if yard else get_text("address_buildings.handlers.unknown_yard", language=lang)
 
         await state.update_data(yard_id=yard_id, yard_name=yard_name)
@@ -477,7 +477,7 @@ async def toggle_building_status(callback: CallbackQuery, language: str = "ru"):
     db = next(get_db())
     try:
         lang = language
-        building = await AddressService.get_building_by_id(db, building_id)
+        building = AddressService.get_building_by_id(db, building_id)
         if not building:
             await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
             return
@@ -518,7 +518,7 @@ async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru
     db = next(get_db())
     try:
         lang = language
-        building = await AddressService.get_building_by_id(db, building_id)
+        building = AddressService.get_building_by_id(db, building_id)
         if not building:
             await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
             return

@@ -82,7 +82,7 @@ class TestGetYardById:
         _mock_execute(session, scalar_result=yard)
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_yard_by_id(session, 1)
+        result = AddressService.get_yard_by_id(session, 1)
         assert result == yard
 
     @pytest.mark.asyncio
@@ -91,7 +91,7 @@ class TestGetYardById:
         _mock_execute(session, scalar_result=None)
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_yard_by_id(session, 999)
+        result = AddressService.get_yard_by_id(session, 999)
         assert result is None
 
 
@@ -105,7 +105,7 @@ class TestGetAllYards:
         _mock_execute(session, scalars_all=yards)
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_all_yards(session)
+        result = AddressService.get_all_yards(session)
         assert len(result) == 2
 
     @pytest.mark.asyncio
@@ -115,7 +115,7 @@ class TestGetAllYards:
         _mock_execute(session, scalars_all=yards)
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_all_yards(session, only_active=False)
+        result = AddressService.get_all_yards(session, only_active=False)
         assert len(result) == 1
 
 
@@ -132,7 +132,7 @@ class TestGetBuildingsByYard:
 
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_buildings_by_yard(session, 1)
+        result = AddressService.get_buildings_by_yard(session, 1)
         assert len(result) == 2
 
 
@@ -151,7 +151,7 @@ class TestGetApartmentsByBuilding:
 
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_apartments_by_building(session, 1)
+        result = AddressService.get_apartments_by_building(session, 1)
         # Numeric "1" before "2" before non-numeric "A"
         assert result[0].apartment_number == "1"
         assert result[1].apartment_number == "2"
@@ -168,7 +168,7 @@ class TestGetApartmentById:
         _mock_execute(session, scalar_result=apt)
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_apartment_by_id(session, 1)
+        result = AddressService.get_apartment_by_id(session, 1)
         assert result == apt
 
     @pytest.mark.asyncio
@@ -177,7 +177,7 @@ class TestGetApartmentById:
         _mock_execute(session, scalar_result=None)
         from uk_management_bot.services.address_service import AddressService
 
-        result = await AddressService.get_apartment_by_id(session, 999)
+        result = AddressService.get_apartment_by_id(session, 999)
         assert result is None
 
 
@@ -287,7 +287,7 @@ class TestReadMethodsPropagateDbError:
         session.execute.side_effect = _operational_error()
 
         with pytest.raises(OperationalError):
-            await AddressService.get_statistics(session)
+            AddressService.get_statistics(session)
 
     def test_get_user_available_yards_reraises(self):
         from uk_management_bot.services.address_service import AddressService
