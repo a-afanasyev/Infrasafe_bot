@@ -336,6 +336,8 @@ import re
 import httpx
 from enum import Enum
 
+from uk_management_bot.integrations.http_retry import get_with_retries
+
 # BUG-122: compile the shared request-number pattern (\d{6}-\d{3,}) instead of
 # a hardcoded 3-digit shape, so `260524-1000` (>999/day rollover) isn't rejected.
 from uk_management_bot.services.request_number_service import (
@@ -475,8 +477,19 @@ async def proxy_media_list(
     if settings.MEDIA_SERVICE_API_KEY:
         headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
 
+    # ARCH-03: идемпотентный GET — ретраим транзиентные сбои media-service.
+    # Явная деградация: при исчерпании попыток (transport error) возвращаем
+    # пустой список, а не 500 — список вложений не критичен для рендера.
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{media_url}/api/v1/media/request/{request_number}", headers=headers)
+        try:
+            resp = await get_with_retries(
+                client,
+                f"{media_url}/api/v1/media/request/{request_number}",
+                headers=headers,
+            )
+        except httpx.TransportError as exc:
+            _logger.warning("Media service unreachable for list %s: %s", request_number, exc)
+            return []
         if resp.status_code != 200:
             return []
         return resp.json()
@@ -508,12 +521,20 @@ async def proxy_media_file(
     if settings.MEDIA_SERVICE_API_KEY:
         headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
 
+    # ARCH-03: оба обращения — идемпотентные GET, ретраим транзиентные сбои.
+    # Явная деградация: при исчерпании попыток (transport error) → 503, а не
+    # необработанное исключение/500.
     async with httpx.AsyncClient(timeout=60) as client:
-        # 1) Resolve media_id → request_number (cheap metadata call).
-        meta_resp = await client.get(
-            f"{media_url}/api/v1/media/{media_id}",
-            headers=headers,
-        )
+        try:
+            # 1) Resolve media_id → request_number (cheap metadata call).
+            meta_resp = await get_with_retries(
+                client,
+                f"{media_url}/api/v1/media/{media_id}",
+                headers=headers,
+            )
+        except httpx.TransportError as exc:
+            _logger.warning("Media service unreachable for meta %s: %s", media_id, exc)
+            raise HTTPException(status_code=503, detail="Media service unavailable")
         if meta_resp.status_code != 200:
             raise HTTPException(status_code=meta_resp.status_code, detail="Media not found")
         request_number = meta_resp.json().get("request_number")
@@ -524,10 +545,15 @@ async def proxy_media_file(
         await check_request_access(request_number, db, user)
 
         # 3) Stream the bytes. 60s — Telegram CDN can be slow on first hit.
-        resp = await client.get(
-            f"{media_url}/api/v1/media/{media_id}/file",
-            headers=headers,
-        )
+        try:
+            resp = await get_with_retries(
+                client,
+                f"{media_url}/api/v1/media/{media_id}/file",
+                headers=headers,
+            )
+        except httpx.TransportError as exc:
+            _logger.warning("Media service unreachable for file %s: %s", media_id, exc)
+            raise HTTPException(status_code=503, detail="Media service unavailable")
         if resp.status_code != 200:
             _logger.error("Media service file error %s: %s", resp.status_code, resp.text[:200])
             raise HTTPException(status_code=resp.status_code, detail="Media service error")

@@ -105,6 +105,18 @@ if not settings.debug:
             "CHANNEL_REPORTS, CHANNEL_ARCHIVE, CHANNEL_BACKUP."
         )
 
+# SEC-022 fail-fast: wildcard CORS (`ALLOWED_ORIGINS=*`) must never reach
+# production. In prod (debug=False) reject "*" — whether it is the whole value
+# or one item of the comma-separated list (e.g. `https://x.com,*`). Dev
+# (debug=True) still tolerates "*", as before.
+if not settings.debug:
+    _origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    if "*" in _origins:
+        raise RuntimeError(
+            "ALLOWED_ORIGINS must not contain '*' in production (DEBUG=False). "
+            "Set an explicit origin list, e.g. ALLOWED_ORIGINS=https://infrasafe.uz."
+        )
+
 
 class TelegramChannels:
     """Конфигурация Telegram каналов"""

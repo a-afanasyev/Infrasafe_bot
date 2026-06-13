@@ -9,6 +9,8 @@ from typing import List, Optional, Dict, Any, BinaryIO, Union
 import httpx
 from pathlib import Path
 
+from uk_management_bot.integrations.http_retry import get_with_retries
+
 logger = logging.getLogger(__name__)
 
 
@@ -217,9 +219,10 @@ class MediaServiceClient:
             if category:
                 params["category"] = category
 
-            response = await self.client.get(
+            response = await get_with_retries(
+                self.client,
                 f"/media/request/{request_number}",
-                params=params
+                params=params,
             )
 
             response.raise_for_status()
@@ -318,7 +321,7 @@ class MediaServiceClient:
             Информация о медиа-файле
         """
         try:
-            response = await self.client.get(f"/media/{media_id}")
+            response = await get_with_retries(self.client, f"/media/{media_id}")
             response.raise_for_status()
 
             return response.json()
@@ -338,7 +341,7 @@ class MediaServiceClient:
             URL файла или None
         """
         try:
-            response = await self.client.get(f"/media/{media_id}/url")
+            response = await get_with_retries(self.client, f"/media/{media_id}/url")
             response.raise_for_status()
 
             result = response.json()
