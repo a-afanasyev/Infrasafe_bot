@@ -147,7 +147,6 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 - **Полный аудит**: `SECURITY_AUDIT_FINAL.md` (653 строки, все детали)
 - **Проект**: `CLAUDE.md` (общий контекст)
-- **Задачи**: `MemoryBank/tasks.md` (план задач)
 - **Deployment**: `docker-compose.unified.yml` (инфраструктура)
 
 ---

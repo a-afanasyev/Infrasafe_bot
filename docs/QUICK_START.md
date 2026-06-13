@@ -102,8 +102,6 @@ python3 validate_security_fixes.py
 
 ## 📞 ПОДДЕРЖКА
 
-- **Полная документация:** `MemoryBank/bot.md`
-- **API документация:** `MemoryBank/API_DOCUMENTATION.md`
 - **Production deployment:** `PRODUCTION_DEPLOYMENT.md`
 - **Security guide:** Все security меры задокументированы
 

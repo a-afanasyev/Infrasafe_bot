@@ -326,7 +326,6 @@ if not (missing_in_db or extra_in_db):
 ### In This Repository
 
 - [CLAUDE.md](CLAUDE.md) - Project overview and guidelines
-- [MemoryBank/](MemoryBank/) - Project context and state
 - [uk_management_bot/database/models/](uk_management_bot/database/models/) - Actual ORM models
 - [uk_management_bot/database/migrations/](uk_management_bot/database/migrations/) - Migration scripts
 

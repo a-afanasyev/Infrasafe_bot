@@ -485,7 +485,6 @@ A: `make down-v` (ВНИМАНИЕ: удалит все данные!)
 - **Краткое руководство**: [QUICKSTART.md](QUICKSTART.md)
 - **Полная документация**: [UNIFIED_DEPLOYMENT.md](UNIFIED_DEPLOYMENT.md)
 - **Проект**: [CLAUDE.md](CLAUDE.md)
-- **Memory Bank**: [MemoryBank/](MemoryBank/)
 
 ### Помощь
 
