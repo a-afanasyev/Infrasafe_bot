@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DndContext,
@@ -129,27 +129,34 @@ export default function BoardEditorPage() {
   const updateConfig = useUpdateBoardConfig()
 
   const [draft, setDraft] = useState<BoardConfigData | null>(null)
-
-  useEffect(() => {
-    if (serverConfig && draft === null) setDraft(clone(serverConfig))
-  }, [serverConfig, draft])
+  // FE-034: seed the editable draft from server config once it arrives, using the
+  // render-time "adjust state when input changes" pattern (no effect → no cascading
+  // re-render / set-state-in-effect smell; see react.dev "You Might Not Need an Effect").
+  const [seeded, setSeeded] = useState(false)
+  if (serverConfig && !seeded) {
+    setSeeded(true)
+    setDraft(clone(serverConfig))
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  if (!draft) {
-    return <div className="p-8 text-sm text-text-muted">{t('common.loading')}</div>
-  }
-
-  // immutable patch helper
-  const patch = (fn: (d: BoardConfigData) => void) => {
+  // immutable patch helper (FE-039: stable identity via useCallback; declared
+  // before the early return to satisfy rules-of-hooks). `prev` is the live draft
+  // state, so no closure dep on `draft` is needed → deps stay empty.
+  const patch = useCallback((fn: (d: BoardConfigData) => void) => {
     setDraft((prev) => {
-      const next = clone(prev ?? draft)
+      if (!prev) return prev
+      const next = clone(prev)
       fn(next)
       return next
     })
+  }, [])
+
+  if (!draft) {
+    return <div className="p-8 text-sm text-text-muted">{t('common.loading')}</div>
   }
 
   const handleModuleDragEnd = (e: DragEndEvent) => {

@@ -26,7 +26,9 @@ export default function KanbanPage() {
       </Button>
     )
     return clearActions
-  }, [])
+    // FE-08: include reactive deps so the button label re-renders on language
+    // change (setActions/clearActions are stable useCallback refs).
+  }, [t, setActions, clearActions])
 
   return (
     <div className="p-6 h-full">

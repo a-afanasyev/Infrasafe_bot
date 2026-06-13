@@ -233,7 +233,7 @@ export default function AddressesPage() {
         </Button>
       )}
     </div>
-  ), [searchQuery, level])
+  ), [searchQuery, level, t])
 
   useEffect(() => {
     setActions(actionsNode)
