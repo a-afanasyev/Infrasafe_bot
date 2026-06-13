@@ -81,9 +81,10 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
   const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
   const dateLabel = `${t(`days.full.${dayKeys[now.getDay()]}`)}, ${now.getDate()} ${t(`months.${monthKeys[now.getMonth()]}`)} ${now.getFullYear()}`
 
-  // Elapsed time helper
-  function elapsed(iso: string) {
-    const diff = (Date.now() - new Date(iso).getTime()) / 1000
+  // Elapsed time helper — FE-035: takes the tracked `now` so it stays pure in
+  // render (no impure Date.now() call; React Compiler no longer flags it).
+  function elapsed(iso: string, now: Date) {
+    const diff = (now.getTime() - new Date(iso).getTime()) / 1000
     if (diff < 3600) return t('board.elapsed.min', { count: Math.round(diff / 60) })
     if (diff < 86400) return t('board.elapsed.hours', { count: Math.round(diff / 3600) })
     return t('board.elapsed.days', { count: Math.round(diff / 86400) })
@@ -169,12 +170,14 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {colReqs.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '14px 4px', color: '#cbd5e1', fontSize: '0.85rem' }}>{'—'}</div>
-                    ) : colReqs.map((req, j) => {
+                    ) : colReqs.map((req) => {
                       const catIcon = CATEGORY_ICONS[req.category] ?? '\u{1F4CB}'
                       return (
-                        <div key={j} className="rb-req-row" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${step.color}`, transition: 'background 0.15s', cursor: 'default' }}>
+                        // FE-037: PublicBoardRequest is anonymized (no id/number),
+                        // so the most stable key available is created_at + category.
+                        <div key={`${req.created_at}-${req.category}`} className="rb-req-row" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${step.color}`, transition: 'background 0.15s', cursor: 'default' }}>
                           <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>{catIcon} {tCategory(req.category, t)}</div>
-                          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>{elapsed(req.created_at)}</div>
+                          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>{elapsed(req.created_at, now)}</div>
                         </div>
                       )
                     })}
