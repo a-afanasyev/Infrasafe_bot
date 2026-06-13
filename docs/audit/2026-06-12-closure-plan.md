@@ -88,16 +88,16 @@
 - **Состав:** DEAD-01 (6 async-сервисов + тесты), DEAD-02 (**после grep-подтверждения**: цепочка `smart_assign_request`/`get_assignment_recommendations`; `reassign_executor` сохранить — жив в `api/shifts/router.py:447`), DEAD-03 (quarterly-кластер; таблица `quarterly_plan` — отдельное решение; закрывает CODE-13), DEAD-04 (`sheets_utils.py` + structlog), DEAD-05 (pre-alembic `database/migrations/` — **закрывает SEC-023**), DEAD-11 (8 позиций requirements.in; passlib→bcrypt), DEAD-13 (мёртвые settings-флаги), DEAD-16 (закомментированные блоки `handlers/requests.py:322-364`, `user_management.py:1185-1245`).
 - **DoD волны** + grep «0 импортов» на каждое удаление зафиксирован в PR-описании.
 
-#### PR-9 — Артефакты репозитория (S, −~45k строк)
+#### ~~PR-9 — Артефакты репозитория (факт −108 758 строк)~~ ✅ DONE 2026-06-13 (PR #69, `43c900b`, прод git pull подтвердил)
 - **Состав:** DEAD-09 (MemoryBank/ 96 файлов), PRAC-03 (scans/, auth_scan.json, requests_export.csv, ru_temp.json, scan_report.txt, merge_*.py ×3, organize_*.sh, interactive_test_report.html, translation_validation*.txt, устаревший openapi.yaml, coverage-audit.md).
 - **DoD:** **живые docs/Makefile/CI не ссылаются на удалённое — ссылки обновить; архивные/audit-доки исключены из проверки** (исторические упоминания MemoryBank/ в отчётах не правим); CI зелёный.
 
-#### PR-10 — Compose-консолидация (M)
+#### ~~PR-10 — Compose-консолидация (M)~~ ✅ DONE 2026-06-13 (PR #70, `f66f0ea`, прод; drift реконсилирован — git pull чист)
 - **Предусловие (без кода):** ssh-diff прод-копии `docker-compose.yml` с репо, реконсилировать drift **в репо** ДО удаления вариантов.
 - **Состав:** DEAD-10 — остаются ровно `docker-compose.yml` + `docker-compose.media.yml` + `docker-compose.dev.yml`; удалить `docker-compose.{prod,prod.unified,production,unified}.yml` + `*-unified.sh`; **обязательно**: обновить/удалить Makefile-цели и живые docs, ссылающиеся на удаляемые файлы (grep по именам → 0 живых упоминаний). + OPS-110 (alembic bind-mount в dev-compose).
 - **DoD:** прод-деплой-команда работает без изменений; dev: правка `.py`+`alembic/*` видна без rebuild; при проверочном деплое — без `--remove-orphans`.
 
-#### PR-11 — Мёртвые эндпоинты (S)
+#### ~~PR-11 — Мёртвые эндпоинты (S)~~ ✅ DONE 2026-06-13 (PR #71, `79bfc89`, прод: оба → 404)
 - **Состав:** DEAD-07 (`POST /profile/documents`), DEAD-08 (`api/notifications/` — 0 вызовов + закрыт edge-allowlist SEC-22). **После grep-подтверждения** + прод-access-логи, если доступны. DEAD-06 исключён — DECISION (§5).
 - **DoD:** grep-фиксация 0 вызовов; удаление + тесты роутера.
 
