@@ -11,6 +11,7 @@ to in-memory.
 """
 import logging
 
+from fastapi import HTTPException
 from slowapi import Limiter
 
 from uk_management_bot.api.rate_limit_keys import client_ip_key
@@ -75,3 +76,28 @@ async def rate_limit_backend_status() -> dict:
 
 
 limiter = build_limiter()
+
+
+def auth_ratelimit_guard() -> None:
+    """SEC-04 fail-closed gate for auth routes.
+
+    When Redis is the configured rate-limit backend but unreachable, slowapi
+    silently degrades to per-worker in-memory counters (~Nx effective limit at
+    ``--workers N``) — a brute-force amplification window. SEC-062 detects and
+    alerts; this MITIGATES by failing CLOSED on auth endpoints: while the
+    backend is down, reject with 503 instead of allowing the amplified window.
+    Non-auth routes keep the deliberate fail-open posture (availability over
+    strictness) via slowapi's in-memory fallback.
+
+    Reads slowapi's own cached ``_storage_dead`` flag (set on an observed
+    storage failure, auto-reset on backend recovery) — no extra Redis round
+    trip per request. ``getattr`` with a False default keeps this a safe no-op
+    if a slowapi upgrade ever renames the attribute (degrades to fail-open,
+    never crashes). A no-op when Redis isn't the configured backend (dev
+    in-memory), so local development is unaffected.
+    """
+    if settings.USE_REDIS_RATE_LIMIT and getattr(limiter, "_storage_dead", False):
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication temporarily unavailable (rate-limit backend degraded). Retry shortly.",
+        )

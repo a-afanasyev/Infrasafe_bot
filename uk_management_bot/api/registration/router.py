@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db
-from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.rate_limit import limiter, auth_ratelimit_guard
 from uk_management_bot.api.auth.service import verify_twa_init_data
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
@@ -29,7 +29,9 @@ from uk_management_bot.utils.validators import Validator
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+# SEC-04: self-registration is a brute-force surface (ticket guessing, spam
+# account creation) — fail-closed when the rate-limit backend is degraded.
+router = APIRouter(dependencies=[Depends(auth_ratelimit_guard)])
 
 
 def _resolve_telegram_id(init_data: str) -> tuple[int, dict]:
