@@ -7,7 +7,18 @@ str(exc); the API maps them to HTTPException via api/addresses/exception_handler
 
 
 class AddressError(Exception):
-    """Base class for address domain errors."""
+    """Base class for address domain errors.
+
+    FE-094: optional `code` — a stable, language-agnostic slug the bot adapter
+    surfaces instead of the Russian message, so the handler can localize via
+    `get_text("address_errors.<code>", lang)`. Raises WITHOUT a code (e.g.
+    interpolated messages «...есть N зданий») fall back to their Russian
+    `str(exc)` text.
+    """
+
+    def __init__(self, message: str = "", code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 class AddressNotFound(AddressError):
