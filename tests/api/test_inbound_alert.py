@@ -326,6 +326,27 @@ async def test_uk_urgency_override_outside_ladder_falls_back(
 
 
 @pytest.mark.asyncio
+async def test_uk_urgency_override_on_first_time_alert(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """2026-06-13: InfraSafe now stamps `uk_urgency_override` from their per-rule
+    config on EVERY alert.created, not only reopen/engineer events. UK already
+    honours the override unconditionally (the read is not gated on
+    reopen_sequence) — a plain first-time alert (no reopen) must use it and
+    bypass the WARNING→low severity fallback."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-override-firsttime", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",  # would map to "low"
+        uk_urgency_override="high",  # NO reopen_sequence — first-time alert
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.19"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.urgency == "high"
+
+
+@pytest.mark.asyncio
 async def test_reopen_metadata_persisted_in_inbox(
     webhook_client, building, db_session, monkeypatch,
 ):
