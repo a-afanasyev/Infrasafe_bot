@@ -338,7 +338,9 @@
     "reopenBadge": "Повторное обращение №{{n}}",
     "relatedRequest": "связана с",
     "engineerEscalation": "Эскалация на инженера",
-    "engineerReason": "Причина:"
+    "engineerReason": "Причина:",
+    "alertSource": "Источник: InfraSafe",
+    "workingRange": "рабочий диапазон"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",

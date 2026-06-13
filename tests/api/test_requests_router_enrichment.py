@@ -46,7 +46,8 @@ async def _seed_request(db_session, rn: str, *, source: str = "infrasafe",
 async def _seed_inbox(db_session, *, request_number: str, event_id: str,
                       event: str = "alert.created", outcome: str = "accepted",
                       reopen_sequence=None, reopen_chain_id=None,
-                      related_request_number=None, engineer_required_reason=None):
+                      related_request_number=None, engineer_required_reason=None,
+                      alert_extra=None):
     alert = {
         "external_id": "test-ext",
         "type": "LEAK_DETECTED",
@@ -61,6 +62,8 @@ async def _seed_inbox(db_session, *, request_number: str, event_id: str,
         alert["related_request_number"] = related_request_number
     if engineer_required_reason is not None:
         alert["engineer_required_reason"] = engineer_required_reason
+    if alert_extra:
+        alert.update(alert_extra)
 
     row = WebhookInbox(
         event_id=event_id,
@@ -183,3 +186,89 @@ async def test_inbox_with_no_reopen_keys_returns_null(client, db_session, manage
     assert body["reopen_chain_id"] is None
     assert body["related_request_number"] is None
     assert body["engineer_required_reason"] is None
+
+
+# ── FE-119: InfraSafe metric/infrastructure context ──────────────────────
+
+
+@pytest.mark.asyncio
+async def test_fe119_numeric_metric_full_set(client, db_session, manager_user):
+    """A numeric alert (e.g. voltage) surfaces the full metric block +
+    working-range + infrastructure label."""
+    await _seed_request(db_session, "260613-200")
+    await _seed_inbox(
+        db_session, request_number="260613-200", event_id="evt-200",
+        alert_extra={
+            "metric_label": "Напряжение",
+            "metric_value": 190.5,
+            "metric_unit": "В",
+            "metric_normal_min": 198,
+            "metric_normal_max": 242,
+            "infrastructure_label": "Контроллер №7",
+        },
+    )
+
+    r = await client.get(URL_TPL.format(rn="260613-200"))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["metric_label"] == "Напряжение"
+    assert body["metric_value"] == 190.5
+    assert body["metric_unit"] == "В"
+    assert body["metric_normal_min"] == 198
+    assert body["metric_normal_max"] == 242
+    assert body["infrastructure_label"] == "Контроллер №7"
+
+
+@pytest.mark.asyncio
+async def test_fe119_one_sided_range(client, db_session, manager_user):
+    """Heating (≥40 °C) carries only metric_normal_min — max stays null."""
+    await _seed_request(db_session, "260613-201")
+    await _seed_inbox(
+        db_session, request_number="260613-201", event_id="evt-201",
+        alert_extra={
+            "metric_label": "Температура ГВС",
+            "metric_value": 34.0,
+            "metric_unit": "°C",
+            "metric_normal_min": 40,
+            "infrastructure_label": "Контроллер №3",
+        },
+    )
+
+    r = await client.get(URL_TPL.format(rn="260613-201"))
+    body = r.json()
+    assert body["metric_value"] == 34.0
+    assert body["metric_normal_min"] == 40
+    assert body["metric_normal_max"] is None
+
+
+@pytest.mark.asyncio
+async def test_fe119_leak_label_only(client, db_session, manager_user):
+    """LEAK_DETECTED is boolean — metric_label only, no value/range."""
+    await _seed_request(db_session, "260613-202")
+    await _seed_inbox(
+        db_session, request_number="260613-202", event_id="evt-202",
+        alert_extra={
+            "metric_label": "Протечка",
+            "infrastructure_label": "Контроллер №5",
+        },
+    )
+
+    r = await client.get(URL_TPL.format(rn="260613-202"))
+    body = r.json()
+    assert body["metric_label"] == "Протечка"
+    assert body["metric_value"] is None
+    assert body["metric_unit"] is None
+    assert body["metric_normal_min"] is None
+    assert body["infrastructure_label"] == "Контроллер №5"
+
+
+@pytest.mark.asyncio
+async def test_fe119_absent_when_no_alert_context(client, db_session, manager_user):
+    """Manual request (no inbox row) → all FE-119 fields null."""
+    await _seed_request(db_session, "260613-203")
+
+    r = await client.get(URL_TPL.format(rn="260613-203"))
+    body = r.json()
+    assert body["metric_label"] is None
+    assert body["metric_value"] is None
+    assert body["infrastructure_label"] is None

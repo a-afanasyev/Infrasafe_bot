@@ -338,7 +338,9 @@
     "reopenBadge": "Takroriy murojaat №{{n}}",
     "relatedRequest": "bog'liq",
     "engineerEscalation": "Muhandisga eskalatsiya",
-    "engineerReason": "Sabab:"
+    "engineerReason": "Sabab:",
+    "alertSource": "Manba: InfraSafe",
+    "workingRange": "ish oralig'i"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",

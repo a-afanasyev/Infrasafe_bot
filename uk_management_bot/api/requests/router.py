@@ -100,6 +100,25 @@ def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
         reason = alert.get("engineer_required_reason")
         if reason:
             card.engineer_required_reason = reason
+        # FE-119: InfraSafe metric/infrastructure context (render-if-present).
+        # metric_label gates the metric block; metric_value (numeric alerts only)
+        # gates the value + working-range. LEAK_DETECTED is label-only by contract.
+        metric_label = alert.get("metric_label")
+        if metric_label:
+            card.metric_label = metric_label
+            mv = alert.get("metric_value")
+            if isinstance(mv, (int, float)) and not isinstance(mv, bool):
+                card.metric_value = float(mv)
+                card.metric_unit = alert.get("metric_unit") or None
+                nmin = alert.get("metric_normal_min")
+                nmax = alert.get("metric_normal_max")
+                if isinstance(nmin, (int, float)) and not isinstance(nmin, bool):
+                    card.metric_normal_min = float(nmin)
+                if isinstance(nmax, (int, float)) and not isinstance(nmax, bool):
+                    card.metric_normal_max = float(nmax)
+        infra = alert.get("infrastructure_label")
+        if infra:
+            card.infrastructure_label = infra
     return card
 
 
