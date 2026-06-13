@@ -275,7 +275,8 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     <div style={{ fontFamily: "'Nunito', sans-serif", background: '#f7f5f0', color: '#1a1a1a', minHeight: '100vh', overflowX: 'hidden' }}>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+        /* FE-040: @import for Sora/Nunito/IBM Plex Mono moved to index.html
+           (it re-injected and render-blocked on every render here). */
         @keyframes ticker { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
         @keyframes rb-pulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(5,150,105,0.4); } 50% { opacity:.7; box-shadow:0 0 0 6px rgba(5,150,105,0); } }
         .rb-req-row:hover { background: #f0ede6 !important; }

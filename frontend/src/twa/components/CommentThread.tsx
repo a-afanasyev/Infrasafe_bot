@@ -40,6 +40,9 @@ export default function CommentThread({ requestNumber }: Props) {
     // Poll so the other party's reply shows up without a manual refresh —
     // only while the detail page (and thus this thread) is mounted.
     refetchInterval: 10_000,
+    // FE-10: pause polling when the tab is backgrounded — no point hammering
+    // the API for a thread the user can't see.
+    refetchIntervalInBackground: false,
   })
 
   const { data: profile } = useQuery<Profile>({

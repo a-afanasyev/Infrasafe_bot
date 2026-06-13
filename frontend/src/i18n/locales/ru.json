@@ -288,6 +288,7 @@
   },
   "kanban": {
     "createByCall": "Создать по звонку",
+    "emptyColumn": "Нет заявок",
     "confirmed": "Подтверждено",
     "onShift": "На смене",
     "transitionTo": "Перевод в \"{{status}}\"",
@@ -531,6 +532,9 @@
     "bulkPlaceholder": "Номера через запятую: 1, 2, 3...",
     "confirmDeleteYard": "Удалить двор \"{{name}}\"?",
     "confirmDeleteBuilding": "Удалить здание \"{{name}}\"?",
+    "deleteYardTitle": "Удалить двор?",
+    "deleteBuildingTitle": "Удалить здание?",
+    "deleteApartmentTitle": "Удалить квартиру?",
     "confirmPurgeBuilding": "Удалить здание \"{{name}}\" БЕЗВОЗВРАТНО? Будут также удалены все его квартиры. Действие нельзя отменить.",
     "confirmPurgeYard": "Удалить двор \"{{name}}\" БЕЗВОЗВРАТНО? Будут также удалены все его здания и квартиры. Действие нельзя отменить.",
     "confirmPurgeApartment": "Удалить квартиру \"{{name}}\" БЕЗВОЗВРАТНО? Действие нельзя отменить.",

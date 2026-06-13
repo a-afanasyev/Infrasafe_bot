@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WifiOff } from 'lucide-react'
 
+// FE-046: shared offline banner — used by both the TWA shell and the main
+// dashboard (App.tsx). Self-contained (navigator.onLine + window events), no
+// TWA-specific dependencies.
 export default function OfflineIndicator() {
   const { t } = useTranslation()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)

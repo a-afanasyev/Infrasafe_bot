@@ -132,7 +132,7 @@ export default function AddressesPage() {
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
   useEffect(() => {
-    try { localStorage.setItem('addresses_view_mode', viewMode) } catch {}
+    try { localStorage.setItem('addresses_view_mode', viewMode) } catch { /* localStorage unavailable */ }
   }, [viewMode])
 
   // Queries
@@ -268,7 +268,9 @@ export default function AddressesPage() {
     },
     {
       label: t('addresses.stats.residents'),
-      value: stats ? `${stats.residents_approved}+${stats.residents_pending}` : '-',
+      // FE-100: align with the active/total format of the other tiles
+      // (approved residents out of approved+pending total).
+      value: stats ? `${stats.residents_approved}/${stats.residents_approved + stats.residents_pending}` : '-',
       iconBg: 'var(--violet)',
       icon: '\u{1F465}',
       onClick: () => { setView('moderation') },
@@ -522,7 +524,7 @@ export default function AddressesPage() {
                                           close()
                                           setConfirmState({
                                             open: true,
-                                            title: t('addressModals.confirmDeleteYard', { name: yard.name }),
+                                            title: t('addressModals.deleteYardTitle'),
                                             description: t('addressModals.confirmDeleteYard', { name: yard.name }),
                                             onConfirm: () => deleteYard.mutate(yard.id),
                                           })
@@ -610,7 +612,7 @@ export default function AddressesPage() {
                                           close()
                                           setConfirmState({
                                             open: true,
-                                            title: t('addressModals.confirmDeleteBuilding', { name: building.address }),
+                                            title: t('addressModals.deleteBuildingTitle'),
                                             description: t('addressModals.confirmDeleteBuilding', { name: building.address }),
                                             onConfirm: () => deleteBuilding.mutate(building.id),
                                           })
@@ -705,7 +707,7 @@ export default function AddressesPage() {
                                             close()
                                             setConfirmState({
                                               open: true,
-                                              title: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
+                                              title: t('addressModals.deleteApartmentTitle'),
                                               description: t('addressModals.confirmDeleteApartment', { name: apt.apartment_number }),
                                               onConfirm: () => deleteApartment.mutate(apt.id),
                                             })
