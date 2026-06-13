@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
-import KanbanPage from './pages/KanbanPage'
 import { isTWA } from './utils/isTWA'
 import { lazy, Suspense } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
@@ -13,6 +12,9 @@ import OfflineIndicator from './components/shared/OfflineIndicator'
 import { Toaster } from './components/ui/sonner'
 
 const TWAApp = lazy(() => import('./twa/App'))
+// FE-042: the default dashboard route — lazy like the other pages so it leaves
+// the entry chunk (already wrapped in <Suspense> below).
+const KanbanPage = lazy(() => import('./pages/KanbanPage'))
 
 // Lazy-load pages not yet implemented
 const ShiftsPage = lazy(() => import('./pages/ShiftsPage'))

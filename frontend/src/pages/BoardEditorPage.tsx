@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DndContext,
@@ -154,6 +154,21 @@ export default function BoardEditorPage() {
       return next
     })
   }, [])
+
+  // FE-043: guard against accidental data loss while the draft has unsaved edits.
+  // beforeunload covers reload / tab-close / browser-close (the common vectors).
+  // In-app route blocking needs a data router (createBrowserRouter); this app uses
+  // <BrowserRouter>, so router-level blocking is out of scope here.
+  const isDirty = !!serverConfig && !!draft && JSON.stringify(draft) !== JSON.stringify(serverConfig)
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
 
   if (!draft) {
     return <div className="p-8 text-sm text-text-muted">{t('common.loading')}</div>
