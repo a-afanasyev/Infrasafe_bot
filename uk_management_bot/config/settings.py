@@ -102,10 +102,17 @@ class Settings:
     if not INVITE_SECRET and not DEBUG:
         raise ValueError("INVITE_SECRET must be set in production environment for secure invite tokens")
 
-    # JWT (separate from INVITE_SECRET, but falls back to INVITE_SECRET)
+    # JWT signing secret. SEC-02: MUST be its own secret — never reuse
+    # INVITE_SECRET as the JWT key (key separation across cryptographic
+    # purposes). Required explicitly in production; no fallback to INVITE_SECRET.
+    # DEPLOY-NOTE: prod .env must define JWT_SECRET BEFORE deploying — otherwise
+    # the API fails fast on startup.
     JWT_SECRET = os.getenv("JWT_SECRET")
-    if not JWT_SECRET and not INVITE_SECRET and not DEBUG:
-        raise ValueError("JWT_SECRET or INVITE_SECRET must be set in production environment")
+    if not JWT_SECRET and not DEBUG:
+        raise ValueError(
+            "JWT_SECRET must be set in production environment "
+            "(separate from INVITE_SECRET — no fallback)"
+        )
     
     # Rate limiting для /join команды
     JOIN_RATE_LIMIT_WINDOW = int(os.getenv("JOIN_RATE_LIMIT_WINDOW", "600"))  # 10 минут

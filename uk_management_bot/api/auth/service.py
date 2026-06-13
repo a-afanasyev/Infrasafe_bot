@@ -3,6 +3,7 @@ import hmac
 import json
 import logging
 import random
+import secrets
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -16,17 +17,25 @@ from uk_management_bot.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-SECRET_KEY = settings.JWT_SECRET or settings.INVITE_SECRET
+# SEC-02: JWT is signed with its OWN secret — never the invite-token HMAC key.
+# settings.py already fails fast in prod when JWT_SECRET is unset; the prod
+# branch here is defence-in-depth.
+SECRET_KEY = settings.JWT_SECRET
 if not SECRET_KEY:
     if settings.DEBUG:
-        SECRET_KEY = "dev-jwt-secret-DO-NOT-USE-IN-PROD"
-        logger.warning("Using development JWT secret — NOT safe for production")
+        # Dev only: ephemeral per-process secret. NOT a hardcoded constant —
+        # a leaked literal could forge tokens. Tokens won't survive a dev
+        # restart, which is acceptable locally.
+        SECRET_KEY = secrets.token_urlsafe(32)
+        logger.warning("JWT_SECRET unset — using an ephemeral dev secret (NOT for production)")
     else:
-        raise RuntimeError("JWT_SECRET or INVITE_SECRET must be set")
+        raise RuntimeError("JWT_SECRET must be set")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-REFRESH_TOKEN_EXPIRE_DAYS = 30
+# NICE-082: tightened 30d → 7d to shrink the stolen-refresh-token window.
+# (TWA endpoint issues an even shorter 24h refresh — see below.)
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 # TWA-08: refresh tokens issued from the TWA endpoint get a shorter TTL.
 # Telegram WebApp is re-opened by the user often (each open returns fresh
 # initData and a new refresh token), so 24h covers normal usage while

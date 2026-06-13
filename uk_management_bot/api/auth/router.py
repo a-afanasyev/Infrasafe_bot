@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.rate_limit import limiter, auth_ratelimit_guard
 from uk_management_bot.api.auth.schemas import (
     TokenResponse, WebTokenResponse,
     TelegramWidgetLogin, TWALogin,
@@ -25,7 +25,10 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.refresh_token import RefreshToken
 from uk_management_bot.config.settings import settings
 
-router = APIRouter()
+# SEC-04: every route here is a credential/token operation (login, OTP,
+# refresh, set-password, logout) — exactly the brute-force surface. Gate the
+# whole router fail-closed when the rate-limit backend is degraded.
+router = APIRouter(dependencies=[Depends(auth_ratelimit_guard)])
 
 
 # ---------------------------------------------------------------------------
