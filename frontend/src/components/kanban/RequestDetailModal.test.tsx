@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { render, screen, waitFor } from '../../test/test-utils'
 import { server } from '../../test/msw/server'
@@ -80,5 +81,30 @@ describe('RequestDetailModal — manager urgency editor gating (TASK 17)', () =>
     await renderModal(makeRequest({ urgency: 'Срочная', status: 'В работе' }))
     // tUrgency('Срочная') → 'Срочная' via dual-read; editable trigger present.
     expect(screen.getByRole('button', { name: /Срочная/ })).toBeInTheDocument()
+  })
+})
+
+describe('RequestDetailModal — FE-07 per-request state reset', () => {
+  it('clears the manager-note field when a different request opens (render-time reset, no remount)', async () => {
+    mockHasRole.mockReturnValue(true)
+    server.use(
+      http.get('*/api/v2/requests/:number/comments', () => HttpResponse.json([])),
+      http.get('*/api/v2/requests/:number', ({ params }) =>
+        HttpResponse.json(makeRequest({ request_number: params.number, status: 'В работе' }))),
+    )
+    const { rerender } = render(
+      <RequestDetailModal requestNumber="260101-001" onClose={noop} />,
+    )
+    await waitFor(() => expect(screen.getByText('Срочная')).toBeInTheDocument())
+
+    const note = screen.getByPlaceholderText('Добавить заметку...')
+    await userEvent.type(note, 'черновик')
+    expect(note).toHaveValue('черновик')
+
+    // Switch to a different request — state must reset without a key-remount.
+    rerender(<RequestDetailModal requestNumber="260101-002" onClose={noop} />)
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Добавить заметку...')).toHaveValue(''),
+    )
   })
 })

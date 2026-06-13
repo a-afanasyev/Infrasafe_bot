@@ -106,7 +106,14 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null)
 
-  useEffect(() => {
+  // FE-07: reset per-request form state when a *different* request opens.
+  // Done at render time («adjust state when input changes») rather than in an
+  // effect — avoids the set-state-in-effect cascade. We deliberately do NOT use
+  // `key={requestNumber}` to force a remount: that would unmount the Radix
+  // Dialog on close (requestNumber→null) and kill its exit animation.
+  const [shownRequest, setShownRequest] = useState(requestNumber)
+  if (requestNumber !== shownRequest) {
+    setShownRequest(requestNumber)
     setComment('')
     setConfirmNote('')
     setShowConfirmSection(false)
@@ -116,7 +123,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     setForceAcceptNote('')
     setRemindStatus('idle')
     setPendingTargetStatus(null)
-  }, [requestNumber])
+  }
 
   const { data: request } = useQuery({
     queryKey: ['request', requestNumber],
