@@ -43,6 +43,18 @@ class RequestCard(BaseModel):
     reopen_chain_id: Optional[str] = None
     related_request_number: Optional[str] = None
     engineer_required_reason: Optional[str] = None
+    # FE-119 — InfraSafe alert context (metric + infrastructure), surfaced on
+    # the detail endpoint from webhook_inbox.payload.alert. All optional / render
+    # -if-present: boolean alerts (LEAK_DETECTED) carry metric_label only, no
+    # value/range; numeric alerts (transformer/heating/voltage) carry the full
+    # set. metric_normal_* is the working threshold band (alert fires outside it),
+    # one-sided when only min OR max is present (e.g. heating ≥40).
+    metric_label: Optional[str] = None
+    metric_value: Optional[float] = None
+    metric_unit: Optional[str] = None
+    metric_normal_min: Optional[float] = None
+    metric_normal_max: Optional[float] = None
+    infrastructure_label: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
