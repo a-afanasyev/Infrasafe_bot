@@ -77,10 +77,10 @@ class AddressService:
                 )
             return yard, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("create_yard failed")
-            return None, "Не удалось сохранить изменения. Попробуйте позже."
+            return None, "save_failed"
 
     @staticmethod
     def get_yard_by_id(session: Session, yard_id: int) -> Optional[Yard]:
@@ -145,10 +145,10 @@ class AddressService:
                 yard = await _core.update_yard(adb, yard_id, updates)
             return yard, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("update_yard failed")
-            return None, "Не удалось сохранить изменения. Попробуйте позже."
+            return None, "save_failed"
 
     @staticmethod
     async def delete_yard(session: Session, yard_id: int) -> Tuple[bool, Optional[str]]:
@@ -158,10 +158,10 @@ class AddressService:
                 await _core.delete_yard(adb, yard_id)
             return True, None
         except AddressError as e:
-            return False, str(e)
+            return False, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("delete_yard failed")
-            return False, "Не удалось выполнить удаление. Попробуйте позже."
+            return False, "delete_failed"
 
     # ============= BUILDING MANAGEMENT =============
 
@@ -188,10 +188,10 @@ class AddressService:
                 )
             return building, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("create_building failed")
-            return None, "Не удалось сохранить изменения. Попробуйте позже."
+            return None, "save_failed"
 
     @staticmethod
     def get_building_by_id(
@@ -257,10 +257,10 @@ class AddressService:
                 building = await _core.update_building(adb, building_id, updates)
             return building, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("update_building failed")
-            return None, "Не удалось сохранить изменения. Попробуйте позже."
+            return None, "save_failed"
 
     @staticmethod
     async def delete_building(session: Session, building_id: int) -> Tuple[bool, Optional[str]]:
@@ -270,10 +270,10 @@ class AddressService:
                 await _core.delete_building(adb, building_id)
             return True, None
         except AddressError as e:
-            return False, str(e)
+            return False, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("delete_building failed")
-            return False, "Не удалось выполнить удаление. Попробуйте позже."
+            return False, "delete_failed"
 
     # ============= APARTMENT MANAGEMENT =============
 
@@ -299,10 +299,10 @@ class AddressService:
                 )
             return apartment, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("create_apartment failed")
-            return None, "Не удалось сохранить изменения. Попробуйте позже."
+            return None, "save_failed"
 
     @staticmethod
     async def bulk_create_apartments(
@@ -333,7 +333,7 @@ class AddressService:
                     apartment_numbers=apartment_numbers, created_by=created_by,
                 )
         except AddressError as e:
-            return 0, 0, [str(e)]
+            return 0, 0, [e.code or str(e)]
         except SQLAlchemyError:
             logger.exception("bulk_create_apartments failed")
             return 0, 0, ["Не удалось создать квартиры. Попробуйте позже."]
@@ -438,10 +438,10 @@ class AddressService:
                 apartment = await _core.update_apartment(adb, apartment_id, updates)
             return apartment, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("update_apartment failed")
-            return None, "Не удалось сохранить изменения. Попробуйте позже."
+            return None, "save_failed"
 
     @staticmethod
     async def delete_apartment(session: Session, apartment_id: int) -> Tuple[bool, Optional[str]]:
@@ -451,10 +451,10 @@ class AddressService:
                 await _core.delete_apartment(adb, apartment_id)
             return True, None
         except AddressError as e:
-            return False, str(e)
+            return False, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("delete_apartment failed")
-            return False, "Не удалось выполнить удаление. Попробуйте позже."
+            return False, "delete_failed"
 
     # ============= USER-APARTMENT MANAGEMENT =============
 
@@ -475,10 +475,10 @@ class AddressService:
                 )
             return ua, None
         except AddressError as e:
-            return None, str(e)
+            return None, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("request_apartment failed")
-            return None, "Не удалось создать заявку. Попробуйте позже."
+            return None, "request_create_failed"
 
     @staticmethod
     async def approve_apartment_request(
@@ -496,10 +496,10 @@ class AddressService:
                 )
             return True, None
         except AddressError as e:
-            return False, str(e)
+            return False, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("approve_apartment_request failed")
-            return False, "Не удалось обработать заявку. Попробуйте позже."
+            return False, "request_process_failed"
 
     @staticmethod
     async def reject_apartment_request(
@@ -517,10 +517,10 @@ class AddressService:
                 )
             return True, None
         except AddressError as e:
-            return False, str(e)
+            return False, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("reject_apartment_request failed")
-            return False, "Не удалось обработать заявку. Попробуйте позже."
+            return False, "request_process_failed"
 
     @staticmethod
     def get_pending_requests(
@@ -599,10 +599,10 @@ class AddressService:
                 )
             return True, None
         except AddressError as e:
-            return False, str(e)
+            return False, (e.code or str(e))
         except SQLAlchemyError:
             logger.exception("remove_user_from_apartment failed")
-            return False, "Не удалось выполнить удаление. Попробуйте позже."
+            return False, "delete_failed"
 
     # ============= STATISTICS =============
 

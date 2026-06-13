@@ -31,6 +31,7 @@ from uk_management_bot.keyboards.address_management import (
 )
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.address_helpers import localize_address_error
 from uk_management_bot.utils.button_texts import get_skip_texts, get_cancel_texts
 
 logger = logging.getLogger(__name__)
@@ -490,7 +491,7 @@ async def toggle_building_status(callback: CallbackQuery, language: str = "ru"):
         )
 
         if error:
-            await callback.answer(f"❌ {error}", show_alert=True)
+            await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
             return
 
         status_text = get_text("address_buildings.handlers.activated", language=lang) if new_status else get_text("address_buildings.handlers.deactivated", language=lang)
@@ -560,7 +561,7 @@ async def delete_building(callback: CallbackQuery, language: str = "ru"):
         success, error = await AddressService.delete_building(db, building_id)
 
         if not success:
-            await callback.answer(f"❌ {error}", show_alert=True)
+            await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
             return
 
         lang = language

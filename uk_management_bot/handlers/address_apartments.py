@@ -20,6 +20,7 @@ from uk_management_bot.database.session import get_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.address_helpers import localize_address_error
 from uk_management_bot.keyboards.address_management import (
     get_apartments_list_keyboard,
     get_apartment_details_keyboard,
@@ -1073,7 +1074,7 @@ async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext
         if errors:
             text += get_text("address_apartments.handlers.autofill_errors_header", language=lang)
             for error in errors[:5]:  # Показываем только первые 5 ошибок
-                text += f"• {error}\n"
+                text += f"• {localize_address_error(error, lang)}\n"
             if len(errors) > 5:
                 text += get_text("address_apartments.handlers.autofill_more_errors", language=lang).format(
                     count=len(errors) - 5

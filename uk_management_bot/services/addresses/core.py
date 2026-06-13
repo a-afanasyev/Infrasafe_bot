@@ -42,28 +42,28 @@ _APARTMENT_NUMBER_MAX_LEN = 20
 async def _get_yard_or_raise(db: AsyncSession, yard_id: int) -> Yard:
     yard = await db.get(Yard, yard_id)
     if yard is None:
-        raise AddressNotFound("Двор не найден")
+        raise AddressNotFound("Двор не найден", code="yard_not_found")
     return yard
 
 
 async def _get_building_or_raise(db: AsyncSession, building_id: int) -> Building:
     building = await db.get(Building, building_id)
     if building is None:
-        raise AddressNotFound("Здание не найдено")
+        raise AddressNotFound("Здание не найдено", code="building_not_found")
     return building
 
 
 async def _get_apartment_or_raise(db: AsyncSession, apartment_id: int) -> Apartment:
     apartment = await db.get(Apartment, apartment_id)
     if apartment is None:
-        raise AddressNotFound("Квартира не найдена")
+        raise AddressNotFound("Квартира не найдена", code="apartment_not_found")
     return apartment
 
 
 async def _get_user_apartment_or_raise(db: AsyncSession, ua_id: int) -> UserApartment:
     ua = await db.get(UserApartment, ua_id)
     if ua is None:
-        raise AddressNotFound("Заявка не найдена")
+        raise AddressNotFound("Заявка не найдена", code="request_not_found")
     return ua
 
 
@@ -195,7 +195,7 @@ async def create_building(
 ) -> Building:
     yard = await _get_yard_or_raise(db, yard_id)
     if not yard.is_active:
-        raise AddressConflict("Двор неактивен")
+        raise AddressConflict("Двор неактивен", code="yard_inactive")
 
     building = Building(
         address=address,
@@ -235,7 +235,7 @@ async def update_building(db: AsyncSession, building_id: int, updates: dict) -> 
     if "yard_id" in updates and updates["yard_id"] != building.yard_id:
         target_yard = await _get_yard_or_raise(db, updates["yard_id"])
         if not target_yard.is_active:
-            raise AddressConflict("Двор неактивен")
+            raise AddressConflict("Двор неактивен", code="yard_inactive")
 
     for field, value in updates.items():
         setattr(building, field, value)
@@ -287,7 +287,7 @@ async def create_apartment(
 ) -> Apartment:
     building = await _get_building_or_raise(db, building_id)
     if not building.is_active:
-        raise AddressConflict("Здание неактивно")
+        raise AddressConflict("Здание неактивно", code="building_inactive")
 
     clash = (await db.execute(
         select(Apartment.id).where(and_(
@@ -340,7 +340,7 @@ async def bulk_create_apartments(
     """
     building = await _get_building_or_raise(db, building_id)
     if not building.is_active:
-        raise AddressConflict("Здание неактивно")
+        raise AddressConflict("Здание неактивно", code="building_inactive")
 
     existing = set((await db.execute(
         select(Apartment.apartment_number).where(Apartment.building_id == building_id)
@@ -407,7 +407,7 @@ async def update_apartment(db: AsyncSession, apartment_id: int, updates: dict) -
     if "building_id" in updates and updates["building_id"] != apartment.building_id:
         target_building = await _get_building_or_raise(db, updates["building_id"])
         if not target_building.is_active:
-            raise AddressConflict("Здание неактивно")
+            raise AddressConflict("Здание неактивно", code="building_inactive")
 
     number_changed = "apartment_number" in updates and target_number != apartment.apartment_number
     building_changed = "building_id" in updates and target_building_id != apartment.building_id
@@ -471,7 +471,7 @@ async def request_apartment(
     """A resident requests a binding to an apartment (moderation: pending)."""
     apartment = await _get_apartment_or_raise(db, apartment_id)
     if not apartment.is_active:
-        raise AddressConflict("Квартира неактивна")
+        raise AddressConflict("Квартира неактивна", code="apartment_inactive")
 
     existing = (await db.execute(
         select(UserApartment).where(and_(
@@ -481,9 +481,9 @@ async def request_apartment(
     )).scalar_one_or_none()
     if existing is not None:
         if existing.status == "pending":
-            raise AddressConflict("Заявка уже отправлена и ожидает рассмотрения")
+            raise AddressConflict("Заявка уже отправлена и ожидает рассмотрения", code="request_already_pending")
         if existing.status == "approved":
-            raise AddressConflict("Вы уже подтверждены как житель этой квартиры")
+            raise AddressConflict("Вы уже подтверждены как житель этой квартиры", code="already_resident")
         if existing.status == "rejected":
             raise AddressConflict(
                 "Ваша предыдущая заявка была отклонена. Обратитесь к администратору."

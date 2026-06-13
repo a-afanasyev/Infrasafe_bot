@@ -8174,5 +8174,20 @@
     "success": "✅ Rahmat! Murojaatingiz qabul qilindi. Menejerlar xabardor qilindi.",
     "cancelled": "Murojaat bekor qilindi.",
     "reply_to_user": "💬 <b>Murojaatingizga javob</b>\n\n{reply}"
+  },
+  "address_errors": {
+    "yard_not_found": "Hovli topilmadi",
+    "building_not_found": "Bino topilmadi",
+    "apartment_not_found": "Xonadon topilmadi",
+    "request_not_found": "Ariza topilmadi",
+    "yard_inactive": "Hovli faol emas",
+    "building_inactive": "Bino faol emas",
+    "apartment_inactive": "Xonadon faol emas",
+    "request_already_pending": "Ariza allaqachon yuborilgan va ko'rib chiqilmoqda",
+    "already_resident": "Siz allaqachon ushbu xonadon rezidenti sifatida tasdiqlangansiz",
+    "save_failed": "O'zgarishlarni saqlab bo'lmadi. Keyinroq urinib ko'ring.",
+    "delete_failed": "O'chirishni bajarib bo'lmadi. Keyinroq urinib ko'ring.",
+    "request_create_failed": "Ariza yaratib bo'lmadi. Keyinroq urinib ko'ring.",
+    "request_process_failed": "Arizani qayta ishlab bo'lmadi. Keyinroq urinib ko'ring."
   }
 }
