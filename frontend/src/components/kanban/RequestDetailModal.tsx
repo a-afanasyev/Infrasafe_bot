@@ -644,16 +644,14 @@ function RequestMedia({ requestNumber }: { requestNumber: string }) {
 
 function MediaThumb({ id, isVideo, onOpen }: { id: number; isVideo: boolean; onOpen: () => void }) {
   const { t } = useTranslation()
-  const [url, setUrl] = useState<string | null>(null)
-  const [errored, setErrored] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    fetchMediaDataUrl(id)
-      .then((d) => { if (!cancelled) setUrl(d) })
-      .catch(() => { if (!cancelled) setErrored(true) })
-    return () => { cancelled = true }
-  }, [id])
+  // FE-11: cache the blob data-URL by media id (shared queryKey with the
+  // lightbox) so re-opening the modal or the viewer doesn't re-download.
+  const { data: url, isError: errored } = useQuery({
+    queryKey: ['media-blob', id],
+    queryFn: () => fetchMediaDataUrl(id),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
 
   if (errored) {
     return (
@@ -685,16 +683,19 @@ function MediaThumb({ id, isVideo, onOpen }: { id: number; isVideo: boolean; onO
 }
 
 function MediaLightbox({ id, onClose }: { id: number; onClose: () => void }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [isVideo, setIsVideo] = useState(false)
+  // FE-11: reuse the cached blob (shared ['media-blob', id]) — opening the
+  // viewer for a thumb that already loaded is instant, no re-download.
+  const { data: url, isError } = useQuery({
+    queryKey: ['media-blob', id],
+    queryFn: () => fetchMediaDataUrl(id),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  const isVideo = url?.startsWith('data:video') ?? false
 
   useEffect(() => {
-    let cancelled = false
-    fetchMediaDataUrl(id)
-      .then((d) => { if (!cancelled) { setUrl(d); setIsVideo(d.startsWith('data:video')) } })
-      .catch(() => { if (!cancelled) onClose() })
-    return () => { cancelled = true }
-  }, [id, onClose])
+    if (isError) onClose()
+  }, [isError, onClose])
 
   return (
     <div
