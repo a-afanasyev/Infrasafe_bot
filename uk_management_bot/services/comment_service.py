@@ -297,11 +297,13 @@ class CommentService:
     def _create_audit_log(self, request_number: str, user_id: int, action_description: str):
         """Создание записи в аудите"""
         try:
+            # CODE-09: убран битый kwarg timestamp= (нет такой колонки у
+            # AuditLog → TypeError молча гасился except'ом, аудит НЕ писался).
+            # created_at заполняется server_default=func.now() (UTC).
             audit_log = AuditLog(
                 user_id=user_id,
                 action=AUDIT_ACTION_REQUEST_STATUS_CHANGED,
                 details=f"Заявка {request_number}: {action_description}",
-                timestamp=datetime.now()
             )
             self.db.add(audit_log)
         except Exception as e:

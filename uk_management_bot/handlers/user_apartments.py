@@ -565,7 +565,7 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
         try:
             from uk_management_bot.database.models import UserApartment, User
             from sqlalchemy import select
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             user_apartment = db.execute(
                 select(UserApartment).where(UserApartment.id == user_apartment_id)
@@ -586,7 +586,7 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
 
             # Одобряем квартиру
             user_apartment.status = 'approved'
-            user_apartment.reviewed_at = datetime.now()
+            user_apartment.reviewed_at = datetime.now(timezone.utc)
             user_apartment.reviewed_by = admin.id
             user_apartment.admin_comment = f"Одобрено администратором {admin.first_name or callback.from_user.id}"
 
@@ -616,7 +616,7 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
         try:
             from uk_management_bot.database.models import UserApartment, User
             from sqlalchemy import select
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             user_apartment = db.execute(
                 select(UserApartment).where(UserApartment.id == user_apartment_id)
@@ -637,7 +637,7 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
 
             # Отклоняем квартиру
             user_apartment.status = 'rejected'
-            user_apartment.reviewed_at = datetime.now()
+            user_apartment.reviewed_at = datetime.now(timezone.utc)
             user_apartment.reviewed_by = admin.id
             user_apartment.admin_comment = f"Отклонено администратором {admin.first_name or callback.from_user.id}"
 

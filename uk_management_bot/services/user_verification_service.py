@@ -11,7 +11,7 @@
 import json
 import logging
 from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
@@ -58,7 +58,7 @@ class UserVerificationService:
                 # Обновляем существующую верификацию
                 existing_verification.status = VerificationStatus.REQUESTED
                 existing_verification.requested_info = requested_info
-                existing_verification.requested_at = datetime.now()
+                existing_verification.requested_at = datetime.now(timezone.utc)
                 existing_verification.requested_by = admin_id
                 self.db.commit()
                 return existing_verification
@@ -68,7 +68,7 @@ class UserVerificationService:
                 user_id=user_id,
                 status=VerificationStatus.REQUESTED,
                 requested_info=requested_info,
-                requested_at=datetime.now(),
+                requested_at=datetime.now(timezone.utc),
                 requested_by=admin_id
             )
             
@@ -104,7 +104,7 @@ class UserVerificationService:
 
             user.verification_status = "verified"
             user.verification_notes = notes
-            user.verification_date = datetime.now()
+            user.verification_date = datetime.now(timezone.utc)
             user.verified_by = admin_id
 
             # Обновляем статус верификации
@@ -118,7 +118,7 @@ class UserVerificationService:
             if verification:
                 verification.status = VerificationStatus.APPROVED
                 verification.verified_by = admin_id
-                verification.verified_at = datetime.now()
+                verification.verified_at = datetime.now(timezone.utc)
                 verification.admin_notes = notes
 
             self.db.commit()
@@ -135,7 +135,7 @@ class UserVerificationService:
                 approved_count = 0
                 for user_apartment in pending_apartments:
                     user_apartment.status = 'approved'
-                    user_apartment.reviewed_at = datetime.now()
+                    user_apartment.reviewed_at = datetime.now(timezone.utc)
                     user_apartment.reviewed_by = admin_id
                     user_apartment.admin_comment = "Автоматически одобрено при верификации пользователя"
                     approved_count += 1
@@ -194,7 +194,7 @@ class UserVerificationService:
             
             user.verification_status = "rejected"
             user.verification_notes = notes
-            user.verification_date = datetime.now()
+            user.verification_date = datetime.now(timezone.utc)
             user.verified_by = admin_id
             
             # Обновляем статус верификации
@@ -208,7 +208,7 @@ class UserVerificationService:
             if verification:
                 verification.status = VerificationStatus.REJECTED
                 verification.verified_by = admin_id
-                verification.verified_at = datetime.now()
+                verification.verified_at = datetime.now(timezone.utc)
                 verification.admin_notes = notes
             
             self.db.commit()
@@ -280,7 +280,7 @@ class UserVerificationService:
             document.verification_status = status
             document.verification_notes = notes
             document.verified_by = admin_id
-            document.verified_at = datetime.now()
+            document.verified_at = datetime.now(timezone.utc)
             
             self.db.commit()
             logger.info(f"Документ {document_id} проверен администратором {admin_id}")

@@ -6,7 +6,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from uk_management_bot.database.models.request import Request
@@ -81,7 +81,7 @@ class AssignmentService:
             # Обновляем заявку
             request.assignment_type = ASSIGNMENT_TYPE_GROUP
             request.assigned_group = specialization
-            request.assigned_at = datetime.now()
+            request.assigned_at = datetime.now(timezone.utc)
             request.assigned_by = assigned_by
             
             self.db.commit()
@@ -144,7 +144,7 @@ class AssignmentService:
             # Обновляем заявку
             request.assignment_type = ASSIGNMENT_TYPE_INDIVIDUAL
             request.executor_id = executor_id
-            request.assigned_at = datetime.now()
+            request.assigned_at = datetime.now(timezone.utc)
             request.assigned_by = assigned_by
             
             self.db.commit()
@@ -318,11 +318,12 @@ class AssignmentService:
     def _create_audit_log(self, request_number: str, user_id: int, action_description: str):
         """Создание записи в аудите"""
         try:
+            # CODE-09: убран битый kwarg timestamp= (нет колонки → TypeError
+            # гасился except'ом, аудит не писался). created_at = func.now() (UTC).
             audit_log = AuditLog(
                 user_id=user_id,
                 action=AUDIT_ACTION_REQUEST_ASSIGNED,
                 details=f"Заявка {request_number}: {action_description}",
-                timestamp=datetime.now()
             )
             self.db.add(audit_log)
         except Exception as e:
