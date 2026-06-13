@@ -18,6 +18,7 @@ from sqlalchemy.orm.exc import DetachedInstanceError
 from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment, User
 )
+from uk_management_bot.database.models.user_apartment import UserApartmentStatus
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.addresses import core as _core
 from uk_management_bot.services.addresses.exceptions import AddressError
@@ -521,7 +522,7 @@ class AddressService:
                 joinedload(UserApartment.user),
                 joinedload(UserApartment.apartment).joinedload(Apartment.building).joinedload(Building.yard)
             )
-            .where(UserApartment.status == 'pending')
+            .where(UserApartment.status == UserApartmentStatus.PENDING)
             .order_by(UserApartment.requested_at)
             .limit(limit)
         )
@@ -545,7 +546,7 @@ class AddressService:
         )
 
         if only_approved:
-            query = query.where(UserApartment.status == 'approved')
+            query = query.where(UserApartment.status == UserApartmentStatus.APPROVED)
 
         query = query.order_by(UserApartment.is_primary.desc(), UserApartment.requested_at)
 
@@ -566,7 +567,7 @@ class AddressService:
         )
 
         if only_approved:
-            query = query.where(UserApartment.status == 'approved')
+            query = query.where(UserApartment.status == UserApartmentStatus.APPROVED)
 
         query = query.order_by(UserApartment.is_owner.desc(), UserApartment.requested_at)
 
@@ -619,13 +620,13 @@ class AddressService:
                 'residents': {
                     'total': session.execute(select(func.count(UserApartment.id))).scalar(),
                     'approved': session.execute(
-                        select(func.count(UserApartment.id)).where(UserApartment.status == 'approved')
+                        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.APPROVED)
                     ).scalar(),
                     'pending': session.execute(
-                        select(func.count(UserApartment.id)).where(UserApartment.status == 'pending')
+                        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.PENDING)
                     ).scalar(),
                     'rejected': session.execute(
-                        select(func.count(UserApartment.id)).where(UserApartment.status == 'rejected')
+                        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.REJECTED)
                     ).scalar()
                 }
             }
@@ -659,7 +660,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return []
 
             # Получаем одобренные квартиры пользователя с eager loading
@@ -672,7 +673,7 @@ class AddressService:
                 .where(
                     and_(
                         UserApartment.user_id == user.id,
-                        UserApartment.status == 'approved',
+                        UserApartment.status == UserApartmentStatus.APPROVED,
                         Apartment.is_active == True
                     )
                 )
@@ -680,7 +681,7 @@ class AddressService:
             )
             apartments = result.scalars().unique().all()
 
-            logger.info(f"Найдено {len(apartments)} одобренных квартир для пользователя {user_telegram_id}")
+            logger.info("Найдено %s одобренных квартир для пользователя %s", len(apartments), user_telegram_id)
             return list(apartments)
 
         except SQLAlchemyError:
@@ -763,7 +764,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return []
 
             # 1. Получаем дворы через квартиры пользователя (основные дворы)
@@ -775,7 +776,7 @@ class AddressService:
                 .where(
                     and_(
                         UserApartment.user_id == user.id,
-                        UserApartment.status == 'approved',
+                        UserApartment.status == UserApartmentStatus.APPROVED,
                         Apartment.is_active == True,
                         Yard.is_active == True
                     )
@@ -839,7 +840,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return []
 
             # Получаем уникальные здания в дворе через квартиры пользователя
@@ -850,7 +851,7 @@ class AddressService:
                 .where(
                     and_(
                         UserApartment.user_id == user.id,
-                        UserApartment.status == 'approved',
+                        UserApartment.status == UserApartmentStatus.APPROVED,
                         Apartment.is_active == True,
                         Building.yard_id == yard_id,
                         Building.is_active == True
@@ -861,7 +862,7 @@ class AddressService:
             )
             buildings = result.scalars().all()
 
-            logger.info(f"Найдено {len(buildings)} доступных зданий в дворе {yard_id} для пользователя {user_telegram_id}")
+            logger.info("Найдено %s доступных зданий в дворе %s для пользователя %s", len(buildings), yard_id, user_telegram_id)
             return list(buildings)
 
         except SQLAlchemyError:
@@ -890,7 +891,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return []
 
             # Получаем квартиры пользователя в здании
@@ -903,7 +904,7 @@ class AddressService:
                 .where(
                     and_(
                         UserApartment.user_id == user.id,
-                        UserApartment.status == 'approved',
+                        UserApartment.status == UserApartmentStatus.APPROVED,
                         Apartment.building_id == building_id,
                         Apartment.is_active == True
                     )
@@ -912,7 +913,7 @@ class AddressService:
             )
             apartments = result.scalars().unique().all()
 
-            logger.info(f"Найдено {len(apartments)} доступных квартир в здании {building_id} для пользователя {user_telegram_id}")
+            logger.info("Найдено %s доступных квартир в здании %s для пользователя %s", len(apartments), building_id, user_telegram_id)
             return list(apartments)
 
         except SQLAlchemyError:
@@ -924,7 +925,7 @@ class AddressService:
     # ============= USER ADDITIONAL YARDS MANAGEMENT =============
 
     @staticmethod
-    def add_user_yard(session: Session, user_telegram_id: int, yard_id: int, granted_by_id: int, comment: str = None) -> bool:
+    def add_user_yard(session: Session, user_telegram_id: int, yard_id: int, granted_by_id: int, comment: Optional[str] = None) -> bool:
         """
         Добавить дополнительный двор пользователю
 
@@ -947,13 +948,13 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return False
 
             # Проверяем существование двора
             yard = session.get(Yard, yard_id)
             if not yard:
-                logger.warning(f"Двор {yard_id} не найден")
+                logger.warning("Двор %s не найден", yard_id)
                 return False
 
             # Проверяем, нет ли уже такой связи
@@ -967,7 +968,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if existing:
-                logger.info(f"Пользователь {user_telegram_id} уже имеет доступ к двору {yard_id}")
+                logger.info("Пользователь %s уже имеет доступ к двору %s", user_telegram_id, yard_id)
                 return False
 
             # Создаем связь
@@ -980,7 +981,7 @@ class AddressService:
             session.add(user_yard)
             session.commit()
 
-            logger.info(f"Добавлен дополнительный двор {yard_id} для пользователя {user_telegram_id}")
+            logger.info("Добавлен дополнительный двор %s для пользователя %s", yard_id, user_telegram_id)
             return True
 
         except SQLAlchemyError:
@@ -1012,7 +1013,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return False
 
             # Находим связь
@@ -1026,13 +1027,13 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user_yard:
-                logger.warning(f"Связь пользователя {user_telegram_id} с двором {yard_id} не найдена")
+                logger.warning("Связь пользователя %s с двором %s не найдена", user_telegram_id, yard_id)
                 return False
 
             session.delete(user_yard)
             session.commit()
 
-            logger.info(f"Удален дополнительный двор {yard_id} у пользователя {user_telegram_id}")
+            logger.info("Удален дополнительный двор %s у пользователя %s", yard_id, user_telegram_id)
             return True
 
         except SQLAlchemyError:
@@ -1063,7 +1064,7 @@ class AddressService:
             ).scalar_one_or_none()
 
             if not user:
-                logger.warning(f"Пользователь {user_telegram_id} не найден")
+                logger.warning("Пользователь %s не найден", user_telegram_id)
                 return []
 
             # Получаем дополнительные дворы
@@ -1080,7 +1081,7 @@ class AddressService:
             )
             yards = result.scalars().all()
 
-            logger.info(f"Найдено {len(yards)} дополнительных дворов для пользователя {user_telegram_id}")
+            logger.info("Найдено %s дополнительных дворов для пользователя %s", len(yards), user_telegram_id)
             return list(yards)
 
         except SQLAlchemyError:

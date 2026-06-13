@@ -1,10 +1,25 @@
 """
 Модель связи пользователя и квартиры с модерацией
 """
+import enum
+from typing import Optional
+
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
+
+
+class UserApartmentStatus(str, enum.Enum):
+    """REFACTOR-089: канонические статусы модерации связи пользователь-квартира.
+
+    `str`-подкласс → wire-совместим со строковой колонкой `status`: член равен
+    своему значению ('approved' и т.п.), SQLAlchemy биндит value, поэтому
+    сравнения/записи дают те же строки, что и раньше.
+    """
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class UserApartment(Base):
@@ -23,7 +38,7 @@ class UserApartment(Base):
     apartment_id = Column(Integer, ForeignKey("apartments.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Модерация
-    status = Column(String(20), default='pending', nullable=False, index=True)  # pending, approved, rejected
+    status = Column(String(20), default=UserApartmentStatus.PENDING.value, nullable=False, index=True)  # pending, approved, rejected
     requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -53,29 +68,29 @@ class UserApartment(Base):
     @property
     def is_pending(self) -> bool:
         """Заявка на рассмотрении"""
-        return self.status == 'pending'
+        return self.status == UserApartmentStatus.PENDING
 
     @property
     def is_approved(self) -> bool:
         """Заявка подтверждена"""
-        return self.status == 'approved'
+        return self.status == UserApartmentStatus.APPROVED
 
     @property
     def is_rejected(self) -> bool:
         """Заявка отклонена"""
-        return self.status == 'rejected'
+        return self.status == UserApartmentStatus.REJECTED
 
-    def approve(self, reviewer_id: int, comment: str = None):
+    def approve(self, reviewer_id: int, comment: Optional[str] = None):
         """Подтвердить связь"""
-        self.status = 'approved'
+        self.status = UserApartmentStatus.APPROVED.value
         self.reviewed_by = reviewer_id
         self.reviewed_at = func.now()
         if comment:
             self.admin_comment = comment
 
-    def reject(self, reviewer_id: int, comment: str = None):
+    def reject(self, reviewer_id: int, comment: Optional[str] = None):
         """Отклонить связь"""
-        self.status = 'rejected'
+        self.status = UserApartmentStatus.REJECTED.value
         self.reviewed_by = reviewer_id
         self.reviewed_at = func.now()
         if comment:

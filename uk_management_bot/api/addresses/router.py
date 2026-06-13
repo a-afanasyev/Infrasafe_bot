@@ -17,7 +17,7 @@ from uk_management_bot.api.addresses.schemas import (
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.apartment import Apartment
-from uk_management_bot.database.models.user_apartment import UserApartment
+from uk_management_bot.database.models.user_apartment import UserApartment, UserApartmentStatus
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.addresses import core
@@ -68,10 +68,10 @@ async def get_stats(
     )).scalar() or 0
 
     residents_approved = (await db.execute(
-        select(func.count(UserApartment.id)).where(UserApartment.status == "approved")
+        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.APPROVED)
     )).scalar() or 0
     residents_pending = (await db.execute(
-        select(func.count(UserApartment.id)).where(UserApartment.status == "pending")
+        select(func.count(UserApartment.id)).where(UserApartment.status == UserApartmentStatus.PENDING)
     )).scalar() or 0
 
     return AddressStatsOut(
@@ -469,7 +469,7 @@ async def list_apartments(
             select(UserApartment.apartment_id, func.count(UserApartment.id))
             .where(and_(
                 UserApartment.apartment_id.in_(apt_ids),
-                UserApartment.status == "approved",
+                UserApartment.status == UserApartmentStatus.APPROVED,
             ))
             .group_by(UserApartment.apartment_id)
         )
@@ -555,7 +555,7 @@ async def update_apartment(
     residents_count = (await db.execute(
         select(func.count(UserApartment.id)).where(and_(
             UserApartment.apartment_id == apartment_id,
-            UserApartment.status == "approved",
+            UserApartment.status == UserApartmentStatus.APPROVED,
         ))
     )).scalar() or 0
 
@@ -610,7 +610,7 @@ async def purge_apartment(
     approved_residents = (await db.execute(
         select(func.count(UserApartment.id)).where(and_(
             UserApartment.apartment_id == apartment_id,
-            UserApartment.status == "approved",
+            UserApartment.status == UserApartmentStatus.APPROVED,
         ))
     )).scalar() or 0
     if approved_residents > 0:
@@ -664,7 +664,7 @@ async def list_all_apartments(
             select(UserApartment.apartment_id, func.count(UserApartment.id))
             .where(and_(
                 UserApartment.apartment_id.in_(apt_ids),
-                UserApartment.status == "approved",
+                UserApartment.status == UserApartmentStatus.APPROVED,
             ))
             .group_by(UserApartment.apartment_id)
         )
@@ -719,7 +719,7 @@ async def search_apartments(
             select(UserApartment.apartment_id, func.count(UserApartment.id))
             .where(and_(
                 UserApartment.apartment_id.in_(apt_ids),
-                UserApartment.status == "approved",
+                UserApartment.status == UserApartmentStatus.APPROVED,
             ))
             .group_by(UserApartment.apartment_id)
         )
@@ -816,7 +816,7 @@ async def list_pending(
         .join(Apartment, UserApartment.apartment_id == Apartment.id)
         .join(Building, Apartment.building_id == Building.id)
         .join(Yard, Building.yard_id == Yard.id)
-        .where(UserApartment.status == "pending")
+        .where(UserApartment.status == UserApartmentStatus.PENDING)
         .order_by(UserApartment.requested_at.asc())
     )
     result = await db.execute(query)
