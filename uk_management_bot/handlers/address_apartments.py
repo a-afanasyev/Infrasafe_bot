@@ -143,12 +143,12 @@ async def show_apartments_by_building(callback: CallbackQuery, language: str = "
 
     db = next(get_db())
     try:
-        building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
+        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
         if not building:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return
 
-        apartments = await AddressService.get_apartments_by_building(db, building_id, only_active=False)
+        apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
 
         text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
             address=building.address,
@@ -180,12 +180,12 @@ async def paginate_apartments_by_building(callback: CallbackQuery, language: str
 
     db = next(get_db())
     try:
-        building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
+        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
         if not building:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return
 
-        apartments = await AddressService.get_apartments_by_building(db, building_id, only_active=False)
+        apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
 
         text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
             address=building.address,
@@ -246,7 +246,7 @@ async def process_apartment_search(message: Message, state: FSMContext, language
 
     db = next(get_db())
     try:
-        apartments = await AddressService.search_apartments(db, query, only_active=True)
+        apartments = AddressService.search_apartments(db, query, only_active=True)
 
         if not apartments:
             no_results_text = (
@@ -294,7 +294,7 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru"):
 
     db = next(get_db())
     try:
-        apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
 
         if not apartment:
             await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
@@ -357,12 +357,12 @@ async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"
 
     db = next(get_db())
     try:
-        apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
         if not apartment:
             await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
             return
 
-        residents = await AddressService.get_apartment_residents(db, apartment_id, only_approved=False)
+        residents = AddressService.get_apartment_residents(db, apartment_id, only_approved=False)
 
         text = get_text("address_apartments.handlers.residents_title", language=lang).format(
             number=apartment.apartment_number
@@ -469,7 +469,7 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
 
     db = next(get_db())
     try:
-        building = await AddressService.get_building_by_id(db, building_id)
+        building = AddressService.get_building_by_id(db, building_id)
         building_addr = building.address if building else get_text("address_apartments.handlers.unknown_building", language=lang)
 
         await callback.message.edit_text(
@@ -727,7 +727,7 @@ async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru")
 
     db = next(get_db())
     try:
-        apartment = await AddressService.get_apartment_by_id(db, apartment_id)
+        apartment = AddressService.get_apartment_by_id(db, apartment_id)
         if not apartment:
             await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
             return
@@ -768,7 +768,7 @@ async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "r
 
     db = next(get_db())
     try:
-        apartment = await AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
         if not apartment:
             await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
             return
@@ -931,7 +931,7 @@ async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, 
 
     db = next(get_db())
     try:
-        building = await AddressService.get_building_by_id(db, building_id, include_yard=True)
+        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
         if not building:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return

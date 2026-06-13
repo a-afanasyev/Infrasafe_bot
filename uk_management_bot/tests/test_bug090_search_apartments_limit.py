@@ -29,7 +29,7 @@ async def test_search_apartments_query_is_bounded():
     session = MagicMock()
     session.execute.side_effect = _execute
 
-    await AddressService.search_apartments(session, "1")
+    AddressService.search_apartments(session, "1")
 
     compiled = str(captured["query"]).upper()
     assert "LIMIT" in compiled, "search_apartments must apply a LIMIT (BUG-090)"

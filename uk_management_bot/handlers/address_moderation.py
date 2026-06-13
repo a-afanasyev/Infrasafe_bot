@@ -41,7 +41,7 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext, langu
 
     db = next(get_db())
     try:
-        requests = await AddressService.get_pending_requests(db, limit=50)
+        requests = AddressService.get_pending_requests(db, limit=50)
 
         if not requests:
             lang = language
@@ -73,7 +73,7 @@ async def show_moderation_page(callback: CallbackQuery, language: str = "ru"):
 
     db = next(get_db())
     try:
-        requests = await AddressService.get_pending_requests(db, limit=50)
+        requests = AddressService.get_pending_requests(db, limit=50)
 
         lang = language
         text = get_text("address_moderation.handlers.moderation_list_page", language=lang).format(page=page + 1, total=len(requests))
