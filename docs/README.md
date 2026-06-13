@@ -9,7 +9,6 @@
 
 - **[README.md](README.md)** - Главное описание проекта
 - **[QUICK_START.md](QUICK_START.md)** - Быстрый запуск бота
-- **[QUICKSTART.md](QUICKSTART.md)** - Альтернативный быстрый старт
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** - Руководство по разработке
 
 ---
@@ -23,12 +22,6 @@
 ---
 
 ## 🔧 Конфигурация и развертывание
-
-### Unified Deployment
-- **[UNIFIED_DEPLOYMENT.md](UNIFIED_DEPLOYMENT.md)** - Полное руководство по развертыванию
-- **[UNIFIED_SUMMARY.md](UNIFIED_SUMMARY.md)** - Резюме единого развертывания
-- **[UNIFIED_INDEX.md](UNIFIED_INDEX.md)** - Индекс unified файлов
-- **[README.UNIFIED.md](README.UNIFIED.md)** - README для unified deployment
 
 ### Docker
 - **[DOCKER_SETUP.md](DOCKER_SETUP.md)** - Настройка Docker окружения

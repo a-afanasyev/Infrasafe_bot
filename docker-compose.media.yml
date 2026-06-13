@@ -1,0 +1,39 @@
+# Override-compose: integrates media-service into the main uk stack.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.media.yml up -d
+#
+# Shares uk-network, postgres (own logical DB uk_media), redis with the
+# main stack. Configured by media_service/.env (TG bot token, channels,
+# SECRET_KEY, MEDIA_API_KEYS, DATABASE_URL=postgresql://...@postgres/uk_media).
+services:
+  media-service:
+    build:
+      context: ./media_service
+      dockerfile: Dockerfile
+    image: uk-media-service
+    container_name: uk-media-service
+    restart: unless-stopped
+    env_file:
+      - media_service/.env
+    volumes:
+      - media_uploads:/app/data/uploads
+      - ./media_service/channels.json:/app/data/channels.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+    ports:
+      - "127.0.0.1:8009:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  media_uploads:
+    driver: local
