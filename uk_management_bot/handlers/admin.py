@@ -57,7 +57,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.filters import RoleFilter
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -2113,7 +2113,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
                 request.notes = request.notes.strip() + "\n\n" + new_note
             else:
                 request.notes = new_note
-            request.updated_at = datetime.now()
+            request.updated_at = datetime.now(timezone.utc)
             db.commit()
 
 
@@ -2494,7 +2494,7 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
         old_comment = request.manager_materials_comment
         new_comment = message.text.strip()
         request.manager_materials_comment = new_comment
-        request.updated_at = datetime.now()
+        request.updated_at = datetime.now(timezone.utc)
         
         # Обновляем историю закупов для сохранения данных
         requested_materials = request.requested_materials or get_text("admin.handlers.not_specified", language=lang)

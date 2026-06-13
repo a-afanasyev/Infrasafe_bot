@@ -8,7 +8,7 @@ the plan. So the transfer service must write the canonical columns. No reader
 consumes `actual_*` and no migration is added (option b).
 """
 import inspect
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from uk_management_bot.database.models.shift import Shift
@@ -25,8 +25,10 @@ def test_empty_transfer_writes_canonical_end_and_start_times():
     `end_time` column and (re)start the incoming shift on `start_time` — not on
     the unmapped `actual_*` attributes."""
     svc = _svc()
-    old = datetime(2020, 1, 1, 0, 0)
-    outgoing = Shift(id=1, start_time=datetime(2026, 4, 5, 9, 0), status="active")
+    # CODE-09: Shift.start_time/end_time — tz=True; сервис пишет aware UTC,
+    # поэтому литералы сравнения тоже aware (иначе naive↔aware TypeError).
+    old = datetime(2020, 1, 1, 0, 0, tzinfo=timezone.utc)
+    outgoing = Shift(id=1, start_time=datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc), status="active")
     outgoing.executor_id = 10  # service reads it; not a mapped column (out of scope)
     outgoing.end_time = None
     incoming = Shift(id=2, start_time=old, status="planned")

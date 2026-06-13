@@ -3,7 +3,7 @@
 Обеспечивает интеллектуальное распределение исполнителей с учетом специализаций, нагрузки и предпочтений
 """
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import and_, or_, func, desc
 from sqlalchemy.orm import Session
@@ -205,7 +205,7 @@ class ShiftAssignmentService:
 
             # Выполняем назначение
             shift.user_id = best_executor.executor_id
-            shift.assigned_at = datetime.now()
+            shift.assigned_at = datetime.now(timezone.utc)
             shift.assigned_by_user_id = None  # Системное назначение
 
             # Создаем запись аудита
@@ -706,7 +706,7 @@ class ShiftAssignmentService:
                         # Выполняем перенос
                         old_executor_id = shift.user_id
                         shift.user_id = underloaded_executor
-                        shift.assigned_at = datetime.now()
+                        shift.assigned_at = datetime.now(timezone.utc)
 
                         redistributions.append({
                             'shift_id': shift.id,

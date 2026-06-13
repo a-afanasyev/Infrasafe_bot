@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
@@ -85,7 +85,7 @@ class ShiftService:
 
             shift = Shift(
                 user_id=user.id,
-                start_time=datetime.now(),
+                start_time=datetime.now(timezone.utc),
                 status=SHIFT_STATUS_ACTIVE,
                 notes=notes,
             )
@@ -127,7 +127,7 @@ class ShiftService:
             if not active:
                 return {"success": False, "message": "Нет активной смены", "shift": None}
 
-            active.end_time = datetime.now()
+            active.end_time = datetime.now(timezone.utc)
             active.status = SHIFT_STATUS_COMPLETED
             if notes:
                 active.notes = (active.notes or "") + (f"\n{notes}" if active.notes else notes)
@@ -173,7 +173,7 @@ class ShiftService:
             if not active:
                 return {"success": False, "message": "У пользователя нет активной смены", "shift": None}
 
-            active.end_time = datetime.now()
+            active.end_time = datetime.now(timezone.utc)
             active.status = SHIFT_STATUS_COMPLETED
             if notes:
                 active.notes = (active.notes or "") + (f"\n{notes}" if active.notes else notes)

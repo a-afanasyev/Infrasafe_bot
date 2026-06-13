@@ -3,7 +3,7 @@
 Обеспечивает непрерывность обслуживания при смене дежурного персонала
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import and_, or_, func, desc, case
 from sqlalchemy.orm import Session
@@ -220,9 +220,9 @@ class ShiftTransferService:
         # BUG-123: пишем канонические start_time/end_time — модель Shift не имеет
         # колонок actual_* (присваивание молча терялось, persist не происходил).
         outgoing_shift.status = "completed"
-        outgoing_shift.end_time = datetime.now()
+        outgoing_shift.end_time = datetime.now(timezone.utc)
         incoming_shift.status = "active"
-        incoming_shift.start_time = datetime.now()
+        incoming_shift.start_time = datetime.now(timezone.utc)
 
         return transfer
     
@@ -303,7 +303,7 @@ class ShiftTransferService:
             # Переназначаем заявку на входящего исполнителя
             old_executor_id = request.executor_id
             request.executor_id = transfer.incoming_executor_id
-            request.assigned_at = datetime.now()
+            request.assigned_at = datetime.now(timezone.utc)
             request.assigned_by = transfer.outgoing_executor_id  # Кто передал
             
             # Добавляем комментарий о передаче
@@ -373,7 +373,7 @@ class ShiftTransferService:
             
             # Завершаем передачу
             transfer.status = TransferStatus.COMPLETED
-            transfer.completed_at = datetime.now()
+            transfer.completed_at = datetime.utcnow()
             if completion_notes:
                 transfer.transfer_notes = completion_notes
             
@@ -384,14 +384,14 @@ class ShiftTransferService:
             if outgoing_shift:
                 outgoing_shift.status = "completed"
                 # BUG-123: канонический end_time вместо unmapped actual_* поля.
-                outgoing_shift.end_time = datetime.now()
+                outgoing_shift.end_time = datetime.now(timezone.utc)
 
                 # Обновляем статистику исходящей смены
                 outgoing_shift.completed_requests = transfer.transferred_requests + transfer.failed_requests
 
             if incoming_shift:
                 incoming_shift.status = "active"
-                incoming_shift.start_time = datetime.now()
+                incoming_shift.start_time = datetime.now(timezone.utc)
             
             # Создаем финальный аудит
             self._create_transfer_audit(transfer, executor_id, "completed")
