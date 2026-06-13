@@ -26,7 +26,9 @@ if _settings.SENTRY_DSN:
 from uk_management_bot.api.auth.router import router as auth_router
 from uk_management_bot.api.requests.router import router as requests_router
 from uk_management_bot.api.callcenter.router import router as callcenter_router
-from uk_management_bot.api.notifications.router import router as notifications_router
+# DEAD-08 (PR-11): api/notifications удалён — 0 вызовов с фронта, 0 хитов в
+# прод-access-логах, закрыт edge-allowlist'ом SEC-22; модель Notification
+# живёт (бот-уведомления).
 from uk_management_bot.api.profile.router import router as profile_router
 from uk_management_bot.api.ws.router import router as ws_router
 from uk_management_bot.api.shifts.router import router as shifts_router
@@ -202,7 +204,6 @@ app.include_router(auth_router, prefix="/api/v2/auth", tags=["auth"])
 app.include_router(requests_stats_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(requests_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(callcenter_router, prefix="/api/v2/callcenter", tags=["callcenter"])
-app.include_router(notifications_router, prefix="/api/v2/notifications", tags=["notifications"])
 app.include_router(profile_router, prefix="/api/v2/profile", tags=["profile"])
 app.include_router(ws_router, prefix="/ws/v2", tags=["websocket"])
 app.include_router(shifts_router, prefix="/api/v2/shifts", tags=["shifts"])

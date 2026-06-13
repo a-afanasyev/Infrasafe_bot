@@ -3,7 +3,6 @@ import pytest
 from pydantic import ValidationError
 
 from uk_management_bot.api.profile.router import (
-    MAX_UPLOAD_SIZE,
     ALLOWED_LANGUAGES,
     ProfileOut,
     UpdateProfileBody,
@@ -13,12 +12,11 @@ from uk_management_bot.api.profile.router import (
 
 
 # ═══════════════════════ Constants ═══════════════════════
+# DEAD-07 (PR-11): MAX_UPLOAD_SIZE / ALLOWED_DOCUMENT_TYPES / ALLOWED_MIME_TYPES
+# удалены вместе с POST /profile/documents.
 
 
 class TestProfileConstants:
-
-    def test_max_upload_size_is_10mb(self):
-        assert MAX_UPLOAD_SIZE == 10 * 1024 * 1024
 
     def test_allowed_languages(self):
         assert "ru" in ALLOWED_LANGUAGES

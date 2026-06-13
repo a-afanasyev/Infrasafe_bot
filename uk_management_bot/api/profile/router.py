@@ -1,18 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles, _parse_user_roles
 from uk_management_bot.database.models.user import User
-from uk_management_bot.api.rate_limit import limiter
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 router = APIRouter()
 
-MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_LANGUAGES = {"ru", "uz"}
-ALLOWED_DOCUMENT_TYPES = frozenset({"passport", "license", "insurance", "medical", "contract"})
-ALLOWED_MIME_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png", "image/webp"})
 
 
 class ProfileOut(BaseModel):
@@ -83,40 +79,9 @@ async def update_profile(
     return {"ok": True}
 
 
-@router.post("/documents")
-@limiter.limit("10/minute")
-async def upload_document(
-    request: Request,
-    document_type: str,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    if document_type not in ALLOWED_DOCUMENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid document_type. Allowed: {', '.join(sorted(ALLOWED_DOCUMENT_TYPES))}",
-        )
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type not allowed. Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}",
-        )
-    # Read in chunks to enforce size limit
-    content = bytearray()
-    while True:
-        chunk = await file.read(8192)
-        if not chunk:
-            break
-        content.extend(chunk)
-        if len(content) > MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File too large (max {MAX_UPLOAD_SIZE // 1024 // 1024} MB)",
-            )
-
-    # TODO: integrate with MediaServiceClient
-    return {"ok": True, "document_type": document_type, "filename": file.filename}
+# DEAD-07 (PR-11): POST /profile/documents удалён — 0 вызовов (фронт grep,
+# прод-access-логи api за всю историю), TODO-заглушка без интеграции с
+# MediaService; документы загружаются бот-флоу (handlers/onboarding).
 
 
 # ── Role switch ──────────────────────────────────────────
