@@ -102,6 +102,36 @@ async def test_return_to_employee_info_is_render_only(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_unblock_re_renders_card_not_list(monkeypatch):
+    """MGR-05 follow-up: unblock must re-render the card via _return_to_employee_info,
+    not call show_employee_list(callback) (which parsed unblock_employee_<id> as a
+    list callback and raised IndexError)."""
+    monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
+    auth = MagicMock()
+    auth.approve_user.return_value = True
+    monkeypatch.setattr(emp, "AuthService", lambda db: auth)
+    render = AsyncMock()
+    monkeypatch.setattr(emp, "_return_to_employee_info", render)
+    show_list = AsyncMock()
+    monkeypatch.setattr(emp, "show_employee_list", show_list)
+
+    callback = MagicMock()
+    callback.data = "unblock_employee_41"
+    callback.from_user.id = 1
+    callback.answer = AsyncMock()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = MagicMock()
+
+    await emp.unblock_employee(
+        callback, db=db, roles=["manager"], user=MagicMock(), language="ru"
+    )
+
+    render.assert_awaited_once()
+    assert render.await_args.args[2] == 41
+    show_list.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_return_to_employee_info_missing_returns_false(monkeypatch):
     svc = MagicMock()
     svc.get_user_by_id.return_value = None
