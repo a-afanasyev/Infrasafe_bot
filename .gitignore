@@ -189,6 +189,9 @@ ssl/
 .swarm/
 .cursor/
 
+# Stray root-level node_modules (frontend deps live in frontend/node_modules)
+/node_modules/
+
 # E2E (Playwright) generated artifacts — keep specs/ + config, ignore generated
 tests/e2e/node_modules/
 tests/e2e/html-report/

@@ -694,6 +694,81 @@ async def show_user_list(callback: CallbackQuery, db: Session, roles: list = Non
         )
 
 
+# ═══ ПОИСК ЖИТЕЛЕЙ (MGR-02) ═══
+
+@router.callback_query(F.data == "user_mgmt_search")
+async def start_resident_search(callback: CallbackQuery, state: FSMContext, db: Session = None, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+    """MGR-02: вход в поиск жителей. Раньше клик «🔍 Поиск» был no-op (не было
+    prompt + FSM-state). Аналог employee-поиска, но фильтр — только applicant."""
+    lang = language
+
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
+
+    try:
+        await callback.message.edit_text(
+            get_text('user_management.search_instructions', language=lang),
+            reply_markup=get_cancel_keyboard(lang)
+        )
+        await state.set_state(UserManagementStates.waiting_for_search_query)
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка начала поиска жителей: {e}")
+        await callback.answer(get_text('errors.unknown_error', language=lang), show_alert=True)
+
+
+@router.message(UserManagementStates.waiting_for_search_query)
+async def handle_resident_search_query(message: Message, state: FSMContext, db: Session = None, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+    """MGR-02: обработка введённого запроса поиска жителей.
+
+    Ищем только жителей (applicant) по имени/фамилии/username/телефону через
+    UserManagementService.search_residents → кнопки ведут в карточку
+    `user_mgmt_user_<id>` (show_user_details).
+    """
+    lang = language
+
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
+
+    raw_query = (message.text or "").strip()
+    if not raw_query:
+        await message.answer(get_text('user_management.search_empty_query', language=lang))
+        return
+
+    try:
+        residents = UserManagementService(db).search_residents(raw_query, limit=20)
+
+        if not residents:
+            await message.answer(
+                get_text('user_management.search_not_found', language=lang),
+                reply_markup=get_cancel_keyboard(lang)
+            )
+            await state.clear()
+            return
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        rows = []
+        for resident in residents:
+            name = f"{resident.first_name or ''} {resident.last_name or ''}".strip()
+            if not name:
+                name = f"@{resident.username}" if resident.username else f"ID: {resident.telegram_id}"
+            rows.append([InlineKeyboardButton(text=name, callback_data=f"user_mgmt_user_{resident.id}")])
+
+        await message.answer(
+            get_text('user_management.search_results_header', language=lang),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)
+        )
+        await state.clear()
+
+    except Exception as e:
+        logger.error(f"Ошибка поиска жителей: {e}")
+        await message.answer(get_text('errors.unknown_error', language=lang))
+        await state.clear()
+
+
 # ═══ ДЕЙСТВИЯ С ПОЛЬЗОВАТЕЛЯМИ ═══
 
 @router.callback_query(F.data.startswith("user_mgmt_user_"))

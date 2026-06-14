@@ -222,12 +222,13 @@ class TestGetEmployeeSpecializationsKeyboard:
             result = get_specializations_selection_keyboard(["plumber"])
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_nine_spec_buttons_plus_save_cancel(self):
+    def test_has_ten_spec_buttons_plus_save_cancel(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.employee_management import get_specializations_selection_keyboard
             result = get_specializations_selection_keyboard([])
-        # 9 specializations + save + cancel = 11
-        assert len(_flat_texts(result)) == 11
+        # MGR-07: single source = AVAILABLE_SPECIALIZATIONS (10, incl. 'general')
+        # + save + cancel = 12. Раньше был хардкод из 9 (без 'general').
+        assert len(_flat_texts(result)) == 12
 
     def test_spec_toggle_callbacks(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
@@ -236,6 +237,7 @@ class TestGetEmployeeSpecializationsKeyboard:
         cbs = _flat_cbs(result)
         assert "spec_toggle_plumber" in cbs
         assert "spec_toggle_electrician" in cbs
+        assert "spec_toggle_general" in cbs  # MGR-07: 'general' now present
 
     def test_none_selected_defaults_to_empty(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):

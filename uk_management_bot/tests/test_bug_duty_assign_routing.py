@@ -162,3 +162,51 @@ def test_deny_fsm_reason_consumer_registered():
     against silently breaking the reason-input step when touching the deny callback."""
     message_handler_names = [h.callback.__name__ for h in admin_router.message.handlers]
     assert "handle_cancel_reason_text" in message_handler_names
+
+
+# ---------------------------------------------------------------------------
+# PR-25 (BUG-BOT-034/037): accept_/purchase_ used to have bare-prefix duplicates
+# in requests.py (registered before admin_router) that shadowed the canonical
+# admin handlers. The requests.py copies were removed and the admin filters
+# tightened to a strict request-number regex. accept_ in requests.py was a manual
+# status flip; purchase_ in requests.py prematurely set "Закуп" without the
+# material-input prompt. admin.py is the sole, canonical owner now.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_router_owns_accept():
+    assert await _matching_handlers(admin_router, "accept_250528-001") == [
+        "handle_accept_request"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_requests_router_does_not_shadow_accept():
+    assert await _matching_handlers(requests_router, "accept_250528-001") == []
+
+
+@pytest.mark.asyncio
+async def test_admin_router_owns_purchase():
+    assert await _matching_handlers(admin_router, "purchase_250528-001") == [
+        "handle_purchase_request"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_requests_router_does_not_shadow_purchase():
+    assert await _matching_handlers(requests_router, "purchase_250528-001") == []
+
+
+@pytest.mark.asyncio
+async def test_accept_request_prefix_not_caught_by_manager_accept():
+    """accept_request_* (executor accept, request_acceptance.py) must NOT reach the
+    manager accept handler after the strict-regex tightening."""
+    assert await _matching_handlers(admin_router, "accept_request_250528-001") == []
+
+
+@pytest.mark.asyncio
+async def test_purchase_materials_not_caught_by_manager_purchase():
+    """purchase_materials_* (material-input flow) must NOT reach the manager purchase
+    handler."""
+    assert await _matching_handlers(admin_router, "purchase_materials_250528-001") == []

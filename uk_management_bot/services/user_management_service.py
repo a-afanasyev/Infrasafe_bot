@@ -432,13 +432,50 @@ class UserManagementService:
                 'filters': filters or {}
             }
     
+    def search_residents(self, query: str, limit: int = 20) -> List[User]:
+        """MGR-02: поиск жителей (заявителей) по имени/фамилии/username/телефону.
+
+        Применяет тот же applicant-предикат, что `get_residents_by_status`
+        (новая JSON-система ролей + legacy `role`), поэтому пользователи без роли
+        applicant (например, только-сотрудники) в результаты не попадают, а
+        multi-role applicant+executor — попадают.
+        """
+        try:
+            pattern = f"%{(query or '').strip()}%"
+            return (
+                self.db.query(User)
+                .filter(
+                    and_(
+                        or_(
+                            User.roles.contains('applicant'),
+                            and_(
+                                or_(User.roles.is_(None), User.roles == ''),
+                                User.role == 'applicant',
+                            ),
+                        ),
+                        or_(
+                            User.first_name.ilike(pattern),
+                            User.last_name.ilike(pattern),
+                            User.username.ilike(pattern),
+                            User.phone.ilike(pattern),
+                        ),
+                    )
+                )
+                .order_by(User.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            logger.error(f"Ошибка поиска жителей: {e}")
+            return []
+
     def get_user_by_id(self, user_id: int) -> Optional[User]:
         """
         Получить пользователя по ID
-        
+
         Args:
             user_id: ID пользователя
-            
+
         Returns:
             Объект User или None
         """

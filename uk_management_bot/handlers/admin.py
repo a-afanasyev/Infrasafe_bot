@@ -62,6 +62,14 @@ from datetime import datetime, timezone
 router = Router()
 logger = logging.getLogger(__name__)
 
+# PR-25 (BUG-BOT-034): manager accept_/purchase_ actions bound to the shared
+# request-number core (strict regex) instead of open-set startswith+exclusion
+# lambdas, so accept_request_/purchase_materials_ and any future accept_*/
+# purchase_* callbacks fall through to their own handlers.
+from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
+_ACCEPT_REQUEST_NUMBER_RE = rf"^accept_{REQUEST_NUMBER_CORE}$"
+_PURCHASE_REQUEST_NUMBER_RE = rf"^purchase_{REQUEST_NUMBER_CORE}$"
+
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import (
     get_admin_panel_texts,
@@ -813,9 +821,86 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
+async def _render_manager_request_list(callback: CallbackQuery, db: Session, request_number, language: str = "ru"):
+    """BUG-BOT-035: render-only — перерисовать список заявок менеджера в текущем
+    сообщении по `request_number` (берётся аргументом, без парсинга callback.data).
+
+    НЕ проверяет права и НЕ вызывает callback.answer() ни на одном пути — это
+    ответственность caller'а. Может бросить исключение; caller оборачивает в
+    try/except. Это позволяет звать рендер из cancel/complete/delete, чьи
+    callback.data не имеют префикса `mreq_back_`.
+    """
+    lang = language
+    from uk_management_bot.keyboards.admin import get_manager_request_list_kb
+
+    request = db.query(Request).filter(Request.request_number == request_number).first() if request_number else None
+
+    if request:
+        if request.status == REQUEST_STATUS_NEW:
+            q = db.query(Request).filter(Request.status == REQUEST_STATUS_NEW).order_by(Request.created_at.desc())
+            requests = q.limit(10).all()
+            if not requests:
+                await callback.message.edit_text(get_text("admin.handlers.no_new_requests", language=lang))
+                return
+            items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
+            keyboard = get_manager_request_list_kb(items, 1, 1)
+            await callback.message.edit_text(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=keyboard)
+            return
+
+        elif request.status == REQUEST_STATUS_EXECUTED:
+            q = db.query(Request).filter(Request.status == REQUEST_STATUS_EXECUTED).order_by(
+                Request.is_returned.desc(), Request.updated_at.desc().nullslast(), Request.created_at.desc()
+            )
+            requests = q.limit(10).all()
+            if not requests:
+                await callback.message.edit_text(get_text("admin.handlers.no_completed_requests", language=lang))
+                return
+            items = []
+            for r in requests:
+                item = {"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status}
+                if r.is_returned:
+                    item["suffix"] = " 🔄"
+                items.append(item)
+            keyboard = get_manager_request_list_kb(items, 1, 1)
+            await callback.message.edit_text(get_text("admin.handlers.completed_requests_title", language=lang), reply_markup=keyboard)
+            return
+
+        elif request.status in [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]:
+            active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
+            q = db.query(Request).filter(Request.status.in_(active_statuses)).order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
+            requests = q.limit(10).all()
+            if not requests:
+                await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
+                return
+            items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
+            keyboard = get_manager_request_list_kb(items, 1, 1)
+            await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
+            return
+
+    # Fallback: показываем активные заявки по умолчанию
+    active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
+    q = (
+        db.query(Request)
+        .filter(Request.status.in_(active_statuses))
+        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
+    )
+    requests = q.limit(10).all()
+
+    if not requests:
+        await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
+        return
+
+    items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
+    keyboard = get_manager_request_list_kb(items, 1, 1)
+    await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
+
+
 @router.callback_query(F.data.startswith("mreq_back_"))
 async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Возврат из деталей заявки к списку для менеджеров"""
+    """Возврат из деталей заявки к списку для менеджеров (кнопка `mreq_back_<NNN>`).
+
+    Тонкая обёртка: проверка прав + парсинг callback.data → render-only helper.
+    """
     try:
         lang = language
         logger.info(f"Возврат к списку заявок менеджером {callback.from_user.id}")
@@ -825,78 +910,13 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
             await callback.answer(get_text("admin.handlers.no_access_view_requests", language=lang), show_alert=True)
             return
 
-        # Получаем номер заявки из callback_data (mreq_back_{request_number})
         request_number = callback.data.split("mreq_back_")[1]
-        request = db.query(Request).filter(Request.request_number == request_number).first() if request_number else None
-
-        if request:
-            from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-
-            if request.status == REQUEST_STATUS_NEW:
-                q = db.query(Request).filter(Request.status == REQUEST_STATUS_NEW).order_by(Request.created_at.desc())
-                requests = q.limit(10).all()
-                if not requests:
-                    await callback.message.edit_text(get_text("admin.handlers.no_new_requests", language=lang))
-                    return
-                items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-                keyboard = get_manager_request_list_kb(items, 1, 1)
-                await callback.message.edit_text(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=keyboard)
-                return
-
-            elif request.status == REQUEST_STATUS_EXECUTED:
-                q = db.query(Request).filter(Request.status == REQUEST_STATUS_EXECUTED).order_by(
-                    Request.is_returned.desc(), Request.updated_at.desc().nullslast(), Request.created_at.desc()
-                )
-                requests = q.limit(10).all()
-                if not requests:
-                    await callback.message.edit_text(get_text("admin.handlers.no_completed_requests", language=lang))
-                    return
-                items = []
-                for r in requests:
-                    item = {"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status}
-                    if r.is_returned:
-                        item["suffix"] = " 🔄"
-                    items.append(item)
-                keyboard = get_manager_request_list_kb(items, 1, 1)
-                await callback.message.edit_text(get_text("admin.handlers.completed_requests_title", language=lang), reply_markup=keyboard)
-                return
-
-            elif request.status in [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]:
-                active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-                q = db.query(Request).filter(Request.status.in_(active_statuses)).order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-                requests = q.limit(10).all()
-                if not requests:
-                    await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
-                    return
-                items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-                keyboard = get_manager_request_list_kb(items, 1, 1)
-                await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
-                return
-
-        # Fallback: показываем активные заявки по умолчанию
-        active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-        q = (
-            db.query(Request)
-            .filter(Request.status.in_(active_statuses))
-            .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-        )
-        requests = q.limit(10).all()
-        
-        if not requests:
-            await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
-            return
-
-        items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-
-        from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-        keyboard = get_manager_request_list_kb(items, 1, 1)
-
-        await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
+        await _render_manager_request_list(callback, db, request_number, lang)
 
         logger.info(f"Возврат к списку заявок выполнен для менеджера {callback.from_user.id}")
 
     except Exception as e:
-        logger.error(f"Ошибка возврата к списку заявок: {e}")
+        logger.error(f"Ошибка возврата к списку заявок: {e}", exc_info=True)
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
@@ -1648,7 +1668,7 @@ async def handle_invite_cancel(callback: CallbackQuery, state: FSMContext, db: S
 
 # ===== ОБРАБОТЧИКИ ДЕЙСТВИЙ С ЗАЯВКАМИ ДЛЯ МЕНЕДЖЕРОВ =====
 
-@router.callback_query(lambda c: c.data.startswith("accept_") and not c.data.startswith("accept_request_"))
+@router.callback_query(F.data.regexp(_ACCEPT_REQUEST_NUMBER_RE))
 async def handle_accept_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка принятия заявки менеджером - показ выбора типа назначения"""
     try:
@@ -1807,23 +1827,34 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
 
 @router.callback_query(F.data == "cancel_clarification")
 async def handle_cancel_clarification(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Отмена уточнения"""
+    """Отмена уточнения.
+
+    BUG-BOT-035: раньше звался `handle_manager_back_to_list`, который безусловно
+    парсил `mreq_back_` из callback.data == "cancel_clarification" → IndexError.
+    Теперь: явный guard прав, request_number берём из FSM до clear(), рендер
+    списка через render-only helper.
+    """
+    lang = language
+
+    # Guard прав явно (у cancel-callback своей проверки не было)
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+        return
+
     try:
-        lang = language
-        # Очищаем состояние
+        data = await state.get_data()
+        request_number = data.get("request_number")
         await state.clear()
 
-        # Возвращаемся к списку заявок
-        await handle_manager_back_to_list(callback, db, roles, active_role, user)
-
+        await _render_manager_request_list(callback, db, request_number, lang)
         await callback.answer(get_text("admin.handlers.clarification_cancelled", language=lang))
 
     except Exception as e:
-        logger.error(f"Ошибка отмены уточнения: {e}")
+        logger.error(f"Ошибка отмены уточнения: {e}", exc_info=True)
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.callback_query(lambda c: c.data.startswith("purchase_") and not c.data.startswith("purchase_materials_"))
+@router.callback_query(F.data.regexp(_PURCHASE_REQUEST_NUMBER_RE))
 async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка перевода заявки в статус 'Закуп' менеджером"""
     try:
@@ -1957,9 +1988,14 @@ async def handle_complete_request(callback: CallbackQuery, db: Session, roles: l
         await callback.answer(get_text("admin.handlers.request_marked_completed", language=lang))
 
         # run_command коммитит в отдельной сессии — сбрасываем кэш middleware-сессии
-        # перед перечитыванием списка заявок.
+        # перед перечитыванием списка заявок. BUG-BOT-035: рендер списка через
+        # render-only helper с request_number; ошибка рендера после уже отправленного
+        # success-answer только логируется (без повторного callback.answer).
         db.expire_all()
-        await handle_manager_back_to_list(callback, db, roles, active_role, user)
+        try:
+            await _render_manager_request_list(callback, db, request_number, lang)
+        except Exception as render_err:
+            logger.error(f"Ошибка ре-рендера списка после завершения {request_number}: {render_err}", exc_info=True)
 
         logger.info(f"Заявка {request_number} отмечена как выполненная менеджером {callback.from_user.id}")
 
@@ -2013,8 +2049,13 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
         
         await callback.answer(get_text("admin.handlers.request_deleted", language=lang))
 
-        # Возвращаемся к списку заявок
-        await handle_manager_back_to_list(callback, db, roles, active_role, user)
+        # Возвращаемся к списку заявок. BUG-BOT-035: render-only helper с
+        # request_number (заявка удалена → helper покажет активные по fallback);
+        # ошибка рендера после success-answer только логируется.
+        try:
+            await _render_manager_request_list(callback, db, request_number, lang)
+        except Exception as render_err:
+            logger.error(f"Ошибка ре-рендера списка после удаления {request_number}: {render_err}", exc_info=True)
 
         logger.info(f"Заявка {request_number} удалена менеджером {callback.from_user.id}")
 
