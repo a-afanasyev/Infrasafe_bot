@@ -104,7 +104,7 @@ class AddressService:
         query = select(Yard)
 
         if only_active:
-            query = query.where(Yard.is_active == True)
+            query = query.where(Yard.is_active.is_(True))
 
         if include_stats:
             query = query.options(joinedload(Yard.buildings))
@@ -216,7 +216,7 @@ class AddressService:
         query = select(Building).where(Building.yard_id == yard_id)
 
         if only_active:
-            query = query.where(Building.is_active == True)
+            query = query.where(Building.is_active.is_(True))
 
         query = query.order_by(Building.address)
 
@@ -363,7 +363,7 @@ class AddressService:
         query = select(Apartment).where(Apartment.building_id == building_id)
 
         if only_active:
-            query = query.where(Apartment.is_active == True)
+            query = query.where(Apartment.is_active.is_(True))
 
         # BUG-126: bound the fetch (parallel к BUG-090 на search_apartments) —
         # здание с большим числом квартир иначе тянет всё в память.
@@ -400,7 +400,7 @@ class AddressService:
         query = query.where(search_filter)
 
         if only_active:
-            query = query.where(Apartment.is_active == True)
+            query = query.where(Apartment.is_active.is_(True))
 
         query = query.options(
             joinedload(Apartment.building).joinedload(Building.yard)
@@ -615,15 +615,15 @@ class AddressService:
         try:
             y_total, y_active = session.execute(select(
                 func.count(Yard.id),
-                func.count(Yard.id).filter(Yard.is_active == True),
+                func.count(Yard.id).filter(Yard.is_active.is_(True)),
             )).one()
             b_total, b_active = session.execute(select(
                 func.count(Building.id),
-                func.count(Building.id).filter(Building.is_active == True),
+                func.count(Building.id).filter(Building.is_active.is_(True)),
             )).one()
             a_total, a_active = session.execute(select(
                 func.count(Apartment.id),
-                func.count(Apartment.id).filter(Apartment.is_active == True),
+                func.count(Apartment.id).filter(Apartment.is_active.is_(True)),
             )).one()
             r_total, r_approved, r_pending, r_rejected = session.execute(select(
                 func.count(UserApartment.id),
@@ -683,7 +683,7 @@ class AddressService:
                     and_(
                         UserApartment.user_id == user.id,
                         UserApartment.status == UserApartmentStatus.APPROVED,
-                        Apartment.is_active == True
+                        Apartment.is_active.is_(True)
                     )
                 )
                 .order_by(UserApartment.is_primary.desc(), Apartment.apartment_number)
@@ -786,8 +786,8 @@ class AddressService:
                     and_(
                         UserApartment.user_id == user.id,
                         UserApartment.status == UserApartmentStatus.APPROVED,
-                        Apartment.is_active == True,
-                        Yard.is_active == True
+                        Apartment.is_active.is_(True),
+                        Yard.is_active.is_(True)
                     )
                 )
                 .distinct()
@@ -800,7 +800,7 @@ class AddressService:
                 .where(
                     and_(
                         UserYard.user_id == user.id,
-                        Yard.is_active == True
+                        Yard.is_active.is_(True)
                     )
                 )
                 .distinct()
@@ -861,9 +861,9 @@ class AddressService:
                     and_(
                         UserApartment.user_id == user.id,
                         UserApartment.status == UserApartmentStatus.APPROVED,
-                        Apartment.is_active == True,
+                        Apartment.is_active.is_(True),
                         Building.yard_id == yard_id,
-                        Building.is_active == True
+                        Building.is_active.is_(True)
                     )
                 )
                 .distinct()
@@ -915,7 +915,7 @@ class AddressService:
                         UserApartment.user_id == user.id,
                         UserApartment.status == UserApartmentStatus.APPROVED,
                         Apartment.building_id == building_id,
-                        Apartment.is_active == True
+                        Apartment.is_active.is_(True)
                     )
                 )
                 .order_by(UserApartment.is_primary.desc(), Apartment.apartment_number)
@@ -1083,7 +1083,7 @@ class AddressService:
                 .where(
                     and_(
                         UserYard.user_id == user.id,
-                        Yard.is_active == True
+                        Yard.is_active.is_(True)
                     )
                 )
                 .order_by(Yard.name)

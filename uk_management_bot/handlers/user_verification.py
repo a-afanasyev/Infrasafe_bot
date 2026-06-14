@@ -106,7 +106,7 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
         # Получаем права доступа
         access_rights = db.query(AccessRights).filter(
             AccessRights.user_id == user_id,
-            AccessRights.is_active == True
+            AccessRights.is_active.is_(True)
         ).all()
         
         # Формируем информацию о пользователе
@@ -613,7 +613,7 @@ async def manage_access_rights(callback: CallbackQuery, db: Session, roles: list
         # Получаем текущие права доступа
         current_rights = db.query(AccessRights).filter(
             AccessRights.user_id == user_id,
-            AccessRights.is_active == True
+            AccessRights.is_active.is_(True)
         ).all()
         
         # Формируем информацию о правах доступа
@@ -691,7 +691,7 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
                         try:
                             import json
                             user_roles = json.loads(target_user.roles) if isinstance(target_user.roles, str) else target_user.roles
-                        except:
+                        except Exception:
                             user_roles = ["applicant"]
                     else:
                         user_roles = ["applicant"]

@@ -515,8 +515,8 @@ async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMC
 
         # Получаем активные шаблоны для автосоздания
         templates = db.query(ShiftTemplate).filter(
-            ShiftTemplate.is_active == True,
-            ShiftTemplate.auto_create == True
+            ShiftTemplate.is_active.is_(True),
+            ShiftTemplate.auto_create.is_(True)
         ).all()
 
         total_shifts = 0
@@ -3026,7 +3026,7 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
         assigned_executor_ids = [stat.id for stat in executor_stats]
         unassigned_executors = db.query(User).filter(
             User.role == 'executor',
-            User.is_active == True,
+            User.is_active.is_(True),
             ~User.id.in_(assigned_executor_ids)
         ).all()
 
@@ -3610,7 +3610,7 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
                         available_executors.append(user)
                 elif user.active_role == 'executor':
                     available_executors.append(user)
-            except:
+            except Exception:
                 # Если не удалось распарсить JSON, проверяем active_role
                 if user.active_role == 'executor':
                     available_executors.append(user)
@@ -3736,7 +3736,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
         if isinstance(shift_specs, str):
             try:
                 shift_specs = json.loads(shift_specs)
-            except:
+            except Exception:
                 shift_specs = [shift_specs] if shift_specs else []
 
         # Получаем специализации исполнителя
@@ -3797,7 +3797,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             if isinstance(current_specs, str):
                 try:
                     current_specs = json.loads(current_specs)
-                except:
+                except Exception:
                     current_specs = [current_specs]
 
             # Проверяем каждую перекрывающуюся смену
@@ -3806,7 +3806,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                 if isinstance(overlap_specs, str):
                     try:
                         overlap_specs = json.loads(overlap_specs)
-                    except:
+                    except Exception:
                         overlap_specs = [overlap_specs]
 
                 # Если есть пересечение специализаций - это настоящий конфликт
@@ -3904,7 +3904,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
         if isinstance(shift_specs, str):
             try:
                 shift_specs = json.loads(shift_specs)
-            except:
+            except Exception:
                 shift_specs = [shift_specs] if shift_specs else []
 
         # Получаем специализации исполнителя

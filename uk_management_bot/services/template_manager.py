@@ -464,10 +464,10 @@ class TemplateManager:
             query = self.db.query(ShiftTemplate)
             
             if active_only:
-                query = query.filter(ShiftTemplate.is_active == True)
+                query = query.filter(ShiftTemplate.is_active.is_(True))
             
             if auto_create_only:
-                query = query.filter(ShiftTemplate.auto_create == True)
+                query = query.filter(ShiftTemplate.auto_create.is_(True))
             
             templates = query.order_by(ShiftTemplate.priority_level.desc(), ShiftTemplate.name).all()
             

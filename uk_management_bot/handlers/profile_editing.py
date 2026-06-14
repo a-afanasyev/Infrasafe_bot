@@ -237,7 +237,7 @@ async def handle_language_choice(callback: CallbackQuery, state: FSMContext, db:
         try:
             lang = get_user_language(db, callback.from_user.id) if db else "ru"
             await callback.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
-        except:
+        except Exception:
             await callback.answer(get_text("profile_editing.handlers.error_occurred", language="ru"), show_alert=True)
         await state.clear()
 

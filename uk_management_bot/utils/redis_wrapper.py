@@ -83,7 +83,7 @@ def get_redis_version() -> Optional[str]:
     try:
         import redis
         return getattr(redis, '__version__', 'unknown')
-    except:
+    except Exception:
         return 'unknown'
 
 # Обратная совместимость с aioredis API
