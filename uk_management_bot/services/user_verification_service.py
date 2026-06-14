@@ -337,7 +337,7 @@ class UserVerificationService:
                     and_(
                         AccessRights.access_level == AccessLevel.APARTMENT,
                         AccessRights.apartment_number == apartment_number,
-                        AccessRights.is_active == True
+                        AccessRights.is_active.is_(True)
                     )
                 ).count()
                 
@@ -410,7 +410,7 @@ class UserVerificationService:
             rights = self.db.query(AccessRights).filter(
                 and_(
                     AccessRights.user_id == user_id,
-                    AccessRights.is_active == True
+                    AccessRights.is_active.is_(True)
                 )
             ).order_by(AccessRights.created_at.desc()).all()
             

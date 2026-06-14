@@ -162,7 +162,7 @@ def require_role(required_roles: List[str]):
                     if bot and hasattr(bot, '_dispatcher'):
                         # Получаем db из dispatcher context
                         pass  # Это сложно, лучше получить из kwargs или БД напрямую
-                except:
+                except Exception:
                     pass
             
             # Получаем telegram_id из event
@@ -209,7 +209,7 @@ def require_role(required_roles: List[str]):
                     try:
                         from uk_management_bot.utils.helpers import get_user_language
                         language = get_user_language(telegram_id, db)
-                    except:
+                    except Exception:
                         pass
                 
                 text = get_text("auth.no_access", language=language or "ru")

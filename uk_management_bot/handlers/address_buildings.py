@@ -60,7 +60,7 @@ async def show_buildings_list(callback: CallbackQuery, state: Optional[FSMContex
 
         result = db.execute(
             select(Building)
-            .where(Building.is_active == True)
+            .where(Building.is_active.is_(True))
             .order_by(Building.address)
         )
         buildings = result.scalars().all()
@@ -104,7 +104,7 @@ async def show_buildings_page(callback: CallbackQuery, language: str = "ru"):
 
         result = db.execute(
             select(Building)
-            .where(Building.is_active == True)
+            .where(Building.is_active.is_(True))
             .order_by(Building.address)
         )
         buildings = result.scalars().all()

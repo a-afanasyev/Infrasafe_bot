@@ -458,7 +458,7 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                         try:
                             import json
                             user_roles = json.loads(target_user.roles) if isinstance(target_user.roles, str) else target_user.roles
-                        except:
+                        except Exception:
                             user_roles = ["applicant"]
                     else:
                         user_roles = ["applicant"]
@@ -1570,7 +1570,7 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
                     try:
                         import json
                         user_roles = json.loads(target_user.roles) if isinstance(target_user.roles, str) else target_user.roles
-                    except:
+                    except Exception:
                         user_roles = ["applicant"]
                 else:
                     user_roles = ["applicant"]

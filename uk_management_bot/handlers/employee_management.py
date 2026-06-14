@@ -968,7 +968,7 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
         if employee.specialization:
             try:
                 user_specializations = json.loads(employee.specialization)
-            except:
+            except Exception:
                 # Если не JSON, пробуем как строку с запятыми
                 if isinstance(employee.specialization, str):
                     user_specializations = [s.strip() for s in employee.specialization.split(',') if s.strip()]
@@ -1329,7 +1329,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
             if user.roles:
                 try:
                     old_roles = json.loads(user.roles)
-                except:
+                except Exception:
                     old_roles = []
             
             logger.debug(f" Старые роли: {old_roles}, новые роли: {current_roles}")
@@ -1501,7 +1501,7 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
             if user.specialization:
                 try:
                     old_specializations = json.loads(user.specialization)
-                except:
+                except Exception:
                     if isinstance(user.specialization, str):
                         old_specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
             

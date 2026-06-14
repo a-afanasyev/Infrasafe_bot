@@ -62,7 +62,7 @@ async def show_apartments_list(callback: CallbackQuery, state: FSMContext | None
         result = db.execute(
             select(Building)
             .options(joinedload(Building.yard))
-            .where(Building.is_active == True)
+            .where(Building.is_active.is_(True))
             .order_by(Building.address)
         )
         buildings = result.unique().scalars().all()
@@ -81,7 +81,7 @@ async def show_apartments_list(callback: CallbackQuery, state: FSMContext | None
             apartments_count = db.execute(
                 select(func.count(Apartment.id))
                 .where(Apartment.building_id == building.id)
-                .where(Apartment.is_active == True)
+                .where(Apartment.is_active.is_(True))
             ).scalar()
             apartments_counts[building.id] = apartments_count
 
@@ -433,7 +433,7 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, l
 
         result = db.execute(
             select(Building)
-            .where(Building.is_active == True)
+            .where(Building.is_active.is_(True))
             .order_by(Building.address)
             .limit(50)
         )

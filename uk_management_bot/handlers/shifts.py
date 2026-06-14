@@ -156,7 +156,7 @@ async def end_shift_confirm(message: Message, db=None):
                 import json
                 try:
                     specializations = json.loads(specializations)
-                except:
+                except Exception:
                     specializations = [specializations] if specializations else []
 
             spec_text = ", ".join(specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
@@ -218,7 +218,7 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
             import json
             try:
                 specializations = json.loads(specializations)
-            except:
+            except Exception:
                 specializations = [specializations] if specializations else []
 
         spec_text = ", ".join(specializations) if specializations else get_text("shifts.handlers.universal", language=lang)

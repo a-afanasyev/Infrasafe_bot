@@ -118,7 +118,7 @@ def get_yard_selection_keyboard(user_telegram_id: int, lang: str = 'ru') -> Inli
         db = next(get_db())
         try:
             # Получаем все активные дворы
-            all_yards = db.query(Yard).filter(Yard.is_active == True).order_by(Yard.name).all()
+            all_yards = db.query(Yard).filter(Yard.is_active.is_(True)).order_by(Yard.name).all()
 
             # Получаем уже добавленные дворы
             user_yards = AddressService.get_user_available_yards(db, user_telegram_id)

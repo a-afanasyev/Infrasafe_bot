@@ -276,7 +276,7 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
                         ))
                     else:
                         media_group.append(InputMediaPhoto(media=file_id))
-                except:
+                except Exception:
                     if idx == 0:
                         media_group.append(InputMediaDocument(
                             media=file_id,
@@ -292,7 +292,7 @@ async def view_completion_media(callback: CallbackQuery, db: Session = None, lan
         else:
             try:
                 await callback.message.answer_photo(photo=completion_media[0])
-            except:
+            except Exception:
                 try:
                     await callback.message.answer_document(document=completion_media[0])
                 except Exception as e:

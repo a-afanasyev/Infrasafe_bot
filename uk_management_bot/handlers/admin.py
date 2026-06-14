@@ -468,7 +468,7 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
                             media_group.append(InputMediaPhoto(media=file_id, caption=get_text("admin.handlers.photo_counter", language=lang).format(current=idx+1, total=len(media_files))))
                         else:
                             media_group.append(InputMediaPhoto(media=file_id))
-                    except:
+                    except Exception:
                         # Если не получилось как фото, пробуем как документ
                         if idx == 0:
                             media_group.append(InputMediaDocument(media=file_id, caption=get_text("admin.handlers.file_counter", language=lang).format(current=idx+1, total=len(media_files))))
@@ -482,7 +482,7 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
                 file_id = media_files[0].get("file_id") if isinstance(media_files[0], dict) else media_files[0]
                 try:
                     await callback.message.answer_photo(photo=file_id)
-                except:
+                except Exception:
                     try:
                         await callback.message.answer_document(document=file_id)
                     except Exception as e:
@@ -509,7 +509,7 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
                             media_group.append(InputMediaPhoto(media=file_id, caption=get_text("admin.handlers.photo_counter", language=lang).format(current=idx+1, total=len(completion_media))))
                         else:
                             media_group.append(InputMediaPhoto(media=file_id))
-                    except:
+                    except Exception:
                         # Если не получилось как фото, пробуем как документ
                         if idx == 0:
                             media_group.append(InputMediaDocument(media=file_id, caption=get_text("admin.handlers.file_counter", language=lang).format(current=idx+1, total=len(completion_media))))
@@ -523,7 +523,7 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
                 file_id = completion_media[0].get("file_id") if isinstance(completion_media[0], dict) else completion_media[0]
                 try:
                     await callback.message.answer_photo(photo=file_id)
-                except:
+                except Exception:
                     try:
                         await callback.message.answer_document(document=file_id)
                     except Exception as e:
@@ -922,7 +922,7 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
             import json
             user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
             has_access = any(role in ['admin', 'manager'] for role in user_roles)
-        except:
+        except Exception:
             pass
     
     print(f"🔧 Доступ к админ панели: {'✅ Есть' if has_access else '❌ Нет'}")

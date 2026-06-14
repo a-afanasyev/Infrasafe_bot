@@ -482,7 +482,7 @@ class ShiftAssignmentService:
                     import json
                     try:
                         current_specs = json.loads(current_specs)
-                    except:
+                    except Exception:
                         current_specs = [current_specs]
 
                 # Проверяем каждую перекрывающуюся смену
@@ -492,7 +492,7 @@ class ShiftAssignmentService:
                         import json
                         try:
                             overlap_specs = json.loads(overlap_specs)
-                        except:
+                        except Exception:
                             overlap_specs = [overlap_specs]
 
                     # Если есть пересечение специализаций - блокируем

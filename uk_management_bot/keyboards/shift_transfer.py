@@ -192,7 +192,7 @@ def executor_selection_keyboard(users: List[User], language: str = "ru") -> Inli
                 if specializations:
                     spec_text = ", ".join(specializations[:2])  # Первые 2 специализации
                     display_name += f" ({spec_text})"
-            except:
+            except Exception:
                 pass
 
         builder.row(

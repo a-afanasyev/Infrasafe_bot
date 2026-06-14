@@ -54,7 +54,7 @@ class ShiftPlanningService:
         try:
             template = self.db.query(ShiftTemplate).filter(
                 ShiftTemplate.id == template_id,
-                ShiftTemplate.is_active == True
+                ShiftTemplate.is_active.is_(True)
             ).first()
             
             if not template:
@@ -146,8 +146,8 @@ class ShiftPlanningService:
             
             # Получаем активные шаблоны
             query = self.db.query(ShiftTemplate).filter(
-                ShiftTemplate.is_active == True,
-                ShiftTemplate.auto_create == True
+                ShiftTemplate.is_active.is_(True),
+                ShiftTemplate.auto_create.is_(True)
             )
             
             if template_ids:
@@ -233,8 +233,8 @@ class ShiftPlanningService:
             
             # Получаем все активные шаблоны с автоматическим созданием
             auto_templates = self.db.query(ShiftTemplate).filter(
-                ShiftTemplate.is_active == True,
-                ShiftTemplate.auto_create == True
+                ShiftTemplate.is_active.is_(True),
+                ShiftTemplate.auto_create.is_(True)
             ).all()
             
             if not auto_templates:
