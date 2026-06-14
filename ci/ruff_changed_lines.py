@@ -8,8 +8,10 @@ legacy file is not blocked by that file's existing lint debt — only the new or
 changed lines must be clean. (File-scoping proved too aggressive for the repo's
 ~670 pre-existing violations; the full-repo cleanup is a separate follow-up.)
 
-Usage: ruff_changed_lines.py <base-ref> <file.py> [<file.py> ...]
-Exit 0 if every changed line is clean (or there are no Python files), else 1.
+Usage: ruff_changed_lines.py <base-ref>
+Discovers the changed *.py files itself (git diff vs <base-ref>) so it doesn't
+depend on the caller's shell word-splitting. Exit 0 if every changed line is
+clean (or there are no Python files), else 1.
 """
 import json
 import os
@@ -18,6 +20,17 @@ import subprocess
 import sys
 
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def _changed_py_files(base: str) -> list:
+    """Repo-relative *.py files added/modified between `base` and HEAD."""
+    out = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=ACM", f"{base}...HEAD", "--", "*.py"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return [line for line in out.splitlines() if line.strip()]
 
 
 def _changed_lines(base: str, path: str) -> set:
@@ -40,14 +53,17 @@ def _changed_lines(base: str, path: str) -> set:
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("usage: ruff_changed_lines.py <base-ref> [files...]", file=sys.stderr)
+    if len(sys.argv) != 2:
+        print("usage: ruff_changed_lines.py <base-ref>", file=sys.stderr)
         return 2
     base = sys.argv[1]
-    files = [f for f in sys.argv[2:] if f.endswith(".py")]
+    files = _changed_py_files(base)
     if not files:
         print("No changed Python files — nothing to lint.")
         return 0
+    print("Changed Python files:")
+    for f in files:
+        print(f"  {f}")
 
     proc = subprocess.run(
         ["ruff", "check", "--output-format=json", *files],

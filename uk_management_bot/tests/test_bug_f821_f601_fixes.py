@@ -31,7 +31,7 @@ async def test_delete_building_error_branch_no_crash(monkeypatch):
     monkeypatch.setattr(addr_buildings, "get_db", lambda: iter([MagicMock()]))
     monkeypatch.setattr(addr_buildings.AddressService, "delete_building",
                         AsyncMock(return_value=(False, "in_use")))
-    monkeypatch.setattr(addr_buildings, "localize_address_error", lambda e, l: "msg")
+    monkeypatch.setattr(addr_buildings, "localize_address_error", lambda e, lng: "msg")
 
     cb = _callback("addr_building_delete_confirm:1")
     await addr_buildings.delete_building(cb, language="ru")  # must not raise
@@ -45,7 +45,7 @@ async def test_delete_yard_error_branch_no_crash(monkeypatch):
     monkeypatch.setattr(addr_yards, "get_db", lambda: iter([MagicMock()]))
     monkeypatch.setattr(addr_yards.AddressService, "delete_yard",
                         AsyncMock(return_value=(False, "in_use")))
-    monkeypatch.setattr(addr_yards, "localize_address_error", lambda e, l: "msg")
+    monkeypatch.setattr(addr_yards, "localize_address_error", lambda e, lng: "msg")
 
     cb = _callback("addr_yard_delete_confirm:1")
     await addr_yards.delete_yard(cb, language="ru")
