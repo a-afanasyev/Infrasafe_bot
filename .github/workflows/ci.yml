@@ -27,11 +27,12 @@ jobs:
       - name: Install ruff
         run: pip install ruff==0.15.17
 
-      # PRAC-01: ruff lints only CHANGED *.py files (blocking). This enforces
-      # clean new/touched code without failing CI on the ~670 pre-existing
-      # whole-repo violations (full cleanup is a separate follow-up ticket).
-      # Config lives in pyproject.toml [tool.ruff].
-      - name: Ruff (changed Python files)
+      # PRAC-01: ruff scoped to CHANGED LINES of changed *.py files (blocking).
+      # Only new/modified lines must be clean — a small edit to a debt-heavy
+      # legacy file isn't blocked by that file's pre-existing violations (~670
+      # repo-wide; full cleanup is a separate follow-up). Config: pyproject.toml
+      # [tool.ruff]; line-scoping logic: ci/ruff_changed_lines.py.
+      - name: Ruff (changed lines)
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="origin/${{ github.base_ref }}"
@@ -39,14 +40,7 @@ jobs:
             base="HEAD^"
           fi
           echo "Diffing changed Python files against: $base"
-          files=$(git diff --name-only --diff-filter=ACM "$base"...HEAD -- '*.py')
-          if [ -z "$files" ]; then
-            echo "No changed Python files — nothing to lint."
-            exit 0
-          fi
-          echo "Linting:"
-          echo "$files"
-          ruff check $files
+          python ci/ruff_changed_lines.py "$base"
 
   backend-tests:
     name: backend-tests (pytest)

@@ -577,6 +577,7 @@ async def confirm_yard_deletion(callback: CallbackQuery, language: str = "ru"):
 async def delete_yard(callback: CallbackQuery, language: str = "ru"):
     """Удаление двора"""
     yard_id = int(callback.data.split(":")[1])
+    lang = language
 
     db = next(get_db())
     try:
@@ -586,7 +587,6 @@ async def delete_yard(callback: CallbackQuery, language: str = "ru"):
             await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
             return
 
-        lang = language
         await callback.message.edit_text(
             get_text("address_yards.handlers.yard_deleted_success", language=lang)
         )

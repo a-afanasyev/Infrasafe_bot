@@ -2094,20 +2094,21 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
 async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смены на выбранную дату"""
     try:
+        if not db:
+            db = next(get_db())
+        lang = get_user_language(callback.from_user.id, db)
+
         date_offset = int(callback.data.split(':')[1])
         target_date = date.today() + timedelta(days=date_offset)
-        
+
         data = await state.get_data()
         template_id = data.get('template_id')
-        
+
         if not template_id:
             await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
             return
 
-        if not db:
-            db = next(get_db())
         planning_service = ShiftPlanningService(db)
-        lang = get_user_language(callback.from_user.id, db)
 
         # Создаем смены из шаблона
         created_shifts = planning_service.create_shift_from_template(
@@ -2709,27 +2710,11 @@ async def handle_efficiency_analysis(callback: CallbackQuery, state: FSMContext,
             db.close()
 
 
-@router.callback_query(F.data == "back_to_shifts")
-async def handle_back_to_shifts(callback: CallbackQuery, state: FSMContext):
-    """Возврат к главному меню смен"""
-    try:
-        if not db:
-            db = next(get_db())
-        lang = get_user_language(callback.from_user.id, db)
-        
-        await callback.message.edit_text(
-            get_text("shift_management.main_menu_title", language=lang),
-            reply_markup=get_main_shift_menu(lang),
-            parse_mode="HTML"
-        )
-
-        await state.set_state(ShiftManagementStates.main_menu)
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(f"Ошибка возврата к меню смен: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
-        await callback.answer(get_text("shift_management.back_to_shifts_error", language=lang), show_alert=True)
+# NOTE: a second `handle_back_to_shifts` (F.data == "back_to_shifts") previously
+# lived here — a shadowed duplicate of the handler defined earlier (~L815), so it
+# never ran (aiogram dispatches to the first registered match). It also carried an
+# undefined-`db` bug (F821) that the F811 redefinition masked. Removed in the
+# F821/F601 cleanup; the earlier handler is the single source of truth.
 
 
 @router.callback_query(F.data == "back_to_planning")
