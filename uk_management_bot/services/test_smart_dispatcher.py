@@ -1,7 +1,6 @@
 """Unit tests for SmartDispatcher — dispatcher logic."""
-import json
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime
 
 from uk_management_bot.services.smart_dispatcher import (

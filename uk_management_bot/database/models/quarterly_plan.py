@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
 from datetime import date
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 
 class QuarterlyPlan(Base):

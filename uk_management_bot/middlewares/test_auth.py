@@ -7,7 +7,6 @@ Covers:
 - require_role: decorator enforces role checks, allows/denies access
 """
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram.types import Message, CallbackQuery

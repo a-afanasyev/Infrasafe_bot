@@ -9,15 +9,11 @@
 """
 import logging
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
-from aiogram.filters import StateFilter
 
 from uk_management_bot.database.session import get_db
 from uk_management_bot.services.address_service import AddressService
-from uk_management_bot.keyboards.address_management import (
-    get_user_apartment_selection_keyboard
-)
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)

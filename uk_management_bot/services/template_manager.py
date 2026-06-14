@@ -2,14 +2,14 @@
 Менеджер шаблонов смен - управление шаблонами для автоматического создания смен
 """
 
-from datetime import time, date, timedelta
-from typing import List, Optional, Dict, Any, Set
-from sqlalchemy import and_, or_, func
+from datetime import date, timedelta
+from typing import List, Optional, Dict, Any
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift import Shift
-from uk_management_bot.utils.constants import SHIFT_TYPES, SPECIALIZATIONS
+from uk_management_bot.utils.constants import SPECIALIZATIONS
 import logging
 
 logger = logging.getLogger(__name__)

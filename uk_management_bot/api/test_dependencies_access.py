@@ -4,7 +4,7 @@ Extends the existing tests in uk_management_bot/tests/test_api_access.py which c
 is_assigned_executor(). This file focuses on the async check_request_access() function.
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 

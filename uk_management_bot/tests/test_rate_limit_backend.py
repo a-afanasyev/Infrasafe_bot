@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 from unittest.mock import AsyncMock
 
-import pytest
 
 from uk_management_bot.api import rate_limit
 from uk_management_bot.config.settings import settings

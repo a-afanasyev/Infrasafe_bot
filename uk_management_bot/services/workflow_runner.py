@@ -45,7 +45,6 @@ from uk_management_bot.services.webhook_payloads import (
 from uk_management_bot.utils.auth_helpers import get_active_role, get_user_roles
 from uk_management_bot.utils.constants import ROLE_EXECUTOR, SHIFT_STATUS_ACTIVE
 from uk_management_bot.utils.request_workflow import (
-    Action,
     ActionCommand,
     ActorContext,
     EventIntent,

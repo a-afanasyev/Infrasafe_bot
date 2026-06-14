@@ -1,7 +1,6 @@
 """Unit tests for webhook_sender service — extends Phase 1 with queue/send coverage."""
 import hashlib
 import hmac
-import json
 import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch

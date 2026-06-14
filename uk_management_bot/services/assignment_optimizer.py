@@ -3,9 +3,9 @@ AssignmentOptimizer - Продвинутый оптимизатор назнач
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Tuple, Set
+from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 import statistics
 import math
@@ -14,8 +14,6 @@ import random
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_assignment import ShiftAssignment
-from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.constants import REQUEST_STATUSES, SHIFT_STATUSES
 import logging
 
 logger = logging.getLogger(__name__)

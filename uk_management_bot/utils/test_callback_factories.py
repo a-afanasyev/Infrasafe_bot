@@ -5,7 +5,6 @@ Tests that every CallbackData subclass can pack() and unpack() a round-trip
 correctly, exercising all defined fields with representative values.
 No DB or network calls — these are pure dataclass/pydantic operations.
 """
-import pytest
 
 from uk_management_bot.utils.callback_factories import (
     CategoryCB,

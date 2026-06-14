@@ -13,7 +13,7 @@ Covers pure (synchronous) functions only — no DB, no network, no async calls:
 """
 import asyncio
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,6 @@ class TestGetLanguageFromMessage:
 
         # Simulate a real Message type by patching isinstance
         from aiogram.types import Message as AioMessage
-        from unittest.mock import patch
 
         msg = MagicMock(spec=AioMessage)
         msg.from_user = MagicMock()

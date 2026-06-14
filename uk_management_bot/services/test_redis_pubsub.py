@@ -1,7 +1,7 @@
 """Unit tests for redis_pubsub service."""
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from uk_management_bot.services.redis_pubsub import (
     CHANNEL,

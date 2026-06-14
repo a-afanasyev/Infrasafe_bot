@@ -9,7 +9,6 @@
 """
 
 import logging
-from typing import Dict, Any
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -20,9 +19,6 @@ from uk_management_bot.services.user_management_service import UserManagementSer
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.specialization_service import SpecializationService
 from uk_management_bot.states.employee_management import EmployeeManagementStates
-from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
-from sqlalchemy import text
 import json
 from datetime import datetime
 
@@ -92,13 +88,9 @@ from uk_management_bot.keyboards.employee_management import (
     get_employee_management_main_keyboard,
     get_employee_list_keyboard,
     get_employee_actions_keyboard,
-    get_roles_management_keyboard,
-    get_specializations_selection_keyboard,
     get_cancel_keyboard,
-    get_confirmation_keyboard,
     get_employee_edit_keyboard,
 )
-from uk_management_bot.states.employee_management import EmployeeManagementStates
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
@@ -128,7 +120,7 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
         return
     
     try:
-        logger.debug(f" Начинаем получение статистики сотрудников")
+        logger.debug(" Начинаем получение статистики сотрудников")
         # Получаем статистику сотрудников
         user_mgmt_service = UserManagementService(db)
         stats = user_mgmt_service.get_employee_stats()
@@ -139,7 +131,7 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
             title = get_text('employee_management.main_title', language=lang)
             keyboard = get_employee_management_main_keyboard(stats, lang)
             logger.debug(f" Заголовок: {title}")
-            logger.debug(f" Клавиатура создана успешно")
+            logger.debug(" Клавиатура создана успешно")
             
             await callback.message.edit_text(
                 title,
@@ -150,7 +142,7 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
             raise
         
         await callback.answer()
-        logger.debug(f" Панель управления сотрудниками успешно отображена")
+        logger.debug(" Панель управления сотрудниками успешно отображена")
         
     except Exception as e:
         logger.error(f"❌ Ошибка отображения панели управления сотрудниками: {e}")
@@ -258,7 +250,7 @@ async def show_employee_list(callback: CallbackQuery, db: Session, roles: list =
         )
         
         await callback.answer()
-        logger.debug(f" Список сотрудников успешно отображен")
+        logger.debug(" Список сотрудников успешно отображен")
         
     except Exception as e:
         logger.error(f"❌ Ошибка отображения списка сотрудников: {e}")
@@ -1366,13 +1358,13 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
                     })
                 )
                 db.add(audit)
-                logger.debug(f" AuditLog создан успешно")
+                logger.debug(" AuditLog создан успешно")
             except Exception as audit_error:
                 logger.error(f"Failed to create AuditLog: {audit_error}")
                 # Продолжаем выполнение даже если аудит не удался
             
             db.commit()
-            logger.debug(f" Роли успешно обновлены и сохранены")
+            logger.debug(" Роли успешно обновлены и сохранены")
         else:
             logger.error(f"Employee not found: ID {target_employee_id}")
             lang = language

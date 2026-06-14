@@ -1,7 +1,7 @@
 """Unit tests for middlewares/throttling.py."""
 import time
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from uk_management_bot.middlewares.throttling import ThrottlingMiddleware, _EVICTION_THRESHOLD
 

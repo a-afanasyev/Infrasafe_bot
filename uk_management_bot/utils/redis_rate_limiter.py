@@ -2,7 +2,6 @@
 Redis Rate Limiter для production окружения
 Поддерживает горизонтальное масштабирование
 """
-import asyncio
 import threading
 import time
 import logging

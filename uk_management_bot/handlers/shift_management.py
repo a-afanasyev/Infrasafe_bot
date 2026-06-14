@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -17,7 +17,6 @@ from uk_management_bot.database.models.user import User
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from uk_management_bot.services.shift_planning_service import ShiftPlanningService
-from uk_management_bot.services.shift_analytics import ShiftAnalytics
 from uk_management_bot.services.template_manager import TemplateManager
 from uk_management_bot.keyboards.shift_management import (
     get_main_shift_menu,
@@ -25,7 +24,6 @@ from uk_management_bot.keyboards.shift_management import (
     get_template_selection_keyboard,
     get_date_selection_keyboard,
     get_analytics_menu,
-    get_shift_details_keyboard,
     get_auto_planning_keyboard,
     get_schedule_view_keyboard,
     get_template_management_keyboard,
@@ -3172,7 +3170,6 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
         end_date = date.today() + timedelta(days=7)
 
         # Находим пересекающиеся смены у одного исполнителя
-        from sqlalchemy import and_
         conflicts = []
 
         shifts = db.query(Shift).filter(
@@ -3730,7 +3727,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             await callback.answer(get_text("shift_management.shift_or_executor_not_found", language=lang), show_alert=True)
             return
 
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         import json
 
         # ========== КРИТИЧЕСКАЯ ПРОВЕРКА: СООТВЕТСТВИЕ СПЕЦИАЛИЗАЦИЙ ==========

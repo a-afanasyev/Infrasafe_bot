@@ -9,7 +9,6 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.states.request_status import RequestStatusStates
@@ -17,11 +16,10 @@ from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.comment_service import CommentService
 from uk_management_bot.keyboards.request_status import (
     get_status_selection_keyboard,
-    get_status_confirmation_keyboard,
-    get_executor_status_actions_keyboard
+    get_status_confirmation_keyboard
 )
 from uk_management_bot.utils.helpers import get_text, get_language_from_event
-from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji, STATUS_EMOJI
+from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.constants import (
     ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,

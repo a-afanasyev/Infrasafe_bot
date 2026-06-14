@@ -5,17 +5,13 @@
 """
 
 import sys
-import os
 import unittest
-from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from uk_management_bot.services.request_service import RequestService
-from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import Base
-from uk_management_bot.utils.constants import REQUEST_CATEGORIES, REQUEST_URGENCIES, REQUEST_STATUSES
 
 # Создаем тестовую базу данных
 engine = create_engine("sqlite:///:memory:", echo=False)

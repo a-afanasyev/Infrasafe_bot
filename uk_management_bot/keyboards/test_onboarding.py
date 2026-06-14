@@ -5,7 +5,7 @@ Tests each keyboard builder and helper function.
 get_text is mocked; uses real DocumentType enum.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 

@@ -3,14 +3,13 @@
 """
 
 import logging
-import asyncio
 from datetime import datetime, timedelta, date
 from typing import Optional, Dict, Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from uk_management_bot.database.session import get_db, SessionLocal
+from uk_management_bot.database.session import SessionLocal
 from uk_management_bot.services.shift_planning_service import ShiftPlanningService
 from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
 from uk_management_bot.services.shift_transfer_service import ShiftTransferService
@@ -207,7 +206,7 @@ class ShiftScheduler:
                 # Отправляем уведомление если создано много смен
                 if self.notification_service and result['total_created'] > 10:
                     await self.notification_service.send_manager_notification(
-                        f"🏗️ Автосоздание смен завершено",
+                        "🏗️ Автосоздание смен завершено",
                         f"Создано {result['total_created']} новых смен на ближайшие 7 дней"
                     )
             finally:

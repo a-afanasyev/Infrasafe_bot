@@ -9,9 +9,8 @@ from ..states.registration import RegistrationStates
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.keyboards.base import get_main_keyboard, get_cancel_keyboard, get_main_keyboard_for_role
+from uk_management_bot.keyboards.base import get_cancel_keyboard, get_main_keyboard_for_role
 import logging
-import json
 
 from uk_management_bot.utils.button_texts import get_login_texts
 

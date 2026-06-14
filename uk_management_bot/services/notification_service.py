@@ -147,10 +147,10 @@ def build_document_request_message(user: User, request_text: str, document_type:
     
     doc_name = document_names.get(document_type, document_type) if document_type else "дополнительные документы"
     
-    message = f"📋 **Администратор запросил документы**\n\n"
+    message = "📋 **Администратор запросил документы**\n\n"
     message += f"🔍 **Требуемый документ:** {doc_name}\n\n"
     message += f"💬 **Комментарий:**\n{request_text}\n\n"
-    message += f"📤 Пожалуйста, загрузите запрошенный документ в ближайшее время."
+    message += "📤 Пожалуйста, загрузите запрошенный документ в ближайшее время."
     
     return message
 
@@ -185,10 +185,10 @@ def build_multiple_documents_request_message(user: User, request_text: str, docu
     
     doc_list = ", ".join(doc_names)
     
-    message = f"📋 **Администратор запросил документы**\n\n"
+    message = "📋 **Администратор запросил документы**\n\n"
     message += f"🔍 **Требуемые документы:**\n{doc_list}\n\n"
     message += f"💬 **Комментарий:**\n{request_text}\n\n"
-    message += f"📤 Пожалуйста, загрузите все запрошенные документы в ближайшее время."
+    message += "📤 Пожалуйста, загрузите все запрошенные документы в ближайшее время."
     
     return message
 

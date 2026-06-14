@@ -1,9 +1,7 @@
 """Tests for webhook sender service — Phase 1: building webhooks only."""
 import hashlib
 import hmac
-import json
 import time
-import pytest
 
 from uk_management_bot.services.webhook_sender import (
     sign_payload,

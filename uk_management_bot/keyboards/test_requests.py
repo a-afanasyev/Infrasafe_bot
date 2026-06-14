@@ -6,7 +6,7 @@ get_text is mocked; DB/service calls that happen inside keyboard functions
 (yard/building/apartment selection) are also patched.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup
 

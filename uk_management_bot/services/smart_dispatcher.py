@@ -2,10 +2,10 @@
 SmartDispatcher - Интеллектуальная система автоматического назначения заявок на смены
 """
 
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 import statistics
 import json
@@ -13,8 +13,6 @@ import json
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_assignment import ShiftAssignment
-from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.constants import REQUEST_STATUSES, SHIFT_STATUSES, SPECIALIZATIONS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -240,7 +238,7 @@ class SmartDispatcher:
                             workloads[best_shift] += 1
             
             return {
-                "message": f"Балансировка завершена",
+                "message": "Балансировка завершена",
                 "changes": changes_made,
                 "workload_distribution": workloads
             }

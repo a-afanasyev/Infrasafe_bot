@@ -1,6 +1,4 @@
 """Unit tests for SpecializationService."""
-import json
-import pytest
 from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.specialization_service import SpecializationService

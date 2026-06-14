@@ -2,8 +2,6 @@
 import uuid
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import select
 
 from uk_management_bot.api.main import outbox_health, settings as main_settings
 from uk_management_bot.database.models.webhook_outbox import WebhookOutbox

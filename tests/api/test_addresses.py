@@ -5,13 +5,9 @@ Covers: stats, yards CRUD, buildings CRUD, apartments CRUD,
 bulk create, search, moderation (approve/reject), and business logic guards.
 """
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.database.models.yard import Yard
-from uk_management_bot.database.models.building import Building
-from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.request import Request
 

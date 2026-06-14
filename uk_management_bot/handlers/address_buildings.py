@@ -390,7 +390,7 @@ async def process_building_gps(message: Message, state: FSMContext, language: st
             if not (-90 <= gps_latitude <= 90) or not (-180 <= gps_longitude <= 180):
                 raise ValueError("out of range")
 
-        except ValueError as e:
+        except ValueError:
             await message.answer(
                 get_text("address_buildings.handlers.invalid_gps_format", language=lang)
             )

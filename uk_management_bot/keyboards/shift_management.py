@@ -2,8 +2,8 @@
 Клавиатуры для управления сменами (менеджеры)
 """
 
-from datetime import datetime, date, timedelta
-from typing import List, Optional, Dict, Any
+from datetime import date, timedelta
+from typing import List
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from uk_management_bot.database.models.shift_template import ShiftTemplate

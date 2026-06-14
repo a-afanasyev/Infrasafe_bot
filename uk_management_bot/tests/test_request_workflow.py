@@ -15,12 +15,10 @@ import pytest
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CANCELLED,
-    REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_EXECUTED,
     REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_NEW,
-    REQUEST_STATUS_PURCHASE,
 )
 from uk_management_bot.utils.request_workflow import (
     ACTION_TABLE,

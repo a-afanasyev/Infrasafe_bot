@@ -5,7 +5,7 @@ Tests each builder returns InlineKeyboardMarkup with correct buttons.
 get_text and RequestCallbackHelper are mocked.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from aiogram.types import InlineKeyboardMarkup
 
 

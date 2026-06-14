@@ -3,7 +3,6 @@
 The pubsub URL must inherit auth from REDIS_URL (which carries the password in
 production) unless an explicit REDIS_PUBSUB_URL is provided.
 """
-import pytest
 
 from uk_management_bot.config.settings import Settings
 

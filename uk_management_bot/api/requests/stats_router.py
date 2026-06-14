@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone, date as date_type
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession

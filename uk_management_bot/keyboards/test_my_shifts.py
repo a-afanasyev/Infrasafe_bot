@@ -4,9 +4,8 @@ Unit tests for keyboards/my_shifts.py
 Tests return types, button counts, and callback-data structure.
 get_text is mocked; Shift objects are created via MagicMock.
 """
-import pytest
 from unittest.mock import patch, MagicMock
-from datetime import datetime, date, timedelta
+from datetime import datetime
 
 from aiogram.types import InlineKeyboardMarkup
 

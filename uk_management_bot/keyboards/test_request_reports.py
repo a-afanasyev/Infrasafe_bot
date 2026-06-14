@@ -3,7 +3,6 @@ Unit tests for keyboards/request_reports.py
 
 Tests return types and button structure. get_text is mocked.
 """
-import pytest
 from unittest.mock import patch
 
 from aiogram.types import InlineKeyboardMarkup

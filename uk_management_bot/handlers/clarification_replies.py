@@ -3,10 +3,8 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from sqlalchemy.orm import Session
-import re
 import logging
 
-from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.notification_service import NotificationService
@@ -157,7 +155,7 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session, la
                 except Exception as e:
                     logger.error(f"Ошибка отправки уведомления менеджеру {manager.id}: {e}")
 
-            logger.info(f"Уведомления об ответе отправлены менеджерам")
+            logger.info("Уведомления об ответе отправлены менеджерам")
 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомлений менеджерам: {e}")

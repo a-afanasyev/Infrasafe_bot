@@ -4,7 +4,6 @@ Unit tests for safe_localization.py
 Tests for safe_get_text() and safe_get_text_with_fallback().
 get_text is patched so there are no file I/O or network calls.
 """
-import pytest
 from unittest.mock import patch
 
 from uk_management_bot.utils.safe_localization import (

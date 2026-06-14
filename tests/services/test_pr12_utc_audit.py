@@ -7,7 +7,6 @@
 2. DB-write метки времени — tz-aware UTC (выровнены с server_default
    func.now() и webhook-каноном datetime.now(timezone.utc)).
 """
-from datetime import timezone
 
 import pytest
 from sqlalchemy import create_engine

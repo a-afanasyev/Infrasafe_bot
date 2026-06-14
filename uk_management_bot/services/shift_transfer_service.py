@@ -5,7 +5,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Tuple
-from sqlalchemy import and_, or_, func, desc, case
+from sqlalchemy import and_, or_, case
 from sqlalchemy.orm import Session
 from dataclasses import dataclass
 from enum import Enum
@@ -13,7 +13,6 @@ from enum import Enum
 from uk_management_bot.utils.constants import URGENCY_ORDER
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer as ShiftTransferModel
 from uk_management_bot.services.notification_service import NotificationService
@@ -243,7 +242,7 @@ class ShiftTransferService:
                 return False
             
             if executor_id != transfer.outgoing_executor_id:
-                logger.error(f"Передачу может начать только исходящий исполнитель")
+                logger.error("Передачу может начать только исходящий исполнитель")
                 return False
             
             # Меняем статус передачи

@@ -4,7 +4,6 @@ Unit tests for utils/redis_wrapper.py
 Tests _safe_import_redis(), is_redis_available(), create_redis_client(),
 get_redis_version() with mocked redis module.
 """
-import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -45,7 +44,6 @@ class TestSafeImportRedis:
         sys.modules["redis.asyncio"] = None  # simulate ImportError
         try:
             with patch.dict("sys.modules", {"redis": None, "redis.asyncio": None}):
-                import importlib
                 import uk_management_bot.utils.redis_wrapper as rw
                 rw._redis_module = None
                 rw._redis_available = False

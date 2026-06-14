@@ -10,7 +10,7 @@
 
 import json
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.user import User
@@ -288,7 +288,7 @@ class SpecializationService:
                         logger.error(f"Ошибка парсинга специализаций для пользователя {executor.id}: {e}")
                         continue
             
-            logger.info(f"Детальная статистика специализаций получена")
+            logger.info("Детальная статистика специализаций получена")
             return detailed_stats
             
         except Exception as e:

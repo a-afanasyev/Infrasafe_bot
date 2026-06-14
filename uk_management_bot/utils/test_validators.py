@@ -4,8 +4,6 @@ Unit tests for utils/validators.py
 Tests Validator class methods and standalone validation functions.
 Pure logic tests with no DB or network dependencies.
 """
-import pytest
-from unittest.mock import patch
 
 
 # ---------------------------------------------------------------------------

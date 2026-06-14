@@ -44,7 +44,10 @@ def _capture_events(monkeypatch):
         events.append(event_type)
 
     monkeypatch.setattr(req_router, "publish_request_event", fake_publish)
-    monkeypatch.setattr(req_router, "emit_request_status_changed", AsyncMock())
+    # raising=False: emit_request_status_changed is no longer imported in router.py
+    # (dead import removed in PRAC-01-FU1); the patch still neutralises a regression
+    # that re-imports and calls it.
+    monkeypatch.setattr(req_router, "emit_request_status_changed", AsyncMock(), raising=False)
     return events
 
 

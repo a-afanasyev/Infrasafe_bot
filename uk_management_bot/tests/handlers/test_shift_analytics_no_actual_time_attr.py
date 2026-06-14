@@ -19,8 +19,8 @@ Tests pin down:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, date
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, date
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

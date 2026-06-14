@@ -8,19 +8,17 @@
 - Управления правами доступа
 """
 
-import json
 import logging
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Any
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification, AccessRights,
     DocumentType, VerificationStatus, AccessLevel
 )
-from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
 from uk_management_bot.keyboards.base import (
-    get_main_keyboard,
     get_cancel_keyboard,
     get_main_keyboard_for_role,
     get_role_switch_inline,

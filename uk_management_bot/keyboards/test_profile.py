@@ -4,7 +4,6 @@ Unit tests for keyboards/profile.py
 Tests return types and structure of all keyboard builder functions.
 Locale strings are mocked so tests are independent of JSON locale files.
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 from aiogram.types import InlineKeyboardMarkup

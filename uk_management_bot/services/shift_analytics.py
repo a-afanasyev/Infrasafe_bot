@@ -4,17 +4,15 @@
 """
 import logging
 from datetime import datetime, timedelta, date
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, desc, asc
+from sqlalchemy import and_
 
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.shift_assignment import ShiftAssignment
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_COMPLETED, REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_NEW,
-    SHIFT_STATUS_COMPLETED, SHIFT_STATUS_ACTIVE, SHIFT_STATUS_PLANNED
+    SHIFT_STATUS_COMPLETED, SHIFT_STATUS_ACTIVE
 )
 
 logger = logging.getLogger(__name__)

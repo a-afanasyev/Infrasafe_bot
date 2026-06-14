@@ -1,15 +1,12 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc
+from sqlalchemy import desc
 from typing import List, Optional, Dict, Any
-from datetime import datetime
 import logging
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.utils.validators import validate_description
 from uk_management_bot.utils.constants import (
-    REQUEST_CATEGORIES,
     REQUEST_URGENCIES,
     URGENCY_DEFAULT,
     normalize_urgency,
@@ -17,13 +14,10 @@ from uk_management_bot.utils.constants import (
     ROLE_APPLICANT,
     ROLE_EXECUTOR,
     ROLE_MANAGER,
-    AUDIT_ACTION_REQUEST_STATUS_CHANGED,
 )
-from uk_management_bot.services.shift_service import ShiftService
-from uk_management_bot.services.notification_service import notify_status_changed, async_notify_request_status_changed
+from uk_management_bot.services.notification_service import notify_status_changed
 from uk_management_bot.services.webhook_payloads import (
     emit_request_created_sync,
-    emit_request_status_changed_sync,
 )
 # Google Sheets интеграция убрана из продукта
 
@@ -151,7 +145,7 @@ class RequestService:
         """
         try:
             from sqlalchemy.orm import joinedload
-            from uk_management_bot.database.models import Apartment, Building, Yard
+            from uk_management_bot.database.models import Apartment, Building
 
             query = (
                 self.db.query(Request)
@@ -193,7 +187,7 @@ class RequestService:
         """
         try:
             from sqlalchemy.orm import joinedload
-            from uk_management_bot.database.models import Apartment, Building, Yard
+            from uk_management_bot.database.models import Apartment, Building
 
             request = (
                 self.db.query(Request)
@@ -496,7 +490,7 @@ class RequestService:
         """
         try:
             from sqlalchemy.orm import joinedload
-            from uk_management_bot.database.models import Apartment, Building, Yard
+            from uk_management_bot.database.models import Apartment, Building
 
             query = (
                 self.db.query(Request)

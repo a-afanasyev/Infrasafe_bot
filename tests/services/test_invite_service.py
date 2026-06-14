@@ -15,8 +15,7 @@ import time
 import base64
 import hmac
 import hashlib
-from unittest.mock import MagicMock, patch, PropertyMock
-from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 
 def _build_service(db_mock, invite_secret="test_secret_123"):

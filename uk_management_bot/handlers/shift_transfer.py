@@ -3,9 +3,7 @@
 """
 
 import logging
-from datetime import datetime, date
-from typing import Optional, List
-import json
+from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -22,15 +20,13 @@ from uk_management_bot.keyboards.shift_transfer import (
     transfer_reason_keyboard,
     urgency_level_keyboard,
     confirm_transfer_keyboard,
-    executor_selection_keyboard,
-    transfer_response_keyboard,
     transfers_list_keyboard,
     skip_comment_keyboard
 )
 from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
-from sqlalchemy import and_, func, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)

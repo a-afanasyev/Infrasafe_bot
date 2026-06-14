@@ -1,6 +1,5 @@
 """Unit tests for API access control dependencies."""
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from uk_management_bot.api.dependencies_access import (
     is_assigned_executor,
 )

@@ -25,7 +25,6 @@ from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
-from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.shift import Shift
 
 from uk_management_bot.services.workflow_runner import (

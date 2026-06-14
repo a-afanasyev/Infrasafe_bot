@@ -5,7 +5,7 @@ Tests RequestCallbackHelper class methods, standalone format/validation function
 Uses MagicMock for ORM objects; no DB or network calls.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from datetime import datetime
 
 

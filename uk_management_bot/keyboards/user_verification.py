@@ -8,7 +8,7 @@
 - Управления правами доступа
 """
 
-from typing import Dict, List
+from typing import Dict
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from uk_management_bot.utils.helpers import get_text

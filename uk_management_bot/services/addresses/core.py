@@ -23,7 +23,7 @@ from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment,
 )
 from uk_management_bot.services.addresses.exceptions import (
-    AddressNotFound, AddressConflict, AddressValidationError,
+    AddressNotFound, AddressConflict,
 )
 from uk_management_bot.services.addresses.events import (
     enqueue_outbox, publish_realtime_after_commit,

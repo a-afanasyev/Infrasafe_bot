@@ -14,10 +14,8 @@ from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.services.notification_service import async_notify_shift_started, async_notify_shift_ended
 from uk_management_bot.keyboards.shifts import (
     get_shifts_main_keyboard,
-    get_end_shift_confirm_inline,
     get_shifts_filters_inline,
     get_pagination_inline,
-    get_manager_active_shifts_row,
 )
 from uk_management_bot.keyboards.base import get_executor_suggestion_inline
 from uk_management_bot.database.session import get_db, session_scope
@@ -200,7 +198,7 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
         from uk_management_bot.database.models.shift import Shift
         from uk_management_bot.database.models.request import Request
         from uk_management_bot.database.models.request_assignment import RequestAssignment
-        from sqlalchemy import and_, or_
+        from sqlalchemy import and_
         from datetime import datetime
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 

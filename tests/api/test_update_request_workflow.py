@@ -15,8 +15,6 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock
 
-from uk_management_bot.api.main import app
-from uk_management_bot.api.dependencies import get_current_user
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 import uk_management_bot.api.requests.router as req_router

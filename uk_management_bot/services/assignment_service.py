@@ -4,7 +4,7 @@
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, desc
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import logging
@@ -18,9 +18,7 @@ from uk_management_bot.utils.constants import (
     ASSIGNMENT_TYPE_INDIVIDUAL,
     ASSIGNMENT_STATUS_ACTIVE,
     ASSIGNMENT_STATUS_CANCELLED,
-    ASSIGNMENT_STATUS_COMPLETED,
-    AUDIT_ACTION_REQUEST_ASSIGNED,
-    REQUEST_STATUS_IN_PROGRESS
+    AUDIT_ACTION_REQUEST_ASSIGNED
 )
 from uk_management_bot.services.notification_service import NotificationService
 

@@ -1,4 +1,3 @@
-import pytest
 from datetime import timedelta
 from uk_management_bot.api.auth.service import (
     create_access_token, verify_access_token,

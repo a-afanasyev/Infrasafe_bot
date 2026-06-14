@@ -14,7 +14,6 @@ from uk_management_bot.api.shifts.schemas import (
     UpdateShiftBody,
     CreateFromTemplateBody,
     HandleTransferBody,
-    TemplateBrief,
     CreateTemplateBody,
     UpdateTemplateBody,
     DeleteEmployeeRequest,

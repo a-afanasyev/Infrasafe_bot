@@ -1,5 +1,4 @@
 """Unit tests for _parse_user_roles() in uk_management_bot/api/dependencies.py."""
-import pytest
 from unittest.mock import MagicMock
 
 from uk_management_bot.api.dependencies import _parse_user_roles

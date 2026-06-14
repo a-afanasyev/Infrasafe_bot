@@ -5,7 +5,6 @@ Tests ShiftScheduler initialization, start/stop lifecycle, get_status(),
 and setup_jobs(). All external dependencies (APScheduler, services) are mocked.
 """
 import asyncio
-import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
 

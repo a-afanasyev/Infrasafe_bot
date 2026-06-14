@@ -5,7 +5,6 @@ Tests that all keyboard builder functions return the correct markup type
 and have the expected structure (button counts, callback_data prefixes).
 Locale strings are mocked so tests are independent of JSON locale files.
 """
-import pytest
 from unittest.mock import patch
 
 from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup

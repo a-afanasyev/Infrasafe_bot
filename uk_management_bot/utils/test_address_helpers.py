@@ -5,7 +5,6 @@ Tests for localize_address() covering happy paths, language routing,
 regex substitution, and edge cases (None, empty string, missing prefixes).
 No DB or network calls.
 """
-import pytest
 
 from uk_management_bot.utils.address_helpers import localize_address
 

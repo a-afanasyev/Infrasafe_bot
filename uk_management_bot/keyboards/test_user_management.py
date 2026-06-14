@@ -4,7 +4,6 @@ Unit tests for keyboards/user_management.py
 Mocks get_text and any DB/service calls that occur inside keyboard functions.
 Tests focus on return types, button counts, and callback-data conventions.
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 from aiogram.types import InlineKeyboardMarkup

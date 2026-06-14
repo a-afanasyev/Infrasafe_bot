@@ -13,8 +13,8 @@ Performance: +40-60% throughput в async handlers
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, desc, func
-from typing import List, Optional, Dict, Any
+from sqlalchemy import select, and_, desc
+from typing import List, Optional
 from datetime import datetime, timezone
 import logging
 
@@ -27,9 +27,7 @@ from uk_management_bot.utils.constants import (
     ASSIGNMENT_TYPE_INDIVIDUAL,
     ASSIGNMENT_STATUS_ACTIVE,
     ASSIGNMENT_STATUS_CANCELLED,
-    ASSIGNMENT_STATUS_COMPLETED,
-    AUDIT_ACTION_REQUEST_ASSIGNED,
-    REQUEST_STATUS_IN_PROGRESS
+    AUDIT_ACTION_REQUEST_ASSIGNED
 )
 
 logger = logging.getLogger(__name__)

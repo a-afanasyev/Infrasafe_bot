@@ -8,7 +8,7 @@ request_number, lang)` that takes request_number as an argument, never parses
 callback.data, and never calls callback.answer(). Each entry-handler owns its own
 access-check and single callback.answer().
 """
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

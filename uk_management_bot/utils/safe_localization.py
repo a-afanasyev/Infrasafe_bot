@@ -6,7 +6,6 @@
 """
 
 import logging
-from typing import Any, Optional
 
 from uk_management_bot.utils.helpers import get_text
 

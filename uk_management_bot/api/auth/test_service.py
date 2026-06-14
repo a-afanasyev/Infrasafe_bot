@@ -5,7 +5,6 @@ import time
 from datetime import timedelta
 from unittest.mock import patch
 
-import pytest
 
 # Patch settings before importing service so SECRET_KEY initialises cleanly
 with patch.dict(
@@ -27,8 +26,6 @@ with patch.dict(
         hash_token,
         verify_telegram_widget,
         verify_twa_init_data,
-        SECRET_KEY,
-        ALGORITHM,
         AUTH_DATE_MAX_AGE_SECONDS,
     )
 

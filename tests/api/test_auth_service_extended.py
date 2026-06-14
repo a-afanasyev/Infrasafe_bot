@@ -8,7 +8,7 @@ import hmac
 import json
 import time
 from datetime import timedelta
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 
 import pytest
 
