@@ -104,8 +104,8 @@ class TestYards:
         every yard card and the header counter disagrees with the visible list.
         """
         yard = await _create_yard(client, "Counter Yard")
-        active1 = await _create_building(client, yard["id"], "Active 1")
-        active2 = await _create_building(client, yard["id"], "Active 2")
+        await _create_building(client, yard["id"], "Active 1")
+        await _create_building(client, yard["id"], "Active 2")
         inactive = await _create_building(client, yard["id"], "Soft-deleted")
         # Soft-delete the third building (the delete endpoint sets is_active=False).
         await client.delete(f"{BASE}/buildings/{inactive['id']}")
@@ -121,7 +121,7 @@ class TestYards:
         assert r2.json()["buildings_count"] == 2
 
     async def test_list_yards_excludes_inactive(self, client: AsyncClient):
-        yard = await _create_yard(client, "Active Yard")
+        await _create_yard(client, "Active Yard")
         inactive = await _create_yard(client, "Inactive Yard")
         # Deactivate one yard
         await client.patch(f"{BASE}/yards/{inactive['id']}", json={"is_active": False})

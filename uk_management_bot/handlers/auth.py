@@ -324,7 +324,6 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         data = await state.get_data()
         full_name = data.get("full_name")
         phone = data.get("phone")
-        token = data.get("invite_token")
         role = data.get("invite_role")
         specialization = data.get("invite_specialization", "")
         

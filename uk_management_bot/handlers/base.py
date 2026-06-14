@@ -109,7 +109,7 @@ async def cmd_start(message: Message, db: Session, state: FSMContext = None, rol
                     return
 
                 # Обрабатываем присоединение
-                user = await auth_service.process_invite_join(
+                await auth_service.process_invite_join(
                     telegram_id=message.from_user.id,
                     invite_data=invite_data,
                     username=message.from_user.username,

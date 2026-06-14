@@ -463,7 +463,6 @@ async def return_request(callback: CallbackQuery, state: FSMContext, language: s
 async def save_return_reason(message: Message, state: FSMContext, db: Session = None, language: str = "ru"):
     """Сохранение причины возврата и запрос медиа"""
     try:
-        telegram_id = message.from_user.id
         data = await state.get_data()
         request_number = data.get('request_number')
 
@@ -669,12 +668,6 @@ async def back_to_pending_acceptance(callback: CallbackQuery, language: str = "r
     try:
         lang = language
         await callback.message.answer(get_text("request_acceptance.handlers.pending_acceptance_title", language=lang))
-        # Trigger the show_pending_acceptance_requests handler
-        fake_msg = type('obj', (object,), {
-            'from_user': callback.from_user,
-            'answer': callback.message.answer,
-            'text': get_text("request_acceptance.handlers.pending_acceptance_title", language=lang)
-        })()
         # Просто показываем сообщение, пользователь может снова нажать на кнопку
         await callback.message.edit_text(
             get_text("request_acceptance.handlers.press_pending_button", language=lang)

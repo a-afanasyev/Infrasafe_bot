@@ -190,7 +190,7 @@ class TestGetEmployeeRolesManagementKeyboard:
             from uk_management_bot.keyboards.employee_management import get_roles_management_keyboard
             result = get_roles_management_keyboard(["executor"])
         texts = _flat_texts(result)
-        executor_text = next(t for t in texts if "role_toggle_executor" in _flat_cbs(result) and True)
+        next(t for t in texts if "role_toggle_executor" in _flat_cbs(result) and True)
         # We test via callback; selected role toggles with ✅
         cbs = _flat_cbs(result)
         assert "role_toggle_executor" in cbs

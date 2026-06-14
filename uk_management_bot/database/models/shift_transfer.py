@@ -113,7 +113,6 @@ class ShiftTransfer(Base):
         if new_status not in valid_transitions.get(self.status, []):
             return False
 
-        old_status = self.status
         self.status = new_status
 
         # Обновляем временные метки

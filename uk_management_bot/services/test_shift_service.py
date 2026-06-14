@@ -253,8 +253,6 @@ class TestStartShift:
 
         created_shifts = []
 
-        original_add = db.add
-
         def capture_add(obj):
             from uk_management_bot.database.models.shift import Shift as ShiftModel
             if isinstance(obj, ShiftModel):

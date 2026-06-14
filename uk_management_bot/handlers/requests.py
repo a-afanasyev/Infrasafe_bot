@@ -1789,8 +1789,6 @@ async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
         db_session = next(get_db())
         lang = get_user_language(callback.from_user.id, db_session)
 
-        auth = AuthService(db_session)
-        is_manager = await auth.is_user_manager(callback.from_user.id)
         service = RequestService(db_session)
         result = service.update_status_by_actor(
             request_number=request_number,
@@ -2171,7 +2169,6 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         await state.update_data(my_requests_status=choice, my_requests_page=1)
 
         # Собираем список заявок и клавиатуру, затем редактируем сообщение
-        data = await state.get_data()
         db_session = next(get_db())
 
         # Получаем пользователя из базы данных по telegram_id

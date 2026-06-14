@@ -2742,7 +2742,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
         try:
             # Используем индивидуальное назначение с user.id вместо telegram_id
-            assignment = assignment_service.assign_to_executor(
+            assignment_service.assign_to_executor(
                 request_number=request_number,
                 executor_id=executor_id,
                 assigned_by=user.id  # ИСПРАВЛЕНО: используем id из таблицы users

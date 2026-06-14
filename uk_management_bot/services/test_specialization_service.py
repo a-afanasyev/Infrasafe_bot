@@ -257,7 +257,6 @@ class TestSetUserSpecializations:
         assert user.specialization is None
 
     def test_returns_false_on_db_exception(self):
-        user = _make_user()
         db = MagicMock()
         db.query.side_effect = Exception("DB error")
         service = SpecializationService(db)

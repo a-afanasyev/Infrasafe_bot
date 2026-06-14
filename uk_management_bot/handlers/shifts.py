@@ -108,7 +108,6 @@ async def end_shift_confirm(message: Message, db=None):
     
     try:
         lang = get_user_language(message.from_user.id, db)
-        service = ShiftService(db)
 
         # Получаем пользователя
         from uk_management_bot.database.models.user import User
@@ -348,7 +347,6 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
     try:
         shift_id = int(callback.data.split(":")[1])
         db = next(get_db())
-        service = ShiftService(db)
         lang = get_user_language(callback.from_user.id, db)
 
         # Завершаем конкретную смену
@@ -540,7 +538,6 @@ async def shifts_history(message: Message, state: FSMContext, db=None):
 
 @router.callback_query(F.data.startswith("shifts_page_"))
 async def shifts_history_page(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
-    data = await state.get_data()
     page_str = callback.data.replace("shifts_page_", "")
     if page_str == "current":
         await callback.answer()

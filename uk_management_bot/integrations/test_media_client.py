@@ -335,7 +335,7 @@ class TestConvenienceFunctions:
             return_value={"media_file": {"id": 1}}
         )
 
-        result = await upload_request_photo(
+        await upload_request_photo(
             client, "260401-001", str(f), description="test", uploaded_by=3
         )
 
@@ -354,7 +354,7 @@ class TestConvenienceFunctions:
             return_value={"media_file": {"id": 2}}
         )
 
-        result = await upload_completion_photo(
+        await upload_completion_photo(
             client, "260401-001", str(f), uploaded_by=4
         )
 

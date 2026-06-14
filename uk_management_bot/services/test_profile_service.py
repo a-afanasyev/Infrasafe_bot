@@ -313,7 +313,7 @@ class TestFormatProfileText:
         with patch("uk_management_bot.services.profile_service.get_text") as mock_get_text:
             mock_get_text.return_value = "some_role"
             data = self._profile_data(roles=["applicant", "executor"])
-            result = self.service.format_profile_text(data, "ru")
+            self.service.format_profile_text(data, "ru")
             # get_text called for both roles
             assert mock_get_text.call_count > 0
 

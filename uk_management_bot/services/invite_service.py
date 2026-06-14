@@ -98,8 +98,8 @@ class InviteService:
             Ссылка для регистрации через бота
         """
         # Генерируем токен
-        token = self.generate_invite(role, created_by, specialization, hours)
-        
+        self.generate_invite(role, created_by, specialization, hours)
+
         # Формируем ссылку на бота (без параметров, так как Telegram их не передает)
         bot_username = settings.BOT_USERNAME
         invite_link = f"https://t.me/{bot_username}"

@@ -275,14 +275,14 @@ async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMCont
         # Выполняем назначение
         if specialization:
             # Групповое назначение
-            assignment = assignment_service.assign_to_group(
+            assignment_service.assign_to_group(
                 request_number=request_number,
                 specialization=specialization,
                 assigned_by=callback.from_user.id
             )
         elif executor_id:
             # Индивидуальное назначение
-            assignment = assignment_service.assign_to_executor(
+            assignment_service.assign_to_executor(
                 request_number=request_number,
                 executor_id=executor_id,
                 assigned_by=callback.from_user.id

@@ -155,8 +155,7 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
-        current_status = data.get("current_status")
-        
+
         if not request_number:
             await callback.answer(get_text("request_reports.handlers.request_data_not_found", language=language), show_alert=True)
             return

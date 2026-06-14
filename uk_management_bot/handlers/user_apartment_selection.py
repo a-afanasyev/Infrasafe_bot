@@ -413,7 +413,6 @@ async def send_apartment_request_notification(
                 user_name = f"ID: {user.telegram_id}"
 
             username = f"@{user.username}" if user.username else "N/A"
-            lang = user.language if user.language else 'ru'
 
             notification_text = get_text("user_apt_selection.handlers.admin_new_apartment_request", language='ru').format(
                 user_name=user_name, username=username,

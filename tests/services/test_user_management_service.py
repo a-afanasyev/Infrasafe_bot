@@ -116,7 +116,7 @@ class TestGetResidentsByStatus:
 
     def test_returns_users_and_pagination(self):
         user = _FakeUser()
-        q = _mock_query_chain(self.db, count_val=1, all_val=[user])
+        _mock_query_chain(self.db, count_val=1, all_val=[user])
         result = self.svc.get_residents_by_status("approved")
         assert result["total"] == 1
         assert result["page"] == 1
@@ -124,7 +124,7 @@ class TestGetResidentsByStatus:
         assert result["status"] == "approved"
 
     def test_pagination_page_2(self):
-        q = _mock_query_chain(self.db, count_val=15, all_val=[])
+        _mock_query_chain(self.db, count_val=15, all_val=[])
         result = self.svc.get_residents_by_status("approved", page=2, limit=10)
         assert result["has_prev"] is True
         assert result["has_next"] is False
@@ -157,7 +157,7 @@ class TestGetStaffUsers:
 
     def test_returns_staff_with_pagination(self):
         user = _FakeUser(roles='["executor"]')
-        q = _mock_query_chain(self.db, count_val=1, all_val=[user])
+        _mock_query_chain(self.db, count_val=1, all_val=[user])
         result = self.svc.get_staff_users()
         assert result["type"] == "staff"
         assert result["total"] == 1
@@ -177,13 +177,13 @@ class TestSearchUsers:
 
     def test_search_with_query(self):
         user = _FakeUser(first_name="Ахмед")
-        q = _mock_query_chain(self.db, count_val=1, all_val=[user])
+        _mock_query_chain(self.db, count_val=1, all_val=[user])
         result = self.svc.search_users(query="Ахмед")
         assert result["total"] == 1
         assert result["query"] == "Ахмед"
 
     def test_search_with_filters(self):
-        q = _mock_query_chain(self.db, count_val=0)
+        _mock_query_chain(self.db, count_val=0)
         result = self.svc.search_users(
             filters={"status": "approved", "role": "executor"}
         )
@@ -191,7 +191,7 @@ class TestSearchUsers:
         assert result["filters"]["status"] == "approved"
 
     def test_search_empty_query(self):
-        q = _mock_query_chain(self.db, count_val=0)
+        _mock_query_chain(self.db, count_val=0)
         result = self.svc.search_users(query="   ")
         assert result["total"] == 0
 

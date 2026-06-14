@@ -437,7 +437,7 @@ class TestCreateShiftFromTemplateWithExecutors:
         service._can_executor_work_template = MagicMock(return_value=True)
         service._create_single_shift_from_template = MagicMock(return_value=MagicMock())
 
-        result = service.create_shift_from_template(1, date(2026, 4, 5), executor_ids=[1010])
+        service.create_shift_from_template(1, date(2026, 4, 5), executor_ids=[1010])
 
         # Single executor → single shift attempted
         service._create_single_shift_from_template.assert_called_once()

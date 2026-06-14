@@ -57,7 +57,6 @@ class TestPatternA_RequestsCategoryFilter:
         cb = _callback()
         cb.data = "categoryfilter_electricity"
         db = MagicMock()
-        gen = MagicMock(side_effect=lambda: iter([db]))
 
         with patch.object(mod, "get_db", side_effect=lambda: iter([db])) as p_get_db, \
              patch.object(mod, "get_user_language", return_value="ru"), \

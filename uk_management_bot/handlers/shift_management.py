@@ -1073,8 +1073,7 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
         if not db:
             db = next(get_db())
         lang = get_user_language(message.from_user.id, db)
-        template_manager = TemplateManager(db)
-        
+
         duration_text = message.text.strip()
         
         # Парсим продолжительность
@@ -1206,8 +1205,7 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        template_manager = TemplateManager(db)
-        
+
         # Извлекаем ID шаблона из callback_data
         template_id = int(callback.data.replace("template_edit_", ""))
         
@@ -1286,7 +1284,6 @@ async def handle_toggle_template_active(callback: CallbackQuery, state: FSMConte
         if not db:
             db = next(get_db())
         lang = get_user_language(callback.from_user.id, db)
-        template_manager = TemplateManager(db)
 
         # Извлекаем ID шаблона
         template_id = int(callback.data.replace("template_toggle_active_", ""))
@@ -2052,9 +2049,7 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
         
         # Сохраняем ID шаблона в состояние
         await state.update_data(template_id=template_id)
-        
-        template_manager = TemplateManager(db)
-        
+
         # Получаем информацию о шаблоне
         template = db.query(ShiftTemplate).filter(ShiftTemplate.id == template_id).first()
 
@@ -2292,31 +2287,6 @@ async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=
 
     except Exception as e:
         logger.error(f"Ошибка аналитики: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
-        await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
-    finally:
-        if db:
-            db.close()
-
-
-@router.callback_query(F.data == "template_management")
-@require_role(['admin', 'manager'])
-async def handle_template_management(callback: CallbackQuery, state: FSMContext, db=None):
-    """Управление шаблонами смен"""
-    try:
-        if not db:
-            db = next(get_db())
-        lang = get_user_language(callback.from_user.id, db)
-
-        await callback.message.edit_text(
-            get_text("shift_management.template_management_under_development", language=lang),
-            parse_mode="HTML"
-        )
-
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(f"Ошибка управления шаблонами: {e}")
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
     finally:

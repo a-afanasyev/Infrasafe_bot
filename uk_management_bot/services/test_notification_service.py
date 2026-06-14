@@ -763,7 +763,7 @@ class TestAsyncNotifyRequestStatusChanged:
             patch(
                 "uk_management_bot.services.notification_service.send_to_channel",
                 new_callable=AsyncMock,
-            ) as mock_channel,
+            ),
         ):
             await async_notify_request_status_changed(bot, db, req, "В работе", "Выполнена")
 
