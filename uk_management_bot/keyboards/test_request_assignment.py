@@ -8,7 +8,6 @@ Tests that each keyboard builder function:
 
 No DB, no network. get_text and RequestCallbackHelper are mocked.
 """
-import pytest
 from unittest.mock import MagicMock, patch
 from aiogram.types import InlineKeyboardMarkup
 

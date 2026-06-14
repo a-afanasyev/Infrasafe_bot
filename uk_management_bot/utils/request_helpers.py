@@ -1,7 +1,6 @@
 """
 Утилиты для работы с номерами заявок в новом формате
 """
-import re
 import logging
 from typing import Optional
 from uk_management_bot.services.request_number_service import RequestNumberService

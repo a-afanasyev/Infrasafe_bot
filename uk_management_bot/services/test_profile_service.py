@@ -1,6 +1,4 @@
 """Unit tests for ProfileService."""
-import json
-import pytest
 from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.profile_service import ProfileService

@@ -1,16 +1,11 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from typing import List, Dict, Optional
-import re
-from uk_management_bot.services.auth_service import AuthService
+from typing import List, Optional
 from uk_management_bot.database.session import get_db
 import logging
 from uk_management_bot.utils.constants import (
-    REQUEST_CATEGORIES,
     CALLBACK_PREFIX_CATEGORY,
     CALLBACK_PREFIX_URGENCY,
-    REQUEST_URGENCIES,
 )
-from uk_management_bot.utils.constants import REQUEST_STATUSES
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 

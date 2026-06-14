@@ -1,5 +1,4 @@
 """Tests for idempotent returned-status backfill (SSOT cutover PR3, alembic 019)."""
-import pytest
 import sqlalchemy as sa
 
 from uk_management_bot.database.returned_status_backfill import (

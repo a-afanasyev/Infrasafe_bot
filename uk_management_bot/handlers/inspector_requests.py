@@ -10,9 +10,8 @@
 source="inspector").
 """
 import logging
-from typing import Optional
 
-from aiogram import Router, F, Bot
+from aiogram import Router, F
 from aiogram.types import (
     Message,
     CallbackQuery,

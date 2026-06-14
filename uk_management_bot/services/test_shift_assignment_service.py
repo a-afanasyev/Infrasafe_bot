@@ -1,13 +1,9 @@
 """Unit tests for ShiftAssignmentService."""
-import pytest
-from datetime import datetime, date, timedelta
-from unittest.mock import MagicMock, patch, call
+from datetime import datetime, date
+from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.shift_assignment_service import (
     ShiftAssignmentService,
-    ExecutorScore,
-    AssignmentConflict,
-    AssignmentPriority,
 )
 from uk_management_bot.utils.constants import ROLE_EXECUTOR
 

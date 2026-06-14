@@ -4,7 +4,6 @@ Unit tests for status helper functions
 TASK 17 Этап D: Тесты для локализации статусов
 Updated: перенесено на utils/status_display (единственная рабочая реализация)
 """
-import pytest
 from uk_management_bot.utils.status_display import (
     get_status_display,
     STATUS_DISPLAY_KEYS

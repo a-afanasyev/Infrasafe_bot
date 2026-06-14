@@ -4,7 +4,7 @@
 Позволяет жителям создавать заявки в дополнительных дворах помимо их основного двора.
 По умолчанию житель имеет доступ только к двору, где находится его квартира.
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base

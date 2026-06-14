@@ -5,16 +5,14 @@
 
 import logging
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.states.request_assignment import RequestAssignmentStates
 from uk_management_bot.services.assignment_service import AssignmentService
-from uk_management_bot.services.comment_service import CommentService
 from uk_management_bot.keyboards.request_assignment import (
     get_request_assignment_keyboard,
     get_executor_selection_keyboard,
@@ -23,7 +21,7 @@ from uk_management_bot.keyboards.request_assignment import (
 )
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import check_user_role
-from uk_management_bot.utils.constants import ROLE_MANAGER, REQUEST_STATUS_IN_PROGRESS
+from uk_management_bot.utils.constants import ROLE_MANAGER
 
 router = Router()
 logger = logging.getLogger(__name__)

@@ -3,7 +3,6 @@
 Covers the limiter instance, CORS config, and app structure.
 Does not start a test server — only inspects the configured app object.
 """
-import pytest
 
 from uk_management_bot.api.main import app, limiter
 

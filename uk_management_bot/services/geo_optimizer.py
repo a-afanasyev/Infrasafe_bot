@@ -2,21 +2,17 @@
 GeoOptimizer - Геооптимизатор для оптимизации маршрутов исполнителей
 """
 
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Tuple, Set
+from datetime import datetime
+from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 import math
-import statistics
-import json
 import logging
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_assignment import ShiftAssignment
-from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.constants import REQUEST_STATUSES, SHIFT_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +143,7 @@ class GeoOptimizer:
                     ))
             
             if len(route_points) < 2:
-                logger.warning(f"Недостаточно географических точек для оптимизации")
+                logger.warning("Недостаточно географических точек для оптимизации")
                 return None
             
             return self._optimize_route_for_executor(executor_id, route_points)

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from uk_management_bot.api.main import (
-    prometheus_metrics, outbox_health, settings as main_settings,
+    prometheus_metrics, settings as main_settings,
 )
 from uk_management_bot.services.outbox_retention import purge_old_sent_outbox
 from uk_management_bot.database.models.webhook_outbox import WebhookOutbox

@@ -95,8 +95,11 @@ async def test_admin_purchase_opens_materials_without_status_change(monkeypatch)
 
     monkeypatch.setattr(admin, "has_admin_access", lambda **kwargs: True)
     # Guard: the canonical purchase handler must not run any status-update service.
+    # raising=False: RequestService is no longer imported in admin.py (it was dead,
+    # removed in PRAC-01-FU1) — the guard still catches a regression that re-imports
+    # AND calls it, since the patch would then shadow that import.
     status_service = MagicMock()
-    monkeypatch.setattr(admin, "RequestService", status_service)
+    monkeypatch.setattr(admin, "RequestService", status_service, raising=False)
 
     request = MagicMock()
     request.request_number = "250528-001"

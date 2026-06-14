@@ -9,11 +9,9 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.states.request_reports import RequestReportStates
-from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.comment_service import CommentService
 from uk_management_bot.keyboards.request_reports import (
     get_report_confirmation_keyboard,
@@ -23,9 +21,7 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.workflow_predicates import is_awaiting_applicant
 from uk_management_bot.utils.constants import (
-    ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,
-    REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_COMPLETED,
-    REQUEST_STATUS_APPROVED
+    ROLE_MANAGER, ROLE_APPLICANT
 )
 
 router = Router()

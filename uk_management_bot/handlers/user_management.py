@@ -10,7 +10,7 @@
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -26,8 +26,7 @@ from uk_management_bot.keyboards.user_management import (
     get_user_actions_keyboard,
     get_roles_management_keyboard,
     get_specializations_selection_keyboard,
-    get_cancel_keyboard,
-    get_confirmation_keyboard
+    get_cancel_keyboard
 )
 from uk_management_bot.keyboards.base import get_main_keyboard
 from uk_management_bot.states.user_management import UserManagementStates
@@ -449,7 +448,6 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
             
             # Отправляем обновленное главное меню пользователю
             try:
-                from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 
                 # Получаем пользователя
                 target_user = db.query(User).filter(User.id == user_id).first()
@@ -606,7 +604,6 @@ def get_user_actions_keyboard_with_verification(user: User, language: str = 'ru'
 def get_user_management_main_keyboard_with_verification(stats: Dict[str, int], language: str = 'ru'):
     """Получить главное меню управления пользователями с интеграцией верификации"""
     from uk_management_bot.keyboards.user_management import get_user_management_main_keyboard
-    from uk_management_bot.keyboards.user_verification import get_verification_main_keyboard
     
     # Получаем базовую клавиатуру
     base_keyboard = get_user_management_main_keyboard(stats, language)
@@ -1047,7 +1044,6 @@ async def handle_view_user_documents(callback: CallbackQuery, db: Session,
         
         # Получаем документы пользователя
         from uk_management_bot.services.user_verification_service import UserVerificationService
-        from uk_management_bot.database.models.user_verification import UserDocument
         
         verification_service = UserVerificationService(db)
         documents = verification_service.get_user_documents(target_user_id)
@@ -1567,7 +1563,6 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
             
             # Отправляем обновленное главное меню пользователю
             try:
-                from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 
                 # Получаем роли пользователя
                 user_roles = []
@@ -1773,7 +1768,7 @@ async def process_document_request(message: Message, state: FSMContext, db: Sess
     """Обработать запрос дополнительных документов"""
     lang = language
     
-    logger.info(f"🔍 PROCESS_DOCUMENT_REQUEST: Начало обработки запроса документов")
+    logger.info("🔍 PROCESS_DOCUMENT_REQUEST: Начало обработки запроса документов")
     logger.info(f"🔍 PROCESS_DOCUMENT_REQUEST: Пользователь: {message.from_user.id}, Текст: {message.text}")
     
     # Проверяем права доступа через утилитарную функцию
@@ -1819,7 +1814,7 @@ async def process_document_request(message: Message, state: FSMContext, db: Sess
             logger.info(f"🔍 PROCESS_DOCUMENT_REQUEST: Результат запроса множественных документов: {success}")
         else:
             # Общий запрос документов (для обратной совместимости)
-            logger.info(f"🔍 PROCESS_DOCUMENT_REQUEST: Общий запрос документов")
+            logger.info("🔍 PROCESS_DOCUMENT_REQUEST: Общий запрос документов")
             from uk_management_bot.services.user_verification_service import UserVerificationService
             user_verification_service = UserVerificationService(db)
             success = user_verification_service.request_additional_documents(target_user_id, manager_id, request_text)

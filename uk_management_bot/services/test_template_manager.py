@@ -1,6 +1,5 @@
 """Unit tests for TemplateManager."""
-import pytest
-from datetime import date, timedelta
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.template_manager import TemplateManager

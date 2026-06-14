@@ -4,7 +4,6 @@ Unit tests for keyboards/user_verification.py
 Mocks get_text and DocumentType imports. Tests return types and
 callback-data conventions for all keyboard builder functions.
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 from aiogram.types import InlineKeyboardMarkup

@@ -9,7 +9,6 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.utils.constants import (
     SHIFT_STATUS_ACTIVE,
     SHIFT_STATUS_COMPLETED,
-    SHIFT_STATUS_CANCELLED,
     ROLE_EXECUTOR,
     ROLE_MANAGER,
     AUDIT_ACTION_SHIFT_STARTED,

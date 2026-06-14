@@ -6,11 +6,10 @@ Related: shifts.py handles the operational menu ("🔄 Смена")
 """
 
 from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.database.session import get_db
@@ -20,8 +19,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.keyboards.my_shifts import (
     get_my_shifts_menu,
     get_shift_list_keyboard,
-    get_shift_actions_keyboard,
-    get_shift_filter_keyboard
+    get_shift_actions_keyboard
 )
 from uk_management_bot.keyboards.shift_transfer import (
     shift_selection_keyboard,
@@ -29,9 +27,8 @@ from uk_management_bot.keyboards.shift_transfer import (
 )
 from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
-from uk_management_bot.utils.helpers import get_user_language, format_datetime, get_text
+from uk_management_bot.utils.helpers import get_text
 from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import get_my_shifts_texts
 import logging

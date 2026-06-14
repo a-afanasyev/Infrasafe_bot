@@ -9,7 +9,6 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.states.request_comments import RequestCommentStates
@@ -20,10 +19,8 @@ from uk_management_bot.keyboards.request_comments import (
     get_comments_list_keyboard
 )
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.constants import (
-    ROLE_MANAGER, ROLE_EXECUTOR, ROLE_APPLICANT,
-    COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT
+    ROLE_MANAGER, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT
 )
 
 router = Router()

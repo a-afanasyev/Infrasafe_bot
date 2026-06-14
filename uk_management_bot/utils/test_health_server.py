@@ -6,8 +6,7 @@ and global helper functions. HTTP handling tested via direct method calls
 without starting a real socket.
 """
 import json
-import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from io import BytesIO
 
 
@@ -239,7 +238,6 @@ class TestGlobalHelperFunctions:
         hs_mod._health_server = None
 
     def test_start_health_server_creates_server(self):
-        import uk_management_bot.utils.health_server as hs_mod
 
         mock_server_instance = MagicMock()
         with patch("uk_management_bot.utils.health_server.HealthServer", return_value=mock_server_instance):

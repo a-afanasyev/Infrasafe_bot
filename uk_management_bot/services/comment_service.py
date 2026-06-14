@@ -5,8 +5,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
-from typing import List, Optional, Dict, Any
-from datetime import datetime
+from typing import List, Optional
 import logging
 
 from uk_management_bot.database.models.request import Request

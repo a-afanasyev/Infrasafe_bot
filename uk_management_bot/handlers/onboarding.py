@@ -3,7 +3,7 @@
 """
 import logging
 from aiogram import Router, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, Document, PhotoSize
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 from uk_management_bot.services.auth_service import AuthService
@@ -12,7 +12,7 @@ from uk_management_bot.services.user_verification_service import UserVerificatio
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.utils.validators import Validator
-from uk_management_bot.keyboards.base import get_main_keyboard_for_role, get_main_keyboard
+from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
     get_document_confirmation_keyboard,

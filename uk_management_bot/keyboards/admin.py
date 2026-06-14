@@ -2,7 +2,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.status_display import STATUS_EMOJI, get_status_with_emoji
+from uk_management_bot.utils.status_display import STATUS_EMOJI
 
 
 def get_manager_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:

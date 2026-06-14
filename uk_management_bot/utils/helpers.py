@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from typing import Dict, Any
-from uk_management_bot.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,6 @@ Test покрывает matching и non-matching пути.
 """
 from __future__ import annotations
 
-import re
 import pytest
 
 

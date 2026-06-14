@@ -1,6 +1,6 @@
 """Access control dependencies for TWA-safe API endpoints."""
 import logging
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 

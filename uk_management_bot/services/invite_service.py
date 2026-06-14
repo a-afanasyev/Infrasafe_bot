@@ -8,7 +8,7 @@ import base64
 import time
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from uk_management_bot.database.models.audit import AuditLog

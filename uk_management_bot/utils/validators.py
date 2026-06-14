@@ -1,9 +1,9 @@
 import re
-from typing import Optional, Tuple, List
+from typing import Tuple
 from uk_management_bot.utils.constants import (
-    MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_APARTMENT_LENGTH,
+    MAX_DESCRIPTION_LENGTH, MAX_APARTMENT_LENGTH,
     MAX_PHOTO_SIZE, MAX_VIDEO_SIZE, MAX_DOCUMENT_SIZE,
-    REQUEST_CATEGORIES, REQUEST_STATUSES, USER_ROLES
+    REQUEST_STATUSES, USER_ROLES
 )
 
 class Validator:
@@ -80,7 +80,7 @@ class Validator:
                 try:
                     error_msg = error_msg.format(min_length=10)
                 except (KeyError, ValueError):
-                    error_msg = f"Описание должно содержать минимум 10 символов"
+                    error_msg = "Описание должно содержать минимум 10 символов"
             return False, error_msg
         
         if len(description) > MAX_DESCRIPTION_LENGTH:

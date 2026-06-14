@@ -8,7 +8,6 @@ from sqlalchemy import or_
 
 from uk_management_bot.keyboards.admin import (
     get_manager_main_keyboard,
-    get_manager_requests_inline,
     get_manager_request_list_kb,
     get_invite_role_keyboard,
     get_invite_specialization_keyboard,
@@ -18,19 +17,11 @@ from uk_management_bot.keyboards.admin import (
     get_assignment_type_keyboard,
     get_executors_by_category_keyboard,
 )
-from uk_management_bot.keyboards.base import get_main_keyboard, get_user_contextual_keyboard
+from uk_management_bot.keyboards.base import get_user_contextual_keyboard
 from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
-from uk_management_bot.services.auth_service import AuthService
-from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.invite_service import InviteService
 from uk_management_bot.services.notification_service import async_notify_request_status_changed
-from uk_management_bot.database.session import get_db
 from uk_management_bot.utils.constants import (
-    SPECIALIZATION_ELECTRIC,
-    SPECIALIZATION_PLUMBING,
-    SPECIALIZATION_SECURITY,
-    SPECIALIZATION_CLEANING,
-    SPECIALIZATION_OTHER,
     REQUEST_STATUS_NEW,
     REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_PURCHASE,
@@ -47,11 +38,10 @@ from uk_management_bot.utils.workflow_predicates import (
     awaiting_manager_clause,
     returned_for_review_clause,
 )
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 import logging
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji, STATUS_EMOJI
+from uk_management_bot.utils.status_display import get_status_display, get_status_with_emoji
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
@@ -142,7 +132,7 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             return
         
         # Находим исполнителей с нужной специализацией
-        logger.info(f"[AUTO_ASSIGN] Выполнение запроса к таблице users...")
+        logger.info("[AUTO_ASSIGN] Выполнение запроса к таблице users...")
 
         # Сначала проверим всех пользователей с ролью executor
         all_executors = db.query(User).filter(User.active_role == "executor").all()
@@ -418,7 +408,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 async def handle_view_request_media(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Обработка просмотра медиафайлов заявки"""
     try:
-        from aiogram.types import InputMediaPhoto, InputMediaVideo, InputMediaDocument
+        from aiogram.types import InputMediaPhoto, InputMediaDocument
         lang = language
 
         logger.info(f"Просмотр медиафайлов заявки менеджером {callback.from_user.id}")
@@ -552,8 +542,6 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
 async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
     """Менеджер подтверждает выполнение заявки"""
     try:
-        from datetime import datetime
-        from uk_management_bot.services.notification_service import NotificationService
         lang = language
 
         logger.info(f"Подтверждение выполнения заявки менеджером {callback.from_user.id}")
@@ -630,8 +618,6 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
 async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
     """Менеджер повторно подтверждает выполнение возвратной заявки"""
     try:
-        from datetime import datetime
-        from uk_management_bot.services.notification_service import NotificationService
         lang = language
 
         logger.info(f"Повторное подтверждение возвратной заявки менеджером {callback.from_user.id}")
@@ -1918,7 +1904,6 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
 
         # Сохраняем состояние
         from uk_management_bot.states.request_status import RequestStatusStates
-        from aiogram.fsm.context import FSMContext
         
         # Получаем контекст состояния
         try:
@@ -2670,7 +2655,7 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 
         # ИСПРАВЛЕНО: проверяем наличие роли "executor" в массиве roles
         # Используем JSONB operator @> для проверки вхождения элемента в массив
-        from sqlalchemy import cast, String
+        from sqlalchemy import String
         executors = db.query(User).filter(
             User.roles.cast(String).contains('"executor"'),
             User.status == "approved"

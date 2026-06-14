@@ -1,6 +1,6 @@
 """Unit tests for RecommendationEngine — pure algorithm functions."""
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 from datetime import date
 
 from uk_management_bot.services.recommendation_engine import (

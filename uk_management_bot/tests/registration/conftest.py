@@ -1,6 +1,11 @@
-import hmac, hashlib, json, time, uuid
+import hmac
+import hashlib
+import json
+import time
+import uuid
 from urllib.parse import urlencode
-import pytest, pytest_asyncio
+import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
 from uk_management_bot.api.main import app

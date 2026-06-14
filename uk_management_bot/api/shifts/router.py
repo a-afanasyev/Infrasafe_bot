@@ -1,14 +1,14 @@
 import re
 import logging
 import httpx
-from datetime import datetime, timezone, date as date_type
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import aliased
 
-from uk_management_bot.api.dependencies import get_db, get_current_user, require_roles, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
 from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     ShiftBrief, ShiftDetail,

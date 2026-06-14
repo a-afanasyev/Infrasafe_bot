@@ -10,10 +10,7 @@ Strategy: mock get_text at the module level so that _init_button_texts()
 produces deterministic results during the test session, then verify the
 shape contracts on the returned values.
 """
-import importlib
-import sys
 import pytest
-from unittest.mock import patch
 
 import uk_management_bot.utils.button_texts as bt_module
 

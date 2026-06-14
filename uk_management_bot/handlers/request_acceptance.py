@@ -12,11 +12,9 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.keyboards.admin import (
     get_applicant_completed_request_actions_keyboard,
     get_rating_keyboard,
@@ -25,15 +23,10 @@ from uk_management_bot.keyboards.admin import (
 from uk_management_bot.states.request_acceptance import ApplicantAcceptanceStates
 from uk_management_bot.database.session import get_db
 from uk_management_bot.services.notification_service import async_notify_request_status_changed
-from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_EXECUTED, REQUEST_STATUS_COMPLETED, REQUEST_STATUS_APPROVED,
-)
 from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
     can_accept,
-    can_return,
     get_approved_apartment_ids,
-    is_awaiting_applicant,
 )
 
 import logging
@@ -621,7 +614,6 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
 
         # Дополнительно уведомляем менеджеров напрямую с деталями
         try:
-            import json
             bot = message_obj.bot
 
             # Получаем всех менеджеров из базы
@@ -678,7 +670,6 @@ async def back_to_pending_acceptance(callback: CallbackQuery, language: str = "r
         lang = language
         await callback.message.answer(get_text("request_acceptance.handlers.pending_acceptance_title", language=lang))
         # Trigger the show_pending_acceptance_requests handler
-        from aiogram.types import Message as TgMessage
         fake_msg = type('obj', (object,), {
             'from_user': callback.from_user,
             'answer': callback.message.answer,

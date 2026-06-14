@@ -6,7 +6,6 @@ aggregates, исполняется на sqlite (FILTER). BUG-126: limit. BUG-127
 sentinel для GPS update_yard. NICE-076/081: purge — with_for_update + audit.
 """
 import inspect
-import typing
 
 import pytest
 from sqlalchemy import create_engine

@@ -88,7 +88,7 @@ def init_admin_user() -> bool:
             session.commit()
             session.refresh(admin_user)
 
-            logger.info(f"✅ Администратор создан успешно:")
+            logger.info("✅ Администратор создан успешно:")
             logger.info(f"   ID: {admin_user.id}")
             logger.info(f"   Telegram ID: {admin_user.telegram_id}")
             logger.info(f"   Роли: {admin_user.roles}")
@@ -210,7 +210,7 @@ def main():
     print()
     print("=" * 70)
     if created > 0 or updated > 0:
-        print(f"✅ УСПЕШНО:")
+        print("✅ УСПЕШНО:")
         print(f"   Создано администраторов: {created}")
         print(f"   Обновлено администраторов: {updated}")
         print("=" * 70)

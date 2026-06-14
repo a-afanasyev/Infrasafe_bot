@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 # ---------------------------------------------------------------------------

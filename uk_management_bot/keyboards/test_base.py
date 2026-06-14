@@ -5,7 +5,6 @@ Tests that keyboard builder functions return correct markup types and
 contain buttons driven by role/status logic, without relying on specific
 locale strings.
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup

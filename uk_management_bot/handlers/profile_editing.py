@@ -7,7 +7,6 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import get_db
 from uk_management_bot.database.models.user import User
 from uk_management_bot.states.profile_editing import ProfileEditingStates
 from uk_management_bot.keyboards.profile import (

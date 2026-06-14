@@ -17,12 +17,10 @@ from uk_management_bot.api.shifts.schemas import (
     CreateTemplateBody,
     UpdateTemplateBody,
     CreateInviteRequest,
-    CreateInviteResponse,
     CreateEmployeeRequest,
     DeleteEmployeeRequest,
     ActiveRequestsCount,
     EmployeeBrief,
-    ShiftBrief,
 )
 
 

@@ -4,9 +4,8 @@ Unit tests for uk_management_bot/handlers/base.py
 Tests handler functions directly by mocking all aiogram and service objects.
 """
 
-import json
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, call
+from unittest.mock import MagicMock, AsyncMock, patch
 from aiogram.types import Message, CallbackQuery, User as TgUser
 
 

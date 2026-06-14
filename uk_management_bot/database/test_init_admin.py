@@ -1,7 +1,7 @@
 """Unit tests for uk_management_bot/database/init_admin.py."""
 import os
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------

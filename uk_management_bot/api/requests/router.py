@@ -8,10 +8,9 @@ from sqlalchemy.orm import aliased
 from uk_management_bot.api.dependencies import (
     get_db, get_current_user, require_roles, require_approved_roles, _parse_user_roles,
 )
-from uk_management_bot.api.dependencies_access import check_request_access, require_active_shift, is_assigned_executor
+from uk_management_bot.api.dependencies_access import check_request_access, is_assigned_executor
 from uk_management_bot.services.webhook_payloads import (
     emit_request_created,
-    emit_request_status_changed,
 )
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
@@ -44,7 +43,6 @@ from uk_management_bot.utils.request_workflow import (
     PayloadInvalid,
     EditForbidden,
     WorkflowError,
-    project_public_status,
     normalize_status,
 )
 from uk_management_bot.utils import constants as C

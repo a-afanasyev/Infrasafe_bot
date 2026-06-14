@@ -3,7 +3,6 @@ Unit tests for keyboards/employee_management.py
 
 Mocks get_text; tests return types, button counts, and callback conventions.
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 from aiogram.types import InlineKeyboardMarkup

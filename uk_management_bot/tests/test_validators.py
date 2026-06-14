@@ -3,7 +3,6 @@ Unit tests for validators
 
 TASK 17 Этап D: Тесты для валидатора категорий
 """
-import pytest
 from uk_management_bot.utils.validators import Validator
 
 

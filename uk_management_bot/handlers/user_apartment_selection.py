@@ -12,7 +12,6 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-from aiogram.filters import StateFilter
 
 from uk_management_bot.database.session import get_db
 from uk_management_bot.services.address_service import AddressService
@@ -21,7 +20,6 @@ from uk_management_bot.keyboards.address_management import (
     get_user_apartment_selection_keyboard,
     get_confirmation_keyboard
 )
-from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
@@ -391,7 +389,6 @@ async def send_apartment_request_notification(
         apartment_address: Полный адрес квартиры
     """
     try:
-        from aiogram import Bot
         from uk_management_bot.config.settings import settings
         from uk_management_bot.database.session import SessionLocal
         from uk_management_bot.database.models import User

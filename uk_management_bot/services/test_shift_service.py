@@ -1,14 +1,11 @@
 """Unit tests for ShiftService."""
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from datetime import datetime
 
 from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.utils.constants import (
     SHIFT_STATUS_ACTIVE,
     SHIFT_STATUS_COMPLETED,
-    ROLE_EXECUTOR,
-    ROLE_MANAGER,
 )
 
 
@@ -346,7 +343,6 @@ class TestEndShift:
 
         db = MagicMock()
         from uk_management_bot.database.models.user import User as UserModel
-        from uk_management_bot.database.models.shift import Shift as ShiftModel
 
         def _query(model):
             q = MagicMock()
@@ -479,7 +475,6 @@ class TestForceEndShift:
         manager = _make_user(telegram_id=200, user_id=2, roles='["manager"]')
         db = MagicMock()
         from uk_management_bot.database.models.user import User as UserModel
-        from uk_management_bot.database.models.shift import Shift as ShiftModel
 
         def _query(model):
             q = MagicMock()

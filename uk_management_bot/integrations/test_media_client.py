@@ -1,7 +1,7 @@
 """Unit tests for MediaServiceClient."""
 import io
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from datetime import datetime
 
 from uk_management_bot.integrations.media_client import (

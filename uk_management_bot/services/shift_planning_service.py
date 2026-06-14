@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,6 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_schedule import ShiftSchedule
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.constants import SHIFT_TYPES, SHIFT_STATUSES
 from uk_management_bot.services.shift_analytics import ShiftAnalytics
 from uk_management_bot.services.metrics_manager import MetricsManager
 from uk_management_bot.services.recommendation_engine import RecommendationEngine

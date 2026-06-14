@@ -3,7 +3,7 @@ no-op — leaf handlers (edit_employee_name_/edit_employee_phone_) existed but n
 entry handler. Added `edit_employee_entry` bound to a strict `^edit_employee_\\d+$`
 regex (does not shadow the leaf handlers) with an admin guard.
 """
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiogram.types import CallbackQuery

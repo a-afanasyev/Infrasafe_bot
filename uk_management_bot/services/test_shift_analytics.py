@@ -1,13 +1,11 @@
 """Unit tests for ShiftAnalytics — statistics calculations."""
 import pytest
 from unittest.mock import MagicMock
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 
 from uk_management_bot.services.shift_analytics import ShiftAnalytics
 from uk_management_bot.utils.constants import (
-    SHIFT_STATUS_COMPLETED,
     SHIFT_STATUS_ACTIVE,
-    REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_NEW,
 )
 

@@ -4,10 +4,9 @@ Unit tests for utils/redis_rate_limiter.py
 Tests InMemoryRateLimiter, get_rate_limiter(), is_rate_limited(),
 get_rate_limit_remaining_time() with mocked Redis and settings.
 """
-import pytest
 import asyncio
 import time
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 
 # ---------------------------------------------------------------------------

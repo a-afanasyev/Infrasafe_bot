@@ -17,7 +17,6 @@ Tests verify:
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from io import BytesIO
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +88,6 @@ class TestUploadTelegramFileToMediaService:
         client.upload_request_media = capture_upload
 
         with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-            from uk_management_bot.utils.media_helpers import upload_telegram_file_to_media_service
             import importlib
             import uk_management_bot.utils.media_helpers as mh
             importlib.reload(mh)  # reset cached client reference

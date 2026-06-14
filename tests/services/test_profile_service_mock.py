@@ -9,8 +9,6 @@ Covers:
 - format_profile_text (empty data, UZ language)
 - validate_profile_data (all branches)
 """
-import pytest
-import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 

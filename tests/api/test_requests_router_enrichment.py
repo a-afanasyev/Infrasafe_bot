@@ -11,7 +11,6 @@ inbox row per infrasafe-originated request — but we order by id DESC and
 LIMIT 1 defensively).
 """
 import pytest
-import pytest_asyncio
 
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox

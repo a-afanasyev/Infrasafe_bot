@@ -6,7 +6,7 @@ shifts_history, handle_end_shift_cancel, end_shift_no, suggest_executor_skip.
 """
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, call
+from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
 
 from aiogram.types import Message, CallbackQuery, User as TgUser

@@ -1,10 +1,8 @@
 import asyncio
-import logging
 import traceback
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
-from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
 
 # Sentry error tracking (optional — only if SENTRY_DSN is configured)

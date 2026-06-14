@@ -17,7 +17,7 @@ Covers:
 """
 import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # Constants (mirrors uk_management_bot.utils.constants)

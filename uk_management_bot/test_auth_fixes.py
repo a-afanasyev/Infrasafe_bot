@@ -92,7 +92,7 @@ def test_auth_helpers():
         # Проверяем логику
         expected_admin = user.role in ['admin', 'manager'] or (user.roles and 'admin' in json.loads(user.roles) or 'manager' in json.loads(user.roles))
         if has_admin == expected_admin:
-            print(f"   ✅ Логика корректна")
+            print("   ✅ Логика корректна")
         else:
             print(f"   ❌ ОШИБКА: ожидалось {expected_admin}, получено {has_admin}")
 
@@ -103,7 +103,6 @@ def test_database_connection():
     
     try:
         # Создаем таблицы
-        from uk_management_bot.database.models import user
         from uk_management_bot.database.session import Base
         Base.metadata.create_all(bind=engine)
         print("✅ Таблицы созданы/обновлены")
@@ -118,7 +117,7 @@ def test_database_connection():
             # Проверяем структуру таблицы
             if user_count > 0:
                 sample_user = db.query(User).first()
-                print(f"   📋 Структура пользователя:")
+                print("   📋 Структура пользователя:")
                 print(f"      - telegram_id: {sample_user.telegram_id}")
                 print(f"      - role: {sample_user.role}")
                 print(f"      - roles: {sample_user.roles}")

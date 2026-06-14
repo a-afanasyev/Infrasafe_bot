@@ -17,10 +17,6 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.keyboards.admin import get_manager_main_keyboard, get_manager_request_list_kb
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
-from uk_management_bot.services.auth_service import AuthService
-from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_APPROVED,
-)
 from uk_management_bot.utils.workflow_predicates import (
     is_awaiting_applicant,
     awaiting_applicant_clause,

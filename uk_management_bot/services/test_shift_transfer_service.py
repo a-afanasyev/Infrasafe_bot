@@ -1,6 +1,5 @@
 """Unit tests for ShiftTransferService."""
-import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.shift_transfer_service import (

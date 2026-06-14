@@ -2,7 +2,7 @@
 Клавиатуры для функционала передачи смен
 """
 
-from typing import List, Optional
+from typing import List
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from uk_management_bot.database.models.shift import Shift

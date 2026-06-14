@@ -1,5 +1,4 @@
 """Unit tests for uk_management_bot/constants/categories.py."""
-import pytest
 
 from uk_management_bot.constants.categories import (
     CATEGORY_TO_SPECIALIZATION,

@@ -1,7 +1,6 @@
 """Unit tests for ShiftPlanningService."""
-import pytest
-from datetime import datetime, date, timedelta
-from unittest.mock import MagicMock, patch, call
+from datetime import date
+from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.shift_planning_service import ShiftPlanningService
 
@@ -189,8 +188,6 @@ class TestCreateShiftFromTemplate:
         template = _make_template()
 
         def _side(model):
-            from uk_management_bot.database.models.shift_template import ShiftTemplate
-            from uk_management_bot.database.models.shift import Shift
             q = MagicMock()
             if "ShiftTemplate" in str(model):
                 q.filter.return_value.first.return_value = template
@@ -426,9 +423,6 @@ class TestCreateShiftFromTemplateWithExecutors:
         call_count = [0]
 
         def _side(model):
-            from uk_management_bot.database.models.shift_template import ShiftTemplate
-            from uk_management_bot.database.models.shift import Shift
-            from uk_management_bot.database.models.user import User as UserModel
             q = MagicMock()
             call_count[0] += 1
             if "ShiftTemplate" in str(model):

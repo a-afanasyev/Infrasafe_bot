@@ -3,7 +3,6 @@ Unit tests for category helper functions
 
 TASK 17 Этап D: Тесты для нормализации категорий
 """
-import pytest
 from uk_management_bot.keyboards.requests import (
     resolve_category_key,
     get_category_display,

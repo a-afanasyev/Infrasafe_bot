@@ -11,8 +11,7 @@ Covers:
 - validate_address() / validate_description() — length guards
 - format_datetime() — basic formatting, None input
 """
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 # ---------------------------------------------------------------------------

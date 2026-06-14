@@ -9,7 +9,6 @@
 """
 
 import logging
-from typing import Dict, Any
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -28,10 +27,9 @@ from uk_management_bot.keyboards.user_verification import (
 )
 from uk_management_bot.states.user_verification import UserVerificationStates
 from uk_management_bot.database.models.user_verification import (
-    DocumentType, VerificationStatus, AccessLevel
+    VerificationStatus
 )
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import has_admin_access
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -91,7 +89,7 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
     
     try:
         from uk_management_bot.database.models.user import User
-        from uk_management_bot.database.models.user_verification import UserDocument, UserVerification, AccessRights
+        from uk_management_bot.database.models.user_verification import UserDocument, AccessRights
         
         # Получаем пользователя
         user = db.query(User).filter(User.id == user_id).first()
@@ -682,7 +680,6 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
             
             # Отправляем обновленное главное меню пользователю
             try:
-                from uk_management_bot.keyboards.base import get_main_keyboard_for_role
                 from uk_management_bot.database.models.user import User
 
                 # Получаем пользователя

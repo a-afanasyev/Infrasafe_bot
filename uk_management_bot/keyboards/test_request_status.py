@@ -4,7 +4,6 @@ Unit tests for keyboards/request_status.py
 Tests return types and button-count logic for all keyboard builder functions.
 get_text and get_status_with_emoji are mocked so tests are locale-independent.
 """
-import pytest
 from unittest.mock import patch
 
 from aiogram.types import InlineKeyboardMarkup

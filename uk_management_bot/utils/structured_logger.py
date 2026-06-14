@@ -6,7 +6,7 @@ import json
 import re
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 from uk_management_bot.config.settings import settings
 
 class StructuredFormatter(logging.Formatter):

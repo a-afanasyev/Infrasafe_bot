@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any
 
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
 from sqlalchemy.orm import Session
@@ -14,7 +14,6 @@ from sqlalchemy import text
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.helpers import get_text, get_user_language
-from uk_management_bot.utils.auth_helpers import has_admin_access
 
 logger = logging.getLogger(__name__)
 router = Router()

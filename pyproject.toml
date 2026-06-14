@@ -34,6 +34,11 @@ precision = 1
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+# PRAC-01-FU scope decision (owner, 2026-06-14): enforce E/F on bot/API only.
+# media_service/scripts/docs carry ~169 E/F deferred to PRAC-01-FU2.
+# force-exclude makes these apply even when paths are passed explicitly (CI / pre-commit).
+extend-exclude = ["media_service", "scripts", "docs"]
+force-exclude = true
 
 [tool.ruff.lint]
 # Mirror the legacy flake8 baseline (pycodestyle E + pyflakes F). E501

@@ -208,7 +208,6 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
     
     # Просмотр документов (если есть документы)
     from uk_management_bot.services.user_verification_service import UserVerificationService
-    from sqlalchemy.orm import Session
     from uk_management_bot.database.session import session_scope
 
     try:
@@ -229,7 +228,7 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
                 text=f"📄 {get_text('user_management.keyboards.documents', language=language)}",
                 callback_data=f"user_action_view_documents_{user.id}"
             )])
-    except Exception as e:
+    except Exception:
         # В случае ошибки все равно показываем кнопку
         buttons.append([InlineKeyboardButton(
             text=f"📄 {get_text('user_management.keyboards.documents', language=language)}",

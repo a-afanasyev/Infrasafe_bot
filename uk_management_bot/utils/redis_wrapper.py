@@ -2,7 +2,6 @@
 Обертка для Redis с поддержкой redis.asyncio (официальный клиент)
 """
 import logging
-import sys
 from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
