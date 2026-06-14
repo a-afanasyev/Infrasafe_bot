@@ -15,11 +15,13 @@ repos:
       - id: black
         language_version: python3.11
 
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.1.0
+  # PRAC-01: ruff supersedes flake8 (same E+F rules) and is the linter enforced
+  # in CI. Config lives in pyproject.toml [tool.ruff]. --fix applies safe autofixes.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
     hooks:
-      - id: flake8
-        args: [--max-line-length=88, --extend-ignore=E203,W503]
+      - id: ruff
+        args: [--fix]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.7.1

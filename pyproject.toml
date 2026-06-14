@@ -27,3 +27,16 @@ omit = [
 show_missing = false
 skip_empty = true
 precision = 1
+
+# PRAC-01: ruff is the enforced Python linter. CI runs it on CHANGED *.py files
+# (blocking) so new/touched code stays clean without a big-bang cleanup of the
+# ~670 pre-existing whole-repo violations (tracked as a separate follow-up).
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# Mirror the legacy flake8 baseline (pycodestyle E + pyflakes F). E501
+# (line-too-long) is delegated to black (the formatter); E203 is black-compatible.
+select = ["E", "F"]
+ignore = ["E203", "E501"]
