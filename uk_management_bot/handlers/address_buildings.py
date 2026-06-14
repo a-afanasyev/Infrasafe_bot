@@ -555,6 +555,7 @@ async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru
 async def delete_building(callback: CallbackQuery, language: str = "ru"):
     """Удаление здания"""
     building_id = int(callback.data.split(":")[1])
+    lang = language
 
     db = next(get_db())
     try:
@@ -564,7 +565,6 @@ async def delete_building(callback: CallbackQuery, language: str = "ru"):
             await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
             return
 
-        lang = language
         await callback.message.edit_text(
             get_text("address_buildings.handlers.building_deleted_success", language=lang)
         )

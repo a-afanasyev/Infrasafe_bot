@@ -204,8 +204,7 @@ ERROR_MESSAGES = {
     "request_not_found": "Заявка не найдена",
     "user_not_found": "Пользователь не найден",
     "shift_not_found": "Смена не найдена",
-    "already_in_shift": "Вы уже в смене",
-    "not_in_shift": "Вы не в смене"
+    "already_in_shift": "Вы уже в смене"
 }
 
 # Успешные сообщения

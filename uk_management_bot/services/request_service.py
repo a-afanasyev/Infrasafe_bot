@@ -118,9 +118,6 @@ class RequestService:
             self.db.commit()
             self.db.refresh(request)
 
-            # Синхронизация с Google Sheets
-            # await self._sync_request_to_sheets(request, "create")  # Временно отключено
-
             logger.info(f"Создана заявка {request.request_number} пользователем {user_id}")
             return request
             
@@ -668,46 +665,6 @@ class RequestService:
             self.db.rollback()
             logger.error(f"Ошибка добавления медиафайлов к заявке {request_number}: {e}")
             return None
-    
-    async def _sync_request_to_sheets(self, request: Request, operation: str, changes: Dict[str, Any] = None):
-        """
-        Синхронизация заявки с Google Sheets
-        
-        Args:
-            request: Заявка для синхронизации
-            operation: Тип операции ("create", "update")
-            changes: Изменения для операции "update"
-        """
-        try:
-            if not sheets_service.sync_enabled:
-                return
-            
-            # Подготавливаем данные заявки
-            request_data = {
-                'request_number': request.request_number,
-                'created_at': request.created_at.strftime("%Y-%m-%d %H:%M:%S") if request.created_at else '',
-                'status': request.status,
-                'category': request.category,
-                'address': request.address,
-                'description': request.description,
-                'urgency': request.urgency,
-                'applicant_id': request.user_id,
-                'applicant_name': self._get_user_name(request.user_id),
-                'executor_id': request.executor_id,
-                'executor_name': self._get_user_name(request.executor_id) if request.executor_id else '',
-                'assigned_at': request.assigned_at.strftime("%Y-%m-%d %H:%M:%S") if request.assigned_at else '',
-                'completed_at': request.completed_at.strftime("%Y-%m-%d %H:%M:%S") if request.completed_at else '',
-                'comments': request.notes or '',
-                'photo_urls': ','.join(request.media_files) if request.media_files else ''
-            }
-
-            # Google Sheets интеграция убрана из продукта
-            logger.debug(f"Request operation logged: {operation}",
-                        request_number=request.request_number)
-            
-        except Exception as e:
-            logger.error(f"Error creating sync task for request {request.request_number}",
-                        error=str(e))
     
     def _get_user_name(self, user_id: int) -> str:
         """Получение имени пользователя по ID"""
