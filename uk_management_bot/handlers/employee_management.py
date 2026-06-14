@@ -559,15 +559,21 @@ async def unblock_employee(callback: CallbackQuery, db: Session, roles: list = N
                 get_text('employee_management.employee_unblocked', language=lang),
                 show_alert=True
             )
-            
-            # Возвращаемся к списку
-            await show_employee_list(callback, db, roles, active_role, user)
+
+            # MGR-05 (тот же фикс, что для block): ре-рендер карточки на месте
+            # вместо show_employee_list(callback), который парсил callback.data
+            # `unblock_employee_<id>` как `employee_mgmt_list_<type>_<page>` и падал
+            # с IndexError. callback уже отвечен — ошибка рендера только логируется.
+            try:
+                await _return_to_employee_info(callback, db, employee_id, lang)
+            except Exception as render_err:
+                logger.error(f"Ошибка ре-рендера карточки после разблокировки {employee_id}: {render_err}")
         else:
             await callback.answer(
                 get_text('errors.unknown_error', language=lang),
                 show_alert=True
             )
-        
+
     except Exception as e:
         logger.error(f"Ошибка разблокировки сотрудника: {e}")
         await callback.answer(
