@@ -21,7 +21,7 @@ class TestSafeGetText:
     """Tests for safe_get_text()."""
 
     def test_returns_string_for_valid_key(self):
-        with patch(_GET_TEXT, return_value="Создать заявку") as mock_gt:
+        with patch(_GET_TEXT, return_value="Создать заявку"):
             result = safe_get_text("main_menu.create_request", language="ru")
         assert isinstance(result, str)
         assert result == "Создать заявку"

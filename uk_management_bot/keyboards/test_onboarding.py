@@ -219,5 +219,5 @@ class TestGetDocumentTypeName:
 
         with patch(GET_TEXT_PATH, side_effect=mock_get_text):
             from uk_management_bot.keyboards.onboarding import get_document_type_name
-            result = get_document_type_name(DocumentType.OTHER)
+            get_document_type_name(DocumentType.OTHER)
         assert "onboarding.keyboards.doc_name_other" in called_with

@@ -76,7 +76,7 @@ class TestAddComment:
 
         with patch.object(self.svc, "_create_audit_log"), \
              patch.object(self.svc, "_notify_comment_added"):
-            result = self.svc.add_comment(
+            self.svc.add_comment(
                 request_id="260412-001",
                 user_id=10,
                 comment_text="test",
@@ -207,7 +207,7 @@ class TestAddStatusChangeComment:
         ]
         with patch.object(self.svc, "_create_audit_log"), \
              patch.object(self.svc, "_notify_comment_added"):
-            result = self.svc.add_status_change_comment(
+            self.svc.add_status_change_comment(
                 "260412-001", 10, "Новая", "В работе", "доп инфо"
             )
             self.db.add.assert_called()

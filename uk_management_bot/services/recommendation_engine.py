@@ -81,8 +81,6 @@ class RecommendationEngine:
             Список приоритизированных рекомендаций
         """
         try:
-            recommendations = []
-            
             # Анализируем различные аспекты системы
             shift_recs = await self._analyze_shift_optimization(period_days)
             workload_recs = await self._analyze_workload_balance(period_days) 
@@ -674,7 +672,6 @@ class RecommendationEngine:
     async def _get_historical_data_for_date(self, target_date: date) -> List[int]:
         """Получить исторические данные для аналогичной даты"""
         # Найти аналогичные дни недели за последние несколько недель
-        weekday = target_date.weekday()
         historical_counts = []
         
         for weeks_back in range(1, 5):  # Последние 4 недели

@@ -91,7 +91,7 @@ class TestUploadTelegramFileToMediaService:
             import importlib
             import uk_management_bot.utils.media_helpers as mh
             importlib.reload(mh)  # reset cached client reference
-            result = await mh.upload_telegram_file_to_media_service(
+            await mh.upload_telegram_file_to_media_service(
                 bot=bot,
                 file_id="vid789",
                 request_number="250101-003",

@@ -215,7 +215,7 @@ def get_text_with_plural(
         # Returns: "5 заявок" (if keys exist: requests.count, requests.count_plural, requests.count_plural_many)
     """
     try:
-        locale = load_locale(language)
+        load_locale(language)
 
         # Determine plural form
         if language == 'ru':

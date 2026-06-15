@@ -78,7 +78,7 @@ class TestGetOrCreateUser:
         db = _make_db(user=None)
 
         service = AuthService(db)
-        result = await service.get_or_create_user(200, "newuser", "New", "User")
+        await service.get_or_create_user(200, "newuser", "New", "User")
 
         db.add.assert_called_once()
         db.commit.assert_called()

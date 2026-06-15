@@ -1240,7 +1240,6 @@ async def save_employee_roles(callback: CallbackQuery, state: FSMContext, db: Se
     """Сохранить роли сотрудника"""
     try:
         data = await state.get_data()
-        target_employee_id = data.get('target_employee_id')
         original_roles = data.get('original_roles', [])
         current_roles = data.get('current_roles', [])
         
@@ -1425,7 +1424,6 @@ async def save_employee_specializations(callback: CallbackQuery, state: FSMConte
     """Сохранить специализации сотрудника"""
     try:
         data = await state.get_data()
-        target_employee_id = data.get('target_employee_id')
         original_specializations = data.get('original_specializations', [])
         current_specializations = data.get('current_specializations', [])
         

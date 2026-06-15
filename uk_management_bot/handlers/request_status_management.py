@@ -343,9 +343,6 @@ async def handle_materials_input(message: Message, state: FSMContext, db: Sessio
             await message.answer(get_text("request_status_mgmt.handlers.request_not_found", language=lang))
             return
 
-        # Используем номер заявки
-        request_id = request_number
-
         # PR2c: requested_materials — workflow-поле канона. Итоговый список
         # (восстановление из purchase_history при повторном заходе в Закуп +
         # докладка нового) вычисляем ЛОКАЛЬНО (только чтение) и передаём в

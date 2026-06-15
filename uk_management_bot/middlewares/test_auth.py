@@ -149,7 +149,7 @@ class TestAuthMiddleware:
         data = {}
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, unknown_event, data)
+        await auth_middleware(_noop_handler, unknown_event, data)
 
         assert data.get("_handler_called") is True
 

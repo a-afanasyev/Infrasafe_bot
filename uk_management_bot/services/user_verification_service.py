@@ -288,28 +288,7 @@ class UserVerificationService:
             logger.error(f"Ошибка проверки документа: {e}")
             self.db.rollback()
             return False
-    
-    def get_user_documents(self, user_id: int) -> List[UserDocument]:
-        """
-        Получить документы пользователя
-        
-        Args:
-            user_id: ID пользователя
-            
-        Returns:
-            Список документов
-        """
-        try:
-            documents = self.db.query(UserDocument).filter(
-                UserDocument.user_id == user_id
-            ).order_by(UserDocument.created_at.desc()).all()
-            
-            return documents
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения документов пользователя: {e}")
-            return []
-    
+
     # ═══ УПРАВЛЕНИЕ ПРАВАМИ ДОСТУПА ═══
     
     def grant_access_rights(self, user_id: int, admin_id: int, access_level: AccessLevel,
@@ -472,14 +451,14 @@ class UserVerificationService:
                 'requested_at': datetime.now().isoformat()
             }
             
-            verification = self.create_verification_request(user_id, admin_id, requested_info)
-            
+            self.create_verification_request(user_id, admin_id, requested_info)
+
             # Обновляем статус пользователя на "запрошена информация"
             user = self.db.query(User).filter(User.id == user_id).first()
             if user:
                 user.verification_status = 'requested'
                 self.db.commit()
-            
+
             logger.info(f"Запрошены дополнительные документы для пользователя {user_id} от администратора {admin_id}")
             return True
             
@@ -510,14 +489,14 @@ class UserVerificationService:
                 'requested_at': datetime.now().isoformat()
             }
             
-            verification = self.create_verification_request(user_id, admin_id, requested_info)
-            
+            self.create_verification_request(user_id, admin_id, requested_info)
+
             # Обновляем статус пользователя на "запрошена информация"
             user = self.db.query(User).filter(User.id == user_id).first()
             if user:
                 user.verification_status = 'requested'
                 self.db.commit()
-            
+
             logger.info(f"Запрошен документ типа {document_type} для пользователя {user_id} от администратора {admin_id}")
             return True
             
@@ -548,14 +527,14 @@ class UserVerificationService:
                 'requested_at': datetime.now().isoformat()
             }
             
-            verification = self.create_verification_request(user_id, admin_id, requested_info)
-            
+            self.create_verification_request(user_id, admin_id, requested_info)
+
             # Обновляем статус пользователя на "запрошена информация"
             user = self.db.query(User).filter(User.id == user_id).first()
             if user:
                 user.verification_status = 'requested'
                 self.db.commit()
-            
+
             logger.info(f"Запрошены документы типов {document_types} для пользователя {user_id} от администратора {admin_id}")
             return True
             

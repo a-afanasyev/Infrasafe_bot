@@ -177,7 +177,7 @@ class TestStartShift:
             "uk_management_bot.handlers.shifts.async_notify_shift_started", new_callable=AsyncMock
         ), patch(
             "uk_management_bot.handlers.shifts.get_executor_suggestion_inline", return_value=MagicMock()
-        ) as mock_suggestion_kb:
+        ):
             svc = MockService.return_value
             svc.start_shift.return_value = {"success": True, "shift": shift}
             svc._get_user_by_tg.return_value = _make_db_user()

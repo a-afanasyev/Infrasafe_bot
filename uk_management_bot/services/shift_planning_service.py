@@ -518,9 +518,7 @@ class ShiftPlanningService:
         """Вычисляет серьезность пробела в покрытии"""
         if not uncovered_hours:
             return 'none'
-        
-        gap_count = len(uncovered_hours)
-        
+
         # Анализируем критические часы (рабочее время)
         critical_hours = set(range(8, 18))  # 8:00 - 18:00
         critical_gaps = len([hour for hour in uncovered_hours if hour in critical_hours])

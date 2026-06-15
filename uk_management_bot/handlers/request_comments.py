@@ -185,7 +185,7 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
         comment_service = CommentService(db)
 
         # Добавляем комментарий
-        comment = comment_service.add_comment(
+        comment_service.add_comment(
             request_id=request.request_number,
             user_id=callback.from_user.id,
             comment_text=comment_text,

@@ -78,7 +78,7 @@ class TestLocalizationMiddlewareFromUser:
         user = _make_user_with_language("ru")
         data = {"user": user}
 
-        language = await localization_middleware(_record_language_handler, MagicMock(), data)
+        await localization_middleware(_record_language_handler, MagicMock(), data)
 
         assert data["language"] == "ru"
 

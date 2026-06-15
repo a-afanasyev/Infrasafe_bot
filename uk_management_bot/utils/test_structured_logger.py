@@ -341,7 +341,6 @@ class TestLogFunctionCallDecorator:
         logger = get_logger("test.level")
 
         calls = []
-        original_info = logger.info
         logger.info = lambda msg, **kw: calls.append(("info", msg))
 
         @log_function_call(logger=logger, level="info")

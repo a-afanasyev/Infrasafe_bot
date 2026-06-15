@@ -378,8 +378,6 @@ class TestSendWebhook:
                 client,
             )
 
-        call_kwargs = client.post.call_args
-        headers = call_kwargs.kwargs.get("headers", {}) or (call_kwargs.args[1] if len(call_kwargs.args) > 1 else {})
         # headers is passed as kwarg
         sent_headers = client.post.call_args.kwargs["headers"]
         assert "x-webhook-signature" in sent_headers

@@ -550,7 +550,7 @@ async def save_document(message: Message, state: FSMContext, db: Session, langua
         # Сохраняем документ в базу данных
         verification_service = UserVerificationService(db)
         document_type = DocumentType(document_type_value)
-        document = verification_service.save_user_document(
+        verification_service.save_user_document(
             user_id=user.id,
             document_type=document_type,
             file_id=file_id,

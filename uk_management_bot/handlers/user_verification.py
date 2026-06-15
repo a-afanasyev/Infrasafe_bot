@@ -419,7 +419,7 @@ async def process_request_comment(message: Message, state: FSMContext, db: Sessi
             'comment': comment
         }
         
-        verification = verification_service.create_verification_request(
+        verification_service.create_verification_request(
             user_id=user_id,
             admin_id=message.from_user.id,
             requested_info=requested_info
@@ -685,17 +685,6 @@ async def approve_user_verification(callback: CallbackQuery, db: Session, roles:
                 # Получаем пользователя
                 target_user = db.query(User).filter(User.id == user_id).first()
                 if target_user:
-                    # Получаем роли пользователя
-                    user_roles = []
-                    if target_user.roles:
-                        try:
-                            import json
-                            user_roles = json.loads(target_user.roles) if isinstance(target_user.roles, str) else target_user.roles
-                        except Exception:
-                            user_roles = ["applicant"]
-                    else:
-                        user_roles = ["applicant"]
-
                     # Создаем клавиатуру с кнопкой перезапуска
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
                     target_lang = target_user.language or "ru"

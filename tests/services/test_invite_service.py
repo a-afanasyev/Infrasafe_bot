@@ -92,7 +92,7 @@ class TestValidateInvite:
     def test_expired_token_raises(self):
         with patch.object(self.svc, "_is_nonce_used", return_value=False):
             # Generate a token with 0 hours = already expired
-            token = self.svc.generate_invite("applicant", created_by=100, hours=0)
+            self.svc.generate_invite("applicant", created_by=100, hours=0)
             # Need to wait a moment for it to be expired, or set expires_at in the past
             # Instead, let's manually build an expired token
             payload = {

@@ -452,17 +452,6 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                 # Получаем пользователя
                 target_user = db.query(User).filter(User.id == user_id).first()
                 if target_user:
-                    # Получаем роли пользователя
-                    user_roles = []
-                    if target_user.roles:
-                        try:
-                            import json
-                            user_roles = json.loads(target_user.roles) if isinstance(target_user.roles, str) else target_user.roles
-                        except Exception:
-                            user_roles = ["applicant"]
-                    else:
-                        user_roles = ["applicant"]
-
                     # Создаем клавиатуру с кнопкой перезапуска
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -1370,8 +1359,6 @@ async def handle_request_selected_documents(callback: CallbackQuery, state: FSMC
         
         # Обрабатываем формат с количеством дополнительных документов
         if '+' in docs_str:
-            base_docs = docs_str.split('+')[0].split(',')
-            additional_count = int(docs_str.split('+')[1])
             # Получаем полный список из состояния
             data = await state.get_data()
             selected_docs = data.get('selected_documents', [])
@@ -1563,17 +1550,6 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
             
             # Отправляем обновленное главное меню пользователю
             try:
-
-                # Получаем роли пользователя
-                user_roles = []
-                if target_user.roles:
-                    try:
-                        import json
-                        user_roles = json.loads(target_user.roles) if isinstance(target_user.roles, str) else target_user.roles
-                    except Exception:
-                        user_roles = ["applicant"]
-                else:
-                    user_roles = ["applicant"]
 
                 # Создаем клавиатуру с кнопкой перезапуска
                 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -2074,11 +2050,9 @@ async def remove_role_from_user(callback: CallbackQuery, state: FSMContext, lang
 async def save_user_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Сохранить изменения ролей"""
     lang = language
-    
+
     try:
         data = await state.get_data()
-        target_user_id = data.get('target_user_id')
-        manager_id = data.get('manager_id')
         original_roles = data.get('original_roles', [])
         current_roles = data.get('current_roles', [])
         
