@@ -64,7 +64,19 @@ function isTransitionAllowed(sourceStatus: string | undefined, targetStatus: str
   return VALID_TRANSITIONS[sourceStatus]?.has(targetStatus) ?? false
 }
 
-export { isTransitionAllowed, FROZEN_STATUSES, VALID_TRANSITIONS, MODAL_STATUSES }
+/**
+ * Назначение исполнителя (canon MANAGER_ASSIGN) применимо ТОЛЬКО при взятии
+ * заявки из «Новая» в работу. Из «Закуп»/«Уточнение»/«Выполнена»/«Исполнено»/
+ * «Возвращена» «В работе» — это resume/return (MANAGER_PURCHASE_DONE /
+ * CLARIFY_RESOLVED / MANAGER_RETURN_TO_WORK), которые executor_id НЕ принимают
+ * (иначе backend → 422 «unexpected field 'executor_id'»). Из этих источников
+ * переход коммитим напрямую, без модалки выбора исполнителя.
+ */
+function inProgressNeedsExecutorModal(sourceStatus: string | undefined, hasExecutor: boolean): boolean {
+  return sourceStatus === 'Новая' && !hasExecutor
+}
+
+export { isTransitionAllowed, FROZEN_STATUSES, VALID_TRANSITIONS, MODAL_STATUSES, inProgressNeedsExecutorModal }
 
 export default function KanbanBoard({ onCardClick }: Props) {
   const { t } = useTranslation()
@@ -124,10 +136,12 @@ export default function KanbanBoard({ onCardClick }: Props) {
     if (!isTransitionAllowed(sourceCol.status, newStatus)) return
 
     if (MODAL_STATUSES.has(newStatus)) {
-      // For 'В работе': if card already has an executor, skip modal and transition directly
+      // 'В работе': модалка выбора исполнителя нужна только при назначении из
+      // «Новая» без исполнителя. Из «Закуп»/«Уточнение»/«Выполнена»/«Исполнено»/
+      // «Возвращена» это resume/return — коммитим напрямую (executor_id там → 422).
       if (newStatus === 'В работе') {
         const card = columns.flatMap(c => c.requests).find(r => r.request_number === requestNumber)
-        if (card?.executor_id) {
+        if (!inProgressNeedsExecutorModal(sourceCol.status, Boolean(card?.executor_id))) {
           commitTransition(requestNumber, { status: newStatus })
           return
         }
