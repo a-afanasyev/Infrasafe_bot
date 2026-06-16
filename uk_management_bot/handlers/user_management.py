@@ -456,7 +456,7 @@ async def quick_verify_user(callback: CallbackQuery, db: Session, roles: list = 
                     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
                     # Определяем язык целевого пользователя
-                    target_lang = 'ru'  # По умолчанию
+                    target_lang = target_user.language or 'ru'
 
                     restart_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text=get_text('user_mgmt.handlers.restart_bot_btn', language=target_lang), callback_data="restart_bot")]
@@ -1555,7 +1555,7 @@ async def process_approval_comment(message: Message, state: FSMContext, db: Sess
                 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
                 # Определяем язык целевого пользователя
-                target_lang = 'ru'  # По умолчанию
+                target_lang = target_user.language or 'ru'
 
                 restart_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=get_text('user_mgmt.handlers.restart_bot_btn', language=target_lang), callback_data="restart_bot")]
