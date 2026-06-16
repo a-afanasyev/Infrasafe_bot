@@ -11,13 +11,10 @@ concurrency:
 
 jobs:
   lint:
-    name: lint (ruff, changed files)
+    name: lint (ruff, whole scope)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Full history so we can diff against the PR base / previous commit.
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -27,20 +24,16 @@ jobs:
       - name: Install ruff
         run: pip install ruff==0.15.17
 
-      # PRAC-01: ruff scoped to CHANGED LINES of changed *.py files (blocking).
-      # Only new/modified lines must be clean — a small edit to a debt-heavy
-      # legacy file isn't blocked by that file's pre-existing violations (~670
-      # repo-wide; full cleanup is a separate follow-up). Config: pyproject.toml
-      # [tool.ruff]; line-scoping logic: ci/ruff_changed_lines.py.
-      - name: Ruff (changed lines)
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="origin/${{ github.base_ref }}"
-          else
-            base="HEAD^"
-          fi
-          echo "Diffing changed Python files against: $base"
-          python ci/ruff_changed_lines.py "$base"
+      # PRAC-01-FU5: WHOLE-SCOPE blocking gate (flipped from the line-scoped gate
+      # once the bot/API scope reached 0 over FU-1..FU-4). `ruff check .` resolves
+      # to exactly the in-scope set — pyproject [tool.ruff] extend-exclude keeps
+      # media_service/scripts/docs out (their ~169 E/F tracked by PRAC-01-FU2),
+      # force-exclude makes that hold for the explicit `.` path too. `.` also
+      # covers ci/ + root *.py (which an explicit-path form would miss).
+      # ci/ruff_changed_lines.py is kept in-tree as the documented fallback if a
+      # future `select` expansion (I/UP/B/SIM) re-introduces a baseline.
+      - name: Ruff (whole scope)
+        run: ruff check .
 
   backend-tests:
     name: backend-tests (pytest)
