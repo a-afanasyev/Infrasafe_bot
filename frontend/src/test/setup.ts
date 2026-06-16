@@ -23,5 +23,18 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 })
 
+// jsdom lacks the pointer-capture / scroll APIs Radix UI relies on to open
+// menus (DropdownMenu, Select). Stub them so userEvent can drive dropdowns.
+Element.prototype.scrollIntoView = vi.fn()
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = vi.fn(() => false)
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = vi.fn()
+}
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = vi.fn()
+}
+
 // @twa-dev/sdk удалён из зависимостей (DEAD-12, PR-4): 0 импортов в src —
 // TWA-код работает напрямую через window.Telegram.WebApp.
