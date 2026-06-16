@@ -103,7 +103,8 @@ async def register_applicant(
         u.last_name = " ".join(full_name.split()[1:])
         u.phone = phone
         u.active_role = "applicant"
-        r = set(parse_roles_safe(u.roles)); r.add("applicant")
+        r = set(parse_roles_safe(u.roles))
+        r.add("applicant")
         u.roles = json.dumps(sorted(r))
 
     user = (await db.execute(select(User).where(User.telegram_id == telegram_id))).scalar_one_or_none()

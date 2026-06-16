@@ -73,11 +73,11 @@ __all__ = [
     'WebhookOutbox',
     'InviteNonce',
     'BoardConfig',
-    'Feedback'
+    'Feedback',
+    'RequestNumberCounter',
 ]
 
-# Добавляем модели заявок, если они доступны
+# Добавляем модели заявок, если они доступны (импортированы в try-блоке выше).
+# __all__ += (не .extend) — ruff распознаёт это как пометку L41-42 экспортируемыми.
 if _request_models_available:
-    from .request_comment import RequestComment
-    from .request_assignment import RequestAssignment
-    __all__.extend(['RequestComment', 'RequestAssignment'])
+    __all__ += ['RequestComment', 'RequestAssignment']

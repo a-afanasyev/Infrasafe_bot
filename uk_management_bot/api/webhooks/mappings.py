@@ -4,6 +4,8 @@
 категорий — InfraSafe шлёт только `type` и `severity`.
 """
 
+from uk_management_bot.utils.constants import URGENCY_VALUES
+
 # alert.type → UK request category. Неизвестный type → DEFAULT_CATEGORY.
 TYPE_TO_CATEGORY = {
     # Активные типы (InfraSafe alert_rules)
@@ -32,7 +34,6 @@ DEFAULT_URGENCY = "low"
 # Sprint 10 / INT-120 — канонический набор urgency-ключей. Валидация
 # `uk_urgency_override` теперь идёт через normalize_urgency (ключ|рус→ключ)
 # в inbound_alert; этот набор оставлен как канон-референс/совместимость.
-from uk_management_bot.utils.constants import URGENCY_VALUES
 URGENCY_LADDER = frozenset(URGENCY_VALUES)
 
 # Sprint 10 / INT-120 — `event=alert.engineer_required` (chain hit

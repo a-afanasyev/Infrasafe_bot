@@ -13,6 +13,37 @@ from uk_management_bot.database.models.request_assignment import RequestAssignme
 import re
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 
+from uk_management_bot.keyboards.requests import (
+    get_categories_keyboard,
+    get_cancel_keyboard,
+    get_media_keyboard,
+    get_confirmation_keyboard,
+    get_categories_inline_keyboard_with_cancel,
+    get_urgency_inline_keyboard,
+    get_inline_confirmation_keyboard,
+    get_status_filter_inline_keyboard,
+)
+from uk_management_bot.keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
+from uk_management_bot.utils.validators import (
+    validate_media_file
+)
+import logging
+from datetime import datetime
+from uk_management_bot.services.request_service import RequestService
+from typing import Optional
+
+# Localization imports - TASK 17 Phase 2
+from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, STATUS_EMOJI
+from uk_management_bot.utils.language_helpers import (
+    get_language_from_message
+)
+# Single Source of Truth for button texts - TASK 17 Entry Handler Fix
+from uk_management_bot.utils.button_texts import (
+    get_create_request_texts,
+    get_my_requests_texts
+)
+
 # BUG-122: view_/cancel_ callback matchers built from the shared request-number
 # core (\d{3,}) so 4-digit (>999/day) numbers match too — single source of truth.
 _VIEW_REQUEST_NUMBER_RE = rf"^view(?:_request)?_{REQUEST_NUMBER_CORE}$"
@@ -22,54 +53,6 @@ _CANCEL_REQUEST_NUMBER_RE = re.compile(rf"^cancel_{REQUEST_NUMBER_CORE}$")
 # lists, so future edit_*/approve_* callbacks aren't swallowed by these handlers.
 _EDIT_REQUEST_NUMBER_RE = rf"^edit_{REQUEST_NUMBER_CORE}$"
 _APPROVE_REQUEST_NUMBER_RE = rf"^approve_{REQUEST_NUMBER_CORE}$"
-from uk_management_bot.keyboards.requests import (
-    get_categories_keyboard,
-    get_urgency_keyboard,
-    get_cancel_keyboard,
-    get_media_keyboard,
-    get_confirmation_keyboard,
-    get_address_selection_keyboard,
-    get_yard_selection_keyboard,
-    get_building_selection_keyboard,
-    get_apartment_selection_keyboard,
-    get_categories_inline_keyboard,
-    get_categories_inline_keyboard_with_cancel,
-    get_urgency_inline_keyboard,
-    get_inline_confirmation_keyboard,
-)
-from uk_management_bot.keyboards.base import get_main_keyboard, get_contextual_keyboard, get_user_contextual_keyboard
-from uk_management_bot.keyboards.requests import (
-    get_status_filter_inline_keyboard,
-    get_category_filter_inline_keyboard,
-    get_reset_filters_inline_keyboard,
-    get_period_filter_inline_keyboard,
-    get_executor_filter_inline_keyboard,
-)
-from uk_management_bot.utils.validators import (
-    validate_description,
-    validate_media_file
-)
-from uk_management_bot.config.settings import settings
-from uk_management_bot.utils.constants import REQUEST_CATEGORIES, REQUEST_URGENCIES
-from uk_management_bot.utils.constants import REQUEST_CATEGORIES
-import logging
-from datetime import datetime
-from uk_management_bot.services.request_service import RequestService
-from uk_management_bot.services.auth_service import AuthService
-from typing import Optional
-
-# Localization imports - TASK 17 Phase 2
-from uk_management_bot.utils.helpers import get_text, get_user_language
-from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, get_status_with_emoji, STATUS_EMOJI
-from uk_management_bot.utils.language_helpers import (
-    get_language_for_user,
-    get_language_from_message
-)
-# Single Source of Truth for button texts - TASK 17 Entry Handler Fix
-from uk_management_bot.utils.button_texts import (
-    get_create_request_texts,
-    get_my_requests_texts
-)
 
 logger = logging.getLogger(__name__)
 
@@ -716,7 +699,7 @@ async def save_request(
 
         media_file_ids = data.get('media_files', [])
 
-        logger.info(f"[SAVE_REQUEST] Создание объекта заявки...")
+        logger.info("[SAVE_REQUEST] Создание объекта заявки...")
         request = Request(
             request_number=request_number,
             category=data['category'],
@@ -736,7 +719,7 @@ async def save_request(
             status='Новая'
         )
 
-        logger.info(f"[SAVE_REQUEST] Сохранение в БД...")
+        logger.info("[SAVE_REQUEST] Сохранение в БД...")
         db.add(request)
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan
@@ -1915,22 +1898,22 @@ async def show_my_requests(message: Message, state: FSMContext):
             # "Новая" - ещё не назначена, "Принято" - уже принята заявителем (архив)
             if active_role == "executor":
                 query = query.filter(Request.status.in_(["В работе", "Закуп", "Уточнение"]))
-                logger.info(f"Применен фильтр active_status='active' для исполнителя: статусы=['В работе', 'Закуп', 'Уточнение']")
+                logger.info("Применен фильтр active_status='active' для исполнителя: статусы=['В работе', 'Закуп', 'Уточнение']")
             else:
                 query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
-                logger.info(f"Применен фильтр active_status='active': статусы=['Новая', 'В работе', 'Закуп', 'Уточнение']")
+                logger.info("Применен фильтр active_status='active': статусы=['Новая', 'В работе', 'Закуп', 'Уточнение']")
         elif active_status == "archive":
             # Архив: финальные и завершенные статусы
             # Для исполнителей: "Выполнена" (ждёт проверки менеджера), "Принято" (принята заявителем), "Отменена"
             if active_role == "executor":
                 query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-                logger.info(f"Применен фильтр active_status='archive' для исполнителя: статусы=['Выполнена', 'Исполнено', 'Принято', 'Отменена']")
+                logger.info("Применен фильтр active_status='archive' для исполнителя: статусы=['Выполнена', 'Исполнено', 'Принято', 'Отменена']")
             else:
                 query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-                logger.info(f"Применен фильтр active_status='archive': статусы=['Выполнена', 'Исполнено', 'Принято', 'Отменена']")
+                logger.info("Применен фильтр active_status='archive': статусы=['Выполнена', 'Исполнено', 'Принято', 'Отменена']")
         elif active_status == "all":
             # Все заявки: без фильтра по статусу
-            logger.info(f"Применен фильтр active_status='all': показываем все заявки без фильтра статуса")
+            logger.info("Применен фильтр active_status='all': показываем все заявки без фильтра статуса")
         else:
             logger.warning(f"Фильтр статуса НЕ применен! active_status={active_status}")
 

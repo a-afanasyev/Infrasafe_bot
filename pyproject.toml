@@ -45,3 +45,12 @@ force-exclude = true
 # (line-too-long) is delegated to black (the formatter); E203 is black-compatible.
 select = ["E", "F"]
 ignore = ["E203", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Deliberate late module-level imports (NOT sloppy placement):
+# - api/main.py: routers/reconcilers imported after the FastAPI app + lifespan
+#   are set up (entrypoint wiring); moving them risks import cycles.
+# - database/init_admin.py: imports come after sys.path.insert() bootstrap, so
+#   they must stay below it.
+"uk_management_bot/api/main.py" = ["E402"]
+"uk_management_bot/database/init_admin.py" = ["E402"]

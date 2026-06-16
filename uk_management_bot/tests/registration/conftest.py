@@ -63,7 +63,8 @@ def seed_user(async_db):
     from uk_management_bot.database.models.user import User
     async def _make(telegram_id: int, status: str = "pending"):
         u = User(telegram_id=telegram_id, status=status)
-        async_db.add(u); await async_db.flush()
+        async_db.add(u)
+        await async_db.flush()
         return u
     return _make
 
@@ -78,10 +79,13 @@ def seed_apartment(async_db):
         # Yard.name is UNIQUE — keep callers isolated by suffixing a short uuid so
         # repeated seeds in the same outer transaction don't collide.
         y = Yard(name=f"{yard_name}-{uuid.uuid4().hex[:8]}", is_active=yard_active)
-        async_db.add(y); await async_db.flush()
+        async_db.add(y)
+        await async_db.flush()
         b = Building(address=address, yard_id=y.id, is_active=building_active)
-        async_db.add(b); await async_db.flush()
+        async_db.add(b)
+        await async_db.flush()
         a = Apartment(apartment_number=number, building_id=b.id, is_active=True)
-        async_db.add(a); await async_db.flush()
+        async_db.add(a)
+        await async_db.flush()
         return a
     return _make

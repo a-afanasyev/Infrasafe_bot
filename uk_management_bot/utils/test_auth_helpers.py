@@ -4,6 +4,7 @@ Unit tests for auth_helpers.py
 Tests for parse_roles_safe() and get_user_roles() with various inputs.
 No DB or network calls.
 """
+import asyncio
 from unittest.mock import MagicMock
 
 from uk_management_bot.utils.auth_helpers import parse_roles_safe, get_user_roles
@@ -270,8 +271,6 @@ class TestGetActiveRole:
 # ---------------------------------------------------------------------------
 # check_user_role (async)
 # ---------------------------------------------------------------------------
-
-import asyncio
 
 
 class TestCheckUserRole:
