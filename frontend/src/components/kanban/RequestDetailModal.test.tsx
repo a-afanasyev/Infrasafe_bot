@@ -84,6 +84,49 @@ describe('RequestDetailModal — manager urgency editor gating (TASK 17)', () =>
   })
 })
 
+describe('RequestDetailModal — status dropdown «В работе» executor gating (FE-129)', () => {
+  // Bug: выбор «В работе» из статус-дропдауна для заявки из «Закуп» без
+  // исполнителя открывал модалку выбора исполнителя и слал executor_id →
+  // backend 422 «manager_purchase_done: unexpected field 'executor_id'».
+  // Модалка назначения нужна только при взятии из «Новая».
+  async function selectStatus(req: Record<string, unknown>, target: string) {
+    mockHasRole.mockReturnValue(true)
+    let patchBody: unknown = null
+    server.use(
+      http.get('*/api/v2/requests/:number/comments', () => HttpResponse.json([])),
+      http.get('*/api/v2/requests/:number', () => HttpResponse.json(req)),
+      http.patch('*/api/v2/requests/:number', async ({ request }) => {
+        patchBody = await request.json()
+        return HttpResponse.json({ ...req, status: target })
+      }),
+    )
+    render(<RequestDetailModal requestNumber={String(req.request_number)} onClose={noop} />)
+    await waitFor(() => expect(screen.getByText('Срочная')).toBeInTheDocument())
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: new RegExp(String(req.status)) }))
+    await user.click(await screen.findByRole('menuitem', { name: new RegExp(target) }))
+    return () => patchBody
+  }
+
+  it('«Закуп» → «В работе» without executor: commits directly, no executor modal, no executor_id', async () => {
+    const getBody = await selectStatus(
+      makeRequest({ status: 'Закуп', executor_id: null, urgency: 'high' }),
+      'В работе',
+    )
+    await waitFor(() => expect(getBody()).toEqual({ status: 'В работе' }))
+    expect(screen.queryByText('Назначить исполнителя')).not.toBeInTheDocument()
+  })
+
+  it('«Новая» → «В работе» without executor: opens the executor modal (no direct PATCH)', async () => {
+    const getBody = await selectStatus(
+      makeRequest({ status: 'Новая', executor_id: null, urgency: 'high' }),
+      'В работе',
+    )
+    expect(await screen.findByText('Назначить исполнителя')).toBeInTheDocument()
+    expect(getBody()).toBeNull()
+  })
+})
+
 describe('RequestDetailModal — FE-07 per-request state reset', () => {
   it('clears the manager-note field when a different request opens (render-time reset, no remount)', async () => {
     mockHasRole.mockReturnValue(true)

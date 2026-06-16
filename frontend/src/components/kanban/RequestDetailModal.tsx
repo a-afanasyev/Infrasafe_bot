@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import TransitionModal, { type TransitionData } from './TransitionModal'
-import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES } from './KanbanBoard'
+import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal } from './KanbanBoard'
 
 // TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
 const URGENCY: Record<string, { bg: string; text: string }> = {
@@ -251,8 +251,16 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                   statusStyle={statusStyle}
                   onSelect={(targetStatus) => {
                     if (MODAL_STATUSES.has(targetStatus)) {
-                      // For 'В работе': skip modal if already has executor
-                      if (targetStatus === 'В работе' && request.executor_id) {
+                      // 'В работе': модалка выбора исполнителя нужна только при
+                      // назначении из «Новая» без исполнителя (canon MANAGER_ASSIGN).
+                      // Из resume/return-источников (Закуп/Уточнение/Выполнена/
+                      // Исполнено/Возвращена) executor_id НЕ принимается backend'ом
+                      // (→ 422 «unexpected field 'executor_id'»), поэтому коммитим
+                      // переход напрямую. Зеркалит фикс в KanbanBoard.handleDragEnd.
+                      if (
+                        targetStatus === 'В работе' &&
+                        !inProgressNeedsExecutorModal(request.status, Boolean(request.executor_id))
+                      ) {
                         updateRequest.mutate({ status: targetStatus })
                         return
                       }
