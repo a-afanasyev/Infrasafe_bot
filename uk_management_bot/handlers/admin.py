@@ -48,19 +48,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.filters import RoleFilter
 from datetime import datetime, timezone
-
-router = Router()
-logger = logging.getLogger(__name__)
-
-# PR-25 (BUG-BOT-034): manager accept_/purchase_ actions bound to the shared
-# request-number core (strict regex) instead of open-set startswith+exclusion
-# lambdas, so accept_request_/purchase_materials_ and any future accept_*/
-# purchase_* callbacks fall through to their own handlers.
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
-_ACCEPT_REQUEST_NUMBER_RE = rf"^accept_{REQUEST_NUMBER_CORE}$"
-_PURCHASE_REQUEST_NUMBER_RE = rf"^purchase_{REQUEST_NUMBER_CORE}$"
-
-# Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import (
     get_admin_panel_texts,
     get_test_middleware_texts,
@@ -78,7 +66,19 @@ from uk_management_bot.utils.button_texts import (
     get_admin_create_invite_texts,
     get_admin_shifts_texts,
 )
+from uk_management_bot.states.invite_creation import InviteCreationStates
 
+router = Router()
+logger = logging.getLogger(__name__)
+
+# PR-25 (BUG-BOT-034): manager accept_/purchase_ actions bound to the shared
+# request-number core (strict regex) instead of open-set startswith+exclusion
+# lambdas, so accept_request_/purchase_materials_ and any future accept_*/
+# purchase_* callbacks fall through to their own handlers.
+_ACCEPT_REQUEST_NUMBER_RE = rf"^accept_{REQUEST_NUMBER_CORE}$"
+_PURCHASE_REQUEST_NUMBER_RE = rf"^purchase_{REQUEST_NUMBER_CORE}$"
+
+# Single Source of Truth for button texts - TASK 17
 ADMIN_PANEL_TEXTS = get_admin_panel_texts()
 TEST_MIDDLEWARE_TEXTS = get_test_middleware_texts()
 ADMIN_USER_MANAGEMENT_TEXTS = get_admin_user_management_texts()
@@ -100,8 +100,6 @@ class ManagerStates(StatesGroup):
     clarify_reason = State()
     waiting_for_clarification_text = State()
     waiting_for_materials_edit = State()
-
-from uk_management_bot.states.invite_creation import InviteCreationStates
 
 
 # ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====

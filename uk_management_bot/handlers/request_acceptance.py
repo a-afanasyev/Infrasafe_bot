@@ -29,15 +29,15 @@ from uk_management_bot.utils.workflow_predicates import (
     get_approved_apartment_ids,
 )
 
+from uk_management_bot.utils.button_texts import get_acceptance_texts
+from uk_management_bot.utils.helpers import get_text
+
 import logging
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 # Single Source of Truth for button texts - TASK 17
-from uk_management_bot.utils.button_texts import get_acceptance_texts
-from uk_management_bot.utils.helpers import get_text
-
 # Константа для фильтрации сообщений "Ожидают приёмки"
 ACCEPTANCE_TEXTS = get_acceptance_texts()
 

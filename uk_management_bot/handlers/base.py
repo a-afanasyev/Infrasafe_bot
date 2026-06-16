@@ -19,6 +19,16 @@ from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.filters import RoleFilter
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.button_texts import (
+    get_profile_texts,
+    get_switch_role_texts,
+    get_active_requests_texts,
+    get_archive_texts,
+    get_shift_texts,
+    get_help_texts,
+    get_back_texts,
+    get_cancel_texts,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,17 +41,6 @@ router = Router()
 start_router = Router(name="start")
 
 # Single Source of Truth for button texts - TASK 17
-from uk_management_bot.utils.button_texts import (
-    get_profile_texts,
-    get_switch_role_texts,
-    get_active_requests_texts,
-    get_archive_texts,
-    get_shift_texts,
-    get_help_texts,
-    get_back_texts,
-    get_cancel_texts,
-)
-
 # Константы для фильтрации сообщений
 PROFILE_TEXTS = get_profile_texts()
 SWITCH_ROLE_TEXTS = get_switch_role_texts()

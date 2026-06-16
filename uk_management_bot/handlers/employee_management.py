@@ -19,6 +19,16 @@ from uk_management_bot.services.user_management_service import UserManagementSer
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.specialization_service import SpecializationService
 from uk_management_bot.states.employee_management import EmployeeManagementStates
+from uk_management_bot.keyboards.employee_management import (
+    get_employee_management_main_keyboard,
+    get_employee_list_keyboard,
+    get_employee_actions_keyboard,
+    get_cancel_keyboard,
+    get_employee_edit_keyboard,
+)
+from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.database.models.user import User
 import json
 from datetime import datetime
 
@@ -84,16 +94,6 @@ async def _return_to_employee_info(callback: CallbackQuery, db: Session, employe
         reply_markup=get_employee_actions_keyboard(employee_id, employee.status, lang)
     )
     return True
-from uk_management_bot.keyboards.employee_management import (
-    get_employee_management_main_keyboard,
-    get_employee_list_keyboard,
-    get_employee_actions_keyboard,
-    get_cancel_keyboard,
-    get_employee_edit_keyboard,
-)
-from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import has_admin_access
-from uk_management_bot.database.models.user import User
 
 logger = logging.getLogger(__name__)
 router = Router()

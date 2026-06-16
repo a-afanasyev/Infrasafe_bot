@@ -1,4 +1,5 @@
 import pytest
+from httpx import AsyncClient
 from uk_management_bot.api.registration.catalog import list_apartments, is_apartment_selectable
 
 
@@ -23,9 +24,6 @@ async def test_is_apartment_selectable_true_for_active(async_db, seed_apartment)
 @pytest.mark.asyncio
 async def test_is_apartment_selectable_false_for_missing(async_db):
     assert await is_apartment_selectable(async_db, 999999) is False
-
-
-from httpx import AsyncClient
 
 
 @pytest.mark.asyncio

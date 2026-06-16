@@ -16,6 +16,7 @@ import base64
 import hmac
 import hashlib
 from unittest.mock import MagicMock, patch
+from sqlalchemy.exc import IntegrityError
 
 
 def _build_service(db_mock, invite_secret="test_secret_123"):
@@ -195,8 +196,6 @@ class TestIsNonceUsed:
 # Public wrapper around the atomic path: adds an InviteNonce row (UNIQUE
 # constraint enforces single-use), then writes an audit_logs entry. Does
 # NOT commit — caller owns the transaction boundary (SEC-020 refactor).
-
-from sqlalchemy.exc import IntegrityError
 
 
 class TestMarkNonceUsed:
