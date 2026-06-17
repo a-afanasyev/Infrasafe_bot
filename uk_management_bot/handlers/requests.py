@@ -28,7 +28,6 @@ from uk_management_bot.utils.validators import (
     validate_media_file
 )
 import logging
-from datetime import datetime
 from uk_management_bot.services.request_service import RequestService
 from typing import Optional
 
@@ -41,6 +40,7 @@ from uk_management_bot.utils.language_helpers import (
 # Single Source of Truth for button texts - TASK 17 Entry Handler Fix
 from uk_management_bot.utils.button_texts import (
     get_create_request_texts,
+    get_group_pool_texts,
     get_my_requests_texts
 )
 
@@ -66,6 +66,7 @@ router = Router()
 # Вычисляется один раз при импорте модуля (критично для фильтров aiogram)
 CREATE_REQUEST_TEXTS = get_create_request_texts()
 MY_REQUESTS_TEXTS = get_my_requests_texts()
+GROUP_POOL_TEXTS = get_group_pool_texts()
 
 # Вспомогательные функции для улучшенной обработки ошибок и UX
 
@@ -732,6 +733,12 @@ async def save_request(
 
         logger.info(f"[SAVE_REQUEST] ✅ Заявка {request_number} успешно сохранена")
 
+        # FEAT-группы: авто-dispatch на группу-специализацию (Новая→В работе +
+        # group-назначение) через канонический run_command. Best-effort — ошибка
+        # не валит уже-созданную заявку. ПОСЛЕ commit (своя сессия, свой лок).
+        from uk_management_bot.services.dispatch import auto_dispatch_new_request_sync
+        auto_dispatch_new_request_sync(request_number, data['category'])
+
         # PR5: загрузка медиа в Media Service — ПОСЛЕ commit (раньше шла между
         # генерацией номера и INSERT, удерживая блокировки на время сетевого
         # I/O). Результат upload'а в Request не сохраняется (media_files несёт
@@ -1018,85 +1025,65 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 
 
 def _get_executor_requests_query(db_session: Session, user: User):
+    """Заявки исполнителя — ТОЛЬКО его персональные (individual / взятые).
+
+    FEAT-группы: непривязанные group-назначения здесь больше НЕ показываем — они
+    в отдельном «пуле свободных» (`_get_group_pool_query`). Сюда заявка попадает
+    лишь ПОСЛЕ взятия (EXECUTOR_CLAIM конвертирует group→individual,
+    executor_id := взявший).
     """
-    Вспомогательная функция для получения заявок исполнителя.
-    Использует RequestAssignment + fallback на Request.executor_id для совместимости.
-
-    Args:
-        db_session: Сессия базы данных
-        user: Объект пользователя-исполнителя
-
-    Returns:
-        Query: Запрос для получения заявок исполнителя
-    """
-    from uk_management_bot.database.models.shift import Shift
-    import json
-
-    # Получаем специализации исполнителя
-    executor_specializations = []
-    if user.specialization:
-        try:
-            if isinstance(user.specialization, str) and user.specialization.startswith('['):
-                executor_specializations = json.loads(user.specialization)
-            else:
-                executor_specializations = [user.specialization]
-        except (json.JSONDecodeError, TypeError):
-            executor_specializations = [user.specialization] if user.specialization else []
-
-    # Проверяем активную смену
-    now = datetime.now()
-    active_shift = db_session.query(Shift).filter(
-        Shift.user_id == user.id,
-        Shift.status == "active",
-        Shift.start_time <= now,
-        or_(Shift.end_time.is_(None), Shift.end_time >= now)
-    ).first()
-
-    has_active_shift = active_shift is not None
-
-    logger.info(f"Исполнитель {user.id}: активная смена = {has_active_shift}, специализации = {executor_specializations}")
-    if active_shift:
-        logger.info(f"  Смена ID {active_shift.id}: {active_shift.start_time} - {active_shift.end_time}, статус={active_shift.status}")
-
-    # Запрос через RequestAssignment (LEFT JOIN для fallback)
     from sqlalchemy.orm import aliased
     assignment_alias = aliased(RequestAssignment)
 
     query = db_session.query(Request).outerjoin(
         assignment_alias, Request.request_number == assignment_alias.request_number
     )
-
-    # Условия: RequestAssignment ИЛИ прямое назначение через executor_id
-    conditions = []
-
-    # 1. Индивидуальные назначения через RequestAssignment
-    conditions.append(
-        (assignment_alias.status == "active") & (assignment_alias.executor_id == user.id)
-    )
-
-    # 2. Групповые назначения по специализациям (ТОЛЬКО если в активной смене)
-    if has_active_shift and executor_specializations:
-        logger.info(f"  Добавляем групповые назначения для специализаций: {executor_specializations}")
-        for spec in executor_specializations:
-            conditions.append(
-                (assignment_alias.status == "active") &
-                (assignment_alias.assignment_type == "group") &
-                (assignment_alias.group_specialization == spec)
-            )
-
-    # 3. Fallback: Request.executor_id == user.id (для заявок без RequestAssignment)
-    conditions.append(Request.executor_id == user.id)
-
+    conditions = [
+        # активное individual-назначение на меня
+        (assignment_alias.status == "active") & (assignment_alias.executor_id == user.id),
+        # fallback: прямое Request.executor_id (заявки без RequestAssignment)
+        Request.executor_id == user.id,
+    ]
     query = query.filter(or_(*conditions))
 
     # Дедупликация: подзапрос по request_number, т.к. DISTINCT на всех колонках
     # не работает с JSON полями в PostgreSQL
     request_numbers_subq = query.with_entities(Request.request_number).distinct().subquery()
-    query = db_session.query(Request).filter(
+    return db_session.query(Request).filter(
         Request.request_number.in_(db_session.query(request_numbers_subq.c.request_number))
     )
 
-    return query
+
+def _get_group_pool_query(db_session: Session, user: User):
+    """FEAT-группы: пул «свободных» group-заявок для исполнителя.
+
+    Видны ТОЛЬКО дежурному сейчас (on-shift): заявки «В работе» с активным
+    group-назначением по его специализации и БЕЗ исполнителя (executor_id NULL).
+    Не на смене / без специализаций → пустой набор.
+    """
+    from sqlalchemy import false
+    from sqlalchemy.orm import aliased
+    from uk_management_bot.utils.shifts import is_on_shift_now_sync
+    from uk_management_bot.utils.specializations import parse_specializations
+
+    specs = parse_specializations(user)
+    if not specs or not is_on_shift_now_sync(db_session, user.id):
+        return db_session.query(Request).filter(false())
+
+    assignment_alias = aliased(RequestAssignment)
+    query = db_session.query(Request).join(
+        assignment_alias, Request.request_number == assignment_alias.request_number
+    ).filter(
+        Request.status.in_(["В работе"]),
+        assignment_alias.status == "active",
+        assignment_alias.assignment_type == "group",
+        assignment_alias.executor_id.is_(None),
+        assignment_alias.group_specialization.in_(specs),
+    )
+    request_numbers_subq = query.with_entities(Request.request_number).distinct().subquery()
+    return db_session.query(Request).filter(
+        Request.request_number.in_(db_session.query(request_numbers_subq.c.request_number))
+    )
 
 
 @router.callback_query(F.data.startswith("page_"))
@@ -1366,7 +1353,13 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         if active_role == "executor":
             # Для исполнителей: только действия по работе с заявкой
             # TASK 17 Этап C: Локализованные кнопки
-            if request.status == "В работе":
+            if request.status == "В работе" and request.executor_id is None:
+                # FEAT-группы: непривязанная group-заявка → «Взять» (а не
+                # Выполнена/Закуп — работать может только взявший; авторизацию
+                # взятия проверяет EXECUTOR_CLAIM в claim-callback).
+                claim_text = get_text("requests.executor_claim_button", language=lang) or "🙋 Взять в работу"
+                rows.append([InlineKeyboardButton(text=claim_text, callback_data=f"claim_request_{request.request_number}")])
+            elif request.status == "В работе":
                 complete_text = get_text("buttons.complete", language=lang) or "✅ Выполнена"
                 purchase_text = get_text("buttons.purchase", language=lang) or "💰 Нужен закуп"
                 rows.append([InlineKeyboardButton(text=complete_text, callback_data=f"executor_complete_{request.request_number}")])
@@ -2483,6 +2476,176 @@ def _run_executor_command(request_number: str, user_id, action, payload: dict,
         return None, "requests.executor_status_conflict"
     except WorkflowError:
         return None, "common.error"
+
+
+def _build_group_pool_view(db_session: Session, user: User, lang: str):
+    """FEAT-группы: построить (text, keyboard|None) пула «свободных» group-заявок
+    с кнопкой «🙋 Взять #N» по каждой. Пустой пул → текст без клавиатуры."""
+    from uk_management_bot.keyboards.requests import (
+        resolve_category_key, get_category_display)
+    from uk_management_bot.utils.address_helpers import localize_address
+
+    pool = (_get_group_pool_query(db_session, user)
+            .order_by(Request.created_at.desc()).all())
+    title = get_text("requests.group_pool_title", language=lang) or "🆓 Свободные заявки"
+    if not pool:
+        empty = get_text("requests.group_pool_empty", language=lang) or "Свободных заявок нет"
+        return f"{title}\n\n{empty}", None
+
+    claim_text = get_text("requests.executor_claim_button", language=lang) or "🙋 Взять в работу"
+    address_label = get_text("requests.address_label", language=lang) or "Адрес"
+    lines = [title, ""]
+    rows: list = []
+    for i, r in enumerate(pool, 1):
+        category_display = get_category_display(resolve_category_key(r.category), language=lang)
+        lines.append(f"{i}. 🔧 #{r.request_number} — {category_display}")
+        lines.append(f"   {address_label} {localize_address(r.address, lang)}")
+        lines.append("")
+        rows.append([InlineKeyboardButton(
+            text=f"{claim_text} #{r.request_number}",
+            callback_data=f"claim_request_{r.request_number}")])
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _render_group_pool(message: Message, db_session: Session,
+                             user: User, lang: str) -> None:
+    """edit-вариант (перерисовка после взятия / открытия из inline)."""
+    text, kb = _build_group_pool_view(db_session, user, lang)
+    try:
+        await message.edit_text(text, reply_markup=kb)
+    except TelegramBadRequest:
+        pass
+
+
+@router.message(F.text.in_(GROUP_POOL_TEXTS))
+async def show_group_pool_message(message: Message, state: FSMContext):
+    """FEAT-группы: реплай-кнопка «🆓 Свободные заявки» (исполнитель) → пул."""
+    db_session = None
+    try:
+        db_session = next(get_db())
+        lang = get_user_language(message.from_user.id, db_session)
+        user = db_session.query(User).filter(
+            User.telegram_id == message.from_user.id).first()
+        if not user:
+            await message.answer(get_text("common.user_not_found", language=lang))
+            return
+        text, kb = _build_group_pool_view(db_session, user, lang)
+        await message.answer(text, reply_markup=kb)
+    except Exception as e:
+        logger.error(f"Ошибка показа пула (реплай): {e}")
+        await message.answer(get_text("common.error", language="ru"))
+    finally:
+        if db_session:
+            db_session.close()
+
+
+async def _notify_group_pool_claimed(db_session: Session, request_number: str,
+                                     claimer: User) -> None:
+    """FEAT-группы (best-effort, вне tx): уведомить остальных дежурных группы,
+    что заявку #N взял {claimer}. Таргет — on-shift исполнители той же
+    специализации (group_specialization сохранён в назначении как история)."""
+    try:
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        from uk_management_bot.utils.auth_helpers import get_user_roles
+        from uk_management_bot.utils.constants import ROLE_EXECUTOR
+        from uk_management_bot.utils.shifts import is_on_shift_now_sync
+        from uk_management_bot.utils.specializations import parse_specializations
+
+        assignment = db_session.query(RequestAssignment).filter(
+            RequestAssignment.request_number == request_number,
+            RequestAssignment.status == "active").first()
+        spec = assignment.group_specialization if assignment else None
+        if not spec:
+            return
+        bot = _get_shared_bot()
+        if bot is None:
+            return
+        claimer_name = claimer.first_name or str(claimer.id)
+        for ex in db_session.query(User).filter(User.status == "approved").all():
+            if ex.id == claimer.id or not ex.telegram_id:
+                continue
+            if ROLE_EXECUTOR not in get_user_roles(ex):
+                continue
+            if spec not in parse_specializations(ex):
+                continue
+            if not is_on_shift_now_sync(db_session, ex.id):
+                continue
+            text = get_text("requests.claimed_by_other_notify",
+                            language=(ex.language or "ru")).format(
+                request_number=request_number, executor=claimer_name)
+            try:
+                await bot.send_message(chat_id=ex.telegram_id, text=text)
+            except Exception as e:
+                logger.debug(f"claim-notify исполнителю {ex.id} пропущено: {e}")
+    except Exception as e:
+        logger.warning(f"claim-notify для {request_number} не выполнен: {e}")
+
+
+@router.callback_query(F.data == "group_pool")
+async def show_group_pool(callback: CallbackQuery, state: FSMContext):
+    """FEAT-группы: открыть пул «свободных» group-заявок (только дежурным)."""
+    db_session = None
+    try:
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        user = db_session.query(User).filter(
+            User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+            return
+        await _render_group_pool(callback.message, db_session, user, lang)
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка показа пула свободных заявок: {e}")
+        await callback.answer(get_text("common.error", language="ru"), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.callback_query(F.data.startswith("claim_request_"))
+async def claim_group_request(callback: CallbackQuery, state: FSMContext):
+    """FEAT-группы: исполнитель «берёт» group-заявку из пула (EXECUTOR_CLAIM).
+
+    Успех → группа конвертируется в individual на взявшего; заявка уходит из
+    пула, у взявшего появляются рабочие действия. NotAuthorized → «уже взято».
+    """
+    from uk_management_bot.utils.request_workflow import Action
+    db_session = None
+    try:
+        request_number = callback.data.replace("claim_request_", "")
+        db_session = next(get_db())
+        lang = get_user_language(callback.from_user.id, db_session)
+        user = db_session.query(User).filter(
+            User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+            return
+        _outcome, error_key = _run_executor_command(
+            request_number, user.id, Action.EXECUTOR_CLAIM, {}, callback.id)
+        if error_key is not None:
+            # В контексте взятия NotAuthorized/конфликт = заявку уже взяли.
+            if error_key in ("requests.executor_not_authorized",
+                             "requests.executor_status_conflict"):
+                msg = get_text("requests.request_already_claimed", language=lang) \
+                    or "Заявку уже взяли"
+            else:
+                msg = get_text(error_key, language=lang)
+            await callback.answer(msg, show_alert=True)
+            # пул мог измениться — перерисовать
+            await _render_group_pool(callback.message, db_session, user, lang)
+            return
+        await callback.answer(
+            get_text("requests.request_claimed_success", language=lang)
+            or "Вы взяли заявку в работу", show_alert=True)
+        await _notify_group_pool_claimed(db_session, request_number, user)
+        await _render_group_pool(callback.message, db_session, user, lang)
+    except Exception as e:
+        logger.error(f"Ошибка взятия заявки из пула: {e}")
+        await callback.answer(get_text("common.error", language="ru"), show_alert=True)
+    finally:
+        if db_session:
+            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_purchase_"))

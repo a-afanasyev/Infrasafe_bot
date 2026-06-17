@@ -122,6 +122,35 @@ class TestSystemDispatch:
         assert ra.created_by == 1  # seeded system-user, НЕ None (created_by NOT NULL)
         s.close()
 
+    def test_dispatch_to_group_creates_group_assignment(self, factory):
+        """FEAT-группы: SYSTEM_DISPATCH_ASSIGN {group} → group-назначение
+        (executor_id NULL) + Новая→В работе. Это путь авто-dispatch при создании."""
+        from uk_management_bot.config.settings import settings
+        SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+        s = SF()
+        s.add(User(id=1, telegram_id=settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID,
+                   first_name="System", roles='["manager"]', active_role="manager",
+                   status="approved", language="ru"))
+        s.commit()
+        s.close()
+        sysp = PrincipalRef(kind="system", user_id=None,
+                            source="dispatcher", system_actor="dispatcher")
+        out = run_command_sync(
+            SF, "260610-001", sysp,
+            ActionCommand("d", Action.SYSTEM_DISPATCH_ASSIGN, {"group": "plumber"}))
+        assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS
+        s = SF()
+        ra = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").first()
+        assert ra is not None
+        assert ra.assignment_type == "group"
+        assert ra.group_specialization == "plumber"
+        assert ra.executor_id is None
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.assignment_type == "group"
+        assert req.assigned_group == "plumber"
+        s.close()
+
 
 # ---------------------------------------------------------------------------
 # MANAGER_CONFIRM — первый canonical-writer
@@ -542,3 +571,176 @@ class TestParity:
         assert async_out.no_op == sync_out.no_op
         assert {i.kind for i in async_out.post_commit_intents} == \
                {i.kind for i in sync_out.post_commit_intents}
+
+
+# ---------------------------------------------------------------------------
+# EXECUTOR_CLAIM — взятие group-заявки из пула (FEAT-группы, PR-2)
+# ---------------------------------------------------------------------------
+
+class TestGroupClaim:
+    def _exec(self, uid=4):
+        return PrincipalRef(kind="user", user_id=uid, source="telegram")
+
+    def _setup_pool(self, SF, *, spec="plumber", exec_spec="plumber", shift=True):
+        """Заявка «В работе» + активное group-назначение; исполнителю-4
+        проставляются специализация и (опц.) активная смена в окне."""
+        from datetime import datetime, timezone
+        s = SF()
+        u = s.query(User).filter_by(id=4).first()
+        u.specialization = exec_spec
+        s.add(RequestAssignment(
+            request_number="260610-001", assignment_type="group",
+            group_specialization=spec, executor_id=None,
+            created_by=3, status="active"))
+        if shift:
+            s.add(Shift(user_id=4, status="active",
+                        start_time=datetime(2026, 6, 10, 8, 0, tzinfo=timezone.utc)))
+        s.commit()
+        s.close()
+
+    def test_claim_converts_group_to_individual(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF)
+        out = run_command_sync(SF, "260610-001", self._exec(),
+                               ActionCommand("c", Action.EXECUTOR_CLAIM, {}))
+        assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.executor_id == 4
+        assert req.assignment_type == "individual"
+        assert req.assigned_group is None
+        ras = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").all()
+        assert len(ras) == 1
+        assert ras[0].assignment_type == "individual"
+        assert ras[0].executor_id == 4
+        assert ras[0].group_specialization == "plumber"  # история сохранена
+        s.close()
+
+    def test_claim_then_complete_succeeds(self, factory):
+        """Закрывает ключевой пробел: после claim исполнитель проходит COMPLETE."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF)
+        run_command_sync(SF, "260610-001", self._exec(),
+                         ActionCommand("c1", Action.EXECUTOR_CLAIM, {}))
+        out = run_command_sync(
+            SF, "260610-001", self._exec(),
+            ActionCommand("c2", Action.EXECUTOR_COMPLETE,
+                          {"completion_report": "готово"}))
+        assert out.new_status == C.REQUEST_STATUS_EXECUTED
+
+    def test_claim_denied_wrong_spec(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF, spec="electric", exec_spec="plumber")
+        with pytest.raises(NotAuthorized):
+            run_command_sync(SF, "260610-001", self._exec(),
+                             ActionCommand("c", Action.EXECUTOR_CLAIM, {}))
+
+    def test_claim_denied_without_shift(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF, shift=False)
+        with pytest.raises(NotAuthorized):
+            run_command_sync(SF, "260610-001", self._exec(),
+                             ActionCommand("c", Action.EXECUTOR_CLAIM, {}))
+
+    def test_second_claim_rejected_one_active(self, factory):
+        """Двойное взятие: первый успех, второй (другой исполнитель) — отказ,
+        ровно одна active-строка (individual на первого)."""
+        from datetime import datetime, timezone
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF)
+        s = SF()
+        s.add(User(id=5, telegram_id=5, first_name="Exec2",
+                   roles='["executor"]', active_role="executor",
+                   status="approved", language="ru", specialization="plumber"))
+        s.add(Shift(user_id=5, status="active",
+                    start_time=datetime(2026, 6, 10, 8, 0, tzinfo=timezone.utc)))
+        s.commit()
+        s.close()
+        run_command_sync(SF, "260610-001", self._exec(4),
+                         ActionCommand("c1", Action.EXECUTOR_CLAIM, {}))
+        with pytest.raises(NotAuthorized):
+            run_command_sync(SF, "260610-001", self._exec(5),
+                             ActionCommand("c2", Action.EXECUTOR_CLAIM, {}))
+        s = SF()
+        ras = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").all()
+        assert len(ras) == 1 and ras[0].executor_id == 4
+        s.close()
+
+    def test_is_on_shift_now_respects_window(self, factory):
+        """on-shift helper: status=active, но окно (end_time) в прошлом → не на смене."""
+        from datetime import datetime, timezone
+        from uk_management_bot.utils.shifts import is_on_shift_now_sync
+        SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+        s = SF()
+        s.add(Shift(user_id=4, status="active",
+                    start_time=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    end_time=datetime(2020, 1, 2, tzinfo=timezone.utc)))
+        s.commit()
+        s.close()
+        s = SF()
+        assert is_on_shift_now_sync(s, 4) is False
+        s.close()
+
+
+async def _async_claim_run():
+    """async-зеркало claim: поднять aiosqlite, засеять пул, прогнать claim."""
+    from datetime import datetime, timezone
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine, async_sessionmaker, AsyncSession)
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with AF() as s:
+        s.add(User(id=4, telegram_id=4, first_name="Exec", roles='["executor"]',
+                   active_role="executor", status="approved", language="ru",
+                   specialization="plumber"))
+        s.add(Request(request_number="260610-001", user_id=2, category="c",
+                      description="d", urgency="low",
+                      status=C.REQUEST_STATUS_IN_PROGRESS))
+        s.add(RequestAssignment(
+            request_number="260610-001", assignment_type="group",
+            group_specialization="plumber", executor_id=None,
+            created_by=4, status="active"))
+        s.add(Shift(user_id=4, status="active",
+                    start_time=datetime(2026, 6, 10, 8, 0, tzinfo=timezone.utc)))
+        await s.commit()
+    try:
+        return await run_command_async(
+            AF, "260610-001", PrincipalRef(kind="user", user_id=4, source="telegram"),
+            ActionCommand("c", Action.EXECUTOR_CLAIM, {}))
+    finally:
+        await engine.dispose()
+
+
+class TestGroupClaimParity:
+    def test_async_claim_converts_group_to_individual(self, factory):
+        sync = run_command_sync(  # sync-эталон
+            _claim_sync_factory(factory), "260610-001",
+            PrincipalRef(kind="user", user_id=4, source="telegram"),
+            ActionCommand("c", Action.EXECUTOR_CLAIM, {}))
+        async_out = asyncio.run(_async_claim_run())
+        assert async_out.new_status == sync.new_status == C.REQUEST_STATUS_IN_PROGRESS
+        assert async_out.no_op is False
+
+
+def _claim_sync_factory(factory):
+    """sync-эталон для parity: засеять пул в sync-БД и вернуть SF."""
+    from datetime import datetime, timezone
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    s = SF()
+    u = s.query(User).filter_by(id=4).first()
+    u.specialization = "plumber"
+    s.add(RequestAssignment(
+        request_number="260610-001", assignment_type="group",
+        group_specialization="plumber", executor_id=None,
+        created_by=3, status="active"))
+    s.add(Shift(user_id=4, status="active",
+                start_time=datetime(2026, 6, 10, 8, 0, tzinfo=timezone.utc)))
+    s.commit()
+    s.close()
+    return SF
