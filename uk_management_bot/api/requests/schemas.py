@@ -152,6 +152,10 @@ class UpdateRequestBody(BaseModel):
     requested_materials: Optional[str] = None
     return_reason: Optional[str] = None
     rating: Optional[int] = None
+    # FEAT-группы (followup #2): дашборд «Назначить дежурному» — назначить на
+    # ГРУППУ-специализацию по категории заявки (спец резолвит сервер по
+    # CATEGORY_TO_SPECIALIZATION). Идёт вместе со status="В работе".
+    assign_to_duty: Optional[bool] = None
 
     @field_validator("status")
     @classmethod

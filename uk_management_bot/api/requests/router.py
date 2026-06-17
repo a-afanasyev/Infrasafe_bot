@@ -521,6 +521,18 @@ async def update_request(
             and updates.get("executor_id") is not None):
         assign_executor_id = updates["executor_id"]
 
+    # FEAT-группы (followup #2): дашборд «Назначить дежурному» (transition В работе
+    # + assign_to_duty) → назначить на ГРУППУ по специализации категории. Спец
+    # резолвит сервер (единый источник CATEGORY_TO_SPECIALIZATION). Нет маппинга
+    # категории → fallback на status-only переход (прежнее поведение «менеджер берёт»).
+    duty_group_spec = None
+    if target_status == C.REQUEST_STATUS_IN_PROGRESS and updates.get("assign_to_duty"):
+        from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
+        category = await db.scalar(select(RequestModel.category).where(
+            RequestModel.request_number == request_number))
+        if category:
+            duty_group_spec = CATEGORY_TO_SPECIALIZATION.get(category)
+
     # ═══════════════════ WORKFLOW-переход → единый canonical-writer ═══════════════════
     if target_status is not None or assign_executor_id is not None:
         # Комбинированный PATCH (переход + edit) запрещён: атомарность гарантируется
@@ -536,6 +548,12 @@ async def update_request(
                 command_id=f"api:{request_number}:assign",
                 action=Action.MANAGER_ASSIGN,
                 payload={"executor_id": assign_executor_id},
+            )
+        elif duty_group_spec is not None:
+            command = ActionCommand(
+                command_id=f"api:{request_number}:assign-duty",
+                action=Action.MANAGER_ASSIGN,
+                payload={"group": duty_group_spec},
             )
         else:
             command = LegacyStatusIntent(

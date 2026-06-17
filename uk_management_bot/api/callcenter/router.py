@@ -153,4 +153,12 @@ async def create_call_center_request(
     db.add(req)
     await db.commit()
     await db.refresh(req)
+
+    # FEAT-группы (followup #1): call-center — ещё один канал создания. Авто-dispatch
+    # на группу-специализацию (Новая→В работе + group) через канонический
+    # run_command, как в _persist_request (twa/inspector) и боте. Best-effort —
+    # ошибка не валит уже-созданную заявку. refresh — чтобы карточка отразила статус.
+    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
+    await auto_dispatch_new_request_async(req.request_number, body.category)
+    await db.refresh(req)
     return RequestCard.model_validate(req)

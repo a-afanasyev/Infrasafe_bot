@@ -17,6 +17,9 @@ import { Label } from '@/components/ui/label'
 export interface TransitionData {
   status: string
   executor_id?: number
+  /** FEAT-группы: «Назначить дежурному» — назначить на группу-специализацию
+   *  категории (спец резолвит сервер). Идёт со status="В работе". */
+  assign_to_duty?: boolean
   notes?: string
   requested_materials?: string
   completion_report?: string
@@ -52,6 +55,11 @@ export default function TransitionModal({ requestNumber: _requestNumber, targetS
     const data: TransitionData = { status: targetStatus }
     if (targetStatus === 'В работе' && executorId !== 'duty' && executorId !== '') {
       data.executor_id = executorId as number
+    }
+    // FEAT-группы: «Дежурный» → назначение на группу-специализацию (сервер
+    // резолвит спец по категории), а не status-only переход без исполнителя.
+    if (targetStatus === 'В работе' && executorId === 'duty') {
+      data.assign_to_duty = true
     }
     if (targetStatus === 'Закуп') data.requested_materials = text.trim()
     if (targetStatus === 'Уточнение') data.notes = text.trim()
