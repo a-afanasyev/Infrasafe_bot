@@ -14,7 +14,15 @@ services:
     
     # Перезапуск контейнера при сбоях
     restart: unless-stopped
-    
+
+    # IPv4-only: в Узбекистане нет рабочего IPv6-egress. Без этого getaddrinfo
+    # отдаёт AAAA (api.telegram.org резолвится в IPv6) и aiogram/httpx виснут на
+    # TCP-connect → TelegramNetworkError. disable_ipv6 убирает IPv6 с интерфейса,
+    # и getaddrinfo (AI_ADDRCONFIG) возвращает только IPv4 — для всего egress.
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+
     # Команда запуска бота
     command: python -m uk_management_bot.main
     
@@ -62,6 +70,11 @@ services:
       dockerfile: Dockerfile.api
     container_name: uk-management-api
     restart: unless-stopped
+    # IPv4-only (см. комментарий у app): UZ без IPv6-egress; InfraSafe-вебхуки и
+    # любой внешний HTTP из API должны идти по IPv4.
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
     environment:
