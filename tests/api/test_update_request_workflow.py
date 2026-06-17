@@ -157,6 +157,25 @@ async def test_deprecated_manager_confirmed_routes_to_completed(
 
 
 @pytest.mark.asyncio
+async def test_executor_id_only_patch_routes_to_manager_assign(
+    client, db_session, manager_user, applicant_user, monkeypatch
+):
+    """FEAT-группы: PATCH {executor_id} без status → канонический MANAGER_ASSIGN
+    {executor_id} (а не прямой setattr executor_id в обход workflow)."""
+    from uk_management_bot.utils.request_workflow import Action
+    await _seed(db_session, owner_id=applicant_user.id, status="Новая")
+    mock = AsyncMock(return_value=_outcome("Новая", "В работе", "В работе"))
+    monkeypatch.setattr(req_router, "run_command_async", mock)
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"executor_id": 7})
+    assert r.status_code == 200, r.text
+    sent = mock.await_args.args[3]
+    assert sent.action == Action.MANAGER_ASSIGN
+    assert dict(sent.payload) == {"executor_id": 7}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("exc,code", [
     (NotAuthorized("x"), 403),
     (InvalidTransition("x"), 422),

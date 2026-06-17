@@ -128,6 +128,12 @@ def _init_button_texts() -> dict:
         fallback_text="Archive"
     )
 
+    # FEAT-группы: пул «свободных» group-заявок
+    button_texts['group_pool'] = get_button_texts_for_all_languages(
+        "main_menu.group_pool",
+        fallback_text="🆓 Свободные заявки"
+    )
+
     button_texts['shift'] = get_button_texts_for_all_languages(
         "main_menu.shift",
         fallback_text="Shift"
@@ -393,11 +399,16 @@ def get_active_requests_texts() -> List[str]:
 def get_archive_texts() -> List[str]:
     """
     Получить тексты кнопки 'Архив' для всех языков.
-    
+
     Returns:
         List[str]: Список текстов на всех поддерживаемых языках
     """
     return BUTTON_TEXTS.get('archive', ["Archive"])
+
+
+def get_group_pool_texts() -> List[str]:
+    """FEAT-группы: тексты кнопки «Свободные заявки» для всех языков."""
+    return BUTTON_TEXTS.get('group_pool', ["🆓 Свободные заявки"])
 
 
 def get_shift_texts() -> List[str]:

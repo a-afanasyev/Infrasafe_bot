@@ -34,6 +34,8 @@ from uk_management_bot.services.workflow_runner import (
     RequestNotFound,
 )
 from uk_management_bot.utils.request_workflow import (
+    Action,
+    ActionCommand,
     LegacyStatusIntent,
     PrincipalRef,
     NotAuthorized,
@@ -362,6 +364,13 @@ async def _persist_request(
 
     # Redis pub/sub — best-effort, уже после durable-commit.
     await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))
+
+    # FEAT-группы: авто-dispatch на группу-специализацию (Новая→В работе + group)
+    # через канонический run_command + realtime status_changed. Best-effort.
+    # refresh — чтобы карточка ответа отразила актуальный статус (В работе).
+    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
+    await auto_dispatch_new_request_async(req.request_number, category)
+    await db.refresh(req)
     return req
 
 
@@ -477,8 +486,10 @@ def _build_workflow_payload(target_status: str, updates: dict) -> dict:
 
 
 # Поля, которые менеджер правит вне workflow (прямая запись в живой сессии).
-# executor_id-only переназначение — канонизация (assignment_service) отложена в PR2c.
-_MANAGER_EDIT_FIELDS = {"urgency", "notes", "description", "category", "executor_id"}
+# FEAT-группы: executor_id УБРАН — назначение исполнителя идёт только через
+# канонический MANAGER_ASSIGN (см. трансляцию executor_id-only PATCH выше), а не
+# прямым setattr в обход RequestAssignment/assignment_type/assigned_group/audit.
+_MANAGER_EDIT_FIELDS = {"urgency", "notes", "description", "category"}
 # Контент-поля исполнителя без смены статуса.
 _EXECUTOR_EDIT_FIELDS = {"completion_report", "requested_materials", "notes"}
 
@@ -500,8 +511,18 @@ async def update_request(
     if target_status is None and updates.get("manager_confirmed") is True:
         target_status = C.REQUEST_STATUS_COMPLETED
 
+    # FEAT-группы: назначение исполнителя через API без status (фронт
+    # AssignRequestModal шлёт PATCH {executor_id}) — раньше прямой setattr в обход
+    # workflow/assignment/audit. Теперь транслируем в канонический MANAGER_ASSIGN
+    # {executor_id} (Новая/В работе → В работе): individual-назначение + синхрон
+    # legacy-полей + отмена прошлого active-назначения + audit/outbox в одной tx.
+    assign_executor_id = None
+    if (target_status is None and "status" not in updates
+            and updates.get("executor_id") is not None):
+        assign_executor_id = updates["executor_id"]
+
     # ═══════════════════ WORKFLOW-переход → единый canonical-writer ═══════════════════
-    if target_status is not None:
+    if target_status is not None or assign_executor_id is not None:
         # Комбинированный PATCH (переход + edit) запрещён: атомарность гарантируется
         # только внутри run_command, urgency туда не входит (план, риск #28).
         if "urgency" in updates:
@@ -509,16 +530,22 @@ async def update_request(
                 status_code=422,
                 detail="Cannot combine a status transition with an urgency edit",
             )
-        payload = _build_workflow_payload(target_status, updates)
         principal = PrincipalRef(kind="user", user_id=user.id, source="api")
-        intent = LegacyStatusIntent(
-            command_id=f"api:{request_number}:{target_status}",
-            target_status=target_status,
-            payload=payload,
-        )
+        if assign_executor_id is not None:
+            command = ActionCommand(
+                command_id=f"api:{request_number}:assign",
+                action=Action.MANAGER_ASSIGN,
+                payload={"executor_id": assign_executor_id},
+            )
+        else:
+            command = LegacyStatusIntent(
+                command_id=f"api:{request_number}:{target_status}",
+                target_status=target_status,
+                payload=_build_workflow_payload(target_status, updates),
+            )
         try:
             outcome = await run_command_async(
-                AsyncSessionLocal, request_number, principal, intent
+                AsyncSessionLocal, request_number, principal, command
             )
         except RequestNotFound:
             raise HTTPException(status_code=404, detail="Request not found")

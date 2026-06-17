@@ -115,7 +115,6 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
     """
     try:
         from uk_management_bot.database.models.request_assignment import RequestAssignment
-        import json
 
         logger.info(f"[AUTO_ASSIGN] Начало автоматического назначения для заявки {request.request_number}, категория: {request.category}")
 
@@ -132,43 +131,21 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         # Находим исполнителей с нужной специализацией
         logger.info("[AUTO_ASSIGN] Выполнение запроса к таблице users...")
 
-        # Сначала проверим всех пользователей с ролью executor
-        all_executors = db.query(User).filter(User.active_role == "executor").all()
-        logger.info(f"[AUTO_ASSIGN] Всего пользователей с active_role='executor': {len(all_executors)}")
+        # AUD3-01: кандидаты — по roles-массиву (исполнитель может быть с активной
+        # ролью applicant), НЕ по active_role; специализации — единый парсер
+        # (JSON-list/CSV/скаляр) вместо локального json.loads.
+        from uk_management_bot.utils.auth_helpers import get_user_roles
+        from uk_management_bot.utils.constants import ROLE_EXECUTOR
+        from uk_management_bot.utils.specializations import parse_specializations
 
-        approved_executors = db.query(User).filter(
-            User.active_role == "executor",
-            User.status == "approved"
-        ).all()
-        logger.info(f"[AUTO_ASSIGN] Из них со status='approved': {len(approved_executors)}")
+        approved_users = db.query(User).filter(User.status == "approved").all()
+        logger.info(f"[AUTO_ASSIGN] Approved-пользователей всего: {len(approved_users)}")
 
-        for ex in all_executors:
-            logger.debug(f"[AUTO_ASSIGN]   User {ex.id} ({ex.first_name}): active_role={ex.active_role}, status={ex.status}")
-
-        executors = approved_executors
-        logger.info(f"[AUTO_ASSIGN] Найдено {len(executors)} активных исполнителей")
-
-        matching_executors = []
-        for executor in executors:
-            if executor.specialization:
-                try:
-                    # Парсим специализации исполнителя
-                    if isinstance(executor.specialization, str):
-                        executor_specializations = json.loads(executor.specialization)
-                    else:
-                        executor_specializations = executor.specialization
-
-                    # Проверяем, есть ли нужная специализация
-                    if specialization in executor_specializations:
-                        matching_executors.append(executor)
-                        logger.debug(f"[AUTO_ASSIGN] Исполнитель {executor.id} ({executor.first_name}) подходит (специализации: {executor_specializations})")
-                    else:
-                        logger.debug(f"[AUTO_ASSIGN] Исполнитель {executor.id} не подходит (специализации: {executor_specializations}, требуется: {specialization})")
-                except (json.JSONDecodeError, TypeError):
-                    # Если специализация - просто строка
-                    if executor.specialization == specialization:
-                        matching_executors.append(executor)
-                        logger.debug(f"[AUTO_ASSIGN] Исполнитель {executor.id} подходит (специализация строка: {executor.specialization})")
+        matching_executors = [
+            ex for ex in approved_users
+            if ROLE_EXECUTOR in get_user_roles(ex)
+            and specialization in parse_specializations(ex)
+        ]
 
         logger.info(f"[AUTO_ASSIGN] Найдено {len(matching_executors)} подходящих исполнителей для специализации '{specialization}'")
 

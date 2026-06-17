@@ -114,6 +114,12 @@ class Action(str, Enum):
     # → В работе). Продуктовое решение 2026-06-10: помимо менеджерских
     # MANAGER_PURCHASE_DONE/CLARIFY_RESOLVED исполнителю разрешён self-resume.
     EXECUTOR_RESUME = "executor_resume"
+    # Исполнитель «берёт» групповую заявку из пула себе (В работе → В работе,
+    # смена только исполнителя). FEAT-группы: чисто-групповое назначение имеет
+    # executor_id=NULL → ни один не авторизован работать; claim конвертирует
+    # активное group-назначение в individual (executor_id := взявший) in-place.
+    # Достижимо ТОЛЬКО явным ActionCommand (исключено из resolve_command).
+    EXECUTOR_CLAIM = "executor_claim"
     EXECUTOR_COMPLETE = "executor_complete"
     # Менеджер завершает работу за исполнителя (В работе/Закуп/Уточнение →
     # Выполнена). Продуктовое решение 2026-06-10: менеджерский shortcut-аналог
@@ -173,6 +179,9 @@ class ActorContext:
     roles: frozenset[str] = frozenset()
     active_role: Optional[str] = None
     approved_apartment_ids: frozenset[int] = frozenset()
+    # Специализации исполнителя (canonical-ключи: plumber/electric/...). Нужны
+    # для EXECUTOR_CLAIM: взять можно только заявку своей группы-специализации.
+    specializations: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -194,6 +203,12 @@ class WorkflowSnapshot:
     has_rating: bool = False
     active_assignment_executor_id: Optional[int] = None
     actor_has_active_shift: bool = False
+    # FEAT-группы: тип активного назначения ("group"/"individual"/None),
+    # его group_specialization и флаг «непривязанное group-назначение»
+    # (assignment_type=="group" И executor_id IS NULL) — для EXECUTOR_CLAIM.
+    active_assignment_type: Optional[str] = None
+    active_assignment_group: Optional[str] = None
+    active_assignment_unclaimed: bool = False
 
 
 @dataclass(frozen=True)
@@ -220,7 +235,8 @@ class LegacyStatusIntent:
 @dataclass(frozen=True)
 class DomainOp:
     """Операция по связанной таблице — применяется адаптером в той же tx."""
-    kind: Literal["create_rating", "cancel_active_assignments", "create_assignment"]
+    kind: Literal["create_rating", "cancel_active_assignments",
+                  "create_assignment", "claim_group_assignment"]
     data: Mapping[str, object] = field(default_factory=dict)
 
 
@@ -319,6 +335,7 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         required={"question": str}, optional={"notes": str}),
     Action.CLARIFY_RESOLVED: PayloadSchema(),
     Action.EXECUTOR_RESUME: PayloadSchema(),
+    Action.EXECUTOR_CLAIM: PayloadSchema(),
     Action.EXECUTOR_COMPLETE: PayloadSchema(
         optional={"completion_report": str, "completion_media": list}),
     Action.MANAGER_COMPLETE: PayloadSchema(
@@ -367,6 +384,23 @@ def _executor_can_work(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     return _is_assigned_executor(snap, actor) and snap.actor_has_active_shift
 
 
+def _executor_can_claim(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
+    """Исполнитель может взять заявку из группового пула.
+
+    Условия: роль executor + on-shift-now + активное group-назначение без
+    исполнителя (unclaimed) + его group_specialization входит в специализации
+    актора. После взятия unclaimed=False → действие исчезает из allowed.
+    """
+    if actor.kind != "user" or ROLE_EXECUTOR not in actor.roles:
+        return False
+    if not snap.actor_has_active_shift:
+        return False
+    if not snap.active_assignment_unclaimed:
+        return False
+    group = snap.active_assignment_group
+    return group is not None and group in actor.specializations
+
+
 def _is_owner(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     return actor.kind == "user" and snap.request.user_id == actor.user_id
 
@@ -407,8 +441,13 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_NEW}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: a.kind == "system",   # capability проверяется отдельно
         RepeatPolicy.NO_OP_IF_SAME, system_only=True),
+    # +В работе (FEAT-группы): после авто-dispatch заявка уже «В работе» с
+    # group-назначением; ручной выбор менеджером конкретного исполнителя или
+    # смена группы = переназначение из «В работе». same-canon В работе→В работе
+    # — легальный re-entry (check_repeat вернёт None, т.к. canon ∈ from).
     Action.MANAGER_ASSIGN: ActionSpec(
-        frozenset({REQUEST_STATUS_NEW}), REQUEST_STATUS_IN_PROGRESS,
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a), RepeatPolicy.NO_OP_IF_SAME),
     Action.EXECUTOR_PURCHASE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_PURCHASE,
@@ -433,6 +472,13 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION}),
         REQUEST_STATUS_IN_PROGRESS,
         _executor_can_work, RepeatPolicy.REJECT),
+    # from==to==«В работе»: смена только исполнителя. RepeatPolicy здесь НЕ
+    # несёт смысла — check_repeat для same-canon с from⊇текущий возвращает None
+    # (не повтор), действие всегда доходит до plan_transition и гейтится
+    # предикатом _executor_can_claim. REJECT — формальный дефолт, недостижим.
+    Action.EXECUTOR_CLAIM: ActionSpec(
+        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        _executor_can_claim, RepeatPolicy.REJECT),
     Action.EXECUTOR_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_EXECUTED,
         _executor_can_work, RepeatPolicy.REPEATABLE),
@@ -510,17 +556,32 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
         # назначении (executor_id/group в payload). Пустой payload = чистый
         # переход Новая→В работе (менеджер «берёт» заявку, исполнителя выбирает
         # отдельным шагом через assignment_service). Без placeholder-строк.
-        has_assignment = (payload.get("executor_id") is not None
-                          or payload.get("group") is not None)
-        if payload.get("executor_id") is not None:
-            ops += [("executor_id", Op.SET, payload["executor_id"])]
-        if payload.get("group") is not None:
+        # FEAT-группы: ветки взаимоисключающие (валидатор «не-оба» гарантирует
+        # отсутствие обоих полей) и СИММЕТРИЧНЫЕ — каждая чистит legacy-поля
+        # противоположного типа, чтобы переназначение individual↔group не
+        # оставляло stale executor_id/assigned_group.
+        has_executor = payload.get("executor_id") is not None
+        has_group = payload.get("group") is not None
+        if has_executor:
+            ops += [("executor_id", Op.SET, payload["executor_id"]),
+                    ("assignment_type", Op.SET, "individual"),
+                    ("assigned_group", Op.CLEAR, None)]
+        if has_group:
             ops += [("assigned_group", Op.SET, payload["group"]),
-                    ("assignment_type", Op.SET, "group")]
-        if has_assignment:
+                    ("assignment_type", Op.SET, "group"),
+                    ("executor_id", Op.CLEAR, None)]
+        if has_executor or has_group:
             ops += [("assigned_at", Op.SET_NOW, None)]
             if actor.kind == "user":
                 ops += [("assigned_by", Op.SET_ACTOR, None)]
+    elif action == Action.EXECUTOR_CLAIM:
+        # Взятие из пула: group-назначение → individual на взявшего. Снимаем
+        # legacy Request.assigned_group (история исходной группы остаётся в
+        # RequestAssignment.group_specialization). status уже «В работе».
+        ops += [("executor_id", Op.SET_ACTOR, None),
+                ("assignment_type", Op.SET, "individual"),
+                ("assigned_at", Op.SET_NOW, None),
+                ("assigned_group", Op.CLEAR, None)]
     elif action == Action.EXECUTOR_PURCHASE:
         ops += [("requested_materials", Op.SET, payload["requested_materials"])]
     elif action == Action.MANAGER_PURCHASE:
@@ -584,9 +645,15 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
         return (DomainOp("create_rating", {"rating": payload["rating"]}),)
     if action == Action.CANCEL:
         return (DomainOp("cancel_active_assignments"),)
+    if action == Action.EXECUTOR_CLAIM:
+        return (DomainOp("claim_group_assignment"),)
     if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
         # PR2c: строку RequestAssignment создаём только при фактическом
-        # назначении исполнителя/группы (см. _build_patch).
+        # назначении исполнителя/группы (см. _build_patch). FEAT-группы:
+        # переназначение из «В работе» безопасно для partial-unique —
+        # create_assignment в раннере сам отменяет прошлое active-назначение
+        # перед вставкой нового (workflow_runner._apply_domain_op_*), поэтому
+        # отдельный cancel здесь не нужен (инвариант «1 active» — за раннером).
         if payload.get("executor_id") is not None or payload.get("group") is not None:
             return (DomainOp("create_assignment", dict(payload)),)
         return ()
@@ -654,6 +721,14 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     action = command.action
     spec = ACTION_TABLE[action]
     PAYLOAD_SCHEMAS[action].validate(action, command.payload)
+    # FEAT-группы: назначение «не-оба» — group и executor_id одновременно
+    # бессмысленны (заявка либо группе, либо конкретному). Пустой payload
+    # остаётся валидным (status-only «менеджер берёт заявку» Новая→В работе).
+    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
+        if (command.payload.get("executor_id") is not None
+                and command.payload.get("group") is not None):
+            raise PayloadInvalid(
+                f"{action.value}: 'executor_id' и 'group' взаимоисключающи")
 
     if action not in allowed_actions(snap, actor):
         # различаем «не авторизован» от «не то состояние» для внятных ошибок
@@ -712,6 +787,13 @@ def check_repeat(snap: WorkflowSnapshot, command: ActionCommand,
 # resolve_command — mapper status-based входа (вызывается ПОД локом, PR2b)
 # ---------------------------------------------------------------------------
 
+# FEAT-группы: EXECUTOR_CLAIM (to=«В работе») достижим ТОЛЬКО явным
+# ActionCommand. Status-based вход target=«В работе» НЕ должен случайно
+# резолвиться во взятие из пула — иначе legacy-клиент «возобновить работу»
+# мог бы перехватить чужую/групповую заявку.
+_STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM})
+
+
 def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
                     intent: LegacyStatusIntent) -> ActionCommand:
     """target-status + актор + состояние → ActionCommand.
@@ -725,6 +807,7 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
     candidates = [
         a for a in allowed_actions(snap, actor)
         if ACTION_TABLE[a].to_status == target
+        and a not in _STATUS_RESOLVE_EXCLUDE
     ]
     if not candidates:
         canon = normalize_status(snap.request)

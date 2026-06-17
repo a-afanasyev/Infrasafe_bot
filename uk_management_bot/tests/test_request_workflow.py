@@ -62,21 +62,27 @@ def _state(status, *, confirmed=False, returned=False, executor=None):
 
 
 def _snap(status, *, confirmed=False, returned=False, executor=None,
-          assignment=None, shift=False, has_rating=False):
+          assignment=None, shift=False, has_rating=False,
+          assignment_type=None, assignment_group=None, unclaimed=False):
     return WorkflowSnapshot(
         request=_state(status, confirmed=confirmed, returned=returned,
                        executor=executor),
         has_rating=has_rating,
         active_assignment_executor_id=assignment,
         actor_has_active_shift=shift,
+        active_assignment_type=assignment_type,
+        active_assignment_group=assignment_group,
+        active_assignment_unclaimed=unclaimed,
     )
 
 
-def _user(uid, *roles, apartments=frozenset(), active=None):
+def _user(uid, *roles, apartments=frozenset(), active=None,
+          specializations=frozenset()):
     return ActorContext(
         kind="user", user_id=uid, system_actor=None,
         roles=frozenset(roles), active_role=active or (list(roles) or [None])[0],
         approved_apartment_ids=frozenset(apartments),
+        specializations=frozenset(specializations),
     )
 
 
@@ -481,6 +487,139 @@ class TestResolveCommand:
             resolve_command(
                 _snap(REQUEST_STATUS_NEW), OWNER,
                 LegacyStatusIntent("c", REQUEST_STATUS_EXECUTED))
+
+
+# ===========================================================================
+# EXECUTOR_CLAIM — взятие group-заявки из пула (PR-1)
+# ===========================================================================
+
+PLUMBER = _user(EXECUTOR_ID, "executor", specializations={"plumber"})
+PLUMBER_PRINCIPAL = PrincipalRef(kind="user", user_id=EXECUTOR_ID, source="telegram")
+
+
+def _group_snap(*, group="plumber", unclaimed=True, shift=True, executor=None):
+    """Заявка «В работе» с активным group-назначением (executor_id NULL)."""
+    return _snap(
+        REQUEST_STATUS_IN_PROGRESS, shift=shift, assignment=executor,
+        assignment_type="group", assignment_group=group, unclaimed=unclaimed)
+
+
+class TestExecutorClaim:
+    def test_claim_allowed_on_shift_matching_spec_unclaimed(self):
+        assert Action.EXECUTOR_CLAIM in allowed_actions(_group_snap(), PLUMBER)
+
+    def test_claim_patch_converts_group_to_individual(self):
+        res = _plan(_group_snap(), Action.EXECUTOR_CLAIM, PLUMBER,
+                    principal=PLUMBER_PRINCIPAL)
+        f = _patch_fields(res)
+        assert f["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+        assert f["executor_id"] == (Op.SET_ACTOR, None)
+        assert f["assignment_type"] == (Op.SET, "individual")
+        assert f["assigned_at"][0] == Op.SET_NOW
+        assert f["assigned_group"] == (Op.CLEAR, None)
+        assert any(d.kind == "claim_group_assignment" for d in res.domain_ops)
+
+    def test_claim_denied_without_shift(self):
+        assert Action.EXECUTOR_CLAIM not in allowed_actions(
+            _group_snap(shift=False), PLUMBER)
+
+    def test_claim_denied_wrong_spec(self):
+        assert Action.EXECUTOR_CLAIM not in allowed_actions(
+            _group_snap(group="electric"), PLUMBER)
+
+    def test_claim_denied_individual_assignment(self):
+        snap = _snap(REQUEST_STATUS_IN_PROGRESS, shift=True,
+                     assignment_type="individual", unclaimed=False)
+        assert Action.EXECUTOR_CLAIM not in allowed_actions(snap, PLUMBER)
+
+    def test_claim_denied_already_claimed(self):
+        snap = _group_snap(unclaimed=False, executor=99)
+        assert Action.EXECUTOR_CLAIM not in allowed_actions(snap, PLUMBER)
+
+    def test_claim_denied_wrong_status(self):
+        snap = _snap(REQUEST_STATUS_NEW, shift=True, assignment_type="group",
+                     assignment_group="plumber", unclaimed=True)
+        assert Action.EXECUTOR_CLAIM not in allowed_actions(snap, PLUMBER)
+
+    def test_claim_denied_for_manager(self):
+        assert Action.EXECUTOR_CLAIM not in allowed_actions(_group_snap(), MANAGER)
+
+    def test_claim_not_authorized_raises(self):
+        with pytest.raises(NotAuthorized):
+            _plan(_group_snap(shift=False), Action.EXECUTOR_CLAIM, PLUMBER,
+                  principal=PLUMBER_PRINCIPAL)
+
+    def test_claim_payload_rejects_extra_fields(self):
+        with pytest.raises(PayloadInvalid):
+            _plan(_group_snap(), Action.EXECUTOR_CLAIM, PLUMBER,
+                  {"executor_id": 7}, principal=PLUMBER_PRINCIPAL)
+
+    def test_legacy_in_progress_intent_does_not_resolve_to_claim(self):
+        with pytest.raises(InvalidTransition):
+            resolve_command(
+                _group_snap(), PLUMBER,
+                LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+
+
+# ===========================================================================
+# MANAGER_ASSIGN — переназначение из «В работе» + симметрия legacy-полей (PR-1)
+# ===========================================================================
+
+class TestManagerReassign:
+    def test_manager_assign_from_in_progress_allowed(self):
+        snap = _snap(REQUEST_STATUS_IN_PROGRESS, assignment_type="group",
+                     assignment_group="plumber", unclaimed=True)
+        assert Action.MANAGER_ASSIGN in allowed_actions(snap, MANAGER)
+
+    def test_assign_executor_sets_individual_and_clears_group(self):
+        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN,
+                    MANAGER, {"executor_id": EXECUTOR_ID})
+        f = _patch_fields(res)
+        assert f["executor_id"] == (Op.SET, EXECUTOR_ID)
+        assert f["assignment_type"] == (Op.SET, "individual")
+        assert f["assigned_group"] == (Op.CLEAR, None)
+
+    def test_assign_group_clears_executor(self):
+        snap = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID,
+                     assignment_type="individual")
+        res = _plan(snap, Action.MANAGER_ASSIGN, MANAGER, {"group": "plumber"})
+        f = _patch_fields(res)
+        assert f["assigned_group"] == (Op.SET, "plumber")
+        assert f["assignment_type"] == (Op.SET, "group")
+        assert f["executor_id"] == (Op.CLEAR, None)
+
+    def test_reassign_from_in_progress_emits_create_assignment(self):
+        # Инвариант «1 active» обеспечивает раннер (create_assignment сам
+        # отменяет прошлое active-назначение перед вставкой) — см. runner-тест.
+        snap = _snap(REQUEST_STATUS_IN_PROGRESS, assignment_type="group",
+                     assignment_group="plumber", unclaimed=True)
+        res = _plan(snap, Action.MANAGER_ASSIGN, MANAGER,
+                    {"executor_id": EXECUTOR_ID})
+        assert [d.kind for d in res.domain_ops] == ["create_assignment"]
+
+    def test_assign_from_new_emits_create_assignment(self):
+        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN,
+                    MANAGER, {"group": "plumber"})
+        assert [d.kind for d in res.domain_ops] == ["create_assignment"]
+
+    def test_assign_both_group_and_executor_invalid(self):
+        with pytest.raises(PayloadInvalid):
+            _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER,
+                  {"group": "plumber", "executor_id": EXECUTOR_ID})
+
+    def test_dispatch_both_group_and_executor_invalid(self):
+        with pytest.raises(PayloadInvalid):
+            plan_transition(
+                _snap(REQUEST_STATUS_NEW),
+                ActionCommand("c", Action.SYSTEM_DISPATCH_ASSIGN,
+                              {"group": "plumber", "executor_id": 7}),
+                DISPATCHER, SYSTEM_PRINCIPAL, NOW)
+
+    def test_assign_empty_payload_still_status_only(self):
+        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER)
+        f = _patch_fields(res)
+        assert f["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+        assert res.domain_ops == ()
 
 
 # ===========================================================================

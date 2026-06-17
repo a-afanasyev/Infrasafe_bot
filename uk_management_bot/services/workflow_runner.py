@@ -36,14 +36,18 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.request_assignment import RequestAssignment
-from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.webhook_payloads import (
     emit_request_status_changed,
     emit_request_status_changed_sync,
 )
 from uk_management_bot.utils.auth_helpers import get_active_role, get_user_roles
-from uk_management_bot.utils.constants import ROLE_EXECUTOR, SHIFT_STATUS_ACTIVE
+from uk_management_bot.utils.constants import ROLE_EXECUTOR
+from uk_management_bot.utils.shifts import (
+    is_on_shift_now_async,
+    is_on_shift_now_sync,
+)
+from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.request_workflow import (
     ActionCommand,
     ActorContext,
@@ -187,6 +191,7 @@ def _load_actor_context_sync(db: Session, principal: PrincipalRef) -> ActorConte
         roles=frozenset(get_user_roles(user)),
         active_role=get_active_role(user),
         approved_apartment_ids=get_approved_apartment_ids(db, user.id),
+        specializations=frozenset(parse_specializations(user)),
     )
 
 
@@ -194,19 +199,27 @@ def _build_snapshot_sync(db: Session, req: Request,
                          actor: ActorContext) -> WorkflowSnapshot:
     has_rating = db.query(Rating.id).filter(
         Rating.request_number == req.request_number).first() is not None
-    active = db.query(RequestAssignment.executor_id).filter(
+    active = db.query(
+        RequestAssignment.executor_id,
+        RequestAssignment.assignment_type,
+        RequestAssignment.group_specialization,
+    ).filter(
         RequestAssignment.request_number == req.request_number,
         RequestAssignment.status == "active").first()
     has_shift = False
     if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
-        has_shift = db.query(Shift.id).filter(
-            Shift.user_id == actor.user_id,
-            Shift.status == SHIFT_STATUS_ACTIVE).first() is not None
+        has_shift = is_on_shift_now_sync(db, actor.user_id)
+    a_exec = active[0] if active else None
+    a_type = active[1] if active else None
+    a_group = active[2] if active else None
     return WorkflowSnapshot(
         request=_new_state_from(req),
         has_rating=has_rating,
-        active_assignment_executor_id=active[0] if active else None,
+        active_assignment_executor_id=a_exec,
         actor_has_active_shift=has_shift,
+        active_assignment_type=a_type,
+        active_assignment_group=a_group,
+        active_assignment_unclaimed=(a_type == "group" and a_exec is None),
     )
 
 
@@ -237,6 +250,21 @@ def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active",
         ).update({"status": "cancelled"}, synchronize_session=False)
+    elif dop.kind == "claim_group_assignment":
+        # Взятие из пула: конвертация активного group-назначения в individual
+        # на взявшего IN-PLACE (status не меняется → partial-unique цел).
+        # group_specialization НЕ трогаем (история). rowcount-guard =
+        # defense-in-depth поверх FOR UPDATE-лока (SQLite-тесты без него).
+        updated = db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == req.request_number,
+            RequestAssignment.status == "active",
+            RequestAssignment.assignment_type == "group",
+            RequestAssignment.executor_id.is_(None),
+        ).update({"assignment_type": "individual",
+                  "executor_id": actor.user_id}, synchronize_session=False)
+        if updated != 1:
+            raise WorkflowError(
+                f"claim_group_assignment: ожидалась 1 строка, обновлено {updated}")
     elif dop.kind == "create_assignment":
         # SYSTEM-актор (created_by NOT NULL): переиспользуем seeded system-user
         # (PR2d) — у авто-диспетчера нет человека, но «кто» фиксируется
@@ -312,6 +340,7 @@ async def _load_actor_context_async(db: AsyncSession,
         roles=frozenset(get_user_roles(user)),
         active_role=get_active_role(user),
         approved_apartment_ids=frozenset(r[0] for r in rows),
+        specializations=frozenset(parse_specializations(user)),
     )
 
 
@@ -321,20 +350,25 @@ async def _build_snapshot_async(db: AsyncSession, req: Request,
         select(Rating.id).where(
             Rating.request_number == req.request_number))).first() is not None
     active = (await db.execute(
-        select(RequestAssignment.executor_id).where(
+        select(RequestAssignment.executor_id,
+               RequestAssignment.assignment_type,
+               RequestAssignment.group_specialization).where(
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active"))).first()
     has_shift = False
     if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
-        has_shift = (await db.execute(
-            select(Shift.id).where(
-                Shift.user_id == actor.user_id,
-                Shift.status == SHIFT_STATUS_ACTIVE))).first() is not None
+        has_shift = await is_on_shift_now_async(db, actor.user_id)
+    a_exec = active[0] if active else None
+    a_type = active[1] if active else None
+    a_group = active[2] if active else None
     return WorkflowSnapshot(
         request=_new_state_from(req),
         has_rating=has_rating,
-        active_assignment_executor_id=active[0] if active else None,
+        active_assignment_executor_id=a_exec,
         actor_has_active_shift=has_shift,
+        active_assignment_type=a_type,
+        active_assignment_group=a_group,
+        active_assignment_unclaimed=(a_type == "group" and a_exec is None),
     )
 
 
@@ -366,6 +400,18 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
         await db.execute(sa_update(RequestAssignment).where(
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active").values(status="cancelled"))
+    elif dop.kind == "claim_group_assignment":
+        # Взятие из пула (async-зеркало sync): group → individual IN-PLACE,
+        # group_specialization сохраняем (история), rowcount-guard.
+        res = await db.execute(sa_update(RequestAssignment).where(
+            RequestAssignment.request_number == req.request_number,
+            RequestAssignment.status == "active",
+            RequestAssignment.assignment_type == "group",
+            RequestAssignment.executor_id.is_(None),
+        ).values(assignment_type="individual", executor_id=actor.user_id))
+        if res.rowcount != 1:
+            raise WorkflowError(
+                f"claim_group_assignment: ожидалась 1 строка, обновлено {res.rowcount}")
     elif dop.kind == "create_assignment":
         if actor.kind == "user":
             created_by = actor.user_id

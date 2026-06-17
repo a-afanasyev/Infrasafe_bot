@@ -133,6 +133,11 @@ def collect_write_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 #      service + api/shifts transfer.assigned_at — отдельная машина статусов
 #      смен, одноимённые поля (шум-инвариант).
 #   4. ONE-OFF migration: fix_manager_confirmed_legacy.py (план, риск №30).
+#   5. WORKFLOW-RUNNER claim-домен-оп (FEAT-группы): claim_group_assignment в
+#      workflow_runner конвертирует активное group-назначение в individual
+#      in-place (executor_id := взявший) через UPDATE...values/update. Это
+#      САМ канонический run_command-слой (а не сырой обход) — взятие из пула
+#      идёт под FOR UPDATE-локом + rowcount-guard, как и прочие domain-ops.
 #
 # Любой НОВЫЙ кортеж = либо новый сырой writer (должен идти через run_command/
 # assignment_service), либо осознанное расширение ядра с обоснованием здесь.
@@ -169,6 +174,11 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:transfer', 'completed_at'),
     # 4. ONE-OFF migration-скрипт (план, риск №30)
+    # 5. WORKFLOW-RUNNER claim-домен-оп (FEAT-группы): взятие group→individual
+    ('uk_management_bot/services/workflow_runner.py', 'update()', 'assignment_type'),
+    ('uk_management_bot/services/workflow_runner.py', 'update()', 'executor_id'),
+    ('uk_management_bot/services/workflow_runner.py', 'values()', 'assignment_type'),
+    ('uk_management_bot/services/workflow_runner.py', 'values()', 'executor_id'),
 }
 
 

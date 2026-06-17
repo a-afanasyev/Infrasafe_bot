@@ -113,6 +113,8 @@ def get_main_keyboard_for_role(
     if active_role == "executor":
         # Клавиатура исполнителя
         builder.add(KeyboardButton(text=get_text("main_menu.active_requests", language=language)))
+        # FEAT-группы: пул «свободных» group-заявок (взять из общего пула)
+        builder.add(KeyboardButton(text=get_text("main_menu.group_pool", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.archive", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
