@@ -367,6 +367,24 @@ async def test_callcenter_no_user_owner_is_manager_legacy(make_client, manager_u
 
 
 @pytest.mark.asyncio
+async def test_callcenter_create_auto_dispatches_group(make_client, manager_user, monkeypatch):
+    """FEAT-группы (followup #1): call-center create — канал создания → авто-dispatch
+    на группу-специализацию (раньше оставалась «Новая»)."""
+    import uk_management_bot.services.dispatch as dispatch_mod
+    calls = []
+
+    async def fake_dispatch(request_number, category):
+        calls.append((request_number, category))
+
+    monkeypatch.setattr(dispatch_mod, "auto_dispatch_new_request_async", fake_dispatch)
+    async with make_client(manager_user) as ac:
+        r = await ac.post("/api/v2/callcenter/requests",
+                          json=_cc_body(category="Сантехника", address="ул. Тест 1"))
+    assert r.status_code == 201, r.text
+    assert calls == [(r.json()["request_number"], "Сантехника")]
+
+
+@pytest.mark.asyncio
 async def test_callcenter_with_owned_apartment_canonical(make_client, manager_user, applicant, addr_tree):
     async with make_client(manager_user) as ac:
         r = await ac.post(

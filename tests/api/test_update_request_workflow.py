@@ -176,6 +176,26 @@ async def test_executor_id_only_patch_routes_to_manager_assign(
 
 
 @pytest.mark.asyncio
+async def test_assign_to_duty_routes_to_manager_assign_group(
+    client, db_session, manager_user, applicant_user, monkeypatch
+):
+    """FEAT-группы (followup #2): дашборд «Назначить дежурному» (status=В работе +
+    assign_to_duty) → MANAGER_ASSIGN {group: spec}, спец резолвится сервером по
+    категории заявки (CATEGORY_TO_SPECIALIZATION[electricity]=electrician)."""
+    from uk_management_bot.utils.request_workflow import Action
+    await _seed(db_session, owner_id=applicant_user.id, status="Новая")  # category=electricity
+    mock = AsyncMock(return_value=_outcome("Новая", "В работе", "В работе"))
+    monkeypatch.setattr(req_router, "run_command_async", mock)
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"status": "В работе", "assign_to_duty": True})
+    assert r.status_code == 200, r.text
+    sent = mock.await_args.args[3]
+    assert sent.action == Action.MANAGER_ASSIGN
+    assert dict(sent.payload) == {"group": "electrician"}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("exc,code", [
     (NotAuthorized("x"), 403),
     (InvalidTransition("x"), 422),
