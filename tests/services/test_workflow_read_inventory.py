@@ -135,7 +135,7 @@ BASELINE: set[tuple[str, str, str]] = {
     # _make_request_card) → 'cmp:r' status в этом файле исчез.
     ('uk_management_bot/api/requests/router.py', 'cmp:req', 'status'),
     ('uk_management_bot/api/requests/stats_router.py', 'in_:Request', 'status'),
-    ('uk_management_bot/api/shifts/router.py', 'in_:Request', 'status'),
+    ('uk_management_bot/api/shifts/service.py', 'in_:Request', 'status'),
     # одноразовый migration-скрипт (write-гейт уже фиксирует его update())
     # FALSE-POSITIVE/вне scope (подтверждено PR2-pre/2): self.request.status in
     # ["completed","cancelled"] (shift_assignment.py:212) — non-canon значения,
