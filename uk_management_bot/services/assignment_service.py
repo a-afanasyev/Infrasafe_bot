@@ -34,6 +34,25 @@ except ImportError as e:
     logger.warning(f"Расширенные сервисы назначения недоступны: {e}")
     ADVANCED_ASSIGNMENT_AVAILABLE = False
 
+
+def apply_executor_reassign(
+    request: Request,
+    active: Optional[RequestAssignment],
+    new_executor_id: int,
+) -> None:
+    """SSOT-правило лёгкой переброски исполнителя (ARCH-02, PR-32).
+
+    Меняет executor_id IN PLACE: у активного ИНДИВИДУАЛЬНОГО назначения (если
+    оно есть) и всегда у самой заявки. Без cancel/recreate строки, без
+    уведомлений, без commit — вызывающий владеет транзакцией. Единая точка
+    правила для sync- (ребалансировка смен) и async- (массовая переброска при
+    удалении сотрудника) обёрток.
+    """
+    if active is not None and active.assignment_type == ASSIGNMENT_TYPE_INDIVIDUAL:
+        active.executor_id = new_executor_id
+    request.executor_id = new_executor_id
+
+
 class AssignmentService:
     """Сервис для управления назначениями заявок"""
     
@@ -181,9 +200,7 @@ class AssignmentService:
             RequestAssignment.request_number == request_number,
             RequestAssignment.status == ASSIGNMENT_STATUS_ACTIVE,
         ).first()
-        if active is not None and active.assignment_type == ASSIGNMENT_TYPE_INDIVIDUAL:
-            active.executor_id = new_executor_id
-        request.executor_id = new_executor_id
+        apply_executor_reassign(request, active, new_executor_id)
         return True
 
     def get_executor_assignments(self, executor_id: int, status: str = ASSIGNMENT_STATUS_ACTIVE) -> List[RequestAssignment]:
