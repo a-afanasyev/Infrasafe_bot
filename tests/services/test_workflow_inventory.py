@@ -122,12 +122,16 @@ def collect_write_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 #   1. CREATE-фабрика: ctor:Request/RequestModel со status — создание заявки
 #      (status="Новая") в callcenter/requests/request_service/async_request_
 #      service/inbound_alert. Это не переход, а рождение записи.
-#   2. ASSIGNMENT-mutation-layer: assignment_service / async_assignment_service —
-#      единственный санкционированный writer полей назначения (executor_id/
-#      assigned_*/RequestAssignment). Диспетчер/оптимизатор/admin-auto-assign/
+#   2. ASSIGNMENT-mutation-layer: assignment_service — единственный
+#      санкционированный writer полей назначения (executor_id/assigned_*/
+#      RequestAssignment). Диспетчер/оптимизатор/admin-auto-assign/
 #      delete_employee (PR2d) теперь пишут ТОЛЬКО через него (assign_to_*/
 #      reassign_executor); сам сервис — allowlist. attr:active executor_id —
-#      reassign_executor (обновление активного RequestAssignment in place).
+#      apply_executor_reassign (обновление активного RequestAssignment in place).
+#      ARCH-02 (PR-32): правило переброски сведено в одну агностичную функцию
+#      assignment_service.apply_executor_reassign; async-обёртка
+#      (async_assignment_service.reassign_executor) лишь грузит объекты и зовёт
+#      её — собственных write-сайтов у async-файла больше нет.
 #   3. SHIFT-машина (вне scope кластера #1): Shift/ShiftTransfer/ShiftAssignment
 #      (completed_at/assigned_at) + shift_assignment_service/shift_transfer_
 #      service + api/shifts transfer.assigned_at — отдельная машина статусов
@@ -160,12 +164,11 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'assignment_type'),
     ('uk_management_bot/services/assignment_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/assignment_service.py', 'attr:active', 'executor_id'),
-    ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_at'),
-    ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_by'),
-    ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assigned_group'),
-    ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'assignment_type'),
-    ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'executor_id'),
-    ('uk_management_bot/services/async_assignment_service.py', 'attr:active', 'executor_id'),
+    # ARCH-02 (PR-32): async_assignment_service ужат до живого reassign_executor;
+    # его прежние прямые write-сайты (assign_to_*/cancel/reassign) удалены —
+    # правило переброски теперь единое в assignment_service.apply_executor_reassign,
+    # а async-обёртка лишь грузит объекты и зовёт его (см. attr:request/attr:active
+    # выше, в assignment_service.py).
     # 3. SHIFT-машина (вне scope; одноимённые поля Shift/ShiftTransfer)
     ('uk_management_bot/api/shifts/service.py', 'attr:transfer', 'assigned_at'),
     ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
