@@ -14,7 +14,10 @@ from sqlalchemy.pool import StaticPool
 
 from uk_management_bot.database.session import Base
 from uk_management_bot.services.address_service import AddressService, _UNSET
-from uk_management_bot.api.addresses import router as addr_router
+# PR-28 (ARCH-05b/REFACTOR-027): покупка/удаление-ORM (with_for_update + AuditLog +
+# db.delete) вынесена из api/addresses/router.py в services/addresses/queries.py.
+# Гейт NICE-076/081 указывает на новый дом функций (механический follow за выносом).
+from uk_management_bot.services.addresses import queries as addr_purge
 
 
 DEASYNC = [
@@ -100,7 +103,7 @@ class TestBug126Bug127:
 class TestNice076Nice081Purge:
     def test_purge_endpoints_lock_and_audit(self):
         for name in ("purge_yard", "purge_building", "purge_apartment"):
-            src = inspect.getsource(getattr(addr_router, name))
+            src = inspect.getsource(getattr(addr_purge, name))
             assert "with_for_update()" in src, f"{name} без FOR UPDATE (NICE-076)"
             assert "AuditLog(" in src, f"{name} без audit (NICE-081)"
             # audit идёт ДО физического удаления
