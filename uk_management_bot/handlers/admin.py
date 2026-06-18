@@ -40,7 +40,7 @@ from uk_management_bot.utils.status_display import get_status_display, get_statu
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.auth_helpers import has_admin_access, legacy_primary_role
 from uk_management_bot.filters import RoleFilter
 from datetime import datetime, timezone
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
@@ -1206,7 +1206,7 @@ async def back_to_main_menu(message: Message, db: Session, roles: list = None, a
     # Используем универсальную клавиатуру для активной роли пользователя
     await message.answer(
         get_text("menu.main", language=lang),
-        reply_markup=get_main_keyboard_for_role(active_role or user.role, roles or [user.role], user.status, language=lang)
+        reply_markup=get_main_keyboard_for_role(active_role or legacy_primary_role(user), roles or [legacy_primary_role(user)], user.status, language=lang)
     )
 
 

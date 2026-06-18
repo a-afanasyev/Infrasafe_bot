@@ -25,6 +25,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 
 
 # «Возвращена» (канон cutover PR3+4) — активная (ждёт разбора менеджером);
@@ -56,7 +57,7 @@ async def list_employees(
     """Return (users, {user_id: active_shift_id}) for the employees list."""
     query = select(User).where(
         or_(
-            User.role == "executor",
+            legacy_role_filter("executor"),
             User.roles.like('%"executor"%'),
         ),
         User.deleted_at.is_(None),
@@ -354,7 +355,7 @@ async def get_stats(db: AsyncSession, *, period_start: datetime,
         select(func.count(User.id)).where(
             User.status == "approved",
             or_(
-                User.role == "executor",
+                legacy_role_filter("executor"),
                 User.roles.like('%"executor"%'),
             ),
         )

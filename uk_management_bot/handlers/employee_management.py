@@ -27,7 +27,7 @@ from uk_management_bot.keyboards.employee_management import (
     get_employee_edit_keyboard,
 )
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.auth_helpers import has_admin_access, sync_legacy_role
 from uk_management_bot.database.models.user import User
 import json
 from datetime import datetime
@@ -1335,7 +1335,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
             
             user.roles = json.dumps(current_roles)
             if current_roles:
-                user.role = current_roles[0]  # Первая роль как основная
+                sync_legacy_role(user, current_roles[0])  # Первая роль как основная
                 # Инвариант: active_role всегда ∈ roles. Если активная роль
                 # больше не входит в набор (или не задана) — переводим на первую.
                 if not user.active_role or user.active_role not in current_roles:

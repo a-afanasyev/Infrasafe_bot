@@ -548,22 +548,16 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
         # Перечитываем пользователя и строим меню в соответствии с активной ролью
         try:
             user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-            # Собираем список ролей из JSON, фолбэк к историческому полю role
+            # Роли и активная роль — через единый резолвер (ARCH-07)
             roles_list = ["applicant"]
             active_role = "applicant"
             if user:
-                import json
-                try:
-                    if getattr(user, "roles", None):
-                        parsed = json.loads(user.roles)
-                        if isinstance(parsed, list) and parsed:
-                            roles_list = [str(r) for r in parsed if isinstance(r, str)] or roles_list
-                except Exception:
-                    roles_list = [user.role] if getattr(user, "role", None) else roles_list
-                if getattr(user, "active_role", None):
-                    active_role = user.active_role
-                else:
-                    active_role = roles_list[0] if roles_list else "applicant"
+                from uk_management_bot.utils.auth_helpers import (
+                    get_user_roles,
+                    get_active_role,
+                )
+                roles_list = get_user_roles(user)
+                active_role = get_active_role(user)
                 if active_role not in roles_list:
                     active_role = roles_list[0] if roles_list else "applicant"
         except Exception:

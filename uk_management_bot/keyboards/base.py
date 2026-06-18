@@ -34,12 +34,9 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         user = db.query(User).filter(User.telegram_id == user_id).first()
 
         if user:
-            from uk_management_bot.utils.auth_helpers import parse_roles_safe
+            from uk_management_bot.utils.auth_helpers import get_user_roles
 
-            roles = parse_roles_safe(user.roles)
-
-            if not roles and user.role:
-                roles = [user.role]
+            roles = get_user_roles(user)
 
             active_role = user.active_role or (roles[0] if roles else "applicant")
             user_status = user.status or "approved"

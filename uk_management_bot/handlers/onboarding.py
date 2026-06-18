@@ -92,9 +92,10 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session, lan
         # Если пользователь уже одобрен, показываем главное меню
         if user.status == "approved":
             from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            from uk_management_bot.utils.auth_helpers import legacy_primary_role
             await message.answer(
                 get_text("welcome", language=lang),
-                reply_markup=get_main_keyboard_for_role(user.active_role or user.role, user.roles or [user.role], user.status, language=lang)
+                reply_markup=get_main_keyboard_for_role(user.active_role or legacy_primary_role(user), user.roles or [legacy_primary_role(user)], user.status, language=lang)
             )
             return
 

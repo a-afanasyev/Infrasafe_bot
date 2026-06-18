@@ -181,3 +181,40 @@ async def check_user_role(user_id: int, required_role: str, db) -> bool:
     except Exception as e:
         logger.error(f"Ошибка проверки роли пользователя {user_id}: {e}")
         return False
+
+
+def legacy_role_filter(*roles: str):
+    """SQLAlchemy-выражение фильтра по устаревшей колонке ``User.role``.
+
+    ARCH-07 (PR-30): единственная точка обращения к legacy-колонке роли на
+    стороне запросов. Поведение байт-идентично прежним инлайновым
+    ``User.role == x`` / ``User.role.in_(...)``. PR-31 (дроп колонки) изменит
+    реализацию на JSON-массив ``roles`` — править нужно будет только здесь.
+
+    Args:
+        *roles: одна или несколько ролей. Для одной — ``==``, для нескольких — ``IN``.
+    """
+    if len(roles) == 1:
+        return User.role == roles[0]
+    return User.role.in_(list(roles))
+
+
+def sync_legacy_role(user: User, primary_role: str) -> None:
+    """Точка записи устаревшей колонки ``User.role`` (ARCH-07, PR-30).
+
+    Вызывающий код по-прежнему сам поддерживает JSON ``user.roles``; этот хелпер
+    держит legacy-колонку основной роли в синхроне до её дропа в PR-31.
+    """
+    user.role = primary_role
+
+
+def legacy_primary_role(user) -> Optional[str]:
+    """Прочитать устаревшую одиночную роль ``User.role`` как скаляр (ARCH-07, PR-30).
+
+    Единственная точка чтения legacy-колонки как скалярного значения — в отличие
+    от ``get_active_role``/``get_user_roles`` НЕ подставляет дефолт «applicant».
+    Нужна там, где требуется байт-идентичное поведение прежнего ``user.role``
+    (например, пустой результат при отсутствии роли). Возвращает None, если роль
+    не задана. В PR-31 (дроп колонки) будет возвращать None всегда.
+    """
+    return getattr(user, "role", None) or None

@@ -8,6 +8,11 @@ import logging
 import secrets
 import json
 from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
+from uk_management_bot.utils.auth_helpers import (
+    legacy_role_filter,
+    sync_legacy_role,
+    legacy_primary_role,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +76,7 @@ class AuthService:
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
             user.status = "approved"
-            user.role = role
+            sync_legacy_role(user, role)
             # CODE-10: добавляем роль в roles-массив и при непустом
             # (логика как в process_invite_join), а не только при пустом.
             current_roles = []
@@ -518,10 +523,10 @@ class AuthService:
                     return "manager" in parsed_roles
         except (ValueError, TypeError):
             # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
-            logger.warning(f"is_user_manager: битый JSON в user.roles (telegram_id={telegram_id}), fallback к user.role")
+            logger.warning(f"is_user_manager: битый JSON в user.roles (telegram_id={telegram_id}), fallback к legacy-роли")
 
-        # Fallback к старому формату
-        return user.role == "manager"
+        # Fallback к legacy-роли через резолвер
+        return legacy_primary_role(user) == "manager"
     
     async def is_user_executor(self, telegram_id: int) -> bool:
         """Проверить, является ли пользователь исполнителем"""
@@ -541,10 +546,10 @@ class AuthService:
                     return True
         except (ValueError, TypeError):
             # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
-            logger.warning(f"is_user_executor: битый JSON в user.roles (telegram_id={telegram_id}), fallback к user.role")
+            logger.warning(f"is_user_executor: битый JSON в user.roles (telegram_id={telegram_id}), fallback к legacy-роли")
 
-        # Fallback к старому полю
-        return user.role == "executor"
+        # Fallback к legacy-роли через резолвер
+        return legacy_primary_role(user) == "executor"
     
     async def get_all_users(self) -> list[User]:
         """Получить всех пользователей"""
@@ -565,7 +570,7 @@ class AuthService:
             or_(
                 User.active_role == role,
                 User.roles.contains(exact_match),
-                User.role == role,
+                legacy_role_filter(role),
             )
         ).all()
     
@@ -579,7 +584,7 @@ class AuthService:
         
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
-            user.role = "manager"
+            sync_legacy_role(user, "manager")
             user.status = "approved"
             # SEC-06 (least privilege): /admin выдаёт только manager,
             # а не весь набор ролей скопом.
@@ -608,8 +613,10 @@ class AuthService:
                     roles_list = [str(r) for r in parsed if isinstance(r, str)]
         except Exception:
             roles_list = []
-        if not roles_list and user.role:
-            roles_list = [user.role]
+        if not roles_list:
+            legacy = legacy_primary_role(user)
+            if legacy:
+                roles_list = [legacy]
         if role not in roles_list:
             return False
         user.active_role = role
@@ -631,7 +638,7 @@ class AuthService:
         if not user:
             return False, "not_allowed"
 
-        old_role = user.active_role or (user.role if getattr(user, "role", None) else None)
+        old_role = user.active_role or legacy_primary_role(user)
 
         ok = await self.set_active_role(telegram_id, role)
         if not ok:
@@ -676,7 +683,7 @@ class AuthService:
                 "username": user.username,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                "role": user.role,
+                "role": legacy_primary_role(user),
                 "roles": user.roles,
                 "status": user.status,
                 "created_at": str(user.created_at) if user.created_at else None

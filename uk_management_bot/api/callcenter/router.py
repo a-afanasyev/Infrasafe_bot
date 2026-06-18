@@ -12,6 +12,7 @@ from uk_management_bot.services.request_address import (
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 
 router = APIRouter()
 
@@ -52,7 +53,7 @@ async def search_resident(
             User.status == "approved",
             or_(
                 User.roles.like('%"applicant"%'),
-                User.role == "applicant",
+                legacy_role_filter("applicant"),
             ),
             or_(
                 User.phone.ilike(pattern),
