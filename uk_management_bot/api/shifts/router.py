@@ -1,14 +1,12 @@
-import re
 import logging
 import httpx
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
+from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     ShiftBrief, ShiftDetail,
@@ -19,10 +17,7 @@ from uk_management_bot.api.shifts.schemas import (
     DeleteEmployeeRequest, ActiveRequestsCount,
     CreateInviteRequest, CreateInviteResponse, CreateEmployeeRequest,
 )
-from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
-from uk_management_bot.database.models.shift_template import ShiftTemplate
-from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event
 
@@ -31,13 +26,8 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers (no direct ORM — pure serializers / non-DB utilities)
 # ---------------------------------------------------------------------------
-
-def _escape_like(value: str) -> str:
-    """Escape SQL LIKE wildcards % _ \\ to prevent injection."""
-    return re.sub(r'([%_\\])', r'\\\1', value)
-
 
 async def _resolve_bot_username() -> Optional[str]:
     """Return the bot @username used to build invite links.
@@ -75,6 +65,7 @@ async def _resolve_bot_username() -> Optional[str]:
         app_settings.BOT_USERNAME = username  # cache for subsequent requests
         logger.info(f"Resolved bot username via getMe(): {username}")
     return username
+
 
 def _executor_name(user: Optional[User]) -> Optional[str]:
     if user is None:
@@ -125,6 +116,13 @@ def _shift_detail(shift: Shift, user: Optional[User] = None) -> ShiftDetail:
     )
 
 
+def _ensure_not_privileged(user: User, *, action: str) -> None:
+    """Raise 403 if the target user is a manager/admin (cannot be modified)."""
+    target_roles = set(_parse_user_roles(user))
+    if "manager" in target_roles or "admin" in target_roles:
+        raise HTTPException(status_code=403, detail=action)
+
+
 # ---------------------------------------------------------------------------
 # Employees
 # ---------------------------------------------------------------------------
@@ -141,59 +139,16 @@ async def list_employees(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    query = select(User).where(
-        or_(
-            User.role == "executor",
-            User.roles.like('%"executor"%'),
-        ),
-        User.deleted_at.is_(None),
+    users, active_shifts = await service.list_employees(
+        db,
+        specialization=specialization,
+        has_active_shift=has_active_shift,
+        search=search,
+        role=role,
+        verification_status=verification_status,
+        limit=limit,
+        offset=offset,
     )
-
-    if specialization:
-        query = query.where(User.specialization.like(f'%{_escape_like(specialization)}%'))
-
-    if search:
-        search_term = f"%{_escape_like(search)}%"
-        query = query.where(
-            or_(
-                User.first_name.ilike(search_term),
-                User.last_name.ilike(search_term),
-                User.phone.ilike(search_term),
-            )
-        )
-    if verification_status:
-        query = query.where(User.verification_status == verification_status)
-    if role:
-        query = query.where(User.roles.like(f'%"{_escape_like(role)}"%'))
-
-    if has_active_shift is True:
-        active_shift_subq = (
-            select(Shift.user_id)
-            .where(Shift.status == "active")
-            .scalar_subquery()
-        )
-        query = query.where(User.id.in_(active_shift_subq))
-    elif has_active_shift is False:
-        active_shift_subq = (
-            select(Shift.user_id)
-            .where(Shift.status == "active")
-            .scalar_subquery()
-        )
-        query = query.where(User.id.not_in(active_shift_subq))
-
-    result = await db.execute(query.offset(offset).limit(limit))
-    users = result.scalars().all()
-
-    # For each user, find their active shift id
-    user_ids = [u.id for u in users]
-    active_shifts: dict[int, int] = {}
-    if user_ids:
-        shift_result = await db.execute(
-            select(Shift.user_id, Shift.id)
-            .where(Shift.status == "active", Shift.user_id.in_(user_ids))
-        )
-        for uid, sid in shift_result.all():
-            active_shifts[uid] = sid
 
     briefs = []
     for u in users:
@@ -210,29 +165,15 @@ async def create_employee(
     _user: User = Depends(require_roles("manager")),
 ):
     """Create an employee directly from the web dashboard."""
-    import time as _time
-    import json as _json
-
-    # Generate a negative placeholder telegram_id (real Telegram IDs are always positive)
-    placeholder_tid = -abs(int(_time.time() * 1000))
-
-    roles_list = [body.role]
-    user = User(
-        telegram_id=placeholder_tid,
+    user = await service.create_employee(
+        db,
         first_name=body.first_name,
         last_name=body.last_name,
         phone=body.phone,
         role=body.role,
-        roles=_json.dumps(roles_list),
-        active_role=body.role,
-        specialization=_json.dumps(body.specializations) if body.specializations else None,
+        specializations=body.specializations,
         status=body.status,
-        verification_status="verified" if body.status == "approved" else "pending",
     )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
     user.__dict__['active_shift_id'] = None
     return EmployeeBrief.model_validate(user)
 
@@ -289,91 +230,55 @@ async def create_invite(
 @router.patch("/employees/{user_id}/approve", dependencies=[Depends(require_roles("manager"))])
 async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Approve a pending user (set verification_status = 'verified')"""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    target_roles = set(_parse_user_roles(user))
-    if "manager" in target_roles or "admin" in target_roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot modify status of a manager or admin user"
-        )
+    _ensure_not_privileged(user, action="Cannot modify status of a manager or admin user")
     if user.verification_status == "verified":
         raise HTTPException(status_code=409, detail="User is already verified")
     if user.verification_status == "rejected":
         raise HTTPException(status_code=409, detail="User was rejected and cannot be re-approved this way")
-    user.verification_status = "verified"
-    await db.commit()
-    await db.refresh(user)
+    await service.set_user_verification(db, user, "verified")
     return {"id": user.id, "verification_status": user.verification_status}
 
 
 @router.patch("/employees/{user_id}/reject", dependencies=[Depends(require_roles("manager"))])
 async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Reject a pending user (set verification_status = 'rejected')"""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    target_roles = set(_parse_user_roles(user))
-    if "manager" in target_roles or "admin" in target_roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot modify status of a manager or admin user"
-        )
+    _ensure_not_privileged(user, action="Cannot modify status of a manager or admin user")
     if user.verification_status == "rejected":
         raise HTTPException(status_code=409, detail="User is already rejected")
-    user.verification_status = "rejected"
-    await db.commit()
-    await db.refresh(user)
+    await service.set_user_verification(db, user, "rejected")
     return {"id": user.id, "verification_status": user.verification_status}
 
 
 @router.patch("/employees/{user_id}/block", dependencies=[Depends(require_roles("manager"))])
 async def block_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Block an employee — sets status='blocked', preventing system access."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    target_roles = set(_parse_user_roles(user))
-    if "manager" in target_roles or "admin" in target_roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot modify status of a manager or admin user"
-        )
+    _ensure_not_privileged(user, action="Cannot modify status of a manager or admin user")
     if user.status == "blocked":
         raise HTTPException(status_code=409, detail="User is already blocked")
-    user.status = "blocked"
-    await db.commit()
+    await service.set_user_status(db, user, "blocked")
     return {"message": "blocked"}
 
 
 @router.patch("/employees/{user_id}/unblock", dependencies=[Depends(require_roles("manager"))])
 async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Unblock an employee — sets status back to 'approved'."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    target_roles = set(_parse_user_roles(user))
-    if "manager" in target_roles or "admin" in target_roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot modify status of a manager or admin user"
-        )
+    _ensure_not_privileged(user, action="Cannot modify status of a manager or admin user")
     if user.status != "blocked":
         raise HTTPException(status_code=409, detail="User is not blocked")
-    user.status = "approved"
-    await db.commit()
+    await service.set_user_status(db, user, "approved")
     return {"message": "unblocked"}
-
-
-# «Возвращена» (канон cutover PR3+4) — активная (ждёт разбора менеджером);
-# до cutover кодировалась как «Исполнено», поэтому добавлена рядом с ним для
-# сохранения прежней классификации (наружу проецируется как «Исполнено»).
-ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Возвращена"}
 
 
 @router.get("/employees/{user_id}/active-requests-count", response_model=ActiveRequestsCount)
@@ -383,13 +288,8 @@ async def get_active_requests_count(
     _user: User = Depends(require_roles("manager")),
 ):
     """Return number of active requests assigned to this employee."""
-    result = await db.execute(
-        select(func.count()).select_from(Request).where(
-            Request.executor_id == user_id,
-            Request.status.in_(ACTIVE_REQUEST_STATUSES),
-        )
-    )
-    return ActiveRequestsCount(count=result.scalar() or 0)
+    count = await service.count_active_requests(db, user_id)
+    return ActiveRequestsCount(count=count)
 
 
 @router.patch("/employees/{user_id}/delete")
@@ -400,26 +300,16 @@ async def delete_employee(
     current_user: User = Depends(require_roles("manager")),
 ):
     """Soft-delete an employee, optionally reassigning their active requests."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    target_roles = set(_parse_user_roles(user))
-    if "manager" in target_roles or "admin" in target_roles:
-        raise HTTPException(status_code=403, detail="Cannot delete a manager or admin user")
+    _ensure_not_privileged(user, action="Cannot delete a manager or admin user")
 
     if user.deleted_at is not None:
         raise HTTPException(status_code=409, detail="User is already deleted")
 
-    # Count active requests
-    count_result = await db.execute(
-        select(func.count()).select_from(Request).where(
-            Request.executor_id == user_id,
-            Request.status.in_(ACTIVE_REQUEST_STATUSES),
-        )
-    )
-    active_count = count_result.scalar() or 0
+    active_count = await service.count_active_requests(db, user_id)
 
     if active_count > 0 and body.reassign_to is None:
         raise HTTPException(
@@ -430,45 +320,21 @@ async def delete_employee(
             },
         )
 
-    # Reassign active requests
     if body.reassign_to is not None and active_count > 0:
-        target_result = await db.execute(select(User).where(User.id == body.reassign_to))
-        target_user = target_result.scalar_one_or_none()
+        target_user = await service.get_user(db, body.reassign_to)
         if not target_user:
             raise HTTPException(status_code=404, detail="Target employee not found")
         if target_user.deleted_at is not None:
             raise HTTPException(status_code=422, detail="Cannot reassign to a deleted employee")
 
-        # SSOT-кластер #1, PR2d: переброска executor_id активных заявок через
-        # allowlist-слой async_assignment_service (обновляет и активный
-        # RequestAssignment), а не сырым ORM в роутере. Без commit — общая tx
-        # хендлера (soft-delete + завершение смен) коммитится ниже.
-        from uk_management_bot.services.async_assignment_service import AsyncAssignmentService
-        _assignment_svc = AsyncAssignmentService(db)
-        active_requests_result = await db.execute(
-            select(Request).where(
-                Request.executor_id == user_id,
-                Request.status.in_(ACTIVE_REQUEST_STATUSES),
-            )
-        )
-        for req in active_requests_result.scalars().all():
-            await _assignment_svc.reassign_executor(req.request_number, body.reassign_to)
-
-    # Soft-delete the user
-    user.deleted_at = datetime.now(timezone.utc)
-    user.deleted_by = current_user.id
-    user.deletion_reason = body.reason
-    user.status = "deleted"
-
-    # End any active shift
-    active_shifts_result = await db.execute(
-        select(Shift).where(Shift.user_id == user_id, Shift.status.in_(["active", "paused"]))
+    await service.soft_delete_employee(
+        db,
+        user=user,
+        reassign_to=body.reassign_to,
+        reason=body.reason,
+        deleted_by_id=current_user.id,
+        active_count=active_count,
     )
-    for shift in active_shifts_result.scalars().all():
-        shift.status = "completed"
-        shift.end_time = datetime.now(timezone.utc)
-
-    await db.commit()
     return {"message": "deleted", "reassigned_requests": active_count if body.reassign_to else 0}
 
 
@@ -478,37 +344,12 @@ async def get_employee(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(User).where(User.id == user_id))
-    emp = result.scalar_one_or_none()
-    if not emp:
+    data = await service.get_employee_with_stats(db, user_id)
+    if data is None:
         raise HTTPException(status_code=404, detail="Employee not found")
+    emp, active_shift_obj, total_shifts, total_completed, rating = data
 
-    # Active shift
-    shift_result = await db.execute(
-        select(Shift).where(Shift.user_id == user_id, Shift.status == "active")
-    )
-    active_shift_obj = shift_result.scalar_one_or_none()
     active_shift_brief = _shift_brief(active_shift_obj) if active_shift_obj else None
-
-    # Stats
-    total_result = await db.execute(
-        select(func.count(Shift.id)).where(Shift.user_id == user_id)
-    )
-    total_shifts = total_result.scalar() or 0
-
-    completed_result = await db.execute(
-        select(func.count(Shift.id)).where(Shift.user_id == user_id, Shift.status == "completed")
-    )
-    total_completed = completed_result.scalar() or 0
-
-    rating_result = await db.execute(
-        select(func.avg(Shift.quality_rating)).where(
-            Shift.user_id == user_id,
-            Shift.status == "completed",
-            Shift.quality_rating.isnot(None),
-        )
-    )
-    rating = rating_result.scalar()
 
     emp.__dict__['active_shift_id'] = active_shift_obj.id if active_shift_obj else None
     brief = EmployeeBrief.model_validate(emp)
@@ -538,29 +379,16 @@ async def list_shifts(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    query = select(Shift)
-    if status:
-        query = query.where(Shift.status == status)
-    if shift_type:
-        query = query.where(Shift.shift_type == shift_type)
-    if user_id:
-        query = query.where(Shift.user_id == user_id)
-    if date_from:
-        query = query.where(Shift.start_time >= date_from)
-    if date_to:
-        query = query.where(Shift.start_time <= date_to)
-
-    result = await db.execute(query.order_by(Shift.start_time.desc()).offset(offset).limit(limit))
-    shifts = result.scalars().all()
-
-    # Batch load users for executor_name
-    uids = list({s.user_id for s in shifts if s.user_id})
-    users_map: dict[int, User] = {}
-    if uids:
-        u_result = await db.execute(select(User).where(User.id.in_(uids)))
-        for u in u_result.scalars().all():
-            users_map[u.id] = u
-
+    shifts, users_map = await service.list_shifts(
+        db,
+        status=status,
+        shift_type=shift_type,
+        user_id=user_id,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset,
+    )
     return [_shift_brief(s, users_map.get(s.user_id) if s.user_id else None) for s in shifts]
 
 
@@ -575,31 +403,7 @@ async def get_schedule(
         raise HTTPException(status_code=422, detail="date_to must be >= date_from")
     if (date_to - date_from).days > 90:
         raise HTTPException(status_code=422, detail="Date range cannot exceed 90 days")
-    # Overlap filter (not start_time-only): a shift belongs on every day it
-    # spans, so a 24h/overnight shift shows on both its start and end day.
-    # Ended shift overlaps [date_from, date_to) iff start < date_to AND end > date_from.
-    # Open shifts (end_time NULL — unknown end) keep the old start-in-range
-    # behaviour so a long-ago open shift doesn't leak into every future day.
-    result = await db.execute(
-        select(Shift)
-        .where(
-            Shift.start_time < date_to,
-            or_(
-                Shift.end_time > date_from,
-                and_(Shift.end_time.is_(None), Shift.start_time >= date_from),
-            ),
-        )
-        .order_by(Shift.start_time.asc())
-    )
-    shifts = result.scalars().all()
-
-    uids = list({s.user_id for s in shifts if s.user_id})
-    users_map: dict[int, User] = {}
-    if uids:
-        u_result = await db.execute(select(User).where(User.id.in_(uids)))
-        for u in u_result.scalars().all():
-            users_map[u.id] = u
-
+    shifts, users_map = await service.get_schedule(db, date_from=date_from, date_to=date_to)
     return [_shift_brief(s, users_map.get(s.user_id) if s.user_id else None) for s in shifts]
 
 
@@ -618,74 +422,30 @@ async def get_stats(
             days = 7
     days = max(1, min(days, 365))
 
+    from datetime import timedelta
     period_start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
-    from datetime import timedelta
     period_start = period_start - timedelta(days=days - 1)
 
-    # active_shifts
-    active_count_result = await db.execute(
-        select(func.count(Shift.id)).where(Shift.status == "active")
-    )
-    active_shifts = active_count_result.scalar() or 0
-
-    # active_executors
-    active_exec_result = await db.execute(
-        select(func.count(func.distinct(Shift.user_id))).where(
-            Shift.status == "active", Shift.user_id.isnot(None)
-        )
-    )
-    active_executors = active_exec_result.scalar() or 0
-
-    # total approved executors
-    total_exec_result = await db.execute(
-        select(func.count(User.id)).where(
-            User.status == "approved",
-            or_(
-                User.role == "executor",
-                User.roles.like('%"executor"%'),
-            ),
-        )
-    )
-    total_executors = total_exec_result.scalar() or 0
-    coverage_pct = (active_executors / total_executors * 100) if total_executors > 0 else 0.0
-
-    # avg_efficiency over period
-    eff_result = await db.execute(
-        select(func.avg(Shift.efficiency_score)).where(
-            Shift.start_time >= period_start,
-            Shift.efficiency_score.isnot(None),
-        )
-    )
-    avg_efficiency = eff_result.scalar()
-
-    # shifts_today
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=999999)
-    today_result = await db.execute(
-        select(func.count(Shift.id)).where(
-            Shift.start_time >= today_start,
-            Shift.start_time <= today_end,
-        )
-    )
-    shifts_today = today_result.scalar() or 0
 
-    # pending_transfers
-    pending_result = await db.execute(
-        select(func.count(ShiftTransfer.id)).where(
-            ShiftTransfer.status.in_(["pending", "assigned"])
-        )
+    stats = await service.get_stats(
+        db, period_start=period_start, today_start=today_start, today_end=today_end
     )
-    pending_transfers = pending_result.scalar() or 0
+
+    total_executors = stats["total_executors"]
+    active_executors = stats["active_executors"]
+    coverage_pct = (active_executors / total_executors * 100) if total_executors > 0 else 0.0
 
     return ShiftStatsOut(
-        active_shifts=active_shifts,
+        active_shifts=stats["active_shifts"],
         active_executors=active_executors,
         coverage_pct=round(coverage_pct, 1),
-        avg_efficiency=avg_efficiency,
-        shifts_today=shifts_today,
-        pending_transfers=pending_transfers,
+        avg_efficiency=stats["avg_efficiency"],
+        shifts_today=stats["shifts_today"],
+        pending_transfers=stats["pending_transfers"],
     )
 
 
@@ -696,20 +456,7 @@ async def list_transfers(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    from_user = aliased(User)
-    to_user = aliased(User)
-
-    result = await db.execute(
-        select(ShiftTransfer, from_user, to_user)
-        .join(from_user, ShiftTransfer.from_executor_id == from_user.id)
-        .outerjoin(to_user, ShiftTransfer.to_executor_id == to_user.id)
-        .where(ShiftTransfer.status.in_(["pending", "assigned"]))
-        .order_by(ShiftTransfer.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-
-    rows = result.all()
+    rows = await service.list_transfers(db, limit=limit, offset=offset)
     out = []
     for transfer, fu, tu in rows:
         out.append(TransferOut(
@@ -733,14 +480,8 @@ async def list_templates(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(
-        select(ShiftTemplate)
-        .where(ShiftTemplate.is_active == True)  # noqa: E712
-        .order_by(ShiftTemplate.id.asc())
-        .offset(offset)
-        .limit(limit)
-    )
-    return [TemplateBrief.model_validate(t) for t in result.scalars().all()]
+    templates = await service.list_templates(db, limit=limit, offset=offset)
+    return [TemplateBrief.model_validate(t) for t in templates]
 
 
 @router.get("/templates/{template_id}", response_model=TemplateBrief)
@@ -749,8 +490,7 @@ async def get_template(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(ShiftTemplate).where(ShiftTemplate.id == template_id))
-    tmpl = result.scalar_one_or_none()
+    tmpl = await service.get_template(db, template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
     return TemplateBrief.model_validate(tmpl)
@@ -762,29 +502,7 @@ async def create_template(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    tmpl = ShiftTemplate(
-        name=body.name,
-        description=body.description,
-        start_hour=body.start_hour,
-        start_minute=body.start_minute,
-        duration_hours=body.duration_hours,
-        required_specializations=body.required_specializations or [],
-        min_executors=body.min_executors,
-        max_executors=body.max_executors,
-        default_max_requests=body.default_max_requests,
-        days_of_week=body.days_of_week or [],
-        auto_create=body.auto_create,
-        default_shift_type=body.default_shift_type,
-        priority_level=body.priority_level,
-        recurrence_mode=body.recurrence_mode,
-        cycle_days_on=body.cycle_days_on,
-        cycle_days_off=body.cycle_days_off,
-        cycle_anchor_date=body.cycle_anchor_date,
-        is_active=True,
-    )
-    db.add(tmpl)
-    await db.commit()
-    await db.refresh(tmpl)
+    tmpl = await service.create_template(db, body=body)
     return TemplateBrief.model_validate(tmpl)
 
 
@@ -795,16 +513,12 @@ async def update_template(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(ShiftTemplate).where(ShiftTemplate.id == template_id))
-    tmpl = result.scalar_one_or_none()
+    tmpl = await service.get_template(db, template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
-
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(tmpl, field, value)
-
-    await db.commit()
-    await db.refresh(tmpl)
+    tmpl = await service.update_template(
+        db, tmpl=tmpl, fields=body.model_dump(exclude_unset=True)
+    )
     return TemplateBrief.model_validate(tmpl)
 
 
@@ -814,13 +528,10 @@ async def delete_template(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(ShiftTemplate).where(ShiftTemplate.id == template_id))
-    tmpl = result.scalar_one_or_none()
+    tmpl = await service.get_template(db, template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
-    # Soft-delete
-    tmpl.is_active = False
-    await db.commit()
+    await service.soft_delete_template(db, tmpl=tmpl)
     return {"message": "deleted"}
 
 
@@ -830,10 +541,7 @@ async def create_from_template(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(
-        select(ShiftTemplate).where(ShiftTemplate.id == body.template_id, ShiftTemplate.is_active == True)  # noqa: E712
-    )
-    tmpl = result.scalar_one_or_none()
+    tmpl = await service.get_active_template(db, body.template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -855,40 +563,14 @@ async def create_from_template(
         raise HTTPException(status_code=422, detail="user_ids must not be empty")
 
     # Batch-load and validate all users upfront
-    users_map: dict[int, User] = {}
-    u_res = await db.execute(select(User).where(User.id.in_(user_ids)))
-    for u in u_res.scalars().all():
-        users_map[u.id] = u
+    users_map = await service.load_users_map(db, user_ids)
     missing = [uid for uid in user_ids if uid not in users_map]
     if missing:
         raise HTTPException(status_code=404, detail=f"Users not found: {missing}")
 
-    created_shifts = []
-    for uid in user_ids:
-        shift = Shift(
-            user_id=uid,
-            start_time=start_dt,
-            end_time=end_dt,
-            # planned_* mirror start/end so the bot schedule (which reads
-            # planned_start_time/planned_end_time) shows real times, not "??:??".
-            planned_start_time=start_dt,
-            planned_end_time=end_dt,
-            status="planned",
-            shift_type=tmpl.default_shift_type,
-            max_requests=tmpl.default_max_requests,
-            priority_level=tmpl.priority_level,
-            shift_template_id=tmpl.id,
-            specialization_focus=tmpl.required_specializations,
-            current_request_count=0,
-            completed_requests=0,
-        )
-        db.add(shift)
-        await db.flush()
-        created_shifts.append(shift)
-
-    await db.commit()
-    for s in created_shifts:
-        await db.refresh(s)
+    created_shifts = await service.create_shifts_from_template(
+        db, tmpl=tmpl, user_ids=user_ids, start_dt=start_dt, end_dt=end_dt
+    )
 
     return [_shift_detail(s, users_map.get(s.user_id) if s.user_id else None) for s in created_shifts]
 
@@ -900,10 +582,7 @@ async def handle_transfer(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(
-        select(ShiftTransfer).where(ShiftTransfer.id == transfer_id).with_for_update()
-    )
-    transfer = result.scalar_one_or_none()
+    transfer = await service.get_transfer_for_update(db, transfer_id)
     if not transfer:
         raise HTTPException(status_code=404, detail="Transfer not found")
 
@@ -921,8 +600,7 @@ async def handle_transfer(
                 detail="to_executor_id is required for action 'approve'",
             )
         # Validate target executor exists and has executor role
-        exec_res = await db.execute(select(User).where(User.id == body.to_executor_id))
-        new_executor = exec_res.scalar_one_or_none()
+        new_executor = await service.get_user(db, body.to_executor_id)
         if not new_executor:
             raise HTTPException(status_code=404, detail="Executor not found")
         has_exec_role = "executor" in _parse_user_roles(new_executor)
@@ -931,17 +609,7 @@ async def handle_transfer(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Target user does not have executor role",
             )
-        transfer.status = "assigned"
-        transfer.to_executor_id = body.to_executor_id
-        transfer.assigned_at = datetime.now(timezone.utc)
-
-        # Actually reassign the shift to the new executor
-        shift_result = await db.execute(
-            select(Shift).where(Shift.id == transfer.shift_id).with_for_update()
-        )
-        the_shift = shift_result.scalar_one_or_none()
-        if the_shift:
-            the_shift.user_id = body.to_executor_id
+        await service.approve_transfer(db, transfer=transfer, to_executor_id=body.to_executor_id)
 
     elif action == "reject":
         if transfer.status != "assigned":
@@ -949,15 +617,8 @@ async def handle_transfer(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cannot reject transfer in status '{transfer.status}' — expected 'assigned'",
             )
-        transfer.status = "rejected"
-        # Restore original executor on the shift
-        shift_result = await db.execute(
-            select(Shift).where(Shift.id == transfer.shift_id).with_for_update()
-        )
-        the_shift = shift_result.scalar_one_or_none()
-        if the_shift:
-            the_shift.user_id = transfer.from_executor_id
-        else:
+        the_shift = await service.reject_transfer(db, transfer=transfer)
+        if the_shift is None:
             logger.warning(
                 "Shift %s not found when rejecting transfer %s — shift.user_id not restored",
                 transfer.shift_id, transfer.id
@@ -969,19 +630,12 @@ async def handle_transfer(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cannot cancel transfer in status '{transfer.status}'",
             )
-        transfer.status = "cancelled"
+        service.cancel_transfer(transfer)
 
-    await db.commit()
-    await db.refresh(transfer)
+    await service.commit_and_refresh_transfer(db, transfer)
 
     # Resolve executor names
-    from_user_result = await db.execute(select(User).where(User.id == transfer.from_executor_id))
-    from_user = from_user_result.scalar_one_or_none()
-
-    to_user = None
-    if transfer.to_executor_id:
-        to_user_result = await db.execute(select(User).where(User.id == transfer.to_executor_id))
-        to_user = to_user_result.scalar_one_or_none()
+    from_user, to_user = await service.resolve_transfer_users(db, transfer)
 
     transfer_out = TransferOut(
         id=transfer.id,
@@ -1005,15 +659,13 @@ async def get_shift(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Shift).where(Shift.id == shift_id))
-    shift = result.scalar_one_or_none()
+    shift = await service.get_shift(db, shift_id)
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
     user_obj = None
     if shift.user_id:
-        u_result = await db.execute(select(User).where(User.id == shift.user_id))
-        user_obj = u_result.scalar_one_or_none()
+        user_obj = await service.get_user(db, shift.user_id)
 
     return _shift_detail(shift, user_obj)
 
@@ -1025,8 +677,7 @@ async def create_shift(
     _user: User = Depends(require_roles("manager")),
 ):
     # Validate executor exists and has executor role
-    u_result = await db.execute(select(User).where(User.id == body.user_id))
-    emp = u_result.scalar_one_or_none()
+    emp = await service.get_user(db, body.user_id)
     if not emp:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -1038,36 +689,16 @@ async def create_shift(
         )
 
     # Check for overlapping active or planned shifts
-    overlap_result = await db.execute(
-        select(Shift).where(
-            Shift.user_id == body.user_id,
-            Shift.status.in_(["active", "planned"]),
-            Shift.start_time < body.end_time,
-            Shift.end_time > body.start_time,
-        ).with_for_update()
+    overlap = await service.find_overlapping_shift_for_update(
+        db, user_id=body.user_id, start_time=body.start_time, end_time=body.end_time,
     )
-    if overlap_result.scalar_one_or_none():
+    if overlap:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already has an active shift overlapping with the requested time range",
         )
 
-    shift = Shift(
-        user_id=body.user_id,
-        start_time=body.start_time,
-        end_time=body.end_time,
-        status="active",
-        shift_type=body.shift_type,
-        specialization_focus=body.specialization_focus or [],
-        max_requests=body.max_requests,
-        priority_level=body.priority_level,
-        notes=body.notes,
-        current_request_count=0,
-        completed_requests=0,
-    )
-    db.add(shift)
-    await db.commit()
-    await db.refresh(shift)
+    shift = await service.create_shift(db, body=body)
 
     detail = _shift_detail(shift, emp)
     await publish_shift_event("shift.created", detail.model_dump(mode="json"))
@@ -1081,8 +712,7 @@ async def update_shift(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Shift).where(Shift.id == shift_id))
-    shift = result.scalar_one_or_none()
+    shift = await service.get_shift(db, shift_id)
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -1100,8 +730,7 @@ async def update_shift(
             )
 
     if body.user_id is not None and body.user_id != shift.user_id:
-        u_res = await db.execute(select(User).where(User.id == body.user_id))
-        new_user = u_res.scalar_one_or_none()
+        new_user = await service.get_user(db, body.user_id)
         if not new_user:
             raise HTTPException(status_code=404, detail="Target user not found")
         if "executor" not in _parse_user_roles(new_user):
@@ -1136,38 +765,21 @@ async def update_shift(
     if ("start_time" in data or "end_time" in data or "user_id" in data) \
             and new_start is not None and new_end is not None:
         target_user_id = data.get("user_id", shift.user_id)
-        overlap_result = await db.execute(
-            select(Shift).where(
-                Shift.id != shift_id,
-                Shift.user_id == target_user_id,
-                Shift.status.in_(["active", "planned"]),
-                Shift.start_time < new_end,
-                Shift.end_time > new_start,
-            )
+        overlap = await service.find_overlapping_shift_for_update(
+            db, user_id=target_user_id, start_time=new_start, end_time=new_end,
+            exclude_shift_id=shift_id, lock=False,
         )
-        if overlap_result.scalar_one_or_none():
+        if overlap:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User already has an active shift overlapping with the requested time range",
             )
 
-    for field, value in data.items():
-        setattr(shift, field, value)
-
-    # The bot schedule reads planned_*; keep it in sync when actual times change
-    # (mirrors create_from_template, which sets planned_* = actual start/end).
-    if "start_time" in data:
-        shift.planned_start_time = shift.start_time
-    if "end_time" in data:
-        shift.planned_end_time = shift.end_time
-
-    await db.commit()
-    await db.refresh(shift)
+    shift = await service.apply_shift_update(db, shift=shift, data=data)
 
     user_obj = None
     if shift.user_id:
-        u_result = await db.execute(select(User).where(User.id == shift.user_id))
-        user_obj = u_result.scalar_one_or_none()
+        user_obj = await service.get_user(db, shift.user_id)
 
     detail = _shift_detail(shift, user_obj)
     await publish_shift_event("shift.updated", detail.model_dump(mode="json"))
@@ -1180,8 +792,7 @@ async def delete_shift(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Shift).where(Shift.id == shift_id))
-    shift = result.scalar_one_or_none()
+    shift = await service.get_shift(db, shift_id)
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -1191,8 +802,7 @@ async def delete_shift(
             detail=f"Only planned shifts can be deleted — current status is '{shift.status}'",
         )
 
-    await db.delete(shift)
-    await db.commit()
+    await service.delete_shift(db, shift=shift)
     return {"message": "deleted"}
 
 
@@ -1202,8 +812,7 @@ async def end_shift(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
-    result = await db.execute(select(Shift).where(Shift.id == shift_id))
-    shift = result.scalar_one_or_none()
+    shift = await service.get_shift(db, shift_id)
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -1213,16 +822,11 @@ async def end_shift(
             detail=f"Cannot end shift with status '{shift.status}'",
         )
 
-    shift.end_time = datetime.now(timezone.utc)
-    shift.status = "completed"
-
-    await db.commit()
-    await db.refresh(shift)
+    shift = await service.end_shift(db, shift=shift)
 
     user_obj = None
     if shift.user_id:
-        u_result = await db.execute(select(User).where(User.id == shift.user_id))
-        user_obj = u_result.scalar_one_or_none()
+        user_obj = await service.get_user(db, shift.user_id)
 
     detail = _shift_detail(shift, user_obj)
     await publish_shift_event("shift.ended", detail.model_dump(mode="json"))

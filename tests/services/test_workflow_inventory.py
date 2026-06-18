@@ -164,7 +164,7 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/async_assignment_service.py', 'attr:request', 'executor_id'),
     ('uk_management_bot/services/async_assignment_service.py', 'attr:active', 'executor_id'),
     # 3. SHIFT-машина (вне scope; одноимённые поля Shift/ShiftTransfer)
-    ('uk_management_bot/api/shifts/router.py', 'attr:transfer', 'assigned_at'),
+    ('uk_management_bot/api/shifts/service.py', 'attr:transfer', 'assigned_at'),
     ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
