@@ -4,8 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 
+from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.keyboards.admin import (
     get_manager_main_keyboard,
     get_manager_request_list_kb,
@@ -27,16 +27,11 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE,
     REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_EXECUTED,
-    REQUEST_STATUS_COMPLETED,
-    REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CANCELLED,
 )
 from uk_management_bot.utils.workflow_predicates import (
     is_awaiting_applicant,
     is_awaiting_manager,
-    awaiting_applicant_clause,
-    awaiting_manager_clause,
-    returned_for_review_clause,
 )
 
 import logging
@@ -114,8 +109,6 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         manager: Менеджер, который назначает заявку
     """
     try:
-        from uk_management_bot.database.models.request_assignment import RequestAssignment
-
         logger.info(f"[AUTO_ASSIGN] Начало автоматического назначения для заявки {request.request_number}, категория: {request.category}")
 
         category_to_specialization = CATEGORY_TO_SPECIALIZATION
@@ -138,7 +131,8 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         from uk_management_bot.utils.constants import ROLE_EXECUTOR
         from uk_management_bot.utils.specializations import parse_specializations
 
-        approved_users = db.query(User).filter(User.status == "approved").all()
+        svc = AdminHandlerService(db)
+        approved_users = svc.list_approved_users()
         logger.info(f"[AUTO_ASSIGN] Approved-пользователей всего: {len(approved_users)}")
 
         matching_executors = [
@@ -154,22 +148,16 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
             return
         
         # Проверяем, есть ли уже назначение для этой заявки
-        existing_assignment = db.query(RequestAssignment).filter(
-            RequestAssignment.request_number == request.request_number,
-            RequestAssignment.status == "active"
-        ).first()
+        existing_assignment = svc.get_active_assignment(request.request_number)
 
         if existing_assignment:
             logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена (ID: {existing_assignment.id}), пропускаем")
             return
 
         # Дополнительная проверка на групповые назначения для той же специализации
-        existing_group_assignment = db.query(RequestAssignment).filter(
-            RequestAssignment.request_number == request.request_number,
-            RequestAssignment.assignment_type == "group",
-            RequestAssignment.group_specialization == specialization,
-            RequestAssignment.status == "active"
-        ).first()
+        existing_group_assignment = svc.get_active_group_assignment(
+            request.request_number, specialization
+        )
 
         if existing_group_assignment:
             logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена группе {specialization}, пропускаем")
@@ -184,12 +172,11 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         # on-shift Telegram-дути-нотифай ниже сохранён (другой канал/таргетинг).
         from uk_management_bot.services.assignment_service import AssignmentService
         AssignmentService(db).assign_to_group(request.request_number, specialization, manager.id)
-        db.refresh(request)
+        svc.refresh(request)
 
         logger.info(f"[AUTO_ASSIGN] ✅ Заявка {request.request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
 
         # Отправляем уведомления исполнителям в активных сменах
-        from uk_management_bot.database.models.shift import Shift
         from datetime import datetime as dt
         from uk_management_bot.services.notification_service import _get_shared_bot
 
@@ -199,12 +186,7 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         # Находим исполнителей в активных сменах с нужной специализацией
         for executor in matching_executors:
             # Проверяем активную смену
-            active_shift = db.query(Shift).filter(
-                Shift.user_id == executor.id,
-                Shift.status == "active",
-                Shift.start_time <= now,
-                or_(Shift.end_time.is_(None), Shift.end_time >= now)
-            ).first()
+            active_shift = svc.get_active_shift_for(executor.id, now)
 
             if active_shift:
                 try:
@@ -244,16 +226,17 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             return
         
         request_number = callback.data.replace("mview_", "")
-        
+
+        svc = AdminHandlerService(db)
         # Получаем заявку из базы данных
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        
+        request = svc.get_request_by_number(request_number)
+
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
 
         # Получаем информацию о пользователе, создавшем заявку
-        request_user = db.query(User).filter(User.id == request.user_id).first()
+        request_user = svc.get_user_by_id(request.user_id)
         if request_user:
             # Формируем полное имя из first_name и last_name
             full_name_parts = []
@@ -283,11 +266,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             message_text += get_text("admin.handlers.request_detail_updated", language=lang).format(updated_at=request.updated_at.strftime('%d.%m.%Y %H:%M')) + "\n"
 
         # Добавляем информацию о назначении
-        from uk_management_bot.database.models.request_assignment import RequestAssignment
-        active_assignment = db.query(RequestAssignment).filter(
-            RequestAssignment.request_number == request.request_number,
-            RequestAssignment.status == "active"
-        ).first()
+        active_assignment = svc.get_active_assignment(request.request_number)
 
         if active_assignment:
             if active_assignment.assignment_type == "group":
@@ -296,7 +275,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
                 message_text += get_text("admin.handlers.assigned_duty_specialist", language=lang).format(spec_name=spec_name) + "\n"
             elif active_assignment.assignment_type == "individual" and active_assignment.executor_id:
                 # Индивидуальное назначение конкретному исполнителю
-                assigned_executor = db.query(User).filter(User.id == active_assignment.executor_id).first()
+                assigned_executor = svc.get_user_by_id(active_assignment.executor_id)
                 if assigned_executor:
                     executor_name = f"{assigned_executor.first_name or ''} {assigned_executor.last_name or ''}".strip()
                     if not executor_name:
@@ -396,7 +375,7 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
         request_number = callback.data.replace("media_", "")
 
         # Получаем заявку из базы данных
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
 
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
@@ -552,7 +531,7 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
 
         # Best-effort post-commit (потеря допустима, PR0 Р7): уведомления + правка.
         # run_command работал в своей сессии → перечитываем заявку свежей.
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
@@ -585,7 +564,7 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
     except Exception as e:
         logger.error(f"Ошибка подтверждения выполнения заявки: {e}")
         if db:
-            db.rollback()
+            AdminHandlerService(db).rollback()
         await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
 
 
@@ -629,7 +608,7 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
             return
 
         # Best-effort post-commit (PR0 Р7): уведомления + правка сообщения.
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
 
         # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
         try:
@@ -662,7 +641,7 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
     except Exception as e:
         logger.error(f"Ошибка повторного подтверждения заявки: {e}")
         if db:
-            db.rollback()
+            AdminHandlerService(db).rollback()
         await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
 
 
@@ -701,7 +680,7 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
             return
 
         # Best-effort post-commit (PR0 Р7): уведомление + правка сообщения.
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         try:
             bot = callback.bot
             await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
@@ -717,7 +696,7 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
     except Exception as e:
         logger.error(f"Ошибка возврата заявки в работу: {e}")
         if db:
-            db.rollback()
+            AdminHandlerService(db).rollback()
         await callback.answer(get_text("admin.handlers.error_changing_status", language=lang), show_alert=True)
 
 
@@ -741,27 +720,24 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
             return
         
         current_page = int(page_data)
-        
+
         # Определяем тип списка заявок (новые, активные, архив)
         # Пока что показываем активные заявки
-        active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-        q = (
-            db.query(Request)
-            .filter(Request.status.in_(active_statuses))
-            .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-        )
-        
+        svc = AdminHandlerService(db)
+
         # Вычисляем общее количество страниц
-        total_requests = q.count()
+        total_requests = svc.count_active_requests()
         requests_per_page = 10
         total_pages = max(1, (total_requests + requests_per_page - 1) // requests_per_page)
-        
+
         if current_page < 1 or current_page > total_pages:
             await callback.answer(get_text("admin.handlers.page_not_found", language=lang), show_alert=True)
             return
 
         # Получаем заявки для текущей страницы
-        requests = q.offset((current_page - 1) * requests_per_page).limit(requests_per_page).all()
+        requests = svc.page_active_requests(
+            (current_page - 1) * requests_per_page, requests_per_page
+        )
 
         if not requests:
             await callback.answer(get_text("admin.handlers.no_requests_on_page", language=lang), show_alert=True)
@@ -794,12 +770,12 @@ async def _render_manager_request_list(callback: CallbackQuery, db: Session, req
     lang = language
     from uk_management_bot.keyboards.admin import get_manager_request_list_kb
 
-    request = db.query(Request).filter(Request.request_number == request_number).first() if request_number else None
+    svc = AdminHandlerService(db)
+    request = svc.get_request_by_number(request_number)
 
     if request:
         if request.status == REQUEST_STATUS_NEW:
-            q = db.query(Request).filter(Request.status == REQUEST_STATUS_NEW).order_by(Request.created_at.desc())
-            requests = q.limit(10).all()
+            requests = svc.list_new_requests(limit=10)
             if not requests:
                 await callback.message.edit_text(get_text("admin.handlers.no_new_requests", language=lang))
                 return
@@ -809,10 +785,7 @@ async def _render_manager_request_list(callback: CallbackQuery, db: Session, req
             return
 
         elif request.status == REQUEST_STATUS_EXECUTED:
-            q = db.query(Request).filter(Request.status == REQUEST_STATUS_EXECUTED).order_by(
-                Request.is_returned.desc(), Request.updated_at.desc().nullslast(), Request.created_at.desc()
-            )
-            requests = q.limit(10).all()
+            requests = svc.list_executed_requests(limit=10)
             if not requests:
                 await callback.message.edit_text(get_text("admin.handlers.no_completed_requests", language=lang))
                 return
@@ -827,9 +800,7 @@ async def _render_manager_request_list(callback: CallbackQuery, db: Session, req
             return
 
         elif request.status in [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]:
-            active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-            q = db.query(Request).filter(Request.status.in_(active_statuses)).order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-            requests = q.limit(10).all()
+            requests = svc.list_active_requests(limit=10)
             if not requests:
                 await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
                 return
@@ -839,13 +810,7 @@ async def _render_manager_request_list(callback: CallbackQuery, db: Session, req
             return
 
     # Fallback: показываем активные заявки по умолчанию
-    active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-    q = (
-        db.query(Request)
-        .filter(Request.status.in_(active_statuses))
-        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-    )
-    requests = q.limit(10).all()
+    requests = svc.list_active_requests(limit=10)
 
     if not requests:
         await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
@@ -1007,13 +972,8 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
         return
     
     # Новые заявки: только "Новая" (🆕)
-    q = (
-        db.query(Request)
-        .filter(Request.status == REQUEST_STATUS_NEW)
-        .order_by(Request.created_at.desc())
-    )
-    requests = q.limit(10).all()
-    
+    requests = AdminHandlerService(db).list_new_requests(limit=10)
+
     if not requests:
         await message.answer(get_text("admin.handlers.no_new_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
@@ -1035,13 +995,7 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
         )
         return
     
-    active_statuses = [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]
-    q = (
-        db.query(Request)
-        .filter(Request.status.in_(active_statuses))
-        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-    )
-    requests = q.limit(10).all()
+    requests = AdminHandlerService(db).list_active_requests(limit=10)
 
     if not requests:
         await message.answer(get_text("admin.handlers.no_active_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
@@ -1065,14 +1019,15 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
         return
 
     # Получаем статистику
+    svc = AdminHandlerService(db)
     # "Всего исполненных" = заявки, ожидающие подтверждения менеджером
-    total_completed = db.query(Request).filter(awaiting_manager_clause()).count()
+    total_completed = svc.count_awaiting_manager()
 
     # Возвращённые = заявка возвращена заявителем на доработку (ждёт разбора менеджером)
-    returned_count = db.query(Request).filter(returned_for_review_clause()).count()
+    returned_count = svc.count_returned_for_review()
 
     # Не принятые = подтверждены менеджером, но не приняты заявителем
-    unaccepted_count = db.query(Request).filter(awaiting_applicant_clause()).count()
+    unaccepted_count = svc.count_awaiting_applicant()
 
     stats_text = get_text("admin.handlers.completed_requests_stats", language=lang).format(
         total_completed=total_completed,
@@ -1098,16 +1053,7 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
 
     # Все исполненные заявки: статус "Выполнена" и НЕ подтверждены менеджером
     # (ожидают проверки и подтверждения менеджером)
-    q = (
-        db.query(Request)
-        .filter(awaiting_manager_clause())  # Только НЕподтверждённые менеджером
-        .order_by(
-            Request.is_returned.desc(),  # Возвратные заявки показываем первыми
-            Request.updated_at.desc().nullslast(),
-            Request.created_at.desc()
-        )
-    )
-    requests = q.limit(10).all()
+    requests = AdminHandlerService(db).list_awaiting_manager(limit=10)
 
     if not requests:
         await message.answer(get_text("admin.handlers.no_completed_requests", language=lang), reply_markup=get_completed_requests_submenu(language=lang))
@@ -1142,16 +1088,7 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
 
     # Только возвращённые заявки
     # Статус "Исполнено" - когда заявка возвращена заявителем на доработку
-    q = (
-        db.query(Request)
-        .filter(returned_for_review_clause())
-        .order_by(
-            Request.returned_at.desc().nullslast(),
-            Request.updated_at.desc().nullslast(),
-            Request.created_at.desc()
-        )
-    )
-    requests = q.limit(10).all()
+    requests = AdminHandlerService(db).list_returned_for_review(limit=10)
 
     if not requests:
         await message.answer(
@@ -1197,16 +1134,7 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
 
     # Непринятые заявки: подтверждены менеджером (manager_confirmed = True), но не приняты заявителем (статус != "Принято")
     from datetime import datetime, timezone
-    q = (
-        db.query(Request)
-        .filter(awaiting_applicant_clause())  # Подтверждено менеджером, не принято заявителем
-        .order_by(
-            Request.completed_at.desc().nullslast(),
-            Request.updated_at.desc().nullslast(),
-            Request.created_at.desc()
-        )
-    )
-    requests = q.limit(20).all()
+    requests = AdminHandlerService(db).list_awaiting_applicant(limit=20)
 
     if not requests:
         await message.answer(
@@ -1300,13 +1228,7 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         return
     
     # Архив: только завершенные статусы (Выполнена, Исполнено, Принято, Отменена)
-    archive_statuses = [REQUEST_STATUS_EXECUTED, REQUEST_STATUS_COMPLETED, REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED]
-    q = (
-        db.query(Request)
-        .filter(Request.status.in_(archive_statuses))
-        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-    )
-    requests = q.limit(10).all()
+    requests = AdminHandlerService(db).list_archive_requests(limit=10)
     if not requests:
         await message.answer(get_text("admin.handlers.archive_empty", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
         return
@@ -1340,12 +1262,7 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
         return
     
     # Получаем заявки в статусе "Закуп"
-    q = (
-        db.query(Request)
-        .filter(Request.status == REQUEST_STATUS_PURCHASE)
-        .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-    )
-    requests = q.limit(10).all()
+    requests = AdminHandlerService(db).list_purchase_requests(limit=10)
 
     if not requests:
         await message.answer(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
@@ -1666,8 +1583,9 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
             return
 
         # run_command работал в своей сессии → перечитываем свежей для отрисовки.
-        db.expire_all()
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        svc = AdminHandlerService(db)
+        svc.expire_all()
+        request = svc.get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -1705,7 +1623,7 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
         request_number = callback.data.replace("mgr_deny_", "")
 
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -1750,7 +1668,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
         request_number = callback.data.replace("clarify_", "")
 
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -1830,11 +1748,11 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
         request_number = callback.data.replace("purchase_", "")
 
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
-        
+
         # Формируем текст с учетом истории закупок
         prompt_text = get_text("admin.handlers.purchase_transfer_header", language=lang) + "\n\n"
 
@@ -1983,30 +1901,16 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
         
         request_number = callback.data.replace("mgr_delete_", "")
 
+        svc = AdminHandlerService(db)
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = svc.get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Сначала удаляем все связанные записи
-        from uk_management_bot.database.models.rating import Rating
-        from uk_management_bot.database.models.request_comment import RequestComment
-        from uk_management_bot.database.models.request_assignment import RequestAssignment
+        # Каскадное удаление связанных записей + самой заявки (один commit)
+        svc.delete_request_cascade(request, request_number)
 
-        # Удаляем рейтинги
-        db.query(Rating).filter(Rating.request_number == request_number).delete()
-
-        # Удаляем комментарии
-        db.query(RequestComment).filter(RequestComment.request_number == request_number).delete()
-
-        # Удаляем назначения
-        db.query(RequestAssignment).filter(RequestAssignment.request_number == request_number).delete()
-
-        # Теперь удаляем саму заявку
-        db.delete(request)
-        db.commit()
-        
         await callback.answer(get_text("admin.handlers.request_deleted", language=lang))
 
         # Возвращаемся к списку заявок. BUG-BOT-035: render-only helper с
@@ -2046,13 +1950,14 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
             await state.clear()
             return
 
+        svc = AdminHandlerService(db)
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = svc.get_request_by_number(request_number)
         if not request:
             await message.answer(get_text("admin.handlers.request_not_found", language=lang))
             await state.clear()
             return
-        
+
         # Получаем текст уточнения
         clarification_text = message.text.strip()
         
@@ -2107,24 +2012,20 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
                 await state.clear()
                 return
             # run_command коммитит в отдельной сессии — сбрасываем кэш middleware
-            db.expire_all()
+            svc.expire_all()
         else:
             # вне канон-перехода: дописываем только примечание, статус не меняем
-            if request.notes and request.notes.strip():
-                request.notes = request.notes.strip() + "\n\n" + new_note
-            else:
-                request.notes = new_note
-            request.updated_at = datetime.now(timezone.utc)
-            db.commit()
+            svc.append_clarification_note(
+                request, new_note, datetime.now(timezone.utc)
+            )
 
 
         # Отправляем уведомление заявителю
         try:
             from uk_management_bot.services.notification_service import send_to_user
-            from uk_management_bot.database.models.user import User as UserModel
-            
+
             # Получаем telegram_id пользователя
-            user_obj = db.query(UserModel).filter(UserModel.id == request.user_id).first()
+            user_obj = svc.get_user_by_id(request.user_id)
             if user_obj and user_obj.telegram_id:
                 notification_text = get_text("admin.handlers.notify_user_clarification", language=lang).format(
                     request_number=request.request_number,
@@ -2184,12 +2085,12 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
             return
 
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         if not request:
             await message.answer(get_text("admin.handlers.request_not_found", language=lang))
             await state.clear()
             return
-        
+
         # Получаем причину отклонения
         cancel_reason = message.text.strip()
         
@@ -2315,8 +2216,9 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
         
         request_number = callback.data.replace("purchase_return_to_work_", "")
 
+        svc = AdminHandlerService(db)
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = svc.get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -2371,25 +2273,16 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
 
         # Post-commit: purchase_history (вне workflow-полей). run_command писал
         # в своей сессии → перечитываем свежей.
-        db.expire_all()
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        svc.expire_all()
+        request = svc.get_request_by_number(request_number)
         if request is not None and history_entry is not None:
-            if request.purchase_history:
-                request.purchase_history += f"\n\n===\n\n{history_entry}"
-            else:
-                request.purchase_history = history_entry
-            db.commit()
+            svc.append_purchase_history(request, history_entry)
 
         await callback.answer(get_text("admin.handlers.request_returned_to_work_short", language=lang))
 
         # Загружаем обновленный список заявок в закупе
-        q = (
-            db.query(Request)
-            .filter(Request.status == REQUEST_STATUS_PURCHASE)
-            .order_by(Request.updated_at.desc().nullslast(), Request.created_at.desc())
-        )
-        requests = q.limit(10).all()
-        
+        requests = svc.list_purchase_requests(limit=10)
+
         if not requests:
             await callback.message.edit_text(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
             return
@@ -2423,9 +2316,9 @@ async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: 
             return
         
         request_number = callback.data.replace("edit_materials_", "")
-        
+
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -2484,19 +2377,18 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
             await state.clear()
             return
 
+        svc = AdminHandlerService(db)
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = svc.get_request_by_number(request_number)
         if not request:
             await message.answer(get_text("admin.handlers.request_not_found", language=lang))
             await state.clear()
             return
-        
+
         # Обновляем комментарий менеджера к материалам (запрошенные материалы НЕ изменяем)
         old_comment = request.manager_materials_comment
         new_comment = message.text.strip()
-        request.manager_materials_comment = new_comment
-        request.updated_at = datetime.now(timezone.utc)
-        
+
         # Обновляем историю закупов для сохранения данных
         requested_materials = request.requested_materials or get_text("admin.handlers.not_specified", language=lang)
         purchase_history_entry = (
@@ -2504,14 +2396,11 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
             + get_text("admin.handlers.purchase_history_entry_comment", language=lang).format(comment=new_comment) + "\n"
             + get_text("admin.handlers.purchase_history_entry_updated", language=lang).format(date=datetime.now().strftime('%d.%m.%Y %H:%M'))
         )
-        
-        if request.purchase_history:
-            request.purchase_history += f"\n\n---\n\n{purchase_history_entry}"
-        else:
-            request.purchase_history = purchase_history_entry
-            
-        db.commit()
-        
+
+        svc.update_materials_comment(
+            request, new_comment, purchase_history_entry, datetime.now(timezone.utc)
+        )
+
         await message.answer(get_text("admin.handlers.materials_comment_updated", language=lang).format(request_number=request_number), reply_markup=get_manager_main_keyboard(language=lang))
         
         # Добавляем комментарий об изменении
@@ -2561,7 +2450,7 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
         logger.info(f"Назначение дежурного специалиста для заявки {request_number}")
 
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -2612,8 +2501,9 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
         request_number = callback.data.replace("assign_specific_", "")
         logger.info(f"Выбор конкретного исполнителя для заявки {request_number}")
 
+        svc = AdminHandlerService(db)
         # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = svc.get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
@@ -2630,11 +2520,7 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 
         # ИСПРАВЛЕНО: проверяем наличие роли "executor" в массиве roles
         # Используем JSONB operator @> для проверки вхождения элемента в массив
-        from sqlalchemy import String
-        executors = db.query(User).filter(
-            User.roles.cast(String).contains('"executor"'),
-            User.status == "approved"
-        ).all()
+        executors = svc.list_approved_executors()
 
         logger.info(f"[SPECIFIC_ASSIGN] Найдено {len(executors)} исполнителей (с ролью executor) со статусом 'approved'")
 
@@ -2696,9 +2582,10 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
         logger.info(f"Финальное назначение исполнителя {executor_id} на заявку {request_number}")
 
+        svc = AdminHandlerService(db)
         # Получаем заявку и исполнителя
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        executor = db.query(User).filter(User.id == executor_id).first()
+        request = svc.get_request_by_number(request_number)
+        executor = svc.get_user_by_id(executor_id)
 
         if not request or not executor:
             await callback.answer(get_text("admin.handlers.request_or_executor_not_found", language=lang), show_alert=True)
@@ -2706,7 +2593,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
 
         # Получаем менеджера (текущий пользователь)
         if not user:
-            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            user = svc.get_user_by_telegram_id(callback.from_user.id)
             if not user:
                 await callback.answer(get_text("admin.handlers.error_user_not_found", language=lang), show_alert=True)
                 return
@@ -2806,7 +2693,7 @@ async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Sess
 
         request_number = callback.data.replace("back_to_assignment_type_", "")
 
-        request = db.query(Request).filter(Request.request_number == request_number).first()
+        request = AdminHandlerService(db).get_request_by_number(request_number)
 
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)

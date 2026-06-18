@@ -146,13 +146,14 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/handlers/address_apartments.py', 'cmp:r', 'status'),
     # PR2-pre/2: composite-флаги (manager_confirmed/is_returned) admin.py
     # мигрированы на предикаты awaiting_manager/awaiting_applicant/returned_for_review.
-    # Остаются простые status-фильтры, НЕ затрагиваемые канон-нормализацией A
-    # (NEW/active-навигация :853-884) + display-маркер возврата (:882/:1167).
-    ('uk_management_bot/handlers/admin.py', 'cmp:Request', 'status'),
+    # PR-29.3 (ARCH-01): class-level query-выражения `Request.status == ...` /
+    # `Request.status.in_([...])` (cmp:Request / in_:Request) переехали вместе с
+    # ORM-слоем в services/admin_handler_service.py (см. ниже). В хендлере
+    # остаются ТОЛЬКО сравнения статуса/флага на УЖЕ ЗАГРУЖЕННОМ объекте
+    # (выбор клавиатуры/текста UI): cmp:r/cmp:request status + if:r is_returned.
     ('uk_management_bot/handlers/admin.py', 'cmp:r', 'status'),
     ('uk_management_bot/handlers/admin.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/admin.py', 'if:r', 'is_returned'),
-    ('uk_management_bot/handlers/admin.py', 'in_:Request', 'status'),
     ('uk_management_bot/handlers/clarification_replies.py', 'cmp:request', 'status'),
     # PR2a-6: request_reports.py:118,239 переведены на is_awaiting_applicant
     # (возвращённые исключены) — сняты из read-baseline.
@@ -170,6 +171,13 @@ BASELINE: set[tuple[str, str, str]] = {
     # FALSE-POSITIVE (подтверждено PR2-pre/2): existing = членство в адресе,
     # status "pending"/"approved"/"rejected" (addresses/core.py:483-487).
     ('uk_management_bot/services/addresses/core.py', 'cmp:existing', 'status'),
+    # PR-29.3 (ARCH-01): ORM manager/admin-хендлера заявок вынесен сюда из
+    # handlers/admin.py — `Request.status == ...` (NEW/EXECUTED/Закуп точечные
+    # фильтры списков) и `Request.status.in_([...])` (active/archive-наборы).
+    # Это status-фильтры, НЕ затрагиваемые канон-нормализацией A: значения
+    # статусов сохраняются по обе стороны cutover.
+    ('uk_management_bot/services/admin_handler_service.py', 'cmp:Request', 'status'),
+    ('uk_management_bot/services/admin_handler_service.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/assignment_optimizer.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/geo_optimizer.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/metrics_manager.py', 'cmp:Request', 'status'),
