@@ -9,6 +9,7 @@ from ..states.registration import RegistrationStates
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import sync_legacy_role
 from uk_management_bot.keyboards.base import get_cancel_keyboard, get_main_keyboard_for_role
 import logging
 
@@ -342,7 +343,7 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         user.first_name = name_parts[0] if name_parts else ""
         user.last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
         user.phone = phone
-        user.role = role
+        sync_legacy_role(user, role)
         user.status = "pending"
         
         # Если это исполнитель, добавляем специализацию

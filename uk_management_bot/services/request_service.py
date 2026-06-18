@@ -5,6 +5,7 @@ import logging
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_primary_role
 from uk_management_bot.utils.validators import validate_description
 from uk_management_bot.utils.constants import (
     REQUEST_URGENCIES,
@@ -279,7 +280,7 @@ class RequestService:
         target_status: str
     ) -> bool:
         # Определяем активную роль пользователя (новая система ролей)
-        active_role = actor.active_role if actor.active_role else actor.role
+        active_role = actor.active_role or legacy_primary_role(actor)
         
         # Получаем список всех ролей пользователя
         user_roles = []
@@ -294,8 +295,10 @@ class RequestService:
             logger.warning(f"is_role_allowed_for_transition: битый JSON в user.roles (user_id={actor.id}), fallback к user.role")
         
         # Fallback к старому полю role если новая система не настроена
-        if not user_roles and actor.role:
-            user_roles = [actor.role]
+        if not user_roles:
+            legacy = legacy_primary_role(actor)
+            if legacy:
+                user_roles = [legacy]
         
         # Заявитель: отмена своей "Новой", приёмка/возврат из "Выполнена" и legacy "Исполнено"
         if active_role == ROLE_APPLICANT:
@@ -613,7 +616,7 @@ class RequestService:
             if request.user_id != user_id:
                 # Проверяем, является ли пользователь администратором
                 user = self.db.query(User).filter(User.id == user_id).first()
-                if not user or user.role != "admin":
+                if not user or legacy_primary_role(user) != "admin":
                     logger.warning(f"Попытка удаления заявки {request_number} без прав пользователем {user_id}")
                     return False
             

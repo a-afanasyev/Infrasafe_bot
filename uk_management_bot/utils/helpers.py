@@ -270,11 +270,14 @@ def format_user_info(user, locale: Dict[str, Any]) -> str:
         "blocked": "Заблокирован"
     }
     
+    from uk_management_bot.utils.auth_helpers import legacy_primary_role
+
+    role_value = legacy_primary_role(user) or ""
     return f"""
 👤 {locale.get('profile', {}).get('title', 'Профиль')}
 
 🆔 ID: {user.telegram_id}
-👤 {locale.get('profile', {}).get('role', 'Роль')}: {role_names.get(user.role, user.role)}
+👤 {locale.get('profile', {}).get('role', 'Роль')}: {role_names.get(role_value, role_value)}
 📊 {locale.get('profile', {}).get('status', 'Статус')}: {status_names.get(user.status, user.status)}
 🌐 {locale.get('profile', {}).get('language', 'Язык')}: {user.language.upper()}
 📅 Регистрация: {user.created_at.strftime('%d.%m.%Y')}

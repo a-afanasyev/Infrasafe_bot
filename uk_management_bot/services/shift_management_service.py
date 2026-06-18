@@ -25,6 +25,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +213,7 @@ class ShiftManagementService:
         return (
             self.db.query(User)
             .filter(
-                User.role == "executor",
+                legacy_role_filter("executor"),
                 User.is_active.is_(True),
                 ~User.id.in_(assigned_ids),
             )

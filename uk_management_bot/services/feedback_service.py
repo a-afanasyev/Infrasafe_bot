@@ -15,13 +15,14 @@ from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.feedback import Feedback
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 
 # Менеджеры: новый JSON-формат roles ИЛИ legacy одиночное поле role; только
 # активные (не удалённые, одобренные).
-_MANAGER_FILTER = or_(User.roles.like('%"manager"%'), User.role == "manager")
+_MANAGER_FILTER = or_(User.roles.like('%"manager"%'), legacy_role_filter("manager"))
 _ACTIVE_FILTER = and_(User.deleted_at.is_(None), User.status == "approved")
 
 # Лимиты Telegram

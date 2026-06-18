@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_primary_role
 from sqlalchemy import select
 from typing import AsyncGenerator, Optional
 
@@ -22,7 +23,8 @@ def _parse_user_roles(user) -> list[str]:
             except (json.JSONDecodeError, TypeError):
                 pass
         return [r.strip() for r in raw.split(",") if r.strip()]
-    return [user.role] if user.role else []
+    legacy = legacy_primary_role(user)
+    return [legacy] if legacy else []
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

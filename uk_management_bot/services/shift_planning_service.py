@@ -11,6 +11,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_schedule import ShiftSchedule
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.services.shift_analytics import ShiftAnalytics
 from uk_management_bot.services.metrics_manager import MetricsManager
 from uk_management_bot.services.recommendation_engine import RecommendationEngine
@@ -420,7 +421,7 @@ class ShiftPlanningService:
         try:
             query = self.db.query(User).filter(
                 User.status == 'approved',
-                User.role.in_(['executor', 'admin', 'manager'])
+                legacy_role_filter('executor', 'admin', 'manager')
             )
             
             # Фильтруем по специализации

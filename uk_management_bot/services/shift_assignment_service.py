@@ -12,6 +12,11 @@ from enum import Enum
 
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import (
+    legacy_role_filter,
+    get_user_roles,
+    get_active_role,
+)
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.assignment_service import AssignmentService
@@ -738,7 +743,7 @@ class ShiftAssignmentService:
         """Проверяет, можно ли назначить смену исполнителю"""
         # Базовая проверка - можно расширить
         return (
-            executor.role == ROLE_EXECUTOR and
+            ROLE_EXECUTOR in get_user_roles(executor) and
             executor.status == 'approved' and
             self._calculate_availability_score(shift, executor) > 0.5
         )
@@ -766,12 +771,12 @@ class ShiftAssignmentService:
             return conflicts
 
         # Проверка роли
-        if executor.role != ROLE_EXECUTOR:
+        if ROLE_EXECUTOR not in get_user_roles(executor):
             conflicts.append(AssignmentConflict(
                 type="invalid_role",
                 executor_id=executor_id,
                 shift_id=shift.id,
-                description=f"Неверная роль: {executor.role}, требуется: {ROLE_EXECUTOR}",
+                description=f"Неверная роль: {get_active_role(executor)}, требуется: {ROLE_EXECUTOR}",
                 severity="high",
                 can_resolve=False
             ))
@@ -901,7 +906,7 @@ class ShiftAssignmentService:
         """Получает список доступных исполнителей"""
         return self.db.query(User).filter(
             and_(
-                User.role == ROLE_EXECUTOR,
+                legacy_role_filter(ROLE_EXECUTOR),
                 User.status == 'approved'
             )
         ).all()

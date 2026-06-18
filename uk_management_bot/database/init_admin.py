@@ -15,6 +15,7 @@ sys.path.insert(0, str(project_root))
 from sqlalchemy import select
 from uk_management_bot.database.session import SessionLocal
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import sync_legacy_role
 from uk_management_bot.utils.structured_logger import get_logger
 
 logger = get_logger(__name__)
@@ -60,7 +61,7 @@ def init_admin_user() -> bool:
                 else:
                     # Добавляем ВСЕ роли администратору
                     existing_user.roles = '["applicant", "executor", "manager"]'
-                    existing_user.role = "manager"  # Основная роль
+                    sync_legacy_role(existing_user, "manager")  # Основная роль
                     existing_user.active_role = "manager"
                     existing_user.status = "active"
 
@@ -143,7 +144,7 @@ def init_all_admins() -> tuple[int, int]:
                     if not required_roles.issubset(current_roles) or existing_user.status != "approved":
                         # Обновляем на ВСЕ роли и правильный статус
                         existing_user.roles = '["applicant", "executor", "manager"]'
-                        existing_user.role = "manager"
+                        sync_legacy_role(existing_user, "manager")
                         existing_user.active_role = "manager"
                         existing_user.status = "approved"  # ВАЖНО: approved!
                         if not existing_user.phone:

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ class UserManagementService:
                         User.roles.contains('applicant'),
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
-                            User.role == 'applicant'
+                            legacy_role_filter('applicant')
                         )
                     )
                 )
@@ -58,7 +59,7 @@ class UserManagementService:
                         User.roles.contains('applicant'),
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
-                            User.role == 'applicant'
+                            legacy_role_filter('applicant')
                         )
                     )
                 )
@@ -71,7 +72,7 @@ class UserManagementService:
                         User.roles.contains('applicant'),
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
-                            User.role == 'applicant'
+                            legacy_role_filter('applicant')
                         )
                     )
                 )
@@ -129,9 +130,9 @@ class UserManagementService:
                         User.roles.like('%"executor"%'),
                         User.roles.like('%"manager"%'),
                         User.roles.like('%"inspector"%'),
-                        User.role == 'executor',
-                        User.role == 'manager',
-                        User.role == 'inspector'
+                        legacy_role_filter('executor'),
+                        legacy_role_filter('manager'),
+                        legacy_role_filter('inspector')
                     )
                 )
             ).count()
@@ -144,9 +145,9 @@ class UserManagementService:
                         User.roles.like('%"executor"%'),
                         User.roles.like('%"manager"%'),
                         User.roles.like('%"inspector"%'),
-                        User.role == 'executor',
-                        User.role == 'manager',
-                        User.role == 'inspector'
+                        legacy_role_filter('executor'),
+                        legacy_role_filter('manager'),
+                        legacy_role_filter('inspector')
                     )
                 )
             ).count()
@@ -159,9 +160,9 @@ class UserManagementService:
                         User.roles.like('%"executor"%'),
                         User.roles.like('%"manager"%'),
                         User.roles.like('%"inspector"%'),
-                        User.role == 'executor',
-                        User.role == 'manager',
-                        User.role == 'inspector'
+                        legacy_role_filter('executor'),
+                        legacy_role_filter('manager'),
+                        legacy_role_filter('inspector')
                     )
                 )
             ).count()
@@ -170,7 +171,7 @@ class UserManagementService:
             executors = self.db.query(User).filter(
                 or_(
                     User.roles.like('%"executor"%'),
-                    User.role == 'executor'
+                    legacy_role_filter('executor')
                 )
             ).count()
 
@@ -178,7 +179,7 @@ class UserManagementService:
             managers = self.db.query(User).filter(
                 or_(
                     User.roles.like('%"manager"%'),
-                    User.role == 'manager'
+                    legacy_role_filter('manager')
                 )
             ).count()
             
@@ -233,7 +234,7 @@ class UserManagementService:
                         # Старая система ролей (поле role) - для обратной совместимости
                         and_(
                             or_(User.roles.is_(None), User.roles == ''),
-                            User.role == 'applicant'
+                            legacy_role_filter('applicant')
                         )
                     )
                 )
@@ -450,7 +451,7 @@ class UserManagementService:
                             User.roles.contains('applicant'),
                             and_(
                                 or_(User.roles.is_(None), User.roles == ''),
-                                User.role == 'applicant',
+                                legacy_role_filter('applicant'),
                             ),
                         ),
                         or_(
@@ -693,9 +694,9 @@ class UserManagementService:
                     User.roles.like('%"executor"%'),
                     User.roles.like('%"manager"%'),
                     User.roles.like('%"inspector"%'),
-                    User.role == 'executor',
-                    User.role == 'manager',
-                    User.role == 'inspector'
+                    legacy_role_filter('executor'),
+                    legacy_role_filter('manager'),
+                    legacy_role_filter('inspector')
                 )
             )
 
@@ -710,14 +711,14 @@ class UserManagementService:
                 query = base_query.filter(
                     or_(
                         User.roles.like('%"executor"%'),
-                        User.role == 'executor'
+                        legacy_role_filter('executor')
                     )
                 )
             elif list_type == 'managers':
                 query = base_query.filter(
                     or_(
                         User.roles.like('%"manager"%'),
-                        User.role == 'manager'
+                        legacy_role_filter('manager')
                     )
                 )
             else:
@@ -772,9 +773,9 @@ class UserManagementService:
                     User.roles.like('%"executor"%'),
                     User.roles.like('%"manager"%'),
                     User.roles.like('%"inspector"%'),
-                    User.role == 'executor',
-                    User.role == 'manager',
-                    User.role == 'inspector'
+                    legacy_role_filter('executor'),
+                    legacy_role_filter('manager'),
+                    legacy_role_filter('inspector')
                 )
             )
 
