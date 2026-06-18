@@ -25,13 +25,17 @@ def _bypass_request_access(monkeypatch):
     """The proxy gates uploads on check_request_access (request ownership).
     These tests target the validation/forward layer, not access control, and
     don't seed a request row — stub the access check to a no-op so we reach
-    the code under test instead of a 404."""
-    from uk_management_bot.api import main as api_main
+    the code under test instead of a 404.
+
+    ARCH-012: the media-proxy endpoints moved out of `api.main` into
+    `api.routes.media_proxy`; patch `check_request_access` where it is now
+    looked up."""
+    from uk_management_bot.api.routes import media_proxy
 
     async def _noop(*a, **k):
         return None
 
-    monkeypatch.setattr(api_main, "check_request_access", _noop)
+    monkeypatch.setattr(media_proxy, "check_request_access", _noop)
 
 
 @pytest.mark.asyncio
