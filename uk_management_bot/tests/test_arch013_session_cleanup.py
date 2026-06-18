@@ -46,42 +46,59 @@ def _message(user_id=7):
 
 
 # --------------------------------------------------------------------------
-# Pattern A — requests.py filter handler (db_session = None + finally, no
-# second session in the except branch).
+# Pattern A — requests.py filter handler. PR-29.2 (CODE-04): converted to
+# `with _db_scope(None)` → `session_scope()`. The leak invariant now lives in
+# session_scope's contextmanager (close on any exit, incl. exception); the
+# handler must open exactly one scope and never a second one on the error path.
 # --------------------------------------------------------------------------
 @pytest.mark.asyncio
 class TestPatternA_RequestsCategoryFilter:
+    @staticmethod
+    def _scope_factory(closed, opens):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_scope():
+            opens.append(1)
+            db = MagicMock()
+            try:
+                yield db
+            finally:
+                closed.append(1)
+
+        return fake_scope
+
     async def test_happy_path_closes_single_session(self):
         from uk_management_bot.handlers import requests as mod
 
         cb = _callback()
         cb.data = "categoryfilter_electricity"
-        db = MagicMock()
+        closed, opens = [], []
 
-        with patch.object(mod, "get_db", side_effect=lambda: iter([db])) as p_get_db, \
+        with patch.object(mod, "session_scope", self._scope_factory(closed, opens)), \
              patch.object(mod, "get_user_language", return_value="ru"), \
              patch.object(mod, "show_my_requests", new=AsyncMock()):
             await mod.handle_category_filter(cb, state=MagicMock())
 
-        assert p_get_db.call_count == 1          # opened exactly once
-        db.close.assert_called_once()            # and closed
+        assert len(opens) == 1          # opened exactly once
+        assert len(closed) == 1         # and closed
 
     async def test_exception_path_closes_and_opens_no_second_session(self):
         from uk_management_bot.handlers import requests as mod
 
         cb = _callback()
         cb.data = "categoryfilter_electricity"
-        db = MagicMock()
+        closed, opens = [], []
 
-        with patch.object(mod, "get_db", side_effect=lambda: iter([db])) as p_get_db, \
+        with patch.object(mod, "session_scope", self._scope_factory(closed, opens)), \
              patch.object(mod, "get_user_language", return_value="ru"), \
              patch.object(mod, "show_my_requests", new=AsyncMock(side_effect=RuntimeError("boom"))), \
              patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key):
             await mod.handle_category_filter(cb, state=MagicMock())
 
-        # Leak invariant: still exactly one session, and it was closed.
-        assert p_get_db.call_count == 1
-        db.close.assert_called_once()
+        # Leak invariant: still exactly one scope, and it was closed.
+        assert len(opens) == 1
+        assert len(closed) == 1
 
 
 # --------------------------------------------------------------------------

@@ -157,10 +157,13 @@ BASELINE: set[tuple[str, str, str]] = {
     # PR2a-6: request_reports.py:118,239 переведены на is_awaiting_applicant
     # (возвращённые исключены) — сняты из read-baseline.
     ('uk_management_bot/handlers/request_status_management.py', 'in_:Request', 'status'),
+    # PR-29.2 (ARCH-01): cmp:r/req/request — сравнения статуса на УЖЕ
+    # ЗАГРУЖЕННОМ объекте (выбор клавиатуры/ветки UI) — ОСТАЮТСЯ в хендлере.
     ('uk_management_bot/handlers/requests.py', 'cmp:r', 'status'),
     ('uk_management_bot/handlers/requests.py', 'cmp:req', 'status'),
     ('uk_management_bot/handlers/requests.py', 'cmp:request', 'status'),
-    ('uk_management_bot/handlers/requests.py', 'in_:Request', 'status'),
+    # PR-29.2: `Request.status.in_([...])` в запросах переехал из хендлера в
+    # services/request_handler_service.py (см. ниже) вместе с ORM-слоем.
     ('uk_management_bot/handlers/shifts.py', 'in_:Request', 'status'),
     # PR2-pre/2: unaccepted_requests.py ПОЛНОСТЬЮ мигрирован на
     # is_awaiting_applicant / awaiting_applicant_clause — сырых чтений не осталось.
@@ -171,6 +174,11 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/geo_optimizer.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/metrics_manager.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/recommendation_engine.py', 'cmp:Request', 'status'),
+    # PR-29.2 (ARCH-01): ORM resident/executor-хендлера заявок вынесен сюда из
+    # handlers/requests.py — `Request.status.in_([...])` в list/pagination/pool
+    # запросах. Это status-фильтры (NEW/active/archive-наборы), НЕ затрагиваемые
+    # канон-нормализацией A: значения статусов сохраняются по обе стороны cutover.
+    ('uk_management_bot/services/request_handler_service.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/request_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/request_service.py', 'cmp:request', 'status'),
     ('uk_management_bot/services/shift_analytics.py', 'cmp:r', 'status'),

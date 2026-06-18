@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.exceptions import TelegramBadRequest
@@ -5,11 +7,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import session_scope
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.request_assignment import RequestAssignment
+from uk_management_bot.services.request_handler_service import RequestHandlerService
 import re
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 
@@ -68,6 +69,23 @@ CREATE_REQUEST_TEXTS = get_create_request_texts()
 MY_REQUESTS_TEXTS = get_my_requests_texts()
 GROUP_POOL_TEXTS = get_group_pool_texts()
 
+
+@contextmanager
+def _db_scope(db):
+    """Сессия для хендлера: инъецированная (владелец — вызывающий, НЕ закрываем
+    здесь) либо свежая через ``session_scope()`` (закроется на выходе).
+
+    CODE-04: заменяет ``db = next(get_db())`` + ``finally: db.close()``. Сохраняет
+    seam внедрения ``db`` в тестах (близкий к исходному: переданный db не трогаем,
+    а если db нет — берём и гарантированно закрываем).
+    """
+    if db is not None:
+        yield db
+    else:
+        with session_scope() as scoped:
+            yield scoped
+
+
 # Вспомогательные функции для улучшенной обработки ошибок и UX
 
 async def _get_user_language(message: Message = None, callback: CallbackQuery = None, user_id: int = None) -> str:
@@ -96,16 +114,14 @@ async def _get_user_language(message: Message = None, callback: CallbackQuery = 
         
         # Используем язык из базы данных (приоритет над language_code из Telegram)
         if target_user_id:
-            db = next(get_db())
-            try:
-                from uk_management_bot.utils.helpers import get_user_language
-                lang = get_user_language(target_user_id, db)
-                if lang and lang in ['ru', 'uz']:
-                    return lang
-            except Exception as e:
-                logger.warning(f"Failed to get user language from DB for {target_user_id}: {e}")
-            finally:
-                db.close()
+            with _db_scope(None) as db:
+                try:
+                    from uk_management_bot.utils.helpers import get_user_language
+                    lang = get_user_language(target_user_id, db)
+                    if lang and lang in ['ru', 'uz']:
+                        return lang
+                except Exception as e:
+                    logger.warning(f"Failed to get user language from DB for {target_user_id}: {e}")
         
         # Fallback: используем language_code из Telegram
         if message:
@@ -225,19 +241,15 @@ def _load_user_request_addresses(telegram_id: int):
     Единый источник правил — resolve_request_address. Возвращает dict
     {yards, buildings, apartments} или None, если пользователь не найден.
     """
-    from uk_management_bot.database.models.user import User
     from uk_management_bot.services.request_address import (
         list_available_request_addresses_sync,
     )
 
-    db = next(get_db())
-    try:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    with _db_scope(None) as db:
+        user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
         if not user:
             return None
         return list_available_request_addresses_sync(db, user.id)
-    finally:
-        db.close()
 
 
 def _has_any_address(addresses: Optional[dict]) -> bool:
@@ -264,32 +276,27 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
         return
 
     # Проверяем наличие телефона у пользователя
-    from uk_management_bot.database.session import get_db
-    from uk_management_bot.database.models.user import User
-
-    db = next(get_db())
     try:
-        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        # Approved-applicant гейт (план «Обходчик»): applicant-flow стал
-        # role-gated. Менеджер/обходчик заводят заявки своими путями. Гейт —
-        # ЖЁСТКИЙ: при отсутствии юзера/ошибке БД не входим в FSM (fail-closed).
-        if user is None:
-            await message.answer(get_text("requests.applicant_only", language=lang))
-            return
-        from uk_management_bot.api.dependencies import _parse_user_roles
-        user_roles = _parse_user_roles(user)
-        if "applicant" not in user_roles or user.status != "approved":
-            await message.answer(get_text("requests.applicant_only", language=lang))
-            return
-        if not user.phone:
-            await message.answer(get_text("requests.phone_required", language=lang))
-            return
+        with _db_scope(None) as db:
+            user = RequestHandlerService(db).get_user_by_telegram_id(message.from_user.id)
+            # Approved-applicant гейт (план «Обходчик»): applicant-flow стал
+            # role-gated. Менеджер/обходчик заводят заявки своими путями. Гейт —
+            # ЖЁСТКИЙ: при отсутствии юзера/ошибке БД не входим в FSM (fail-closed).
+            if user is None:
+                await message.answer(get_text("requests.applicant_only", language=lang))
+                return
+            from uk_management_bot.api.dependencies import _parse_user_roles
+            user_roles = _parse_user_roles(user)
+            if "applicant" not in user_roles or user.status != "approved":
+                await message.answer(get_text("requests.applicant_only", language=lang))
+                return
+            if not user.phone:
+                await message.answer(get_text("requests.phone_required", language=lang))
+                return
     except Exception as e:
         logger.error(f"Ошибка проверки доступа пользователя {message.from_user.id}: {e}", exc_info=True)
         await message.answer(get_text("errors.default", language=lang))
         return
-    finally:
-        db.close()
 
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки (текст: '{message.text}')")
     await state.set_state(RequestStates.category)
@@ -349,15 +356,13 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
         return
 
-    from uk_management_bot.database.models.user import User
     from uk_management_bot.services.request_address import (
         resolve_request_address_sync,
         AddressResolutionError,
     )
 
-    db = next(get_db())
-    try:
-        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+    with _db_scope(None) as db:
+        user = RequestHandlerService(db).get_user_by_telegram_id(callback.from_user.id)
         if not user:
             await callback.answer(get_text("errors.default", language=lang), show_alert=True)
             return
@@ -368,8 +373,6 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
                 get_text("requests.address_not_available", language=lang), show_alert=True
             )
             return
-    finally:
-        db.close()
 
     await state.update_data(
         address=resolved.canonical_address,
@@ -670,8 +673,8 @@ async def save_request(
             return None
 
         # Получаем пользователя из базы данных по telegram_id
-        from uk_management_bot.database.models.user import User
-        user = db.query(User).filter(User.telegram_id == user_id).first()
+        service = RequestHandlerService(db)
+        user = service.get_user_by_telegram_id(user_id)
 
         if not user:
             logger.error(f"[SAVE_REQUEST] Пользователь с telegram_id {user_id} не найден в базе данных")
@@ -701,10 +704,13 @@ async def save_request(
         media_file_ids = data.get('media_files', [])
 
         logger.info("[SAVE_REQUEST] Создание объекта заявки...")
-        request = Request(
+        logger.info("[SAVE_REQUEST] Сохранение в БД...")
+        # Адрес и FK — из резолвера (сервер), а не из FSM/клиента. В модели
+        # media_files ожидается JSON (список) — храним file_ids как backup,
+        # основное хранилище Media Service.
+        request = service.create_request_record(
             request_number=request_number,
             category=data['category'],
-            # Адрес и FK — из резолвера (сервер), а не из FSM/клиента.
             address=resolved.canonical_address,
             description=data['description'],
             urgency=data['urgency'],
@@ -712,16 +718,11 @@ async def save_request(
             building_id=resolved.building_id,
             yard_id=resolved.yard_id,
             address_type=resolved.address_type,
-            # В модели media_files ожидается JSON (список), поэтому сохраняем список
-            # Теперь храним file_ids как backup, основное хранилище - Media Service
             media_files=list(media_file_ids),
             user_id=user.id,  # Используем id пользователя из базы данных
             source=source,
-            status='Новая'
+            status='Новая',
         )
-
-        logger.info("[SAVE_REQUEST] Сохранение в БД...")
-        db.add(request)
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan
         # requests (request row durable but outbox row missing on commit failure).
@@ -729,7 +730,7 @@ async def save_request(
         from uk_management_bot.services.webhook_payloads import emit_request_created_sync
         emit_request_created_sync(db, request, source=source)
 
-        db.commit()
+        service.commit()
 
         logger.info(f"[SAVE_REQUEST] ✅ Заявка {request_number} успешно сохранена")
 
@@ -946,7 +947,6 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
 
     if await _deny_if_pending_callback(callback, user_status):
         return
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка подтверждения для пользователя {callback.from_user.id}")
 
@@ -957,10 +957,10 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
             data = await state.get_data()
 
             # Создаем заявку в базе данных
-            db_session = next(get_db())
-            request_number = await save_request(
-                data, callback.from_user.id, db_session, callback.bot, source="bot", role="applicant"
-            )
+            with _db_scope(None) as db_session:
+                request_number = await save_request(
+                    data, callback.from_user.id, db_session, callback.bot, source="bot", role="applicant"
+                )
 
             if request_number:
                 # Get localized display values for category and urgency
@@ -1019,77 +1019,31 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
     except Exception as e:
         logger.error(f"Ошибка обработки подтверждения: {e}")
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 def _get_executor_requests_query(db_session: Session, user: User):
     """Заявки исполнителя — ТОЛЬКО его персональные (individual / взятые).
 
-    FEAT-группы: непривязанные group-назначения здесь больше НЕ показываем — они
-    в отдельном «пуле свободных» (`_get_group_pool_query`). Сюда заявка попадает
-    лишь ПОСЛЕ взятия (EXECUTOR_CLAIM конвертирует group→individual,
-    executor_id := взявший).
+    Тонкая обёртка над ``RequestHandlerService.get_executor_requests_query``
+    (ARCH-01: ORM в сервисе). Сохранена как публичная точка входа для
+    tests/services/test_group_pool_query.py (вызывает ``.all()`` на результате).
     """
-    from sqlalchemy.orm import aliased
-    assignment_alias = aliased(RequestAssignment)
-
-    query = db_session.query(Request).outerjoin(
-        assignment_alias, Request.request_number == assignment_alias.request_number
-    )
-    conditions = [
-        # активное individual-назначение на меня
-        (assignment_alias.status == "active") & (assignment_alias.executor_id == user.id),
-        # fallback: прямое Request.executor_id (заявки без RequestAssignment)
-        Request.executor_id == user.id,
-    ]
-    query = query.filter(or_(*conditions))
-
-    # Дедупликация: подзапрос по request_number, т.к. DISTINCT на всех колонках
-    # не работает с JSON полями в PostgreSQL
-    request_numbers_subq = query.with_entities(Request.request_number).distinct().subquery()
-    return db_session.query(Request).filter(
-        Request.request_number.in_(db_session.query(request_numbers_subq.c.request_number))
-    )
+    return RequestHandlerService(db_session).get_executor_requests_query(user)
 
 
 def _get_group_pool_query(db_session: Session, user: User):
     """FEAT-группы: пул «свободных» group-заявок для исполнителя.
 
-    Видны ТОЛЬКО дежурному сейчас (on-shift): заявки «В работе» с активным
-    group-назначением по его специализации и БЕЗ исполнителя (executor_id NULL).
-    Не на смене / без специализаций → пустой набор.
+    Тонкая обёртка над ``RequestHandlerService.get_group_pool_query`` (ARCH-01:
+    ORM в сервисе). Сохранена как публичная точка входа для
+    tests/services/test_group_pool_query.py.
     """
-    from sqlalchemy import false
-    from sqlalchemy.orm import aliased
-    from uk_management_bot.utils.shifts import is_on_shift_now_sync
-    from uk_management_bot.utils.specializations import parse_specializations
-
-    specs = parse_specializations(user)
-    if not specs or not is_on_shift_now_sync(db_session, user.id):
-        return db_session.query(Request).filter(false())
-
-    assignment_alias = aliased(RequestAssignment)
-    query = db_session.query(Request).join(
-        assignment_alias, Request.request_number == assignment_alias.request_number
-    ).filter(
-        Request.status.in_(["В работе"]),
-        assignment_alias.status == "active",
-        assignment_alias.assignment_type == "group",
-        assignment_alias.executor_id.is_(None),
-        assignment_alias.group_specialization.in_(specs),
-    )
-    request_numbers_subq = query.with_entities(Request.request_number).distinct().subquery()
-    return db_session.query(Request).filter(
-        Request.request_number.in_(db_session.query(request_numbers_subq.c.request_number))
-    )
+    return RequestHandlerService(db_session).get_group_pool_query(user)
 
 
 @router.callback_query(F.data.startswith("page_"))
 async def handle_pagination(callback: CallbackQuery, state: FSMContext):
     """Обработка пагинации списков заявок"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка пагинации для пользователя {callback.from_user.id}")
 
@@ -1101,42 +1055,29 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         active_status = data.get("my_requests_status")
 
         # Получаем список заявок пользователя с учетом фильтра
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        # Получаем пользователя из базы данных по telegram_id
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            # Получаем пользователя из базы данных по telegram_id
+            user = service.get_user_by_telegram_id(callback.from_user.id)
 
-        if not user:
-            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
-            return
+            if not user:
+                await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+                return
 
-        # Определяем активную роль пользователя
-        user_roles = user.roles.strip('[]').replace('"', '').split(', ') if user.roles else []
-        active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
+            # Определяем активную роль пользователя
+            user_roles = user.roles.strip('[]').replace('"', '').split(', ') if user.roles else []
+            active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
-        # Получаем заявки в зависимости от роли
-        if active_role == "executor":
-            # Для исполнителей используем вспомогательную функцию
-            query = _get_executor_requests_query(db_session, user)
-        else:
-            # Для заявителей и других ролей
-            query = db_session.query(Request).filter(Request.user_id == user.id)
-
-        # Применяем фильтр статуса
-        if active_status == "active":
-            query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
-        elif active_status == "archive":
-            query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-
-        user_requests = query.order_by(Request.created_at.desc()).all()
+            # Получаем заявки в зависимости от роли + status-фильтр (ORM в сервисе)
+            user_requests = service.list_pagination_requests(user, active_role, active_status)
 
         # Вычисляем общее количество страниц
         total_requests = len(user_requests)
         requests_per_page = 5
         total_pages = max(1, (total_requests + requests_per_page - 1) // requests_per_page)
-        
+
         if current_page < 1 or current_page > total_pages:
             await callback.answer(get_text("requests.page_not_found", language=lang), show_alert=True)
             return
@@ -1217,9 +1158,6 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки пагинации: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 @router.callback_query(
     # BUG-BOT-033 fix: replace fragile prefix-match + maintained exclusion list
@@ -1231,7 +1169,6 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
 )
 async def handle_view_request(callback: CallbackQuery, state: FSMContext):
     """Обработка просмотра деталей заявки"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка просмотра заявки для пользователя {callback.from_user.id}")
 
@@ -1239,100 +1176,90 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         request_number = callback.data.replace("view_request_", "").replace("view_", "")
 
         # Получаем заявку из базы данных
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
+            request = service.get_request_by_number(request_number)
 
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
+            if not request:
+                await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+                return
 
-        # Получаем пользователя и проверяем права доступа
-        from uk_management_bot.database.models.user import User
-        from uk_management_bot.database.models.request_assignment import RequestAssignment
-        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            # Получаем пользователя и проверяем права доступа
+            user = service.get_user_by_telegram_id(callback.from_user.id)
 
-        if not user:
-            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
-            return
+            if not user:
+                await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+                return
 
-        # Определяем роль пользователя
-        user_roles = []
-        if user.roles:
-            try:
-                import json
-                user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-            except (json.JSONDecodeError, TypeError):
-                user_roles = []
+            # Определяем роль пользователя
+            user_roles = []
+            if user.roles:
+                try:
+                    import json
+                    user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
+                except (json.JSONDecodeError, TypeError):
+                    user_roles = []
 
-        active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
+            active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
-        # Проверяем права доступа в зависимости от роли
-        has_access = False
+            # Проверяем права доступа в зависимости от роли
+            has_access = False
 
-        if active_role == "executor":
-            # BUG-BOT-004: прямое назначение через Request.executor_id (FK)
-            # имеет приоритет — если исполнитель назначен напрямую, он видит заявку
-            # независимо от наличия записей в RequestAssignment.
-            if request.executor_id == user.id:
-                has_access = True
-
-            # Для исполнителей: проверяем назначение
-            assignment = db_session.query(RequestAssignment).filter(
-                RequestAssignment.request_number == request.request_number,
-                RequestAssignment.status == "active"
-            ).first()
-
-            if not has_access and assignment:
-                # Индивидуальное назначение
-                if assignment.executor_id == user.id:
+            if active_role == "executor":
+                # BUG-BOT-004: прямое назначение через Request.executor_id (FK)
+                # имеет приоритет — если исполнитель назначен напрямую, он видит заявку
+                # независимо от наличия записей в RequestAssignment.
+                if request.executor_id == user.id:
                     has_access = True
-                # Групповое назначение по специализациям
-                elif assignment.assignment_type == "group":
-                    # Получаем ВСЕ специализации исполнителя
-                    executor_specializations = []
-                    if user.specialization:
-                        try:
-                            if isinstance(user.specialization, str) and user.specialization.startswith('['):
-                                executor_specializations = json.loads(user.specialization)
-                            else:
-                                executor_specializations = [user.specialization]
-                        except (json.JSONDecodeError, TypeError):
-                            executor_specializations = [user.specialization] if user.specialization else []
 
-                    # Проверяем, есть ли совпадение с хотя бы одной специализацией
-                    if assignment.group_specialization in executor_specializations:
+                # Для исполнителей: проверяем назначение
+                assignment = service.get_active_assignment(request.request_number)
+
+                if not has_access and assignment:
+                    # Индивидуальное назначение
+                    if assignment.executor_id == user.id:
                         has_access = True
-        else:
-            # Для заявителей и других ролей: проверяем владение заявкой или квартиры
-            if request.user_id == user.id:
-                has_access = True
-            elif request.apartment_id:
-                from uk_management_bot.database.models.user_apartment import UserApartment
-                is_resident = db_session.query(UserApartment).filter(
-                    UserApartment.user_id == user.id,
-                    UserApartment.apartment_id == request.apartment_id,
-                    UserApartment.status == "approved",
-                ).first()
-                if is_resident:
+                    # Групповое назначение по специализациям
+                    elif assignment.assignment_type == "group":
+                        # Получаем ВСЕ специализации исполнителя
+                        executor_specializations = []
+                        if user.specialization:
+                            try:
+                                if isinstance(user.specialization, str) and user.specialization.startswith('['):
+                                    executor_specializations = json.loads(user.specialization)
+                                else:
+                                    executor_specializations = [user.specialization]
+                            except (json.JSONDecodeError, TypeError):
+                                executor_specializations = [user.specialization] if user.specialization else []
+
+                        # Проверяем, есть ли совпадение с хотя бы одной специализацией
+                        if assignment.group_specialization in executor_specializations:
+                            has_access = True
+            else:
+                # Для заявителей и других ролей: проверяем владение заявкой или квартиры
+                if request.user_id == user.id:
                     has_access = True
+                elif request.apartment_id:
+                    if service.is_apartment_resident(user.id, request.apartment_id):
+                        has_access = True
 
-        if not has_access:
-            await callback.answer(get_text("requests.no_access_to_request", language=lang), show_alert=True)
-            return
+            if not has_access:
+                await callback.answer(get_text("requests.no_access_to_request", language=lang), show_alert=True)
+                return
 
-        # TASK 17 Issue #4: Use localized helper function for request details
-        # Replaces 18 lines of hard-coded Russian text with reusable helper
-        from uk_management_bot.utils.request_helpers import format_request_details
+            # TASK 17 Issue #4: Use localized helper function for request details
+            # Replaces 18 lines of hard-coded Russian text with reusable helper
+            from uk_management_bot.utils.request_helpers import format_request_details
 
-        message_text = format_request_details(
-            request=request,
-            language=lang,
-            show_executor=True,
-            active_role=active_role,
-            db_session=db_session
-        )
+            message_text = format_request_details(
+                request=request,
+                language=lang,
+                show_executor=True,
+                active_role=active_role,
+                db_session=db_session
+            )
 
         # Check media files for keyboard logic
         has_media = bool(request.media_files)
@@ -1415,9 +1342,6 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки просмотра заявки: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("back_list_"))
@@ -1438,118 +1362,65 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
         active_status = data.get("my_requests_status", "active")
         current_page = int(data.get("my_requests_page", 1))
 
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        user = db_session.query(User).filter(User.telegram_id == telegram_id).first()
+            user = service.get_user_by_telegram_id(telegram_id)
 
-        if not user:
-            await callback.message.answer(get_text("common.user_not_found", language=lang))
-            await callback.answer()
-            return
+            if not user:
+                await callback.message.answer(get_text("common.user_not_found", language=lang))
+                await callback.answer()
+                return
 
-        # Определяем роль пользователя
-        user_roles = []
-        if user.roles:
-            try:
-                import json
-                user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
-                user_roles = []
-
-        active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
-
-        # Получаем заявки в зависимости от роли
-        if active_role == "executor":
-            # Для исполнителей: показываем заявки, назначенные им или их специализации (если в активной смене)
-            from uk_management_bot.database.models.request_assignment import RequestAssignment
-            from uk_management_bot.database.models.shift import Shift
-            from datetime import datetime
-
-            # Получаем специализации исполнителя (может быть несколько)
-            executor_specializations = []
-            if user.specialization:
+            # Определяем роль пользователя
+            user_roles = []
+            if user.roles:
                 try:
                     import json
-                    if isinstance(user.specialization, str) and user.specialization.startswith('['):
-                        executor_specializations = json.loads(user.specialization)
-                    else:
-                        executor_specializations = [user.specialization]
+                    user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
                 except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"Ошибка парсинга специализации пользователя {user.id}: {e}")
-                    executor_specializations = [user.specialization] if user.specialization else []
+                    logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
+                    user_roles = []
 
-            # Проверяем, есть ли активная смена
-            now = datetime.now()
-            active_shift = db_session.query(Shift).filter(
-                Shift.user_id == user.id,
-                Shift.status == "active",
-                Shift.start_time <= now,
-                or_(Shift.end_time.is_(None), Shift.end_time >= now)
-            ).first()
+            active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
-            has_active_shift = active_shift is not None
+            # Получаем заявки в зависимости от роли
+            has_active_shift = False
+            executor_specializations = []
+            if active_role == "executor":
+                from datetime import datetime
 
-            # Запрос назначенных заявок
-            query = db_session.query(Request).join(RequestAssignment).filter(
-                RequestAssignment.status == "active"
+                # Получаем специализации исполнителя (может быть несколько)
+                if user.specialization:
+                    try:
+                        import json
+                        if isinstance(user.specialization, str) and user.specialization.startswith('['):
+                            executor_specializations = json.loads(user.specialization)
+                        else:
+                            executor_specializations = [user.specialization]
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Ошибка парсинга специализации пользователя {user.id}: {e}")
+                        executor_specializations = [user.specialization] if user.specialization else []
+
+                # Проверяем, есть ли активная смена
+                now = datetime.now()
+                has_active_shift = service.get_active_shift(user.id, now) is not None
+
+            # Подсчёт + БД-пагинация (ORM-логика в сервисе)
+            ITEMS_PER_PAGE = 5
+            offset = (current_page - 1) * ITEMS_PER_PAGE
+            total_requests, requests = service.paginate_back_to_list(
+                user=user,
+                active_role=active_role,
+                active_status=active_status,
+                has_active_shift=has_active_shift,
+                executor_specializations=executor_specializations,
+                offset=offset,
+                limit=ITEMS_PER_PAGE,
             )
 
-            # Фильтруем по назначениям
-            assignment_conditions = []
-
-            # 1. Индивидуальные назначения (ВСЕГДА показываем)
-            assignment_conditions.append(RequestAssignment.executor_id == user.id)
-
-            # 2. Групповые назначения по специализациям (ТОЛЬКО если в активной смене)
-            if has_active_shift and executor_specializations:
-                for spec in executor_specializations:
-                    assignment_conditions.append(
-                        (RequestAssignment.assignment_type == "group") &
-                        (RequestAssignment.group_specialization == spec)
-                    )
-
-            if assignment_conditions:
-                query = query.filter(or_(*assignment_conditions))
-            else:
-                query = query.filter(RequestAssignment.executor_id == user.id)
-
-        else:
-            # Для заявителей и других ролей: показываем их собственные заявки
-            query = db_session.query(Request).filter(Request.user_id == user.id)
-
-        # Фильтр по статусу: только для не-исполнителей
-        if active_role != "executor":
-            if active_status == "active":
-                query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
-            elif active_status == "archive":
-                query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-            elif active_status == "all":
-                # Все заявки: без фильтра по статусу
-                pass
-
-        # Сортировка и пагинация
-        if active_role != "executor" and active_status == "all":
-            from sqlalchemy import case
-            # Для "all" сортируем: сначала активные, потом архивные, внутри по дате
-            status_priority = case(
-                (Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]), 0),  # Активные
-                else_=1  # Архивные
-            )
-            query = query.order_by(status_priority, Request.created_at.desc())
-        else:
-            query = query.order_by(Request.created_at.desc())
-
-        # Подсчет общего количества
-        total_requests = query.count()
-
-        # Пагинация
-        ITEMS_PER_PAGE = 5
         total_pages = (total_requests + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
-        offset = (current_page - 1) * ITEMS_PER_PAGE
-
-        requests = query.offset(offset).limit(ITEMS_PER_PAGE).all()
 
         # TASK 17 Issue #5: Use localized helper functions for list formatting
         from uk_management_bot.utils.request_helpers import (
@@ -1662,35 +1533,31 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка возврата к списку: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 @router.callback_query(F.data.regexp(_EDIT_REQUEST_NUMBER_RE))
 async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
     """Обработка редактирования заявки"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         logger.info(f"Обработка редактирования заявки для пользователя {callback.from_user.id}")
 
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        request_number = callback.data.replace("edit_", "")
+            request_number = callback.data.replace("edit_", "")
 
-        # Получаем заявку из базы данных
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
+            # Получаем заявку из базы данных
+            request = service.get_request_by_number(request_number)
 
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
+            if not request:
+                await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+                return
 
-        # Проверяем права доступа (сравниваем с telegram_id пользователя)
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not user or request.user_id != user.id:
-            await callback.answer(get_text("requests.no_edit_permission", language=lang), show_alert=True)
-            return
+            # Проверяем права доступа (сравниваем с telegram_id пользователя)
+            user = service.get_user_by_telegram_id(callback.from_user.id)
+            if not user or request.user_id != user.id:
+                await callback.answer(get_text("requests.no_edit_permission", language=lang), show_alert=True)
+                return
 
         # Сохраняем номер заявки в FSM для редактирования
         await state.update_data(editing_request_number=request_number)
@@ -1707,9 +1574,6 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки редактирования заявки: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 # Менеджерское удаление заявки перенесено на префикс `mgr_delete_` и живёт в
 # handlers/admin.py::handle_delete_request (гейт ADMIN_USER_IDS + каскадное удаление).
@@ -1758,34 +1622,30 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.regexp(_CANCEL_REQUEST_NUMBER_RE.pattern))
 async def handle_cancel_request(callback: CallbackQuery, state: FSMContext):
     """Обработка отмены заявки. Срабатывает только на `cancel_<YYMMDD-NNN>`."""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         # Менеджер или владелец (в RequestService также есть проверка)
         request_number = callback.data.replace("cancel_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        service = RequestService(db_session)
-        result = service.update_status_by_actor(
-            request_number=request_number,
-            new_status="Отменена",
-            actor_telegram_id=callback.from_user.id,
-        )
-        if not result.get("success"):
-            error_msg = result.get("message", get_text("common.error", language=lang))
-            await callback.answer(error_msg, show_alert=True)
-            return
-        await callback.message.edit_text(
-            get_text("requests.request_cancelled", language=lang).format(request_number=request_number),
-            reply_markup=get_main_keyboard(language=lang)
-        )
+            service = RequestService(db_session)
+            result = service.update_status_by_actor(
+                request_number=request_number,
+                new_status="Отменена",
+                actor_telegram_id=callback.from_user.id,
+            )
+            if not result.get("success"):
+                error_msg = result.get("message", get_text("common.error", language=lang))
+                await callback.answer(error_msg, show_alert=True)
+                return
+            await callback.message.edit_text(
+                get_text("requests.request_cancelled", language=lang).format(request_number=request_number),
+                reply_markup=get_main_keyboard(language=lang)
+            )
     except Exception as e:
         logger.error(f"Ошибка обработки отмены заявки: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 # Менеджерское «Отклонить» перенесено на префикс `mgr_deny_` и живёт в
@@ -1807,11 +1667,10 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
     клавиатуру оценки 1–5★, дальнейшую приёмку выполняет
     request_acceptance.save_rating через run_command(APPLICANT_ACCEPT).
     """
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("approve_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         from uk_management_bot.keyboards.admin import get_rating_keyboard
         await callback.message.edit_text(
@@ -1823,9 +1682,6 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки подтверждения заявки: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 # ============================
@@ -1835,7 +1691,6 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext):
 @router.message(F.text.in_(MY_REQUESTS_TEXTS))
 async def show_my_requests(message: Message, state: FSMContext):
     """Показать список заявок пользователя (страница 1)"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         telegram_id = message.from_user.id
         # Читаем активный фильтр и страницу из FSM
@@ -1846,96 +1701,45 @@ async def show_my_requests(message: Message, state: FSMContext):
         # Убеждаемся, что статус установлен в FSM
         if not data.get("my_requests_status"):
             await state.update_data(my_requests_status="all")
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(message.from_user.id, db_session)
 
-        # Получаем пользователя из базы данных по telegram_id
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == telegram_id).first()
+            # Получаем пользователя из базы данных по telegram_id
+            user = service.get_user_by_telegram_id(telegram_id)
 
-        if not user:
-            await message.answer(get_text("common.user_not_found", language=lang))
-            return
-        
-        # Определяем роль пользователя
-        user_roles = []
-        if user.roles:
-            try:
-                import json
-                user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
-                user_roles = []
-        
-        active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
+            if not user:
+                await message.answer(get_text("common.user_not_found", language=lang))
+                return
 
-        # Логируем начало запроса
-        logger.info(f"show_my_requests: telegram_id={telegram_id}, active_role={active_role}, active_status={active_status}, user_id={user.id}")
+            # Определяем роль пользователя
+            user_roles = []
+            if user.roles:
+                try:
+                    import json
+                    user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
+                    user_roles = []
 
-        # Получаем заявки в зависимости от роли
-        if active_role == "executor":
-            # Для исполнителей используем вспомогательную функцию
-            # (работает только с новой системой через RequestAssignment)
-            query = _get_executor_requests_query(db_session, user)
-            logger.info(f"Исполнитель {user.id}: используется новая система назначений через RequestAssignment")
+            active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
-        else:
-            # Для заявителей и других ролей: показываем их собственные заявки
-            query = db_session.query(Request).filter(Request.user_id == user.id)
-            logger.info(f"Заявитель/другая роль {user.id}: показываем заявки с user_id={user.id}")
-        
-        # Фильтр статуса: применяем для ВСЕХ ролей (включая исполнителей)
-        if active_status == "active":
-            # Активные: рабочие статусы (ожидают действий)
-            # Для исполнителей: только "В работе", "Закуп", "Уточнение" (назначенные менеджером)
-            # "Новая" - ещё не назначена, "Принято" - уже принята заявителем (архив)
-            if active_role == "executor":
-                query = query.filter(Request.status.in_(["В работе", "Закуп", "Уточнение"]))
-                logger.info("Применен фильтр active_status='active' для исполнителя: статусы=['В работе', 'Закуп', 'Уточнение']")
-            else:
-                query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
-                logger.info("Применен фильтр active_status='active': статусы=['Новая', 'В работе', 'Закуп', 'Уточнение']")
-        elif active_status == "archive":
-            # Архив: финальные и завершенные статусы
-            # Для исполнителей: "Выполнена" (ждёт проверки менеджера), "Принято" (принята заявителем), "Отменена"
-            if active_role == "executor":
-                query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-                logger.info("Применен фильтр active_status='archive' для исполнителя: статусы=['Выполнена', 'Исполнено', 'Принято', 'Отменена']")
-            else:
-                query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-                logger.info("Применен фильтр active_status='archive': статусы=['Выполнена', 'Исполнено', 'Принято', 'Отменена']")
-        elif active_status == "all":
-            # Все заявки: без фильтра по статусу
-            logger.info("Применен фильтр active_status='all': показываем все заявки без фильтра статуса")
-        else:
-            logger.warning(f"Фильтр статуса НЕ применен! active_status={active_status}")
+            # Логируем начало запроса
+            logger.info(f"show_my_requests: telegram_id={telegram_id}, active_role={active_role}, active_status={active_status}, user_id={user.id}")
 
-        # Сортировка: для фильтра "all" сначала активные, потом архивные, внутри каждой группы по дате
-        if active_role != "executor" and active_status == "all":
-            from sqlalchemy import case
-            # Определяем приоритет статусов: активные (0) идут перед архивными (1)
-            status_priority = case(
-                (Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]), 0),  # Активные
-                else_=1  # Архивные
-            )
-            user_requests = query.order_by(status_priority, Request.created_at.desc()).all()
-        else:
-            # Для остальных случаев - просто по дате создания
-            user_requests = query.order_by(Request.created_at.desc()).all()
+            # Заявки в зависимости от роли + status-фильтр + сортировка (ORM в сервисе).
+            # Семантика идентична прежней (executor-active = В работе/Закуп/
+            # Уточнение; non-executor all = case-приоритет активных).
+            user_requests = service.list_my_requests(user, active_role, active_status)
 
-        # Добавляем логирование для отладки
-        logger.info(f"Пользователь {telegram_id} (роль: {active_role}) - найдено заявок: {len(user_requests)}")
-        if user_requests:
-            logger.info(f"Первые 3 заявки: {[(r.request_number, r.status, r.category) for r in user_requests[:3]]}")
-        if active_role == "executor" and len(user_requests) == 0:
-            # Проверяем, есть ли вообще назначения для сантехников
-            test_query = db_session.query(Request).join(RequestAssignment).filter(
-                RequestAssignment.status == "active",
-                RequestAssignment.assignment_type == "group",
-                RequestAssignment.group_specialization == "plumber",
-                Request.status.in_(["В работе", "Закуп", "Уточнение"])
-            ).all()
-            logger.info(f"Тестовый запрос для сантехников вернул {len(test_query)} заявок")
+            # Добавляем логирование для отладки
+            logger.info(f"Пользователь {telegram_id} (роль: {active_role}) - найдено заявок: {len(user_requests)}")
+            if user_requests:
+                logger.info(f"Первые 3 заявки: {[(r.request_number, r.status, r.category) for r in user_requests[:3]]}")
+            if active_role == "executor" and len(user_requests) == 0:
+                # Проверяем, есть ли вообще назначения для сантехников (диагностика)
+                test_count = service.count_plumber_group_test_requests()
+                logger.info(f"Тестовый запрос для сантехников вернул {test_count} заявок")
 
         total_requests = len(user_requests)
         requests_per_page = 5
@@ -2032,9 +1836,6 @@ async def show_my_requests(message: Message, state: FSMContext):
         logger.error(f"Ошибка отображения списка заявок для пользователя {message.from_user.id}: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("requests.error_loading_requests", language=lang))
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.message(Command("my_requests"))
@@ -2048,26 +1849,25 @@ async def cmd_my_requests(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("replyclarify_"))
 async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext):
     """Пользователь хочет ответить на запрос уточнения. Просим ввести текст."""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        request_number = callback.data.replace("replyclarify_", "")
-        # Показать текущий диалог из notes перед вводом
-        req = db_session.query(Request).filter(Request.request_number == request_number).first()
-        await state.update_data(reply_request_number=request_number)
-        await state.set_state(RequestStates.waiting_clarify_reply)
-        # Получаем пользователя из базы данных по telegram_id
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            request_number = callback.data.replace("replyclarify_", "")
+            # Показать текущий диалог из notes перед вводом
+            req = service.get_request_by_number(request_number)
+            await state.update_data(reply_request_number=request_number)
+            await state.set_state(RequestStates.waiting_clarify_reply)
+            # Получаем пользователя из базы данных по telegram_id
+            user = service.get_user_by_telegram_id(callback.from_user.id)
 
-        if req and user and req.user_id == user.id:
-            notes_text = (req.notes or "").strip()
-            if notes_text:
-                await callback.message.answer(get_text("requests.current_dialog", language=lang).format(notes=notes_text))
-            else:
-                await callback.message.answer(get_text("requests.dialog_empty", language=lang))
+            if req and user and req.user_id == user.id:
+                notes_text = (req.notes or "").strip()
+                if notes_text:
+                    await callback.message.answer(get_text("requests.current_dialog", language=lang).format(notes=notes_text))
+                else:
+                    await callback.message.answer(get_text("requests.dialog_empty", language=lang))
         await callback.message.answer(
             get_text("requests.enter_clarification_reply", language=lang),
             reply_markup=get_cancel_keyboard(language=lang),
@@ -2077,45 +1877,40 @@ async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext)
         logger.error(f"Ошибка старта ответа на уточнение: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang))
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.message(RequestStates.waiting_clarify_reply)
 async def handle_reply_clarify_text(message: Message, state: FSMContext):
     """Сохраняем ответ пользователя в notes без смены статуса."""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            handler_service = RequestHandlerService(db_session)
+            lang = get_user_language(message.from_user.id, db_session)
 
-        data = await state.get_data()
-        request_number = data.get("reply_request_number")
-        if not request_number:
-            await message.answer(get_text("requests.request_number_not_found", language=lang))
-            await state.clear()
-            return
+            data = await state.get_data()
+            request_number = data.get("reply_request_number")
+            if not request_number:
+                await message.answer(get_text("requests.request_number_not_found", language=lang))
+                await state.clear()
+                return
 
-        service = RequestService(db_session)
-        req = service.get_request_by_number(request_number)
-        # Получаем пользователя из базы данных по telegram_id
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == message.from_user.id).first()
+            service = RequestService(db_session)
+            req = service.get_request_by_number(request_number)
+            # Получаем пользователя из базы данных по telegram_id
+            user = handler_service.get_user_by_telegram_id(message.from_user.id)
 
-        if not req or not user or req.user_id != user.id:
-            await message.answer(get_text("requests.request_not_found_or_unavailable", language=lang))
-            await state.clear()
-            await message.answer(get_text("common.return_to_menu", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
-            return
-        existing = (req.notes or "").strip()
-        to_add = message.text.strip()
-        # Добавляем с ролью пользователя
-        user_prefix = get_text("requests.user_prefix", language=lang)
-        clarification_label = get_text("requests.clarification_label", language=lang)
-        new_notes = (existing + "\n" if existing else "") + f"[{user_prefix}] {clarification_label}: {to_add}"
-        req.notes = new_notes
-        db_session.commit()
+            if not req or not user or req.user_id != user.id:
+                await message.answer(get_text("requests.request_not_found_or_unavailable", language=lang))
+                await state.clear()
+                await message.answer(get_text("common.return_to_menu", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
+                return
+            existing = (req.notes or "").strip()
+            to_add = message.text.strip()
+            # Добавляем с ролью пользователя
+            user_prefix = get_text("requests.user_prefix", language=lang)
+            clarification_label = get_text("requests.clarification_label", language=lang)
+            new_notes = (existing + "\n" if existing else "") + f"[{user_prefix}] {clarification_label}: {to_add}"
+            handler_service.append_clarify_reply(req, new_notes)
         await message.answer(get_text("requests.reply_saved", language=lang), reply_markup=get_main_keyboard(language=lang))
         await state.clear()
     except Exception as e:
@@ -2123,15 +1918,11 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await state.clear()
         await message.answer(get_text("requests.reply_save_failed", language=lang), reply_markup=get_main_keyboard(language=lang))
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("status_"))
 async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора фильтра статуса для списка заявок"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         # Совместимость с тестами: поддержать текстовые статусы, но маппить на упрощённые "active"/"archive"/"all"
         raw = callback.data.replace("status_", "")
@@ -2145,39 +1936,20 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         await state.update_data(my_requests_status=choice, my_requests_page=1)
 
         # Собираем список заявок и клавиатуру, затем редактируем сообщение
-        db_session = next(get_db())
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
 
-        # Получаем пользователя из базы данных по telegram_id
-        from uk_management_bot.database.models.user import User
-        user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            # Получаем пользователя из базы данных по telegram_id
+            user = service.get_user_by_telegram_id(callback.from_user.id)
 
-        lang = get_user_language(callback.from_user.id, db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        if not user:
-            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
-            return
+            if not user:
+                await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+                return
 
-        query = db_session.query(Request).filter(Request.user_id == user.id)
-        if choice == "active" or choice == "В работе":
-            # Активные: рабочие статусы (ожидают действий)
-            query = query.filter(Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]))
-        elif choice == "archive":
-            # Архив: финальные и завершенные статусы
-            query = query.filter(Request.status.in_(["Выполнена", "Исполнено", "Принято", "Отменена"]))
-        elif choice == "all":
-            # Все заявки: без фильтра по статусу
-            pass
-
-        # Сортировка: для "all" сначала активные, потом архивные
-        if choice == "all":
-            from sqlalchemy import case
-            status_priority = case(
-                (Request.status.in_(["Новая", "В работе", "Закуп", "Уточнение"]), 0),  # Активные
-                else_=1  # Архивные
-            )
-            user_requests = query.order_by(status_priority, Request.created_at.desc()).all()
-        else:
-            user_requests = query.order_by(Request.created_at.desc()).all()
+            # Фильтр + сортировка списка (ORM в сервисе, семантика идентична).
+            user_requests = service.list_applicant_requests_filtered(user.id, choice)
         current_page = 1
         requests_per_page = 5
         total_pages = max(1, (len(user_requests) + requests_per_page - 1) // requests_per_page)
@@ -2261,9 +2033,8 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка применения фильтра статуса: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
+
+
 @router.callback_query(F.data.startswith("categoryfilter_"))
 async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
     """
@@ -2271,10 +2042,9 @@ async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
     
     TASK 17 Этап A: Теперь работает с внутренними ключами категорий вместо русских текстов.
     """
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         # TASK 17 Этап A: Извлекаем внутренний ключ категории (или "all")
         choice = callback.data.replace("categoryfilter_", "")
@@ -2288,18 +2058,14 @@ async def handle_category_filter(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка применения фильтра категории: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data == "filters_reset")
 async def handle_filters_reset(callback: CallbackQuery, state: FSMContext):
     """Сброс всех фильтров списка заявок"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         await state.update_data(
             my_requests_status="all",
@@ -2314,17 +2080,13 @@ async def handle_filters_reset(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка сброса фильтров: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("period_"))
 async def handle_period_filter(callback: CallbackQuery, state: FSMContext):
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         choice = callback.data.replace("period_", "")
         await state.update_data(my_requests_period=choice, my_requests_page=1)
@@ -2334,17 +2096,13 @@ async def handle_period_filter(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка применения фильтра периода: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executorfilter_"))
 async def handle_executor_filter(callback: CallbackQuery, state: FSMContext):
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         choice = callback.data.replace("executorfilter_", "")
         await state.update_data(my_requests_executor=choice, my_requests_page=1)
@@ -2354,9 +2112,6 @@ async def handle_executor_filter(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка применения фильтра исполнителя: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("requests.filter_error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
@@ -2396,17 +2151,19 @@ class ExecutorRequestStates(StatesGroup):
 @router.callback_query(F.data.startswith("executor_view_media_"))
 async def executor_view_media(callback: CallbackQuery):
     """Просмотр медиа-файлов заявки исполнителем"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_view_media_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
+            request = service.get_request_by_number(request_number)
 
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            return
+            if not request:
+                await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+                return
+
+            request_media_files = request.media_files
 
         # Отправляем медиа-файлы
         from aiogram.types import InputMediaPhoto, InputMediaVideo, InputMediaDocument
@@ -2414,9 +2171,9 @@ async def executor_view_media(callback: CallbackQuery):
 
         media_group = []
 
-        if request.media_files:
+        if request_media_files:
             try:
-                media_files = json.loads(request.media_files) if isinstance(request.media_files, str) else request.media_files
+                media_files = json.loads(request_media_files) if isinstance(request_media_files, str) else request_media_files
                 if media_files:
                     for media in media_files:
                         file_id = media.get('file_id') if isinstance(media, dict) else media
@@ -2441,9 +2198,6 @@ async def executor_view_media(callback: CallbackQuery):
         logger.error(f"Ошибка просмотра медиа исполнителем: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 def _run_executor_command(request_number: str, user_id, action, payload: dict,
@@ -2485,8 +2239,7 @@ def _build_group_pool_view(db_session: Session, user: User, lang: str):
         resolve_category_key, get_category_display)
     from uk_management_bot.utils.address_helpers import localize_address
 
-    pool = (_get_group_pool_query(db_session, user)
-            .order_by(Request.created_at.desc()).all())
+    pool = RequestHandlerService(db_session).list_group_pool(user)
     title = get_text("requests.group_pool_title", language=lang) or "🆓 Свободные заявки"
     if not pool:
         empty = get_text("requests.group_pool_empty", language=lang) or "Свободных заявок нет"
@@ -2520,23 +2273,19 @@ async def _render_group_pool(message: Message, db_session: Session,
 @router.message(F.text.in_(GROUP_POOL_TEXTS))
 async def show_group_pool_message(message: Message, state: FSMContext):
     """FEAT-группы: реплай-кнопка «🆓 Свободные заявки» (исполнитель) → пул."""
-    db_session = None
     try:
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
-        user = db_session.query(User).filter(
-            User.telegram_id == message.from_user.id).first()
-        if not user:
-            await message.answer(get_text("common.user_not_found", language=lang))
-            return
-        text, kb = _build_group_pool_view(db_session, user, lang)
-        await message.answer(text, reply_markup=kb)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(message.from_user.id, db_session)
+            user = RequestHandlerService(db_session).get_user_by_telegram_id(
+                message.from_user.id)
+            if not user:
+                await message.answer(get_text("common.user_not_found", language=lang))
+                return
+            text, kb = _build_group_pool_view(db_session, user, lang)
+            await message.answer(text, reply_markup=kb)
     except Exception as e:
         logger.error(f"Ошибка показа пула (реплай): {e}")
         await message.answer(get_text("common.error", language="ru"))
-    finally:
-        if db_session:
-            db_session.close()
 
 
 async def _notify_group_pool_claimed(db_session: Session, request_number: str,
@@ -2551,9 +2300,8 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
         from uk_management_bot.utils.shifts import is_on_shift_now_sync
         from uk_management_bot.utils.specializations import parse_specializations
 
-        assignment = db_session.query(RequestAssignment).filter(
-            RequestAssignment.request_number == request_number,
-            RequestAssignment.status == "active").first()
+        service = RequestHandlerService(db_session)
+        assignment = service.get_active_assignment(request_number)
         spec = assignment.group_specialization if assignment else None
         if not spec:
             return
@@ -2561,7 +2309,7 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
         if bot is None:
             return
         claimer_name = claimer.first_name or str(claimer.id)
-        for ex in db_session.query(User).filter(User.status == "approved").all():
+        for ex in service.list_approved_users():
             if ex.id == claimer.id or not ex.telegram_id:
                 continue
             if ROLE_EXECUTOR not in get_user_roles(ex):
@@ -2584,23 +2332,19 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
 @router.callback_query(F.data == "group_pool")
 async def show_group_pool(callback: CallbackQuery, state: FSMContext):
     """FEAT-группы: открыть пул «свободных» group-заявок (только дежурным)."""
-    db_session = None
     try:
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        user = db_session.query(User).filter(
-            User.telegram_id == callback.from_user.id).first()
-        if not user:
-            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
-            return
-        await _render_group_pool(callback.message, db_session, user, lang)
-        await callback.answer()
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
+            user = RequestHandlerService(db_session).get_user_by_telegram_id(
+                callback.from_user.id)
+            if not user:
+                await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+                return
+            await _render_group_pool(callback.message, db_session, user, lang)
+            await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка показа пула свободных заявок: {e}")
         await callback.answer(get_text("common.error", language="ru"), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("claim_request_"))
@@ -2611,51 +2355,46 @@ async def claim_group_request(callback: CallbackQuery, state: FSMContext):
     пула, у взявшего появляются рабочие действия. NotAuthorized → «уже взято».
     """
     from uk_management_bot.utils.request_workflow import Action
-    db_session = None
     try:
         request_number = callback.data.replace("claim_request_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
-        user = db_session.query(User).filter(
-            User.telegram_id == callback.from_user.id).first()
-        if not user:
-            await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
-            return
-        _outcome, error_key = _run_executor_command(
-            request_number, user.id, Action.EXECUTOR_CLAIM, {}, callback.id)
-        if error_key is not None:
-            # В контексте взятия NotAuthorized/конфликт = заявку уже взяли.
-            if error_key in ("requests.executor_not_authorized",
-                             "requests.executor_status_conflict"):
-                msg = get_text("requests.request_already_claimed", language=lang) \
-                    or "Заявку уже взяли"
-            else:
-                msg = get_text(error_key, language=lang)
-            await callback.answer(msg, show_alert=True)
-            # пул мог измениться — перерисовать
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
+            user = RequestHandlerService(db_session).get_user_by_telegram_id(
+                callback.from_user.id)
+            if not user:
+                await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
+                return
+            _outcome, error_key = _run_executor_command(
+                request_number, user.id, Action.EXECUTOR_CLAIM, {}, callback.id)
+            if error_key is not None:
+                # В контексте взятия NotAuthorized/конфликт = заявку уже взяли.
+                if error_key in ("requests.executor_not_authorized",
+                                 "requests.executor_status_conflict"):
+                    msg = get_text("requests.request_already_claimed", language=lang) \
+                        or "Заявку уже взяли"
+                else:
+                    msg = get_text(error_key, language=lang)
+                await callback.answer(msg, show_alert=True)
+                # пул мог измениться — перерисовать
+                await _render_group_pool(callback.message, db_session, user, lang)
+                return
+            await callback.answer(
+                get_text("requests.request_claimed_success", language=lang)
+                or "Вы взяли заявку в работу", show_alert=True)
+            await _notify_group_pool_claimed(db_session, request_number, user)
             await _render_group_pool(callback.message, db_session, user, lang)
-            return
-        await callback.answer(
-            get_text("requests.request_claimed_success", language=lang)
-            or "Вы взяли заявку в работу", show_alert=True)
-        await _notify_group_pool_claimed(db_session, request_number, user)
-        await _render_group_pool(callback.message, db_session, user, lang)
     except Exception as e:
         logger.error(f"Ошибка взятия заявки из пула: {e}")
         await callback.answer(get_text("common.error", language="ru"), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_purchase_"))
 async def executor_request_purchase(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Закуп'"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_purchase_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         await state.update_data(executor_request_number=request_number)
         await state.set_state(ExecutorRequestStates.waiting_purchase_comment)
@@ -2670,56 +2409,52 @@ async def executor_request_purchase(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка начала процесса закупа: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.message(ExecutorRequestStates.waiting_purchase_comment)
 async def executor_process_purchase_comment(message: Message, state: FSMContext):
     """Обработка комментария для закупа"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         data = await state.get_data()
         request_number = data.get("executor_request_number")
 
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(message.from_user.id, db_session)
 
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
+            request = service.get_request_by_number(request_number)
 
-        if not request:
-            await message.answer(get_text("requests.request_not_found", language=lang))
-            await state.clear()
-            return
+            if not request:
+                await message.answer(get_text("requests.request_not_found", language=lang))
+                await state.clear()
+                return
 
-        # Канонический переход (PR2a-5): EXECUTOR_PURCHASE (В работе→Закуп)
-        # через единый layer. Комментарий исполнителя → requested_materials
-        # (канон-поле). Активную смену + назначение проверяет run_command.
-        from uk_management_bot.database.models.user import User as _User
-        from uk_management_bot.utils.request_workflow import Action
-        actor = db_session.query(_User).filter(_User.telegram_id == message.from_user.id).first()
-        outcome, err = _run_executor_command(
-            request_number, actor.id if actor else None,
-            Action.EXECUTOR_PURCHASE, {"requested_materials": message.text},
-            command_id=f"exec-purchase-{request_number}-{message.message_id}",
-        )
-        if err:
-            await message.answer(get_text(err, language=lang))
-            await state.clear()
-            return
+            # Канонический переход (PR2a-5): EXECUTOR_PURCHASE (В работе→Закуп)
+            # через единый layer. Комментарий исполнителя → requested_materials
+            # (канон-поле). Активную смену + назначение проверяет run_command.
+            from uk_management_bot.utils.request_workflow import Action
+            actor = service.get_user_by_telegram_id(message.from_user.id)
+            outcome, err = _run_executor_command(
+                request_number, actor.id if actor else None,
+                Action.EXECUTOR_PURCHASE, {"requested_materials": message.text},
+                command_id=f"exec-purchase-{request_number}-{message.message_id}",
+            )
+            if err:
+                await message.answer(get_text(err, language=lang))
+                await state.clear()
+                return
 
-        # Best-effort post-commit: уведомление + ответ. run_command коммитит в
-        # отдельной сессии → expire_all сбрасывает identity-map middleware-сессии,
-        # иначе повторный query вернёт устаревший объект (не свежий).
-        db_session.expire_all()
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        from uk_management_bot.services.notification_service import async_notify_request_status_changed
-        try:
-            bot = message.bot
-            await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления: {e}")
+            # Best-effort post-commit: уведомление + ответ. run_command коммитит в
+            # отдельной сессии → expire_all сбрасывает identity-map middleware-сессии,
+            # иначе повторный query вернёт устаревший объект (не свежий).
+            service.expire_all()
+            request = service.get_request_by_number(request_number)
+            from uk_management_bot.services.notification_service import async_notify_request_status_changed
+            try:
+                bot = message.bot
+                await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления: {e}")
 
         await message.answer(
             get_text("requests.purchase_comment_saved", language=lang).format(request_number=request_number),
@@ -2733,19 +2468,15 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("common.error", language=lang))
         await state.clear()
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_complete_"))
 async def executor_complete_request(callback: CallbackQuery, state: FSMContext):
     """Исполнитель переводит заявку в 'Выполнено'"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_complete_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(callback.from_user.id, db_session)
 
         await state.update_data(executor_request_number=request_number, completion_media=[])
         await state.set_state(ExecutorRequestStates.waiting_completion_comment)
@@ -2760,21 +2491,17 @@ async def executor_complete_request(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка начала завершения заявки: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.message(ExecutorRequestStates.waiting_completion_comment)
 async def executor_process_completion_comment(message: Message, state: FSMContext):
     """Обработка комментария для завершения"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         data = await state.get_data()
         request_number = data.get("executor_request_number")
 
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(message.from_user.id, db_session)
 
         await state.update_data(completion_comment=message.text)
         await state.set_state(ExecutorRequestStates.waiting_completion_media)
@@ -2795,22 +2522,18 @@ async def executor_process_completion_comment(message: Message, state: FSMContex
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("common.error", language=lang))
         await state.clear()
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.message(ExecutorRequestStates.waiting_completion_media, F.photo | F.video | F.document)
 async def executor_collect_completion_media(message: Message, state: FSMContext):
     """Сбор медиа-файлов для завершения заявки"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         data = await state.get_data()
         completion_media = data.get("completion_media", [])
         request_number = data.get("executor_request_number")
 
-        db_session = next(get_db())
-        lang = get_user_language(message.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            lang = get_user_language(message.from_user.id, db_session)
 
         # Добавляем файл в список
         if message.photo:
@@ -2838,178 +2561,166 @@ async def executor_collect_completion_media(message: Message, state: FSMContext)
         logger.error(f"Ошибка сбора медиа для завершения: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await message.answer(get_text("common.error", language=lang))
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_finish_completion_"))
 async def executor_finish_completion(callback: CallbackQuery, state: FSMContext):
     """Финализация завершения заявки"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_finish_completion_", "")
         data = await state.get_data()
         completion_comment = data.get("completion_comment", "")
         completion_media = data.get("completion_media", [])
 
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
+            request = service.get_request_by_number(request_number)
 
-        if not request:
-            await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
-            await state.clear()
-            return
+            if not request:
+                await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+                await state.clear()
+                return
 
-        # Загружаем медиа-файлы в Media Service (если есть)
-        media_service_files = []
-        if completion_media:
-            from uk_management_bot.utils.media_helpers import upload_report_file_to_media_service
-            bot = callback.bot
+            # Загружаем медиа-файлы в Media Service (если есть)
+            media_service_files = []
+            if completion_media:
+                from uk_management_bot.utils.media_helpers import upload_report_file_to_media_service
+                bot = callback.bot
 
-            # Получаем user_id для uploaded_by
-            from uk_management_bot.database.models.user import User
-            user = db_session.query(User).filter(User.telegram_id == callback.from_user.id).first()
-            uploaded_by = user.id if user else None
+                # Получаем user_id для uploaded_by
+                user = service.get_user_by_telegram_id(callback.from_user.id)
+                uploaded_by = user.id if user else None
 
-            logger.info(f"Загрузка {len(completion_media)} файлов в Media Service для заявки {request_number}")
+                logger.info(f"Загрузка {len(completion_media)} файлов в Media Service для заявки {request_number}")
 
-            for idx, media_item in enumerate(completion_media, 1):
-                file_id = media_item.get("file_id")
-                file_type = media_item.get("type", "photo")
+                for idx, media_item in enumerate(completion_media, 1):
+                    file_id = media_item.get("file_id")
+                    file_type = media_item.get("type", "photo")
 
-                # Определяем report_type на основе типа файла
-                if file_type == "video":
-                    report_type = "completion_video"
-                elif file_type == "document":
-                    report_type = "completion_document"
-                else:
-                    report_type = "completion_photo"
-
-                try:
-                    result = await upload_report_file_to_media_service(
-                        bot=bot,
-                        file_id=file_id,
-                        request_number=request_number,
-                        report_type=report_type,
-                        description=f"Report #{idx}",
-                        uploaded_by=uploaded_by
-                    )
-
-                    if result:
-                        media_service_files.append({
-                            "media_id": result["media_file"]["id"],
-                            "file_url": result["media_file"]["file_url"],
-                            "type": file_type
-                        })
-                        logger.info(f"Файл #{idx} загружен в Media Service: media_id={result['media_file']['id']}")
+                    # Определяем report_type на основе типа файла
+                    if file_type == "video":
+                        report_type = "completion_video"
+                    elif file_type == "document":
+                        report_type = "completion_document"
                     else:
-                        logger.warning(f"Не удалось загрузить файл #{idx} в Media Service")
+                        report_type = "completion_photo"
 
-                except Exception as e:
-                    logger.error(f"Ошибка загрузки файла #{idx} в Media Service: {e}")
+                    try:
+                        result = await upload_report_file_to_media_service(
+                            bot=bot,
+                            file_id=file_id,
+                            request_number=request_number,
+                            report_type=report_type,
+                            description=f"Report #{idx}",
+                            uploaded_by=uploaded_by
+                        )
 
-        # Канонический переход (PR2a-5): EXECUTOR_COMPLETE (В работе→Выполнена)
-        # через единый layer. Медиа уже загружены в Media Service ВЫШЕ (сетевой
-        # I/O — вне транзакции). Отчёт → completion_report, файлы →
-        # completion_media (list; ридеры принимают и list, и json-строку).
-        from uk_management_bot.database.models.user import User as _User
-        from uk_management_bot.utils.request_workflow import Action
-        actor = db_session.query(_User).filter(_User.telegram_id == callback.from_user.id).first()
-        media_payload = media_service_files if media_service_files else completion_media
-        outcome, err = _run_executor_command(
-            request_number, actor.id if actor else None,
-            Action.EXECUTOR_COMPLETE,
-            {"completion_report": completion_comment or "",
-             "completion_media": media_payload or []},
-            command_id=f"exec-complete-{request_number}-{callback.id}",
-        )
-        if err:
-            await callback.answer(get_text(err, language=lang), show_alert=True)
+                        if result:
+                            media_service_files.append({
+                                "media_id": result["media_file"]["id"],
+                                "file_url": result["media_file"]["file_url"],
+                                "type": file_type
+                            })
+                            logger.info(f"Файл #{idx} загружен в Media Service: media_id={result['media_file']['id']}")
+                        else:
+                            logger.warning(f"Не удалось загрузить файл #{idx} в Media Service")
+
+                    except Exception as e:
+                        logger.error(f"Ошибка загрузки файла #{idx} в Media Service: {e}")
+
+            # Канонический переход (PR2a-5): EXECUTOR_COMPLETE (В работе→Выполнена)
+            # через единый layer. Медиа уже загружены в Media Service ВЫШЕ (сетевой
+            # I/O — вне транзакции). Отчёт → completion_report, файлы →
+            # completion_media (list; ридеры принимают и list, и json-строку).
+            from uk_management_bot.utils.request_workflow import Action
+            actor = service.get_user_by_telegram_id(callback.from_user.id)
+            media_payload = media_service_files if media_service_files else completion_media
+            outcome, err = _run_executor_command(
+                request_number, actor.id if actor else None,
+                Action.EXECUTOR_COMPLETE,
+                {"completion_report": completion_comment or "",
+                 "completion_media": media_payload or []},
+                command_id=f"exec-complete-{request_number}-{callback.id}",
+            )
+            if err:
+                await callback.answer(get_text(err, language=lang), show_alert=True)
+                await state.clear()
+                return
+
+            # Best-effort post-commit: уведомление. expire_all сбрасывает identity-map
+            # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
+            service.expire_all()
+            request = service.get_request_by_number(request_number)
+            from uk_management_bot.services.notification_service import async_notify_request_status_changed
+            try:
+                await async_notify_request_status_changed(callback.bot, db_session, request, outcome.old_status, outcome.public_status)
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления: {e}")
+
+            # Формируем сообщение с результатом
+            message_text = get_text("requests.request_completed_title", language=lang).format(request_number=request_number)
+            message_text += get_text("requests.comment_label", language=lang).format(comment=completion_comment)
+            if media_service_files:
+                message_text += get_text("requests.files_uploaded_to_media_service", language=lang).format(count=len(media_service_files))
+            elif completion_media:
+                message_text += get_text("requests.files_saved_locally", language=lang).format(count=len(completion_media))
+
+            await callback.message.edit_text(message_text, parse_mode="HTML")
+
             await state.clear()
-            return
-
-        # Best-effort post-commit: уведомление. expire_all сбрасывает identity-map
-        # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
-        db_session.expire_all()
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        from uk_management_bot.services.notification_service import async_notify_request_status_changed
-        try:
-            await async_notify_request_status_changed(callback.bot, db_session, request, outcome.old_status, outcome.public_status)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления: {e}")
-
-        # Формируем сообщение с результатом
-        message_text = get_text("requests.request_completed_title", language=lang).format(request_number=request_number)
-        message_text += get_text("requests.comment_label", language=lang).format(comment=completion_comment)
-        if media_service_files:
-            message_text += get_text("requests.files_uploaded_to_media_service", language=lang).format(count=len(media_service_files))
-        elif completion_media:
-            message_text += get_text("requests.files_saved_locally", language=lang).format(count=len(completion_media))
-
-        await callback.message.edit_text(message_text, parse_mode="HTML")
-
-        await state.clear()
-        await callback.answer(get_text("requests.request_completed_short", language=lang))
+            await callback.answer(get_text("requests.request_completed_short", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка финализации завершения: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
         await state.clear()
-    finally:
-        if db_session:
-            db_session.close()
 
 
 @router.callback_query(F.data.startswith("executor_work_"))
 async def executor_return_to_work(callback: CallbackQuery):
     """Возврат заявки в работу из статуса Закуп/Уточнение"""
-    db_session = None          # ARCH-013: гарантируем close в finally
     try:
         request_number = callback.data.replace("executor_work_", "")
-        db_session = next(get_db())
-        lang = get_user_language(callback.from_user.id, db_session)
+        with _db_scope(None) as db_session:
+            service = RequestHandlerService(db_session)
+            lang = get_user_language(callback.from_user.id, db_session)
 
-        # Канонический переход (PR2a-5): EXECUTOR_RESUME (Закуп/Уточнение→
-        # В работе) через единый layer. Исполнителю разрешён self-resume
-        # (продуктовое решение 2026-06-10); активную смену+назначение проверяет
-        # run_command.
-        from uk_management_bot.database.models.user import User as _User
-        from uk_management_bot.utils.request_workflow import Action
-        actor = db_session.query(_User).filter(_User.telegram_id == callback.from_user.id).first()
-        outcome, err = _run_executor_command(
-            request_number, actor.id if actor else None,
-            Action.EXECUTOR_RESUME, {},
-            command_id=f"exec-resume-{request_number}-{callback.id}",
-        )
-        if err:
-            await callback.answer(get_text(err, language=lang), show_alert=True)
-            return
+            # Канонический переход (PR2a-5): EXECUTOR_RESUME (Закуп/Уточнение→
+            # В работе) через единый layer. Исполнителю разрешён self-resume
+            # (продуктовое решение 2026-06-10); активную смену+назначение проверяет
+            # run_command.
+            from uk_management_bot.utils.request_workflow import Action
+            actor = service.get_user_by_telegram_id(callback.from_user.id)
+            outcome, err = _run_executor_command(
+                request_number, actor.id if actor else None,
+                Action.EXECUTOR_RESUME, {},
+                command_id=f"exec-resume-{request_number}-{callback.id}",
+            )
+            if err:
+                await callback.answer(get_text(err, language=lang), show_alert=True)
+                return
 
-        # Best-effort post-commit: уведомление. expire_all сбрасывает identity-map
-        # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
-        db_session.expire_all()
-        request = db_session.query(Request).filter(Request.request_number == request_number).first()
-        from uk_management_bot.services.notification_service import async_notify_request_status_changed
-        try:
-            bot = callback.bot
-            await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления: {e}")
+            # Best-effort post-commit: уведомление. expire_all сбрасывает identity-map
+            # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
+            service.expire_all()
+            request = service.get_request_by_number(request_number)
+            from uk_management_bot.services.notification_service import async_notify_request_status_changed
+            try:
+                bot = callback.bot
+                await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления: {e}")
 
-        await callback.message.edit_text(
-            get_text("requests.request_returned_to_work", language=lang).format(request_number=request_number),
-            parse_mode="HTML"
-        )
-        await callback.answer(get_text("requests.request_in_work", language=lang))
+            await callback.message.edit_text(
+                get_text("requests.request_returned_to_work", language=lang).format(request_number=request_number),
+                parse_mode="HTML"
+            )
+            await callback.answer(get_text("requests.request_in_work", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка возврата заявки в работу: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
         await callback.answer(get_text("common.error", language=lang), show_alert=True)
-    finally:
-        if db_session:
-            db_session.close()

@@ -10,6 +10,7 @@ BUG-BOT-005: executor can open own shift schedule / history; manager sees all;
              query is filtered by Shift.user_id (not telegram_id).
 """
 
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,6 +19,22 @@ from aiogram.types import CallbackQuery, User as TgUser
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _fake_scope(db):
+    """PR-29.2: stand-in for `session_scope()` yielding the injected mock db.
+
+    requests.handle_view_request now opens its session via
+    `with _db_scope(None)` → `session_scope()`; patch that with this factory so
+    the existing `db.query` side-effect mocks (request/user/assignment) still
+    drive the real RequestHandlerService ORM calls in the same order.
+    """
+
+    @contextmanager
+    def _scope():
+        yield db
+
+    return _scope
 
 
 def _make_tg_user(user_id=555):
@@ -269,7 +286,8 @@ class TestBugBot004ExecutorOwnRequest:
         db_session.query.side_effect = _query
 
         with patch(
-            "uk_management_bot.handlers.requests.get_db", return_value=iter([db_session])
+            "uk_management_bot.handlers.requests.session_scope",
+            new=_fake_scope(db_session),
         ), patch(
             "uk_management_bot.handlers.requests.get_user_language", return_value="ru"
         ), patch(
@@ -325,7 +343,8 @@ class TestBugBot004ExecutorOwnRequest:
         db_session.query.side_effect = _query
 
         with patch(
-            "uk_management_bot.handlers.requests.get_db", return_value=iter([db_session])
+            "uk_management_bot.handlers.requests.session_scope",
+            new=_fake_scope(db_session),
         ), patch(
             "uk_management_bot.handlers.requests.get_user_language", return_value="ru"
         ), patch(
