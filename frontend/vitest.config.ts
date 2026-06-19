@@ -39,15 +39,17 @@ export default mergeConfig(
         // target (see plan ratchet schedule). The pages/components denominator
         // is large, so the global is still low; each phase ratchets it up.
         //
-        // Phase 2 (stores + hooks): added hook coverage (useHasRole/usePageTitle/
-        // useMediaQuery/useEmployees + MSW data-hook paths), lifting the global
-        // off the Phase 0+1 floor. Floors sit a few points under the achieved
-        // global so a regression trips them without day-to-day flake.
+        // Phase 2 (stores + hooks): hook coverage (useHasRole/usePageTitle/
+        // useMediaQuery/useEmployees + MSW data-hook paths).
+        // Phase 3 (components): presentational components (addresses StatsBar/
+        // Breadcrumb/TabBar, shared EmptyState/LoadingSpinner). Floors sit a few
+        // points under the achieved global so a regression trips them without
+        // day-to-day flake.
         thresholds: {
-          lines: 20,
-          statements: 18,
-          functions: 13,
-          branches: 14,
+          lines: 22,
+          statements: 20,
+          functions: 15,
+          branches: 17,
         },
       },
     },
