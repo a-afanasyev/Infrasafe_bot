@@ -441,3 +441,37 @@ class TestCreateShiftFromTemplateWithExecutors:
 
         # Single executor → single shift attempted
         service._create_single_shift_from_template.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# QA-02 regression: get_optimization_recommendations must call the engine's
+# real method generate_comprehensive_recommendations, NOT the non-existent
+# get_shift_optimization_recommendations (которая роняла весь отчёт в {'error'}).
+# ---------------------------------------------------------------------------
+
+class TestGetOptimizationRecommendations:
+    def test_calls_generate_comprehensive_and_no_error(self):
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        service, db = _make_service()
+        # current_shifts query → пустой список (нам важен только блок 4)
+        db.query.return_value.filter.return_value.all.return_value = []
+        # изолируем приватные аналитические helper'ы
+        service._calculate_hour_coverage = MagicMock(return_value=list(range(24)))
+        service._calculate_load_balance_score = MagicMock(return_value=100)
+        service._calculate_specialization_coverage_score = MagicMock(return_value=100)
+        # движок: реальный метод существует, старый — нет
+        service.recommendation_engine.generate_comprehensive_recommendations = AsyncMock(
+            return_value={"recommendations": [{"description": "x"}]}
+        )
+
+        result = asyncio.get_event_loop().run_until_complete(
+            service.get_optimization_recommendations(date(2026, 6, 20))
+        )
+
+        assert "error" not in result
+        assert result["ai_recommendations"] == {"recommendations": [{"description": "x"}]}
+        service.recommendation_engine.generate_comprehensive_recommendations.assert_awaited_once()
+        # старый несуществующий метод НЕ вызывается
+        assert not service.recommendation_engine.get_shift_optimization_recommendations.called
