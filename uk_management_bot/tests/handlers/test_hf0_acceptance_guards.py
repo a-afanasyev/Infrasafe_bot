@@ -62,11 +62,11 @@ def db():
     session = SF()
     session.add_all([
         User(id=1, telegram_id=OWNER_TG, first_name="Owner",
-             role="applicant", roles='["applicant"]', status="approved", language="ru"),
+             roles='["applicant"]', status="approved", language="ru"),
         User(id=2, telegram_id=NEIGHBOR_TG, first_name="Neighbor",
-             role="applicant", roles='["applicant"]', status="approved", language="ru"),
+             roles='["applicant"]', status="approved", language="ru"),
         User(id=3, telegram_id=STRANGER_TG, first_name="Stranger",
-             role="applicant", roles='["applicant"]', status="approved", language="ru"),
+             roles='["applicant"]', status="approved", language="ru"),
         # Одобренное соседство: neighbor ↔ квартира заявки владельца
         UserApartment(user_id=2, apartment_id=APARTMENT_ID, status="approved"),
     ])

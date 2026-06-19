@@ -76,7 +76,6 @@ def init_admin_user() -> bool:
                 username=f"admin_{main_admin_id}",  # Будет обновлено при первом сообщении
                 first_name="Администратор",
                 last_name="",
-                role="manager",
                 roles='["applicant", "executor", "manager"]',  # ВСЕ роли для администратора
                 active_role="manager",
                 status="approved",  # ВАЖНО: approved для доступа к боту!
@@ -163,7 +162,6 @@ def init_all_admins() -> tuple[int, int]:
                         username=f"admin_{admin_id}",
                         first_name="Администратор",
                         last_name="",
-                        role="manager",
                         roles='["applicant", "executor", "manager"]',  # ВСЕ роли
                         active_role="manager",
                         status="approved",  # ВАЖНО: approved!

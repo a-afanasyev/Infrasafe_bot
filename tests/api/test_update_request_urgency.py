@@ -18,7 +18,7 @@ PATCH_URL = "/api/v2/requests/{number}"
 @pytest_asyncio.fixture
 async def executor_user(db_session):
     u = User(telegram_id=777001, username="exec", first_name="Exec", last_name="Test",
-             role="executor", roles='["executor"]', status="approved")
+             roles='["executor"]', status="approved")
     db_session.add(u)
     await db_session.commit()
     await db_session.refresh(u)
@@ -28,7 +28,7 @@ async def executor_user(db_session):
 @pytest_asyncio.fixture
 async def applicant_user(db_session):
     u = User(telegram_id=777002, username="appl", first_name="Appl", last_name="Test",
-             role="applicant", roles='["applicant"]', status="approved")
+             roles='["applicant"]', status="approved")
     db_session.add(u)
     await db_session.commit()
     await db_session.refresh(u)

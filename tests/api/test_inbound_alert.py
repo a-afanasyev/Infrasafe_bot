@@ -102,7 +102,7 @@ async def building(db_session):
     b = Building(address="ул. Тестовая, 1", yard_id=yard.id, is_active=True)
     sysuser = User(
         telegram_id=settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID,
-        first_name="InfraSafe", role="manager", roles='["manager"]',
+        first_name="InfraSafe", roles='["manager"]',
         active_role="manager", status="approved",
     )
     db_session.add_all([b, sysuser])

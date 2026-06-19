@@ -23,8 +23,8 @@ def db():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
     s = sessionmaker(bind=engine)()
-    s.add(User(id=1, telegram_id=1, first_name="U", role="applicant",
-               status="approved", language="ru"))
+    s.add(User(id=1, telegram_id=1, first_name="U", roles='["applicant"]',
+               active_role="applicant", status="approved", language="ru"))
     s.add(Request(request_number="260610-001", user_id=1, category="c",
                   description="d", urgency="low", status="Исполнено"))
     s.commit()

@@ -49,7 +49,8 @@ class AuthService:
                 username=username,
                 first_name=first_name,
                 last_name=last_name,
-                role="applicant",
+                roles='["applicant"]',
+                active_role="applicant",
                 status="pending"
             )
             self.db.add(user)

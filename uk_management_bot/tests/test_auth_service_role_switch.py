@@ -27,7 +27,6 @@ def test_role_switch_records_audit():
         # Создаём пользователя с двумя ролями и активной applicant
         user = User(
             telegram_id=999001,
-            role="applicant",
             roles='["applicant", "executor"]',
             active_role="applicant",
             status="approved",

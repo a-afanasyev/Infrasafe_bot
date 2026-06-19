@@ -19,7 +19,7 @@ def db():
     session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
     user = User(
         id=1, telegram_id=111, username="u", first_name="U",
-        role="applicant", status="approved", language="ru",
+        roles='["applicant"]', active_role="applicant", status="approved", language="ru",
     )
     session.add(user)
     session.commit()

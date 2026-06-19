@@ -48,7 +48,9 @@ def _make_executor(
     user.id = user_id
     user.first_name = first_name
     user.last_name = last_name
-    user.role = role
+    # PR-31/DB-060: legacy .role dropped; roles JSON + active_role drive logic.
+    user.roles = f'["{role}"]'
+    user.active_role = role
     user.status = status
     user.specialization = specialization
     user.rating = rating

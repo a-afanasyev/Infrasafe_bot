@@ -20,20 +20,18 @@ def test_auth_helpers():
     # Создаем тестовые пользователи
     test_users = [
         {
-            "name": "Администратор (старая система)",
+            "name": "Администратор (новая система)",
             "user": User(
                 telegram_id=1001,
-                role="admin",
                 status="approved",
-                roles=None,
-                active_role=None
+                roles='["admin"]',
+                active_role="admin"
             )
         },
         {
             "name": "Менеджер (новая система)",
             "user": User(
                 telegram_id=1002,
-                role="applicant",
                 status="approved",
                 roles='["applicant", "manager"]',
                 active_role="manager"
@@ -43,7 +41,6 @@ def test_auth_helpers():
             "name": "Исполнитель (смешанная система)",
             "user": User(
                 telegram_id=1003,
-                role="executor",
                 status="approved",
                 roles='["applicant", "executor"]',
                 active_role="executor"
@@ -53,7 +50,6 @@ def test_auth_helpers():
             "name": "Обычный пользователь",
             "user": User(
                 telegram_id=1004,
-                role="applicant",
                 status="approved",
                 roles='["applicant"]',
                 active_role="applicant"
@@ -63,7 +59,6 @@ def test_auth_helpers():
             "name": "Заблокированный пользователь",
             "user": User(
                 telegram_id=1005,
-                role="applicant",
                 status="blocked",
                 roles='["applicant"]',
                 active_role="applicant"
@@ -75,7 +70,6 @@ def test_auth_helpers():
         user = test_case["user"]
         print(f"\n👤 {test_case['name']}:")
         print(f"   Telegram ID: {user.telegram_id}")
-        print(f"   Старая роль: {user.role}")
         print(f"   Новые роли: {user.roles}")
         print(f"   Активная роль: {user.active_role}")
         print(f"   Статус: {user.status}")
@@ -90,7 +84,9 @@ def test_auth_helpers():
         print(f"   🔐 Доступ к админ панели: {'✅ Есть' if has_admin else '❌ Нет'}")
         
         # Проверяем логику
-        expected_admin = user.role in ['admin', 'manager'] or (user.roles and 'admin' in json.loads(user.roles) or 'manager' in json.loads(user.roles))
+        # PR-31/DB-060: legacy .role dropped — admin-доступ только по roles JSON.
+        parsed = json.loads(user.roles) if user.roles else []
+        expected_admin = bool('admin' in parsed or 'manager' in parsed)
         if has_admin == expected_admin:
             print("   ✅ Логика корректна")
         else:
@@ -119,7 +115,6 @@ def test_database_connection():
                 sample_user = db.query(User).first()
                 print("   📋 Структура пользователя:")
                 print(f"      - telegram_id: {sample_user.telegram_id}")
-                print(f"      - role: {sample_user.role}")
                 print(f"      - roles: {sample_user.roles}")
                 print(f"      - active_role: {sample_user.active_role}")
                 print(f"      - status: {sample_user.status}")
@@ -138,7 +133,6 @@ def test_middleware_simulation():
     # Создаем тестового пользователя
     user = User(
         telegram_id=9999,
-        role="manager",
         status="approved",
         roles='["applicant", "manager"]',
         active_role="manager"

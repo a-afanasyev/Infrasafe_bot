@@ -79,7 +79,8 @@ def db():
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
     session.add(User(id=1, telegram_id=1, first_name="U",
-                     role="applicant", status="approved", language="ru"))
+                     roles='["applicant"]', active_role="applicant",
+                     status="approved", language="ru"))
     session.commit()
     try:
         yield session

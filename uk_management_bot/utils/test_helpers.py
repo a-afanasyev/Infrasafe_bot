@@ -481,7 +481,8 @@ class TestFormatUserInfo:
         from datetime import datetime
         user = MagicMock()
         user.telegram_id = 99
-        user.role = "executor"
+        user.active_role = "executor"
+        user.roles = '["executor"]'
         user.status = "pending"
         user.language = "uz"
         user.created_at = datetime(2025, 3, 1)
@@ -493,7 +494,8 @@ class TestFormatUserInfo:
         from datetime import datetime
         user = MagicMock()
         user.telegram_id = 1
-        user.role = "super_admin"
+        user.active_role = "super_admin"
+        user.roles = '["super_admin"]'
         user.status = "approved"
         user.language = "ru"
         user.created_at = datetime(2025, 1, 1)

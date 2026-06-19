@@ -1,27 +1,23 @@
-"""ARCH-07 / PR-30 sentinel: доступ к legacy-роли ``User.role`` — только в резолвере.
+"""PR-31 / DB-060 sentinel: атрибута ``User.role`` БОЛЬШЕ НЕТ — ни одного ``.role``.
 
-DoD PR-30 (closure-plan §4, «архитектурное выпрямление»): обращения к устаревшей
-колонке ``User.role`` / атрибуту ``user.role`` в боевой логике должны идти через
-единый резолвер ``utils/auth_helpers`` (``get_user_roles`` / ``get_active_role`` /
-``legacy_role_filter`` / ``sync_legacy_role``). Разрешены только сам резолвер и
-модель ``database/models/user.py`` (определение колонки + ``__repr__``).
+PR-30 свёл доступ к legacy-роли к резолверу; PR-31 удалил саму колонку
+``users.role`` (миграция 022) и переключил нутро ``utils/auth_helpers``
+(legacy_role_filter / sync_legacy_role / legacy_primary_role) на ``roles`` +
+``active_role``. Теперь источник истины ролей — ``user.roles`` (JSON) и
+``user.active_role``; обращение к ``user.role`` упало бы в AttributeError.
 
-Гейт статический (AST): считаем именно узлы ``Attribute`` с ``.role`` — строки
-(локаль-ключи вида ``'employee_management.role'``) и комментарии не ловятся.
-Любой новый прямой доступ к legacy-роли вне резолвера ломает тест намеренно —
-сначала проведите его через ``auth_helpers``. В PR-31 (дроп колонки) тест
-обновляется/снимается вместе с удалением ``User.role``.
+Гейт статический (AST): считаем узлы ``Attribute`` с ``.role`` во ВСЁМ пакете
+(allowlist пуст — даже резолвер и модель больше не должны их иметь). Строки
+(локаль-ключи) и комментарии не ловятся. Исключение — ``.role`` на не-User
+владельцах (Pydantic-боди ``body.role`` и т.п.).
 """
 import ast
 import pathlib
 
 PKG_ROOT = pathlib.Path(__file__).resolve().parents[2] / "uk_management_bot"
 
-# Файлы, которым РАЗРЕШЕНО ссылаться на legacy-роль (резолвер + модель).
-ALLOWED = {
-    "utils/auth_helpers.py",
-    "database/models/user.py",
-}
+# PR-31: legacy-колонка удалена — ни одному файлу больше нельзя ссылаться на .role.
+ALLOWED: set[str] = set()
 
 # Владельцы ``.role``, не являющиеся колонкой User (Pydantic-боди запроса и т.п.).
 NON_USER_OWNERS = {"body"}
@@ -46,7 +42,7 @@ def _iter_modules():
         yield path.relative_to(PKG_ROOT).as_posix(), path
 
 
-def test_legacy_role_access_only_in_resolver():
+def test_no_legacy_role_attribute_access():
     offenders: dict[str, list[int]] = {}
     for rel, path in _iter_modules():
         if rel in ALLOWED:
@@ -66,7 +62,8 @@ def test_legacy_role_access_only_in_resolver():
             offenders[rel] = sorted(lines)
 
     assert not offenders, (
-        "Прямой доступ к legacy `User.role` вне резолвера (ARCH-07/PR-30). "
-        "Проведите через utils/auth_helpers: get_user_roles / get_active_role / "
-        f"legacy_role_filter / sync_legacy_role. Нарушители: {offenders}"
+        "Доступ к удалённой колонке `User.role` (DB-060/PR-31 — колонки больше нет, "
+        "это AttributeError в рантайме). Используйте user.roles / user.active_role "
+        "или резолвер utils/auth_helpers (get_user_roles / get_active_role / "
+        f"legacy_primary_role / legacy_role_filter). Нарушители: {offenders}"
     )

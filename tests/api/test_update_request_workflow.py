@@ -227,7 +227,7 @@ async def test_combine_status_and_urgency_rejected(client, db_session, applicant
 @pytest_asyncio.fixture
 async def applicant_user(db_session):
     u = User(telegram_id=777002, username="appl", first_name="A", last_name="B",
-             role="applicant", roles='["applicant"]', status="approved")
+             roles='["applicant"]', status="approved")
     db_session.add(u)
     await db_session.commit()
     await db_session.refresh(u)

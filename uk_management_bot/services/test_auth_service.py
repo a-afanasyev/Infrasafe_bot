@@ -99,7 +99,9 @@ class TestGetOrCreateUser:
         assert len(created) == 1
         obj = created[0]
         assert obj.telegram_id == 300
-        assert obj.role == "applicant"
+        # PR-31/DB-060: legacy .role dropped — new users get roles JSON + active_role.
+        assert obj.active_role == "applicant"
+        assert obj.roles == '["applicant"]'
         assert obj.status == "pending"
 
 
@@ -171,7 +173,8 @@ class TestAutoApproveUser:
 
         assert result is True
         assert user.status == "approved"
-        assert user.role == "executor"
+        # PR-31/DB-060: legacy .role dropped — approval adds the role to roles JSON.
+        assert "executor" in json.loads(user.roles)
 
     @pytest.mark.asyncio
     async def test_returns_false_for_invalid_role(self):
@@ -616,8 +619,12 @@ class TestStatusChecks:
 
     @pytest.mark.asyncio
     async def test_is_user_manager_broken_roles_json_warns_and_falls_back(self, caplog):
-        """ARCH-04: битый JSON ролей — warning + fallback к user.role, не молча."""
-        user = _make_user(status="approved", role="manager", roles="{broken json", active_role=None)
+        """ARCH-04: битый JSON ролей — warning + fallback, не молча.
+
+        PR-31/DB-060: legacy .role column dropped. Fallback now goes through
+        legacy_primary_role() → active_role, so we drive the fallback via active_role.
+        """
+        user = _make_user(status="approved", roles="{broken json", active_role="manager")
         db = _make_db(user=user)
 
         service = AuthService(db)
@@ -626,14 +633,21 @@ class TestStatusChecks:
         assert any("битый JSON" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_is_user_executor_broken_roles_json_warns_and_falls_back(self, caplog):
-        """ARCH-04: то же для is_user_executor."""
-        user = _make_user(status="approved", role="executor", roles="{broken json", active_role=None)
+    async def test_is_user_executor_broken_roles_json_warns(self, caplog):
+        """ARCH-04: то же для is_user_executor — битый JSON логируется, не молча.
+
+        PR-31/DB-060: legacy .role column dropped. is_user_executor checks
+        active_role=="executor" FIRST (short-circuit, no warning), поэтому здесь
+        active_role не executor — мы доходим до разбора roles, ловим битый JSON,
+        видим warning, и fallback через legacy_primary_role() даёт active_role,
+        которая не "executor" → False. Проверяем именно видимость warning.
+        """
+        user = _make_user(status="approved", roles="{broken json", active_role="applicant")
         db = _make_db(user=user)
 
         service = AuthService(db)
         with caplog.at_level("WARNING"):
-            assert await service.is_user_executor(100) is True
+            assert await service.is_user_executor(100) is False
         assert any("битый JSON" in r.message for r in caplog.records)
 
 

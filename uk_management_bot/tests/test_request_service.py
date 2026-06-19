@@ -34,7 +34,8 @@ class TestRequestService(unittest.TestCase):
             first_name="Test",
             last_name="User",
             phone="+998901234567",
-            role="applicant",
+            roles='["applicant"]',
+            active_role="applicant",
             status="approved",
             language="ru"
         )
