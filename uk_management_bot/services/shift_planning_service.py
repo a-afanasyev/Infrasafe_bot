@@ -800,7 +800,10 @@ class ShiftPlanningService:
                 })
             
             # 4. Используем рекомендательный движок для более глубокого анализа
-            engine_recommendations = await self.recommendation_engine.get_shift_optimization_recommendations(target_date)
+            # QA-02: ранее звался несуществующий метод get_shift_optimization_recommendations
+            # → AttributeError ловился общим except и весь отчёт превращался в {'error'}.
+            # Реальный публичный метод движка — generate_comprehensive_recommendations.
+            engine_recommendations = await self.recommendation_engine.generate_comprehensive_recommendations()
             if engine_recommendations:
                 recommendations['ai_recommendations'] = engine_recommendations
             
