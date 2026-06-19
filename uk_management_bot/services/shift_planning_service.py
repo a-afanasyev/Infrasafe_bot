@@ -1079,8 +1079,11 @@ class ShiftPlanningService:
             specialization_counts = {}
             
             for request in historical_requests:
-                if request.specialization:
-                    spec = request.specialization
+                # QA-NEW-01: модель Request имеет поле category, а не specialization —
+                # обращение к request.specialization бросало AttributeError на первой
+                # заявке → функция всегда возвращала [] (приоритет спец-ций не считался).
+                if request.category:
+                    spec = request.category
                     specialization_counts[spec] = specialization_counts.get(spec, 0) + 1
             
             # Сортируем по частоте

@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 from sqlalchemy import select
 from uk_management_bot.database.session import SessionLocal
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import sync_legacy_role
+from uk_management_bot.utils.auth_helpers import sync_legacy_role, parse_roles_safe
 from uk_management_bot.utils.structured_logger import get_logger
 
 logger = get_logger(__name__)
@@ -136,8 +136,12 @@ def init_all_admins() -> tuple[int, int]:
                 existing_user = session.execute(stmt).scalar_one_or_none()
 
                 if existing_user:
-                    # Проверяем, есть ли уже все роли
-                    current_roles = set((existing_user.roles or "").split(","))
+                    # Проверяем, есть ли уже все роли.
+                    # roles хранится JSON-строкой ('["applicant",...]') — наивный
+                    # split(",") давал {'["applicant"', ...} и issubset был ВСЕГДА
+                    # False → форс status="approved" при каждом старте. parse_roles_safe
+                    # корректно парсит и JSON, и CSV.
+                    current_roles = set(parse_roles_safe(existing_user.roles))
                     required_roles = {"applicant", "executor", "manager"}
 
                     if not required_roles.issubset(current_roles) or existing_user.status != "approved":
