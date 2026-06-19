@@ -48,11 +48,22 @@ class TestGetMyShiftsMenu:
             result = get_my_shifts_menu()
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_six_buttons(self):
+    def test_has_four_buttons(self):
+        # QA-01: было 6; убраны мёртвые кнопки time_tracking + my_statistics
+        # (callback'и без зарегистрированного хендлера — клик был no-op).
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.my_shifts import get_my_shifts_menu
             result = get_my_shifts_menu()
-        assert len(_flat_texts(result)) == 6
+        assert len(_flat_texts(result)) == 4
+
+    def test_no_dead_callbacks(self):
+        # QA-01: у этих callback'ов не было хендлера.
+        with patch(GET_TEXT_PATH, side_effect=_echo):
+            from uk_management_bot.keyboards.my_shifts import get_my_shifts_menu
+            result = get_my_shifts_menu()
+        cbs = _flat_cbs(result)
+        assert "my_statistics" not in cbs
+        assert "time_tracking" not in cbs
 
     def test_view_current_shifts_callback(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):

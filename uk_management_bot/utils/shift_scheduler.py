@@ -3,7 +3,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Optional, Dict, Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -332,7 +332,10 @@ class ShiftScheduler:
                 from uk_management_bot.database.models.user import User
 
                 # Ищем смены, которые начинаются в течение следующих 2 часов
-                now = datetime.now()
+                # QA-04: tz-aware now — Shift.start_time это timestamptz; naive
+                # datetime.now() ронял `shift.start_time - now` ("can't subtract
+                # offset-naive and offset-aware datetimes") → уведомления не уходили.
+                now = datetime.now(timezone.utc)
                 upcoming_threshold = now + timedelta(hours=2)
 
                 upcoming_shifts = db.query(Shift).join(User).filter(

@@ -424,12 +424,12 @@ class RecommendationEngine:
         ).all()
         
         for shift in shifts:
-            executor_id = shift.executor_id
+            executor_id = shift.user_id  # QA-02: Shift PK исполнителя — user_id, не executor_id
             if executor_id:
                 if executor_id not in executor_loads:
                     executor_loads[executor_id] = 0
                 executor_loads[executor_id] += shift.current_request_count or 0
-        
+
         if len(executor_loads) > 1:
             loads = list(executor_loads.values())
             avg_load = sum(loads) / len(loads)
@@ -476,10 +476,10 @@ class RecommendationEngine:
         
         executor_performance = {}
         for shift in shifts:
-            if shift.executor_id:
-                if shift.executor_id not in executor_performance:
-                    executor_performance[shift.executor_id] = []
-                executor_performance[shift.executor_id].append(shift.efficiency_score)
+            if shift.user_id:  # QA-02: user_id вместо несуществующего executor_id
+                if shift.user_id not in executor_performance:
+                    executor_performance[shift.user_id] = []
+                executor_performance[shift.user_id].append(shift.efficiency_score)
         
         low_performers = []
         for executor_id, scores in executor_performance.items():
@@ -732,12 +732,12 @@ class RecommendationEngine:
         shifts = self.db.query(Shift).filter(
             and_(
                 Shift.start_time >= start_date,
-                Shift.executor_id.isnot(None)
+                Shift.user_id.isnot(None)  # QA-02: user_id вместо несуществующего executor_id
             )
         ).all()
-        
+
         for shift in shifts:
-            executor_id = shift.executor_id
+            executor_id = shift.user_id  # QA-02
             if executor_id not in executor_loads:
                 executor_loads[executor_id] = 0
             executor_loads[executor_id] += shift.current_request_count or 0

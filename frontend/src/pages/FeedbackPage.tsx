@@ -9,6 +9,7 @@ import {
 import FeedbackDetailModal from '../components/feedback/FeedbackDetailModal'
 import { cn } from '@/lib/utils'
 import { Paperclip } from 'lucide-react'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 const TYPE_FILTERS: (FeedbackType | 'all')[] = ['all', 'complaint', 'wish']
 const STATUS_FILTERS: (FeedbackStatus | 'all')[] = ['all', 'new', 'in_review', 'resolved']
@@ -51,6 +52,7 @@ function FilterRow<T extends string>({
 
 export default function FeedbackPage() {
   const { t } = useTranslation()
+  usePageTitle(t('feedback.title')) // QA-03: иначе document.title оставался от предыдущей страницы
   const [typeFilter, setTypeFilter] = useState<FeedbackType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<FeedbackStatus | 'all'>('all')
   const [openId, setOpenId] = useState<number | null>(null)
