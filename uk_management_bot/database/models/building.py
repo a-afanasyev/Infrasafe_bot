@@ -13,7 +13,7 @@ class Building(Base):
     """
     __tablename__ = "buildings"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     address = Column(String(300), nullable=False, index=True)  # Полный адрес здания
     yard_id = Column(Integer, ForeignKey("yards.id", ondelete="CASCADE"), nullable=False, index=True)
 

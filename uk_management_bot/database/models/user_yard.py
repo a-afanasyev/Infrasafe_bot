@@ -21,7 +21,7 @@ class UserYard(Base):
     """
     __tablename__ = "user_yards"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     yard_id = Column(Integer, ForeignKey("yards.id", ondelete="CASCADE"), nullable=False, index=True)
 

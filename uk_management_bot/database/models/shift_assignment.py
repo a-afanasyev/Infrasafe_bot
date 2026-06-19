@@ -11,7 +11,7 @@ class ShiftAssignment(Base):
     
     __tablename__ = "shift_assignments"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # ========== ОСНОВНЫЕ СВЯЗИ ==========
     # Смена, к которой назначена заявка

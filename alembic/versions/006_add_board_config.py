@@ -9,8 +9,6 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
-
 revision: str = '006'
 down_revision: Union[str, None] = '005'
 branch_labels: Union[str, Sequence[str], None] = None
@@ -18,6 +16,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # DB-059: импорт app-кода внутри upgrade(), а не на module-level —
+    # иначе сбор ревизий алембиком падает ModuleNotFoundError вне installed package.
+    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+
     op.create_table(
         'board_config',
         sa.Column('id', sa.Integer(), primary_key=True),

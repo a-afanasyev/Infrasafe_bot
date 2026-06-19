@@ -8,7 +8,7 @@ class ShiftTransfer(Base):
     """Модель для передачи смен и заявок между исполнителями"""
     __tablename__ = "shift_transfers"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
 
     # Основная информация о передаче
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=False, index=True)

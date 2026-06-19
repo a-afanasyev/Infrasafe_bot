@@ -12,7 +12,7 @@ class Rating(Base):
         UniqueConstraint("request_number", name="uq_ratings_request_number"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с заявкой
     request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)

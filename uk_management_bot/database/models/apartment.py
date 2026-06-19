@@ -1,7 +1,7 @@
 """
 Модель квартиры
 """
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -13,7 +13,7 @@ class Apartment(Base):
     """
     __tablename__ = "apartments"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     building_id = Column(Integer, ForeignKey("buildings.id", ondelete="CASCADE"), nullable=False, index=True)
     apartment_number = Column(String(20), nullable=False, index=True)  # Номер квартиры
 
@@ -21,7 +21,7 @@ class Apartment(Base):
     entrance = Column(Integer, nullable=True)  # Номер подъезда
     floor = Column(Integer, nullable=True)     # Этаж
     rooms_count = Column(Integer, nullable=True)     # Количество комнат
-    area = Column(Float, nullable=True)  # Площадь квартиры (кв.м)
+    area = Column(Numeric(8, 2), nullable=True)  # Площадь квартиры (кв.м) — DB-104: numeric, не float
 
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False, index=True)

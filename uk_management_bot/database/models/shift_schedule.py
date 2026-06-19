@@ -10,7 +10,7 @@ class ShiftSchedule(Base):
     
     __tablename__ = "shift_schedules"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # ========== ОСНОВНАЯ ИНФОРМАЦИЯ ==========
     # Дата, на которую создано расписание

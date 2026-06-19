@@ -24,7 +24,7 @@ class Request(Base):
     )
 
     # НОВЫЙ PRIMARY KEY - номер заявки в формате YYMMDD-NNN
-    request_number = Column(String(15), primary_key=True, index=True)
+    request_number = Column(String(15), primary_key=True)
     
     # Связь с пользователем (заявителем)
     # DB-050/052: index — заявки часто фильтруются/джойнятся по заявителю.

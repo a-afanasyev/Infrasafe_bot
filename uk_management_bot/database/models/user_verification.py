@@ -38,7 +38,7 @@ class UserDocument(Base):
     """Модель документов пользователя"""
     __tablename__ = "user_documents"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -69,7 +69,7 @@ class UserVerification(Base):
     """Модель процесса верификации пользователя"""
     __tablename__ = "user_verifications"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -101,7 +101,7 @@ class AccessRights(Base):
     """Модель прав доступа для подачи заявок"""
     __tablename__ = "access_rights"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

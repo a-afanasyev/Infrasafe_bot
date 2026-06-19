@@ -11,7 +11,7 @@ from uk_management_bot.database.session import Base
 class WebhookInbox(Base):
     __tablename__ = "webhook_inbox"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     event_id = Column(String(64), nullable=False, unique=True, index=True)
     event = Column(String(50), nullable=False, index=True)
     source_ip = Column(String(45), nullable=True)

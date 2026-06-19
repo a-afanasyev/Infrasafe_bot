@@ -11,7 +11,7 @@ class QuarterlyPlan(Base):
     
     __tablename__ = "quarterly_plans"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Основная информация о плане
     year = Column(Integer, nullable=False)
@@ -130,7 +130,7 @@ class QuarterlyShiftSchedule(Base):
     
     __tablename__ = "quarterly_shift_schedules"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с квартальным планом
     quarterly_plan_id = Column(Integer, ForeignKey("quarterly_plans.id"), nullable=False)
@@ -209,7 +209,7 @@ class PlanningConflict(Base):
     
     __tablename__ = "planning_conflicts"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с квартальным планом
     quarterly_plan_id = Column(Integer, ForeignKey("quarterly_plans.id"), nullable=False)
