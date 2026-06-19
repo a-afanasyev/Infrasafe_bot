@@ -1,5 +1,5 @@
 """Webhook outbox — transactional outbox pattern for reliable webhook delivery."""
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Text, Index
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Text, Index, CheckConstraint
 from sqlalchemy.sql import func, text
 from uk_management_bot.database.session import Base
 
@@ -7,7 +7,7 @@ from uk_management_bot.database.session import Base
 class WebhookOutbox(Base):
     __tablename__ = "webhook_outbox"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     event_id = Column(String(36), nullable=False, unique=True, index=True)
     event = Column(String(50), nullable=False, index=True)
     endpoint = Column(String(200), nullable=False)
@@ -34,6 +34,11 @@ class WebhookOutbox(Base):
         Index("ix_webhook_outbox_pending", "created_at", postgresql_where=text("status = 'pending'")),
         # PR-5: reclaim-скан протухших in_flight по claimed_at.
         Index("ix_webhook_outbox_in_flight", "claimed_at", postgresql_where=text("status = 'in_flight'")),
+        # DB-057: статус — закрытое множество (pending → in_flight → sent/failed).
+        CheckConstraint(
+            "status IN ('pending', 'in_flight', 'sent', 'failed')",
+            name="ck_webhook_outbox_status",
+        ),
     )
 
     def __repr__(self):

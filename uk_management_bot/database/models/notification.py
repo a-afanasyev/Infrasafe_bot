@@ -16,7 +16,7 @@ class Notification(Base):
     """Модель уведомлений"""
     __tablename__ = "notifications"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # DB-051

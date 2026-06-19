@@ -28,7 +28,7 @@ class RequestAssignment(Base):
     )
 
     # Основные поля
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
     
     # Тип назначения

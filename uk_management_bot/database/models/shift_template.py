@@ -10,7 +10,7 @@ class ShiftTemplate(Base):
     
     __tablename__ = "shift_templates"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # ========== ОСНОВНАЯ ИНФОРМАЦИЯ ==========
     # Название шаблона

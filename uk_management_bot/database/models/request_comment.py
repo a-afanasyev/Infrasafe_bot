@@ -15,7 +15,7 @@ class RequestComment(Base):
     __tablename__ = "request_comments"
     
     # Основные поля
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     

@@ -20,7 +20,7 @@ class Yard(Base):
     __tablename__ = "yards"
 
     # Основные поля
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
 

@@ -6,7 +6,7 @@ from uk_management_bot.database.session import Base
 class Shift(Base):
     __tablename__ = "shifts"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Исполнитель
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

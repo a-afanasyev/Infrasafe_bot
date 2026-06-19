@@ -6,7 +6,7 @@ from uk_management_bot.database.session import Base
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # Пользователь, выполнивший действие
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

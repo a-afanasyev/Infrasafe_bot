@@ -43,6 +43,8 @@ def build_apartment_event_data(apartment: Apartment) -> dict:
         "entrance": apartment.entrance,
         "floor": apartment.floor,
         "rooms_count": apartment.rooms_count,
-        "area": apartment.area,
+        # DB-104: area теперь Numeric → Decimal; кастуем в float для JSON-сериализации
+        # события (EventBus/Redis json.dumps не умеет Decimal).
+        "area": float(apartment.area) if apartment.area is not None else None,
         "is_active": apartment.is_active,
     }
