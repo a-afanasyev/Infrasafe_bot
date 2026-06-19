@@ -35,14 +35,19 @@ export default mergeConfig(
           '**/*.d.ts',
           '**/*.test.*',
         ],
-        // TEST-068 ratchet — Phase 0+1 floor (pure-logic only; the pages/hooks/
-        // components denominator is large, so global is still low). Each later
-        // phase raises these toward the 80% target (see plan ratchet schedule).
+        // TEST-068 ratchet — coverage floor raised per phase toward the 80%
+        // target (see plan ratchet schedule). The pages/components denominator
+        // is large, so the global is still low; each phase ratchets it up.
+        //
+        // Phase 2 (stores + hooks): added hook coverage (useHasRole/usePageTitle/
+        // useMediaQuery/useEmployees + MSW data-hook paths), lifting the global
+        // off the Phase 0+1 floor. Floors sit a few points under the achieved
+        // global so a regression trips them without day-to-day flake.
         thresholds: {
-          lines: 4,
-          statements: 4,
-          functions: 3,
-          branches: 2,
+          lines: 20,
+          statements: 18,
+          functions: 13,
+          branches: 14,
         },
       },
     },
