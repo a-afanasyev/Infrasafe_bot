@@ -71,8 +71,8 @@ async def manager_user(db_session: AsyncSession):
         username="testmanager",
         first_name="Test",
         last_name="Manager",
-        role="manager",
         roles='["manager"]',
+        active_role="manager",
         status="approved",
     )
     db_session.add(user)
@@ -91,8 +91,8 @@ async def resident_user(db_session: AsyncSession):
         username="testresident",
         first_name="Resident",
         last_name="User",
-        role="applicant",
         roles='["applicant"]',
+        active_role="applicant",
         status="approved",
         phone="+79001234567",
     )

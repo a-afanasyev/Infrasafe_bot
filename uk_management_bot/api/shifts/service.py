@@ -134,7 +134,6 @@ async def create_employee(
         first_name=first_name,
         last_name=last_name,
         phone=phone,
-        role=role,
         roles=_json.dumps(roles_list),
         active_role=role,
         specialization=_json.dumps(specializations) if specializations else None,

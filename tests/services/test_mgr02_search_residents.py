@@ -30,10 +30,11 @@ def session():
 
 
 def _add(session, *, user_id, telegram_id, first_name="Ivan", roles='["applicant"]',
-         role="applicant", active_role="applicant", phone=None):
+         active_role="applicant", phone=None):
+    # PR-31/DB-060: legacy .role column dropped — roles JSON + active_role only.
     session.add(User(
         id=user_id, telegram_id=telegram_id, first_name=first_name,
-        roles=roles, role=role, active_role=active_role,
+        roles=roles, active_role=active_role,
         status="approved", language="ru", phone=phone,
     ))
     session.commit()
@@ -44,15 +45,18 @@ class TestSearchResidents:
         _add(session, user_id=1, telegram_id=101, roles='["applicant"]')
         _add(session, user_id=2, telegram_id=102, roles='["applicant", "executor"]')
         _add(session, user_id=3, telegram_id=103, roles='["executor"]',
-             role="executor", active_role="executor")
+             active_role="executor")
 
         ids = {u.id for u in UserManagementService(session).search_residents("Ivan")}
         assert ids == {1, 2}  # executor-only (id=3) excluded; applicant+executor included
 
-    def test_legacy_role_fallback_included(self, session):
-        _add(session, user_id=1, telegram_id=101, roles=None)  # legacy: role='applicant'
+    def test_user_without_roles_json_excluded(self, session):
+        # PR-31/DB-060: legacy .role column dropped — search is roles-JSON only.
+        # A user without roles JSON is no longer matched (old role-column fallback gone).
+        _add(session, user_id=1, telegram_id=101, roles=None)
+        _add(session, user_id=2, telegram_id=102, roles='["applicant"]')
         ids = {u.id for u in UserManagementService(session).search_residents("Ivan")}
-        assert ids == {1}
+        assert ids == {2}
 
     def test_search_by_phone(self, session):
         _add(session, user_id=1, telegram_id=101, first_name="Ivan", phone="+998901234567")

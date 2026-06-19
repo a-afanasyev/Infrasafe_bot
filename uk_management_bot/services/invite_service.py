@@ -372,7 +372,8 @@ class InviteService:
                 telegram_id=telegram_id,
                 first_name=first_name,
                 last_name=last_name,
-                role=invite_data["role"],
+                roles=json.dumps([invite_data["role"]]),
+                active_role=invite_data["role"],
                 specialization=specialization if invite_data["role"] == "executor" else None,
                 status="pending"
             )

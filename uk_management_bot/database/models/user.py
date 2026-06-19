@@ -12,11 +12,7 @@ class User(Base):
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
     
-    # Роль пользователя (историческое поле для совместимости): applicant | executor | manager
-    # В новой модели используем поля roles (JSON в TEXT) и active_role
-    role = Column(String(50), default="applicant", nullable=False)
-
-    # Новый формат ролей: список ролей в JSON (храним как TEXT для простоты в SQLite)
+    # Роли: список ролей в JSON (храним как TEXT для простоты в SQLite)
     # Пример значения: '["applicant", "executor"]'
     roles = Column(Text, nullable=True)
 
@@ -85,6 +81,6 @@ class User(Base):
 
     def __repr__(self):
         return (
-            f"<User(telegram_id={self.telegram_id}, role={self.role}, "
+            f"<User(telegram_id={self.telegram_id}, roles={self.roles}, "
             f"active_role={self.active_role}, status={self.status})>"
         )

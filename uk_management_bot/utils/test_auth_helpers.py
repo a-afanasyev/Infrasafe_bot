@@ -90,15 +90,18 @@ class TestGetUserRoles:
         result = get_user_roles(user)
         assert result == ["applicant", "executor"]
 
-    def test_fallback_to_role_field_when_roles_empty(self):
+    def test_no_role_fallback_when_roles_empty(self):
+        # PR-31/DB-060: legacy .role column dropped — get_user_roles no longer
+        # reads user.role. With empty roles the default is ["applicant"].
         user = self._make_user(roles=None, role="manager")
         result = get_user_roles(user)
-        assert result == ["manager"]
+        assert result == ["applicant"]
 
-    def test_fallback_to_role_field_when_roles_empty_string(self):
+    def test_no_role_fallback_when_roles_empty_string(self):
+        # PR-31/DB-060: no fallback to user.role; empty string → default applicant.
         user = self._make_user(roles="", role="executor")
         result = get_user_roles(user)
-        assert result == ["executor"]
+        assert result == ["applicant"]
 
     def test_default_applicant_when_both_empty(self):
         user = self._make_user(roles=None, role=None)
@@ -162,21 +165,24 @@ class TestHasAdminAccess:
         user = self._make_user(roles='["executor"]', role=None)
         assert has_admin_access(user=user) is False
 
-    def test_user_fallback_to_role_field_admin(self):
+    def test_user_no_role_fallback_admin(self):
+        # PR-31/DB-060: has_admin_access no longer reads user.role.
+        # roles empty → no admin access even if legacy role would have been admin.
         from uk_management_bot.utils.auth_helpers import has_admin_access
         user = self._make_user(roles=None, role="admin")
-        assert has_admin_access(user=user) is True
+        assert has_admin_access(user=user) is False
 
     def test_user_fallback_to_role_field_applicant_returns_false(self):
         from uk_management_bot.utils.auth_helpers import has_admin_access
         user = self._make_user(roles=None, role="applicant")
         assert has_admin_access(user=user) is False
 
-    def test_user_json_parse_error_falls_through(self):
+    def test_user_json_parse_error_no_role_fallback(self):
         from uk_management_bot.utils.auth_helpers import has_admin_access
         user = self._make_user(roles="invalid-json-{[}", role="manager")
-        # JSON parse fails, falls back to user.role == 'manager' → True
-        assert has_admin_access(user=user) is True
+        # PR-31/DB-060: JSON parse fails and there is no fallback to user.role
+        # anymore → access denied.
+        assert has_admin_access(user=user) is False
 
     def test_user_roles_list_directly_not_string(self):
         from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -219,16 +225,17 @@ class TestHasExecutorAccess:
         user = self._make_user(roles='["executor"]', active_role=None)
         assert has_executor_access(user=user) is True
 
-    def test_user_json_parse_error_falls_through(self):
+    def test_user_json_parse_error_no_role_fallback(self):
         from uk_management_bot.utils.auth_helpers import has_executor_access
         user = self._make_user(roles="not-json", role="executor", active_role=None)
-        # Falls back to user.role
-        assert has_executor_access(user=user) is True
+        # PR-31/DB-060: no fallback to user.role anymore → access denied.
+        assert has_executor_access(user=user) is False
 
-    def test_user_fallback_role_field_executor(self):
+    def test_user_no_role_fallback_executor(self):
+        # PR-31/DB-060: has_executor_access no longer reads user.role.
         from uk_management_bot.utils.auth_helpers import has_executor_access
         user = self._make_user(roles=None, role="executor", active_role=None)
-        assert has_executor_access(user=user) is True
+        assert has_executor_access(user=user) is False
 
 
 # ---------------------------------------------------------------------------

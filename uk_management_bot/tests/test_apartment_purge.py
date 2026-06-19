@@ -81,13 +81,12 @@ def seeded_apartment_with_request(session):
 
     # 4. User (заявитель)
     # NB: source-of-truth для роли в логике — active_role + roles JSON (CLAUDE.md).
-    # Колонка `role` здесь установлена ТОЛЬКО потому, что schema-level NOT NULL
-    # без server_default. Серверный default — отдельный шаг (out of scope FIX-003).
+    # Legacy-колонка `role` удалена (PR-31/DB-060) — больше не указываем её в INSERT.
     user_id = session.execute(
         text(
-            "INSERT INTO users (telegram_id, role, roles, active_role, status, language, "
+            "INSERT INTO users (telegram_id, roles, active_role, status, language, "
             "verification_status, created_at) "
-            "VALUES (:tg, 'applicant', '[\"applicant\"]', 'applicant', 'approved', 'ru', "
+            "VALUES (:tg, '[\"applicant\"]', 'applicant', 'approved', 'ru', "
             "'verified', now()) RETURNING id"
         ),
         # уникальный отрицательный telegram_id, чтобы не пересечься с реальными

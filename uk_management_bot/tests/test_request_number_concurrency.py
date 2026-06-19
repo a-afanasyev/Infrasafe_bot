@@ -63,9 +63,9 @@ def clean_fake_day(engine):
 def test_user_id(engine, clean_fake_day):
     with engine.begin() as conn:
         return conn.execute(text(
-            "INSERT INTO users (telegram_id, username, first_name, role, roles,"
+            "INSERT INTO users (telegram_id, username, first_name, roles,"
             " active_role, status, language, verification_status, created_at)"
-            " VALUES (:tg, :un, 'PR5', 'applicant', '[\"applicant\"]',"
+            " VALUES (:tg, :un, 'PR5', '[\"applicant\"]',"
             " 'applicant', 'approved', 'ru', 'pending', now()) RETURNING id"
         ), {"tg": int(uuid.uuid4().int % 10**9) + 10**10,
             "un": f"pr5-test-{uuid.uuid4().hex[:8]}"}).scalar_one()

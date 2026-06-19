@@ -5,6 +5,7 @@
 import json
 import logging
 from typing import Optional, List
+from sqlalchemy import or_
 from uk_management_bot.database.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -66,11 +67,7 @@ def has_admin_access(roles: Optional[List[str]] = None, user: Optional[User] = N
                     return True
             except Exception as e:
                 logger.warning(f"Ошибка парсинга ролей пользователя {user.telegram_id}: {e}")
-        
-        # Fallback к старому полю role
-        if user.role in ['admin', 'manager']:
-            return True
-    
+
     return False
 
 def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] = None) -> bool:
@@ -102,11 +99,7 @@ def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] 
                     return True
             except Exception as e:
                 logger.warning(f"Ошибка парсинга ролей пользователя {user.telegram_id}: {e}")
-        
-        # Fallback к старому полю role
-        if user.role in ['executor', 'manager', 'admin']:
-            return True
-    
+
     return False
 
 def get_user_roles(user: User) -> List[str]:
@@ -122,10 +115,6 @@ def get_user_roles(user: User) -> List[str]:
     try:
         # Используем безопасную функцию парсинга ролей
         roles_list = parse_roles_safe(user.roles)
-
-        # Fallback к старому полю role
-        if not roles_list and user.role:
-            roles_list = [user.role]
 
         return roles_list or ["applicant"]
 
@@ -184,37 +173,43 @@ async def check_user_role(user_id: int, required_role: str, db) -> bool:
 
 
 def legacy_role_filter(*roles: str):
-    """SQLAlchemy-выражение фильтра по устаревшей колонке ``User.role``.
+    """SQLAlchemy-выражение «у пользователя есть хотя бы одна из ролей».
 
-    ARCH-07 (PR-30): единственная точка обращения к legacy-колонке роли на
-    стороне запросов. Поведение байт-идентично прежним инлайновым
-    ``User.role == x`` / ``User.role.in_(...)``. PR-31 (дроп колонки) изменит
-    реализацию на JSON-массив ``roles`` — править нужно будет только здесь.
+    DB-060/AUD3-01 (PR-31): legacy-колонка ``User.role`` удалена. Фильтр теперь
+    идёт по JSON-массиву ``User.roles`` (хранится как TEXT, напр.
+    ``'["applicant", "executor"]'``) через ``LIKE '%"role"%'`` — кросс-диалектно
+    (sqlite-тесты + postgres-прод), матчит закавыченный токен роли. Это РАСШИРЯЕТ
+    прежнее ``role == x`` (одна основная роль) до «роль среди всех ролей» —
+    устаревшая колонка расходилась с реальным набором ролей (см. AUD3-01).
 
     Args:
-        *roles: одна или несколько ролей. Для одной — ``==``, для нескольких — ``IN``.
+        *roles: одна или несколько ролей; результат — ИЛИ по вхождению любой.
     """
-    if len(roles) == 1:
-        return User.role == roles[0]
-    return User.role.in_(list(roles))
+    clauses = [User.roles.like(f'%"{role}"%') for role in roles]
+    if len(clauses) == 1:
+        return clauses[0]
+    return or_(*clauses)
 
 
 def sync_legacy_role(user: User, primary_role: str) -> None:
-    """Точка записи устаревшей колонки ``User.role`` (ARCH-07, PR-30).
+    """No-op после дропа legacy-колонки ``User.role`` (DB-060, PR-31).
 
-    Вызывающий код по-прежнему сам поддерживает JSON ``user.roles``; этот хелпер
-    держит legacy-колонку основной роли в синхроне до её дропа в PR-31.
+    Колонка удалена; источник истины — ``user.roles`` (JSON) + ``user.active_role``,
+    которые вызывающий код поддерживает сам. Сигнатура сохранена, чтобы не трогать
+    точки вызова — функция намеренно ничего не делает.
     """
-    user.role = primary_role
+    return None
 
 
 def legacy_primary_role(user) -> Optional[str]:
-    """Прочитать устаревшую одиночную роль ``User.role`` как скаляр (ARCH-07, PR-30).
+    """Скалярная «основная роль» пользователя без дефолта «applicant» (PR-31).
 
-    Единственная точка чтения legacy-колонки как скалярного значения — в отличие
-    от ``get_active_role``/``get_user_roles`` НЕ подставляет дефолт «applicant».
-    Нужна там, где требуется байт-идентичное поведение прежнего ``user.role``
-    (например, пустой результат при отсутствии роли). Возвращает None, если роль
-    не задана. В PR-31 (дроп колонки) будет возвращать None всегда.
+    Заменяет чтение удалённой колонки ``User.role``: возвращает ``active_role``,
+    иначе первую роль из ``roles``, иначе ``None``. В отличие от
+    ``get_active_role``/``get_user_roles`` НЕ подставляет дефолт «applicant» —
+    нужна там, где при отсутствии роли важен пустой результат (fallback-ветки).
     """
-    return getattr(user, "role", None) or None
+    if getattr(user, "active_role", None):
+        return user.active_role
+    roles_list = parse_roles_safe(getattr(user, "roles", None))
+    return roles_list[0] if roles_list else None

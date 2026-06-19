@@ -18,9 +18,11 @@ def db():
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
     session.add(User(id=1, telegram_id=111, username="u", first_name="U",
-                     role="applicant", status="approved", language="ru"))
+                     roles='["applicant"]', active_role="applicant",
+                     status="approved", language="ru"))
     session.add(User(id=2, telegram_id=222, first_name="Mgr",
-                     role="manager", status="approved", language="ru"))
+                     roles='["manager"]', active_role="manager",
+                     status="approved", language="ru"))
     session.commit()
     yield session
     session.close()

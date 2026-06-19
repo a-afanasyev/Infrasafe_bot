@@ -35,11 +35,12 @@ def session():
     engine.dispose()
 
 
-def _add_user(session, *, user_id, telegram_id, roles, role="applicant",
+def _add_user(session, *, user_id, telegram_id, roles,
               active_role="applicant", status="approved"):
+    # PR-31/DB-060: legacy .role column dropped — roles JSON + active_role only.
     session.add(User(
         id=user_id, telegram_id=telegram_id, first_name=f"U{user_id}",
-        roles=roles, role=role, active_role=active_role,
+        roles=roles, active_role=active_role,
         status=status, language="ru",
     ))
     session.commit()
@@ -56,7 +57,7 @@ class TestApplicantSelection:
                   roles='["applicant", "executor"]')
         # Сотрудник без applicant — НЕ житель
         _add_user(session, user_id=3, telegram_id=103, roles='["manager"]',
-                  role="manager", active_role="manager")
+                  active_role="manager")
 
         svc = UserManagementService(session)
         result = svc.get_residents_by_status("approved")
@@ -65,15 +66,20 @@ class TestApplicantSelection:
         assert ids == {1, 2}
         assert result["total"] == 2
 
-    def test_get_residents_legacy_role_field_fallback(self, session):
-        """Старая система (roles пуст, role='applicant') тоже видна."""
+    def test_get_residents_excludes_user_without_roles_json(self, session):
+        """PR-31/DB-060: legacy .role column dropped — выборка идёт только по
+        roles JSON. Пользователь без roles JSON (roles=None) больше НЕ
+        попадает в жителей (старый fallback к колонке role удалён).
+        """
         _add_user(session, user_id=1, telegram_id=101, roles=None,
-                  role="applicant", active_role=None)
+                  active_role=None)
+        # Контрольный житель с корректным roles JSON — он виден.
+        _add_user(session, user_id=2, telegram_id=102, roles='["applicant"]')
 
         svc = UserManagementService(session)
         result = svc.get_residents_by_status("approved")
 
-        assert [u.id for u in result["users"]] == [1]
+        assert [u.id for u in result["users"]] == [2]
 
     def test_get_user_stats_counts_applicants(self, session):
         _add_user(session, user_id=1, telegram_id=101, roles='["applicant"]',
@@ -96,7 +102,7 @@ class TestAutoApproveRolesConsistency:
     async def test_appends_role_to_non_empty_roles(self, session):
         """Роль добавляется в НЕпустой roles-массив (как в process_invite_join)."""
         _add_user(session, user_id=1, telegram_id=101, roles='["executor"]',
-                  role="executor", active_role="executor", status="pending")
+                  active_role="executor", status="pending")
 
         svc = AuthService(session)
         ok = await svc.auto_approve_user(101, "applicant")
@@ -111,7 +117,7 @@ class TestAutoApproveRolesConsistency:
     @pytest.mark.asyncio
     async def test_initializes_empty_roles(self, session):
         _add_user(session, user_id=1, telegram_id=101, roles=None,
-                  role="applicant", active_role=None, status="pending")
+                  active_role=None, status="pending")
 
         svc = AuthService(session)
         ok = await svc.auto_approve_user(101, "executor")

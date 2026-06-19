@@ -26,9 +26,10 @@ def db():
     Base.metadata.drop_all(bind=engine)
 
 
-def _user(db, uid, tg, *, roles=None, role="applicant", status="approved", deleted_at=None):
+def _user(db, uid, tg, *, roles='["applicant"]', status="approved", deleted_at=None):
+    # PR-31/DB-060: legacy .role column dropped; roles JSON is the source of truth.
     u = User(id=uid, telegram_id=tg, username=f"u{uid}", first_name="U",
-             role=role, roles=roles, status=status, language="ru", deleted_at=deleted_at)
+             roles=roles, status=status, language="ru", deleted_at=deleted_at)
     db.add(u)
     db.commit()
     return u
@@ -43,12 +44,14 @@ def test_create_feedback_sync(db):
     assert fb.media_files == []
 
 
-def test_manager_enumeration_includes_json_and_legacy_excludes_inactive(db):
+def test_manager_enumeration_includes_json_excludes_inactive(db):
+    # PR-31/DB-060: enumeration is now purely roles-JSON based (legacy .role
+    # column dropped). Managers must have "manager" in their roles JSON array.
     _user(db, 1, 111, roles='["applicant", "manager"]')      # JSON roles → include
-    _user(db, 2, 222, roles=None, role="manager")            # legacy role → include
+    _user(db, 2, 222, roles='["manager"]')                   # JSON roles → include
     _user(db, 3, 333, roles='["applicant"]')                 # not a manager → exclude
-    _user(db, 4, 444, role="manager", status="pending")      # pending → exclude
-    _user(db, 5, 555, role="manager", deleted_at=__import__("datetime").datetime.utcnow())  # deleted → exclude
+    _user(db, 4, 444, roles='["manager"]', status="pending")  # pending → exclude
+    _user(db, 5, 555, roles='["manager"]', deleted_at=__import__("datetime").datetime.utcnow())  # deleted → exclude
     ids = set(manager_telegram_ids_sync(db))
     assert ids == {111, 222}
 

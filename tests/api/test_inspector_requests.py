@@ -54,7 +54,7 @@ async def addr_tree(db_session: AsyncSession):
 
 @pytest_asyncio.fixture
 async def applicant(db_session: AsyncSession, addr_tree):
-    user = User(telegram_id=111, username="appl", first_name="A", role="applicant",
+    user = User(telegram_id=111, username="appl", first_name="A",
                 roles='["applicant"]', status="approved", phone="+700")
     db_session.add(user)
     await db_session.flush()
@@ -66,7 +66,7 @@ async def applicant(db_session: AsyncSession, addr_tree):
 
 @pytest_asyncio.fixture
 async def inspector(db_session: AsyncSession):
-    user = User(telegram_id=222, username="insp", first_name="I", role="inspector",
+    user = User(telegram_id=222, username="insp", first_name="I",
                 roles='["inspector"]', status="approved", phone="+701")
     db_session.add(user)
     await db_session.commit()
@@ -76,7 +76,7 @@ async def inspector(db_session: AsyncSession):
 
 @pytest_asyncio.fixture
 async def pending_inspector(db_session: AsyncSession):
-    user = User(telegram_id=223, username="pinsp", first_name="P", role="inspector",
+    user = User(telegram_id=223, username="pinsp", first_name="P",
                 roles='["inspector"]', status="pending", phone="+702")
     db_session.add(user)
     await db_session.commit()
