@@ -20,6 +20,16 @@ describe('Dashboard FeedbackPage', () => {
     expect(screen.getByText('Больше зелени')).toBeInTheDocument()
   })
 
+  it('sets document.title (QA-03)', async () => {
+    server.use(
+      http.get('*/api/v2/feedback', () => HttpResponse.json({ items: ITEMS, total: 2 })),
+    )
+    render(<FeedbackPage />)
+    await screen.findByText('Лифт сломан')
+    expect(document.title).toContain('Обратная связь')
+    expect(document.title).toContain('UK Management')
+  })
+
   it('sends status filter as a query param', async () => {
     const urls: string[] = []
     server.use(

@@ -5,6 +5,7 @@ import { usePublicBoard } from '../hooks/usePublicBoard'
 import { useBoardConfig } from '../hooks/useBoardConfig'
 import { defaultBoardConfig } from '../types/boardConfig'
 import type { BoardConfigData, LocalizedText } from '../types/boardConfig'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ interface ResidentBoardPageProps {
 
 export default function ResidentBoardPage({ configOverride }: ResidentBoardPageProps) {
   const { t, i18n } = useTranslation()
+  usePageTitle(t('nav.residentBoard')) // QA-03: иначе document.title оставался от предыдущей страницы
   const [now, setNow] = useState(new Date())
   const { data: board } = usePublicBoard()
   const { data: fetchedConfig } = useBoardConfig()

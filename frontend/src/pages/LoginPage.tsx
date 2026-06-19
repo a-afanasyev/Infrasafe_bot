@@ -8,11 +8,13 @@ import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 import { safeNextPath } from '../utils/safeNextPath'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 const BOT_USERNAME = 'infrasafebot'
 
 export default function LoginPage() {
   const { t } = useTranslation()
+  usePageTitle(t('login.subtitle')) // QA-03: иначе document.title оставался от предыдущей страницы
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')

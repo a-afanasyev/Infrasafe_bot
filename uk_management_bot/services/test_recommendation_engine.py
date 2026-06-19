@@ -9,6 +9,7 @@ from uk_management_bot.services.recommendation_engine import (
     RecommendationType,
     Recommendation,
 )
+from uk_management_bot.database.models.shift import Shift
 
 
 # ---------------------------------------------------------------------------
@@ -345,3 +346,53 @@ class TestAnalyzeTimeCoverage:
 
         result = await engine._analyze_time_coverage([shift], date(2026, 4, 1))
         assert result["coverage_percentage"] > 90
+
+
+# ---------------------------------------------------------------------------
+# QA-02 regression: Shift identifies the executor via user_id, NOT executor_id.
+# Methods aggregating shift load/performance must read shift.user_id — reading
+# the non-existent shift.executor_id raised AttributeError at runtime and broke
+# "Рекомендации по оптимизации". MagicMock(spec=Shift) makes .executor_id raise,
+# so these tests fail on the pre-fix code.
+# ---------------------------------------------------------------------------
+
+class TestQA02UsesUserId:
+    def _db_with_shifts(self, shifts):
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value.all.return_value = shifts
+        q.all.return_value = shifts
+        db.query.return_value = q
+        return db
+
+    def _shift(self, user_id, count=5, efficiency=50.0):
+        s = MagicMock(spec=Shift)
+        s.user_id = user_id
+        s.current_request_count = count
+        s.efficiency_score = efficiency
+        return s
+
+    @pytest.mark.asyncio
+    async def test_workload_balance_no_attribute_error(self):
+        shifts = [self._shift(1, count=10), self._shift(2, count=1)]
+        engine = _make_engine(self._db_with_shifts(shifts))
+        result = await engine._analyze_workload_balance(7)
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_performance_issues_no_attribute_error(self):
+        shifts = [self._shift(1, efficiency=40.0) for _ in range(3)]
+        engine = _make_engine(self._db_with_shifts(shifts))
+        result = await engine._analyze_performance_issues(7)
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_find_overloaded_executors_groups_by_user_id(self):
+        from datetime import datetime
+        shifts = [self._shift(1, count=100), self._shift(2, count=1)]
+        engine = _make_engine(self._db_with_shifts(shifts))
+        result = await engine._find_overloaded_executors(
+            datetime(2026, 1, 1), datetime(2026, 1, 8)
+        )
+        assert 1 in result  # user_id=1 перегружен; 2 — нет
+        assert 2 not in result

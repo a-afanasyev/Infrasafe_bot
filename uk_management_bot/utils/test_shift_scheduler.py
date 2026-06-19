@@ -374,3 +374,33 @@ class TestNotifyUpcomingShifts:
             asyncio.get_event_loop().run_until_complete(sched._notify_upcoming_shifts())
 
         assert sched.task_stats["notify_upcoming"]["success"] == 1
+
+    def test_tz_aware_shift_does_not_break_reminder(self):
+        # QA-04: Shift.start_time это timestamptz (tz-aware). До фикса `now` был
+        # naive (datetime.now()), и `shift.start_time - now` падал с TypeError
+        # ("can't subtract offset-naive and offset-aware datetimes") — внутри
+        # per-shift try/except, поэтому success-счётчик рос, но напоминание НЕ
+        # отправлялось. Дискриминатор регрессии — факт вызова send_shift_reminder.
+        from datetime import datetime, timezone, timedelta
+
+        mock_notif = MagicMock()
+        mock_notif.send_shift_reminder = AsyncMock()
+        sched = _make_scheduler(notification_service=mock_notif)
+
+        shift = MagicMock()
+        shift.id = 1
+        shift.user_id = 42
+        shift.start_time = datetime.now(timezone.utc) + timedelta(minutes=30)
+
+        mock_db = _mock_db()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = [shift]
+
+        with patch(SESSION_LOCAL_PATH, return_value=mock_db):
+            asyncio.get_event_loop().run_until_complete(sched._notify_upcoming_shifts())
+
+        mock_notif.send_shift_reminder.assert_awaited_once()
+        assert sched.task_stats["notify_upcoming"]["success"] == 1

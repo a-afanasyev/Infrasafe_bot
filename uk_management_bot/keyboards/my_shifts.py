@@ -13,12 +13,14 @@ from uk_management_bot.utils.helpers import get_text
 def get_my_shifts_menu(language: str = "ru") -> InlineKeyboardMarkup:
     """Главное меню моих смен"""
 
+    # QA-01: "time_tracking" и "my_statistics" удалены — на эти callback'и не было
+    # ни одного зарегистрированного хендлера (клик молча игнорировался). Клавиатуры
+    # get_time_tracking_keyboard/get_statistics_keyboard остаются как заготовки до
+    # реализации соответствующих фич (отдельная задача).
     keyboard = [
         [InlineKeyboardButton(text=get_text("my_shifts.keyboards.current_shifts", language=language), callback_data="view_current_shifts")],
         [InlineKeyboardButton(text=get_text("my_shifts.keyboards.week_schedule", language=language), callback_data="view_week_schedule")],
         [InlineKeyboardButton(text=get_text("my_shifts.keyboards.shift_history", language=language), callback_data="shift_history")],
-        [InlineKeyboardButton(text=get_text("my_shifts.keyboards.time_tracking", language=language), callback_data="time_tracking")],
-        [InlineKeyboardButton(text=get_text("my_shifts.keyboards.my_statistics", language=language), callback_data="my_statistics")],
         [InlineKeyboardButton(text=get_text("my_shifts.keyboards.shift_transfer", language=language), callback_data="shift_transfer_menu")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

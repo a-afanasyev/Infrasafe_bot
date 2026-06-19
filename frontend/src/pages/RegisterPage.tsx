@@ -5,6 +5,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Select } from '../components/ui/select'
 import { useRegistration, type RegistrationApartment } from '../hooks/useRegistration'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type Phase = 'loading' | 'no_telegram' | 'form' | 'pending' | 'already_registered'
 
@@ -24,6 +25,7 @@ function getStatus(err: unknown): number | undefined {
 
 export default function RegisterPage() {
   const { t } = useTranslation()
+  usePageTitle(t('register.title')) // QA-03: иначе document.title оставался от предыдущей страницы
   const { initData, start, submit } = useRegistration()
 
   const [phase, setPhase] = useState<Phase>('loading')
