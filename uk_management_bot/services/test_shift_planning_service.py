@@ -475,3 +475,28 @@ class TestGetOptimizationRecommendations:
         service.recommendation_engine.generate_comprehensive_recommendations.assert_awaited_once()
         # старый несуществующий метод НЕ вызывается
         assert not service.recommendation_engine.get_shift_optimization_recommendations.called
+
+
+# ---------------------------------------------------------------------------
+# QA-NEW-01 regression: _get_specialization_priority must read request.category,
+# NOT request.specialization (которого у модели Request нет → AttributeError →
+# функция всегда возвращала []). SimpleNamespace без .specialization падал бы.
+# ---------------------------------------------------------------------------
+
+class TestGetSpecializationPriority:
+    def test_counts_by_category(self):
+        import asyncio
+        from types import SimpleNamespace
+
+        service, _ = _make_service()
+        reqs = [
+            SimpleNamespace(category="Сантехника"),
+            SimpleNamespace(category="Сантехника"),
+            SimpleNamespace(category="Электрика"),
+        ]
+        result = asyncio.get_event_loop().run_until_complete(
+            service._get_specialization_priority(reqs)
+        )
+        assert result, "priority list must be non-empty for non-empty history"
+        assert result[0]["specialization"] == "Сантехника"
+        assert result[0]["request_count"] == 2
