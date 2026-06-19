@@ -42,14 +42,15 @@ export default mergeConfig(
         // Phase 2 (stores + hooks): hook coverage (useHasRole/usePageTitle/
         // useMediaQuery/useEmployees + MSW data-hook paths).
         // Phase 3 (components): presentational components (addresses StatsBar/
-        // Breadcrumb/TabBar, shared EmptyState/LoadingSpinner). Floors sit a few
-        // points under the achieved global so a regression trips them without
-        // day-to-day flake.
+        // Breadcrumb/TabBar, shared EmptyState/LoadingSpinner).
+        // Phase 5 (pages): LoginPage (password + MFA flow) + RegisterPage (resident
+        // self-reg phases). Floors sit a few points under the achieved global so a
+        // regression trips them without day-to-day flake.
         thresholds: {
-          lines: 22,
-          statements: 20,
-          functions: 15,
-          branches: 17,
+          lines: 26,
+          statements: 24,
+          functions: 17,
+          branches: 19,
         },
       },
     },
