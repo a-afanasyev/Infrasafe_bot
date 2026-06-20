@@ -129,12 +129,19 @@ export default function BoardEditorPage() {
   const updateConfig = useUpdateBoardConfig()
 
   const [draft, setDraft] = useState<BoardConfigData | null>(null)
-  // FE-034: seed the editable draft from server config once it arrives, using the
+  // FE-034: seed the editable draft from server config when it arrives, using the
   // render-time "adjust state when input changes" pattern (no effect → no cascading
   // re-render / set-state-in-effect smell; see react.dev "You Might Not Need an Effect").
-  const [seeded, setSeeded] = useState(false)
-  if (serverConfig && !seeded) {
-    setSeeded(true)
+  // WR-09: track the *reference* of the server config we last seeded from instead of
+  // a one-shot boolean. React Query's structural sharing keeps the same reference
+  // while data is unchanged and hands back a NEW reference once the data actually
+  // changes — so after a successful save (mutation invalidates ['board-config'] →
+  // refetch) the fresh config re-seeds `draft`, clearing the phantom `isDirty`
+  // (and its lingering beforeunload guard). User edits live only in `draft`, so a
+  // background refetch that returns identical data won't stomp on them.
+  const [seededFrom, setSeededFrom] = useState<BoardConfigData | null>(null)
+  if (serverConfig && serverConfig !== seededFrom) {
+    setSeededFrom(serverConfig)
     setDraft(clone(serverConfig))
   }
 
@@ -198,6 +205,8 @@ export default function BoardEditorPage() {
     })
   }
 
+  // WR-09: re-seeding is driven by the serverConfig-reference check above; the
+  // mutation's invalidate → refetch yields a fresh reference that re-syncs `draft`.
   const onSave = () => updateConfig.mutate(draft)
   const onReset = () => setDraft(serverConfig ? clone(serverConfig) : clone(defaultBoardConfig))
 

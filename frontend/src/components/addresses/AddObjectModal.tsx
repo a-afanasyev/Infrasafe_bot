@@ -165,11 +165,11 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
             <div className="flex gap-3">
               <div className="flex-1">
                 <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
-                <Input type="number" value={yardLat} onChange={e => setYardLat(e.target.value)} placeholder="-90 ... 90" />
+                <Input type="number" min={-90} max={90} step="any" value={yardLat} onChange={e => setYardLat(e.target.value)} placeholder="-90 ... 90" />
               </div>
               <div className="flex-1">
                 <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
-                <Input type="number" value={yardLon} onChange={e => setYardLon(e.target.value)} placeholder="-180 ... 180" />
+                <Input type="number" min={-180} max={180} step="any" value={yardLon} onChange={e => setYardLon(e.target.value)} placeholder="-180 ... 180" />
               </div>
             </div>
             {createYard.error && (
@@ -220,11 +220,11 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
             <div className="flex gap-3">
               <div className="flex-1">
                 <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
-                <Input type="number" value={buildingLat} onChange={e => setBuildingLat(e.target.value)} placeholder="-90 ... 90" />
+                <Input type="number" min={-90} max={90} step="any" value={buildingLat} onChange={e => setBuildingLat(e.target.value)} placeholder="-90 ... 90" />
               </div>
               <div className="flex-1">
                 <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
-                <Input type="number" value={buildingLon} onChange={e => setBuildingLon(e.target.value)} placeholder="-180 ... 180" />
+                <Input type="number" min={-180} max={180} step="any" value={buildingLon} onChange={e => setBuildingLon(e.target.value)} placeholder="-180 ... 180" />
               </div>
             </div>
             {createBuilding.error && (
