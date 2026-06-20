@@ -1067,7 +1067,10 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
                 return
 
             # Определяем активную роль пользователя
-            user_roles = user.roles.strip('[]').replace('"', '').split(', ') if user.roles else []
+            # WR-10: единый канон-парсер ролей вместо хрупкого ручного
+            # strip('[]').replace('"','').split(', ') по JSON-строке.
+            from uk_management_bot.utils.auth_helpers import parse_roles_safe
+            user_roles = parse_roles_safe(user.roles)
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
             # Получаем заявки в зависимости от роли + status-фильтр (ORM в сервисе)
@@ -1284,8 +1287,13 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 # FEAT-группы: непривязанная group-заявка → «Взять» (а не
                 # Выполнена/Закуп — работать может только взявший; авторизацию
                 # взятия проверяет EXECUTOR_CLAIM в claim-callback).
-                claim_text = get_text("requests.executor_claim_button", language=lang) or "🙋 Взять в работу"
-                rows.append([InlineKeyboardButton(text=claim_text, callback_data=f"claim_request_{request.request_number}")])
+                # WR-04: показываем «Взять» только дежурным (on-shift) — иначе
+                # не-дежурный жал бы кнопку и получал NotAuthorized («уже взяли»),
+                # хотя реальная причина — вне смены. Вне смены кнопок действий нет.
+                from uk_management_bot.utils.shifts import is_on_shift_now_sync
+                if is_on_shift_now_sync(db_session, user.id):
+                    claim_text = get_text("requests.executor_claim_button", language=lang) or "🙋 Взять в работу"
+                    rows.append([InlineKeyboardButton(text=claim_text, callback_data=f"claim_request_{request.request_number}")])
             elif request.status == "В работе":
                 complete_text = get_text("buttons.complete", language=lang) or "✅ Выполнена"
                 purchase_text = get_text("buttons.purchase", language=lang) or "💰 Нужен закуп"

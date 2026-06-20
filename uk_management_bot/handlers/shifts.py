@@ -220,6 +220,16 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
             except Exception:
                 specializations = [specializations] if specializations else []
 
+        # FS-10: ad-hoc смена не несёт specialization_focus → раньше показывалось
+        # «Универсальная», хотя у исполнителя есть спец-ция. Падаем на спец-цию
+        # самого исполнителя смены, и только при её отсутствии — «Универсальная».
+        if not specializations and shift.user_id:
+            from uk_management_bot.database.models.user import User
+            from uk_management_bot.utils.specializations import parse_specializations
+            shift_user = db.query(User).filter(User.id == shift.user_id).first()
+            if shift_user:
+                specializations = sorted(parse_specializations(shift_user))
+
         spec_text = ", ".join(specializations) if specializations else get_text("shifts.handlers.universal", language=lang)
 
         # Формируем текст

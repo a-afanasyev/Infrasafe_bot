@@ -400,11 +400,19 @@ class TestGetTemplateManagementKeyboard:
             result = get_template_management_keyboard()
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_seven_buttons(self):
+    def test_has_four_buttons(self):
+        # FS-05: убраны 3 мёртвые кнопки (usage_stats/import/export) → 7 стало 4.
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_management import get_template_management_keyboard
             result = get_template_management_keyboard()
-        assert len(_all_buttons(result)) == 7
+        assert len(_all_buttons(result)) == 4
+
+    def test_no_dead_callbacks(self):
+        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
+            from uk_management_bot.keyboards.shift_management import get_template_management_keyboard
+            result = get_template_management_keyboard()
+        cbs = set(_all_callbacks(result))
+        assert {"template_usage_stats", "import_templates", "export_templates"}.isdisjoint(cbs)
 
     def test_callback_data_present(self):
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):

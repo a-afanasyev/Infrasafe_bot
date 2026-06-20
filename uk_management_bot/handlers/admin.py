@@ -1461,22 +1461,20 @@ async def handle_invite_confirmation(callback: CallbackQuery, state: FSMContext,
             await callback.answer(get_text("admin.handlers.error_role_not_selected", language=lang))
             return
         
-        # Создаем приглашение в виде ссылки
+        # FS-09: генерируем приглашение РОВНО один раз. Раньше вызывались и
+        # generate_invite_link, и generate_invite — каждый создаёт токен и пишет
+        # audit-лог → дублирование (2 записи, 2 токена, причём показывался токен,
+        # которого нет в ссылке). Ссылка — статический bot-URL (токен в неё не
+        # входит), поэтому строим её инлайном из одного сгенерированного токена.
+        from uk_management_bot.config.settings import settings
         invite_service = InviteService(db)
-        invite_link = invite_service.generate_invite_link(
-            role=role,
-            created_by=callback.from_user.id,
-            specialization=specialization if role == "executor" else None,
-            hours=expiry_hours
-        )
-        
-        # Генерируем токен отдельно для отображения
         token = invite_service.generate_invite(
             role=role,
             created_by=callback.from_user.id,
             specialization=specialization if role == "executor" else None,
             hours=expiry_hours
         )
+        invite_link = f"https://t.me/{settings.BOT_USERNAME}"
         
         # Формируем текст с токеном
         role_name = get_text(f"roles.{role}", language=lang)
