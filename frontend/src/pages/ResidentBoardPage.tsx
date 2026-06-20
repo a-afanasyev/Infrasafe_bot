@@ -40,7 +40,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Безопасность': '\u{1F512}', 'security': '\u{1F512}',
   'Благоустройство': '\u{1F33F}', 'landscaping': '\u{1F33F}',
   'Ремонт': '\u{1F3D7}️', 'repair': '\u{1F3D7}️',
-  'Интернет/ТВ': '\u{1F4E1}', 'internet_tv': '\u{1F4E1}',
+  'Интернет/ТВ': '\u{1F4E1}', 'internet_tv': '\u{1F4E1}', 'internet': '\u{1F4E1}',
 }
 
 // Pipeline stages use API status values (Russian)

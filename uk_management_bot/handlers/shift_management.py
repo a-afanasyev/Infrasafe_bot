@@ -2822,9 +2822,11 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
 
             # FS-03: метод redistribute_workload на ShiftAssignmentService не
             # существует — балансировка выполняется синхронным
-            # balance_executor_workload(target_date). Прежний await на
-            # несуществующий метод → AttributeError → кнопка падала.
-            result = assignment_service.balance_executor_workload(target_date=date.today())
+            # balance_executor_workload(). Прежний await на несуществующий метод
+            # → AttributeError → кнопка падала. target_date по умолчанию = завтра
+            # (балансируем planned-смены на следующий день, как задумано сервисом;
+            # date.today() давал почти всегда пустой план → no-op).
+            result = assignment_service.balance_executor_workload()
 
             if result.get('error'):
                 await callback.message.edit_text(
@@ -2938,6 +2940,9 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
             if not conflicts:
                 no_conflicts_msg = get_text("shift_management.no_conflicts_found", language=lang)
             else:
+                def _hm(dt):
+                    return dt.strftime('%H:%M') if dt else "—"
+
                 for i, conflict in enumerate(conflicts[:5], 1):  # Показываем первые 5
                     executor = conflict['executor']
                     shift1 = conflict['shift1']
@@ -2945,7 +2950,6 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
                     conflict_type = conflict['type']
 
                     name = f"{executor.first_name} {executor.last_name}" if executor else "—"
-                    _hm = lambda dt: dt.strftime('%H:%M') if dt else "—"  # noqa: E731
                     conflicts_list += f"<b>{i}. {name}</b>\n"
                     conflicts_list += f"📅 {shift1.start_time.strftime('%d.%m.%Y')}\n"
 
