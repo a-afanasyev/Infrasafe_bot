@@ -2940,6 +2940,10 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
             if not conflicts:
                 no_conflicts_msg = get_text("shift_management.no_conflicts_found", language=lang)
             else:
+                # Заголовок секции теперь в conflicts_list (а не хардкодом в шаблоне),
+                # иначе при 0 конфликтов он висел пустым.
+                conflicts_list = get_text("shift_management.conflicts_found_header", language=lang) + "\n\n"
+
                 def _hm(dt):
                     return dt.strftime('%H:%M') if dt else "—"
 

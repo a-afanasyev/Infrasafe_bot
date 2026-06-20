@@ -174,17 +174,22 @@ class Settings:
     ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
     
     # Request Categories
+    # DEPRECATED (FS-04): источник истины категорий — канон EN-ключи в
+    # keyboards.requests.CANONICAL_CATEGORY_KEYS (+ resolve_category_key /
+    # get_category_display). Этот список больше не используется для валидации
+    # (валидатор перешёл на канон-ключи); оставлен как EN-ключи на случай
+    # legacy-чтения, чтобы не вернуть RU-лейбл в данные.
     REQUEST_CATEGORIES = [
-        "Электрика",
-        "Сантехника", 
-        "Отопление",
-        "Вентиляция",
-        "Лифт",
-        "Уборка",
-        "Благоустройство",
-        "Безопасность",
-        "Интернет/ТВ",
-        "Другое"
+        "electricity",
+        "plumbing",
+        "heating",
+        "ventilation",
+        "elevator",
+        "cleaning",
+        "landscaping",
+        "security",
+        "internet",
+        "other",
     ]
     
     # Request Statuses

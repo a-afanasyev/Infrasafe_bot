@@ -6455,7 +6455,7 @@
     "time_overlap_label": "Smenalar kesishishi",
     "short_break_label": "Qisqa tanaffus ({hours:.1f}s)",
     "redistribute_recommendation": "💡 <b>Tavsiya:</b> Konfliktlarni bartaraf etish uchun yuklamani qayta taqsimlash funksiyasidan foydalaning.",
-    "conflicts_analysis_result": "⚠️ <b>Jadval konfliktlari tahlili</b>\n\n<b>Davr:</b> {period_start} - {period_end}\n<b>Topilgan konfliktlar:</b> {conflicts_count}\n\n{no_conflicts}<b>🚨 Aniqlangan konfliktlar:</b>\n\n{conflicts_list}",
+    "conflicts_analysis_result": "⚠️ <b>Jadval konfliktlari tahlili</b>\n\n<b>Davr:</b> {period_start} - {period_end}\n<b>Topilgan konfliktlar:</b> {conflicts_count}\n\n{no_conflicts}{conflicts_list}",
     "template_force_deleted": "✅ Shablon '{name}' majburiy o'chirildi",
     "editing_data_not_found": "❌ Xatolik: tahrirlash uchun ma'lumotlar topilmadi",
     "name_min_length": "❌ Nom kamida 3 ta belgidan iborat bo'lishi kerak",
@@ -6537,7 +6537,8 @@
       "cancel_action": "❌ Bekor qilish",
       "date_entry": "📅 {date_text}",
       "tomorrow_short": "Ertaga"
-    }
+    },
+    "conflicts_found_header": "🚨 <b>Aniqlangan konfliktlar:</b>"
   },
   "shifts": {
     "accept_смену": "🔄 Smenani qabul qilish",

@@ -6455,7 +6455,7 @@
     "time_overlap_label": "Пересечение смен",
     "short_break_label": "Короткий перерыв ({hours:.1f}ч)",
     "redistribute_recommendation": "💡 <b>Рекомендация:</b> Используйте функцию перераспределения нагрузки для устранения конфликтов.",
-    "conflicts_analysis_result": "⚠️ <b>Анализ конфликтов расписания</b>\n\n<b>Период:</b> {period_start} - {period_end}\n<b>Найдено конфликтов:</b> {conflicts_count}\n\n{no_conflicts}<b>🚨 Обнаруженные конфликты:</b>\n\n{conflicts_list}",
+    "conflicts_analysis_result": "⚠️ <b>Анализ конфликтов расписания</b>\n\n<b>Период:</b> {period_start} - {period_end}\n<b>Найдено конфликтов:</b> {conflicts_count}\n\n{no_conflicts}{conflicts_list}",
     "template_force_deleted": "✅ Шаблон '{name}' принудительно удален",
     "editing_data_not_found": "❌ Ошибка: не найдены данные для редактирования",
     "name_min_length": "❌ Название должно содержать минимум 3 символа",
@@ -6537,7 +6537,8 @@
       "cancel_action": "❌ Отмена",
       "date_entry": "📅 {date_text}",
       "tomorrow_short": "Завтра"
-    }
+    },
+    "conflicts_found_header": "🚨 <b>Обнаруженные конфликты:</b>"
   },
   "shifts": {
     "accept_смену": "🔄 Принять смену",

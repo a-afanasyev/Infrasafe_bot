@@ -165,3 +165,23 @@ def test_fs03_redistribute_uses_balance_method_not_missing_one():
 
     assert hasattr(ShiftAssignmentService, "balance_executor_workload")
     assert not hasattr(ShiftAssignmentService, "redistribute_workload")
+
+
+def test_fs03_conflicts_template_no_dangling_header_at_zero():
+    """FS-03 косметика: при 0 конфликтов шаблон не оставляет висячий заголовок."""
+    from uk_management_bot.utils.helpers import get_text
+
+    # заголовок секции вынесен в отдельный ключ (не хардкод в шаблоне)
+    header = get_text("shift_management.conflicts_found_header", language="ru")
+    assert header and header != "shift_management.conflicts_found_header"
+
+    rendered = get_text(
+        "shift_management.conflicts_analysis_result",
+        language="ru",
+        period_start="01.01", period_end="07.01",
+        conflicts_count=0,
+        no_conflicts=get_text("shift_management.no_conflicts_found", language="ru"),
+        conflicts_list="",
+    )
+    # при 0 конфликтов «Обнаруженные конфликты» НЕ должно появляться
+    assert "Обнаруженные конфликты" not in rendered
