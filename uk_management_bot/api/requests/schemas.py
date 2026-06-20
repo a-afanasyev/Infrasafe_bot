@@ -86,11 +86,17 @@ class KanbanResponse(BaseModel):
 
 
 def _validate_request_category(v: str) -> str:
-    from uk_management_bot.config.settings import settings
-    valid = settings.REQUEST_CATEGORIES
-    if v not in valid:
-        raise ValueError(f"category must be one of: {valid}")
-    return v
+    # FS-04: канон категории — EN-ключ. Принимаем и EN-ключ, и legacy RU-лейбл
+    # (нормализуем через resolve_category_key), но на запись возвращаем EN-ключ,
+    # чтобы все каналы (бот + web/API) писали единообразно.
+    from uk_management_bot.keyboards.requests import (
+        resolve_category_key,
+        CANONICAL_CATEGORY_KEYS,
+    )
+    key = resolve_category_key(v)
+    if key not in CANONICAL_CATEGORY_KEYS:
+        raise ValueError(f"category must be one of: {CANONICAL_CATEGORY_KEYS}")
+    return key
 
 
 class CreateRequestBody(BaseModel):

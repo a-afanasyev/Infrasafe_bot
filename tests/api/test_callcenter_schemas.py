@@ -53,7 +53,8 @@ class TestCallCenterCreateRequest:
         body = CallCenterCreateRequest(
             category="Электрика", urgency="Обычная", description="Не горит свет"
         )
-        assert body.category == "Электрика"
+        # FS-04: валидатор нормализует legacy RU-лейбл к канон-EN-ключу.
+        assert body.category == "electricity"
         assert body.user_id is None
         assert body.apartment_id is None
         assert body.caller_name is None

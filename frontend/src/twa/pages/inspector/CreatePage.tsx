@@ -5,24 +5,12 @@ import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
-import { URGENCIES } from '../../../constants'
+import { CATEGORIES, URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
 import RoleSwitchButton from '../../components/RoleSwitchButton'
 
-const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
-const CATEGORY_API_MAP: Record<string, string> = {
-  electricity: 'Электрика',
-  plumbing: 'Сантехника',
-  heating: 'Отопление',
-  ventilation: 'Вентиляция',
-  elevator: 'Лифт',
-  cleaning: 'Уборка',
-  landscaping: 'Благоустройство',
-  security: 'Безопасность',
-  internet_tv: 'Интернет/ТВ',
-  other: 'Другое',
-}
+// FS-04: category — канон-EN-ключ из общего constants, шлём как есть.
 
 interface Yard {
   id: number
@@ -142,7 +130,7 @@ export default function InspectorCreatePage() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await twaClient.post('/api/v2/requests/inspector', {
-        category: CATEGORY_API_MAP[category] || category,
+        category,
         address_type: 'building',
         address_id: buildingId,
         description,

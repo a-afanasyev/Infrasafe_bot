@@ -6,25 +6,12 @@ import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
-import { URGENCIES } from '../../../constants'
+import { CATEGORIES, URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
 
-const CATEGORIES = ['electricity', 'plumbing', 'heating', 'ventilation', 'elevator', 'cleaning', 'landscaping', 'security', 'internet_tv', 'other']
-// TASK 17: urgency — канон-ключи, шлём как есть (URGENCIES из общего constants).
-// Backend (settings.REQUEST_CATEGORIES) expects Russian strings — map TWA i18n keys to API values.
-const CATEGORY_API_MAP: Record<string, string> = {
-  electricity: 'Электрика',
-  plumbing: 'Сантехника',
-  heating: 'Отопление',
-  ventilation: 'Вентиляция',
-  elevator: 'Лифт',
-  cleaning: 'Уборка',
-  landscaping: 'Благоустройство',
-  security: 'Безопасность',
-  internet_tv: 'Интернет/ТВ',
-  other: 'Другое',
-}
+// FS-04: category — канон-EN-ключ, шлём как есть (CATEGORIES из общего constants).
+// urgency — тоже канон-ключи (TASK 17). Преобразование EN→RU удалено.
 
 type AddressType = 'yard' | 'building' | 'apartment'
 
@@ -160,7 +147,7 @@ export default function CreatePage() {
       // Структурный контракт: сервер сам формирует адрес/FK/source по
       // {address_type, address_id}. Клиент address/source НЕ шлёт.
       const res = await twaClient.post('/api/v2/requests', {
-        category: CATEGORY_API_MAP[category] || category,
+        category,
         address_type: addressType,
         address_id: addressId,
         description,

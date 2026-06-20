@@ -114,12 +114,21 @@ async def get_request_stats(
         ))
 
     # --- by_category ---
+    # FS-04: нормализуем legacy RU-лейблы к канон-EN-ключу в Python и схлопываем
+    # дубли (напр. «Сантехника»+«plumbing» → один plumbing), иначе аналитика
+    # двоит дольки. Defense-in-depth: корректно и до миграции данных.
+    from uk_management_bot.keyboards.requests import resolve_category_key
     cat_result = await db.execute(
         select(Request.category, func.count())
         .where(Request.created_at >= period_start)
         .group_by(Request.category)
     )
-    by_category: dict[str, int] = {row[0]: row[1] for row in cat_result.all() if row[0]}
+    by_category: dict[str, int] = {}
+    for raw, count in cat_result.all():
+        if not raw:
+            continue
+        key = resolve_category_key(raw)
+        by_category[key] = by_category.get(key, 0) + count
 
     # --- by_status: open requests only (not in CLOSED_STATUSES), scoped to period ---
     status_result = await db.execute(

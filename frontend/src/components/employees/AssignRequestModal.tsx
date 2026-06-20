@@ -6,6 +6,7 @@ import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import type { KanbanColumn, RequestCard } from '../../hooks/useKanban'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 
 const ASSIGNABLE_STATUSES = new Set(['Новая', 'В работе'])
@@ -112,7 +113,7 @@ function RequestRow({ request, isPending, onSelect }: RowProps) {
           #{request.request_number}
         </span>
         <span className="font-bold text-[13px] text-text-primary truncate">
-          {request.category}
+          {tCategory(request.category, t)}
         </span>
         <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-[10px] bg-blue/[.12] text-blue shrink-0">
           {t('employees.assign')}

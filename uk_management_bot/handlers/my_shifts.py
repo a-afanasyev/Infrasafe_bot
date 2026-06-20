@@ -678,17 +678,21 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext,
                 await callback.answer(get_text("my_shifts.handlers.user_not_found", language=user_lang), show_alert=True)
                 return
 
+            # FS-02: Shift.user_id — FK на users.id (НЕ telegram_id); смены
+            # создаются с user_id=user.id. Сравнение с telegram_id давало пустой
+            # список → меню передачи приходило с пустой клавиатурой (тупик).
+            # Окно по start_time убрано: текущая (уже идущая) active-смена тоже
+            # должна быть доступна к передаче, а не только будущие planned.
             active_shifts = db.query(Shift).filter(
-                Shift.user_id == user.telegram_id,
-                Shift.status.in_(['planned', 'active']),
-                Shift.start_time >= datetime.now()
+                Shift.user_id == user.id,
+                Shift.status.in_(['planned', 'active'])
             ).order_by(Shift.start_time).limit(10).all()
 
-            # Получаем мои передачи
+            # Получаем мои передачи (FS-02: from/to_executor_id — FK на users.id)
             my_transfers = db.query(ShiftTransfer).filter(
                 or_(
-                    ShiftTransfer.from_executor_id == user.telegram_id,
-                    ShiftTransfer.to_executor_id == user.telegram_id
+                    ShiftTransfer.from_executor_id == user.id,
+                    ShiftTransfer.to_executor_id == user.id
                 )
             ).order_by(ShiftTransfer.created_at.desc()).limit(5).all()
 
@@ -738,10 +742,14 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, l
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
             # Получаем активные смены пользователя
+            # FS-02: Shift.user_id — FK на users.id (НЕ telegram_id); смены
+            # создаются с user_id=user.id. Сравнение с telegram_id давало пустой
+            # список → меню передачи приходило с пустой клавиатурой (тупик).
+            # Окно по start_time убрано: текущая (уже идущая) active-смена тоже
+            # должна быть доступна к передаче, а не только будущие planned.
             active_shifts = db.query(Shift).filter(
-                Shift.user_id == user.telegram_id,
-                Shift.status.in_(['planned', 'active']),
-                Shift.start_time >= datetime.now()
+                Shift.user_id == user.id,
+                Shift.status.in_(['planned', 'active'])
             ).order_by(Shift.start_time).limit(10).all()
 
             if not active_shifts:
@@ -773,11 +781,11 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, l
         try:
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
-            # Получаем передачи пользователя
+            # Получаем передачи пользователя (FS-02: from/to_executor_id — FK на users.id)
             my_transfers = db.query(ShiftTransfer).filter(
                 or_(
-                    ShiftTransfer.from_executor_id == user.telegram_id,
-                    ShiftTransfer.to_executor_id == user.telegram_id
+                    ShiftTransfer.from_executor_id == user.id,
+                    ShiftTransfer.to_executor_id == user.id
                 )
             ).order_by(ShiftTransfer.created_at.desc()).limit(10).all()
 
