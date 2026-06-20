@@ -127,7 +127,8 @@ class TestCreateRequestBody:
         body = CreateRequestBody(
             category="Электрика", urgency="Обычная", description="Не горит свет", **_ADDR
         )
-        assert body.category == "Электрика"
+        # FS-04: валидатор нормализует legacy RU-лейбл к канон-EN-ключу.
+        assert body.category == "electricity"
         assert body.address_type == "apartment"
         assert body.address_id == 1
         assert body.media_files is None

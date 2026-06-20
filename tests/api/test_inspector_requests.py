@@ -381,7 +381,8 @@ async def test_callcenter_create_auto_dispatches_group(make_client, manager_user
         r = await ac.post("/api/v2/callcenter/requests",
                           json=_cc_body(category="Сантехника", address="ул. Тест 1"))
     assert r.status_code == 201, r.text
-    assert calls == [(r.json()["request_number"], "Сантехника")]
+    # FS-04: категория нормализуется к канон-EN-ключу до dispatch.
+    assert calls == [(r.json()["request_number"], "plumbing")]
 
 
 @pytest.mark.asyncio

@@ -52,16 +52,35 @@ CATEGORY_DEFINITIONS = {
     },
     "security": {
         "locale_key": "categories.security",
-        "legacy_texts": ["Безопасность"]
+        "legacy_texts": ["Безопасность", "Охрана"]
     },
     "internet": {
         "locale_key": "categories.internet",
-        "legacy_texts": ["Интернет/ТВ", "Интернет"]
+        "legacy_texts": ["Интернет/ТВ", "Интернет", "internet_tv"]
+    },
+    # FS-04: ventilation/other/repair не в бот-меню (CATEGORY_KEYS), но входят в
+    # канон для нормализации/отображения web-категорий и legacy-данных.
+    "ventilation": {
+        "locale_key": "categories.ventilation",
+        "legacy_texts": ["Вентиляция"]
+    },
+    "other": {
+        "locale_key": "categories.other",
+        "legacy_texts": ["Другое"]
+    },
+    "repair": {
+        "locale_key": "categories.repair",
+        "legacy_texts": ["Ремонт"]
     },
 }
 
-# List of internal category keys (for use in callbacks)
+# List of internal category keys (bot category-selection keyboard — 8 keys)
 CATEGORY_INTERNAL_KEYS = list(CATEGORY_KEYS.keys())
+
+# FS-04: полный канонический набор EN-ключей (включает ventilation/other/repair,
+# которых нет в бот-меню). Источник истины для нормализации/валидации категории
+# на всех каналах записи (бот + web/API) и для миграции legacy RU-лейблов.
+CANONICAL_CATEGORY_KEYS = list(CATEGORY_DEFINITIONS.keys())
 
 
 # TASK 17 Этап A: Helper функции для работы с категориями
@@ -108,8 +127,8 @@ def resolve_category_key(raw_value: str) -> str:
         resolve_category_key("electricity") -> "electricity"
         resolve_category_key("unknown") -> "unknown" (с предупреждением в логах)
     """
-    # Если это уже внутренний ключ, возвращаем как есть
-    if raw_value in CATEGORY_INTERNAL_KEYS:
+    # Если это уже канонический ключ (FS-04: полный набор, не только бот-меню)
+    if raw_value in CATEGORY_DEFINITIONS:
         return raw_value
     
     # Ищем в legacy текстах

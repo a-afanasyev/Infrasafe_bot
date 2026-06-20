@@ -16,6 +16,13 @@ CATEGORY_TO_SPECIALIZATION: dict[str, str] = {
     "maintenance": "maintenance",
     "repair": "repair",
     "installation": "installation",
+    # FS-04: канон-ключи web/бота, которых тут не было (Отопление/Вентиляция→hvac,
+    # Лифт→maintenance, Интернет/ТВ→electrician). Без них dispatch по EN-ключу
+    # после нормализации возвращал None и группа не назначалась.
+    "heating": "hvac",
+    "ventilation": "hvac",
+    "elevator": "maintenance",
+    "internet": "electrician",
     # Legacy Russian names (backward compatibility)
     "Сантехника": "plumber",
     "Электрика": "electrician",

@@ -80,6 +80,7 @@ export const CATEGORY_MAP = {
   'cleaning':        'category.cleaning',
   'landscaping':     'category.landscaping',
   'security':        'category.security',
+  'internet':        'category.internet_tv',
   'internet_tv':     'category.internet_tv',
   'repair':          'category.repair',
   'other':           'category.other',

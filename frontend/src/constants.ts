@@ -1,24 +1,24 @@
 // ─── Shared constants ──────────────────────────────────────────────────────
-// Single source of truth for Russian API values used across the frontend.
+// Single source of truth for API values used across the frontend.
 // These arrays contain values as they appear in the API — do NOT translate them.
 // For display, use apiMaps.ts helpers (tStatus, tCategory, tUrgency, etc.)
 
-/** Request categories — synced with backend */
+/** Request categories — canonical EN keys sent to backend (FS-04). Display via tCategory(). */
 export const CATEGORIES = [
-  'Электрика',
-  'Сантехника',
-  'Отопление',
-  'Вентиляция',
-  'Лифт',
-  'Уборка',
-  'Благоустройство',
-  'Безопасность',
-  'Интернет/ТВ',
-  'Другое',
+  'electricity',
+  'plumbing',
+  'heating',
+  'ventilation',
+  'elevator',
+  'cleaning',
+  'landscaping',
+  'security',
+  'internet',
+  'other',
 ] as const
 
-/** Request categories including "Ремонт" (used on ResidentBoardPage) */
-export const CATEGORIES_WITH_REPAIR = [...CATEGORIES, 'Ремонт'] as const
+/** Request categories including "repair" (used on ResidentBoardPage) */
+export const CATEGORIES_WITH_REPAIR = [...CATEGORIES, 'repair'] as const
 
 /** Urgency levels — canonical keys, synced with backend (TASK 17) */
 export const URGENCIES = [
