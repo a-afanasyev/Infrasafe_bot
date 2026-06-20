@@ -64,7 +64,11 @@ interface ResidentBoardPageProps {
 
 export default function ResidentBoardPage({ configOverride }: ResidentBoardPageProps) {
   const { t, i18n } = useTranslation()
-  usePageTitle(t('nav.residentBoard')) // QA-03: иначе document.title оставался от предыдущей страницы
+  // QA-03: иначе document.title оставался от предыдущей страницы.
+  // WR-07: в режиме live-preview (configOverride задан из BoardEditorPage) не
+  // перетираем заголовок вкладки — иначе показывается «Табло жителей» вместо
+  // «Редактор витрины».
+  usePageTitle(t('nav.residentBoard'), !configOverride)
   const [now, setNow] = useState(new Date())
   const { data: board } = usePublicBoard()
   const { data: fetchedConfig } = useBoardConfig()

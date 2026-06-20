@@ -227,9 +227,8 @@ def get_template_management_keyboard(language: str = "ru") -> InlineKeyboardMark
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.view_all_templates", language=language), callback_data="templates_view_all")],
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.create_new_template", language=language), callback_data="create_new_template")],
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.edit_templates", language=language), callback_data="templates_edit")],
-        [InlineKeyboardButton(text=get_text("shift_management.keyboards.usage_statistics", language=language), callback_data="template_usage_stats")],
-        [InlineKeyboardButton(text=get_text("shift_management.keyboards.import_templates", language=language), callback_data="import_templates")],
-        [InlineKeyboardButton(text=get_text("shift_management.keyboards.export_templates", language=language), callback_data="export_templates")],
+        # FS-05: убраны мёртвые кнопки usage_statistics/import_templates/
+        # export_templates — у них не было хендлеров (клик без реакции).
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.back", language=language), callback_data="back_to_shifts")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

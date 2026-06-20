@@ -711,6 +711,10 @@ function MediaThumb({ id, isVideo, onOpen }: { id: number; isVideo: boolean; onO
     queryKey: ['media-blob', id],
     queryFn: () => fetchMediaDataUrl(id),
     staleTime: 5 * 60_000,
+    // WR-08: base64 data-URLs are heavy; with the default 5-min gcTime they
+    // linger in cache long after the modal closes. Drop them ~30s after the
+    // last observer unmounts to free memory promptly.
+    gcTime: 30_000,
     retry: false,
   })
 
@@ -750,6 +754,9 @@ function MediaLightbox({ id, onClose }: { id: number; onClose: () => void }) {
     queryKey: ['media-blob', id],
     queryFn: () => fetchMediaDataUrl(id),
     staleTime: 5 * 60_000,
+    // WR-08: match the thumbnail query so the cached data-URL is freed ~30s after
+    // the last observer (thumb or lightbox) unmounts.
+    gcTime: 30_000,
     retry: false,
   })
   const isVideo = url?.startsWith('data:video') ?? false

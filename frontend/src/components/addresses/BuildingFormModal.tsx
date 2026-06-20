@@ -126,6 +126,9 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
               <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLat')}</Label>
               <Input
                 type="number"
+                min={-90}
+                max={90}
+                step="any"
                 value={gpsLat}
                 onChange={e => setGpsLat(e.target.value)}
                 placeholder="-90 ... 90"
@@ -135,6 +138,9 @@ export default function BuildingFormModal({ building, yardId, yards, onClose }: 
               <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.gpsLon')}</Label>
               <Input
                 type="number"
+                min={-180}
+                max={180}
+                step="any"
                 value={gpsLon}
                 onChange={e => setGpsLon(e.target.value)}
                 placeholder="-180 ... 180"

@@ -143,6 +143,7 @@ export function useCreateYard() {
     onSuccess: () => {
       toast.success(i18n.t('toast.yardCreated'))
       queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Create yard failed:', error)
@@ -175,6 +176,7 @@ export function useDeleteYard() {
     onSuccess: () => {
       toast.success(i18n.t('toast.yardDeleted'))
       queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Delete yard failed:', error)
@@ -213,6 +215,7 @@ export function useCreateBuilding() {
       toast.success(i18n.t('toast.buildingCreated'))
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Create building failed:', error)
@@ -246,6 +249,7 @@ export function useDeleteBuilding() {
       toast.success(i18n.t('toast.buildingDeleted'))
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['yards'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Delete building failed:', error)
@@ -284,6 +288,7 @@ export function useCreateApartment() {
       toast.success(i18n.t('toast.apartmentCreated'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Create apartment failed:', error)
@@ -317,6 +322,7 @@ export function useDeleteApartment() {
       toast.success(i18n.t('toast.apartmentDeleted'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Delete apartment failed:', error)
@@ -353,6 +359,7 @@ export function useBulkCreateApartments() {
       toast.success(i18n.t('toast.bulkCreated'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
     onError: (error: Error) => {
       console.error('Bulk create apartments failed:', error)
