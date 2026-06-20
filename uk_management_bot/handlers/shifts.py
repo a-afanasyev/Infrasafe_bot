@@ -491,23 +491,31 @@ async def my_shift(message: Message, db=None):
 
 
 @router.message(F.text.in_(SHIFT_HISTORY_TEXTS))
-async def shifts_history(message: Message, state: FSMContext, db=None):
-    """Показать историю смен"""
+async def shifts_history(message: Message, state: FSMContext, db=None, from_user_id: int = None):
+    """Показать историю смен.
+
+    FS-01: `from_user_id` позволяет вызвать рендер из callback-хендлеров фильтров
+    БЕЗ мутации `callback.message.from_user` (aiogram 3 `Message` — frozen Pydantic,
+    присваивание бросает ValidationError → «непредвиденная ошибка»). Callback'и
+    передают `callback.from_user.id` сюда явно.
+    """
     if not db:
         db = next(get_db())
         need_close = True
     else:
         need_close = False
-    
+
+    user_id = from_user_id or message.from_user.id
+
     try:
-        lang = get_user_language(message.from_user.id, db)
+        lang = get_user_language(user_id, db)
         data = await state.get_data()
         period = data.get("my_shifts_period", "all")
         status = data.get("my_shifts_status", "all")
         page = int(data.get("my_shifts_page", 1))
 
         service = ShiftService(db)
-        shifts = service.list_shifts(telegram_id=message.from_user.id, period=period if period != "all" else None, status=None if status == "all" else status)
+        shifts = service.list_shifts(telegram_id=user_id, period=period if period != "all" else None, status=None if status == "all" else status)
         per_page = 5
         total_pages = max(1, (len(shifts) + per_page - 1) // per_page)
         if page > total_pages:
@@ -549,10 +557,8 @@ async def shifts_history_page(callback: CallbackQuery, state: FSMContext, langua
         await callback.answer(get_text("shifts.handlers.invalid_page", language=lang), show_alert=True)
         return
     await state.update_data(my_shifts_page=page)
-    # Перерисовать через message flow
-    fake = callback.message
-    fake.from_user = callback.from_user
-    await shifts_history(fake, state)
+    # FS-01: перерисовать через message flow, передав id явно (Message — frozen).
+    await shifts_history(callback.message, state, from_user_id=callback.from_user.id)
     await callback.answer()
 
 
@@ -560,9 +566,7 @@ async def shifts_history_page(callback: CallbackQuery, state: FSMContext, langua
 async def shifts_filter_period(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     value = callback.data.replace("shifts_period_", "")
     await state.update_data(my_shifts_period=value, my_shifts_page=1)
-    fake = callback.message
-    fake.from_user = callback.from_user
-    await shifts_history(fake, state)
+    await shifts_history(callback.message, state, from_user_id=callback.from_user.id)
     await callback.answer()
 
 
@@ -570,18 +574,14 @@ async def shifts_filter_period(callback: CallbackQuery, state: FSMContext, langu
 async def shifts_filter_status(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     value = callback.data.replace("shifts_status_", "")
     await state.update_data(my_shifts_status=value, my_shifts_page=1)
-    fake = callback.message
-    fake.from_user = callback.from_user
-    await shifts_history(fake, state)
+    await shifts_history(callback.message, state, from_user_id=callback.from_user.id)
     await callback.answer()
 
 
 @router.callback_query(F.data == "shifts_filters_reset")
 async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     await state.update_data(my_shifts_status="all", my_shifts_period="all", my_shifts_page=1)
-    fake = callback.message
-    fake.from_user = callback.from_user
-    await shifts_history(fake, state)
+    await shifts_history(callback.message, state, from_user_id=callback.from_user.id)
     lang = language
     await callback.answer(get_text("shifts.handlers.filters_reset", language=lang))
 

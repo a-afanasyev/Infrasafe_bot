@@ -2623,10 +2623,15 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
             from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
             assignment_service = ShiftAssignmentService(db)
 
-            # Запускаем автоматическое назначение
-            result = await assignment_service.auto_assign_executors_to_shifts(
-                target_date=date.today(),
-                days_ahead=7
+            # FS-03: auto_assign_executors_to_shifts — синхронный и принимает
+            # СПИСОК смен (не target_date/days_ahead), и не должен await'иться.
+            # Сами неназначенные смены тянем из ShiftManagementService.
+            end_dt = datetime.now() + timedelta(days=7)
+            unassigned_shifts = ShiftManagementService(db).list_unassigned_shifts_window(
+                datetime.now(), end_dt
+            )
+            result = assignment_service.auto_assign_executors_to_shifts(
+                unassigned_shifts, force_reassign=False
             )
 
             if result.get('error'):
@@ -2638,44 +2643,37 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
                 await callback.answer()
                 return
 
-            # Формируем отчет о назначении
+            # Реальная форма результата: successful_assignments / failed_assignments /
+            # conflicts_found + assignments[{executor_name, assignment_score, shift_id}]
+            # + conflicts[{shift_id, description}].
             assignments = result.get('assignments', [])
             conflicts = result.get('conflicts', [])
-            unassigned = result.get('unassigned_shifts', [])
+            assigned_count = result.get('successful_assignments', len(assignments))
+            failed_count = result.get('failed_assignments', 0)
 
-            # Формируем списки
             assignments_list = ""
             if assignments:
-                for assignment in assignments[:5]:
-                    shift = assignment.get('shift')
-                    executor = assignment.get('executor')
-                    confidence = assignment.get('confidence', 0)
-
-                    if shift and executor:
-                        assignments_list += (f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} "
-                                           f"→ {executor.first_name} {executor.last_name} "
-                                           f"({confidence:.0%})\n")
-
+                for a in assignments[:5]:
+                    name = a.get('executor_name') or f"#{a.get('executor_id')}"
+                    score = a.get('assignment_score') or 0
+                    assignments_list += f"• №{a.get('shift_id')} → {name} ({score:.0%})\n"
                 if len(assignments) > 5:
                     more_text = get_text("shift_management.and_more_assignments", language=lang, count=len(assignments) - 5)
                     assignments_list += more_text + "\n"
 
             conflicts_list = ""
             if conflicts:
-                for conflict in conflicts[:3]:
-                    shift = conflict.get('shift')
-                    reason = conflict.get('reason', get_text("shift_management.unknown_reason", language=lang))
-                    if shift:
-                        conflicts_list += f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')} - {reason}\n"
-
+                for c in conflicts[:3]:
+                    reason = c.get('description') or get_text("shift_management.unknown_reason", language=lang)
+                    conflicts_list += f"• #{c.get('shift_id')} - {reason}\n"
                 if len(conflicts) > 3:
                     more_text = get_text("shift_management.and_more_conflicts", language=lang, count=len(conflicts) - 3)
                     conflicts_list += more_text + "\n"
 
             text = get_text("shift_management.ai_assignment_result", language=lang,
-                           assigned=len(assignments),
-                           conflicts=len(conflicts),
-                           unassigned=len(unassigned),
+                           assigned=assigned_count,
+                           conflicts=result.get('conflicts_found', len(conflicts)),
+                           unassigned=failed_count,
                            assignments_list=assignments_list,
                            conflicts_list=conflicts_list)
 
@@ -2822,12 +2820,11 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
             from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
             assignment_service = ShiftAssignmentService(db)
 
-            # Выполняем перераспределение нагрузки
-            result = await assignment_service.redistribute_workload(
-                start_date=date.today(),
-                days_ahead=7,
-                max_hours_per_executor=40
-            )
+            # FS-03: метод redistribute_workload на ShiftAssignmentService не
+            # существует — балансировка выполняется синхронным
+            # balance_executor_workload(target_date). Прежний await на
+            # несуществующий метод → AttributeError → кнопка падала.
+            result = assignment_service.balance_executor_workload(target_date=date.today())
 
             if result.get('error'):
                 await callback.message.edit_text(
@@ -2838,31 +2835,37 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
                 await callback.answer()
                 return
 
-            # Формируем отчет о перераспределении
-            redistributed = result.get('redistributed_shifts', [])
-            summary = result.get('summary', {})
+            # Нечего перераспределять (нет смен / уже сбалансировано / некуда) —
+            # сервис возвращает {'message': ...} без rebalance_result.
+            if result.get('message') and not result.get('rebalancing_performed'):
+                await callback.message.edit_text(
+                    f"🔄 {result['message']}",
+                    reply_markup=get_executor_assignment_keyboard(lang),
+                    parse_mode="HTML"
+                )
+                await callback.answer()
+                return
+
+            # Реальная форма: rebalance_result.redistributions[{shift_id,
+            # from_executor, to_executor}] + initial_distribution.load_variance.
+            rebalance = result.get('rebalance_result', {})
+            redistributions = rebalance.get('redistributions', [])
+            initial = result.get('initial_distribution', {})
+            not_assigned = get_text("shift_management.not_assigned", language=lang)
 
             changes_list = ""
-            if redistributed:
-                for change in redistributed[:5]:  # Показываем первые 5
-                    shift = change.get('shift')
-                    old_executor = change.get('old_executor')
-                    new_executor = change.get('new_executor')
-
-                    if shift and new_executor:
-                        not_assigned = get_text("shift_management.not_assigned", language=lang)
-                        old_name = f"{old_executor.first_name}" if old_executor else not_assigned
-                        changes_list += (f"• {shift.date.strftime('%d.%m')} {shift.start_time.strftime('%H:%M')}\n"
-                                       f"  {old_name} → {new_executor.first_name} {new_executor.last_name}\n")
-
-                if len(redistributed) > 5:
-                    more_text = get_text("shift_management.and_more_changes", language=lang, count=len(redistributed) - 5)
-                    changes_list += f"{more_text}\n"
+            for change in redistributions[:5]:
+                old_id = change.get('from_executor') or not_assigned
+                new_id = change.get('to_executor')
+                changes_list += f"• №{change.get('shift_id')}: {old_id} → {new_id}\n"
+            if len(redistributions) > 5:
+                more_text = get_text("shift_management.and_more_changes", language=lang, count=len(redistributions) - 5)
+                changes_list += f"{more_text}\n"
 
             text = get_text("shift_management.redistribute_result", language=lang,
-                           redistributed=len(redistributed),
-                           balance_improvement=summary.get('balance_improvement', 0),
-                           load_variance=summary.get('load_variance', 0),
+                           redistributed=rebalance.get('redistributions_performed', len(redistributions)),
+                           balance_improvement=0.0,
+                           load_variance=float(initial.get('load_variance', 0) or 0),
                            changes_list=changes_list)
 
             await callback.message.edit_text(
@@ -2895,42 +2898,38 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
 
             shifts = ShiftManagementService(db).list_assigned_shifts_between(datetime.now(), end_date)
 
-            # Группируем по исполнителям и ищем пересечения
+            # FS-03: модель Shift хранит start_time/end_time как полные DateTime
+            # и не имеет полей `date`/`executor`/`executor_id` (исполнитель —
+            # `user_id`/`user`). Прежний код читал s.executor_id и shift.date →
+            # AttributeError → кнопка падала. Группируем по user_id (смены уже
+            # упорядочены сервисом по user_id, start_time) и сравниваем datetime
+            # напрямую: пересечение (end1 > start2) и короткий перерыв (<1ч).
             from itertools import groupby
-            for executor_id, executor_shifts in groupby(shifts, key=lambda s: s.user_id):
+            for _executor_id, executor_shifts in groupby(shifts, key=lambda s: s.user_id):
                 executor_shifts = list(executor_shifts)
                 for i in range(len(executor_shifts) - 1):
                     shift1 = executor_shifts[i]
                     shift2 = executor_shifts[i + 1]
 
-                    # Проверяем пересечение по времени в тот же день
-                    if (shift1.date == shift2.date and
-                        shift1.end_time > shift2.start_time):
+                    if not shift1.end_time:
+                        continue
+
+                    if shift1.end_time > shift2.start_time:
                         conflicts.append({
-                            'executor': shift1.executor,
+                            'executor': shift1.user,
                             'shift1': shift1,
                             'shift2': shift2,
                             'type': 'time_overlap'
                         })
-
-            # Находим смены без достаточного перерыва (менее 1 часа)
-            for executor_id, executor_shifts in groupby(shifts, key=lambda s: s.executor_id):
-                executor_shifts = list(executor_shifts)
-                for i in range(len(executor_shifts) - 1):
-                    shift1 = executor_shifts[i]
-                    shift2 = executor_shifts[i + 1]
-
-                    if shift1.date == shift2.date:
-                        break_time = (datetime.combine(shift2.date, shift2.start_time) -
-                                     datetime.combine(shift1.date, shift1.end_time)).total_seconds() / 3600
-
-                        if 0 < break_time < 1:  # Менее часа перерыва
+                    else:
+                        break_hours = (shift2.start_time - shift1.end_time).total_seconds() / 3600
+                        if 0 < break_hours < 1:  # Менее часа перерыва
                             conflicts.append({
-                                'executor': shift1.executor,
+                                'executor': shift1.user,
                                 'shift1': shift1,
                                 'shift2': shift2,
                                 'type': 'short_break',
-                                'break_hours': break_time
+                                'break_hours': break_hours
                             })
 
             conflicts_list = ""
@@ -2945,18 +2944,20 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
                     shift2 = conflict['shift2']
                     conflict_type = conflict['type']
 
-                    conflicts_list += f"<b>{i}. {executor.first_name} {executor.last_name}</b>\n"
-                    conflicts_list += f"📅 {shift1.date.strftime('%d.%m.%Y')}\n"
+                    name = f"{executor.first_name} {executor.last_name}" if executor else "—"
+                    _hm = lambda dt: dt.strftime('%H:%M') if dt else "—"  # noqa: E731
+                    conflicts_list += f"<b>{i}. {name}</b>\n"
+                    conflicts_list += f"📅 {shift1.start_time.strftime('%d.%m.%Y')}\n"
 
                     if conflict_type == 'time_overlap':
                         conflicts_list += f"❌ {get_text('shift_management.time_overlap_label', language=lang)}:\n"
-                        conflicts_list += f"   {shift1.start_time.strftime('%H:%M')}-{shift1.end_time.strftime('%H:%M')}\n"
-                        conflicts_list += f"   {shift2.start_time.strftime('%H:%M')}-{shift2.end_time.strftime('%H:%M')}\n"
+                        conflicts_list += f"   {_hm(shift1.start_time)}-{_hm(shift1.end_time)}\n"
+                        conflicts_list += f"   {_hm(shift2.start_time)}-{_hm(shift2.end_time)}\n"
                     elif conflict_type == 'short_break':
                         break_hours = conflict['break_hours']
                         conflicts_list += f"⚡ {get_text('shift_management.short_break_label', language=lang, hours=break_hours)}:\n"
-                        conflicts_list += f"   {shift1.start_time.strftime('%H:%M')}-{shift1.end_time.strftime('%H:%M')}\n"
-                        conflicts_list += f"   {shift2.start_time.strftime('%H:%M')}-{shift2.end_time.strftime('%H:%M')}\n"
+                        conflicts_list += f"   {_hm(shift1.start_time)}-{_hm(shift1.end_time)}\n"
+                        conflicts_list += f"   {_hm(shift2.start_time)}-{_hm(shift2.end_time)}\n"
 
                     conflicts_list += "\n"
 

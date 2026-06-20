@@ -210,11 +210,13 @@ class ShiftManagementService:
         )
 
     def list_executors_without_shifts(self, assigned_ids: list) -> List[User]:
+        # FS-03: у модели User нет колонки is_active (есть status); обращение к
+        # User.is_active бросало AttributeError → кнопка «Анализ нагрузки» падала.
         return (
             self.db.query(User)
             .filter(
                 legacy_role_filter("executor"),
-                User.is_active.is_(True),
+                User.status == "approved",
                 ~User.id.in_(assigned_ids),
             )
             .all()
