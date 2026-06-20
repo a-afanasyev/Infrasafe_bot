@@ -230,7 +230,13 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
             if shift_user:
                 specializations = sorted(parse_specializations(shift_user))
 
-        spec_text = ", ".join(specializations) if specializations else get_text("shifts.handlers.universal", language=lang)
+        # FS-10: локализуем ключи спец-ций (plumber→«Сантехник»); неизвестный
+        # ключ get_text вернёт как есть → fallback на сырое значение.
+        def _loc_spec(s):
+            t = get_text(f"specializations.{s}", language=lang)
+            return s if t == f"specializations.{s}" else t
+
+        spec_text = ", ".join(_loc_spec(s) for s in specializations) if specializations else get_text("shifts.handlers.universal", language=lang)
 
         # Формируем текст
         text = f"⚠️ <b>{get_text('shifts.handlers.end_shift_confirmation', language=lang)}</b>\n\n"
