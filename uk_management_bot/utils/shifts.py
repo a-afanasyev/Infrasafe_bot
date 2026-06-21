@@ -14,12 +14,25 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.utils.constants import SHIFT_STATUS_ACTIVE
+
+
+def effective_shift_time():
+    """FS-06/FS-07: единое «эффективное время смены» для UI-чтений.
+
+    Плановые смены живут на `planned_start_time`, ad-hoc (через «Принять смену»)
+    — только на `start_time` (`planned_start_time` = NULL). Вьюхи «Текущие смены»
+    и «История смен» раньше фильтровали/показывали по `planned_start_time` → не
+    видели ad-hoc-смены (расхождение с «Моя смена»/«История» на `start_time`).
+    `COALESCE(planned_start_time, start_time)` сводит оба типа к одному полю.
+    NB: НЕ заменяет `_on_shift_filter` (предикат «на смене сейчас» для claim-пула).
+    """
+    return func.coalesce(Shift.planned_start_time, Shift.start_time)
 
 
 def _on_shift_filter(user_id: int, now: datetime):

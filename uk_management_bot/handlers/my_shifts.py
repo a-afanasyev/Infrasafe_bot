@@ -100,13 +100,18 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
         today = date.today()
         tomorrow = today + timedelta(days=1)
 
+        # FS-06: ad-hoc смены живут на start_time (planned_start_time=NULL) —
+        # фильтр/сортировка по «эффективному времени», иначе «🔥 Текущие смены»
+        # их не видят (расхождение с «ℹ️ Моя смена»).
+        from uk_management_bot.utils.shifts import effective_shift_time
+        _eff = effective_shift_time()
         current_shifts = db.query(Shift).filter(
             and_(
                 Shift.user_id == user.id,
-                func.date(Shift.planned_start_time).in_([today, tomorrow]),
+                func.date(_eff).in_([today, tomorrow]),
                 Shift.status.in_(['planned', 'active'])
             )
-        ).order_by(Shift.planned_start_time).all()
+        ).order_by(_eff).all()
 
         if not current_shifts:
             await callback.message.edit_text(
@@ -121,12 +126,15 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
         shifts_text = f"📅 <b>{get_text('my_shifts.handlers.your_current_shifts', language=lang)}</b>\n\n"
 
         for shift in current_shifts:
-            shift_date = shift.planned_start_time.date()
+            # FS-06: ad-hoc смена не имеет planned_*; берём эффективное время.
+            eff_start = shift.planned_start_time or shift.start_time
+            eff_end = shift.planned_end_time or shift.end_time
+            shift_date = eff_start.date()
             is_today = shift_date == today
             date_prefix = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}"
-            
-            start_time = shift.planned_start_time.strftime("%H:%M")
-            end_time = shift.planned_end_time.strftime("%H:%M") if shift.planned_end_time else "?"
+
+            start_time = eff_start.strftime("%H:%M")
+            end_time = eff_end.strftime("%H:%M") if eff_end else "?"
             
             status_emoji = {
                 'planned': '⏱️',
@@ -560,15 +568,20 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
         end_date = date.today()
         start_date = end_date - timedelta(days=30)
 
+        # FS-07: история через «эффективное время» (ad-hoc на start_time,
+        # planned_start_time=NULL) — иначе завершённые ad-hoc смены теряются и
+        # «История» расходится с «🔄 Смена → 📜 История» (та на start_time).
+        from uk_management_bot.utils.shifts import effective_shift_time
+        _eff = effective_shift_time()
         filters = [
-            func.date(Shift.planned_start_time) >= start_date,
-            func.date(Shift.planned_start_time) <= end_date,
+            func.date(_eff) >= start_date,
+            func.date(_eff) <= end_date,
             Shift.status.in_(['completed', 'cancelled']),
         ]
         if not is_privileged:
             filters.append(Shift.user_id == user.id)
 
-        history_shifts = db.query(Shift).filter(and_(*filters)).order_by(Shift.planned_start_time.desc()).limit(20).all()
+        history_shifts = db.query(Shift).filter(and_(*filters)).order_by(_eff.desc()).limit(20).all()
         
         if not history_shifts:
             await callback.message.edit_text(
@@ -603,8 +616,10 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
         ) + "\n"
         
         for shift in history_shifts[:10]:  # Показываем последние 10
-            shift_date = shift.planned_start_time.strftime('%d.%m')
-            start_time = shift.planned_start_time.strftime('%H:%M')
+            # FS-07: ad-hoc смена без planned_* → эффективное время.
+            eff_start = shift.planned_start_time or shift.start_time
+            shift_date = eff_start.strftime('%d.%m')
+            start_time = eff_start.strftime('%H:%M')
             
             status_emoji = {
                 'completed': '✅',

@@ -159,6 +159,26 @@ def test_fs03_auto_assign_is_sync_and_takes_shift_list():
     assert "shifts" in inspect.signature(m).parameters
 
 
+def test_fs06_fs07_effective_time_matches_adhoc_shift(db):
+    """FS-06/07: ad-hoc смена (start_time, planned_start_time=NULL) видна через
+    effective_shift_time, но НЕ через planned_start_time (старый фильтр)."""
+    from datetime import date
+    from sqlalchemy import func
+    from uk_management_bot.utils.shifts import effective_shift_time
+
+    user = User(id=50, telegram_id=5050, username="ad", first_name="A", last_name="H",
+                roles='["executor"]', active_role="executor", status="approved", language="ru")
+    db.add(user)
+    db.add(Shift(user_id=user.id, status="active", start_time=datetime.now()))  # ad-hoc, planned=NULL
+    db.commit()
+
+    today = date.today()
+    via_eff = db.query(Shift).filter(func.date(effective_shift_time()) == today).all()
+    via_planned = db.query(Shift).filter(func.date(Shift.planned_start_time) == today).all()
+    assert len(via_eff) == 1          # effective time видит ad-hoc
+    assert len(via_planned) == 0      # старый planned-фильтр — нет (корень FS-06/07)
+
+
 def test_fs03_redistribute_uses_balance_method_not_missing_one():
     """redistribute_load: balance_executor_workload есть, redistribute_workload нет."""
     from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
