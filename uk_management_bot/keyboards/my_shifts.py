@@ -32,7 +32,11 @@ def get_shift_list_keyboard(shifts: List[Shift], language: str = "ru") -> Inline
 
     for shift in shifts:
         # Формируем описание смены
-        shift_date = shift.planned_start_time.date()
+        # FS-06: ad-hoc смены без planned_* → эффективное время (start_time),
+        # иначе planned_start_time.date() падает на NoneType для ad-hoc.
+        eff_start = shift.planned_start_time or shift.start_time
+        eff_end = shift.planned_end_time or shift.end_time
+        shift_date = eff_start.date()
         today = date.today()
         tomorrow = today + timedelta(days=1)
 
@@ -43,8 +47,8 @@ def get_shift_list_keyboard(shifts: List[Shift], language: str = "ru") -> Inline
         else:
             date_prefix = "📆"
 
-        start_time = shift.planned_start_time.strftime("%H:%M")
-        end_time = shift.planned_end_time.strftime("%H:%M") if shift.planned_end_time else "?"
+        start_time = eff_start.strftime("%H:%M")
+        end_time = eff_end.strftime("%H:%M") if eff_end else "?"
 
         status_emoji = {
             'planned': '⏱️',
