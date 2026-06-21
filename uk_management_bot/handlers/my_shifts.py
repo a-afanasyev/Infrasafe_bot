@@ -330,14 +330,18 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
             return
 
         # Формируем подробную информацию
-        shift_date = shift.planned_start_time.date()
+        # FS-06: ad-hoc смена без planned_* (достижима из «Текущие смены» →
+        # shift_details) → эффективное время, иначе planned_start_time.date() крах.
+        eff_start = shift.planned_start_time or shift.start_time
+        eff_end = shift.planned_end_time or shift.end_time
+        shift_date = eff_start.date()
         is_today = shift_date == date.today()
         is_tomorrow = shift_date == date.today() + timedelta(days=1)
 
         date_text = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}" if is_tomorrow else shift_date.strftime('%d.%m.%Y')
-        
-        start_time = shift.planned_start_time.strftime("%H:%M")
-        end_time = shift.planned_end_time.strftime("%H:%M") if shift.planned_end_time else "?"
+
+        start_time = eff_start.strftime("%H:%M")
+        end_time = eff_end.strftime("%H:%M") if eff_end else "?"
         
         status_text = {
             'planned': f"⏱️ {get_text('my_shifts.handlers.status_planned', language=lang)}",

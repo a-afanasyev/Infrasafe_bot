@@ -179,6 +179,16 @@ def test_fs06_fs07_effective_time_matches_adhoc_shift(db):
     assert len(via_planned) == 0      # старый planned-фильтр — нет (корень FS-06/07)
 
 
+def test_fs06_shift_list_keyboard_handles_adhoc_shift():
+    """FS-06: get_shift_list_keyboard для ad-hoc смены (planned_start_time=NULL)
+    не падает на NoneType.date() — берёт эффективное время (start_time)."""
+    from uk_management_bot.keyboards.my_shifts import get_shift_list_keyboard
+    adhoc = Shift(id=999, user_id=1, status="active", start_time=datetime.now())
+    kb = get_shift_list_keyboard([adhoc], "ru")
+    assert any(b.callback_data == "shift_details:999"
+               for row in kb.inline_keyboard for b in row)
+
+
 def test_fs03_redistribute_uses_balance_method_not_missing_one():
     """redistribute_load: balance_executor_workload есть, redistribute_workload нет."""
     from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
