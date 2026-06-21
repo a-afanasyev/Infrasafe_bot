@@ -470,6 +470,24 @@ class TestResolveCommand:
             LegacyStatusIntent("c", REQUEST_STATUS_APPROVED))
         assert cmd.action == Action.MANAGER_FORCE_ACCEPT
 
+    def test_accept_manager_owner_without_rating_maps_to_force_accept(self):
+        """Регрессия: владелец-И-менеджер «принимает за заявителя» без rating.
+        Раньше user-приоритет выбирал APPLICANT_ACCEPT → PayloadInvalid
+        'missing required rating'. Теперь без rating → MANAGER_FORCE_ACCEPT."""
+        mgr_owner = _user(OWNER_ID, "applicant", "manager")
+        cmd = resolve_command(
+            _snap(REQUEST_STATUS_COMPLETED), mgr_owner,
+            LegacyStatusIntent("c", REQUEST_STATUS_APPROVED))
+        assert cmd.action == Action.MANAGER_FORCE_ACCEPT
+
+    def test_accept_manager_owner_with_rating_maps_to_applicant_accept(self):
+        """С rating владелец-менеджер всё ещё оценивает (APPLICANT_ACCEPT)."""
+        mgr_owner = _user(OWNER_ID, "applicant", "manager")
+        cmd = resolve_command(
+            _snap(REQUEST_STATUS_COMPLETED), mgr_owner,
+            LegacyStatusIntent("c", REQUEST_STATUS_APPROVED, {"rating": 5}))
+        assert cmd.action == Action.APPLICANT_ACCEPT
+
     def test_in_progress_target_from_new_is_assign(self):
         cmd = resolve_command(
             _snap(REQUEST_STATUS_NEW), MANAGER,

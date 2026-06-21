@@ -809,6 +809,14 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
         if ACTION_TABLE[a].to_status == target
         and a not in _STATUS_RESOLVE_EXCLUDE
     ]
+    # APPLICANT_ACCEPT требует rating (PAYLOAD_SCHEMAS). При status-based входе
+    # БЕЗ rating (напр. дашборд-менеджер принимает «за заявителя» перетаскиванием
+    # в «Принято») user-приоритет выбрал бы APPLICANT_ACCEPT и упал на
+    # PayloadInvalid «missing required 'rating'». Без rating это действие
+    # невыполнимо — убираем его из кандидатов, давая дорогу MANAGER_FORCE_ACCEPT
+    # (rating не нужен). Приёмка с оценкой (TWA/бот) шлёт rating и сюда не падает.
+    if not intent.payload.get("rating"):
+        candidates = [a for a in candidates if a != Action.APPLICANT_ACCEPT]
     if not candidates:
         canon = normalize_status(snap.request)
         raise InvalidTransition(
