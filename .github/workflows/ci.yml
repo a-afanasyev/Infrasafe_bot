@@ -35,6 +35,42 @@ jobs:
       - name: Ruff (whole scope)
         run: ruff check .
 
+  pip-audit:
+    name: pip-audit (dependency CVE gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit==2.9.0
+
+      # REG-03: blocking CVE gate over the hash-pinned runtime lock. The only
+      # ignored cluster is aiohttp (11 CVEs) — its fixes land in 3.14.x, which
+      # aiogram 3.28.2 caps out (`aiohttp<3.14`). The ignore-list is therefore
+      # stable until aiogram is bumped; at that point drop these and bump aiohttp
+      # in requirements.in. Any NEW vuln in any OTHER package fails this job.
+      # Bumpable CVEs (cryptography/python-multipart/starlette) were closed in
+      # the REG-03 dep-bump, so they must NOT reappear here.
+      - name: Audit runtime dependencies
+        run: |
+          pip-audit -r requirements.txt \
+            --ignore-vuln CVE-2026-34993 \
+            --ignore-vuln CVE-2026-47265 \
+            --ignore-vuln CVE-2026-50269 \
+            --ignore-vuln CVE-2026-54273 \
+            --ignore-vuln CVE-2026-54274 \
+            --ignore-vuln CVE-2026-54275 \
+            --ignore-vuln CVE-2026-54276 \
+            --ignore-vuln CVE-2026-54277 \
+            --ignore-vuln CVE-2026-54278 \
+            --ignore-vuln CVE-2026-54279 \
+            --ignore-vuln CVE-2026-54280
+
   backend-tests:
     name: backend-tests (pytest)
     runs-on: ubuntu-latest
