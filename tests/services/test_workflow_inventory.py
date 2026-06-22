@@ -171,6 +171,9 @@ BASELINE: set[tuple[str, str, str]] = {
     # выше, в assignment_service.py).
     # 3. SHIFT-машина (вне scope; одноимённые поля Shift/ShiftTransfer)
     ('uk_management_bot/api/shifts/service.py', 'attr:transfer', 'assigned_at'),
+    # REG-02: approve_transfer (assign-only) пишет ShiftTransfer.assigned_by —
+    # аудит «кто из менеджеров назначил» (НЕ Request.assigned_by; совпадает имя).
+    ('uk_management_bot/api/shifts/service.py', 'attr:transfer', 'assigned_by'),
     ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),

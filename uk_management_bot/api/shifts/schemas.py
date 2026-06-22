@@ -148,6 +148,11 @@ class CreateFromTemplateBody(BaseModel):
     user_ids: list[int] = Field(..., min_length=1)
 
 
+class ReassignShiftBody(BaseModel):
+    # REG-02: прямой менеджерский reassign смены (без согласия получателя).
+    executor_id: int
+
+
 class HandleTransferBody(BaseModel):
     action: TransferAction
     to_executor_id: Optional[int] = None  # required when action == "approve"

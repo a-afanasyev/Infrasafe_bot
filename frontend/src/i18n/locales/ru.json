@@ -191,9 +191,10 @@
   "transferReason": {
     "workload": "Загруженность",
     "illness": "Болезнь",
-    "personal": "Личные причины",
     "emergency": "Экстренная ситуация",
-    "schedule": "Изменение графика"
+    "vacation": "Отпуск",
+    "other": "Другое",
+    "manager_reassign": "Переназначение менеджером"
   },
   "priority": {
     "1": "1 — Низкий",
@@ -754,7 +755,13 @@
     "confirmEndShiftDesc": "Завершить смену? Это действие нельзя отменить.",
     "confirmEnd": "Завершить",
     "specializationsLabel": "Специализации",
-    "dayOffset": "+{{n}}д"
+    "dayOffset": "+{{n}}д",
+    "reassignShift": "🔄 Переназначить",
+    "reassignPick": "Новый исполнитель",
+    "reassignSelectPlaceholder": "Выберите исполнителя…",
+    "confirmReassign": "Переназначить",
+    "reassigning": "Переназначение…",
+    "executorEditHint": "Исполнителя можно сменить только через «Переназначить» (переносит активные заявки)."
   },
   "templates": {
     "title": "Шаблоны",
@@ -1110,7 +1117,9 @@
     "templateDeleted": "Шаблон удалён",
     "templateDeleteFailed": "Не удалось удалить шаблон",
     "shiftFromTemplate": "Смена создана из шаблона",
-    "shiftFromTemplateFailed": "Не удалось создать смену из шаблона"
+    "shiftFromTemplateFailed": "Не удалось создать смену из шаблона",
+    "shiftReassigned": "Смена переназначена",
+    "shiftReassignFailed": "Не удалось переназначить смену"
   },
   "feedback": {
     "title": "Обратная связь",

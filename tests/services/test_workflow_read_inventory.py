@@ -136,6 +136,9 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/api/requests/router.py', 'cmp:req', 'status'),
     ('uk_management_bot/api/requests/stats_router.py', 'in_:Request', 'status'),
     ('uk_management_bot/api/shifts/service.py', 'in_:Request', 'status'),
+    # REG-02: _move_active_requests_web фильтрует заявки активных статусов перед
+    # status-preserving переносом при reassign смены (набор-фильтр, не переход).
+    ('uk_management_bot/api/shifts/service.py', 'cmp:req', 'status'),
     # одноразовый migration-скрипт (write-гейт уже фиксирует его update())
     # FALSE-POSITIVE/вне scope (подтверждено PR2-pre/2): self.request.status in
     # ["completed","cancelled"] (shift_assignment.py:212) — non-canon значения,

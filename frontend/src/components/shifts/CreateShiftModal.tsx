@@ -104,9 +104,10 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
 
     try {
       if (isEdit && shift) {
+        // REG-02: смена исполнителя только через /reassign — НЕ шлём user_id
+        // в PATCH (он вернул бы 422 и обходил бы перенос заявок/аудит).
         await updateShift.mutateAsync({
           id: shift.id,
-          user_id: Number(executorId),
           start_time: new Date(startTime).toISOString(),
           end_time: endTime ? new Date(endTime).toISOString() : undefined,
           shift_type: shiftType,
@@ -167,6 +168,7 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
               <Select
                 value={executorId}
                 onChange={e => setExecutorId(e.target.value)}
+                disabled={isEdit}
               >
                 <option value="">{t('shifts.selectExecutor')}</option>
                 {showCurrentExecutor && shift && (
@@ -181,6 +183,11 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
                   </option>
                 ))}
               </Select>
+              {/* REG-02: исполнителя нельзя менять через редактирование смены —
+                  только через «Переназначить» (переносит активные заявки/аудит). */}
+              {isEdit && (
+                <p className="text-[11px] text-text-muted">{t('shifts.executorEditHint')}</p>
+              )}
             </div>
 
             {/* Start time */}

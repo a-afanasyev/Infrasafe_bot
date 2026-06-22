@@ -189,11 +189,12 @@
     "paused": "To'xtatilgan"
   },
   "transferReason": {
-    "workload": "Ish yuki",
+    "workload": "Bandlik",
     "illness": "Kasallik",
-    "personal": "Shaxsiy sabablar",
     "emergency": "Favqulodda holat",
-    "schedule": "Jadval o'zgarishi"
+    "vacation": "Ta'til",
+    "other": "Boshqa",
+    "manager_reassign": "Menejer tomonidan qayta tayinlash"
   },
   "priority": {
     "1": "1 — Past",
@@ -744,7 +745,13 @@
     "confirmEndShiftDesc": "Smenani tugatish? Bu amalni bekor qilib bo'lmaydi.",
     "confirmEnd": "Tugatish",
     "specializationsLabel": "Ixtisosliklar",
-    "dayOffset": "+{{n}} kun"
+    "dayOffset": "+{{n}} kun",
+    "reassignShift": "🔄 Qayta tayinlash",
+    "reassignPick": "Yangi ijrochi",
+    "reassignSelectPlaceholder": "Ijrochini tanlang…",
+    "confirmReassign": "Qayta tayinlash",
+    "reassigning": "Qayta tayinlanmoqda…",
+    "executorEditHint": "Ijrochini faqat «Qayta tayinlash» orqali o'zgartirish mumkin (faol arizalarni ko'chiradi)."
   },
   "templates": {
     "title": "Shablonlar",
@@ -1100,7 +1107,9 @@
     "templateDeleted": "Shablon o'chirildi",
     "templateDeleteFailed": "Shablonni o'chirib bo'lmadi",
     "shiftFromTemplate": "Smena shablondan yaratildi",
-    "shiftFromTemplateFailed": "Shablondan smena yaratib bo'lmadi"
+    "shiftFromTemplateFailed": "Shablondan smena yaratib bo'lmadi",
+    "shiftReassigned": "Smena qayta tayinlandi",
+    "shiftReassignFailed": "Smenani qayta tayinlab bo'lmadi"
   },
   "feedback": {
     "title": "Qayta aloqa",

@@ -22,10 +22,17 @@ from sqlalchemy.orm import aliased
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.database.models.shift_assignment import ShiftAssignment
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.utils.specializations import has_required_specs
+from uk_management_bot.api.dependencies import _parse_user_roles
+
+# REG-02: статусы заявок, переносимых вместе со сменой при переназначении
+# (status-preserving). Совпадает с бот-ядром ShiftTransferService.
+REASSIGN_MOVE_STATUSES = {"В работе", "Закуп", "Уточнение"}
 
 
 # «Возвращена» (канон cutover PR3+4) — активная (ждёт разбора менеджером);
@@ -542,31 +549,30 @@ async def get_shift_for_update(db: AsyncSession, shift_id: int) -> Optional[Shif
 
 
 async def approve_transfer(
-    db: AsyncSession, *, transfer: ShiftTransfer, to_executor_id: int,
+    db: AsyncSession, *, transfer: ShiftTransfer, to_executor_id: int, manager_id: int,
 ) -> None:
-    """Mark transfer 'assigned' and reassign its shift to the new executor."""
+    """Назначить получателя передачи (pending→assigned). ASSIGN-ONLY (REG-02).
+
+    НЕ трогает `shift.user_id` — смена переходит к исполнителю только когда он
+    ПРИМЕТ передачу в боте (`accept_transfer`). Раньше web сразу переписывал
+    владельца смены, конфликтуя с unified-флоу «assign → executor accept».
+    """
     transfer.status = "assigned"
     transfer.to_executor_id = to_executor_id
+    transfer.assigned_by = manager_id
     transfer.assigned_at = datetime.now(timezone.utc)
-
-    the_shift = await get_shift_for_update(db, transfer.shift_id)
-    if the_shift:
-        the_shift.user_id = to_executor_id
 
 
 async def reject_transfer(
     db: AsyncSession, *, transfer: ShiftTransfer,
 ) -> Optional[Shift]:
-    """Mark transfer 'rejected' and restore original executor on its shift.
+    """Отклонить передачу (assigned→rejected). Смена НЕ менялась на assign-шаге
+    (REG-02), поэтому восстанавливать `shift.user_id` не нужно.
 
-    Returns the shift if found (None when the shift is gone so the caller can
-    emit the original warning).
+    Возвращает смену (или None, если её нет — для прежнего warning у вызывающего).
     """
     transfer.status = "rejected"
-    the_shift = await get_shift_for_update(db, transfer.shift_id)
-    if the_shift:
-        the_shift.user_id = transfer.from_executor_id
-    return the_shift
+    return await get_shift_for_update(db, transfer.shift_id)
 
 
 def cancel_transfer(transfer: ShiftTransfer) -> None:
@@ -669,3 +675,105 @@ async def end_shift(db: AsyncSession, *, shift: Shift) -> Shift:
     await db.commit()
     await db.refresh(shift)
     return shift
+
+
+# ---------------------------------------------------------------------------
+# Manager-direct reassign (REG-02) — async-зеркало ShiftTransferService.reassign_shift
+# ---------------------------------------------------------------------------
+
+async def _move_active_requests_web(
+    db: AsyncSession, shift: Shift, old_executor_id: int, new_executor_id: int,
+) -> list[str]:
+    """Status-preserving перенос активных заявок смены old→new (без commit).
+
+    Скоуп: не-терминальные ShiftAssignment этой смены; fallback по
+    Request.executor_id только для active-смены. Переброска — через allowlist-слой
+    AsyncAssignmentService.reassign_executor. Возвращает перенесённые request_number.
+    """
+    from uk_management_bot.services.async_assignment_service import AsyncAssignmentService
+
+    assignment_svc = AsyncAssignmentService(db)
+
+    sa_result = await db.execute(
+        select(ShiftAssignment).where(
+            ShiftAssignment.shift_id == shift.id,
+            ShiftAssignment.status.notin_(["completed", "cancelled"]),
+        )
+    )
+    request_numbers = {row.request_number for row in sa_result.scalars().all()}
+
+    if not request_numbers and shift.status == "active":
+        fb_result = await db.execute(
+            select(Request).where(
+                Request.executor_id == old_executor_id,
+                Request.status.in_(REASSIGN_MOVE_STATUSES),
+            )
+        )
+        request_numbers = {r.request_number for r in fb_result.scalars().all()}
+
+    moved: list[str] = []
+    for request_number in request_numbers:
+        req_result = await db.execute(
+            select(Request).where(Request.request_number == request_number)
+        )
+        req = req_result.scalar_one_or_none()
+        if req and req.status in REASSIGN_MOVE_STATUSES:
+            if await assignment_svc.reassign_executor(request_number, new_executor_id):
+                moved.append(request_number)
+    return moved
+
+
+async def reassign_shift_web(
+    db: AsyncSession, *, shift_id: int, new_executor_id: int, manager_id: int,
+) -> dict:
+    """Прямой менеджерский reassign смены (без согласия получателя).
+
+    Те же guards, что бот-ядро (approved/executor/спец-ия/overlap active+planned,
+    не текущий владелец). Меняет `shift.user_id`, переносит активные заявки
+    (status-preserving), пишет ShiftTransfer-историю, commit. Возвращает
+    {success, error, moved_request_numbers, shift}. Realtime/HTTP-маппинг — в роутере.
+    """
+    shift = await get_shift_for_update(db, shift_id)
+    if not shift:
+        return {"success": False, "error": "shift_not_found"}
+
+    new_executor = await get_user(db, new_executor_id)
+    if not new_executor:
+        return {"success": False, "error": "executor_not_found"}
+    if new_executor.status != "approved":
+        return {"success": False, "error": "not_approved"}
+    if "executor" not in _parse_user_roles(new_executor):
+        return {"success": False, "error": "not_executor"}
+    if shift.user_id == new_executor_id:
+        return {"success": False, "error": "same_executor"}
+    if not has_required_specs(new_executor, shift):
+        return {"success": False, "error": "spec_mismatch"}
+    if shift.start_time is not None and shift.end_time is not None:
+        overlap = await find_overlapping_shift_for_update(
+            db, user_id=new_executor_id, start_time=shift.start_time,
+            end_time=shift.end_time, exclude_shift_id=shift.id, lock=True,
+        )
+        if overlap:
+            return {"success": False, "error": "overlap"}
+
+    old_executor_id = shift.user_id
+    shift.user_id = new_executor_id
+    moved = await _move_active_requests_web(db, shift, old_executor_id, new_executor_id)
+
+    now = datetime.now(timezone.utc)
+    db.add(ShiftTransfer(
+        shift_id=shift.id,
+        from_executor_id=old_executor_id,
+        to_executor_id=new_executor_id,
+        assigned_by=manager_id,
+        status="completed",
+        reason="manager_reassign",
+        auto_assigned=True,
+        assigned_at=now,
+        responded_at=now,
+        completed_at=now,
+    ))
+
+    await db.commit()
+    await db.refresh(shift)
+    return {"success": True, "error": None, "moved_request_numbers": moved, "shift": shift}

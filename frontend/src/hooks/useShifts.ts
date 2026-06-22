@@ -106,6 +106,27 @@ export function useUpdateShift() {
   })
 }
 
+export function useReassignShift() {
+  // REG-02: прямой менеджерский reassign смены (без согласия получателя).
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, executor_id }: { id: number; executor_id: number }) =>
+      apiClient.post(`/api/v2/shifts/${id}/reassign`, { executor_id }).then(r => r.data),
+    onSuccess: (_, variables) => {
+      toast.success(i18n.t('toast.shiftReassigned'))
+      queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-schedule'] })
+      queryClient.invalidateQueries({ queryKey: ['shift-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['shift', variables.id] })
+      // заявки перенесены на нового исполнителя → обновить канбан
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+    },
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.shiftReassignFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 export function useDeleteShift() {
   const queryClient = useQueryClient()
   return useMutation({
