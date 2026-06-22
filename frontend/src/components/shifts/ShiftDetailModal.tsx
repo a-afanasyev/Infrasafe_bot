@@ -228,6 +228,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
         onConfirm={handleEndShift}
         variant="warning"
         loading={endShift.isPending}
+        closeOnConfirm={false}
       />
     </>
   )

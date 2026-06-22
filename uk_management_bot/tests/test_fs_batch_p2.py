@@ -189,6 +189,56 @@ def test_fs06_shift_list_keyboard_handles_adhoc_shift():
                for row in kb.inline_keyboard for b in row)
 
 
+# ─────────────────── shift_details / start / end (BUG-BOT-007 добивка) ───────────────────
+
+@pytest.mark.parametrize("handler_name", [
+    "handle_shift_details", "handle_start_shift", "handle_end_shift",
+])
+def test_shift_detail_handlers_accept_di_params(handler_name):
+    """require_role читает kwargs['roles']; aiogram отдаёт DI-параметры только если
+    они есть в сигнатуре хендлера. Без db/user/roles исполнителю прилетал
+    «нет прав доступа» на ЕГО ЖЕ смене. Проверяем, что параметры объявлены."""
+    from uk_management_bot.handlers import my_shifts as ms
+    sig = inspect.signature(getattr(ms, handler_name))
+    for p in ("db", "user", "roles"):
+        assert p in sig.parameters, f"{handler_name} не принимает DI-параметр {p}"
+
+
+@pytest.mark.asyncio
+async def test_shift_details_resolves_internal_user_id(db):
+    """Деталь смены ищется по Shift.user_id == user.id (внутренний DB id),
+    а не telegram_id. Раньше сравнивалось с callback.from_user.id (telegram_id)
+    → смена не находилась («shift_not_found») / нет прав."""
+    from uk_management_bot.handlers import my_shifts as ms
+
+    # id != telegram_id — именно это расхождение ломало выборку.
+    user = User(id=7, telegram_id=70707, username="ex", first_name="E", last_name="X",
+                roles='["executor"]', active_role="executor", status="approved", language="ru")
+    db.add(user)
+    shift = Shift(user_id=user.id, status="active", start_time=datetime.now())
+    db.add(shift)
+    db.commit()
+
+    cb = MagicMock()
+    cb.data = f"shift_details:{shift.id}"
+    cb.from_user = MagicMock(id=70707)
+    cb.message = MagicMock()
+    cb.message.edit_text = AsyncMock()
+    cb.answer = AsyncMock()
+    state = MagicMock()
+    state.update_data = AsyncMock()
+    state.set_state = AsyncMock()
+
+    with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        # db/user инжектятся как DI — смена должна найтись и отрисоваться.
+        await ms.handle_shift_details(cb, state, language="ru", db=db, user=user, roles=["executor"])
+
+    cb.message.edit_text.assert_awaited_once()
+    # не ушли в ветку shift_not_found
+    answers = [c.args[0] for c in cb.answer.await_args_list if c.args]
+    assert "my_shifts.handlers.shift_not_found" not in answers
+
+
 def test_fs03_redistribute_uses_balance_method_not_missing_one():
     """redistribute_load: balance_executor_workload есть, redistribute_workload нет."""
     from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
