@@ -21,6 +21,15 @@ interface ConfirmDialogProps {
   variant?: "danger" | "warning" | "default"
   onConfirm: () => void
   loading?: boolean
+  /**
+   * Закрыть диалог сразу после onConfirm (по умолчанию true).
+   * Диалог контролируемый (`open` приходит из родителя), поэтому встроенный
+   * close Radix перебивается ре-рендером, если onConfirm синхронно мутирует
+   * состояние — диалог «зависал» открытым после успешного действия. Явный
+   * onOpenChange(false) это чинит для fire-and-forget вызывателей.
+   * Async-flow, которые сами закрывают родителя после await, ставят false.
+   */
+  closeOnConfirm?: boolean
 }
 
 const variantStyles = {
@@ -39,6 +48,7 @@ export default function ConfirmDialog({
   variant = "danger",
   onConfirm,
   loading = false,
+  closeOnConfirm = true,
 }: ConfirmDialogProps) {
   const { t } = useTranslation()
   const resolvedConfirmLabel = confirmLabel ?? t('common.delete')
@@ -58,6 +68,7 @@ export default function ConfirmDialog({
           <AlertDialogAction
             onClick={() => {
               onConfirm()
+              if (closeOnConfirm) onOpenChange(false)
             }}
             disabled={loading}
             className={cn(variantStyles[variant], loading && "opacity-70")}

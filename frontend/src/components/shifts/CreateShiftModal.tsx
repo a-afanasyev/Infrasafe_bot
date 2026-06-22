@@ -321,6 +321,7 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
         onConfirm={handleDelete}
         variant="warning"
         loading={deleteShift.isPending}
+        closeOnConfirm={false}
       />
     </>
   )

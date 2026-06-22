@@ -308,20 +308,30 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
 
 @router.callback_query(F.data.startswith("shift_details:"))
 @require_role(['executor'])
-async def handle_shift_details(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def handle_shift_details(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None, user: User = None, roles: list = None):
     """Подробная информация о смене"""
-    db = None  # ARCH-013: гарантируем close в finally
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         shift_id = int(callback.data.split(':')[1])
-        db = next(get_db())
-        user_id = callback.from_user.id
+        if not db:
+            db = next(get_db())
         lang = language
-        
+
+        # BUG-BOT-007: Shift.user_id — FK на users.id (внутренний DB id), а не
+        # telegram_id; callback.from_user.id это telegram_id → нужен резолв user.
+        # Без db/user/roles в сигнатуре aiogram DI не передавал roles, и
+        # require_role отклонял исполнителя на ЕГО ЖЕ смене («нет прав доступа»).
+        if user is None:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if user is None:
+            await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
         # Получаем смену
         shift = db.query(Shift).filter(
             and_(
                 Shift.id == shift_id,
-                Shift.user_id == user_id
+                Shift.user_id == user.id
             )
         ).first()
         
@@ -420,15 +430,15 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
         logger.error(f"Ошибка просмотра деталей смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
 @router.callback_query(F.data == "start_shift")
 @require_role(['executor'])
-async def handle_start_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def handle_start_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None, user: User = None, roles: list = None):
     """Начать смену"""
-    db = None  # ARCH-013: гарантируем close в finally
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         lang = language
         data = await state.get_data()
@@ -438,14 +448,21 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
             await callback.answer(get_text("my_shifts.handlers.shift_not_selected", language=lang), show_alert=True)
             return
 
-        db = next(get_db())
-        user_id = callback.from_user.id
-        
+        if not db:
+            db = next(get_db())
+
+        # BUG-BOT-007: Shift.user_id — FK на users.id, не telegram_id (резолв user).
+        if user is None:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if user is None:
+            await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
         # Получаем и обновляем смену
         shift = db.query(Shift).filter(
             and_(
                 Shift.id == shift_id,
-                Shift.user_id == user_id,
+                Shift.user_id == user.id,
                 Shift.status == 'planned'
             )
         ).first()
@@ -473,15 +490,15 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
         logger.error(f"Ошибка начала смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
 @router.callback_query(F.data == "end_shift")
 @require_role(['executor'])
-async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru", db=None, user: User = None, roles: list = None):
     """Завершить смену"""
-    db = None  # ARCH-013: гарантируем close в finally
+    own_db = db is None  # ARCH-013: закрываем только свою сессию
     try:
         lang = language
         data = await state.get_data()
@@ -491,14 +508,21 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
             await callback.answer(get_text("my_shifts.handlers.shift_not_selected", language=lang), show_alert=True)
             return
 
-        db = next(get_db())
-        user_id = callback.from_user.id
-        
+        if not db:
+            db = next(get_db())
+
+        # BUG-BOT-007: Shift.user_id — FK на users.id, не telegram_id (резолв user).
+        if user is None:
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if user is None:
+            await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
+            return
+
         # Получаем и обновляем смену
         shift = db.query(Shift).filter(
             and_(
                 Shift.id == shift_id,
-                Shift.user_id == user_id,
+                Shift.user_id == user.id,
                 Shift.status == 'active'
             )
         ).first()
@@ -540,7 +564,7 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
         logger.error(f"Ошибка завершения смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
     finally:
-        if db:
+        if own_db and db:
             db.close()
 
 
