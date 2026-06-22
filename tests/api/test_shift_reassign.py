@@ -148,6 +148,28 @@ async def test_reassign_web_not_executor(db_session):
     assert res["error"] == "not_executor"
 
 
+@pytest.mark.asyncio
+async def test_reassign_web_unassigned_shift_not_transferable(db_session):
+    # Code-review HIGH-4: смена без владельца → from_executor_id=None нарушил бы
+    # NOT NULL при записи истории. Должен быть мягкий guard, не IntegrityError.
+    new = await _user(db_session, 1071)
+    shift = await _shift(db_session, None, status="planned")
+    res = await service.reassign_shift_web(db_session, shift_id=shift.id, new_executor_id=new.id, manager_id=999)
+    assert res["success"] is False
+    assert res["error"] == "shift_not_transferable"
+
+
+@pytest.mark.asyncio
+async def test_reassign_web_completed_shift_not_transferable(db_session):
+    # Code-review MED-1: completed/cancelled-смену переназначать нечего.
+    old = await _user(db_session, 1081)
+    new = await _user(db_session, 1082)
+    shift = await _shift(db_session, old.id, status="completed")
+    res = await service.reassign_shift_web(db_session, shift_id=shift.id, new_executor_id=new.id, manager_id=999)
+    assert res["success"] is False
+    assert res["error"] == "shift_not_transferable"
+
+
 # ═══════════════════ HTTP-контракт ═══════════════════
 
 @pytest.fixture(autouse=True)

@@ -474,16 +474,29 @@ async def handle_transfer_response(callback: CallbackQuery, state: FSMContext = 
 
 
 @router.callback_query(F.data.startswith("view_transfer:"))
-async def handle_view_transfer(callback: CallbackQuery, state: FSMContext = None):
-    """Детали передачи (из списка «Мои передачи»)."""
+@require_role(['executor', 'manager'])
+async def handle_view_transfer(callback: CallbackQuery, state: FSMContext = None,
+                               db=None, user: User = None, roles: list = None):
+    """Детали передачи (из списка «Мои передачи»). Только участник или менеджер."""
     user_lang = "ru"
     try:
         transfer_id = int(callback.data.split(":")[1])
-        with session_scope() as db:
-            user_lang = get_user_language(callback.from_user.id, db)
-            transfer = ShiftTransferService(db).get_transfer(transfer_id)
+        with session_scope() as db_local:
+            user_lang = get_user_language(callback.from_user.id, db_local)
+            current = db_local.query(User).filter(
+                User.telegram_id == callback.from_user.id
+            ).first()
+            transfer = ShiftTransferService(db_local).get_transfer(transfer_id)
             if not transfer:
                 await callback.answer(_err_text("transfer_not_found", user_lang), show_alert=True)
+                return
+            # IDOR-guard: детали видит только участник передачи или менеджер.
+            is_manager = bool(roles and "manager" in roles)
+            if not is_manager and (
+                not current
+                or current.id not in (transfer.from_executor_id, transfer.to_executor_id)
+            ):
+                await callback.answer(_err_text("not_your_transfer", user_lang), show_alert=True)
                 return
 
             shift_date = transfer.shift.start_time.strftime('%d.%m %H:%M') if transfer.shift and transfer.shift.start_time else "—"

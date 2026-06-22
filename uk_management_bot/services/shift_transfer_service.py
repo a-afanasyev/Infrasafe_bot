@@ -78,8 +78,14 @@ class ShiftTransferService:
 
         Возвращает None если ок, иначе короткий error-key (handlers/web локализуют):
         executor_not_found / not_approved / not_executor / same_executor /
-        spec_mismatch / overlap.
+        spec_mismatch / overlap / shift_not_transferable.
         """
+        # Смену без владельца или в терминальном статусе переназначать нельзя
+        # (запись истории требует from_executor_id NOT NULL; completed/cancelled
+        # — нет активной смены для передачи). UI показывает кнопку только для
+        # planned/active с владельцем, но slash/API/гонка могут прийти иначе.
+        if shift.user_id is None or shift.status not in ("planned", "active"):
+            return "shift_not_transferable"
         new_executor = self.db.query(User).filter(User.id == new_executor_id).first()
         if not new_executor:
             return "executor_not_found"
@@ -256,7 +262,7 @@ class ShiftTransferService:
         try:
             transfer = self.db.query(ShiftTransferModel).filter(
                 ShiftTransferModel.id == transfer_id
-            ).first()
+            ).with_for_update().first()
             if not transfer:
                 return {"success": False, "error": "transfer_not_found"}
             if transfer.status != "pending":
@@ -291,7 +297,7 @@ class ShiftTransferService:
         try:
             transfer = self.db.query(ShiftTransferModel).filter(
                 ShiftTransferModel.id == transfer_id
-            ).first()
+            ).with_for_update().first()
             if not transfer:
                 return {"success": False, "error": "transfer_not_found"}
             if transfer.status != "assigned":
@@ -344,7 +350,7 @@ class ShiftTransferService:
         try:
             transfer = self.db.query(ShiftTransferModel).filter(
                 ShiftTransferModel.id == transfer_id
-            ).first()
+            ).with_for_update().first()
             if not transfer:
                 return {"success": False, "error": "transfer_not_found"}
             if transfer.status != "assigned":

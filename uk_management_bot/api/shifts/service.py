@@ -736,6 +736,11 @@ async def reassign_shift_web(
     shift = await get_shift_for_update(db, shift_id)
     if not shift:
         return {"success": False, "error": "shift_not_found"}
+    # Смену без владельца / в терминальном статусе переназначать нельзя
+    # (история требует from_executor_id NOT NULL; completed/cancelled нечего
+    # передавать). Зеркалит bot-ядро _validate_reassign_target.
+    if shift.user_id is None or shift.status not in ("planned", "active"):
+        return {"success": False, "error": "shift_not_transferable"}
 
     new_executor = await get_user(db, new_executor_id)
     if not new_executor:

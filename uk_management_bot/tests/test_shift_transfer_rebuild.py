@@ -311,6 +311,19 @@ def test_reassign_shift_spec_mismatch(db):
     assert res["error"] == "spec_mismatch"
 
 
+def test_reassign_shift_unassigned_or_terminal_not_transferable(db):
+    # Code-review HIGH-4/MED-1: смена без владельца (from_executor_id=None → NOT
+    # NULL) и completed/cancelled-смена не переназначаются мягким guard'ом.
+    _user(db, 20, 2020)
+    _shift(db, 1, None, status="planned")        # без владельца
+    _shift(db, 2, 20, status="completed")        # терминальная
+    svc = _service(db)
+    res_unassigned = svc.reassign_shift(1, 20, actor_manager_id=30, record_history=True)
+    res_terminal = svc.reassign_shift(2, 20, actor_manager_id=30, record_history=True)
+    assert res_unassigned["error"] == "shift_not_transferable"
+    assert res_terminal["error"] == "shift_not_transferable"
+
+
 def test_reassign_shift_overlap_rejected(db):
     _user(db, 10, 1010)
     _user(db, 20, 2020)
