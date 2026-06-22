@@ -175,9 +175,13 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/services/shift_assignment_service.py', 'attr:shift', 'assigned_at'),
-    ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'assigned_at'),
-    ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'assigned_by'),
-    ('uk_management_bot/services/shift_transfer_service.py', 'attr:request', 'executor_id'),
+    # REG-02: фантомный transfer_single_request (писал request.executor_id/
+    # assigned_at/assigned_by сырьём) удалён — перенос заявок теперь идёт через
+    # allowlist-слой assignment_service.reassign_executor (status-preserving).
+    # attr:transfer completed_at — process_expired_transfers (BUG-BOT-036).
+    # attr:transfer assigned_by — аудит «кто из менеджеров назначил передачу»
+    # (ShiftTransfer.assigned_by, НЕ Request.assigned_by; совпадает имя поля).
+    ('uk_management_bot/services/shift_transfer_service.py', 'attr:transfer', 'assigned_by'),
     ('uk_management_bot/services/shift_transfer_service.py', 'attr:transfer', 'completed_at'),
     # 4. ONE-OFF migration-скрипт (план, риск №30)
     # 5. WORKFLOW-RUNNER claim-домен-оп (FEAT-группы): взятие group→individual

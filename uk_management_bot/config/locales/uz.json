@@ -6536,9 +6536,13 @@
       "confirm": "✅ Tasdiqlash",
       "cancel_action": "❌ Bekor qilish",
       "date_entry": "📅 {date_text}",
-      "tomorrow_short": "Ertaga"
+      "tomorrow_short": "Ertaga",
+      "reassign_shift": "🔄 Qayta tayinlash ({time})"
     },
-    "conflicts_found_header": "🚨 <b>Aniqlangan konfliktlar:</b>"
+    "conflicts_found_header": "🚨 <b>Aniqlangan konfliktlar:</b>",
+    "reassign_no_executors": "Mavjud ijrochilar yo'q.",
+    "reassign_pick_title": "{time} smenasi uchun yangi ijrochini tanlang:",
+    "reassign_success": "✅ Smena qayta tayinlandi. Ko'chirilgan arizalar: {moved}."
   },
   "shifts": {
     "accept_смену": "🔄 Smenani qabul qilish",
@@ -7495,7 +7499,31 @@
       "urgency_high": "Yuqori",
       "urgency_low": "Past",
       "urgency_normal": "Oddiy",
-      "user_not_found": "Foydalanuvchi topilmadi"
+      "user_not_found": "Foydalanuvchi topilmadi",
+      "no_eligible_executors": "Tayinlash uchun mavjud ijrochilar yo'q.",
+      "select_executor": "Topshiriqni tayinlash uchun ijrochini tanlang:",
+      "transfer_assigned_to_you": "Sizga smena topshirig'i taklif qilindi. Qabul qiling yoki rad eting.",
+      "transfer_assigned_success": "✅ Ijrochi tayinlandi, qabul qiluvchiga xabar yuborildi.",
+      "transfer_accepted_success": "✅ Topshiriq qabul qilindi. Smena va faol arizalar sizga o'tkazildi.",
+      "transfer_rejected_success": "Topshiriq rad etildi.",
+      "transfer_details": "Smena: {date}\nSabab: {reason}\nIzoh: {comment}"
+    },
+    "errors": {
+      "shift_not_found": "Smena topilmadi.",
+      "not_your_shift": "Bu sizning smenangiz emas.",
+      "shift_not_transferable": "Bu smenani topshirib bo'lmaydi (yakunlangan yoki bekor qilingan).",
+      "transfer_already_exists": "Bu smena bo'yicha allaqachon faol topshiriq bor.",
+      "transfer_not_found": "Topshiriq topilmadi yoki allaqachon qayta ishlangan.",
+      "wrong_status": "Topshiriq holati mos emas.",
+      "cannot_assign_to_self": "Topshiriqni tashabbuskorga tayinlab bo'lmaydi.",
+      "executor_not_found": "Ijrochi topilmadi.",
+      "not_approved": "Ijrochi tasdiqlanmagan.",
+      "not_executor": "Foydalanuvchida ijrochi roli yo'q.",
+      "same_executor": "Ijrochi allaqachon bu smena egasi.",
+      "spec_mismatch": "Ijrochida bu smena uchun kerakli mutaxassislik yo'q.",
+      "overlap": "Ijrochida vaqt bo'yicha kesishadigan smena bor.",
+      "not_your_transfer": "Bu topshiriq sizga tayinlanmagan.",
+      "internal_error": "Ichki xatolik. Keyinroq urinib ko'ring."
     }
   },
   "user_verification": {

@@ -194,6 +194,10 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/shift_assignment_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/shift_assignment_service.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/shift_transfer_service.py', 'in_:Request', 'status'),
+    # REG-02: _move_active_requests фильтрует заявки активных статусов перед
+    # status-preserving переносом (В работе/Закуп/Уточнение) — это набор-фильтр
+    # переноса, НЕ workflow-переход (канон-нормализация A не затрагивается).
+    ('uk_management_bot/services/shift_transfer_service.py', 'cmp:req', 'status'),
     ('uk_management_bot/services/smart_dispatcher.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/webhook_sender.py', 'cmp:r', 'status'),
     ('uk_management_bot/utils/request_helpers.py', 'cmp:request', 'status'),

@@ -102,9 +102,11 @@ async def test_shift_selection_uses_session_and_does_not_crash():
     state.set_state = AsyncMock()
 
     db = MagicMock()
-    # shift exists, no existing transfer
+    # REG-02: handler сначала резолвит внутренний user.id (FS-02), затем смену,
+    # затем проверяет существующую передачу → три .first(): [user, shift, None].
+    current = MagicMock(id=42)
     shift = MagicMock(id=5)
-    db.query.return_value.filter.return_value.first.side_effect = [shift, None]
+    db.query.return_value.filter.return_value.first.side_effect = [current, shift, None]
 
     @contextmanager
     def fake_scope():

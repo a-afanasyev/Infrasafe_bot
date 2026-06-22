@@ -581,6 +581,8 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
             response = get_text("shift_management.schedule_date_title", language=lang,
                               date=selected_date.strftime('%d.%m.%Y'))
 
+            # REG-02: кнопки прямого менеджерского переназначения смен.
+            reassign_rows = []
             if shifts:
                 response += get_text("shift_management.shifts_found", language=lang, count=len(shifts))
                 for shift in shifts:
@@ -609,14 +611,22 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
                         f"   📋 {template_name}\n"
                         f"   📊 {shift.status.title()}\n\n"
                     )
+
+                    if shift.user_id and shift.status in ("active", "planned"):
+                        reassign_rows.append([InlineKeyboardButton(
+                            text=get_text("shift_management.keyboards.reassign_shift", language=lang, time=start_time),
+                            callback_data=f"reassign_shift_pick:{shift.id}"
+                        )])
             else:
                 response += get_text("shift_management.no_shifts_on_date", language=lang)
 
             response += get_text("shift_management.select_another_date", language=lang)
 
+            base_kb = get_schedule_view_keyboard(selected_date, lang)
+            markup = InlineKeyboardMarkup(inline_keyboard=reassign_rows + base_kb.inline_keyboard)
             await callback.message.edit_text(
                 response,
-                reply_markup=get_schedule_view_keyboard(selected_date, lang),
+                reply_markup=markup,
                 parse_mode="HTML"
             )
 
@@ -626,6 +636,88 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
         logger.error(f"Ошибка выбора даты расписания: {e}")
         lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.schedule_load_error", language=lang), show_alert=True)
+
+
+def _reassign_error_text(error: str, lang: str) -> str:
+    """Локализованный текст ошибки reassign (ключи в shift_transfer.errors.*)."""
+    full_key = f"shift_transfer.errors.{error}"
+    text = get_text(full_key, language=lang)
+    if text == full_key:
+        return get_text("shift_transfer.handlers.error_generic", language=lang)
+    return text
+
+
+@router.callback_query(F.data.startswith("reassign_shift_pick:"))
+@require_role(['admin', 'manager'])
+async def handle_reassign_shift_pick(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """REG-02: менеджер выбирает нового исполнителя для прямого переназначения смены.
+
+    Тонкий слой: весь data-access — в ShiftTransferService (ARCH-01 — без прямого
+    ORM в handlers/shift_management.py).
+    """
+    lang = "ru"
+    try:
+        shift_id = int(callback.data.split(":")[1])
+        from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
+        from uk_management_bot.services.shift_transfer_service import ShiftTransferService
+
+        with _db_scope(db) as db:
+            lang = get_user_language(callback.from_user.id, db)
+            service = ShiftTransferService(db)
+            shift = service.get_shift(shift_id)
+            if not shift:
+                await callback.answer(_reassign_error_text("shift_not_found", lang), show_alert=True)
+                return
+
+            eligible = service.list_eligible_executors(exclude_user_id=shift.user_id)
+            if not eligible:
+                await callback.answer(get_text("shift_management.reassign_no_executors", language=lang), show_alert=True)
+                return
+
+            start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
+            await callback.message.edit_text(
+                get_text("shift_management.reassign_pick_title", language=lang, time=start_time),
+                reply_markup=executor_selection_keyboard(
+                    shift_id, eligible, lang, mode="reassign", back_callback="back_to_planning"
+                )
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка выбора исполнителя для reassign: {e}")
+        await callback.answer(get_text("shift_management.schedule_error", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("reassign_executor:"))
+@require_role(['admin', 'manager'])
+async def handle_reassign_executor(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+    """REG-02: прямой менеджерский reassign смены (без согласия получателя).
+
+    Commit + рассылка — в сервисном слое/после него (ARCH-01 — без прямого ORM
+    в хендлере: `manager_direct_reassign` коммитит, хендлер шлёт jobs).
+    """
+    lang = "ru"
+    try:
+        _, shift_id_s, new_user_id_s = callback.data.split(":")
+        shift_id, new_user_id = int(shift_id_s), int(new_user_id_s)
+        from uk_management_bot.services.shift_transfer_service import ShiftTransferService
+
+        with _db_scope(db) as db:
+            lang = get_user_language(callback.from_user.id, db)
+            service = ShiftTransferService(db)
+            res = service.manager_direct_reassign(shift_id, new_user_id, callback.from_user.id)
+            if not res["success"]:
+                await callback.answer(_reassign_error_text(res["error"], lang), show_alert=True)
+                return
+
+            service.dispatch_jobs(res["notification_jobs"])  # ПОСЛЕ commit (в сервисе)
+
+            await callback.message.edit_text(
+                get_text("shift_management.reassign_success", language=lang, moved=res.get("moved_requests", 0))
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка прямого reassign смены: {e}")
+        await callback.answer(get_text("shift_management.schedule_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "schedule_week_view")

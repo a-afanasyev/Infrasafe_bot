@@ -163,91 +163,85 @@ def confirm_transfer_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def executor_selection_keyboard(users: List[User], language: str = "ru") -> InlineKeyboardMarkup:
+def executor_selection_keyboard(
+    target_id: int,
+    users: List[User],
+    language: str = "ru",
+    *,
+    mode: str = "transfer",
+    back_callback: str = "assign_step:back",
+) -> InlineKeyboardMarkup:
     """
-    Клавиатура для выбора исполнителя (для менеджеров)
+    Клавиатура выбора исполнителя (для менеджеров).
 
-    Args:
-        users: Список доступных исполнителей
-        language: Язык пользователя
+    Два режима (REG-02), оба передают ВНУТРЕННИЙ ``user.id`` (НЕ telegram_id):
+      * ``mode="transfer"`` — назначение получателя по передаче:
+        callback ``transfer_assign_executor:{target_id}:{user.id}`` (target_id = transfer_id);
+      * ``mode="reassign"`` — прямой менеджерский reassign:
+        callback ``reassign_executor:{target_id}:{user.id}`` (target_id = shift_id).
 
-    Returns:
-        InlineKeyboardMarkup
+    Префиксы уникальны (не ``assign_executor:`` — занят shift_management.py:119).
+    Кнопка автоназначения убрана (детерминированный явный выбор).
     """
+    from uk_management_bot.utils.specializations import parse_specializations
+
+    prefix = "reassign_executor" if mode == "reassign" else "transfer_assign_executor"
+
     builder = InlineKeyboardBuilder()
 
     for user in users:
-        # Формируем имя пользователя
         display_name = user.first_name or get_text(
             "shift_transfer.keyboards.unknown_user", language=language
         )
         if user.last_name:
             display_name += f" {user.last_name}"
 
-        # Добавляем информацию о специализации если есть
-        if hasattr(user, 'specialization') and user.specialization:
-            import json
-            try:
-                specializations = json.loads(user.specialization)
-                if specializations:
-                    spec_text = ", ".join(specializations[:2])  # Первые 2 специализации
-                    display_name += f" ({spec_text})"
-            except Exception:
-                pass
+        specs = parse_specializations(user)
+        if specs:
+            spec_text = ", ".join(sorted(specs)[:2])
+            display_name += f" ({spec_text})"
 
         builder.row(
             InlineKeyboardButton(
                 text=f"👤 {display_name}",
-                callback_data=f"assign_executor:{user.telegram_id}"
+                callback_data=f"{prefix}:{target_id}:{user.id}"
             )
         )
 
-    # Кнопка автоназначения
-    builder.row(
-        InlineKeyboardButton(
-            text=get_text("shift_transfer.keyboards.auto_assign", language=language),
-            callback_data="assign_executor:auto"
-        )
-    )
-
-    # Кнопка назад
     builder.row(
         InlineKeyboardButton(
             text=get_text("shift_transfer.keyboards.back", language=language),
-            callback_data="assign_step:back"
+            callback_data=back_callback
         )
     )
 
     return builder.as_markup()
 
 
-def transfer_response_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def transfer_response_keyboard(transfer_id: int, language: str = "ru") -> InlineKeyboardMarkup:
     """
-    Клавиатура для ответа на передачу смены
+    Клавиатура ответа получателя на передачу смены.
 
-    Args:
-        language: Язык пользователя
-
-    Returns:
-        InlineKeyboardMarkup
+    REG-02: callback'и несут ``transfer_id`` (раньше его не было → у получателя
+    без FSM было непонятно, на какую передачу отвечают).
     """
     builder = InlineKeyboardBuilder()
 
     builder.row(
         InlineKeyboardButton(
             text=get_text("shift_transfer.keyboards.accept", language=language),
-            callback_data="transfer_response:accept"
+            callback_data=f"transfer_response:accept:{transfer_id}"
         ),
         InlineKeyboardButton(
             text=get_text("shift_transfer.keyboards.reject", language=language),
-            callback_data="transfer_response:reject"
+            callback_data=f"transfer_response:reject:{transfer_id}"
         )
     )
 
     builder.row(
         InlineKeyboardButton(
             text=get_text("shift_transfer.keyboards.details", language=language),
-            callback_data="transfer_response:details"
+            callback_data=f"transfer_response:details:{transfer_id}"
         )
     )
 

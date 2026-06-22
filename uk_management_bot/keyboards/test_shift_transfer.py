@@ -38,10 +38,11 @@ def _make_shift(shift_id: int, status: str = "planned") -> MagicMock:
 
 def _make_user(user_id: int, first_name: str = "Иван", last_name: str = None) -> MagicMock:
     u = MagicMock()
-    u.telegram_id = user_id
+    u.id = user_id            # внутренний users.id — используется в callback (REG-02)
+    u.telegram_id = user_id + 10_000
     u.first_name = first_name
     u.last_name = last_name
-    del u.specialization  # hasattr returns False
+    del u.specialization  # parse_specializations → пустое множество
     return u
 
 
@@ -191,30 +192,44 @@ class TestExecutorSelectionKeyboard:
     def test_returns_inline_keyboard_markup(self):
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
-            result = executor_selection_keyboard(users=[])
+            result = executor_selection_keyboard(7, users=[])
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_empty_users_has_auto_assign_and_back(self):
+    def test_empty_users_has_back_no_auto(self):
+        """REG-02: кнопка автоназначения убрана; остаётся только «назад»."""
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
-            result = executor_selection_keyboard(users=[])
+            result = executor_selection_keyboard(7, users=[])
         callbacks = set(_all_callbacks(result))
-        assert "assign_executor:auto" in callbacks
         assert "assign_step:back" in callbacks
+        assert not any("auto" in c for c in callbacks)
 
-    def test_users_appear_as_buttons(self):
+    def test_transfer_mode_callback_carries_transfer_id_and_user_id(self):
         users = [_make_user(i + 100) for i in range(3)]
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
-            result = executor_selection_keyboard(users=users)
-        user_cbs = [c for c in _all_callbacks(result) if "assign_executor:" in c and "auto" not in c]
+            result = executor_selection_keyboard(55, users=users, mode="transfer")
+        user_cbs = [c for c in _all_callbacks(result) if c.startswith("transfer_assign_executor:")]
         assert len(user_cbs) == 3
+        # transfer_assign_executor:<transfer_id>:<user.id>
+        assert "transfer_assign_executor:55:100" in user_cbs
+
+    def test_reassign_mode_uses_unique_prefix(self):
+        users = [_make_user(200)]
+        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
+            from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
+            result = executor_selection_keyboard(9, users=users, mode="reassign", back_callback="back_to_planning")
+        callbacks = set(_all_callbacks(result))
+        # reassign_executor:<shift_id>:<user.id> — НЕ assign_executor: (занят shift_management)
+        assert "reassign_executor:9:200" in callbacks
+        assert not any(c.startswith("assign_executor:") for c in callbacks)
+        assert "back_to_planning" in callbacks
 
     def test_user_with_last_name(self):
         user = _make_user(42, first_name="Иван", last_name="Иванов")
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
-            result = executor_selection_keyboard(users=[user])
+            result = executor_selection_keyboard(1, users=[user])
         texts = [btn.text for btn in _all_buttons(result)]
         assert any("Иванов" in t for t in texts)
 
@@ -222,7 +237,7 @@ class TestExecutorSelectionKeyboard:
         user = _make_user(99, first_name=None)
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
-            result = executor_selection_keyboard(users=[user])
+            result = executor_selection_keyboard(1, users=[user])
         assert isinstance(result, InlineKeyboardMarkup)
 
     def test_user_with_specialization(self):
@@ -230,7 +245,7 @@ class TestExecutorSelectionKeyboard:
         user.specialization = '["сантехника", "электрика"]'
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import executor_selection_keyboard
-            result = executor_selection_keyboard(users=[user])
+            result = executor_selection_keyboard(1, users=[user])
         assert isinstance(result, InlineKeyboardMarkup)
 
 
@@ -242,20 +257,21 @@ class TestTransferResponseKeyboard:
     def test_returns_inline_keyboard_markup(self):
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import transfer_response_keyboard
-            result = transfer_response_keyboard()
+            result = transfer_response_keyboard(12)
         assert isinstance(result, InlineKeyboardMarkup)
 
     def test_has_three_buttons(self):
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import transfer_response_keyboard
-            result = transfer_response_keyboard()
+            result = transfer_response_keyboard(12)
         assert len(_all_buttons(result)) == 3
 
-    def test_accept_and_reject_callbacks(self):
+    def test_callbacks_carry_transfer_id(self):
+        """REG-02: callback'и несут transfer_id (раньше его не было)."""
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_transfer import transfer_response_keyboard
-            result = transfer_response_keyboard()
+            result = transfer_response_keyboard(12)
         callbacks = set(_all_callbacks(result))
-        assert "transfer_response:accept" in callbacks
-        assert "transfer_response:reject" in callbacks
-        assert "transfer_response:details" in callbacks
+        assert "transfer_response:accept:12" in callbacks
+        assert "transfer_response:reject:12" in callbacks
+        assert "transfer_response:details:12" in callbacks
