@@ -6536,9 +6536,13 @@
       "confirm": "✅ Подтвердить",
       "cancel_action": "❌ Отмена",
       "date_entry": "📅 {date_text}",
-      "tomorrow_short": "Завтра"
+      "tomorrow_short": "Завтра",
+      "reassign_shift": "🔄 Переназначить ({time})"
     },
-    "conflicts_found_header": "🚨 <b>Обнаруженные конфликты:</b>"
+    "conflicts_found_header": "🚨 <b>Обнаруженные конфликты:</b>",
+    "reassign_no_executors": "Нет доступных исполнителей.",
+    "reassign_pick_title": "Выберите нового исполнителя для смены {time}:",
+    "reassign_success": "✅ Смена переназначена. Заявок перенесено: {moved}."
   },
   "shifts": {
     "accept_смену": "🔄 Принять смену",
@@ -7494,7 +7498,31 @@
       "urgency_high": "Высокий",
       "urgency_low": "Низкий",
       "urgency_normal": "Обычный",
-      "user_not_found": "Пользователь не найден"
+      "user_not_found": "Пользователь не найден",
+      "no_eligible_executors": "Нет доступных исполнителей для назначения.",
+      "select_executor": "Выберите исполнителя, которому назначить передачу:",
+      "transfer_assigned_to_you": "Вам предложена передача смены. Примите или отклоните.",
+      "transfer_assigned_success": "✅ Исполнитель назначен, получателю отправлено уведомление.",
+      "transfer_accepted_success": "✅ Передача принята. Смена и активные заявки переведены на вас.",
+      "transfer_rejected_success": "Передача отклонена.",
+      "transfer_details": "Смена: {date}\nПричина: {reason}\nКомментарий: {comment}"
+    },
+    "errors": {
+      "shift_not_found": "Смена не найдена.",
+      "not_your_shift": "Это не ваша смена.",
+      "shift_not_transferable": "Эту смену нельзя передать (завершена или отменена).",
+      "transfer_already_exists": "По этой смене уже есть активная передача.",
+      "transfer_not_found": "Передача не найдена или уже обработана.",
+      "wrong_status": "Передача в неподходящем статусе.",
+      "cannot_assign_to_self": "Нельзя назначить передачу инициатору.",
+      "executor_not_found": "Исполнитель не найден.",
+      "not_approved": "Исполнитель не подтверждён.",
+      "not_executor": "У пользователя нет роли исполнителя.",
+      "same_executor": "Исполнитель уже владеет этой сменой.",
+      "spec_mismatch": "У исполнителя нет нужной специализации для этой смены.",
+      "overlap": "У исполнителя есть пересекающаяся по времени смена.",
+      "not_your_transfer": "Эта передача назначена не вам.",
+      "internal_error": "Внутренняя ошибка. Попробуйте позже."
     }
   },
   "user_verification": {

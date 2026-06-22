@@ -6,7 +6,7 @@ Verifies that the scheduled job marks stale pending/assigned transfers as
 the transaction and returns the expected counter dict.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -43,7 +43,7 @@ class TestProcessExpiredTransfers:
         """A pending transfer older than threshold is moved to status=expired."""
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired_row = _make_transfer(1, "pending", now - timedelta(hours=48))
         db = _make_db_with_rows([expired_row])
 
@@ -78,7 +78,7 @@ class TestProcessExpiredTransfers:
         """All rows returned by query are treated as expired (filter happens in SQL)."""
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         # Query in SUT pre-filters; we feed it both pending+assigned rows.
         rows = [
             _make_transfer(10, "pending", now - timedelta(hours=30)),
@@ -100,7 +100,7 @@ class TestProcessExpiredTransfers:
         """If notify_user raises, the row is still expired and counted as processed."""
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         row = _make_transfer(20, "pending", now - timedelta(hours=48))
         db = _make_db_with_rows([row])
 
@@ -141,7 +141,7 @@ class TestProcessExpiredTransfers:
         """notify_user_async returning False (real send failure) ⇒ delivered < scheduled."""
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         rows = [
             _make_transfer(30, "pending", now - timedelta(hours=48), from_executor_id=1),
             _make_transfer(31, "pending", now - timedelta(hours=48), from_executor_id=2),
@@ -164,7 +164,7 @@ class TestProcessExpiredTransfers:
     async def test_delivered_equals_scheduled_on_success(self):
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         rows = [_make_transfer(40, "pending", now - timedelta(hours=48))]
         db = _make_db_with_rows(rows)
 
@@ -183,7 +183,7 @@ class TestProcessExpiredTransfers:
         """commit raising ⇒ rollback, no delivery attempted, all counts zero."""
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         rows = [_make_transfer(50, "pending", now - timedelta(hours=48))]
         db = _make_db_with_rows(rows)
         db.commit.side_effect = RuntimeError("commit failed")
@@ -206,7 +206,7 @@ class TestProcessExpiredTransfers:
         """A delivery raising must not abort the rest; processed_count preserved."""
         from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         rows = [
             _make_transfer(60, "pending", now - timedelta(hours=48), from_executor_id=1),
             _make_transfer(61, "pending", now - timedelta(hours=48), from_executor_id=2),

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useShift, useEndShift } from '../../hooks/useShifts'
+import { useShift, useEndShift, useReassignShift } from '../../hooks/useShifts'
+import { useEmployees } from '../../hooks/useEmployees'
+import { useHasRole } from '../../hooks/useHasRole'
 import { formatTime, formatDateTime, dayOffset } from '../../utils/timezone'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ConfirmDialog from '../shared/ConfirmDialog'
@@ -39,9 +41,31 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
   const { data: shift, isLoading } = useShift(shiftId)
   const endShift = useEndShift()
+  const reassign = useReassignShift()
+  const isManager = useHasRole('manager')
   const [confirmEndOpen, setConfirmEndOpen] = useState(false)
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const [pickedExecutor, setPickedExecutor] = useState<string>('')
+  // REG-02: список исполнителей для переназначения (грузим только когда нужно).
+  const { data: employees } = useEmployees({}, undefined)
 
   if (shiftId === null) return null
+
+  const eligibleExecutors = (employees ?? []).filter(
+    e => e.status === 'approved' && e.id !== shift?.user_id,
+  )
+
+  const handleReassign = async () => {
+    if (!pickedExecutor || shiftId === null) return
+    try {
+      await reassign.mutateAsync({ id: shiftId, executor_id: Number(pickedExecutor) })
+      setReassignOpen(false)
+      setPickedExecutor('')
+      onClose()
+    } catch {
+      // error visible via toast
+    }
+  }
 
   const handleEndShift = async () => {
     try {
@@ -183,6 +207,39 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                 </div>
               )}
 
+              {/* REG-02: переназначение смены (менеджер) */}
+              {reassignOpen && (
+                <div className="bg-bg-surface border border-border-default rounded-sm p-3 flex flex-col gap-2">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                    {t('shifts.reassignPick')}
+                  </label>
+                  <select
+                    className="bg-bg-base border border-border-default rounded-sm px-2 py-1.5 text-sm text-text-primary"
+                    value={pickedExecutor}
+                    onChange={e => setPickedExecutor(e.target.value)}
+                  >
+                    <option value="">{t('shifts.reassignSelectPlaceholder')}</option>
+                    {eligibleExecutors.map(e => (
+                      <option key={e.id} value={e.id}>
+                        {[e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`}
+                        {e.specialization?.length ? ` (${e.specialization.join(', ')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" onClick={() => { setReassignOpen(false); setPickedExecutor('') }}>
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      onClick={handleReassign}
+                      disabled={!pickedExecutor || reassign.isPending}
+                    >
+                      {reassign.isPending ? t('shifts.reassigning') : t('shifts.confirmReassign')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
               <DialogFooter>
                 {onEdit && (shift.status === 'planned' || shift.status === 'active') && (
@@ -192,6 +249,14 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                     onClick={() => onEdit(shift)}
                   >
                     {t('shifts.editShift')}
+                  </Button>
+                )}
+                {isManager && shift.user_id && (shift.status === 'planned' || shift.status === 'active') && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setReassignOpen(v => !v)}
+                  >
+                    {t('shifts.reassignShift')}
                   </Button>
                 )}
                 {shift.status === 'active' && (

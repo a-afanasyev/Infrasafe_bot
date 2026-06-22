@@ -1,7 +1,12 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from uk_management_bot.database.session import Base
+
+
+def _utcnow() -> datetime:
+    """Aware-UTC сейчас (REG-02/AUD3-11): фича теперь живая, timestamptz-колонки."""
+    return datetime.now(timezone.utc)
 
 
 class ShiftTransfer(Base):
@@ -14,6 +19,8 @@ class ShiftTransfer(Base):
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=False, index=True)
     from_executor_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     to_executor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # REG-02: какой менеджер назначил/переназначил (assign-флоу + история прямого reassign)
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Статус передачи
     status = Column(String(50), nullable=False, default="pending", index=True)
@@ -41,11 +48,11 @@ class ShiftTransfer(Base):
     # high - высокий приоритет
     # critical - критический приоритет
 
-    # Временные метки
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
-    assigned_at = Column(DateTime, nullable=True, index=True)
-    responded_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    # Временные метки (REG-02/AUD3-11: tz-aware, фича живая)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+    assigned_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    responded_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Системная информация
     auto_assigned = Column(Boolean, nullable=False, default=False)
@@ -88,7 +95,7 @@ class ShiftTransfer(Base):
         """Возвращает количество минут с момента создания"""
         if not self.created_at:
             return 0
-        return int((datetime.utcnow() - self.created_at).total_seconds() / 60)
+        return int((_utcnow() - self.created_at).total_seconds() / 60)
 
     def can_be_assigned_to(self, user_id: int) -> bool:
         """Проверяет, можно ли назначить передачу указанному пользователю"""
@@ -116,7 +123,7 @@ class ShiftTransfer(Base):
         self.status = new_status
 
         # Обновляем временные метки
-        now = datetime.utcnow()
+        now = _utcnow()
         if new_status == "assigned":
             self.assigned_at = now
         elif new_status in ["accepted", "rejected"]:

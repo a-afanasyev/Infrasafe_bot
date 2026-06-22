@@ -108,12 +108,13 @@ describe('CreateShiftModal — edit mode', () => {
     await waitFor(() => expect(posted).not.toBeNull())
     expect(patchedId).toBe('67')
     expect(posted).toMatchObject({
-      user_id: 1,
       shift_type: 'regular',
       max_requests: 15,
       priority_level: 4,
       specialization_focus: ['electrician'],
     })
+    // REG-02: смена исполнителя только через /reassign — PATCH НЕ шлёт user_id
+    expect(posted).not.toHaveProperty('user_id')
     // times sent as ISO instants
     expect(posted).toHaveProperty('start_time')
     expect(posted).toHaveProperty('end_time')

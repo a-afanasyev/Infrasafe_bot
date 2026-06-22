@@ -11,7 +11,7 @@ from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     ShiftBrief, ShiftDetail,
     TransferOut, ShiftStatsOut,
-    CreateShiftBody, UpdateShiftBody,
+    CreateShiftBody, UpdateShiftBody, ReassignShiftBody,
     CreateFromTemplateBody, HandleTransferBody,
     TemplateBrief, CreateTemplateBody, UpdateTemplateBody,
     DeleteEmployeeRequest, ActiveRequestsCount,
@@ -19,7 +19,7 @@ from uk_management_bot.api.shifts.schemas import (
 )
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.redis_pubsub import publish_shift_event
+from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -609,7 +609,9 @@ async def handle_transfer(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Target user does not have executor role",
             )
-        await service.approve_transfer(db, transfer=transfer, to_executor_id=body.to_executor_id)
+        await service.approve_transfer(
+            db, transfer=transfer, to_executor_id=body.to_executor_id, manager_id=_user.id
+        )
 
     elif action == "reject":
         if transfer.status != "assigned":
@@ -729,14 +731,18 @@ async def update_shift(
                 detail=f"Transition '{shift.status}' → '{body.status}' is not allowed",
             )
 
+    # REG-02: смена исполнителя через PATCH запрещена — она обходила перенос
+    # активных заявок / аудит / спец-проверку / уведомления. Только через
+    # POST /shifts/{id}/reassign (reassign-core).
     if body.user_id is not None and body.user_id != shift.user_id:
-        new_user = await service.get_user(db, body.user_id)
-        if not new_user:
-            raise HTTPException(status_code=404, detail="Target user not found")
-        if "executor" not in _parse_user_roles(new_user):
-            raise HTTPException(status_code=422, detail="Target user does not have executor role")
+        raise HTTPException(
+            status_code=422,
+            detail="Смена исполнителя только через POST /shifts/{id}/reassign",
+        )
 
     data = body.model_dump(exclude_unset=True)
+    # user_id, даже равный текущему, не применяем через PATCH (no-op подстраховка).
+    data.pop("user_id", None)
 
     # Content edits (anything other than a status transition) are only allowed
     # while the shift is still editable — not after it is completed/cancelled.
@@ -783,6 +789,40 @@ async def update_shift(
 
     detail = _shift_detail(shift, user_obj)
     await publish_shift_event("shift.updated", detail.model_dump(mode="json"))
+    return detail
+
+
+@router.post("/{shift_id}/reassign", response_model=ShiftDetail)
+async def reassign_shift(
+    shift_id: int,
+    body: ReassignShiftBody,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("manager")),
+):
+    """REG-02: прямой менеджерский reassign смены (без согласия получателя).
+
+    Меняет владельца смены, переносит активные заявки старого исполнителя новому
+    (status-preserving), пишет ShiftTransfer-историю. Realtime: `shift.updated` +
+    `request.updated` на каждую перенесённую заявку.
+    """
+    res = await service.reassign_shift_web(
+        db, shift_id=shift_id, new_executor_id=body.executor_id, manager_id=_user.id
+    )
+    if not res["success"]:
+        err = res["error"]
+        status_map = {
+            "shift_not_found": 404,
+            "executor_not_found": 404,
+            "overlap": status.HTTP_409_CONFLICT,
+        }
+        raise HTTPException(status_code=status_map.get(err, status.HTTP_422_UNPROCESSABLE_ENTITY), detail=err)
+
+    shift = res["shift"]
+    user_obj = await service.get_user(db, shift.user_id) if shift.user_id else None
+    detail = _shift_detail(shift, user_obj)
+    await publish_shift_event("shift.updated", detail.model_dump(mode="json"))
+    for number in res["moved_request_numbers"]:
+        await publish_request_event("request.updated", {"number": number})
     return detail
 
 

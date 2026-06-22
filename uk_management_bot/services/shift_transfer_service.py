@@ -1,571 +1,481 @@
 """
-Сервис передачи заявок между сменами
-Обеспечивает непрерывность обслуживания при смене дежурного персонала
+Сервис передачи смен между исполнителями (REG-02, перестроен).
+
+Работает на РЕАЛЬНОЙ ORM-модели `ShiftTransfer` (peer-to-peer:
+shift_id / from_executor_id / to_executor_id, status-машина
+pending→assigned→accepted/rejected/cancelled/completed/expired).
+
+Два флоу:
+  1) executor-инициированный с менеджерским посредничеством и приёмом
+     (create_transfer → assign_transfer → accept_transfer/reject_transfer);
+  2) менеджерский прямой reassign (reassign_shift, record_history=True) —
+     вызывается ботом и веб-API.
+
+Общее ядро `reassign_shift` меняет владельца смены + переносит активные заявки
+старого исполнителя новому (status-preserving, через AssignmentService) и
+ВОЗВРАЩАЕТ notification_jobs БЕЗ commit — владелец коммитит и рассылает.
+
+`from/to_executor_id` — ВСЕГДА внутренний `users.id` (никогда telegram_id).
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any, Tuple
-from sqlalchemy import and_, or_, case
-from sqlalchemy.orm import Session
-from dataclasses import dataclass
-from enum import Enum
+from typing import List, Optional, Dict, Any
+import json
+import logging
 
-from uk_management_bot.utils.constants import URGENCY_ORDER
+from sqlalchemy.orm import Session, joinedload
+
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.shift_assignment import ShiftAssignment
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer as ShiftTransferModel
 from uk_management_bot.services.notification_service import NotificationService
-import logging
+from uk_management_bot.utils.specializations import has_required_specs
 
 logger = logging.getLogger(__name__)
 
+# Активные статусы заявки, которые переносятся вместе со сменой (status-preserving).
+ACTIVE_REQUEST_STATUSES = ["В работе", "Закуп", "Уточнение"]
 
-class TransferStatus(Enum):
-    """Статусы передачи заявок"""
-    PENDING = "pending"           # Ожидает передачи
-    IN_PROGRESS = "in_progress"   # В процессе передачи
-    COMPLETED = "completed"       # Передача завершена
-    FAILED = "failed"            # Ошибка передачи
-    CANCELLED = "cancelled"       # Передача отменена
+# Статусы передачи, блокирующие создание новой передачи на ту же смену.
+_BLOCKING_TRANSFER_STATUSES = ["pending", "assigned", "accepted"]
 
 
-@dataclass
-class TransferItem:
-    """Элемент передачи - одна заявка"""
-    request_number: str
-    request_category: str
-    request_status: str
-    request_address: str
-    priority: str
-    assigned_at: datetime
-    notes: Optional[str] = None
-    transfer_notes: Optional[str] = None  # Комментарий при передаче
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-@dataclass
-class ShiftTransfer:
-    """Передача заявок между сменами"""
-    id: Optional[int]
-    outgoing_shift_id: int
-    incoming_shift_id: int
-    outgoing_executor_id: int
-    incoming_executor_id: int
-    
-    transfer_items: List[TransferItem]
-    status: TransferStatus
-    
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    transfer_notes: Optional[str] = None
-    
-    # Статистика
-    total_requests: int = 0
-    transferred_requests: int = 0
-    failed_requests: int = 0
+def _has_role(user: User, role: str) -> bool:
+    """Толерантный разбор `User.roles` (JSON-массив строк / CSV / скаляр)."""
+    raw = getattr(user, "roles", None)
+    if not raw:
+        return False
+    if isinstance(raw, (list, tuple, set)):
+        return role in {str(r).strip() for r in raw}
+    text = str(raw).strip()
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return role in {str(r).strip() for r in parsed}
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return role in {part.strip() for part in text.split(",")}
 
 
 class ShiftTransferService:
-    """Сервис для управления передачей заявок между сменами"""
-    
+    """Сервис управления передачей смен между исполнителями."""
+
     def __init__(self, db: Session):
         self.db = db
         self.notification_service = NotificationService(db)
-    
-    # ========== ОСНОВНЫЕ МЕТОДЫ ПЕРЕДАЧИ ==========
-    
-    def initiate_shift_transfer(
-        self, 
-        outgoing_shift_id: int, 
-        incoming_shift_id: int,
-        initiated_by: int
-    ) -> Optional[ShiftTransfer]:
+
+    # ========== ВАЛИДАЦИЯ ЦЕЛЕВОГО ИСПОЛНИТЕЛЯ ==========
+
+    def _validate_reassign_target(self, shift: Shift, new_executor_id: int) -> Optional[str]:
+        """Проверяет, можно ли переназначить `shift` на `new_executor_id`.
+
+        Возвращает None если ок, иначе короткий error-key (handlers/web локализуют):
+        executor_not_found / not_approved / not_executor / same_executor /
+        spec_mismatch / overlap / shift_not_transferable.
         """
-        Инициирует передачу заявок между сменами
-        
-        Args:
-            outgoing_shift_id: ID завершающейся смены
-            incoming_shift_id: ID начинающейся смены
-            initiated_by: ID пользователя, инициирующего передачу
-        
-        Returns:
-            ShiftTransfer или None при ошибке
+        # Смену без владельца или в терминальном статусе переназначать нельзя
+        # (запись истории требует from_executor_id NOT NULL; completed/cancelled
+        # — нет активной смены для передачи). UI показывает кнопку только для
+        # planned/active с владельцем, но slash/API/гонка могут прийти иначе.
+        if shift.user_id is None or shift.status not in ("planned", "active"):
+            return "shift_not_transferable"
+        new_executor = self.db.query(User).filter(User.id == new_executor_id).first()
+        if not new_executor:
+            return "executor_not_found"
+        if new_executor.status != "approved":
+            return "not_approved"
+        if not _has_role(new_executor, "executor"):
+            return "not_executor"
+        if shift.user_id == new_executor_id:
+            return "same_executor"
+        if not has_required_specs(new_executor, shift):
+            return "spec_mismatch"
+        # Overlap: у нового исполнителя нет пересекающейся смены (active/planned).
+        if shift.start_time is not None and shift.end_time is not None:
+            overlap = self.db.query(Shift).filter(
+                Shift.user_id == new_executor_id,
+                Shift.status.in_(["active", "planned"]),
+                Shift.id != shift.id,
+                Shift.start_time < shift.end_time,
+                Shift.end_time > shift.start_time,
+            ).first()
+            if overlap:
+                return "overlap"
+        return None
+
+    # ========== ПЕРЕНОС АКТИВНЫХ ЗАЯВОК (status-preserving) ==========
+
+    def _move_active_requests(self, shift: Shift, old_executor_id: int, new_executor_id: int) -> int:
+        """Переносит активные заявки смены old→new БЕЗ смены статуса. Без commit.
+
+        Основной скоуп — не-терминальные ShiftAssignment этой смены; fallback по
+        Request.executor_id только для active-смены без проставленных привязок.
+        Переносятся только заявки в активных статусах (В работе/Закуп/Уточнение).
         """
-        try:
-            logger.info(f"Инициация передачи смен: {outgoing_shift_id} → {incoming_shift_id}")
-            
-            # Получаем смены
-            outgoing_shift = self.db.query(Shift).filter(Shift.id == outgoing_shift_id).first()
-            incoming_shift = self.db.query(Shift).filter(Shift.id == incoming_shift_id).first()
-            
-            if not outgoing_shift or not incoming_shift:
-                logger.error("Одна или обе смены не найдены")
-                return None
-            
-            # Проверяем статусы смен
-            if outgoing_shift.status not in ["active", "in_transition"]:
-                logger.error(f"Неверный статус исходящей смены: {outgoing_shift.status}")
-                return None
-            
-            if incoming_shift.status != "planned":
-                logger.error(f"Неверный статус входящей смены: {incoming_shift.status}")
-                return None
-            
-            # Получаем активные заявки для передачи
-            transfer_items = self._get_requests_for_transfer(outgoing_shift)
-            
-            if not transfer_items:
-                logger.info("Нет заявок для передачи")
-                return self._create_empty_transfer(outgoing_shift, incoming_shift)
-            
-            # Создаем объект передачи
-            transfer = ShiftTransfer(
-                id=None,
-                outgoing_shift_id=outgoing_shift_id,
-                incoming_shift_id=incoming_shift_id,
-                outgoing_executor_id=outgoing_shift.executor_id,
-                incoming_executor_id=incoming_shift.executor_id,
-                transfer_items=transfer_items,
-                status=TransferStatus.PENDING,
-                total_requests=len(transfer_items)
-            )
-            
-            # Меняем статусы смен
-            outgoing_shift.status = "in_transition"
-            incoming_shift.status = "planned"  # Остается запланированной до завершения передачи
-            
-            # Создаем записи аудита
-            self._create_transfer_audit(transfer, initiated_by, "initiated")
-            
-            # Отправляем уведомления
-            self._notify_transfer_initiated(transfer)
-            
-            self.db.commit()
-            logger.info(f"Передача инициирована: {len(transfer_items)} заявок")
-            
-            return transfer
-            
-        except Exception as e:
-            logger.error(f"Ошибка инициации передачи: {e}")
-            self.db.rollback()
-            return None
-    
-    def _get_requests_for_transfer(self, shift: Shift) -> List[TransferItem]:
-        """Получает заявки, которые нужно передать"""
-        try:
-            # Ищем все активные заявки, назначенные на эту смену или исполнителю
-            active_statuses = ["В работе", "Закуп", "Уточнение"]
-            
-            requests = self.db.query(Request).filter(
-                and_(
-                    Request.executor_id == shift.executor_id,
-                    Request.status.in_(active_statuses),
-                    Request.assigned_at >= shift.planned_start_time,
-                    or_(
-                        Request.assigned_at <= shift.planned_end_time,
-                        shift.status == "active"  # Для активных смен берем все заявки исполнителя
-                    )
-                )
-            ).order_by(
-                # TASK 17: явный CASE-порядок по канон-ключам (urgency теперь строка-ключ,
-                # лексикографическая сортировка несемантична).
-                case(URGENCY_ORDER, value=Request.urgency, else_=0).desc(),
-                Request.created_at,
+        from uk_management_bot.services.assignment_service import AssignmentService
+
+        assignment_svc = AssignmentService(self.db)
+
+        sa_rows = self.db.query(ShiftAssignment).filter(
+            ShiftAssignment.shift_id == shift.id,
+            ShiftAssignment.status.notin_(["completed", "cancelled"]),
+        ).all()
+        request_numbers = {row.request_number for row in sa_rows}
+
+        if not request_numbers and shift.status == "active":
+            fallback_reqs = self.db.query(Request).filter(
+                Request.executor_id == old_executor_id,
+                Request.status.in_(ACTIVE_REQUEST_STATUSES),
             ).all()
+            request_numbers = {r.request_number for r in fallback_reqs}
 
-            transfer_items = []
-            for request in requests:
-                # Приоритет передачи (TASK 17, явный маппинг — behavior fix:
-                # critical→high, high→medium, остальные→normal).
-                priority = {"critical": "high", "high": "medium"}.get(request.urgency, "normal")
-                
-                item = TransferItem(
-                    request_number=request.request_number,
-                    request_category=request.category,
-                    request_status=request.status,
-                    request_address=request.address[:50] + "..." if len(request.address) > 50 else request.address,
-                    priority=priority,
-                    assigned_at=request.assigned_at,
-                    notes=request.notes
-                )
-                
-                transfer_items.append(item)
-            
-            logger.info(f"Найдено {len(transfer_items)} заявок для передачи")
-            return transfer_items
-            
-        except Exception as e:
-            logger.error(f"Ошибка поиска заявок для передачи: {e}")
-            return []
-    
-    def _create_empty_transfer(self, outgoing_shift: Shift, incoming_shift: Shift) -> ShiftTransfer:
-        """Создает пустую передачу (нет активных заявок)"""
-        transfer = ShiftTransfer(
-            id=None,
-            outgoing_shift_id=outgoing_shift.id,
-            incoming_shift_id=incoming_shift.id,
-            outgoing_executor_id=outgoing_shift.executor_id,
-            incoming_executor_id=incoming_shift.executor_id,
-            transfer_items=[],
-            status=TransferStatus.COMPLETED,
-            total_requests=0,
-            transferred_requests=0,
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            transfer_notes="Передача завершена автоматически - нет активных заявок"
-        )
-        
-        # Завершаем исходящую смену и активируем входящую
-        # BUG-123: пишем канонические start_time/end_time — модель Shift не имеет
-        # колонок actual_* (присваивание молча терялось, persist не происходил).
-        outgoing_shift.status = "completed"
-        outgoing_shift.end_time = datetime.now(timezone.utc)
-        incoming_shift.status = "active"
-        incoming_shift.start_time = datetime.now(timezone.utc)
+        moved = 0
+        for request_number in request_numbers:
+            req = self.db.query(Request).filter(
+                Request.request_number == request_number
+            ).first()
+            if req and req.status in ACTIVE_REQUEST_STATUSES:
+                if assignment_svc.reassign_executor(request_number, new_executor_id):
+                    moved += 1
+        return moved
 
-        return transfer
-    
-    def start_transfer_process(self, transfer: ShiftTransfer, executor_id: int) -> bool:
-        """
-        Начинает процесс передачи заявок
-        
-        Args:
-            transfer: Объект передачи
-            executor_id: ID исполнителя, начинающего передачу
-        
-        Returns:
-            bool: True если процесс начат успешно
-        """
-        try:
-            if transfer.status != TransferStatus.PENDING:
-                logger.error(f"Неверный статус передачи для начала: {transfer.status}")
-                return False
-            
-            if executor_id != transfer.outgoing_executor_id:
-                logger.error("Передачу может начать только исходящий исполнитель")
-                return False
-            
-            # Меняем статус передачи
-            transfer.status = TransferStatus.IN_PROGRESS
-            transfer.started_at = datetime.now()
-            
-            # Создаем аудит
-            self._create_transfer_audit(transfer, executor_id, "started")
-            
-            # Уведомляем входящего исполнителя
-            self._notify_transfer_started(transfer)
-            
-            logger.info(f"Процесс передачи начат исполнителем {executor_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка начала процесса передачи: {e}")
-            return False
-    
-    def transfer_single_request(
+    # ========== ОБЩЕЕ ЯДРО: ПЕРЕНАЗНАЧЕНИЕ СМЕНЫ ==========
+
+    def reassign_shift(
         self,
-        transfer: ShiftTransfer,
-        request_number: str,
-        transfer_notes: Optional[str] = None,
-        executor_id: int = None
-    ) -> bool:
+        shift_id: int,
+        new_executor_id: int,
+        actor_manager_id: Optional[int],
+        *,
+        record_history: bool,
+    ) -> Dict[str, Any]:
+        """Переназначает смену + переносит активные заявки. БЕЗ commit.
+
+        Возвращает {success, error, notification_jobs, moved_requests}.
+        notification_jobs — список (user_id, title, message); владелец рассылает
+        ПОСЛЕ commit (иначе можно уведомить о переносе, который откатился).
         """
-        Передает одну заявку в рамках передачи смены
-        
-        Args:
-            transfer: Объект передачи
-            request_number: Номер заявки для передачи
-            transfer_notes: Комментарий к передаче
-            executor_id: ID исполнителя, выполняющего передачу
-        
-        Returns:
-            bool: True если заявка передана успешно
-        """
+        shift = self.db.query(Shift).filter(Shift.id == shift_id).first()
+        if not shift:
+            return {"success": False, "error": "shift_not_found", "notification_jobs": []}
+
+        error = self._validate_reassign_target(shift, new_executor_id)
+        if error:
+            return {"success": False, "error": error, "notification_jobs": []}
+
+        old_executor_id = shift.user_id
+        shift.user_id = new_executor_id
+        moved = self._move_active_requests(shift, old_executor_id, new_executor_id)
+
+        if record_history:
+            now = _utcnow()
+            self.db.add(ShiftTransferModel(
+                shift_id=shift.id,
+                from_executor_id=old_executor_id,
+                to_executor_id=new_executor_id,
+                assigned_by=actor_manager_id,
+                status="completed",
+                reason="manager_reassign",
+                auto_assigned=True,
+                assigned_at=now,
+                responded_at=now,
+                completed_at=now,
+            ))
+
+        shift_label = self._shift_label(shift)
+        jobs: List[tuple] = [
+            (new_executor_id, "Вам назначена смена",
+             f"Вам переназначена смена {shift_label}. Активных заявок перенесено: {moved}."),
+        ]
+        if old_executor_id and old_executor_id != new_executor_id:
+            jobs.append((
+                old_executor_id, "Смена переназначена",
+                f"Смена {shift_label} переназначена другому исполнителю.",
+            ))
+
+        return {
+            "success": True,
+            "error": None,
+            "notification_jobs": jobs,
+            "moved_requests": moved,
+        }
+
+    # ========== EXECUTOR-ИНИЦИИРОВАННЫЙ ФЛОУ ==========
+
+    def create_transfer(
+        self,
+        shift_id: int,
+        from_executor_id: int,
+        reason: str,
+        comment: str,
+        urgency_level: str,
+    ) -> Dict[str, Any]:
+        """Создаёт передачу (status=pending). from_executor_id — внутренний users.id."""
         try:
-            # Находим заявку в списке передачи
-            transfer_item = None
-            for item in transfer.transfer_items:
-                if item.request_number == request_number:
-                    transfer_item = item
-                    break
-            
-            if not transfer_item:
-                logger.error(f"Заявка {request_number} не найдена в списке передачи")
-                return False
-            
-            # Получаем заявку из БД
-            request = self.db.query(Request).filter(Request.request_number == request_number).first()
-            if not request:
-                logger.error(f"Заявка {request_number} не найдена в базе данных")
-                return False
-            
-            # Переназначаем заявку на входящего исполнителя
-            old_executor_id = request.executor_id
-            request.executor_id = transfer.incoming_executor_id
-            request.assigned_at = datetime.now(timezone.utc)
-            request.assigned_by = transfer.outgoing_executor_id  # Кто передал
-            
-            # Добавляем комментарий о передаче
-            if transfer_notes:
-                transfer_item.transfer_notes = transfer_notes
-                existing_notes = request.notes or ""
-                transfer_comment = f"\n[ПЕРЕДАЧА СМЕНЫ {datetime.now().strftime('%d.%m.%Y %H:%M')}] {transfer_notes}"
-                request.notes = existing_notes + transfer_comment
-            
-            # Обновляем счетчики передачи
-            transfer.transferred_requests += 1
-            
-            # Создаем запись аудита для заявки
-            audit = AuditLog(
-                user_id=transfer.outgoing_executor_id,
-                telegram_user_id=None,
-                action="REQUEST_TRANSFERRED",
-                details={
-                    "request_number": request_number,
-                    "from_executor": old_executor_id,
-                    "to_executor": transfer.incoming_executor_id,
-                    "transfer_notes": transfer_notes,
-                    "outgoing_shift_id": transfer.outgoing_shift_id,
-                    "incoming_shift_id": transfer.incoming_shift_id
-                }
+            shift = self.db.query(Shift).filter(Shift.id == shift_id).first()
+            if not shift:
+                return {"success": False, "error": "shift_not_found"}
+            if shift.user_id != from_executor_id:
+                return {"success": False, "error": "not_your_shift"}
+            if shift.status not in ("planned", "active"):
+                return {"success": False, "error": "shift_not_transferable"}
+
+            existing = self.db.query(ShiftTransferModel).filter(
+                ShiftTransferModel.shift_id == shift_id,
+                ShiftTransferModel.status.in_(_BLOCKING_TRANSFER_STATUSES),
+            ).first()
+            if existing:
+                return {"success": False, "error": "transfer_already_exists"}
+
+            transfer = ShiftTransferModel(
+                shift_id=shift_id,
+                from_executor_id=from_executor_id,
+                status="pending",
+                reason=reason or "other",
+                comment=comment or None,
+                urgency_level=urgency_level or "normal",
             )
-            self.db.add(audit)
-            
+            self.db.add(transfer)
             self.db.commit()
-            logger.info(f"Заявка {request_number} передана исполнителю {transfer.incoming_executor_id}")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка передачи заявки {request_number}: {e}")
-            self.db.rollback()
-            transfer.failed_requests += 1
-            return False
-    
-    def complete_transfer(self, transfer: ShiftTransfer, executor_id: int, completion_notes: Optional[str] = None) -> bool:
-        """
-        Завершает передачу заявок между сменами
-        
-        Args:
-            transfer: Объект передачи
-            executor_id: ID исполнителя, завершающего передачу
-            completion_notes: Комментарии о завершении
-        
-        Returns:
-            bool: True если передача завершена успешно
-        """
-        try:
-            if transfer.status != TransferStatus.IN_PROGRESS:
-                logger.error(f"Неверный статус для завершения передачи: {transfer.status}")
-                return False
-            
-            # Может завершить как исходящий, так и входящий исполнитель
-            if executor_id not in [transfer.outgoing_executor_id, transfer.incoming_executor_id]:
-                logger.error("Завершить передачу могут только участвующие исполнители")
-                return False
-            
-            # Проверяем, что все заявки обработаны
-            pending_requests = transfer.total_requests - transfer.transferred_requests - transfer.failed_requests
-            if pending_requests > 0:
-                logger.warning(f"Остались необработанные заявки: {pending_requests}")
-                # Можем разрешить завершение с предупреждением
-            
-            # Завершаем передачу
-            transfer.status = TransferStatus.COMPLETED
-            transfer.completed_at = datetime.utcnow()
-            if completion_notes:
-                transfer.transfer_notes = completion_notes
-            
-            # Обновляем статусы смен
-            outgoing_shift = self.db.query(Shift).filter(Shift.id == transfer.outgoing_shift_id).first()
-            incoming_shift = self.db.query(Shift).filter(Shift.id == transfer.incoming_shift_id).first()
-            
-            if outgoing_shift:
-                outgoing_shift.status = "completed"
-                # BUG-123: канонический end_time вместо unmapped actual_* поля.
-                outgoing_shift.end_time = datetime.now(timezone.utc)
+            self.db.refresh(transfer)
 
-                # Обновляем статистику исходящей смены
-                outgoing_shift.completed_requests = transfer.transferred_requests + transfer.failed_requests
+            # Уведомить менеджеров (best-effort, после commit).
+            self.notify_managers_new_transfer(transfer)
 
-            if incoming_shift:
-                incoming_shift.status = "active"
-                incoming_shift.start_time = datetime.now(timezone.utc)
-            
-            # Создаем финальный аудит
-            self._create_transfer_audit(transfer, executor_id, "completed")
-            
-            # Уведомляем о завершении
-            self._notify_transfer_completed(transfer)
-            
-            self.db.commit()
-            logger.info(f"Передача завершена: {transfer.transferred_requests}/{transfer.total_requests} заявок")
-            
-            return True
-            
+            return {"success": True, "error": None, "transfer_id": transfer.id}
         except Exception as e:
-            logger.error(f"Ошибка завершения передачи: {e}")
+            logger.error(f"create_transfer: ошибка: {e}")
             self.db.rollback()
-            return False
-    
-    def cancel_transfer(self, transfer: ShiftTransfer, executor_id: int, reason: str) -> bool:
-        """
-        Отменяет передачу заявок
-        
-        Args:
-            transfer: Объект передачи
-            executor_id: ID исполнителя, отменяющего передачу
-            reason: Причина отмены
-        
-        Returns:
-            bool: True если передача отменена успешно
-        """
+            return {"success": False, "error": "internal_error"}
+
+    def assign_transfer(
+        self, transfer_id: int, to_executor_id: int, manager_id: int
+    ) -> Dict[str, Any]:
+        """Менеджер назначает получателя: pending→assigned. Без смены shift.user_id."""
         try:
-            if transfer.status not in [TransferStatus.PENDING, TransferStatus.IN_PROGRESS]:
-                logger.error(f"Нельзя отменить передачу в статусе: {transfer.status}")
-                return False
-            
-            # Отменяем передачу
-            transfer.status = TransferStatus.CANCELLED
-            transfer.transfer_notes = f"Отменено: {reason}"
-            
-            # Возвращаем смены в исходное состояние
-            outgoing_shift = self.db.query(Shift).filter(Shift.id == transfer.outgoing_shift_id).first()
-            incoming_shift = self.db.query(Shift).filter(Shift.id == transfer.incoming_shift_id).first()
-            
-            if outgoing_shift and outgoing_shift.status == "in_transition":
-                outgoing_shift.status = "active"  # Возвращаем в активное состояние
-            
-            if incoming_shift and incoming_shift.status != "planned":
-                incoming_shift.status = "planned"  # Возвращаем в запланированное состояние
-            
-            # Откатываем переданные заявки
-            for i in range(transfer.transferred_requests):
-                # Здесь нужно найти и откатить уже переданные заявки
-                # Это сложная операция, возможно стоит ограничить отмену только для PENDING статуса
-                pass
-            
-            # Создаем аудит отмены
-            self._create_transfer_audit(transfer, executor_id, "cancelled", reason)
-            
-            # Уведомляем об отмене
-            self._notify_transfer_cancelled(transfer, reason)
-            
+            transfer = self.db.query(ShiftTransferModel).filter(
+                ShiftTransferModel.id == transfer_id
+            ).with_for_update().first()
+            if not transfer:
+                return {"success": False, "error": "transfer_not_found"}
+            if transfer.status != "pending":
+                return {"success": False, "error": "wrong_status"}
+            if not transfer.can_be_assigned_to(to_executor_id):
+                return {"success": False, "error": "cannot_assign_to_self"}
+
+            shift = self.db.query(Shift).filter(Shift.id == transfer.shift_id).first()
+            if not shift:
+                return {"success": False, "error": "shift_not_found"}
+
+            # Precheck guards (тот же набор, что accept перепроверит из-за гонки).
+            error = self._validate_reassign_target(shift, to_executor_id)
+            if error:
+                return {"success": False, "error": error}
+
+            if not transfer.update_status("assigned"):
+                return {"success": False, "error": "wrong_status"}
+            transfer.to_executor_id = to_executor_id
+            transfer.assigned_by = manager_id
             self.db.commit()
-            logger.info(f"Передача отменена: {reason}")
-            
-            return True
-            
+
+            return {"success": True, "error": None, "transfer_id": transfer.id,
+                    "to_executor_id": to_executor_id}
         except Exception as e:
-            logger.error(f"Ошибка отмены передачи: {e}")
+            logger.error(f"assign_transfer: ошибка: {e}")
             self.db.rollback()
-            return False
-    
-    # ========== АВТОМАТИЧЕСКИЕ ПРОЦЕССЫ ==========
-    
-    def auto_detect_required_transfers(self, time_window_minutes: int = 30) -> List[Tuple[int, int]]:
-        """
-        Автоматически определяет смены, которые требуют передачи заявок
-        
-        Args:
-            time_window_minutes: Временное окно для поиска завершающихся смен
-        
-        Returns:
-            List[Tuple[int, int]]: Список пар (исходящая_смена_id, входящая_смена_id)
-        """
+            return {"success": False, "error": "internal_error"}
+
+    def accept_transfer(self, transfer_id: int, executor_id: int) -> Dict[str, Any]:
+        """Получатель принимает: assigned→accepted→completed + перенос смены/заявок."""
         try:
-            now = datetime.now()
-            window_start = now
-            window_end = now + timedelta(minutes=time_window_minutes)
-            
-            # Ищем смены, которые завершаются в ближайшее время
-            ending_shifts = self.db.query(Shift).filter(
-                and_(
-                    Shift.status == "active",
-                    Shift.planned_end_time >= window_start,
-                    Shift.planned_end_time <= window_end
-                )
+            transfer = self.db.query(ShiftTransferModel).filter(
+                ShiftTransferModel.id == transfer_id
+            ).with_for_update().first()
+            if not transfer:
+                return {"success": False, "error": "transfer_not_found"}
+            if transfer.status != "assigned":
+                return {"success": False, "error": "wrong_status"}
+            if transfer.to_executor_id != executor_id:
+                return {"success": False, "error": "not_your_transfer"}
+
+            # Транзишен accepted, затем перенос через общее ядро (без истории —
+            # сама строка передачи и есть история).
+            if not transfer.update_status("accepted"):
+                return {"success": False, "error": "wrong_status"}
+
+            res = self.reassign_shift(
+                shift_id=transfer.shift_id,
+                new_executor_id=executor_id,
+                actor_manager_id=transfer.assigned_by,
+                record_history=False,
+            )
+            if not res["success"]:
+                # Откатываем промежуточный accepted — «висячего accepted» нет.
+                self.db.rollback()
+                return {"success": False, "error": res["error"]}
+
+            transfer.update_status("completed")
+            self.db.commit()
+
+            # Уведомления ПОСЛЕ commit.
+            jobs = list(res["notification_jobs"])
+            jobs.append((
+                transfer.from_executor_id, "Передача смены принята",
+                "Назначенный исполнитель принял переданную смену.",
+            ))
+            if transfer.assigned_by:
+                jobs.append((
+                    transfer.assigned_by, "Передача смены принята",
+                    f"Передача смены #{transfer.id} принята исполнителем.",
+                ))
+            self.dispatch_jobs(jobs)
+
+            return {"success": True, "error": None, "moved_requests": res.get("moved_requests", 0)}
+        except Exception as e:
+            logger.error(f"accept_transfer: ошибка: {e}")
+            self.db.rollback()
+            return {"success": False, "error": "internal_error"}
+
+    def reject_transfer(
+        self, transfer_id: int, executor_id: int, comment: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Получатель отклоняет: assigned→rejected. Смена НЕ менялась."""
+        try:
+            transfer = self.db.query(ShiftTransferModel).filter(
+                ShiftTransferModel.id == transfer_id
+            ).with_for_update().first()
+            if not transfer:
+                return {"success": False, "error": "transfer_not_found"}
+            if transfer.status != "assigned":
+                return {"success": False, "error": "wrong_status"}
+            if transfer.to_executor_id != executor_id:
+                return {"success": False, "error": "not_your_transfer"}
+
+            if not transfer.update_status("rejected", comment):
+                return {"success": False, "error": "wrong_status"}
+            self.db.commit()
+
+            jobs = [(
+                transfer.from_executor_id, "Передача смены отклонена",
+                "Назначенный исполнитель отклонил переданную смену.",
+            )]
+            if transfer.assigned_by:
+                jobs.append((
+                    transfer.assigned_by, "Передача смены отклонена",
+                    f"Передача смены #{transfer.id} отклонена получателем.",
+                ))
+            self.dispatch_jobs(jobs)
+
+            return {"success": True, "error": None}
+        except Exception as e:
+            logger.error(f"reject_transfer: ошибка: {e}")
+            self.db.rollback()
+            return {"success": False, "error": "internal_error"}
+
+    # ========== ВЫБОРКИ ДЛЯ ХЕНДЛЕРОВ ==========
+
+    def list_pending_transfers(self, limit: int = 20) -> List[ShiftTransferModel]:
+        """Ожидающие назначения передачи (для менеджера)."""
+        return self.db.query(ShiftTransferModel).filter(
+            ShiftTransferModel.status == "pending"
+        ).options(
+            joinedload(ShiftTransferModel.shift),
+            joinedload(ShiftTransferModel.from_executor),
+        ).order_by(ShiftTransferModel.created_at.desc()).limit(limit).all()
+
+    def get_shift(self, shift_id: int) -> Optional[Shift]:
+        return self.db.query(Shift).filter(Shift.id == shift_id).first()
+
+    def list_eligible_executors(self, exclude_user_id: Optional[int], limit: int = 30) -> List[User]:
+        """Approved-исполнители для назначения/reassign (кроме указанного user.id)."""
+        return self.db.query(User).filter(
+            User.roles.contains("executor"),
+            User.status == "approved",
+            User.id != exclude_user_id,
+        ).order_by(User.first_name).limit(limit).all()
+
+    def manager_direct_reassign(
+        self, shift_id: int, new_executor_id: int, actor_telegram_id: int
+    ) -> Dict[str, Any]:
+        """Прямой менеджерский reassign (бот): reassign_shift + commit (owner-слой).
+
+        Резолвит менеджера по telegram_id, переназначает смену с записью истории,
+        коммитит при успехе и ВОЗВРАЩАЕТ notification_jobs — рассылку выполняет
+        вызывающий через `dispatch_jobs` ПОСЛЕ commit.
+        """
+        manager = self.db.query(User).filter(User.telegram_id == actor_telegram_id).first()
+        res = self.reassign_shift(
+            shift_id, new_executor_id,
+            actor_manager_id=(manager.id if manager else None),
+            record_history=True,
+        )
+        if res["success"]:
+            self.db.commit()
+        return res
+
+    def get_transfer(self, transfer_id: int) -> Optional[ShiftTransferModel]:
+        return self.db.query(ShiftTransferModel).filter(
+            ShiftTransferModel.id == transfer_id
+        ).options(
+            joinedload(ShiftTransferModel.shift),
+            joinedload(ShiftTransferModel.from_executor),
+            joinedload(ShiftTransferModel.to_executor),
+        ).first()
+
+    def notify_managers_new_transfer(self, transfer: ShiftTransferModel) -> None:
+        """Best-effort уведомление approved-менеджеров о новой передаче."""
+        try:
+            managers = self.db.query(User).filter(
+                User.roles.contains("manager"),
+                User.status == "approved",
             ).all()
-            
-            transfer_pairs = []
-            
-            for ending_shift in ending_shifts:
-                # Ищем следующую смену той же специализации
-                next_shift = self._find_next_shift_for_specialization(
-                    ending_shift.specialization_focus,
-                    ending_shift.planned_end_time
+            for manager in managers:
+                self.notification_service.notify_user(
+                    manager.id,
+                    "Новая передача смены",
+                    f"Поступила передача смены #{transfer.id}, ожидает назначения исполнителя "
+                    f"(/assign_{transfer.id}).",
                 )
-                
-                if next_shift:
-                    transfer_pairs.append((ending_shift.id, next_shift.id))
-                    logger.info(f"Обнаружена необходимость передачи: {ending_shift.id} → {next_shift.id}")
-                else:
-                    logger.warning(f"Не найдена следующая смена для специализации {ending_shift.specialization_focus}")
-            
-            return transfer_pairs
-            
         except Exception as e:
-            logger.error(f"Ошибка автоопределения передач: {e}")
-            return []
-    
-    def _find_next_shift_for_specialization(
-        self, 
-        specialization_focus: List[str], 
-        after_time: datetime
-    ) -> Optional[Shift]:
-        """Находит следующую смену для той же специализации"""
-        try:
-            # Ищем ближайшую запланированную смену с той же специализацией
-            next_shift = self.db.query(Shift).filter(
-                and_(
-                    Shift.status == "planned",
-                    Shift.planned_start_time >= after_time - timedelta(hours=1),  # Небольшое перекрытие
-                    Shift.planned_start_time <= after_time + timedelta(hours=8),   # В разумных пределах
-                    or_(*[
-                        Shift.specialization_focus.contains([spec]) 
-                        for spec in specialization_focus
-                    ])
-                )
-            ).order_by(Shift.planned_start_time).first()
-            
-            return next_shift
-            
-        except Exception as e:
-            logger.error(f"Ошибка поиска следующей смены: {e}")
-            return None
-    
-    def auto_initiate_transfers(self) -> List[ShiftTransfer]:
-        """Автоматически инициирует передачи для обнаруженных смен"""
-        try:
-            transfer_pairs = self.auto_detect_required_transfers()
-            initiated_transfers = []
-            
-            for outgoing_id, incoming_id in transfer_pairs:
-                transfer = self.initiate_shift_transfer(
-                    outgoing_id, 
-                    incoming_id, 
-                    initiated_by=0  # Системная инициация
-                )
-                
-                if transfer:
-                    initiated_transfers.append(transfer)
-            
-            logger.info(f"Автоматически инициировано {len(initiated_transfers)} передач")
-            return initiated_transfers
-            
-        except Exception as e:
-            logger.error(f"Ошибка автоинициации передач: {e}")
-            return []
-    
+            logger.warning(f"notify_managers_new_transfer: {e}")
+
+    # ========== ВСПОМОГАТЕЛЬНОЕ ==========
+
+    def _shift_label(self, shift: Shift) -> str:
+        if shift.start_time is not None:
+            try:
+                return f"#{shift.id} ({shift.start_time.strftime('%d.%m %H:%M')})"
+            except Exception:
+                pass
+        return f"#{shift.id}"
+
+    def dispatch_jobs(self, jobs: List[tuple]) -> None:
+        """Best-effort рассылка (user_id, title, message) — строго ПОСЛЕ commit.
+
+        Публичный: вызывается владельцем транзакции (бот-хендлер прямого reassign)
+        после commit, а также внутри accept/reject.
+        """
+        for user_id, title, message in jobs:
+            try:
+                self.notification_service.notify_user(user_id, title, message)
+            except Exception as e:
+                logger.warning(f"_dispatch: ошибка уведомления user_id={user_id}: {e}")
+
+    # ========== ПЛАНИРОВЩИК: ИСТЕКШИЕ ПЕРЕДАЧИ (BUG-BOT-036) ==========
+
     async def process_expired_transfers(self, hours_threshold: int = 24) -> Dict[str, Any]:
         """
         Помечает «зависшие» передачи как expired.
 
         Передача считается истёкшей, если её статус всё ещё «pending» / «assigned»,
         а с момента создания прошло больше `hours_threshold` часов.
-
-        Args:
-            hours_threshold: сколько часов передача может оставаться без ответа.
 
         Returns:
             Dict с ключами:
@@ -596,7 +506,7 @@ class ShiftTransferService:
 
         # --- Фаза 1+2: мутация записей + commit (под rollback-guard) ---
         try:
-            cutoff = datetime.utcnow() - timedelta(hours=hours_threshold)
+            cutoff = _utcnow() - timedelta(hours=hours_threshold)
 
             expired_rows = self.db.query(ShiftTransferModel).filter(
                 ShiftTransferModel.status.in_(["pending", "assigned"]),
@@ -607,7 +517,7 @@ class ShiftTransferService:
                 logger.info("Истёкших передач не обнаружено")
                 return _result()
 
-            now = datetime.utcnow()
+            now = _utcnow()
             for transfer in expired_rows:
                 try:
                     transfer.status = "expired"
@@ -663,118 +573,3 @@ class ShiftTransferService:
             errors,
         )
         return _result()
-
-    # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
-    
-    def _create_transfer_audit(self, transfer: ShiftTransfer, user_id: int, action: str, details: str = None):
-        """Создает запись аудита для передачи"""
-        try:
-            audit = AuditLog(
-                user_id=user_id,
-                telegram_user_id=None,
-                action=f"SHIFT_TRANSFER_{action.upper()}",
-                details={
-                    "outgoing_shift_id": transfer.outgoing_shift_id,
-                    "incoming_shift_id": transfer.incoming_shift_id,
-                    "outgoing_executor_id": transfer.outgoing_executor_id,
-                    "incoming_executor_id": transfer.incoming_executor_id,
-                    "total_requests": transfer.total_requests,
-                    "transferred_requests": transfer.transferred_requests,
-                    "failed_requests": transfer.failed_requests,
-                    "status": transfer.status.value,
-                    "details": details
-                }
-            )
-            self.db.add(audit)
-            
-        except Exception as e:
-            logger.error(f"Ошибка создания аудита передачи: {e}")
-    
-    def _notify_transfer_initiated(self, transfer: ShiftTransfer):
-        """Уведомляет участников о начале передачи"""
-        try:
-            # Уведомляем исходящего исполнителя
-            self.notification_service.notify_user(
-                transfer.outgoing_executor_id,
-                "Инициирована передача смены",
-                f"Передача {transfer.total_requests} заявок следующей смене. Начните процесс передачи в удобное время."
-            )
-            
-            # Уведомляем входящего исполнителя
-            self.notification_service.notify_user(
-                transfer.incoming_executor_id,
-                "Вам будут переданы заявки",
-                f"От предыдущей смены будет передано {transfer.total_requests} активных заявок. Будьте готовы к приему."
-            )
-            
-        except Exception as e:
-            logger.error(f"Ошибка уведомлений о передаче: {e}")
-    
-    def _notify_transfer_started(self, transfer: ShiftTransfer):
-        """Уведомляет о начале процесса передачи"""
-        try:
-            self.notification_service.notify_user(
-                transfer.incoming_executor_id,
-                "Начался процесс передачи смены",
-                f"Предыдущая смена начала передачу {transfer.total_requests} заявок. Подготовьтесь к их приему."
-            )
-        except Exception as e:
-            logger.error(f"Ошибка уведомления о начале передачи: {e}")
-    
-    def _notify_transfer_completed(self, transfer: ShiftTransfer):
-        """Уведомляет о завершении передачи"""
-        try:
-            success_rate = (transfer.transferred_requests / transfer.total_requests * 100) if transfer.total_requests > 0 else 100
-            
-            message = f"Передача смены завершена. Передано: {transfer.transferred_requests}/{transfer.total_requests} заявок ({success_rate:.1f}%)"
-            if transfer.failed_requests > 0:
-                message += f". Ошибок: {transfer.failed_requests}"
-            
-            # Уведомляем обоих исполнителей
-            self.notification_service.notify_user(transfer.outgoing_executor_id, "Передача завершена", message)
-            self.notification_service.notify_user(transfer.incoming_executor_id, "Смена принята", message)
-            
-        except Exception as e:
-            logger.error(f"Ошибка уведомления о завершении: {e}")
-    
-    def _notify_transfer_cancelled(self, transfer: ShiftTransfer, reason: str):
-        """Уведомляет об отмене передачи"""
-        try:
-            message = f"Передача смены отменена. Причина: {reason}"
-            
-            self.notification_service.notify_user(transfer.outgoing_executor_id, "Передача отменена", message)
-            self.notification_service.notify_user(transfer.incoming_executor_id, "Передача отменена", message)
-            
-        except Exception as e:
-            logger.error(f"Ошибка уведомления об отмене: {e}")
-    
-    # ========== СТАТИСТИКА И АНАЛИТИКА ==========
-    
-    def get_transfer_statistics(self, days: int = 30) -> Dict[str, Any]:
-        """Возвращает статистику передач за указанный период"""
-        try:
-            # Здесь будет запрос к таблице передач, когда она будет создана
-            # Пока возвращаем базовую статистику
-            return {
-                "total_transfers": 0,
-                "successful_transfers": 0,
-                "failed_transfers": 0,
-                "average_transfer_time": 0,
-                "total_requests_transferred": 0,
-                "transfer_success_rate": 0
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения статистики передач: {e}")
-            return {}
-    
-    def get_active_transfers(self) -> List[ShiftTransfer]:
-        """Возвращает список активных передач"""
-        try:
-            # Здесь будет запрос к БД для получения активных передач
-            # Пока возвращаем пустой список
-            return []
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения активных передач: {e}")
-            return []
