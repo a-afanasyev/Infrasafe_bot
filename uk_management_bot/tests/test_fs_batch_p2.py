@@ -239,6 +239,44 @@ async def test_shift_details_resolves_internal_user_id(db):
     assert "my_shifts.handlers.shift_not_found" not in answers
 
 
+@pytest.mark.asyncio
+async def test_end_shift_handles_tz_aware_start_time(db):
+    """handle_end_shift: ad-hoc смена имеет tz-aware start_time, а end_time =
+    datetime.now() (naive). Вычитание naive-aware раньше падало
+    «can't subtract offset-naive and offset-aware datetimes» → generic ошибка,
+    хотя смена завершалась. Длительность считается без исключения."""
+    from datetime import timezone
+    from uk_management_bot.handlers import my_shifts as ms
+
+    user = User(id=8, telegram_id=80808, username="ex", first_name="E", last_name="X",
+                roles='["executor"]', active_role="executor", status="approved", language="ru")
+    db.add(user)
+    shift = Shift(user_id=user.id, status="active",
+                  start_time=datetime.now(timezone.utc) - timedelta(hours=1))  # tz-aware
+    db.add(shift)
+    db.commit()
+
+    cb = MagicMock()
+    cb.from_user = MagicMock(id=80808)
+    cb.message = MagicMock()
+    cb.message.edit_text = AsyncMock()
+    cb.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"current_shift_id": shift.id})
+    state.set_state = AsyncMock()
+
+    with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key), \
+         patch.object(ms, "get_my_shifts_menu", return_value=MagicMock()):
+        await ms.handle_end_shift(cb, state, language="ru", db=db, user=user, roles=["executor"])
+
+    # дошли до summary (edit_text), не упали в error_occurred
+    cb.message.edit_text.assert_awaited_once()
+    answers = [c.args[0] for c in cb.answer.await_args_list if c.args]
+    assert "my_shifts.handlers.error_occurred" not in answers
+    db.refresh(shift)
+    assert shift.status == "completed"
+
+
 def test_fs03_redistribute_uses_balance_method_not_missing_one():
     """redistribute_load: balance_executor_workload есть, redistribute_workload нет."""
     from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
