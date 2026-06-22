@@ -994,7 +994,9 @@ class ShiftAssignmentService:
                 and_(
                     Shift.user_id == executor_id,
                     Shift.status.in_(['planned', 'active']),
-                    Shift.planned_start_time >= datetime.now()
+                    # AUD3-11: planned_start_time = DateTime(timezone=True); сравнение
+                    # с naive datetime.now() семантически хрупко (зависит от session TZ).
+                    Shift.planned_start_time >= datetime.now(timezone.utc)
                 )
             ).all()
 
