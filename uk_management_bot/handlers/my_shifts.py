@@ -536,9 +536,11 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
         shift.status = 'completed'
         shift.end_time = end_time
         
-        # Рассчитываем фактическую длительность
+        # Рассчитываем фактическую длительность. Shift.start_time у ad-hoc смен
+        # tz-aware, а end_time = datetime.now() naive → нормализуем к naive перед
+        # вычитанием (как в handlers/shifts.py), иначе TypeError naive vs aware.
         if shift.start_time:
-            actual_duration = (end_time - shift.start_time).total_seconds() / 3600
+            actual_duration = (end_time - shift.start_time.replace(tzinfo=None)).total_seconds() / 3600
         else:
             actual_duration = 0
         
