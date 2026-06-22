@@ -26,10 +26,15 @@ httpx>=0.25.0
 # Web Framework for invite registration
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
+# REG-03: python-multipart>=0.0.31 закрывает CVE (DoS в multipart-парсере)
+python-multipart>=0.0.31
+# REG-03: starlette>=1.3.1 закрывает CVE (совместимо с fastapi>=0.136 — starlette>=0.46)
+starlette>=1.3.1
 
 # JWT + Auth
 python-jose[cryptography]>=3.3.0
+# REG-03: cryptography>=48.0.1 закрывает CVE (прямой пин — приходит транзитивно)
+cryptography>=48.0.1
 bcrypt>=4.0.0  # DEAD-11: код использует `import bcrypt` напрямую, passlib не нужен
 
 # Rate limiting
