@@ -1001,6 +1001,51 @@
         "empty": "Нет смен",
         "limitNote": "Показаны последние {{count}} смен"
       },
+      "transfer": {
+        "initiate": "Передать смену",
+        "title": "Передача смены",
+        "myTransfers": "Мои передачи",
+        "empty": "Нет передач",
+        "outgoing": "Исходящая",
+        "incoming": "Входящая",
+        "reason": "Причина",
+        "urgency": "Срочность",
+        "comment": "Комментарий",
+        "commentPlaceholder": "Необязательно…",
+        "submit": "Отправить",
+        "cancel": "Отмена",
+        "accept": "Принять",
+        "reject": "Отклонить",
+        "urgencyLevels": {
+          "low": "Низкая",
+          "normal": "Обычная",
+          "high": "Высокая",
+          "critical": "Критическая"
+        },
+        "status": {
+          "pending": "Ожидает назначения",
+          "assigned": "Ждёт ответа получателя",
+          "accepted": "Принята",
+          "rejected": "Отклонена",
+          "cancelled": "Отменена",
+          "completed": "Завершена"
+        },
+        "toastCreated": "Передача создана",
+        "toastCreateFailed": "Не удалось создать передачу",
+        "toastAccepted": "Передача принята",
+        "toastRejected": "Передача отклонена",
+        "toastRespondFailed": "Не удалось обработать передачу",
+        "errors": {
+          "not_your_shift": "Это не ваша смена",
+          "shift_not_transferable": "Смену нельзя передать (статус)",
+          "transfer_already_exists": "По этой смене уже есть активная передача",
+          "not_your_transfer": "Эта передача назначена не вам",
+          "wrong_status": "Передача в неподходящем статусе",
+          "overlap": "У вас пересекающаяся смена в это время",
+          "spec_mismatch": "Нет нужной специализации для смены",
+          "not_executor": "Получатель не является исполнителем"
+        }
+      },
       "report": {
         "title": "Отчёт о выполнении",
         "description": "Опишите что было сделано",
