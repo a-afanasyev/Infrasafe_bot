@@ -2,7 +2,7 @@ import logging
 import httpx
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
@@ -575,10 +575,30 @@ async def create_from_template(
     return [_shift_detail(s, users_map.get(s.user_id) if s.user_id else None) for s in created_shifts]
 
 
+async def _notify_transfer_assigned(telegram_id: int, lang: str, transfer_id: int) -> None:
+    """Best-effort: уведомить получателя о назначенной web-передаче с клавиатурой
+    ответа. Запускается как BackgroundTask (после ответа) — сбой/таймаут TG не
+    влияет на запрос."""
+    try:
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        from uk_management_bot.keyboards.shift_transfer import transfer_response_keyboard
+        from uk_management_bot.utils.helpers import get_text
+
+        await _get_shared_bot().send_message(
+            chat_id=telegram_id,
+            text=get_text("shift_transfer.handlers.transfer_assigned_to_you", language=lang),
+            reply_markup=transfer_response_keyboard(transfer_id, lang),
+        )
+    except Exception as notify_err:
+        logger.warning("Не удалось уведомить получателя tg %s о передаче %s: %s",
+                       telegram_id, transfer_id, notify_err)
+
+
 @router.post("/transfers/{transfer_id}/handle", response_model=TransferOut)
 async def handle_transfer(
     transfer_id: int,
     body: HandleTransferBody,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("manager")),
 ):
@@ -656,26 +676,15 @@ async def handle_transfer(
     # CR-8: при web-назначении (approve) уведомить получателя в Telegram с
     # клавиатурой ответа — иначе приём передачи был недостижим (web сам не
     # шлёт уведомление, а в боте не было входа для assigned-получателя).
-    # Best-effort: сбой доставки не должен валить запрос (приём также доступен
-    # через /my_transfers в боте).
+    # В фоне (после ответа): таймаут Telegram API не должен подвешивать запрос;
+    # приём также доступен через /my_transfers в боте.
     if action == "approve" and to_user is not None and getattr(to_user, "telegram_id", None):
-        try:
-            from uk_management_bot.services.notification_service import _get_shared_bot
-            from uk_management_bot.keyboards.shift_transfer import transfer_response_keyboard
-            from uk_management_bot.utils.helpers import get_text
-
-            rec_lang = getattr(to_user, "language", None) or "ru"
-            bot = _get_shared_bot()
-            await bot.send_message(
-                chat_id=to_user.telegram_id,
-                text=get_text("shift_transfer.handlers.transfer_assigned_to_you", language=rec_lang),
-                reply_markup=transfer_response_keyboard(transfer.id, rec_lang),
-            )
-        except Exception as notify_err:
-            logger.warning(
-                "Не удалось уведомить получателя %s о передаче %s: %s",
-                transfer.to_executor_id, transfer.id, notify_err,
-            )
+        background.add_task(
+            _notify_transfer_assigned,
+            to_user.telegram_id,
+            getattr(to_user, "language", None) or "ru",
+            transfer.id,
+        )
 
     return transfer_out
 

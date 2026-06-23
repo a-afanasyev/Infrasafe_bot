@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
-import { Play, Square, Clock } from 'lucide-react'
+import { Play, Square, Clock, CalendarDays, ChevronRight } from 'lucide-react'
 
 export default function ShiftPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { haptic } = useTelegramSDK()
   const [elapsed, setElapsed] = useState('')
@@ -98,6 +100,17 @@ export default function ShiftPage() {
           </>
         )}
       </div>
+
+      {/* Вход в «Мои смены» — список смен + инициация/приём передачи (PR-T2) */}
+      <button
+        onClick={() => { haptic('selection'); navigate('/twa/exec/shifts') }}
+        className="w-full mt-3 flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 text-left"
+      >
+        <span className="flex items-center gap-2 text-[14px] font-medium text-gray-900 dark:text-gray-100">
+          <CalendarDays size={18} className="text-emerald-500" /> {t('twa.exec.myShifts.title')}
+        </span>
+        <ChevronRight size={18} className="text-gray-400" />
+      </button>
     </div>
   )
 }
