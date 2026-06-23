@@ -991,6 +991,51 @@
         "empty": "Smenalar yo'q",
         "limitNote": "Oxirgi {{count}} ta smena ko'rsatildi"
       },
+      "transfer": {
+        "initiate": "Smenani uzatish",
+        "title": "Smenani uzatish",
+        "myTransfers": "Mening uzatishlarim",
+        "empty": "Uzatishlar yo'q",
+        "outgoing": "Chiquvchi",
+        "incoming": "Kiruvchi",
+        "reason": "Sabab",
+        "urgency": "Shoshilinchlik",
+        "comment": "Izoh",
+        "commentPlaceholder": "Ixtiyoriy…",
+        "submit": "Yuborish",
+        "cancel": "Bekor qilish",
+        "accept": "Qabul qilish",
+        "reject": "Rad etish",
+        "urgencyLevels": {
+          "low": "Past",
+          "normal": "Oddiy",
+          "high": "Yuqori",
+          "critical": "Kritik"
+        },
+        "status": {
+          "pending": "Tayinlash kutilmoqda",
+          "assigned": "Qabul qiluvchi javobi kutilmoqda",
+          "accepted": "Qabul qilindi",
+          "rejected": "Rad etildi",
+          "cancelled": "Bekor qilindi",
+          "completed": "Yakunlandi"
+        },
+        "toastCreated": "Uzatish yaratildi",
+        "toastCreateFailed": "Uzatishni yaratib bo'lmadi",
+        "toastAccepted": "Uzatish qabul qilindi",
+        "toastRejected": "Uzatish rad etildi",
+        "toastRespondFailed": "Uzatishni qayta ishlab bo'lmadi",
+        "errors": {
+          "not_your_shift": "Bu sizning smenangiz emas",
+          "shift_not_transferable": "Smenani uzatib bo'lmaydi (holat)",
+          "transfer_already_exists": "Bu smena bo'yicha allaqachon faol uzatish bor",
+          "not_your_transfer": "Bu uzatish sizga tayinlanmagan",
+          "wrong_status": "Uzatish holati mos emas",
+          "overlap": "Shu vaqtda kesishuvchi smenangiz bor",
+          "spec_mismatch": "Smena uchun kerakli mutaxassislik yo'q",
+          "not_executor": "Qabul qiluvchi ijrochi emas"
+        }
+      },
       "report": {
         "title": "Bajarish hisoboti",
         "description": "Nima qilinganini tasvirlang",
