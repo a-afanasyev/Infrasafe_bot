@@ -7,7 +7,6 @@ status-preserving перенос заявок на accept и список с dir
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from sqlalchemy import select
 
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.shift import Shift
