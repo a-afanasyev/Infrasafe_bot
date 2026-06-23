@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -212,15 +212,25 @@ def _transfer_out(
     )
 
 
-async def _notify(user: Optional[User], text: str) -> None:
-    """Best-effort Telegram-уведомление исполнителю/менеджеру через shared bot."""
-    if not user or not getattr(user, "telegram_id", None):
+def _job(user: Optional[User], text: str) -> Optional[tuple[int, str]]:
+    """(telegram_id, text) для уведомления, либо None если у пользователя нет tg."""
+    tid = getattr(user, "telegram_id", None) if user else None
+    return (tid, text) if tid else None
+
+
+async def _notify_many(jobs: list[tuple[int, str]]) -> None:
+    """Best-effort Telegram-рассылка через shared bot. Запускается как
+    BackgroundTask ПОСЛЕ ответа — таймаут Telegram API не должен блокировать/
+    валить сам запрос (раньше inline-await подвешивал POST при медленном TG)."""
+    if not jobs:
         return
-    try:
-        from uk_management_bot.services.notification_service import _get_shared_bot
-        await _get_shared_bot().send_message(chat_id=user.telegram_id, text=text)
-    except Exception as e:
-        logger.warning("transfer notify failed for user %s: %s", user.id, e)
+    from uk_management_bot.services.notification_service import _get_shared_bot
+    bot = _get_shared_bot()
+    for telegram_id, text in jobs:
+        try:
+            await bot.send_message(chat_id=telegram_id, text=text)
+        except Exception as e:
+            logger.warning("transfer notify failed for tg %s: %s", telegram_id, e)
 
 
 @router.get("/transfers", response_model=list[TransferOut])
@@ -241,6 +251,7 @@ async def list_my_transfers(
 @router.post("/transfers", response_model=TransferOut, status_code=status.HTTP_201_CREATED)
 async def create_my_transfer(
     body: CreateTransferBody,
+    background: BackgroundTasks,
     user: User = Depends(require_roles("executor")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -257,13 +268,14 @@ async def create_my_transfer(
         )
 
     transfer = res["transfer"]
-    # Best-effort: уведомить approved-менеджеров о новой передаче.
-    for manager in await service.list_approved_managers(db):
-        await _notify(
-            manager,
-            f"🔄 Новая передача смены #{transfer.id} от {_executor_name(user)} — "
-            f"ожидает назначения исполнителя (/assign_{transfer.id}).",
-        )
+    # Уведомить approved-менеджеров — в фоне (после ответа), чтобы таймаут
+    # Telegram API не подвешивал POST.
+    text = (
+        f"🔄 Новая передача смены #{transfer.id} от {_executor_name(user)} — "
+        f"ожидает назначения исполнителя (/assign_{transfer.id})."
+    )
+    jobs = [j for j in (_job(m, text) for m in await service.list_approved_managers(db)) if j]
+    background.add_task(_notify_many, jobs)
 
     await publish_shift_event(
         "transfer.updated",
@@ -277,6 +289,7 @@ async def create_my_transfer(
 async def respond_my_transfer(
     transfer_id: int,
     body: RespondTransferBody,
+    background: BackgroundTasks,
     user: User = Depends(require_roles("executor")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -314,11 +327,16 @@ async def respond_my_transfer(
         )
         for number in res["moved_request_numbers"]:
             await publish_request_event("request.updated", {"number": number})
-        await _notify(initiator, f"✅ Передача смены #{transfer.id} принята назначенным исполнителем.")
-        await _notify(manager, f"✅ Передача смены #{transfer.id} принята исполнителем.")
+        jobs = [
+            _job(initiator, f"✅ Передача смены #{transfer.id} принята назначенным исполнителем."),
+            _job(manager, f"✅ Передача смены #{transfer.id} принята исполнителем."),
+        ]
     else:
-        await _notify(initiator, f"❌ Передача смены #{transfer.id} отклонена назначенным исполнителем.")
-        await _notify(manager, f"❌ Передача смены #{transfer.id} отклонена получателем.")
+        jobs = [
+            _job(initiator, f"❌ Передача смены #{transfer.id} отклонена назначенным исполнителем."),
+            _job(manager, f"❌ Передача смены #{transfer.id} отклонена получателем."),
+        ]
+    background.add_task(_notify_many, [j for j in jobs if j])
 
     await publish_shift_event(
         "transfer.updated",
