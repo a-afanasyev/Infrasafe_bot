@@ -106,7 +106,7 @@ async def switch_role(
     roles = _parse_user_roles(user)
     if body.active_role not in roles:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Role '{body.active_role}' not in user roles: {roles}",
         )
     result = await db.execute(select(User).where(User.id == user.id))

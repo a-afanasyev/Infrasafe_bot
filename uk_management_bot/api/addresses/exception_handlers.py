@@ -22,7 +22,7 @@ async def _address_conflict_handler(request: Request, exc: AddressConflict) -> J
 
 async def _address_validation_handler(request: Request, exc: AddressValidationError) -> JSONResponse:
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": str(exc)}
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)}
     )
 
 

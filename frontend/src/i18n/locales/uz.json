@@ -746,7 +746,7 @@
     "confirmEnd": "Tugatish",
     "specializationsLabel": "Ixtisosliklar",
     "dayOffset": "+{{n}} kun",
-    "reassignShift": "🔄 Qayta tayinlash",
+    "reassignShift": "Qayta tayinlash",
     "reassignPick": "Yangi ijrochi",
     "reassignSelectPlaceholder": "Ijrochini tanlang…",
     "confirmReassign": "Qayta tayinlash",

@@ -270,7 +270,7 @@ async def create_my_transfer(
     if not res["success"]:
         err = res["error"]
         raise HTTPException(
-            status_code=_TRANSFER_ERROR_STATUS.get(err, status.HTTP_422_UNPROCESSABLE_ENTITY),
+            status_code=_TRANSFER_ERROR_STATUS.get(err, status.HTTP_422_UNPROCESSABLE_CONTENT),
             detail=err,
         )
 
@@ -304,7 +304,7 @@ async def respond_my_transfer(
     отклоняет (assigned→rejected) назначенную ему передачу."""
     if body.action not in ("accept", "reject"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="action must be 'accept' or 'reject'",
         )
 
@@ -318,7 +318,7 @@ async def respond_my_transfer(
     if not res["success"]:
         err = res["error"]
         raise HTTPException(
-            status_code=_TRANSFER_ERROR_STATUS.get(err, status.HTTP_422_UNPROCESSABLE_ENTITY),
+            status_code=_TRANSFER_ERROR_STATUS.get(err, status.HTTP_422_UNPROCESSABLE_CONTENT),
             detail=err,
         )
 
