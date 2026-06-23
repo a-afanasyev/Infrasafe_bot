@@ -782,3 +782,167 @@ async def reassign_shift_web(
     await db.commit()
     await db.refresh(shift)
     return {"success": True, "error": None, "moved_request_numbers": moved, "shift": shift}
+
+
+# ---------------------------------------------------------------------------
+# Executor-facing transfer flow (TWA PR-T1) — async-зеркало бот-сервиса
+# ShiftTransferService.{create_transfer,accept_transfer,reject_transfer}.
+# ---------------------------------------------------------------------------
+
+# Статусы, блокирующие создание новой передачи на ту же смену (зеркалит
+# бот-сервис _BLOCKING_TRANSFER_STATUSES).
+_BLOCKING_TRANSFER_STATUSES = ("pending", "assigned", "accepted")
+
+
+async def list_approved_managers(db: AsyncSession) -> list[User]:
+    """Approved-менеджеры — для best-effort уведомления о новой передаче."""
+    result = await db.execute(
+        select(User).where(
+            legacy_role_filter("manager"),
+            User.status == "approved",
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def list_user_transfers(
+    db: AsyncSession, *, user_id: int, limit: int, offset: int
+) -> list[tuple[ShiftTransfer, Optional[User], Optional[User], Optional[Shift]]]:
+    """[(transfer, from_user, to_user, shift)] передач, где user — инициатор ИЛИ получатель."""
+    from_user = aliased(User)
+    to_user = aliased(User)
+
+    result = await db.execute(
+        select(ShiftTransfer, from_user, to_user, Shift)
+        .join(from_user, ShiftTransfer.from_executor_id == from_user.id)
+        .outerjoin(to_user, ShiftTransfer.to_executor_id == to_user.id)
+        .outerjoin(Shift, ShiftTransfer.shift_id == Shift.id)
+        .where(
+            or_(
+                ShiftTransfer.from_executor_id == user_id,
+                ShiftTransfer.to_executor_id == user_id,
+            )
+        )
+        .order_by(ShiftTransfer.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(result.all())
+
+
+async def create_transfer_web(
+    db: AsyncSession, *, shift_id: int, from_executor_id: int,
+    reason: str, comment: Optional[str], urgency_level: str,
+) -> dict:
+    """Исполнитель инициирует передачу своей смены (status=pending).
+
+    Guards зеркалят бот-сервис: смена существует, принадлежит инициатору,
+    в статусе planned/active, на неё нет активной передачи. БЕЗ уведомлений
+    (их шлёт роутер после commit). Возвращает {success, error, transfer}.
+    """
+    shift = await get_shift_for_update(db, shift_id)
+    if not shift:
+        return {"success": False, "error": "shift_not_found"}
+    if shift.user_id != from_executor_id:
+        return {"success": False, "error": "not_your_shift"}
+    if shift.status not in ("planned", "active"):
+        return {"success": False, "error": "shift_not_transferable"}
+
+    existing = await db.execute(
+        select(ShiftTransfer).where(
+            ShiftTransfer.shift_id == shift_id,
+            ShiftTransfer.status.in_(_BLOCKING_TRANSFER_STATUSES),
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"success": False, "error": "transfer_already_exists"}
+
+    transfer = ShiftTransfer(
+        shift_id=shift_id,
+        from_executor_id=from_executor_id,
+        status="pending",
+        reason=reason or "other",
+        comment=comment or None,
+        urgency_level=urgency_level or "normal",
+    )
+    db.add(transfer)
+    await db.commit()
+    await db.refresh(transfer)
+    return {"success": True, "error": None, "transfer": transfer}
+
+
+async def accept_transfer_web(
+    db: AsyncSession, *, transfer_id: int, executor_id: int,
+) -> dict:
+    """Получатель принимает назначенную передачу: assigned→completed.
+
+    Переносит владельца смены и активные заявки (status-preserving) на
+    получателя. Гонка assign→accept перепроверяется (approved/executor/спец/
+    overlap) — зеркалит бот-`accept_transfer`→`reassign_shift`. Запись передачи
+    САМА является историей (НЕ создаём отдельную, в отличие от reassign_shift_web).
+    """
+    transfer = await get_transfer_for_update(db, transfer_id)
+    if not transfer:
+        return {"success": False, "error": "transfer_not_found"}
+    if transfer.status != "assigned":
+        return {"success": False, "error": "wrong_status"}
+    if transfer.to_executor_id != executor_id:
+        return {"success": False, "error": "not_your_transfer"}
+
+    shift = await get_shift_for_update(db, transfer.shift_id)
+    if not shift:
+        return {"success": False, "error": "shift_not_found"}
+    if shift.user_id is None or shift.status not in ("planned", "active"):
+        return {"success": False, "error": "shift_not_transferable"}
+
+    recipient = await get_user(db, executor_id)
+    if not recipient or recipient.status != "approved" \
+            or "executor" not in _parse_user_roles(recipient):
+        return {"success": False, "error": "not_executor"}
+    if not has_required_specs(recipient, shift):
+        return {"success": False, "error": "spec_mismatch"}
+    if shift.start_time is not None and shift.end_time is not None:
+        overlap = await find_overlapping_shift_for_update(
+            db, user_id=executor_id, start_time=shift.start_time,
+            end_time=shift.end_time, exclude_shift_id=shift.id, lock=True,
+        )
+        if overlap:
+            return {"success": False, "error": "overlap"}
+
+    old_executor_id = shift.user_id
+    if not transfer.update_status("accepted"):
+        return {"success": False, "error": "wrong_status"}
+    shift.user_id = executor_id
+    moved = await _move_active_requests_web(db, shift, old_executor_id, executor_id)
+    transfer.update_status("completed")
+
+    await db.commit()
+    await db.refresh(transfer)
+    await db.refresh(shift)
+    return {
+        "success": True, "error": None, "transfer": transfer, "shift": shift,
+        "moved_request_numbers": moved, "from_executor_id": old_executor_id,
+    }
+
+
+async def reject_transfer_web_by_recipient(
+    db: AsyncSession, *, transfer_id: int, executor_id: int,
+) -> dict:
+    """Получатель отклоняет назначенную передачу: assigned→rejected.
+
+    Смена НЕ менялась на assign-шаге, восстанавливать нечего.
+    """
+    transfer = await get_transfer_for_update(db, transfer_id)
+    if not transfer:
+        return {"success": False, "error": "transfer_not_found"}
+    if transfer.status != "assigned":
+        return {"success": False, "error": "wrong_status"}
+    if transfer.to_executor_id != executor_id:
+        return {"success": False, "error": "not_your_transfer"}
+
+    if not transfer.update_status("rejected"):
+        return {"success": False, "error": "wrong_status"}
+    await db.commit()
+    await db.refresh(transfer)
+    return {"success": True, "error": None, "transfer": transfer,
+            "from_executor_id": transfer.from_executor_id}

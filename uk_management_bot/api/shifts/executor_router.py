@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -7,10 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.shifts import service
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Service error-key → HTTP status (зеркалит менеджерский /reassign-маппинг).
+_TRANSFER_ERROR_STATUS = {
+    "shift_not_found": status.HTTP_404_NOT_FOUND,
+    "transfer_not_found": status.HTTP_404_NOT_FOUND,
+    "not_your_shift": status.HTTP_403_FORBIDDEN,
+    "not_your_transfer": status.HTTP_403_FORBIDDEN,
+    "transfer_already_exists": status.HTTP_409_CONFLICT,
+    "overlap": status.HTTP_409_CONFLICT,
+    "wrong_status": status.HTTP_409_CONFLICT,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +47,36 @@ class ShiftOut(BaseModel):
 
 class StartShiftBody(BaseModel):
     notes: Optional[str] = None
+
+
+class CreateTransferBody(BaseModel):
+    shift_id: int
+    reason: str
+    comment: Optional[str] = None
+    urgency_level: str = "normal"
+
+
+class RespondTransferBody(BaseModel):
+    action: str  # "accept" | "reject"
+
+
+class TransferOut(BaseModel):
+    id: int
+    shift_id: int
+    status: str
+    reason: str
+    urgency_level: str
+    comment: Optional[str]
+    from_executor_id: int
+    to_executor_id: Optional[int]
+    from_executor_name: Optional[str]
+    to_executor_name: Optional[str]
+    # "outgoing" — инициировал текущий исполнитель; "incoming" — ему назначена.
+    direction: str
+    # true → текущий исполнитель может принять/отклонить (assigned + получатель).
+    can_respond: bool
+    shift_start_time: Optional[str]
+    created_at: Optional[str]
 
 
 # ---------------------------------------------------------------------------
@@ -129,3 +175,154 @@ async def end_shift(
     await db.commit()
     await db.refresh(shift)
     return _shift_out(shift)
+
+
+# ---------------------------------------------------------------------------
+# Transfers (TWA PR-T1): исполнитель инициирует передачу своей смены и
+# принимает/отклоняет назначенную ему. Менеджерское назначение — на дашборде
+# (`/api/v2/shifts/transfers/{id}/handle`), сюда не дублируется.
+# ---------------------------------------------------------------------------
+
+def _executor_name(user: Optional[User]) -> Optional[str]:
+    if user is None:
+        return None
+    name = " ".join(p for p in (user.first_name, user.last_name) if p).strip()
+    return name or (user.username or f"#{user.id}")
+
+
+def _transfer_out(
+    transfer, *, from_user: Optional[User], to_user: Optional[User],
+    shift: Optional[Shift], me_id: int,
+) -> TransferOut:
+    return TransferOut(
+        id=transfer.id,
+        shift_id=transfer.shift_id,
+        status=transfer.status,
+        reason=transfer.reason,
+        urgency_level=transfer.urgency_level,
+        comment=transfer.comment,
+        from_executor_id=transfer.from_executor_id,
+        to_executor_id=transfer.to_executor_id,
+        from_executor_name=_executor_name(from_user),
+        to_executor_name=_executor_name(to_user),
+        direction="outgoing" if transfer.from_executor_id == me_id else "incoming",
+        can_respond=(transfer.status == "assigned" and transfer.to_executor_id == me_id),
+        shift_start_time=shift.start_time.isoformat() if shift and shift.start_time else None,
+        created_at=transfer.created_at.isoformat() if transfer.created_at else None,
+    )
+
+
+async def _notify(user: Optional[User], text: str) -> None:
+    """Best-effort Telegram-уведомление исполнителю/менеджеру через shared bot."""
+    if not user or not getattr(user, "telegram_id", None):
+        return
+    try:
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        await _get_shared_bot().send_message(chat_id=user.telegram_id, text=text)
+    except Exception as e:
+        logger.warning("transfer notify failed for user %s: %s", user.id, e)
+
+
+@router.get("/transfers", response_model=list[TransferOut])
+async def list_my_transfers(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(require_roles("executor")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Передачи текущего исполнителя (инициированные ИМ + назначенные ЕМУ)."""
+    rows = await service.list_user_transfers(db, user_id=user.id, limit=limit, offset=offset)
+    return [
+        _transfer_out(tr, from_user=fu, to_user=tu, shift=sh, me_id=user.id)
+        for (tr, fu, tu, sh) in rows
+    ]
+
+
+@router.post("/transfers", response_model=TransferOut, status_code=status.HTTP_201_CREATED)
+async def create_my_transfer(
+    body: CreateTransferBody,
+    user: User = Depends(require_roles("executor")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Исполнитель инициирует передачу своей смены (pending) + уведомляет менеджеров."""
+    res = await service.create_transfer_web(
+        db, shift_id=body.shift_id, from_executor_id=user.id,
+        reason=body.reason, comment=body.comment, urgency_level=body.urgency_level,
+    )
+    if not res["success"]:
+        err = res["error"]
+        raise HTTPException(
+            status_code=_TRANSFER_ERROR_STATUS.get(err, status.HTTP_422_UNPROCESSABLE_ENTITY),
+            detail=err,
+        )
+
+    transfer = res["transfer"]
+    # Best-effort: уведомить approved-менеджеров о новой передаче.
+    for manager in await service.list_approved_managers(db):
+        await _notify(
+            manager,
+            f"🔄 Новая передача смены #{transfer.id} от {_executor_name(user)} — "
+            f"ожидает назначения исполнителя (/assign_{transfer.id}).",
+        )
+
+    await publish_shift_event(
+        "transfer.updated",
+        _transfer_out(transfer, from_user=user, to_user=None, shift=None, me_id=user.id)
+        .model_dump(mode="json"),
+    )
+    return _transfer_out(transfer, from_user=user, to_user=None, shift=None, me_id=user.id)
+
+
+@router.post("/transfers/{transfer_id}/respond", response_model=TransferOut)
+async def respond_my_transfer(
+    transfer_id: int,
+    body: RespondTransferBody,
+    user: User = Depends(require_roles("executor")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Получатель принимает (assigned→completed, перенос смены+заявок) или
+    отклоняет (assigned→rejected) назначенную ему передачу."""
+    if body.action not in ("accept", "reject"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="action must be 'accept' or 'reject'",
+        )
+
+    if body.action == "accept":
+        res = await service.accept_transfer_web(db, transfer_id=transfer_id, executor_id=user.id)
+    else:
+        res = await service.reject_transfer_web_by_recipient(
+            db, transfer_id=transfer_id, executor_id=user.id
+        )
+
+    if not res["success"]:
+        err = res["error"]
+        raise HTTPException(
+            status_code=_TRANSFER_ERROR_STATUS.get(err, status.HTTP_422_UNPROCESSABLE_ENTITY),
+            detail=err,
+        )
+
+    transfer = res["transfer"]
+    initiator = await service.get_user(db, res["from_executor_id"])
+    manager = await service.get_user(db, transfer.assigned_by) if transfer.assigned_by else None
+
+    if body.action == "accept":
+        shift = res["shift"]
+        # Realtime: смена сменила владельца + перенесённые заявки.
+        await publish_shift_event(
+            "shift.updated", {"id": shift.id, "user_id": shift.user_id, "status": shift.status}
+        )
+        for number in res["moved_request_numbers"]:
+            await publish_request_event("request.updated", {"number": number})
+        await _notify(initiator, f"✅ Передача смены #{transfer.id} принята назначенным исполнителем.")
+        await _notify(manager, f"✅ Передача смены #{transfer.id} принята исполнителем.")
+    else:
+        await _notify(initiator, f"❌ Передача смены #{transfer.id} отклонена назначенным исполнителем.")
+        await _notify(manager, f"❌ Передача смены #{transfer.id} отклонена получателем.")
+
+    await publish_shift_event(
+        "transfer.updated",
+        _transfer_out(transfer, from_user=initiator, to_user=user, shift=None, me_id=user.id)
+        .model_dump(mode="json"),
+    )
+    return _transfer_out(transfer, from_user=initiator, to_user=user, shift=None, me_id=user.id)
