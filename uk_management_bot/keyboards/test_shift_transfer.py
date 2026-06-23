@@ -275,3 +275,57 @@ class TestTransferResponseKeyboard:
         assert "transfer_response:accept:12" in callbacks
         assert "transfer_response:reject:12" in callbacks
         assert "transfer_response:details:12" in callbacks
+
+
+# ---------------------------------------------------------------------------
+# transfers_list_keyboard (CR-8: inline accept/reject for assigned recipient)
+# ---------------------------------------------------------------------------
+
+def _make_transfer(transfer_id: int, status: str, to_executor_id: int = None) -> MagicMock:
+    t = MagicMock()
+    t.id = transfer_id
+    t.status = status
+    t.to_executor_id = to_executor_id
+    t.created_at = datetime(2025, 3, 15, 8, 0)
+    return t
+
+
+class TestTransfersListKeyboard:
+    def test_assigned_recipient_gets_accept_reject(self):
+        """CR-8: получатель assigned-передачи видит Принять/Отклонить в списке."""
+        transfer = _make_transfer(7, "assigned", to_executor_id=42)
+        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
+            from uk_management_bot.keyboards.shift_transfer import transfers_list_keyboard
+            result = transfers_list_keyboard([transfer], "ru", current_user_id=42)
+        callbacks = set(_all_callbacks(result))
+        assert "transfer_response:accept:7" in callbacks
+        assert "transfer_response:reject:7" in callbacks
+
+    def test_initiator_does_not_see_accept_reject(self):
+        """Инициатор (не получатель) не получает кнопки приёма."""
+        transfer = _make_transfer(7, "assigned", to_executor_id=42)
+        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
+            from uk_management_bot.keyboards.shift_transfer import transfers_list_keyboard
+            result = transfers_list_keyboard([transfer], "ru", current_user_id=99)
+        callbacks = set(_all_callbacks(result))
+        assert "transfer_response:accept:7" not in callbacks
+        assert "transfer_response:reject:7" not in callbacks
+
+    def test_pending_transfer_no_accept_reject(self):
+        """До назначения (pending) кнопок приёма нет даже у будущего получателя."""
+        transfer = _make_transfer(7, "pending", to_executor_id=None)
+        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
+            from uk_management_bot.keyboards.shift_transfer import transfers_list_keyboard
+            result = transfers_list_keyboard([transfer], "ru", current_user_id=42)
+        callbacks = set(_all_callbacks(result))
+        assert not any(c.startswith("transfer_response:") for c in callbacks)
+
+    def test_no_current_user_backward_compatible(self):
+        """Без current_user_id — прежнее поведение (только view_transfer)."""
+        transfer = _make_transfer(7, "assigned", to_executor_id=42)
+        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
+            from uk_management_bot.keyboards.shift_transfer import transfers_list_keyboard
+            result = transfers_list_keyboard([transfer], "ru")
+        callbacks = set(_all_callbacks(result))
+        assert "view_transfer:7" in callbacks
+        assert not any(c.startswith("transfer_response:") for c in callbacks)

@@ -248,6 +248,37 @@ async def test_handle_transfer_approve_assign_only(client, db_session, manager_u
 
 
 @pytest.mark.asyncio
+async def test_handle_transfer_approve_notifies_recipient(client, db_session, manager_user):
+    """CR-8: web-approve уведомляет получателя в Telegram с клавиатурой ответа,
+    иначе приём передачи недостижим (web сам не слал push)."""
+    from unittest.mock import patch, AsyncMock
+
+    initiator = await _user(db_session, 2061)
+    recipient = await _user(db_session, 2062)
+    shift = await _shift(db_session, initiator.id, status="planned")
+    transfer = ShiftTransfer(shift_id=shift.id, from_executor_id=initiator.id,
+                             status="pending", reason="illness", urgency_level="normal")
+    db_session.add(transfer)
+    await db_session.commit()
+    await db_session.refresh(transfer)
+
+    fake_bot = AsyncMock()
+    with patch(
+        "uk_management_bot.services.notification_service._get_shared_bot",
+        return_value=fake_bot,
+    ):
+        resp = await client.post(
+            f"/api/v2/shifts/transfers/{transfer.id}/handle",
+            json={"action": "approve", "to_executor_id": recipient.id},
+        )
+    assert resp.status_code == 200, resp.text
+    fake_bot.send_message.assert_awaited_once()
+    kwargs = fake_bot.send_message.call_args.kwargs
+    assert kwargs["chat_id"] == recipient.telegram_id
+    assert kwargs.get("reply_markup") is not None  # клавиатура accept/reject
+
+
+@pytest.mark.asyncio
 async def test_reassign_403_for_non_manager(client, db_session, resident_user):
     from uk_management_bot.api.main import app
     from uk_management_bot.api.dependencies import get_current_user
