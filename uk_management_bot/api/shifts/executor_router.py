@@ -221,11 +221,18 @@ def _job(user: Optional[User], text: str) -> Optional[tuple[int, str]]:
 async def _notify_many(jobs: list[tuple[int, str]]) -> None:
     """Best-effort Telegram-рассылка через shared bot. Запускается как
     BackgroundTask ПОСЛЕ ответа — таймаут Telegram API не должен блокировать/
-    валить сам запрос (раньше inline-await подвешивал POST при медленном TG)."""
+    валить сам запрос (раньше inline-await подвешивал POST при медленном TG).
+
+    ВСЁ обёрнуто в try (вкл. получение бота): исключение в BackgroundTask
+    пробрасывается Starlette и завалило бы ответ (в т.ч. невалидный токен в CI)."""
     if not jobs:
         return
-    from uk_management_bot.services.notification_service import _get_shared_bot
-    bot = _get_shared_bot()
+    try:
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        bot = _get_shared_bot()
+    except Exception as e:
+        logger.warning("transfer notify skipped — bot unavailable: %s", e)
+        return
     for telegram_id, text in jobs:
         try:
             await bot.send_message(chat_id=telegram_id, text=text)
