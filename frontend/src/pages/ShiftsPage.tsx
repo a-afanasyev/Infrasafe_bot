@@ -21,10 +21,10 @@ import CalendarHeatmap from '../components/shifts/CalendarHeatmap'
 import ShiftViewToggle, { type ShiftViewMode } from '../components/shifts/ShiftViewToggle'
 import CreateShiftModal from '../components/shifts/CreateShiftModal'
 import ShiftDetailModal from '../components/shifts/ShiftDetailModal'
+import TransferRequestCard from '../components/shifts/TransferRequestCard'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import {
   addDays,
   endOfMonth,
@@ -283,29 +283,7 @@ export default function ShiftsPage() {
             </div>
           ) : (
             transfers.slice(0, 3).map(tr => (
-              <div
-                key={tr.id}
-                className="flex items-start gap-2 p-2.5 bg-bg-surface rounded-sm"
-              >
-                <div
-                  className={cn(
-                    'w-2 h-2 rounded-full mt-1 shrink-0',
-                    tr.urgency_level === 'critical'
-                      ? 'bg-red'
-                      : tr.urgency_level === 'high'
-                        ? 'bg-amber'
-                        : 'bg-blue',
-                  )}
-                />
-                <div className="flex-1 overflow-hidden">
-                  <div className="text-xs text-text-primary font-semibold truncate">
-                    {tr.from_executor_name} → {tr.to_executor_name ?? '?'}
-                  </div>
-                  <div className="text-[11px] text-text-muted mt-0.5">
-                    {t(`transferReason.${tr.reason}`, tr.reason)}
-                  </div>
-                </div>
-              </div>
+              <TransferRequestCard key={tr.id} transfer={tr} />
             ))
           )}
 

@@ -761,7 +761,11 @@
     "reassignSelectPlaceholder": "Выберите исполнителя…",
     "confirmReassign": "Переназначить",
     "reassigning": "Переназначение…",
-    "executorEditHint": "Исполнителя можно сменить только через «Переназначить» (переносит активные заявки)."
+    "executorEditHint": "Исполнителя можно сменить только через «Переназначить» (переносит активные заявки).",
+    "transferAssign": "Назначить",
+    "transferConfirmAssign": "Назначить",
+    "transferReject": "Отклонить",
+    "transferCancel": "Отменить"
   },
   "templates": {
     "title": "Шаблоны",

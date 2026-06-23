@@ -751,7 +751,11 @@
     "reassignSelectPlaceholder": "Ijrochini tanlang…",
     "confirmReassign": "Qayta tayinlash",
     "reassigning": "Qayta tayinlanmoqda…",
-    "executorEditHint": "Ijrochini faqat «Qayta tayinlash» orqali o'zgartirish mumkin (faol arizalarni ko'chiradi)."
+    "executorEditHint": "Ijrochini faqat «Qayta tayinlash» orqali o'zgartirish mumkin (faol arizalarni ko'chiradi).",
+    "transferAssign": "Tayinlash",
+    "transferConfirmAssign": "Tayinlash",
+    "transferReject": "Rad etish",
+    "transferCancel": "Bekor qilish"
   },
   "templates": {
     "title": "Shablonlar",
