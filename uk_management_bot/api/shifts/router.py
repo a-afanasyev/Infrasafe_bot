@@ -652,6 +652,31 @@ async def handle_transfer(
     )
 
     await publish_shift_event("transfer.updated", transfer_out.model_dump(mode="json"))
+
+    # CR-8: при web-назначении (approve) уведомить получателя в Telegram с
+    # клавиатурой ответа — иначе приём передачи был недостижим (web сам не
+    # шлёт уведомление, а в боте не было входа для assigned-получателя).
+    # Best-effort: сбой доставки не должен валить запрос (приём также доступен
+    # через /my_transfers в боте).
+    if action == "approve" and to_user is not None and getattr(to_user, "telegram_id", None):
+        try:
+            from uk_management_bot.services.notification_service import _get_shared_bot
+            from uk_management_bot.keyboards.shift_transfer import transfer_response_keyboard
+            from uk_management_bot.utils.helpers import get_text
+
+            rec_lang = getattr(to_user, "language", None) or "ru"
+            bot = _get_shared_bot()
+            await bot.send_message(
+                chat_id=to_user.telegram_id,
+                text=get_text("shift_transfer.handlers.transfer_assigned_to_you", language=rec_lang),
+                reply_markup=transfer_response_keyboard(transfer.id, rec_lang),
+            )
+        except Exception as notify_err:
+            logger.warning(
+                "Не удалось уведомить получателя %s о передаче %s: %s",
+                transfer.to_executor_id, transfer.id, notify_err,
+            )
+
     return transfer_out
 
 

@@ -545,7 +545,9 @@ async def cmd_my_transfers(message: Message, state: FSMContext = None,
 
             await message.answer(
                 get_text("shift_transfer.handlers.select_transfer", language=user_lang),
-                reply_markup=transfers_list_keyboard(my_transfers, user_lang)
+                reply_markup=transfers_list_keyboard(
+                    my_transfers, user_lang, current_user_id=current.id if current else None
+                )
             )
 
     except Exception as e:

@@ -248,16 +248,19 @@ def transfer_response_keyboard(transfer_id: int, language: str = "ru") -> Inline
     return builder.as_markup()
 
 
-def transfers_list_keyboard(transfers: List[ShiftTransfer], language: str = "ru") -> InlineKeyboardMarkup:
+def transfers_list_keyboard(
+    transfers: List[ShiftTransfer],
+    language: str = "ru",
+    current_user_id: int = None,
+) -> InlineKeyboardMarkup:
     """
-    Клавиатура со списком передач
+    Клавиатура со списком передач.
 
-    Args:
-        transfers: Список передач
-        language: Язык пользователя
-
-    Returns:
-        InlineKeyboardMarkup
+    CR-8: если ``current_user_id`` — получатель переданной ему смены в статусе
+    ``assigned``, под строкой передачи добавляются кнопки «Принять»/«Отклонить»
+    (callback ``transfer_response:accept|reject:{id}``). Это делает приём
+    достижимым независимо от канала назначения (бот ИЛИ web) и даже если
+    push-уведомление получателю не дошло.
     """
     builder = InlineKeyboardBuilder()
 
@@ -279,6 +282,23 @@ def transfers_list_keyboard(transfers: List[ShiftTransfer], language: str = "ru"
                 callback_data=f"view_transfer:{transfer.id}"
             )
         )
+
+        # Получателю assigned-передачи — действия приёма/отклонения прямо в списке.
+        if (
+            current_user_id is not None
+            and transfer.status == "assigned"
+            and transfer.to_executor_id == current_user_id
+        ):
+            builder.row(
+                InlineKeyboardButton(
+                    text=get_text("shift_transfer.keyboards.accept", language=language),
+                    callback_data=f"transfer_response:accept:{transfer.id}"
+                ),
+                InlineKeyboardButton(
+                    text=get_text("shift_transfer.keyboards.reject", language=language),
+                    callback_data=f"transfer_response:reject:{transfer.id}"
+                )
+            )
 
     # Кнопка назад
     builder.row(
