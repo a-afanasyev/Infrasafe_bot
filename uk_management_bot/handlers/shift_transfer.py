@@ -353,16 +353,17 @@ async def cmd_assign_transfer(message: Message, state: FSMContext = None,
         transfer_id = int(message.text.split("_", 1)[1])
         with session_scope() as db_local:
             user_lang = get_user_language(message.from_user.id, db_local)
+            service = ShiftTransferService(db_local)
             transfer = db_local.query(ShiftTransfer).filter(ShiftTransfer.id == transfer_id).first()
             if not transfer or transfer.status != "pending":
                 await message.answer(_err_text("transfer_not_found", user_lang))
                 return
 
-            eligible = db_local.query(User).filter(
-                User.roles.contains("executor"),
-                User.status == "approved",
-                User.id != transfer.from_executor_id,
-            ).order_by(User.first_name).limit(30).all()
+            # CR-1: spec-префильтр через сервис (не показывать заведомо невалидных).
+            eligible = service.list_eligible_executors(
+                exclude_user_id=transfer.from_executor_id,
+                shift=service.get_shift(transfer.shift_id),
+            )
 
             if not eligible:
                 await message.answer(get_text("shift_transfer.handlers.no_eligible_executors", language=user_lang))

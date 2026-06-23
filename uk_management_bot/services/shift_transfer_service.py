@@ -393,13 +393,25 @@ class ShiftTransferService:
     def get_shift(self, shift_id: int) -> Optional[Shift]:
         return self.db.query(Shift).filter(Shift.id == shift_id).first()
 
-    def list_eligible_executors(self, exclude_user_id: Optional[int], limit: int = 30) -> List[User]:
-        """Approved-исполнители для назначения/reassign (кроме указанного user.id)."""
-        return self.db.query(User).filter(
+    def list_eligible_executors(
+        self, exclude_user_id: Optional[int], limit: int = 30, shift: Optional[Shift] = None
+    ) -> List[User]:
+        """Approved-исполнители для назначения/reassign (кроме указанного user.id).
+
+        CR-1: при переданном ``shift`` префильтруем по спец-ии (``has_required_specs``),
+        чтобы picker не показывал заведомо невалидных кандидатов, которых
+        ``assign_transfer``/``reassign_shift`` всё равно отклонят по ``spec_mismatch``.
+        Фильтр в Python ПОСЛЕ выборки → ``limit`` применяем после него.
+        """
+        users = self.db.query(User).filter(
             User.roles.contains("executor"),
             User.status == "approved",
             User.id != exclude_user_id,
-        ).order_by(User.first_name).limit(limit).all()
+        ).order_by(User.first_name).all()
+        if shift is not None:
+            from uk_management_bot.utils.specializations import has_required_specs
+            users = [u for u in users if has_required_specs(u, shift)]
+        return users[:limit]
 
     def manager_direct_reassign(
         self, shift_id: int, new_executor_id: int, actor_telegram_id: int

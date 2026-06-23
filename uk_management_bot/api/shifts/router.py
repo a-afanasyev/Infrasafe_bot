@@ -616,7 +616,7 @@ async def handle_transfer(
             )
         if body.to_executor_id is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="to_executor_id is required for action 'approve'",
             )
         # Validate target executor exists and has executor role
@@ -626,7 +626,7 @@ async def handle_transfer(
         has_exec_role = "executor" in _parse_user_roles(new_executor)
         if not has_exec_role:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Target user does not have executor role",
             )
         await service.approve_transfer(
@@ -720,7 +720,7 @@ async def create_shift(
     has_executor_role = "executor" in _parse_user_roles(emp)
     if not has_executor_role:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="User does not have executor role",
         )
 
@@ -849,7 +849,7 @@ async def reassign_shift(
             "executor_not_found": 404,
             "overlap": status.HTTP_409_CONFLICT,
         }
-        raise HTTPException(status_code=status_map.get(err, status.HTTP_422_UNPROCESSABLE_ENTITY), detail=err)
+        raise HTTPException(status_code=status_map.get(err, status.HTTP_422_UNPROCESSABLE_CONTENT), detail=err)
 
     shift = res["shift"]
     user_obj = await service.get_user(db, shift.user_id) if shift.user_id else None

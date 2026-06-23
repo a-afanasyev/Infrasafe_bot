@@ -311,6 +311,22 @@ def test_reassign_shift_spec_mismatch(db):
     assert res["error"] == "spec_mismatch"
 
 
+def test_list_eligible_executors_spec_prefilter(db):
+    # CR-1: при переданном shift picker префильтрует по спец-ии.
+    _user(db, 10, 1010)                                   # владелец смены (исключён)
+    _user(db, 20, 2020, specialization='["plumbing"]')   # совпадает
+    _user(db, 30, 3030, specialization='["electric"]')   # не совпадает
+    shift = _shift(db, 1, 10, status="active", specs=["plumbing"])
+    svc = _service(db)
+
+    filtered = {u.id for u in svc.list_eligible_executors(exclude_user_id=10, shift=shift)}
+    assert 20 in filtered and 30 not in filtered and 10 not in filtered
+
+    # без shift — прежнее поведение (все approved, кроме владельца).
+    unfiltered = {u.id for u in svc.list_eligible_executors(exclude_user_id=10)}
+    assert {20, 30} <= unfiltered and 10 not in unfiltered
+
+
 def test_reassign_shift_unassigned_or_terminal_not_transferable(db):
     # Code-review HIGH-4/MED-1: смена без владельца (from_executor_id=None → NOT
     # NULL) и completed/cancelled-смена не переназначаются мягким guard'ом.

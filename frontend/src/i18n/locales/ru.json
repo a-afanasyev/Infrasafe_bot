@@ -756,7 +756,7 @@
     "confirmEnd": "Завершить",
     "specializationsLabel": "Специализации",
     "dayOffset": "+{{n}}д",
-    "reassignShift": "🔄 Переназначить",
+    "reassignShift": "Переназначить",
     "reassignPick": "Новый исполнитель",
     "reassignSelectPlaceholder": "Выберите исполнителя…",
     "confirmReassign": "Переназначить",

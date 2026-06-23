@@ -669,7 +669,7 @@ async def handle_reassign_shift_pick(callback: CallbackQuery, state: FSMContext,
                 await callback.answer(_reassign_error_text("shift_not_found", lang), show_alert=True)
                 return
 
-            eligible = service.list_eligible_executors(exclude_user_id=shift.user_id)
+            eligible = service.list_eligible_executors(exclude_user_id=shift.user_id, shift=shift)
             if not eligible:
                 await callback.answer(get_text("shift_management.reassign_no_executors", language=lang), show_alert=True)
                 return
