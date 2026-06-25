@@ -355,6 +355,22 @@ async def set_password(
 
     result = await db.execute(select(User).where(User.id == user.id))
     db_user = result.scalar_one()
+
+    # AUD3-16 (A07): if a password already exists this is a CHANGE — require the
+    # current password so a replayed/stolen access token alone can't overwrite
+    # it and lock the owner out. First-time set (no hash yet) needs no proof.
+    if db_user.password_hash:
+        if not data.current_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="current_password_required",
+            )
+        if not verify_password(data.current_password, db_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="current_password_invalid",
+            )
+
     db_user.password_hash = hash_password(data.password)
     await db.commit()
     return {"ok": True}

@@ -18,7 +18,7 @@ localStorage.removeItem('auth-store')
 // uk_refresh on Path=/uk/api/). The store holds user identity for UI gating.
 // TWA flow uses its own store/client (Bearer-based) — do not mix the two.
 interface AuthState {
-  user: { id: number; roles: string[]; first_name?: string } | null
+  user: { id: number; roles: string[]; first_name?: string; has_password?: boolean } | null
   isAuthenticated: boolean
   // True until the cold-start cookie probe (bootstrap) resolves. Route guards
   // render a spinner while hydrating instead of bouncing to /login, so a fresh

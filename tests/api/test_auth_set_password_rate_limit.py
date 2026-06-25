@@ -16,7 +16,15 @@ import time
 import pytest
 
 
-VALID_BODY = {"password": "GoodPassword123", "confirm_password": "GoodPassword123"}
+# AUD3-16: include current_password == password so every repeated call stays a
+# valid no-op set (1st call = first-time set, current ignored; later calls =
+# change with matching current) and the rate-limit assertions (5×200, then 429)
+# still hold under the proof-of-presence guard.
+VALID_BODY = {
+    "password": "GoodPassword123",
+    "confirm_password": "GoodPassword123",
+    "current_password": "GoodPassword123",
+}
 
 
 def _unique_ip(salt: int = 0) -> str:
