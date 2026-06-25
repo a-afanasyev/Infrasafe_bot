@@ -4,22 +4,22 @@
  * Requires a manager user with email + password in the DB.
  * Known fixture: admin@test.com (roles: manager).
  *
- * The actual password for the seed user is unknown at test-authoring time —
- * see TEST FIXTURE NOTE below. If the login attempt returns 401/422 the test
- * marks itself as skipped with an explanatory message so the suite stays green
- * and the gap is visible in reports.
+ * Without E2E_MANAGER_EMAIL / E2E_MANAGER_PASSWORD the "successful login" test
+ * skips itself with an explanatory message so the suite stays green and the gap
+ * is visible in reports.
  *
- * TEST FIXTURE NOTE:
- *   To make this test runnable, set the password for admin@test.com via the
- *   API once and record it in an E2E-only .env:
+ * TEST FIXTURE (TEST-071):
+ *   1) Seed a manager user (idempotent). telegram_id must be a real chat that
+ *      started the bot — login requires a Telegram MFA OTP:
  *
- *     curl -X POST http://localhost:8085/api/v2/auth/set-password \
- *       -H "Content-Type: application/json" \
- *       -d '{"email":"admin@test.com","new_password":"E2eTest!2026"}'
+ *        docker exec uk-management-bot python scripts/seed_e2e_user.py \
+ *          --email admin@test.com --password 'E2eTest!2026' --telegram-id <your_tg_id>
  *
- *   Then create tests/e2e/.env:
- *     E2E_MANAGER_EMAIL=admin@test.com
- *     E2E_MANAGER_PASSWORD=E2eTest!2026
+ *   2) Copy tests/e2e/.env.example -> tests/e2e/.env and fill the same values
+ *      (playwright.config.ts loads it). Then `npx playwright test`.
+ *
+ *   Login redirects through an OTP step; this test accepts EITHER landing on
+ *   /uk/dashboard OR the OTP entry screen as a successful "login initiated".
  */
 import { test, expect } from '@playwright/test'
 
