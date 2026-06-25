@@ -6,12 +6,20 @@ asyncio_mode = "auto"
 # the sqlite suite isn't collected together with this one. A bare `pytest`
 # therefore runs only the unit suite; CI runs both.
 testpaths = ["uk_management_bot"]
-# uk_management_bot/ has no top-level __init__.py and tests are colocated with
-# source (e.g. services/test_*.py), so prepend import-mode derives clashing
-# package names (services.*, api.*) and full-suite collection errors with
-# "ModuleNotFoundError". importlib mode imports each test by file path, which
-# avoids the collision and tolerates duplicate basenames across packages.
+# uk_management_bot/ has no top-level __init__.py. Most tests live under
+# uk_management_bot/tests/ (DEAD-15 moved services/utils/keyboards there), but
+# some remain colocated with source (e.g. api/*/test_*.py, middlewares/test_*.py),
+# so prepend import-mode derives clashing package names (api.*, middlewares.*)
+# and full-suite collection errors with "ModuleNotFoundError". importlib mode
+# imports each test by file path, avoiding the collision and tolerating
+# duplicate basenames across packages.
 addopts = "--import-mode=importlib"
+# NICE-114: register custom marks so @pytest.mark.unit / .integration don't emit
+# PytestUnknownMarkWarning. See docs/development/testing-conventions.md.
+markers = [
+    "unit: fast hermetic unit test (no DB/network/external I/O)",
+    "integration: test touching the DB or external services",
+]
 
 [tool.coverage.run]
 source = ["uk_management_bot"]
