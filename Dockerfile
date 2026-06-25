@@ -1,7 +1,10 @@
 # Dockerfile для UK Management Bot
 # Используем официальный Python образ версии 3.11
 # slim версия для уменьшения размера образа
-FROM python:3.11-slim
+# Base запинен по digest (tag: python:3.11-slim) — стабильный cache-key pip-слоя,
+# чтобы ре-таг базы наверху не инвалидировал его и не гонял pip по сети заново.
+# Обновлять digest осознанно при апгрейде базы.
+FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5
 
 # Устанавливаем метаданные образа
 LABEL maintainer="UK Management Bot Team"
@@ -31,6 +34,12 @@ COPY requirements-dev.txt .
 # копируются в этот же image (см. COPY tests/ ниже). Чистый prod-build:
 # `docker compose build --build-arg INSTALL_DEV=false app`.
 ARG INSTALL_DEV=true
+
+# PIP_RETRIES / PIP_DEFAULT_TIMEOUT — устойчивость к транзиентным флапам PyPI CDN
+# (деплой 2026-06-25: ReadTimeout / "from versions: none" на здоровой сети
+# посреди установки). Дефолты (5 ретраев / 15с) были слишком жёсткими.
+ENV PIP_RETRIES=10 \
+    PIP_DEFAULT_TIMEOUT=60
 
 # Устанавливаем Python зависимости
 # --no-cache-dir уменьшает размер образа

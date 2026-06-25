@@ -9,10 +9,18 @@
 # - Healthcheck stays on internal /health (plan §4.6 variant A); external
 #   /uk/api/health is served by the new /api/health route through nginx.
 
-FROM python:3.11-slim AS builder
+# Base pinned by digest (tag: python:3.11-slim) so the pip layer's cache key is
+# stable — an upstream base re-tag won't silently invalidate it and force a
+# network-bound reinstall. Bump the digest deliberately when updating the base.
+FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5 AS builder
 
+# PIP_RETRIES / PIP_DEFAULT_TIMEOUT harden the install against transient PyPI
+# CDN flaps (deploy 2026-06-25 saw ReadTimeout / "from versions: none" on a
+# healthy network mid-install). Defaults (5 retries / 15s) were too tight.
 ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_RETRIES=10 \
+    PIP_DEFAULT_TIMEOUT=60 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -32,7 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user --require-hashes --no-warn-script-location -r requirements.txt
 
 
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
