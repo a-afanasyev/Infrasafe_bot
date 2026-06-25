@@ -23,6 +23,9 @@ class ProfileOut(BaseModel):
     verification_status: str = "pending"
     roles: Optional[list[str]] = None
     active_role: Optional[str] = None
+    # AUD3-16: lets the SPA decide whether the "current password" field is
+    # required when changing the password (true) vs first-time set (false).
+    has_password: bool = False
     model_config = {"from_attributes": True}
 
     @classmethod
@@ -40,6 +43,7 @@ class ProfileOut(BaseModel):
             verification_status=getattr(user, "verification_status", "pending"),
             roles=roles_list,
             active_role=getattr(user, "active_role", None),
+            has_password=bool(getattr(user, "password_hash", None)),
         )
 
 

@@ -34,6 +34,7 @@
     "menuItem": "Parolni o'zgartirish",
     "title": "Parolni o'zgartirish",
     "description": "Yangi parolni kiriting. Kamida 8 ta belgi.",
+    "currentPassword": "Joriy parol",
     "newPassword": "Yangi parol",
     "confirmPassword": "Parolni tasdiqlash",
     "submit": "Parolni yangilash",
@@ -41,6 +42,8 @@
     "success": "Parol yangilandi",
     "mismatch": "Parollar mos kelmaydi",
     "tooShort": "Parol juda qisqa (kamida 8 ta belgi)",
+    "currentRequired": "Joriy parolni kiriting",
+    "currentInvalid": "Joriy parol noto'g'ri",
     "genericError": "Parolni o'zgartirib bo'lmadi"
   },
   "nav": {

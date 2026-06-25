@@ -50,6 +50,10 @@ class RefreshRequest(BaseModel):
 class SetPasswordRequest(BaseModel):
     password: str
     confirm_password: str
+    # AUD3-16: required when the user ALREADY has a password (change flow) —
+    # proof-of-presence so a replayed access token can't silently take over the
+    # account. Optional for the first-time set flow (user has no password yet).
+    current_password: Optional[str] = None
 
 
 class MFARequiredResponse(BaseModel):
