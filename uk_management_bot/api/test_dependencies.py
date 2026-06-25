@@ -83,9 +83,11 @@ class TestParseUserRoles:
         assert isinstance(result, list)
         assert len(result) >= 1
 
-    def test_roles_items_are_strings(self):
-        """Numeric items in a JSON array are coerced to str."""
+    def test_non_string_json_items_are_dropped(self):
+        """NICE-078: parsing is delegated to parse_roles_safe, which DROPS
+        non-string items (a role is always a string — numeric garbage must not
+        be coerced into a bogus role like "1")."""
         user = MagicMock()
-        user.roles = "[1, 2]"
+        user.roles = '["manager", 1, 2]'
         result = _parse_user_roles(user)
-        assert all(isinstance(r, str) for r in result)
+        assert result == ["manager"]

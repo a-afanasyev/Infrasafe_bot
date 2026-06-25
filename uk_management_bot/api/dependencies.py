@@ -1,10 +1,9 @@
-import json
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import legacy_primary_role
+from uk_management_bot.utils.auth_helpers import legacy_primary_role, parse_roles_safe
 from sqlalchemy import select
 from typing import AsyncGenerator, Optional
 
@@ -12,17 +11,16 @@ security = HTTPBearer(auto_error=False)
 
 
 def _parse_user_roles(user) -> list[str]:
-    """Parse user roles from JSON or CSV string, falling back to single role field."""
-    if user.roles:
-        raw = user.roles.strip()
-        if raw.startswith("["):
-            try:
-                parsed = json.loads(raw)
-                if isinstance(parsed, list):
-                    return [str(r) for r in parsed]
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return [r.strip() for r in raw.split(",") if r.strip()]
+    """Parse user roles from ``user.roles`` (JSON or CSV), falling back to the
+    legacy single-role resolution when no roles are stored.
+
+    NICE-078: string parsing is delegated to the canonical
+    ``utils.auth_helpers.parse_roles_safe`` (single source of truth — no second
+    inline JSON/CSV parser). This wrapper adds only the API-side legacy fallback.
+    """
+    roles = parse_roles_safe(getattr(user, "roles", None))
+    if roles:
+        return roles
     legacy = legacy_primary_role(user)
     return [legacy] if legacy else []
 
