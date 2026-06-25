@@ -1,0 +1,44 @@
+name: stale-branches
+
+# ARCH-115: informational weekly report of remote branches with no commits >30 days.
+# Read-only — lists stale branches in the job summary. NO auto-delete; the owner
+# decides per docs/development/branch-policy.md.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # каждый понедельник 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: report stale branches (>30d)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List stale remote branches
+        run: |
+          CUTOFF=$(( $(date +%s) - 30*24*60*60 ))
+          echo "## Stale branches (no commits > 30 days)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | Last commit |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          found=0
+          while IFS='|' read -r ref ts iso; do
+            case "$ref" in
+              origin/HEAD|origin/main) continue ;;
+            esac
+            if [ "$ts" -lt "$CUTOFF" ]; then
+              echo "| ${ref#origin/} | $iso |" >> "$GITHUB_STEP_SUMMARY"
+              found=$((found+1))
+            fi
+          done < <(git for-each-ref --sort=committerdate \
+                    --format='%(refname:short)|%(committerdate:unix)|%(committerdate:short)' \
+                    refs/remotes/origin/)
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Total stale: $found** — см. docs/development/branch-policy.md" >> "$GITHUB_STEP_SUMMARY"

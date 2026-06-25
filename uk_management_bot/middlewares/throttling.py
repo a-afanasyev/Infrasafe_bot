@@ -1,4 +1,11 @@
-"""Simple per-user message throttling middleware."""
+"""Simple per-user message throttling middleware.
+
+KNOWN CONSTRAINT (SEC-09): throttling state (``_last_message``) lives in process
+memory, so the per-user rate limit holds only with a SINGLE bot worker. Running
+multiple bot workers would give each its own counter and multiply the effective
+limit. The bot is deployed single-worker on purpose — see
+docs/development/known-constraints.md before scaling out.
+"""
 import time
 from typing import Any, Awaitable, Callable, Dict
 
