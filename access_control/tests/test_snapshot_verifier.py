@@ -111,3 +111,45 @@ def test_fail_closed_never_opens_even_when_valid() -> None:
     result = verifier.accept(snap)
     assert result.accepted is True
     assert result.entry_allowed is False
+
+
+# --- Порт guards из B (edge/snapshot.py): reject-only усиление (§8.2) ---
+
+
+def test_offline_mode_not_fail_closed_rejected() -> None:
+    """Пилотный snapshot обязан быть fail_closed (§8.2): иной offline_mode → reject."""
+    snap = _signed_snapshot(offline_mode="cached_permanent_only")
+    key_id, pub = _pinned()
+    result = verify_snapshot(snap, pinned_key_id=key_id, pinned_public_key=pub)
+    assert result.accepted is False
+    assert result.reason == "offline_mode_forbidden"
+
+
+def test_grant_fields_forbidden_rejected() -> None:
+    """fail_closed snapshot НЕ должен содержать разрешающий список (§8.2)."""
+    snap = build_snapshot(controller_uid="ctrl-1", zone_id=1)
+    snap["vehicles"] = ["01A111AA"]  # запрещённое grant-поле (до подписи)
+    signed = sign_snapshot(snap).data
+    key_id, pub = _pinned()
+    result = verify_snapshot(signed, pinned_key_id=key_id, pinned_public_key=pub)
+    assert result.accepted is False
+    assert result.reason == "grant_fields_forbidden"
+
+
+def test_snapshot_lifetime_too_long_rejected() -> None:
+    """Заявленный lifetime > 15 мин → reject (§8.2 max age), даже если ещё не истёк."""
+    snap = _signed_snapshot(ttl_seconds=30 * 60)  # 30 минут
+    key_id, pub = _pinned()
+    result = verify_snapshot(snap, pinned_key_id=key_id, pinned_public_key=pub)
+    assert result.accepted is False
+    assert result.reason == "lifetime_too_long"
+
+
+def test_snapshot_issued_in_future_rejected() -> None:
+    """issued_at существенно в будущем (>5c) → reject (§8.2 защита от скачка часов)."""
+    future = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=60)
+    snap = _signed_snapshot(now=future)
+    key_id, pub = _pinned()
+    result = verify_snapshot(snap, pinned_key_id=key_id, pinned_public_key=pub)
+    assert result.accepted is False
+    assert result.reason == "issued_in_future"

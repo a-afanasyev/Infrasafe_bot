@@ -7,9 +7,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import uuid
 
 import pytest
+from sqlalchemy import text
 
 from access_control.api.commands import (
     AckConflict,
@@ -21,6 +23,53 @@ from access_control.tests.conftest import PilotFixture, seed_barrier_command
 
 def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+def _stored_lease_token(pg_db, command_id: str) -> str | None:
+    return pg_db.execute(
+        text("SELECT lease_token FROM barrier_commands WHERE command_id = :c"),
+        {"c": command_id},
+    ).scalar()
+
+
+def test_lease_token_stored_as_hash_not_raw(pg_db, pilot: PilotFixture) -> None:
+    """Lease-токен хранится в БД ХЭШЕМ at-rest, а не сырым (как у B, §9.2)."""
+    seed_barrier_command(pg_db, pilot, status="pending")
+    leased = lease_next_command(pg_db, pilot.controller_id)
+    raw = str(leased.lease_token)
+    stored = _stored_lease_token(pg_db, str(leased.command_id))
+    assert stored != raw  # сырой токен в БД не лежит
+    assert stored == hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def test_ack_with_stored_hash_is_rejected(pg_db, pilot: PilotFixture) -> None:
+    """Перехваченное из БД значение (=хэш) НЕ позволяет заакать (§9.2)."""
+    seed_barrier_command(pg_db, pilot, status="pending")
+    leased = lease_next_command(pg_db, pilot.controller_id)
+    stored_hash = _stored_lease_token(pg_db, str(leased.command_id))
+    with pytest.raises(AckConflict):
+        ack_command(
+            pg_db,
+            pilot.controller_id,
+            str(leased.command_id),
+            stored_hash,  # то, что видно в БД — это хэш, не валидный токен
+            {"opened": True},
+        )
+
+
+def test_legit_token_holder_acks(pg_db, pilot: PilotFixture) -> None:
+    """Легитимный держатель сырого токена аакает успешно (§9.2)."""
+    seed_barrier_command(pg_db, pilot, status="pending")
+    leased = lease_next_command(pg_db, pilot.controller_id)
+    outcome = ack_command(
+        pg_db,
+        pilot.controller_id,
+        str(leased.command_id),
+        str(leased.lease_token),
+        {"opened": True},
+    )
+    assert outcome.status == "acked"
+    assert outcome.replayed is False
 
 
 def test_lease_returns_pending_and_marks_leased(pg_db, pilot: PilotFixture) -> None:

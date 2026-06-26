@@ -226,6 +226,31 @@ def test_tampered_body_rejected_401(pg_db, pilot: PilotFixture) -> None:
     assert resp.status_code == 401
 
 
+# ----------------------------- IP allowlist: CIDR (порт из B) -----------------------------
+
+
+def test_ip_allowlist_supports_cidr() -> None:
+    """allowlist с CIDR-подсетью матчит IP внутри неё и отвергает вне (порт из B, §9.1)."""
+    from access_control.services.device_auth import _client_ip_allowed
+
+    class _Ctrl:
+        ip_allowlist = ["10.0.0.0/24"]
+
+    assert _client_ip_allowed(_Ctrl(), "10.0.0.7") is True
+    assert _client_ip_allowed(_Ctrl(), "10.0.1.7") is False
+
+
+def test_ip_allowlist_exact_match_still_works() -> None:
+    """Точные IP-записи продолжают работать (обратная совместимость, §9.1)."""
+    from access_control.services.device_auth import _client_ip_allowed
+
+    class _Ctrl:
+        ip_allowlist = ["192.168.1.5"]
+
+    assert _client_ip_allowed(_Ctrl(), "192.168.1.5") is True
+    assert _client_ip_allowed(_Ctrl(), "192.168.1.6") is False
+
+
 # ----------------------------- изоляция controller_id -----------------------------
 
 

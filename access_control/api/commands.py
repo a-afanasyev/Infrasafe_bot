@@ -19,6 +19,7 @@ HMAC тела + freshness timestamp + anti-replay nonce + IP allowlist + ста�
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import logging
 import time
@@ -79,6 +80,15 @@ class AckConflict(Exception):
     """Неверный/протухший lease_token или чужой контроллер (compare-and-set провал)."""
 
 
+def hash_lease_token(token: str) -> str:
+    """SHA256-хэш lease-токена для хранения/сравнения at-rest (§9.2, как у B).
+
+    В БД лежит ИМЕННО хэш: перехват значения колонки ``lease_token`` не позволяет
+    заакать команду (нужен исходный сырой токен, выданный edge в ответе lease).
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def _try_lease(
     db: Session, controller_db_id: int, lease_ttl_seconds: int
 ) -> LeasedCommand | None:
@@ -87,14 +97,18 @@ def _try_lease(
     Margin (§9.2): не выдаём команду, чей ``expires_at`` истечёт в течение аренды
     (``expires_at > now() + lease_ttl``) — иначе edge получит команду, протухающую
     до исполнения.
+
+    Сырой ``lease_token`` генерируется здесь и возвращается edge; в БД сохраняется
+    только его SHA256-хэш (§9.2, at-rest гигиена секрета, как у B).
     """
     lease_token = str(uuid.uuid4())
+    lease_token_hash = hash_lease_token(lease_token)
     row = db.execute(
         text(
             """
             UPDATE barrier_commands
             SET status = 'leased',
-                lease_token = :tok,
+                lease_token = :tokhash,
                 lease_expires_at = now() + (:ttl * interval '1 second'),
                 attempts = attempts + 1,
                 leased_at = now(),
@@ -111,10 +125,10 @@ def _try_lease(
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )
-            RETURNING command_id, barrier_id, command_type, lease_token, expires_at
+            RETURNING command_id, barrier_id, command_type, expires_at
             """
         ),
-        {"tok": lease_token, "ttl": lease_ttl_seconds, "cid": controller_db_id},
+        {"tokhash": lease_token_hash, "ttl": lease_ttl_seconds, "cid": controller_db_id},
     ).first()
     if row is None:
         # Очередь пуста — фиксируем (закрываем) транзакцию и выходим.
@@ -125,8 +139,8 @@ def _try_lease(
         command_id=str(row[0]),
         barrier_id=row[1],
         command_type=row[2],
-        lease_token=str(row[3]),
-        expires_at=row[4],
+        lease_token=lease_token,  # СЫРОЙ токен — только edge'у, в БД лежит хэш
+        expires_at=row[3],
         payload={"command_type": row[2], "barrier_id": row[1]},
     )
 
@@ -167,6 +181,8 @@ def ack_command(
     ``AckConflict``.
     """
     res_json = json.dumps(result) if result is not None else None
+    # В БД хранится ХЭШ токена (§9.2): сверяем хэш предъявленного сырого токена.
+    lease_token_hash = hash_lease_token(lease_token)
     updated = db.execute(
         text(
             """
@@ -177,12 +193,17 @@ def ack_command(
                 updated_at = now()
             WHERE command_id = :cmd
               AND controller_id = :cid
-              AND lease_token = :tok
+              AND lease_token = :tokhash
               AND status = 'leased'
             RETURNING ack_result
             """
         ),
-        {"res": res_json, "cmd": command_id, "cid": controller_db_id, "tok": lease_token},
+        {
+            "res": res_json,
+            "cmd": command_id,
+            "cid": controller_db_id,
+            "tokhash": lease_token_hash,
+        },
     ).first()
     if updated is not None:
         db.commit()
@@ -198,7 +219,7 @@ def ack_command(
         ),
         {"cmd": command_id, "cid": controller_db_id},
     ).first()
-    if row is not None and row[0] == "acked" and str(row[1]) == str(lease_token):
+    if row is not None and row[0] == "acked" and str(row[1]) == lease_token_hash:
         # Повторный ACK после потери ответа: сохранённый результат, без реисполнения.
         db.commit()
         return AckOutcome(

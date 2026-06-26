@@ -53,8 +53,10 @@ class BarrierCommand(Base):
     status = Column(
         String(16), nullable=False, server_default=CommandStatus.PENDING.value
     )
-    # Lease для атомарного claim под /commands/next (§9.2).
-    lease_token = Column(Uuid(), nullable=True)
+    # Lease для атомарного claim под /commands/next (§9.2). Хранится SHA256-ХЭШ
+    # выданного токена (at-rest), а не сырой токен (миграция 031, как у B):
+    # перехват значения из БД не позволяет заакать. varchar(64) = длина sha256-hex.
+    lease_token = Column(String(64), nullable=True)
     lease_expires_at = Column(DateTime(timezone=True), nullable=True)
     leased_at = Column(DateTime(timezone=True), nullable=True)
     attempts = Column(Integer, nullable=False, server_default="0")

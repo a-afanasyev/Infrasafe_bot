@@ -111,6 +111,13 @@ class AccessPass(Base):
         CheckConstraint(
             in_clause("status", PassStatus), name="ck_access_passes_status"
         ),
+        # Расходуемый лимит въездов согласован на уровне схемы (§10.3, порт из B):
+        # положительный лимит и used_entries в границах [0, max_entries].
+        CheckConstraint("max_entries > 0", name="ck_access_passes_max_entries"),
+        CheckConstraint(
+            "used_entries >= 0 AND used_entries <= max_entries",
+            name="ck_access_passes_used_entries",
+        ),
     )
 
 

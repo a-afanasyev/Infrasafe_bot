@@ -26,6 +26,13 @@ MAX_CLOCK_DRIFT_SECONDS = 30
 
 FAIL_CLOSED = "fail_closed"
 
+# Макс. заявленный lifetime snapshot (§8.2: возраст ≤ 15 мин). Порт guard'а из B.
+MAX_SNAPSHOT_LIFETIME_SECONDS = SNAPSHOT_TTL_SECONDS
+# Допуск на «issued_at в будущем» (§8.2 защита от скачка часов). Порт из B.
+MAX_FUTURE_ISSUED_SECONDS = 5
+# Поля разрешающего списка, запрещённые в fail_closed-snapshot (§8.2). Порт из B.
+_FORBIDDEN_GRANT_FIELDS = frozenset({"vehicles", "plates", "passes", "grants"})
+
 
 @dataclass(frozen=True)
 class VerifyResult:
@@ -99,8 +106,35 @@ def verify_snapshot(
     ):
         return _reject("controller_uid_mismatch")
 
-    # 4) Срок по СТЕННЫМ часам (§8.2: возраст ≤ 15 мин).
+    # 3.6) offline_mode обязан быть fail_closed (§8.2 пилот). Порт guard'а из B:
+    # snapshot, выписанный в ином режиме, в reject-only пилоте недопустим.
+    if snapshot.get("offline_mode") != FAIL_CLOSED:
+        return _reject("offline_mode_forbidden")
+
+    # 3.7) В fail_closed snapshot НЕ должно быть разрешающего списка (§8.2). Порт из B.
+    if _FORBIDDEN_GRANT_FIELDS.intersection(snapshot):
+        return _reject("grant_fields_forbidden")
+
+    # 3.8) Заявленный lifetime (expires_at - issued_at) ≤ 15 мин (§8.2). Порт из B:
+    # snapshot с раздутым сроком отвергается даже до наступления expires_at.
+    issued_at = _parse_dt(snapshot.get("issued_at"))
     expires_at = _parse_dt(snapshot.get("expires_at"))
+    if (
+        issued_at is not None
+        and expires_at is not None
+        and (expires_at - issued_at).total_seconds() > MAX_SNAPSHOT_LIFETIME_SECONDS
+    ):
+        return _reject("lifetime_too_long")
+
+    # 3.9) issued_at существенно в будущем → reject (§8.2 защита от скачка часов).
+    # Порт из B: backend не выписывает snapshot «из будущего».
+    if (
+        issued_at is not None
+        and (issued_at - wall_now).total_seconds() > MAX_FUTURE_ISSUED_SECONDS
+    ):
+        return _reject("issued_in_future")
+
+    # 4) Срок по СТЕННЫМ часам (§8.2: возраст ≤ 15 мин).
     if expires_at is None or wall_now >= expires_at:
         return _reject("expired")
 

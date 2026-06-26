@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import logging
 import os
 import time
@@ -284,15 +285,37 @@ def resolve_client_ip(request: "Request") -> str | None:
     return direct
 
 
+def _ip_entry_matches(client_ip: str | None, entry: str) -> bool:
+    """Совпадение IP клиента с записью allowlist: точный IP ИЛИ CIDR-подсеть (§9.1).
+
+    Порт из B (``security/device_auth.py``): запись может быть как одиночным IP
+    (``10.0.0.5``), так и подсетью (``10.0.0.0/24``). Невалидные записи/IP молча
+    игнорируются (не матчат) — fail-safe.
+    """
+    if client_ip is None:
+        return False
+    if client_ip == entry:
+        return True
+    try:
+        return ipaddress.ip_address(client_ip) in ipaddress.ip_network(entry, strict=False)
+    except ValueError:
+        return False
+
+
 def _client_ip_allowed(controller: EdgeController, client_ip: str | None) -> bool:
-    """Разрешён ли IP клиента allowlist'ом контроллера (§9.1). Пустой список — без ограничения."""
+    """Разрешён ли IP клиента allowlist'ом контроллера (§9.1). Пустой список — без ограничения.
+
+    Поддерживает как точные IP, так и CIDR-подсети в записях allowlist (порт из B).
+    """
     allowlist = controller.ip_allowlist
     if not allowlist:
         return True
     if isinstance(allowlist, (list, tuple)):
-        return client_ip in set(allowlist)
-    # На случай нестандартного хранения — строка с запятыми.
-    return client_ip in {x.strip() for x in str(allowlist).split(",") if x.strip()}
+        entries = [str(x).strip() for x in allowlist if str(x).strip()]
+    else:
+        # На случай нестандартного хранения — строка с запятыми.
+        entries = [x.strip() for x in str(allowlist).split(",") if x.strip()]
+    return any(_ip_entry_matches(client_ip, entry) for entry in entries)
 
 
 def authenticate(
