@@ -32,6 +32,10 @@ export interface AccessEventRow {
   decision_id: number | null
   resolved_by_user_id: number | null
   has_command: boolean
+  // Фото проезда (§11): обзорное фото авто и фото номера. Строка списка теперь
+  // отдаёт их вместе с детальной camera_event (str | null, опц. для совместимости).
+  plate_photo_url?: string | null
+  overview_photo_url?: string | null
 }
 
 export interface AccessEventsFilters {

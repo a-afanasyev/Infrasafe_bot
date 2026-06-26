@@ -154,6 +154,13 @@
       "commands": "Команды шлагбаума",
       "manualOpenings": "Ручные открытия"
     },
+    "photos": {
+      "title": "Фото проезда",
+      "vehicle": "Фото автомобиля",
+      "plate": "Фото номера",
+      "none": "Нет фото",
+      "enlarge": "Увеличить фото"
+    },
     "filters": {
       "platePlaceholder": "Поиск по номеру",
       "allDecisions": "Все решения",

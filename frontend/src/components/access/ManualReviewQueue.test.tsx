@@ -25,6 +25,8 @@ const pendingEvent = {
   decision_id: 5,
   resolved_by_user_id: null,
   has_command: false,
+  overview_photo_url: 'data:image/svg+xml,<svg/>overview',
+  plate_photo_url: 'data:image/svg+xml,<svg/>plate',
 }
 
 describe('ManualReviewQueue', () => {
@@ -38,6 +40,9 @@ describe('ManualReviewQueue', () => {
     await waitFor(() => expect(screen.getByText('01A777BC')).toBeInTheDocument())
     expect(screen.getByText('Открыть с причиной')).toBeInTheDocument()
     expect(screen.getByText('Отказать')).toBeInTheDocument()
+    // Миниатюры авто + номера видны оператору при решении (§11).
+    expect(screen.getByRole('img', { name: 'Фото автомобиля' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Фото номера' })).toBeInTheDocument()
   })
 
   it('кнопка «Открыть с причиной» открывает диалог с полями шлагбаума и причины', async () => {

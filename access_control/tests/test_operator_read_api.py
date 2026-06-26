@@ -60,6 +60,8 @@ def _seed_camera_event(
     direction: str = "entry",
     confidence: float | None = 0.9,
     attributes: dict | None = None,
+    plate_photo_url: str | None = None,
+    overview_photo_url: str | None = None,
 ) -> int:
     cap = captured_at or utcnow()
     return db.execute(
@@ -67,9 +69,10 @@ def _seed_camera_event(
             "INSERT INTO camera_events "
             "(controller_id, event_id, gate_id, zone_id, direction, "
             " plate_number_original, plate_number_normalized, confidence, "
-            " captured_at, received_at, source, attributes) "
+            " captured_at, received_at, source, attributes, "
+            " plate_photo_url, overview_photo_url) "
             "VALUES (:c,:e,:g,:z,:d,:po,:pn,:conf,:cap, now(), :src, "
-            " CAST(:attr AS JSONB)) RETURNING id"
+            " CAST(:attr AS JSONB), :pp, :op) RETURNING id"
         ),
         {
             "c": pilot.controller_id,
@@ -83,6 +86,8 @@ def _seed_camera_event(
             "cap": cap,
             "src": source,
             "attr": json.dumps(attributes) if attributes is not None else None,
+            "pp": plate_photo_url,
+            "op": overview_photo_url,
         },
     ).scalar()
 
@@ -363,6 +368,8 @@ def test_events_row_shape_and_has_command(pg_db, pilot) -> None:
         "decision_id",
         "resolved_by_user_id",
         "has_command",
+        "plate_photo_url",
+        "overview_photo_url",
     ):
         assert field in row, field
     assert row["event_id"] == "ev-1"
@@ -371,6 +378,26 @@ def test_events_row_shape_and_has_command(pg_db, pilot) -> None:
     assert row["decision_id"] == did
     assert row["has_command"] is True
     assert row["occurred_at"] is not None
+
+
+def test_events_row_includes_photo_urls(pg_db, pilot) -> None:
+    """§9.4/§11: список событий отдаёт фото-ссылки для экрана охраны."""
+    uid = seed_user(pg_db, roles="security_operator")
+    _seed_camera_event(
+        pg_db,
+        pilot,
+        event_id="ev-photo",
+        plate="01PH000",
+        plate_photo_url="https://cdn.example/plate/ev-photo.jpg",
+        overview_photo_url="https://cdn.example/overview/ev-photo.jpg",
+    )
+    pg_db.commit()
+    client = _client(uid, "security_operator")
+    body = client.get("/api/v1/access/events?plate=01PH000").json()
+    assert body["total"] == 1
+    row = body["items"][0]
+    assert row["plate_photo_url"] == "https://cdn.example/plate/ev-photo.jpg"
+    assert row["overview_photo_url"] == "https://cdn.example/overview/ev-photo.jpg"
 
 
 def test_events_current_decision_is_latest_in_group(pg_db, pilot) -> None:

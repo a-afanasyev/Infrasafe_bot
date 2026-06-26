@@ -5,6 +5,7 @@ import { useAccessEvents, useResolveEvent } from '../../hooks/useAccessRegistry'
 import type { AccessEventRow } from '../../types/access'
 import { formatDateTime } from '../../utils/accessFormat'
 import ResolveDialog, { type ResolveTarget, type ResolveSubmit } from './ResolveDialog'
+import AccessPhotos from './AccessPhotos'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import EmptyState from '../shared/EmptyState'
 import { Button } from '@/components/ui/button'
@@ -120,6 +121,13 @@ export default function ManualReviewQueue({
                 {location} · {formatDateTime(event.occurred_at ?? event.captured_at)}
               </div>
             </div>
+            {/* Миниатюры авто+номера, чтобы оператор видел ТС при решении (§11). */}
+            <AccessPhotos
+              size="compact"
+              overviewUrl={event.overview_photo_url}
+              plateUrl={event.plate_photo_url}
+              className="w-[200px]"
+            />
             <div className="flex items-center gap-2">
               <Button
                 size="sm"

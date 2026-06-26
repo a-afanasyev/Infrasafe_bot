@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAccessEventDetail } from '../../hooks/useAccessRegistry'
 import { DecisionBadge } from './AccessBadges'
+import AccessPhotos from './AccessPhotos'
 import { formatDateTime } from '../../utils/accessFormat'
 import LoadingSpinner from '../shared/LoadingSpinner'
 
@@ -85,6 +86,15 @@ export default function AccessEventDetailDialog({ eventId, onClose }: Props) {
                 <Field label={t('accessControl.detail.vehicleClass')} value={data.camera_event.vehicle_class ?? '—'} />
                 <Field label={t('accessControl.detail.color')} value={data.camera_event.color ?? '—'} />
               </div>
+            </Section>
+
+            {/* Фото проезда (§11): обзор авто + номер крупно */}
+            <Section title={t('accessControl.photos.title')}>
+              <AccessPhotos
+                size="full"
+                overviewUrl={data.camera_event.overview_photo_url}
+                plateUrl={data.camera_event.plate_photo_url}
+              />
             </Section>
 
             {/* Решения */}

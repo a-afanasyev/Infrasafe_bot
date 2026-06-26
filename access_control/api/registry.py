@@ -57,6 +57,8 @@ class EventRow(_Frozen):
     captured_at: dt.datetime
     occurred_at: dt.datetime | None
     source: str
+    plate_photo_url: str | None
+    overview_photo_url: str | None
     decision: str | None
     status: str | None
     reason: str | None
@@ -359,7 +361,8 @@ def list_events(
         text(
             "SELECT ce.id, ce.event_id, ce.controller_id, ce.zone_id, ce.gate_id, "
             " ce.direction, ce.plate_number_normalized, ce.captured_at, "
-            " ae.occurred_at, ce.source, d.decision, d.status, d.reason, "
+            " ae.occurred_at, ce.source, ce.plate_photo_url, ce.overview_photo_url, "
+            " d.decision, d.status, d.reason, "
             " d.id AS decision_id, d.resolved_by_user_id, "
             " (d.id IS NOT NULL AND EXISTS(SELECT 1 FROM barrier_commands bc "
             "   WHERE bc.decision_id = d.id)) AS has_command "

@@ -154,6 +154,13 @@
       "commands": "Shlagbaum buyruqlari",
       "manualOpenings": "Qo'lda ochishlar"
     },
+    "photos": {
+      "title": "O'tish fotosi",
+      "vehicle": "Avtomobil fotosi",
+      "plate": "Raqam fotosi",
+      "none": "Foto yo'q",
+      "enlarge": "Fotoni kattalashtirish"
+    },
     "filters": {
       "platePlaceholder": "Raqam boʻyicha qidirish",
       "allDecisions": "Barcha qarorlar",
