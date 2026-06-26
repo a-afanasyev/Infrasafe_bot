@@ -1,0 +1,156 @@
+"""Канонические строковые enum'ы домена access_control (Ф2).
+
+Паттерн ``UserApartmentStatus``: ``str``-подкласс → wire-совместим со строковой
+колонкой (член равен своему значению, SQLAlchemy биндит value). Значения —
+канонические строки из DATA_MODEL_PILOT «Enum». Колонки используют их в
+``CheckConstraint`` (см. модели), без нативных PG ENUM-типов.
+"""
+from __future__ import annotations
+
+import enum
+
+
+class VehicleStatus(str, enum.Enum):
+    """vehicles.status."""
+
+    ACTIVE = "active"
+    BLOCKED = "blocked"
+    ARCHIVED = "archived"
+
+
+class VehicleApartmentRelationType(str, enum.Enum):
+    """vehicle_apartments.relation_type."""
+
+    OWNER = "owner"
+    TENANT = "tenant"
+    FAMILY = "family"
+    SERVICE = "service"
+
+
+class VehicleApartmentStatus(str, enum.Enum):
+    """vehicle_apartments.status."""
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
+class PassType(str, enum.Enum):
+    """access_passes.pass_type (логика пилота — только ``taxi``)."""
+
+    GUEST = "guest"
+    TAXI = "taxi"
+    DELIVERY = "delivery"
+    COURIER = "courier"
+    SERVICE = "service"
+    CONTRACTOR = "contractor"
+    EMERGENCY = "emergency"
+
+
+class PassStatus(str, enum.Enum):
+    """access_passes.status."""
+
+    ACTIVE = "active"
+    USED = "used"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
+class ResidentRequestStatus(str, enum.Enum):
+    """resident_access_requests.status."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+
+class DecisionType(str, enum.Enum):
+    """access_decisions.decision."""
+
+    ALLOW = "allow"
+    DENY = "deny"
+    MANUAL_REVIEW = "manual_review"
+
+
+class DecisionStatus(str, enum.Enum):
+    """access_decisions.status (lifecycle §9.5, append-only переходы)."""
+
+    PENDING_REVIEW = "pending_review"
+    ALLOWED = "allowed"
+    ALLOWED_MANUALLY = "allowed_manually"
+    DENIED = "denied"
+    DENIED_MANUALLY = "denied_manually"
+    EXPIRED = "expired"
+
+
+class DecisionReason(str, enum.Enum):
+    """access_decisions.reason (anti_passback в пилоте не генерируется)."""
+
+    PERMANENT_VEHICLE_ALLOWED = "permanent_vehicle_allowed"
+    TEMPORARY_PASS_ALLOWED = "temporary_pass_allowed"
+    VEHICLE_NOT_FOUND = "vehicle_not_found"
+    VEHICLE_BLOCKED = "vehicle_blocked"
+    ZONE_NOT_ALLOWED = "zone_not_allowed"
+    PASS_EXPIRED = "pass_expired"
+    PASS_ALREADY_USED = "pass_already_used"
+    LOW_CONFIDENCE = "low_confidence"
+    POSSIBLE_PLATE_CLONE = "possible_plate_clone"
+    ANTI_PASSBACK_VIOLATION = "anti_passback_violation"
+    MANUAL_REVIEW_REQUIRED = "manual_review_required"
+
+
+class OfflineMode(str, enum.Enum):
+    """offline_mode (пилот — только fail_closed, §8.1)."""
+
+    FAIL_CLOSED = "fail_closed"
+    CACHED_PERMANENT_ONLY = "cached_permanent_only"
+
+
+class EdgeControllerStatus(str, enum.Enum):
+    """edge_controllers.status."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    DECOMMISSIONED = "decommissioned"
+
+
+class CommandStatus(str, enum.Enum):
+    """barrier_commands.status."""
+
+    PENDING = "pending"
+    LEASED = "leased"
+    ACKED = "acked"
+    DEAD = "dead"
+
+
+class CommandType(str, enum.Enum):
+    """barrier_commands.command_type."""
+
+    OPEN_BARRIER = "open_barrier"
+
+
+class Direction(str, enum.Enum):
+    """direction (пилот фиксирует только entry, §10.3)."""
+
+    ENTRY = "entry"
+    EXIT = "exit"
+
+
+class EventSource(str, enum.Enum):
+    """source: connected | edge_offline (§8.4)."""
+
+    CONNECTED = "connected"
+    EDGE_OFFLINE = "edge_offline"
+
+
+def values(enum_cls: type[enum.Enum]) -> tuple[str, ...]:
+    """Кортеж значений enum — для построения ``CheckConstraint`` IN (...)."""
+    return tuple(member.value for member in enum_cls)
+
+
+def in_clause(column: str, enum_cls: type[enum.Enum]) -> str:
+    """SQL-фрагмент ``column IN ('a','b',...)`` для CheckConstraint."""
+    quoted = ", ".join(f"'{v}'" for v in values(enum_cls))
+    return f"{column} IN ({quoted})"
