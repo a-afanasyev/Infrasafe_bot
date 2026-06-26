@@ -159,6 +159,91 @@ jobs:
           INFRASAFE_WEBHOOK_ENABLED: "true"
         run: pytest -q tests/api tests/services
 
+  access-control-tests:
+    name: access-control-tests (postgres)
+    runs-on: ubuntu-latest
+    # ОТДЕЛЬНЫЙ job именно на PostgreSQL: набор access_control проверяет
+    # advisory-lock (§13.2), append-only PL/pgSQL-триггеры (§9.7), DB-grant
+    # роль access_app_rw (миграция 031), partial-unique индексы и
+    # INSERT ... ON CONFLICT (§10.1) — на sqlite это не воспроизводится. Гейт
+    # access_control/tests/test_environment.py ПАДАЕТ (а не skip) на sqlite,
+    # поэтому набор обязан гоняться против реального postgres.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: uk_management
+          POSTGRES_USER: uk_bot
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U uk_bot -d uk_management"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: "postgresql://uk_bot:postgres@localhost:5432/uk_management"
+      REDIS_URL: "redis://localhost:6379/0"
+      PYTHONPATH: "${{ github.workspace }}"
+      BOT_TOKEN: "ci:dummy-token"
+      JWT_SECRET: "ci-dummy-secret"
+      INVITE_SECRET: "ci-dummy-secret"
+      UK_WEBHOOK_SECRET: "ci-dummy-secret"
+      INFRASAFE_WEBHOOK_SECRET: "ci-dummy-secret"
+      ADMIN_PASSWORD: "ci-dummy-admin-pw-0123456"
+      DEBUG: "true"
+      # Код access_control падает RuntimeError'ом без этих seed-ов (H2/M1: прод-
+      # дефолтов в исходнике нет). Значения СИНТЕТИЧЕСКИЕ, не секреты — те же, что
+      # ставит access_control/tests/conftest.py через os.environ.setdefault.
+      # SIGNING_SEED обязан быть 64 hex-символа.
+      ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # requirements.txt хэш-пиннится (pip включает --require-hashes при наличии
+      # хэшей) — ставится отдельным вызовом, как в backend-tests.
+      - name: Install runtime deps (hash-pinned)
+        run: pip install -r requirements.txt
+
+      # requirements-dev.txt уже содержит pytest + pytest-cov.
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      # Та же раскрутка схемы, что и в backend-tests: create_all строит
+      # историческую базу, затем миграции 007..031 накатывают дельты, которые
+      # create_all выразить не может — в т.ч. таблицы домена access_control
+      # (025..029), append-only триггеры (028) и DB-grant роль access_app_rw
+      # (031). Под суперпользователем postgres (POSTGRES_USER) миграция 031
+      # имеет CREATEROLE, поэтому grant-тест проверяется реально, а не skip.
+      - name: Bootstrap DB schema + apply migrations
+        run: |
+          python -c "import uk_management_bot.database.models; from uk_management_bot.database.session import engine, Base; Base.metadata.create_all(bind=engine)"
+          python -m alembic stamp 006
+          python -m alembic upgrade head
+
+      # Набор access_control. Покрытие — информативное (--cov-report=term-missing),
+      # без жёсткого порога (--cov-fail-under не задан), чтобы не блокировать на
+      # этапе пилота. Падение гейта окружения здесь означает, что прогон ушёл не
+      # на postgres.
+      - name: Run access_control suite (postgres)
+        run: pytest access_control/tests -q --cov=access_control --cov-report=term-missing
+
   images-build:
     name: images-build (docker)
     runs-on: ubuntu-latest
