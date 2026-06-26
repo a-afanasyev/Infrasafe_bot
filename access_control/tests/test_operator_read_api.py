@@ -381,7 +381,11 @@ def test_events_row_shape_and_has_command(pg_db, pilot) -> None:
 
 
 def test_events_row_includes_photo_urls(pg_db, pilot) -> None:
-    """§9.4/§11: список событий отдаёт фото-ссылки для экрана охраны."""
+    """§9.4/§11: список событий отдаёт ПОДПИСАННЫЕ фото-ссылки (не сырой storage-URL).
+
+    Сырой ``*_photo_url`` наружу не отдаётся; вместо него — короткоживущий
+    signed-URL на ``/photos`` (детальные проверки — ``test_photos_api``).
+    """
     uid = seed_user(pg_db, roles="security_operator")
     _seed_camera_event(
         pg_db,
@@ -396,8 +400,9 @@ def test_events_row_includes_photo_urls(pg_db, pilot) -> None:
     body = client.get("/api/v1/access/events?plate=01PH000").json()
     assert body["total"] == 1
     row = body["items"][0]
-    assert row["plate_photo_url"] == "https://cdn.example/plate/ev-photo.jpg"
-    assert row["overview_photo_url"] == "https://cdn.example/overview/ev-photo.jpg"
+    assert row["plate_photo_url"].startswith("/api/v1/access/photos/plate/")
+    assert row["overview_photo_url"].startswith("/api/v1/access/photos/overview/")
+    assert "cdn.example" not in row["plate_photo_url"]
 
 
 def test_events_current_decision_is_latest_in_group(pg_db, pilot) -> None:

@@ -137,7 +137,8 @@ services:
       - ACCESS_EVENT_BROKER=redis
       # Обязательные секреты домена (код падает RuntimeError при их отсутствии):
       #   ACCESS_SNAPSHOT_SIGNING_SEED — приватный сид Ed25519 подписи offline-snapshot (§8.2);
-      #   ACCESS_DEVICE_HMAC_SEED      — сид пер-устройственного HMAC device-auth (§9.1).
+      #   ACCESS_DEVICE_HMAC_SEED      — сид пер-устройственного HMAC device-auth (§9.1);
+      #   ACCESS_PHOTO_URL_SECRET      — секрет HMAC-подписи signed-URL фото (§11).
       # Берутся из .env через env_file выше (общий дефолт в коде запрещён §9.1/§11);
       # как сгенерировать — см. env.example. Здесь НЕ дублируем интерполяцией, чтобы
       # пустой shell-var не перетёр значение из .env.

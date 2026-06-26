@@ -18,12 +18,19 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
-from uk_management_bot.api.dependencies import require_approved_roles
+from access_control.services import photo_urls
+from access_control.services.management import write_audit
+from uk_management_bot.api.auth.service import verify_access_token
+from uk_management_bot.api.dependencies import (
+    _parse_user_roles,
+    require_approved_roles,
+)
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-registry"])
@@ -31,6 +38,10 @@ router = APIRouter(prefix="/api/v1/access", tags=["access-registry"])
 # RBAC-наборы ролей (§6.2/§6.3).
 EVENTS_PASSES_ROLES = ("security_operator", "manager", "system_admin")
 VEHICLES_REQUESTS_ROLES = ("manager", "system_admin")
+# Отдельное разрешение на ПРОСМОТР фото (§11). Пока совпадает с набором, видящим
+# события, НО вынесено отдельно, чтобы потом сузить.
+# TODO(§11): сузить до явного photo-view права (а не «кто видит события»).
+PHOTO_VIEW_ROLES = ("security_operator", "manager", "system_admin")
 
 # Пагинация (общая для всех списков).
 DEFAULT_LIMIT = 50
@@ -253,6 +264,40 @@ def _where(conditions: list[str]) -> str:
     return (" WHERE " + " AND ".join(conditions)) if conditions else ""
 
 
+# ------------------------------ photo-view (§11) ------------------------------
+
+
+def can_view_photos(user) -> bool:
+    """Есть ли у пользователя отдельное разрешение на просмотр фото (§11).
+
+    Предикат для гейтинга полей ``*_photo_url`` в реестре (не зависимость — чтобы
+    отдавать ``null`` вместо 403 на эндпоинте). TODO(§11): сузить до явного права.
+    """
+    roles = _parse_user_roles(user)
+    return any(r in roles for r in PHOTO_VIEW_ROLES)
+
+
+def require_photo_view():
+    """Зависимость отдельного разрешения на просмотр фото (§11).
+
+    Сейчас = ``PHOTO_VIEW_ROLES`` + approved (как остальной реестр). Вынесена
+    отдельно от ``EVENTS_PASSES_ROLES`` намеренно.
+    TODO(§11): сузить до явного photo-view права.
+    """
+    return require_approved_roles(*PHOTO_VIEW_ROLES)
+
+
+def _signed_photo_url(event_id: int, stored: str | None, kind: str, can_view: bool) -> str | None:
+    """Подписанный короткоживущий URL на ``/photos`` вместо сырого storage-URL (§11).
+
+    ``None`` если фото нет ИЛИ у пользователя нет photo-view (сырой URL наружу не
+    отдаётся никогда).
+    """
+    if not stored or not can_view:
+        return None
+    return photo_urls.sign(event_id, kind)
+
+
 def _apartments_for(db: Session, vehicle_ids: list[int]) -> dict[int, list[ApartmentLink]]:
     """Связи vehicle_apartments для набора авто (одним запросом, без N+1)."""
     if not vehicle_ids:
@@ -314,6 +359,81 @@ LEFT JOIN LATERAL (
 """
 
 
+# ------------------------------ /photos (§11) ------------------------------
+
+
+def _optional_actor(request: Request) -> int | None:
+    """Достать actor_user_id из web-сессии (cookie), если она есть.
+
+    Эндпоинт /photos — capability по signed-URL и НЕ требует Bearer (иначе
+    ``<img>`` не загрузится). Но если браузер прислал session-cookie (она уходит
+    с ``<img>`` автоматически для same-origin) — фиксируем актора в аудите; иначе
+    ``None`` (источник доступа — сам signed-URL).
+    """
+    token = request.cookies.get("uk_access") or request.cookies.get("access_token")
+    if not token:
+        return None
+    payload = verify_access_token(token)
+    if not payload:
+        return None
+    try:
+        return int(payload.get("sub"))
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/photos/{kind}/{event_id}")
+def get_photo(
+    request: Request,
+    kind: str = Path(..., description="plate|overview"),
+    event_id: int = Path(..., description="camera_events.id"),
+    exp: int = Query(..., description="срок действия signed-URL (unix)"),
+    sig: str = Query(..., description="HMAC-подпись signed-URL"),
+    db: Session = Depends(get_db),
+):
+    """Выдать фото события по короткоживущему signed-URL (§11).
+
+    Capability по подписи (без Bearer): проверяет подпись+срок → пишет аудит
+    просмотра ``access.photo_view`` (PD-safe details) → редиректит (302) на
+    сохранённый storage-URL. Прод-долг: вместо redirect отдавать байты из
+    приватного storage (S3/MinIO) через backend. Невалидная подпись → 403,
+    протухшая → 410, отсутствующее фото/событие → 404.
+    """
+    try:
+        photo_urls.verify(event_id, kind, exp, sig)
+    except photo_urls.PhotoUrlExpired:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="signed url expired")
+    except photo_urls.PhotoUrlInvalid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid signature")
+
+    row = db.execute(
+        text(
+            "SELECT plate_photo_url, overview_photo_url FROM camera_events WHERE id = :id"
+        ),
+        {"id": event_id},
+    ).mappings().first()
+    stored = None if row is None else (
+        row["plate_photo_url"] if kind == "plate" else row["overview_photo_url"]
+    )
+    if not stored:
+        # Валидная подпись, но фото нет — просмотра не произошло, аудит не пишем.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
+
+    # Просмотр состоялся → аудит (§11/§6.2). Details PD-safe: без номера/URL.
+    actor = _optional_actor(request)
+    write_audit(
+        db,
+        actor_user_id=actor,
+        action="access.photo_view",
+        entity_type="camera_event",
+        entity_id=event_id,
+        details={"kind": kind, "source": "session" if actor else "signed_url"},
+        ip_address=request.client.host if request.client else None,
+    )
+    db.commit()
+    return RedirectResponse(url=stored, status_code=status.HTTP_302_FOUND)
+
+
 @router.get("/events", response_model=EventsPage)
 def list_events(
     decision: str | None = Query(None),
@@ -326,9 +446,13 @@ def list_events(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
 ) -> EventsPage:
-    """История событий: камера-событие + occurred_at + текущее решение группы."""
+    """История событий: камера-событие + occurred_at + текущее решение группы.
+
+    Фото (§11): ``*_photo_url`` отдаются как ПОДПИСАННЫЕ короткоживущие URL на
+    ``/photos`` (не сырой storage-URL) и только пользователю с photo-view.
+    """
     conds: list[str] = []
     params: dict = {}
     if decision is not None:
@@ -371,7 +495,17 @@ def list_events(
         ),
         {**params, "limit": limit, "offset": offset},
     ).mappings()
-    items = [EventRow(**r) for r in rows]
+    can_view = can_view_photos(user)
+    items = []
+    for r in rows:
+        d = dict(r)
+        d["plate_photo_url"] = _signed_photo_url(
+            r["id"], r["plate_photo_url"], "plate", can_view
+        )
+        d["overview_photo_url"] = _signed_photo_url(
+            r["id"], r["overview_photo_url"], "overview", can_view
+        )
+        items.append(EventRow(**d))
     return EventsPage(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -379,9 +513,13 @@ def list_events(
 def get_event(
     event_id: int = Path(..., description="camera_events.id"),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
 ) -> EventDetail:
-    """Деталь события: камера-событие + цепочка решений + команды + ручные открытия."""
+    """Деталь события: камера-событие + цепочка решений + команды + ручные открытия.
+
+    Фото (§11): ``*_photo_url`` — подписанные короткоживущие URL на ``/photos``
+    (не сырой storage-URL), только для пользователя с photo-view.
+    """
     ce = db.execute(
         text(
             "SELECT id, event_id, controller_id, zone_id, gate_id, camera_id, "
@@ -396,6 +534,7 @@ def get_event(
             status_code=status.HTTP_404_NOT_FOUND, detail="camera event not found"
         )
     attrs = ce["attributes"] or {}
+    can_view = can_view_photos(user)
     camera_event = CameraEventDetail(
         id=ce["id"],
         event_id=ce["event_id"],
@@ -410,8 +549,10 @@ def get_event(
         captured_at=ce["captured_at"],
         received_at=ce["received_at"],
         source=ce["source"],
-        plate_photo_url=ce["plate_photo_url"],
-        overview_photo_url=ce["overview_photo_url"],
+        plate_photo_url=_signed_photo_url(ce["id"], ce["plate_photo_url"], "plate", can_view),
+        overview_photo_url=_signed_photo_url(
+            ce["id"], ce["overview_photo_url"], "overview", can_view
+        ),
         vehicle_class=attrs.get("vehicle_class") if isinstance(attrs, dict) else None,
         color=attrs.get("color") if isinstance(attrs, dict) else None,
     )

@@ -33,6 +33,7 @@ os.environ.setdefault(
     "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
 )
 os.environ.setdefault("ACCESS_DEVICE_HMAC_SEED", "pilot-test-hmac-seed")
+os.environ.setdefault("ACCESS_PHOTO_URL_SECRET", "pilot-test-photo-url-secret")
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
