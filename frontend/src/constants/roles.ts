@@ -49,3 +49,14 @@ export const ACCESS_MODULE_ROLES: readonly UserRole[] = [
   'system_admin',
   'security_operator',
 ] as const
+
+/**
+ * Роли управления базой/историей модуля доступа (экраны менеджера: «История
+ * проездов», «База доступа»). Оператор охраны (`security_operator`) НЕ
+ * управляет базой авто/заявок — у него только пост охраны (§6.2/§6.3).
+ * Зеркалит RBAC бэкенда: VEHICLES_REQUESTS_ROLES (registry.py).
+ */
+export const ACCESS_MANAGER_ROLES: readonly UserRole[] = [
+  'manager',
+  'system_admin',
+] as const

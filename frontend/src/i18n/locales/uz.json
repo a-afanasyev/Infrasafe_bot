@@ -57,7 +57,162 @@
     "boardEditor": "Tablo muharriri",
     "main": "Asosiy",
     "external": "Tashqi",
-    "feedback": "Qayta aloqa"
+    "feedback": "Qayta aloqa",
+    "accessControl": "Kirish nazorati",
+    "accessHistory": "O'tishlar tarixi",
+    "accessDatabase": "Kirish bazasi"
+  },
+  "accessControl": {
+    "title": "Kirish nazorati",
+    "subtitle": "Xavfsizlik hodisalari jonli tasmasi",
+    "empty": "Hozircha kirish hodisalari yo'q",
+    "zone": "Hudud",
+    "gate": "Nuqta",
+    "connection": {
+      "connecting": "Ulanmoqda…",
+      "open": "Aloqada",
+      "closed": "Aloqa uzildi",
+      "error": "Ulanish xatosi"
+    },
+    "columns": {
+      "time": "Vaqt",
+      "decision": "Qaror",
+      "reason": "Sabab",
+      "location": "Joy",
+      "direction": "Yo'nalish",
+      "plate": "Raqam",
+      "status": "Holat",
+      "source": "Manba"
+    },
+    "decision": {
+      "allow": "Ruxsat berildi",
+      "deny": "Rad etildi",
+      "manual_review": "Qo'lda tekshiruv"
+    },
+    "direction": {
+      "entry": "Kirish",
+      "exit": "Chiqish"
+    },
+    "reason": {
+      "permanent_vehicle_allowed": "Doimiy ro'yxatdagi avtomobil",
+      "guest_vehicle_allowed": "Mehmon kirishi ruxsat etildi",
+      "vehicle_not_found": "Avtomobil topilmadi",
+      "access_expired": "Kirish muddati tugadi",
+      "manual_review_required": "Qo'lda tekshiruv talab qilinadi"
+    },
+    "tabs": {
+      "live": "Jonli tasma",
+      "queue": "Tekshiruv navbati",
+      "history": "Tarix"
+    },
+    "status": {
+      "active": "Faol",
+      "blocked": "Bloklangan",
+      "allowed": "Ruxsat berildi",
+      "denied": "Rad etildi",
+      "approved": "Tasdiqlandi",
+      "rejected": "Rad etildi",
+      "revoked": "Bekor qilindi",
+      "expired": "Muddati tugadi",
+      "pending": "Kutilmoqda",
+      "pending_review": "Qo'lda tekshiruv"
+    },
+    "eventStatus": {
+      "allowed": "Ruxsat berildi",
+      "denied": "Rad etildi",
+      "pending_review": "Qo'lda tekshiruv",
+      "expired": "Muddati tugadi"
+    },
+    "queue": {
+      "empty": "Tekshiruvda hodisalar yo'q",
+      "emptyDesc": "Barcha hodisalar ko'rib chiqildi",
+      "waiting": "{{min}} daqiqa kutmoqda",
+      "openAction": "Sabab bilan ochish",
+      "denyAction": "Rad etish"
+    },
+    "resolve": {
+      "openTitle": "Shlagbaumni ochish",
+      "openDesc": "Qo'lda ochish. Shlagbaum va sababni ko'rsating — amal jurnalga yoziladi.",
+      "denyTitle": "O'tishni rad etish",
+      "denyDesc": "Hodisani rad etish. Rad etish sababini ko'rsating.",
+      "reasonLabel": "Sabab",
+      "reasonPlaceholder": "Qaror sababini yozing",
+      "barrierLabel": "Shlagbaum ID",
+      "barrierPlaceholder": "Masalan, 1",
+      "openConfirm": "Ochish",
+      "denyConfirm": "Rad etish",
+      "openedToast": "Shlagbaum ochildi",
+      "deniedToast": "O'tish rad etildi"
+    },
+    "detail": {
+      "title": "Kirish hodisasi",
+      "eventId": "Hodisa ID",
+      "cameraEvent": "Kamera hodisasi",
+      "vehicleClass": "TV sinfi",
+      "color": "Rang",
+      "decisions": "Qarorlar",
+      "commands": "Shlagbaum buyruqlari",
+      "manualOpenings": "Qo'lda ochishlar"
+    },
+    "filters": {
+      "platePlaceholder": "Raqam boʻyicha qidirish",
+      "allDecisions": "Barcha qarorlar",
+      "allStatuses": "Barcha holatlar",
+      "dateFrom": "Sanadan",
+      "dateTo": "Sanagacha",
+      "reset": "Tozalash"
+    },
+    "pagination": {
+      "range": "{{total}} dan {{from}}–{{to}}"
+    },
+    "history": {
+      "title": "O'tishlar tarixi",
+      "subtitle": "Filtr va tafsilotlar bilan kirish hodisalari",
+      "empty": "Hodisalar topilmadi"
+    },
+    "database": {
+      "title": "Kirish bazasi",
+      "subtitle": "Avtomobillar, ruxsatnomalar va aholi arizalari",
+      "vehicles": "Avtomobillar",
+      "passes": "Ruxsatnomalar",
+      "requests": "Arizalar"
+    },
+    "vehicles": {
+      "empty": "Avtomobillar topilmadi",
+      "plate": "Raqam",
+      "brandModel": "Marka va model",
+      "color": "Rang",
+      "class": "Sinf",
+      "apartments": "Xonadonlar"
+    },
+    "vehicleDetail": {
+      "title": "Avtomobil",
+      "country": "Raqam mamlakati",
+      "blockedReason": "Bloklash sababi",
+      "apartments": "Bog'langan xonadonlar",
+      "apartment": "Xonadon",
+      "recentEvents": "So'nggi hodisalar"
+    },
+    "passes": {
+      "empty": "Ruxsatnomalar topilmadi",
+      "type": "Turi",
+      "apartment": "Xonadon",
+      "validFrom": "Amal qiladi",
+      "validUntil": "Amal qilish muddati",
+      "entries": "O'tishlar",
+      "passType": {
+        "taxi": "Taksi",
+        "guest": "Mehmon"
+      }
+    },
+    "requests": {
+      "empty": "Arizalar topilmadi",
+      "created": "Yaratildi",
+      "apartment": "Xonadon",
+      "relation": "Munosabat",
+      "reviewedAt": "Ko'rib chiqildi",
+      "comment": "Izoh"
+    }
   },
   "boardEditor": {
     "save": "Saqlash",

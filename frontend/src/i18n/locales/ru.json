@@ -57,7 +57,162 @@
     "boardEditor": "Редактор витрины",
     "main": "Основное",
     "external": "Внешнее",
-    "feedback": "Обратная связь"
+    "feedback": "Обратная связь",
+    "accessControl": "Контроль доступа",
+    "accessHistory": "История проездов",
+    "accessDatabase": "База доступа"
+  },
+  "accessControl": {
+    "title": "Контроль доступа",
+    "subtitle": "Лента событий охраны в реальном времени",
+    "empty": "Пока нет событий доступа",
+    "zone": "Зона",
+    "gate": "Точка",
+    "connection": {
+      "connecting": "Подключение…",
+      "open": "На связи",
+      "closed": "Соединение разорвано",
+      "error": "Ошибка соединения"
+    },
+    "columns": {
+      "time": "Время",
+      "decision": "Решение",
+      "reason": "Причина",
+      "location": "Место",
+      "direction": "Направление",
+      "plate": "Номер",
+      "status": "Статус",
+      "source": "Источник"
+    },
+    "decision": {
+      "allow": "Разрешён",
+      "deny": "Запрещён",
+      "manual_review": "Ручная проверка"
+    },
+    "direction": {
+      "entry": "Въезд",
+      "exit": "Выезд"
+    },
+    "reason": {
+      "permanent_vehicle_allowed": "ТС в постоянном списке",
+      "guest_vehicle_allowed": "Гостевой доступ разрешён",
+      "vehicle_not_found": "ТС не найдено",
+      "access_expired": "Срок доступа истёк",
+      "manual_review_required": "Требуется ручная проверка"
+    },
+    "tabs": {
+      "live": "Live-лента",
+      "queue": "Очередь проверки",
+      "history": "История"
+    },
+    "status": {
+      "active": "Активен",
+      "blocked": "Заблокирован",
+      "allowed": "Разрешён",
+      "denied": "Запрещён",
+      "approved": "Одобрена",
+      "rejected": "Отклонена",
+      "revoked": "Отозван",
+      "expired": "Истёк",
+      "pending": "Ожидает",
+      "pending_review": "Ручная проверка"
+    },
+    "eventStatus": {
+      "allowed": "Разрешён",
+      "denied": "Запрещён",
+      "pending_review": "Ручная проверка",
+      "expired": "Истёк"
+    },
+    "queue": {
+      "empty": "Нет событий на проверке",
+      "emptyDesc": "Все события обработаны",
+      "waiting": "Ожидает {{min}} мин",
+      "openAction": "Открыть с причиной",
+      "denyAction": "Отказать"
+    },
+    "resolve": {
+      "openTitle": "Открыть шлагбаум",
+      "openDesc": "Ручное открытие. Укажите шлагбаум и причину — действие фиксируется в журнале.",
+      "denyTitle": "Отказать в проезде",
+      "denyDesc": "Отклонить событие. Укажите причину отказа.",
+      "reasonLabel": "Причина",
+      "reasonPlaceholder": "Опишите причину решения",
+      "barrierLabel": "ID шлагбаума",
+      "barrierPlaceholder": "Например, 1",
+      "openConfirm": "Открыть",
+      "denyConfirm": "Отказать",
+      "openedToast": "Шлагбаум открыт",
+      "deniedToast": "В проезде отказано"
+    },
+    "detail": {
+      "title": "Событие доступа",
+      "eventId": "ID события",
+      "cameraEvent": "Событие камеры",
+      "vehicleClass": "Класс ТС",
+      "color": "Цвет",
+      "decisions": "Решения",
+      "commands": "Команды шлагбаума",
+      "manualOpenings": "Ручные открытия"
+    },
+    "filters": {
+      "platePlaceholder": "Поиск по номеру",
+      "allDecisions": "Все решения",
+      "allStatuses": "Все статусы",
+      "dateFrom": "С даты",
+      "dateTo": "По дату",
+      "reset": "Сбросить"
+    },
+    "pagination": {
+      "range": "{{from}}–{{to}} из {{total}}"
+    },
+    "history": {
+      "title": "История проездов",
+      "subtitle": "События доступа с фильтрами и детализацией",
+      "empty": "События не найдены"
+    },
+    "database": {
+      "title": "База доступа",
+      "subtitle": "Автомобили, пропуска и заявки жителей",
+      "vehicles": "Автомобили",
+      "passes": "Пропуска",
+      "requests": "Заявки"
+    },
+    "vehicles": {
+      "empty": "Автомобили не найдены",
+      "plate": "Номер",
+      "brandModel": "Марка и модель",
+      "color": "Цвет",
+      "class": "Класс",
+      "apartments": "Квартиры"
+    },
+    "vehicleDetail": {
+      "title": "Автомобиль",
+      "country": "Страна номера",
+      "blockedReason": "Причина блокировки",
+      "apartments": "Связанные квартиры",
+      "apartment": "Квартира",
+      "recentEvents": "Последние события"
+    },
+    "passes": {
+      "empty": "Пропуска не найдены",
+      "type": "Тип",
+      "apartment": "Квартира",
+      "validFrom": "Действует с",
+      "validUntil": "Действует до",
+      "entries": "Проезды",
+      "passType": {
+        "taxi": "Такси",
+        "guest": "Гостевой"
+      }
+    },
+    "requests": {
+      "empty": "Заявки не найдены",
+      "created": "Создана",
+      "apartment": "Квартира",
+      "relation": "Отношение",
+      "reviewedAt": "Рассмотрена",
+      "comment": "Комментарий"
+    }
   },
   "boardEditor": {
     "save": "Сохранить",
