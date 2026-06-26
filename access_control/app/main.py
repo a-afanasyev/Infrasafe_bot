@@ -17,6 +17,7 @@ from access_control.api.health import router as health_router
 from access_control.api.metrics import json_router as metrics_json_router
 from access_control.api.metrics import prometheus_router as metrics_prometheus_router
 from access_control.api.operator import router as operator_router
+from access_control.api.registry import router as registry_router
 from access_control.api.ws_security import router as ws_security_router
 
 
@@ -55,5 +56,6 @@ def create_app() -> FastAPI:
     app.include_router(commands_router)
     app.include_router(edge_router)
     app.include_router(operator_router)
+    app.include_router(registry_router)
     app.include_router(ws_security_router)
     return app
