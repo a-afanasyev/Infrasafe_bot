@@ -8,6 +8,19 @@
 		reverse_proxy frontend:80
 	}
 
+	# Access-control API (отдельный сервис uk-access-api).
+	# Объявлено ДО общего /api/*, чтобы access-роуты шли на access-api,
+	# а не на сервис-десковый api. Same-origin → httpOnly cookie web-сессии
+	# доходит до device/operator/WS эндпоинтов (§9.6, §13).
+	handle /api/v1/access/* {
+		reverse_proxy access-api:8080
+	}
+
+	# Access-control WebSocket (live-экран охраны, §9.6) — тоже на access-api.
+	handle /ws/v1/access/* {
+		reverse_proxy access-api:8080
+	}
+
 	# API
 	handle /api/* {
 		reverse_proxy api:8080
