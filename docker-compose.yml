@@ -107,6 +107,57 @@ services:
       retries: 3
       start_period: 20s
 
+  # Access API сервис (FastAPI + uvicorn) — домен контроля доступа.
+  # Отдельный сервис/образ (ТЗ §1), но общая инфраструктура postgres/redis.
+  # Пилот (ТЗ §14.2): ingestion/decision/edge/operator API + health/latency-метрики.
+  access-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.access
+    container_name: uk-access-api
+    restart: unless-stopped
+    # IPv4-only (см. комментарий у app): UZ без IPv6-egress.
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    env_file:
+      - .env
+    environment:
+      # Общая БД и Redis с основным API (ТЗ §3.1). Миграции применяет
+      # uk-management-api на той же БД — access-api их НЕ гоняет.
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      # Multi-worker-безопасные backend'ы (§9.1 anti-replay, §9.6 live-события):
+      # nonce-store и брокер событий — на общем Redis, а не in-process. Без этого
+      # на нескольких воркерах replay проходит на другом воркере, а WS-клиент не
+      # видит событие чужого воркера. Значения не секретны — заданы прямо здесь.
+      - ACCESS_NONCE_BACKEND=redis
+      - ACCESS_EVENT_BROKER=redis
+      # Обязательные секреты домена (код падает RuntimeError при их отсутствии):
+      #   ACCESS_SNAPSHOT_SIGNING_SEED — приватный сид Ed25519 подписи offline-snapshot (§8.2);
+      #   ACCESS_DEVICE_HMAC_SEED      — сид пер-устройственного HMAC device-auth (§9.1).
+      # Берутся из .env через env_file выше (общий дефолт в коде запрещён §9.1/§11);
+      # как сгенерировать — см. env.example. Здесь НЕ дублируем интерполяцией, чтобы
+      # пустой shell-var не перетёр значение из .env.
+    # Отдельный host-порт (uk-management-api занимает 8085); контейнерный порт 8080.
+    ports:
+      - "127.0.0.1:8086:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   # База данных PostgreSQL
   postgres:
     # Используем официальный образ PostgreSQL
