@@ -3,14 +3,25 @@ import { cn } from '@/lib/utils'
 import type { VehicleRow } from '../../types/access'
 import { AccessStatusBadge } from './AccessBadges'
 import EmptyState from '../shared/EmptyState'
+import { Button } from '@/components/ui/button'
 
 /**
  * Таблица базы автомобилей (экран менеджера). Клик по строке → деталь авто
  * (связи с квартирами + последние события).
+ *
+ * `actions` — действия менеджера в строке (блокировка/разблокировка/архив).
+ * Передаётся только для manager/system_admin; без него колонка действий скрыта.
  */
+export interface VehicleRowActions {
+  onBlock: (vehicle: VehicleRow) => void
+  onUnblock: (vehicle: VehicleRow) => void
+  onArchive: (vehicle: VehicleRow) => void
+}
+
 interface Props {
   vehicles: VehicleRow[]
   onRowClick?: (vehicle: VehicleRow) => void
+  actions?: VehicleRowActions
 }
 
 function HeaderCell({ children }: { children: React.ReactNode }) {
@@ -21,7 +32,7 @@ function HeaderCell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function VehiclesTable({ vehicles, onRowClick }: Props) {
+export default function VehiclesTable({ vehicles, onRowClick, actions }: Props) {
   const { t } = useTranslation()
 
   if (vehicles.length === 0) {
@@ -43,6 +54,7 @@ export default function VehiclesTable({ vehicles, onRowClick }: Props) {
             <HeaderCell>{t('accessControl.vehicles.class')}</HeaderCell>
             <HeaderCell>{t('accessControl.vehicles.apartments')}</HeaderCell>
             <HeaderCell>{t('accessControl.columns.status')}</HeaderCell>
+            {actions && <HeaderCell>{t('common.actions')}</HeaderCell>}
           </tr>
         </thead>
         <tbody>
@@ -75,6 +87,26 @@ export default function VehiclesTable({ vehicles, onRowClick }: Props) {
                 <td className="px-3 py-2.5">
                   <AccessStatusBadge status={v.status} />
                 </td>
+                {actions && (
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-wrap gap-1.5">
+                      {v.status === 'blocked' ? (
+                        <Button size="sm" variant="outline" onClick={() => actions.onUnblock(v)}>
+                          {t('accessControl.actions.unblock')}
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="destructive" onClick={() => actions.onBlock(v)}>
+                          {t('accessControl.actions.block')}
+                        </Button>
+                      )}
+                      {v.status !== 'archived' && (
+                        <Button size="sm" variant="outline" onClick={() => actions.onArchive(v)}>
+                          {t('accessControl.actions.archive')}
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             )
           })}

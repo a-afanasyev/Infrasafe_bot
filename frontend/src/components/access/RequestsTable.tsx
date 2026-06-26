@@ -4,12 +4,22 @@ import type { AccessRequestRow } from '../../types/access'
 import { AccessStatusBadge } from './AccessBadges'
 import { formatDateTime } from '../../utils/accessFormat'
 import EmptyState from '../shared/EmptyState'
+import { Button } from '@/components/ui/button'
 
 /**
  * Таблица заявок жителей на постоянный автомобиль (экран менеджера).
+ *
+ * `actions` — рассмотрение заявки (подтвердить/отклонить); кнопки показываются
+ * только у заявок в статусе pending. Передаётся лишь для manager/system_admin.
  */
+export interface RequestRowActions {
+  onApprove: (request: AccessRequestRow) => void
+  onReject: (request: AccessRequestRow) => void
+}
+
 interface Props {
   requests: AccessRequestRow[]
+  actions?: RequestRowActions
 }
 
 function HeaderCell({ children }: { children: React.ReactNode }) {
@@ -20,7 +30,7 @@ function HeaderCell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function RequestsTable({ requests }: Props) {
+export default function RequestsTable({ requests, actions }: Props) {
   const { t } = useTranslation()
 
   if (requests.length === 0) {
@@ -43,6 +53,7 @@ export default function RequestsTable({ requests }: Props) {
             <HeaderCell>{t('accessControl.columns.status')}</HeaderCell>
             <HeaderCell>{t('accessControl.requests.reviewedAt')}</HeaderCell>
             <HeaderCell>{t('accessControl.requests.comment')}</HeaderCell>
+            {actions && <HeaderCell>{t('common.actions')}</HeaderCell>}
           </tr>
         </thead>
         <tbody>
@@ -72,6 +83,22 @@ export default function RequestsTable({ requests }: Props) {
                 <td className="px-3 py-2.5 text-[13px] text-text-muted max-w-[220px] truncate">
                   {r.review_comment ?? '—'}
                 </td>
+                {actions && (
+                  <td className="px-3 py-2.5">
+                    {r.status === 'pending' ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button size="sm" onClick={() => actions.onApprove(r)}>
+                          {t('accessControl.actions.approve')}
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => actions.onReject(r)}>
+                          {t('accessControl.actions.reject')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-[13px] text-text-muted">—</span>
+                    )}
+                  </td>
+                )}
               </tr>
             )
           })}

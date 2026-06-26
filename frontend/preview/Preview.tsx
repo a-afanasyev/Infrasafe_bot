@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ShieldCheck, History, Database, Camera } from 'lucide-react'
+import { ShieldCheck, History, Database, Camera, Plus } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import AccessTabBar from '@/components/access/AccessTabBar'
 import ManualReviewQueue from '@/components/access/ManualReviewQueue'
 import AccessEventsTable from '@/components/access/AccessEventsTable'
@@ -41,6 +42,9 @@ function SectionHeader({
     </div>
   )
 }
+
+// Визуальные действия превью без сети/состояния — обработчики ничего не делают.
+function noop() {}
 
 function SubLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -113,16 +117,32 @@ function DatabaseSection() {
         subtitle="Автомобили, пропуска и заявки жителей"
       />
       <AccessTabBar tabs={tabs} active={tab} onChange={setTab} />
-      {/* Для скриншота показываем все три таба сразу, под подписями. */}
+      {/* Для скриншота показываем все три таба сразу, под подписями. Действия
+          менеджера — визуальные (no-op handlers): без бэкенда, только вид. */}
       <div className="flex flex-col gap-5">
         <div>
-          <SubLabel>Автомобили</SubLabel>
+          <div className="flex items-center justify-between">
+            <SubLabel>Автомобили</SubLabel>
+            <Button size="sm" className="gap-1.5">
+              <Plus size={16} />
+              Добавить авто
+            </Button>
+          </div>
           <div className="mt-2">
-            <VehiclesTable vehicles={vehicles} />
+            <VehiclesTable
+              vehicles={vehicles}
+              actions={{ onBlock: noop, onUnblock: noop, onArchive: noop }}
+            />
           </div>
         </div>
         <div>
-          <SubLabel>Пропуска</SubLabel>
+          <div className="flex items-center justify-between">
+            <SubLabel>Пропуска</SubLabel>
+            <Button size="sm" className="gap-1.5">
+              <Plus size={16} />
+              Создать taxi-пропуск
+            </Button>
+          </div>
           <div className="mt-2">
             <PassesTable passes={passes} />
           </div>
@@ -130,7 +150,7 @@ function DatabaseSection() {
         <div>
           <SubLabel>Заявки</SubLabel>
           <div className="mt-2">
-            <RequestsTable requests={requests} />
+            <RequestsTable requests={requests} actions={{ onApprove: noop, onReject: noop }} />
           </div>
         </div>
       </div>

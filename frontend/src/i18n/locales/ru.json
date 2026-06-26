@@ -108,6 +108,7 @@
     "status": {
       "active": "Активен",
       "blocked": "Заблокирован",
+      "archived": "В архиве",
       "allowed": "Разрешён",
       "denied": "Запрещён",
       "approved": "Одобрена",
@@ -116,6 +117,78 @@
       "expired": "Истёк",
       "pending": "Ожидает",
       "pending_review": "Ручная проверка"
+    },
+    "relationType": {
+      "owner": "Собственник",
+      "tenant": "Арендатор",
+      "family": "Член семьи",
+      "service": "Сервис"
+    },
+    "actions": {
+      "addVehicle": "Добавить авто",
+      "block": "Заблокировать",
+      "unblock": "Разблокировать",
+      "archive": "В архив",
+      "createTaxiPass": "Создать taxi-пропуск",
+      "approve": "Подтвердить",
+      "reject": "Отклонить",
+      "vehicleCreated": "Автомобиль добавлен",
+      "vehicleDuplicate": "Такой автомобиль уже существует",
+      "vehicleBlocked": "Автомобиль заблокирован",
+      "vehicleUnblocked": "Автомобиль разблокирован",
+      "vehicleArchived": "Автомобиль перемещён в архив",
+      "taxiPassCreated": "Taxi-пропуск создан",
+      "requestApproved": "Заявка подтверждена",
+      "requestRejected": "Заявка отклонена"
+    },
+    "vehicleForm": {
+      "title": "Новый автомобиль",
+      "desc": "Добавьте ТС в базу доступа. Обязателен только гос. номер.",
+      "plate": "Гос. номер",
+      "platePlaceholder": "Например, 01A123BC",
+      "brand": "Марка",
+      "model": "Модель",
+      "color": "Цвет",
+      "class": "Класс ТС",
+      "country": "Страна номера",
+      "plateType": "Тип номера",
+      "apartmentId": "ID квартиры",
+      "zoneId": "ID зоны",
+      "relationType": "Отношение к квартире",
+      "relationNone": "Не указано",
+      "submit": "Добавить"
+    },
+    "statusDialog": {
+      "blockTitle": "Заблокировать автомобиль",
+      "blockDesc": "ТС {{plate}} будет заблокировано для проезда. Укажите причину — она фиксируется в журнале.",
+      "unblockTitle": "Разблокировать автомобиль",
+      "unblockDesc": "Вернуть ТС {{plate}} в активный статус?",
+      "archiveTitle": "Переместить в архив",
+      "archiveDesc": "ТС {{plate}} будет перемещено в архив и скрыто из активной базы.",
+      "reasonLabel": "Причина блокировки",
+      "reasonPlaceholder": "Опишите причину блокировки"
+    },
+    "taxiPassForm": {
+      "title": "Новый taxi-пропуск",
+      "desc": "Разовый пропуск для такси. Обязательны квартира, зона и срок действия.",
+      "apartmentId": "ID квартиры",
+      "zoneId": "ID зоны",
+      "plate": "Гос. номер",
+      "platePlaceholder": "Необязательно",
+      "validFrom": "Действует с",
+      "validUntil": "Действует до",
+      "maxEntries": "Лимит проездов",
+      "submit": "Создать пропуск"
+    },
+    "reviewDialog": {
+      "approveTitle": "Подтвердить заявку",
+      "approveDesc": "Заявка по ТС {{plate}} будет одобрена, автомобиль добавлен в базу доступа.",
+      "rejectTitle": "Отклонить заявку",
+      "rejectDesc": "Заявка по ТС {{plate}} будет отклонена.",
+      "zoneLabel": "ID зоны (необязательно)",
+      "zonePlaceholder": "Например, 1",
+      "commentLabel": "Комментарий",
+      "commentPlaceholder": "Комментарий к решению (необязательно)"
     },
     "eventStatus": {
       "allowed": "Разрешён",

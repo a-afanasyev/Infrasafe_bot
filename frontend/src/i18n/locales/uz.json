@@ -108,6 +108,7 @@
     "status": {
       "active": "Faol",
       "blocked": "Bloklangan",
+      "archived": "Arxivda",
       "allowed": "Ruxsat berildi",
       "denied": "Rad etildi",
       "approved": "Tasdiqlandi",
@@ -116,6 +117,78 @@
       "expired": "Muddati tugadi",
       "pending": "Kutilmoqda",
       "pending_review": "Qo'lda tekshiruv"
+    },
+    "relationType": {
+      "owner": "Egasi",
+      "tenant": "Ijarachi",
+      "family": "Oila a'zosi",
+      "service": "Xizmat"
+    },
+    "actions": {
+      "addVehicle": "Avto qo'shish",
+      "block": "Bloklash",
+      "unblock": "Blokdan chiqarish",
+      "archive": "Arxivga",
+      "createTaxiPass": "Taxi-ruxsatnoma yaratish",
+      "approve": "Tasdiqlash",
+      "reject": "Rad etish",
+      "vehicleCreated": "Avtomobil qo'shildi",
+      "vehicleDuplicate": "Bunday avtomobil allaqachon mavjud",
+      "vehicleBlocked": "Avtomobil bloklandi",
+      "vehicleUnblocked": "Avtomobil blokdan chiqarildi",
+      "vehicleArchived": "Avtomobil arxivga ko'chirildi",
+      "taxiPassCreated": "Taxi-ruxsatnoma yaratildi",
+      "requestApproved": "Ariza tasdiqlandi",
+      "requestRejected": "Ariza rad etildi"
+    },
+    "vehicleForm": {
+      "title": "Yangi avtomobil",
+      "desc": "TVni kirish bazasiga qo'shing. Faqat davlat raqami majburiy.",
+      "plate": "Davlat raqami",
+      "platePlaceholder": "Masalan, 01A123BC",
+      "brand": "Markasi",
+      "model": "Modeli",
+      "color": "Rangi",
+      "class": "TV sinfi",
+      "country": "Raqam davlati",
+      "plateType": "Raqam turi",
+      "apartmentId": "Xonadon ID",
+      "zoneId": "Zona ID",
+      "relationType": "Xonadonga aloqasi",
+      "relationNone": "Ko'rsatilmagan",
+      "submit": "Qo'shish"
+    },
+    "statusDialog": {
+      "blockTitle": "Avtomobilni bloklash",
+      "blockDesc": "{{plate}} TV uchun o'tish bloklanadi. Sababini ko'rsating — u jurnalga yoziladi.",
+      "unblockTitle": "Avtomobilni blokdan chiqarish",
+      "unblockDesc": "{{plate}} TVni faol holatga qaytarasizmi?",
+      "archiveTitle": "Arxivga ko'chirish",
+      "archiveDesc": "{{plate}} TV arxivga ko'chiriladi va faol bazadan yashiriladi.",
+      "reasonLabel": "Bloklash sababi",
+      "reasonPlaceholder": "Bloklash sababini yozing"
+    },
+    "taxiPassForm": {
+      "title": "Yangi taxi-ruxsatnoma",
+      "desc": "Taxi uchun bir martalik ruxsatnoma. Xonadon, zona va amal qilish muddati majburiy.",
+      "apartmentId": "Xonadon ID",
+      "zoneId": "Zona ID",
+      "plate": "Davlat raqami",
+      "platePlaceholder": "Ixtiyoriy",
+      "validFrom": "Amal qiladi:",
+      "validUntil": "Amal qilish muddati:",
+      "maxEntries": "O'tishlar limiti",
+      "submit": "Ruxsatnoma yaratish"
+    },
+    "reviewDialog": {
+      "approveTitle": "Arizani tasdiqlash",
+      "approveDesc": "{{plate}} TV bo'yicha ariza tasdiqlanadi, avtomobil kirish bazasiga qo'shiladi.",
+      "rejectTitle": "Arizani rad etish",
+      "rejectDesc": "{{plate}} TV bo'yicha ariza rad etiladi.",
+      "zoneLabel": "Zona ID (ixtiyoriy)",
+      "zonePlaceholder": "Masalan, 1",
+      "commentLabel": "Izoh",
+      "commentPlaceholder": "Qaror bo'yicha izoh (ixtiyoriy)"
     },
     "eventStatus": {
       "allowed": "Ruxsat berildi",

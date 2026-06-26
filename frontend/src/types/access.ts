@@ -238,3 +238,55 @@ export interface ManualOpenResponse {
   command_id: string
   barrier_id: number
 }
+
+// ── Действия менеджера: мутации базы доступа (registry.py) ───────────────────
+/** Связь авто с квартирой (POST /vehicles). */
+export type VehicleRelationType = 'owner' | 'tenant' | 'family' | 'service'
+
+/** Тело POST /vehicles — создание авто менеджером. */
+export interface CreateVehiclePayload {
+  plate_number_original: string
+  plate_country?: string
+  plate_type?: string
+  brand?: string
+  model?: string
+  color?: string
+  vehicle_class?: string
+  apartment_id?: number
+  relation_type?: VehicleRelationType
+  zone_id?: number
+}
+
+/** Статусы авто для PATCH /vehicles/{id}/status. */
+export type VehicleStatus = 'active' | 'blocked' | 'archived'
+
+/** Тело PATCH /vehicles/{id}/status. reason обязателен при status=blocked. */
+export interface UpdateVehicleStatusPayload {
+  status: VehicleStatus
+  reason?: string
+}
+
+/** Тело POST /passes/taxi — разовый/временный taxi-пропуск. */
+export interface CreateTaxiPassPayload {
+  apartment_id: number
+  zone_id: number
+  valid_until: string
+  plate_number_original?: string
+  valid_from?: string
+  max_entries?: number
+}
+
+/** Тело POST /requests/{id}/review — рассмотрение заявки жителя. */
+export interface ReviewRequestPayload {
+  action: 'approve' | 'reject'
+  comment?: string
+  zone_id?: number
+}
+
+export interface ReviewRequestResponse {
+  ok: boolean
+  request_id: number
+  status: string
+  vehicle_id: number | null
+  replayed: boolean
+}
