@@ -14,6 +14,7 @@ from access_control.api.camera_events import router as camera_events_router
 from access_control.api.commands import router as commands_router
 from access_control.api.edge import router as edge_router
 from access_control.api.health import router as health_router
+from access_control.api.management import router as management_router
 from access_control.api.metrics import json_router as metrics_json_router
 from access_control.api.metrics import prometheus_router as metrics_prometheus_router
 from access_control.api.operator import router as operator_router
@@ -57,5 +58,6 @@ def create_app() -> FastAPI:
     app.include_router(edge_router)
     app.include_router(operator_router)
     app.include_router(registry_router)
+    app.include_router(management_router)
     app.include_router(ws_security_router)
     return app
