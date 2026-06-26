@@ -209,7 +209,9 @@
   "role": {
     "executor": "Ijrochi",
     "manager": "Menejer",
-    "inspector": "Nazoratchi"
+    "inspector": "Nazoratchi",
+    "system_admin": "Tizim administratori",
+    "security_operator": "Xavfsizlik operatori"
   },
   "approvalStatus": {
     "approved": "Tasdiqlangan",

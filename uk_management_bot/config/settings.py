@@ -207,7 +207,17 @@ class Settings:
     ]
     
     # User Roles
-    USER_ROLES = ["applicant", "executor", "manager", "inspector"]
+    # Включает канонические роли модуля контроля доступа (access_control, ТЗ §3.2):
+    # system_admin, security_operator. Синхронно с utils/constants.USER_ROLES и
+    # enum UserRole (см. parity-тест tests/test_roles_parity.py).
+    USER_ROLES = [
+        "applicant",
+        "executor",
+        "manager",
+        "inspector",
+        "system_admin",
+        "security_operator",
+    ]
     
     # Languages
     SUPPORTED_LANGUAGES = ["ru", "uz"]
