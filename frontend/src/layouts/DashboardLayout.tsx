@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   History,
   Database,
+  Cpu,
   BookOpen,
   Sun,
   Moon,
@@ -65,6 +66,9 @@ const NAV_ITEMS: NavItem[] = [
   // access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
   { to: '/dashboard/access/history', labelKey: 'nav.accessHistory', Icon: History, allowedRoles: ACCESS_MANAGER_ROLES },
   { to: '/dashboard/access/database', labelKey: 'nav.accessDatabase', Icon: Database, allowedRoles: ACCESS_MANAGER_ROLES },
+  // access_control: «Оборудование» — manager/system_admin (камеры/шлагбаумы/
+  // контроллеры внутри только для system_admin).
+  { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, allowedRoles: ACCESS_MANAGER_ROLES },
 ]
 
 // ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────

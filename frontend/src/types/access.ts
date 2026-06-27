@@ -290,3 +290,159 @@ export interface ReviewRequestResponse {
   vehicle_id: number | null
   replayed: boolean
 }
+
+// ── Оборудование (admin/equipment) ───────────────────────────────────────────
+// Зеркало DTO бэкенда access_control/api/admin.py. RBAC: зоны/въезды —
+// manager+system_admin; камеры/шлагбаумы/контроллеры — только system_admin.
+
+/** Режим работы offline (зона/контроллер): закрыто при сбое vs кэш постоянных. */
+export type OfflineMode = 'fail_closed' | 'cached_permanent_only'
+
+/** Направление точки проезда/камеры. */
+export type GateDirection = 'entry' | 'exit'
+
+// Зоны ────────────────────────────────────────────────────────────────────────
+export interface ZoneRow {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  offline_mode: OfflineMode
+  max_permanent_per_apartment: number | null
+  is_active: boolean
+  yard_ids?: number[]
+}
+
+export interface CreateZonePayload {
+  code: string
+  name: string
+  description?: string
+  offline_mode: OfflineMode
+  max_permanent_per_apartment?: number
+  is_active?: boolean
+}
+
+export type UpdateZonePayload = Partial<CreateZonePayload>
+
+/** Тело POST /admin/zones/{id}/yards — привязка/отвязка фаз (yards). */
+export interface ZoneYardsPayload {
+  add?: number[]
+  remove?: number[]
+}
+
+export interface ZoneYardsResponse {
+  zone_id: number
+  yard_ids: number[]
+}
+
+// Въезды (точки проезда) ────────────────────────────────────────────────────
+export interface GateRow {
+  id: number
+  code: string
+  zone_id: number
+  direction: GateDirection
+  name: string | null
+  is_active: boolean
+}
+
+export interface CreateGatePayload {
+  code: string
+  zone_id: number
+  direction: GateDirection
+  name?: string
+  is_active?: boolean
+}
+
+export type UpdateGatePayload = Partial<CreateGatePayload>
+
+// Камеры ──────────────────────────────────────────────────────────────────────
+export interface CameraRow {
+  id: number
+  code: string
+  gate_id: number
+  direction: GateDirection
+  name: string | null
+  vendor: string | null
+  model: string | null
+  attributes: Record<string, unknown> | null
+  is_active: boolean
+}
+
+export interface CreateCameraPayload {
+  code: string
+  gate_id: number
+  direction: GateDirection
+  name?: string
+  vendor?: string
+  model?: string
+  attributes?: Record<string, unknown>
+  is_active?: boolean
+}
+
+export type UpdateCameraPayload = Partial<CreateCameraPayload>
+
+// Шлагбаумы ─────────────────────────────────────────────────────────────────
+export interface BarrierRow {
+  id: number
+  code: string
+  gate_id: number
+  name: string | null
+  relay_type: string | null
+  relay_channel: number | null
+  config: Record<string, unknown> | null
+  is_active: boolean
+}
+
+export interface CreateBarrierPayload {
+  code: string
+  gate_id: number
+  name?: string
+  relay_type?: string
+  relay_channel?: number
+  config?: Record<string, unknown>
+  is_active?: boolean
+}
+
+export type UpdateBarrierPayload = Partial<CreateBarrierPayload>
+
+// Контроллеры ─────────────────────────────────────────────────────────────────
+// ВАЖНО: ControllerRow (ответ GET) НЕ содержит api_key. Ключ отдаётся в открытом
+// виде РОВНО ОДИН РАЗ — при создании и при ротации (отдельные response-типы).
+export interface ControllerRow {
+  id: number
+  controller_uid: string
+  name: string | null
+  zone_id: number | null
+  gate_id: number | null
+  offline_mode: OfflineMode | null
+  ip_allowlist: string[] | null
+  pinned_public_key_id: string | null
+  status: string | null
+  is_active: boolean
+}
+
+export interface CreateControllerPayload {
+  controller_uid: string
+  name?: string
+  zone_id?: number
+  gate_id?: number
+  offline_mode?: OfflineMode
+  ip_allowlist?: string[]
+  pinned_public_key_id?: string
+  status?: string
+  is_active?: boolean
+}
+
+export type UpdateControllerPayload = Partial<CreateControllerPayload>
+
+/** Ответ POST /admin/controllers — строка + api_key (PLAINTEXT, один раз). */
+export interface ControllerCreateResponse extends ControllerRow {
+  api_key: string
+}
+
+/** Ответ POST /admin/controllers/{id}/rotate-key — новый ключ (один раз). */
+export interface RotateKeyResponse {
+  controller_id: number
+  controller_uid: string
+  api_key: string
+}

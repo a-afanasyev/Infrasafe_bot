@@ -60,7 +60,8 @@
     "feedback": "Обратная связь",
     "accessControl": "Контроль доступа",
     "accessHistory": "История проездов",
-    "accessDatabase": "База доступа"
+    "accessDatabase": "База доступа",
+    "accessEquipment": "Оборудование"
   },
   "accessControl": {
     "title": "Контроль доступа",
@@ -292,6 +293,104 @@
       "relation": "Отношение",
       "reviewedAt": "Рассмотрена",
       "comment": "Комментарий"
+    },
+    "equipment": {
+      "title": "Оборудование",
+      "subtitle": "Зоны, въезды, камеры, шлагбаумы и контроллеры",
+      "add": "Добавить",
+      "addZone": "Добавить зону",
+      "addGate": "Добавить въезд",
+      "addCamera": "Добавить камеру",
+      "addBarrier": "Добавить шлагбаум",
+      "addController": "Добавить контроллер",
+      "deactivate": "Деактивировать",
+      "deactivateTitle": "Деактивация",
+      "deactivateConfirm": "Деактивировать «{{name}}»? Элемент перестанет использоваться, но не будет удалён.",
+      "rotateKey": "Ротировать ключ",
+      "rotateConfirmTitle": "Ротация ключа",
+      "rotateConfirm": "Сгенерировать новый API-ключ для контроллера «{{uid}}»? Старый ключ перестанет действовать немедленно.",
+      "tabs": {
+        "zones": "Зоны",
+        "gates": "Въезды",
+        "cameras": "Камеры",
+        "barriers": "Шлагбаумы",
+        "controllers": "Контроллеры"
+      },
+      "fields": {
+        "code": "Код",
+        "name": "Название",
+        "description": "Описание",
+        "offlineMode": "Режим offline",
+        "maxPermanent": "Лимит постоянных на квартиру",
+        "isActive": "Активен",
+        "zone": "Зона",
+        "gate": "Въезд",
+        "direction": "Направление",
+        "vendor": "Производитель",
+        "model": "Модель",
+        "relayType": "Тип реле",
+        "relayChannel": "Канал реле",
+        "controllerUid": "UID контроллера",
+        "ipAllowlist": "Разрешённые IP",
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+      },
+      "offlineMode": {
+        "fail_closed": "Закрыто при сбое",
+        "cached_permanent_only": "Только кэш постоянных"
+      },
+      "empty": {
+        "zones": "Зоны не найдены",
+        "gates": "Въезды не найдены",
+        "cameras": "Камеры не найдены",
+        "barriers": "Шлагбаумы не найдены",
+        "controllers": "Контроллеры не найдены"
+      },
+      "zoneForm": {
+        "createTitle": "Новая зона",
+        "editTitle": "Редактирование зоны",
+        "desc": "Параметры зоны доступа и привязка фаз (yards).",
+        "yardsLabel": "Фазы (yards)",
+        "noYards": "Фазы не привязаны",
+        "yardPlaceholder": "ID фазы",
+        "addYard": "Привязать",
+        "removeYard": "Отвязать фазу #{{id}}"
+      },
+      "gateForm": {
+        "createTitle": "Новый въезд",
+        "editTitle": "Редактирование въезда"
+      },
+      "cameraForm": {
+        "createTitle": "Новая камера",
+        "editTitle": "Редактирование камеры"
+      },
+      "barrierForm": {
+        "createTitle": "Новый шлагбаум",
+        "editTitle": "Редактирование шлагбаума"
+      },
+      "controllerForm": {
+        "createTitle": "Новый контроллер",
+        "editTitle": "Редактирование контроллера",
+        "createDesc": "После создания API-ключ будет показан один раз — сохраните его."
+      },
+      "key": {
+        "title": "API-ключ контроллера",
+        "subtitle": "Контроллер «{{uid}}»",
+        "warning": "Сохраните ключ сейчас — он показывается один раз и больше не будет доступен.",
+        "copy": "Скопировать",
+        "copied": "Ключ скопирован",
+        "done": "Готово, я сохранил ключ"
+      },
+      "toast": {
+        "zoneCreated": "Зона создана",
+        "gateCreated": "Въезд создан",
+        "cameraCreated": "Камера добавлена",
+        "barrierCreated": "Шлагбаум добавлен",
+        "controllerCreated": "Контроллер создан",
+        "saved": "Изменения сохранены",
+        "yardsSaved": "Привязка фаз обновлена",
+        "keyRotated": "Ключ обновлён",
+        "duplicate": "Такой элемент уже существует"
+      }
     }
   },
   "boardEditor": {

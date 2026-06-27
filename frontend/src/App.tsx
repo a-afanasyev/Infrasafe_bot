@@ -35,6 +35,7 @@ const AccessControlPage = lazy(() => import('./pages/access/AccessControlPage'))
 // Гард — ACCESS_MANAGER_ROLES (manager/system_admin; оператор охраны не входит).
 const AccessHistoryPage = lazy(() => import('./pages/access/AccessHistoryPage'))
 const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'))
+const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -125,6 +126,12 @@ export default function App() {
               </Route>
               <Route path="/dashboard/access/database" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessDatabasePage /></PageErrorBoundary>} />
+              </Route>
+              {/* access_control: «Оборудование» (зоны/въезды/камеры/шлагбаумы/
+                  контроллеры). Гард — ACCESS_MANAGER_ROLES; камеры/шлагбаумы/
+                  контроллеры внутри доступны только system_admin (гейтинг табов). */}
+              <Route path="/dashboard/access/equipment" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><AccessEquipmentPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Resident board - public standalone page (УК landing) */}

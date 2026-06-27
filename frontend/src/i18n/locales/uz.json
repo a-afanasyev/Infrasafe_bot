@@ -60,7 +60,8 @@
     "feedback": "Qayta aloqa",
     "accessControl": "Kirish nazorati",
     "accessHistory": "O'tishlar tarixi",
-    "accessDatabase": "Kirish bazasi"
+    "accessDatabase": "Kirish bazasi",
+    "accessEquipment": "Jihozlar"
   },
   "accessControl": {
     "title": "Kirish nazorati",
@@ -292,6 +293,104 @@
       "relation": "Munosabat",
       "reviewedAt": "Ko'rib chiqildi",
       "comment": "Izoh"
+    },
+    "equipment": {
+      "title": "Jihozlar",
+      "subtitle": "Zonalar, kirishlar, kameralar, shlagbaumlar va kontrollerlar",
+      "add": "Qo'shish",
+      "addZone": "Zona qo'shish",
+      "addGate": "Kirish qo'shish",
+      "addCamera": "Kamera qo'shish",
+      "addBarrier": "Shlagbaum qo'shish",
+      "addController": "Kontroller qo'shish",
+      "deactivate": "Faolsizlantirish",
+      "deactivateTitle": "Faolsizlantirish",
+      "deactivateConfirm": "«{{name}}» faolsizlantirilsinmi? Element ishlatilmaydi, lekin o'chirilmaydi.",
+      "rotateKey": "Kalitni almashtirish",
+      "rotateConfirmTitle": "Kalitni almashtirish",
+      "rotateConfirm": "«{{uid}}» kontrolleri uchun yangi API-kalit yaratilsinmi? Eski kalit darhol ishlamay qoladi.",
+      "tabs": {
+        "zones": "Zonalar",
+        "gates": "Kirishlar",
+        "cameras": "Kameralar",
+        "barriers": "Shlagbaumlar",
+        "controllers": "Kontrollerlar"
+      },
+      "fields": {
+        "code": "Kod",
+        "name": "Nomi",
+        "description": "Tavsif",
+        "offlineMode": "Offline rejim",
+        "maxPermanent": "Kvartiraga doimiy limiti",
+        "isActive": "Faol",
+        "zone": "Zona",
+        "gate": "Kirish",
+        "direction": "Yo'nalish",
+        "vendor": "Ishlab chiqaruvchi",
+        "model": "Model",
+        "relayType": "Rele turi",
+        "relayChannel": "Rele kanali",
+        "controllerUid": "Kontroller UID",
+        "ipAllowlist": "Ruxsat etilgan IP",
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+      },
+      "offlineMode": {
+        "fail_closed": "Nosozlikda yopiq",
+        "cached_permanent_only": "Faqat doimiylar keshi"
+      },
+      "empty": {
+        "zones": "Zonalar topilmadi",
+        "gates": "Kirishlar topilmadi",
+        "cameras": "Kameralar topilmadi",
+        "barriers": "Shlagbaumlar topilmadi",
+        "controllers": "Kontrollerlar topilmadi"
+      },
+      "zoneForm": {
+        "createTitle": "Yangi zona",
+        "editTitle": "Zonani tahrirlash",
+        "desc": "Kirish zonasi parametrlari va fazalar (yards) bog'lanishi.",
+        "yardsLabel": "Fazalar (yards)",
+        "noYards": "Fazalar bog'lanmagan",
+        "yardPlaceholder": "Faza ID",
+        "addYard": "Bog'lash",
+        "removeYard": "#{{id}} fazani uzish"
+      },
+      "gateForm": {
+        "createTitle": "Yangi kirish",
+        "editTitle": "Kirishni tahrirlash"
+      },
+      "cameraForm": {
+        "createTitle": "Yangi kamera",
+        "editTitle": "Kamerani tahrirlash"
+      },
+      "barrierForm": {
+        "createTitle": "Yangi shlagbaum",
+        "editTitle": "Shlagbaumni tahrirlash"
+      },
+      "controllerForm": {
+        "createTitle": "Yangi kontroller",
+        "editTitle": "Kontrollerni tahrirlash",
+        "createDesc": "Yaratilgandan so'ng API-kalit bir marta ko'rsatiladi — uni saqlang."
+      },
+      "key": {
+        "title": "Kontroller API-kaliti",
+        "subtitle": "«{{uid}}» kontrolleri",
+        "warning": "Kalitni hozir saqlang — u bir marta ko'rsatiladi va boshqa mavjud bo'lmaydi.",
+        "copy": "Nusxalash",
+        "copied": "Kalit nusxalandi",
+        "done": "Tayyor, kalitni saqladim"
+      },
+      "toast": {
+        "zoneCreated": "Zona yaratildi",
+        "gateCreated": "Kirish yaratildi",
+        "cameraCreated": "Kamera qo'shildi",
+        "barrierCreated": "Shlagbaum qo'shildi",
+        "controllerCreated": "Kontroller yaratildi",
+        "saved": "O'zgarishlar saqlandi",
+        "yardsSaved": "Fazalar bog'lanishi yangilandi",
+        "keyRotated": "Kalit yangilandi",
+        "duplicate": "Bunday element allaqachon mavjud"
+      }
     }
   },
   "boardEditor": {
