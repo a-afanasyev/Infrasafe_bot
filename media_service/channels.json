@@ -35,6 +35,15 @@
       "allowed_types": ["jpg", "jpeg", "png", "pdf", "doc"],
       "max_file_size": 20971520,
       "enabled": true
+    },
+    {
+      "id": "access",
+      "name": "Контроль доступа",
+      "description": "Фото проезда (обзор авто + номер)",
+      "telegram_channel_id": null,
+      "allowed_types": ["jpg", "jpeg", "png"],
+      "max_file_size": 10485760,
+      "enabled": true
     }
   ],
   "version": "1.0",

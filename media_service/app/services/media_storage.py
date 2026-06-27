@@ -18,6 +18,14 @@ from app.db.database import get_db_context
 logger = logging.getLogger(__name__)
 
 
+class ChannelNotConfiguredError(RuntimeError):
+    """Целевой канал не сконфигурирован (например, CHANNEL_ACCESS пуст).
+
+    Поднимается при ленивой валидации домен-нейтральной загрузки — endpoint
+    маппит это в HTTP 503 (сервис временно не сконфигурирован для домена).
+    """
+
+
 class MediaStorageService:
     """Основной сервис для работы с медиа-хранилищем в Telegram каналах"""
 
@@ -114,6 +122,88 @@ class MediaStorageService:
 
         logger.info(f"Report media uploaded successfully: {media_file.id}")
         return media_file
+
+    async def upload_domain_media(
+        self,
+        channel_purpose: str,
+        category: str,
+        ref: str,
+        file_data: bytes,
+        filename: str,
+        content_type: str,
+        uploaded_by: Optional[int] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> MediaFile:
+        """Домен-нейтральная загрузка медиа в произвольный канал по purpose.
+
+        Не требует request_number (как у заявок) — вместо него домен-нейтральный
+        ``ref`` (например, "controller|event_id"). Используется доменом контроля
+        доступа (канал «access», категории access_plate/access_overview).
+
+        Переиспользует внутренний путь отправки в Telegram (``_upload_to_channel``)
+        и сохранения метаданных (``_save_media_metadata``) — TG-логика не дублируется.
+
+        request_number в БД остаётся NULL (поле nullable), ``ref`` сохраняется в
+        тегах как ``ref:<ref>`` (и в caption Telegram) — без риска переполнения
+        VARCHAR(20) request_number и без миграции схемы.
+
+        Raises:
+            ChannelNotConfiguredError: целевой канал не сконфигурирован (env пуст).
+        """
+        logger.info(
+            f"Uploading domain media: purpose={channel_purpose}, "
+            f"category={category}, ref={ref}"
+        )
+
+        # Валидация файла (размер/тип) — как у заявок
+        await self._validate_file(file_data, content_type)
+
+        # Ленивая валидация конфигурации канала
+        configured = self._configured_channel_value(channel_purpose)
+        if not configured:
+            raise ChannelNotConfiguredError(
+                f"{channel_purpose} channel not configured "
+                f"(set CHANNEL_{channel_purpose.upper()} env)"
+            )
+
+        # ref домен-нейтрален: храним в тегах, request_number оставляем None
+        all_tags = list(tags or [])
+        if ref:
+            ref_tag = f"ref:{ref}"
+            if ref_tag not in all_tags:
+                all_tags.append(ref_tag)
+
+        with get_db_context() as db:
+            try:
+                channel = await self._get_or_create_domain_channel(
+                    db, channel_purpose, configured
+                )
+
+                file_obj = BufferedInputFile(file_data, filename=filename)
+                caption = self._generate_domain_caption(ref, description, all_tags)
+
+                message = await self._upload_to_channel(
+                    channel, file_obj, caption, content_type
+                )
+
+                media_file = await self._save_media_metadata(
+                    db, message, None, category, description,
+                    all_tags, uploaded_by, filename, content_type, len(file_data)
+                )
+
+                if all_tags:
+                    await self._update_tags_usage(db, all_tags)
+
+                db.refresh(media_file)
+                db.expunge(media_file)
+
+                logger.info(f"Domain media uploaded successfully: {media_file.id}")
+                return media_file
+
+            except Exception as e:
+                logger.error(f"Failed to upload domain media (ref={ref}): {e}")
+                raise
 
     async def get_request_media(
         self,
@@ -314,6 +404,73 @@ class MediaStorageService:
         caption_parts.append(f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
         return "\n".join(caption_parts)
+
+    def _configured_channel_value(self, channel_purpose: str) -> str:
+        """Возвращает env-значение канала по purpose, читая settings ЖИВО.
+
+        TelegramChannels.CHANNEL_MAPPING — снимок на момент импорта; здесь нужен
+        актуальный settings (важно для ленивой валидации и тестов).
+        """
+        live_mapping = {
+            TelegramChannels.REQUESTS: settings.channel_requests,
+            TelegramChannels.REPORTS: settings.channel_reports,
+            TelegramChannels.ARCHIVE: settings.channel_archive,
+            TelegramChannels.BACKUP: settings.channel_backup,
+            TelegramChannels.ACCESS: settings.channel_access,
+        }
+        return live_mapping.get(channel_purpose, "")
+
+    def _generate_domain_caption(
+        self,
+        ref: Optional[str],
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> str:
+        """Подпись для домен-нейтрального медиа (без привязки к заявке)."""
+        caption_parts = []
+        if ref:
+            caption_parts.append(f"🔑 {ref}")
+        if description:
+            caption_parts.append(f"📝 {description}")
+        if tags:
+            hashtags = [
+                "#" + t.replace(" ", "_").replace(":", "_").replace("|", "_")
+                for t in tags
+            ]
+            caption_parts.append(" ".join(hashtags))
+        caption_parts.append(f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        return "\n".join(caption_parts)
+
+    async def _get_or_create_domain_channel(
+        self, db: Session, channel_purpose: str, configured_value: str
+    ) -> MediaChannel:
+        """Возвращает активный канал по purpose, создавая запись при отсутствии.
+
+        Канал «access» (и др. домен-каналы) может отсутствовать в БД на уже
+        развёрнутых инсталляциях (init_db создаёт дефолтные каналы лишь на пустой
+        БД). Здесь создаём строку из env-значения идемпотентно.
+        """
+        channel = db.query(MediaChannel).filter(
+            MediaChannel.purpose == channel_purpose,
+            MediaChannel.is_active == True  # noqa: E712
+        ).first()
+        if channel:
+            return channel
+
+        channel = MediaChannel(
+            channel_name=f"uk_media_{channel_purpose}",
+            channel_username=configured_value,
+            purpose=channel_purpose,
+            category="photo",
+            is_active=True,
+        )
+        db.add(channel)
+        db.flush()
+        logger.info(
+            f"Auto-provisioned media channel: purpose={channel_purpose}, "
+            f"username={configured_value}"
+        )
+        return channel
 
     async def _get_channel_for_category(self, db: Session, category: str) -> MediaChannel:
         """

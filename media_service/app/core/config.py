@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     channel_reports: str = Field(default="", validation_alias="CHANNEL_REPORTS")
     channel_archive: str = Field(default="", validation_alias="CHANNEL_ARCHIVE")
     channel_backup: str = Field(default="", validation_alias="CHANNEL_BACKUP")
+    # CHANNEL_ACCESS — отдельный канал домена контроля доступа (ANPR/шлагбаум).
+    # ОПЦИОНАЛЬНЫЙ: НЕ входит в SEC-065 fail-fast, чтобы не ломать существующие
+    # прод-деплои, у которых его ещё нет. Наличие валидируется ЛЕНИВО — только
+    # при access-загрузке (см. MediaStorageService.upload_domain_media →
+    # ChannelNotConfiguredError → HTTP 503).
+    channel_access: str = Field(default="", validation_alias="CHANNEL_ACCESS")
 
     # === SECURITY ===
     # SEC-066: empty default + fail-fast (below) when empty/dev-string in prod.
@@ -125,12 +131,14 @@ class TelegramChannels:
     REPORTS = "reports"
     ARCHIVE = "archive"
     BACKUP = "backup"
+    ACCESS = "access"
 
     CHANNEL_MAPPING = {
         REQUESTS: settings.channel_requests,
         REPORTS: settings.channel_reports,
         ARCHIVE: settings.channel_archive,
-        BACKUP: settings.channel_backup
+        BACKUP: settings.channel_backup,
+        ACCESS: settings.channel_access
     }
 
     @classmethod
@@ -156,6 +164,11 @@ class FileCategories:
     # Обратная связь (жалобы/пожелания)
     FEEDBACK_PHOTO = "feedback_photo"
 
+    # Контроль доступа (ANPR/шлагбаум): различаем номер vs обзор внутри
+    # одного канала «access» через category.
+    ACCESS_PLATE = "access_plate"
+    ACCESS_OVERVIEW = "access_overview"
+
     # Системные
     ARCHIVE = "archive"
     BACKUP = "backup"
@@ -170,6 +183,8 @@ class FileCategories:
         COMPLETION_PHOTO: TelegramChannels.REPORTS,
         COMPLETION_VIDEO: TelegramChannels.REPORTS,
         FEEDBACK_PHOTO: TelegramChannels.REQUESTS,
+        ACCESS_PLATE: TelegramChannels.ACCESS,
+        ACCESS_OVERVIEW: TelegramChannels.ACCESS,
         ARCHIVE: TelegramChannels.ARCHIVE,
         BACKUP: TelegramChannels.BACKUP
     }
@@ -186,6 +201,9 @@ class ErrorMessages:
     FILE_TOO_LARGE = "Файл слишком большой"
     FILE_TYPE_NOT_ALLOWED = "Тип файла не поддерживается"
     CHANNEL_NOT_FOUND = "Канал не найден"
+    ACCESS_CHANNEL_NOT_CONFIGURED = (
+        "access channel not configured: set CHANNEL_ACCESS env"
+    )
     UPLOAD_FAILED = "Ошибка загрузки"
     FILE_NOT_FOUND = "Файл не найден"
     INVALID_API_KEY = "Неверный API ключ"
