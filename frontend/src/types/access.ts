@@ -301,6 +301,13 @@ export type OfflineMode = 'fail_closed' | 'cached_permanent_only'
 /** Направление точки проезда/камеры. */
 export type GateDirection = 'entry' | 'exit'
 
+/**
+ * Тип парковочной зоны (§14.2 пилот):
+ *  - `assigned` — закреплённые места (за квартирами через spot_assignments);
+ *  - `shared`   — общая зона с ёмкостью (capacity) и контролем занятости.
+ */
+export type ParkingType = 'assigned' | 'shared'
+
 // Зоны ────────────────────────────────────────────────────────────────────────
 export interface ZoneRow {
   id: number
@@ -309,6 +316,10 @@ export interface ZoneRow {
   description: string | null
   offline_mode: OfflineMode
   max_permanent_per_apartment: number | null
+  // Парковочные параметры зоны (см. ParkingType).
+  parking_type?: ParkingType
+  capacity?: number | null
+  max_permanent_vehicles_per_apartment?: number | null
   is_active: boolean
   yard_ids?: number[]
 }
@@ -319,6 +330,9 @@ export interface CreateZonePayload {
   description?: string
   offline_mode: OfflineMode
   max_permanent_per_apartment?: number
+  parking_type?: ParkingType
+  capacity?: number
+  max_permanent_vehicles_per_apartment?: number
   is_active?: boolean
 }
 
@@ -473,4 +487,92 @@ export interface TestEventResponse {
   gate_id: number | null
   barrier_id: number | null
   command: { command_id: string; barrier_id: number } | null
+}
+
+// ── Парковка: места (parking_spots) ───────────────────────────────────────────
+// Зеркало DTO бэкенда /admin/spots. RBAC: manager + system_admin.
+
+/** Статус парковочного места. */
+export type SpotStatus = 'active' | 'inactive' | 'archived'
+
+export interface SpotRow {
+  id: number
+  zone_id: number
+  code: string
+  status: SpotStatus
+}
+
+export interface SpotsFilters {
+  zone_id?: number
+  status?: SpotStatus
+  limit?: number
+  offset?: number
+}
+
+export interface CreateSpotPayload {
+  zone_id: number
+  code: string
+  status?: SpotStatus
+}
+
+export interface UpdateSpotPayload {
+  code?: string
+  status?: SpotStatus
+}
+
+// ── Парковка: закрепления мест (spot_assignments) ─────────────────────────────
+// Зеркало DTO бэкенда /admin/spot-assignments. RBAC: manager + system_admin.
+
+/** Тип владения местом: собственное (бессрочно) или арендованное (со сроком). */
+export type OwnershipType = 'owned' | 'rented'
+
+/** Статус закрепления места. */
+export type AssignmentStatus = 'active' | 'expired' | 'revoked' | 'archived'
+
+export interface AssignmentRow {
+  id: number
+  spot_id: number
+  apartment_id: number
+  ownership_type: OwnershipType
+  valid_from: string | null
+  valid_until: string | null
+  status: AssignmentStatus
+  approved_by_user_id: number | null
+  approved_at: string | null
+}
+
+export interface AssignmentsFilters {
+  spot_id?: number
+  apartment_id?: number
+  status?: AssignmentStatus
+  limit?: number
+  offset?: number
+}
+
+/**
+ * Тело POST /admin/spot-assignments. `valid_until` обязателен для rented
+ * (валидируется на клиенте); для owned — опционален (бессрочно).
+ */
+export interface CreateAssignmentPayload {
+  spot_id: number
+  apartment_id: number
+  ownership_type: OwnershipType
+  valid_from?: string
+  valid_until?: string
+  status?: AssignmentStatus
+}
+
+export interface UpdateAssignmentPayload {
+  status?: AssignmentStatus
+  valid_until?: string
+}
+
+// ── Парковка: занятость зоны (occupancy) ──────────────────────────────────────
+/** Ответ GET /admin/zones/{id}/occupancy — въезды/выезды и текущая занятость. */
+export interface ZoneOccupancy {
+  zone_id: number
+  entries: number
+  exits: number
+  occupancy: number
+  capacity: number | null
 }

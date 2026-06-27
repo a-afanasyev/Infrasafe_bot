@@ -43,6 +43,7 @@ _TEXT_MAX = 128
 OfflineModeLit = Literal["fail_closed", "cached_permanent_only"]
 DirectionLit = Literal["entry", "exit"]
 ControllerStatusLit = Literal["active", "inactive", "decommissioned"]
+ParkingTypeLit = Literal["assigned", "shared"]
 
 
 def _client_ip(request: Request) -> str | None:
@@ -66,6 +67,8 @@ class ZoneRow(_Frozen):
     name: str
     description: str | None
     offline_mode: str
+    parking_type: str
+    capacity: int | None
     max_permanent_vehicles_per_apartment: int | None
     is_active: bool
     created_at: dt.datetime
@@ -165,7 +168,7 @@ ControllersPage = _page_model("ControllersPage", ControllerRow)
 def _zone_row(z) -> ZoneRow:
     return ZoneRow(
         id=z.id, code=z.code, name=z.name, description=z.description,
-        offline_mode=z.offline_mode,
+        offline_mode=z.offline_mode, parking_type=z.parking_type, capacity=z.capacity,
         max_permanent_vehicles_per_apartment=z.max_permanent_vehicles_per_apartment,
         is_active=z.is_active, created_at=z.created_at, updated_at=z.updated_at,
     )
@@ -248,6 +251,8 @@ class ZoneCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=_NAME_MAX)
     description: str | None = None
     offline_mode: OfflineModeLit | None = None
+    parking_type: ParkingTypeLit | None = None
+    capacity: int | None = Field(None, ge=0)
     max_permanent_per_apartment: int | None = Field(None, ge=0)
     is_active: bool = True
 
@@ -257,6 +262,8 @@ class ZonePatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=_NAME_MAX)
     description: str | None = None
     offline_mode: OfflineModeLit | None = None
+    parking_type: ParkingTypeLit | None = None
+    capacity: int | None = Field(None, ge=0)
     max_permanent_per_apartment: int | None = Field(None, ge=0)
     is_active: bool | None = None
 
@@ -293,6 +300,7 @@ def create_zone(
         zone = svc.create_zone(
             db, actor_user_id=user.id, code=body.code, name=body.name,
             description=body.description, offline_mode=body.offline_mode,
+            parking_type=body.parking_type, capacity=body.capacity,
             max_permanent_vehicles_per_apartment=body.max_permanent_per_apartment,
             is_active=body.is_active, ip_address=_client_ip(request),
         )
