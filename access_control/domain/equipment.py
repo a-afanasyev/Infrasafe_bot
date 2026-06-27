@@ -46,6 +46,13 @@ class EdgeController(Base):
     # за VPN; HMAC-подпись тела + nonce + timestamp + IP-allowlist — Ф6.
     api_key_hash = Column(String(255), nullable=False)
     ip_allowlist = Column(JSONB_PORTABLE, nullable=True)
+    # Опц. привязка к конкретной точке проезда (§6.1, admin-реестр оборудования).
+    gate_id = Column(
+        ForeignKey("access_gates.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Ссылка на закреплённый публичный ключ устройства (mTLS post-pilot, §9.1) —
+    # в пилоте свободный слот, секрет НЕ хранится в БД.
+    pinned_public_key_id = Column(String(128), nullable=True)
     offline_mode = Column(
         String(32), nullable=False, server_default=OfflineMode.FAIL_CLOSED.value
     )
@@ -119,6 +126,10 @@ class AccessCamera(Base):
         index=True,
     )
     direction = Column(String(16), nullable=False)
+    # Паспорт камеры (§6.1, admin-реестр оборудования).
+    vendor = Column(String(128), nullable=True)
+    model = Column(String(128), nullable=True)
+    attributes = Column(JSONB_PORTABLE, nullable=True)
     is_active = Column(Boolean, nullable=False, server_default="true")
     created_at = created_at_column()
     updated_at = updated_at_column()
@@ -150,6 +161,9 @@ class AccessBarrier(Base):
     )
     # Номер реле-канала контроллера, если несколько шлагбаумов на устройстве.
     relay_channel = Column(Integer, nullable=True)
+    # Тип реле и гибкая конфигурация шлагбаума (§6.1, admin-реестр оборудования).
+    relay_type = Column(String(64), nullable=True)
+    config = Column(JSONB_PORTABLE, nullable=True)
     is_active = Column(Boolean, nullable=False, server_default="true")
     created_at = created_at_column()
     updated_at = updated_at_column()
