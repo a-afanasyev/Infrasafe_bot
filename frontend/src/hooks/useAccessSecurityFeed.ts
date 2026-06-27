@@ -85,6 +85,9 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const attemptsRef = useRef(0)
   const closedByCaller = useRef(false)
+  // Реконнект вызывает connect рекурсивно из onclose. Маршрутизируем через ref,
+  // чтобы не ссылаться на binding connect до его объявления (TDZ-смелл).
+  const connectRef = useRef<() => void>(() => {})
 
   const connect = useCallback(() => {
     const url = import.meta.env.VITE_ACCESS_WS_URL || defaultWsUrl()
@@ -161,12 +164,13 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
       setStatus('closed')
       const delay = Math.min(BASE_BACKOFF_MS * 2 ** attemptsRef.current, MAX_BACKOFF_MS)
       attemptsRef.current += 1
-      reconnectTimer.current = setTimeout(connect, delay)
+      reconnectTimer.current = setTimeout(() => connectRef.current(), delay)
     }
   }, [])
 
   useEffect(() => {
     closedByCaller.current = false
+    connectRef.current = connect
     connect()
     return () => {
       closedByCaller.current = true

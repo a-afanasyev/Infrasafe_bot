@@ -205,7 +205,7 @@ function GatesPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[]
             open={formOpen}
             title={edit ? t('accessControl.equipment.gateForm.editTitle') : t('accessControl.equipment.gateForm.createTitle')}
             fields={fields}
-            initial={edit}
+            initial={edit as Record<string, unknown> | null}
             loading={edit ? updateGate.isPending : createGate.isPending}
             onClose={() => setFormOpen(false)}
             onSubmit={(payload) => {
@@ -289,7 +289,7 @@ function CamerasPanel({ gates }: { gates: GateRow[] }) {
         open={formOpen}
         title={edit ? t('accessControl.equipment.cameraForm.editTitle') : t('accessControl.equipment.cameraForm.createTitle')}
         fields={fields}
-        initial={edit}
+        initial={edit as Record<string, unknown> | null}
         loading={edit ? update.isPending : create.isPending}
         onClose={() => setFormOpen(false)}
         onSubmit={(payload) => {
@@ -368,7 +368,7 @@ function BarriersPanel({ gates }: { gates: GateRow[] }) {
         open={formOpen}
         title={edit ? t('accessControl.equipment.barrierForm.editTitle') : t('accessControl.equipment.barrierForm.createTitle')}
         fields={fields}
-        initial={edit}
+        initial={edit as Record<string, unknown> | null}
         loading={edit ? update.isPending : create.isPending}
         onClose={() => setFormOpen(false)}
         onSubmit={(payload) => {
@@ -469,7 +469,7 @@ function ControllersPanel({ zones, gates }: { zones: ZoneRow[]; gates: GateRow[]
         title={edit ? t('accessControl.equipment.controllerForm.editTitle') : t('accessControl.equipment.controllerForm.createTitle')}
         description={edit ? undefined : t('accessControl.equipment.controllerForm.createDesc')}
         fields={fields}
-        initial={edit}
+        initial={edit as Record<string, unknown> | null}
         loading={edit ? update.isPending : create.isPending}
         onClose={() => setFormOpen(false)}
         onSubmit={(payload) => {

@@ -152,7 +152,7 @@ def test_append_only_insert_allowed_under_app_role(pg_engine) -> None:
     with pg_engine.connect() as conn:
         outer = conn.begin()
         try:
-            ids = _seed(conn)
+            _seed(conn)
             _set_role_or_skip(conn)
             # INSERT в access_audit_logs (минимум зависимостей) под app-ролью.
             new_id = conn.execute(

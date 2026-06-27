@@ -32,7 +32,7 @@ from access_control.domain.equipment import (
     AccessGate,
     EdgeController,
 )
-from access_control.domain.territory import ParkingZone, ParkingZoneYard
+from access_control.domain.territory import ParkingZone
 from access_control.services.device_auth import hash_api_key
 from access_control.services.management import write_audit
 

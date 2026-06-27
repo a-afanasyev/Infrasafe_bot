@@ -31,7 +31,7 @@ from access_control.services.device_auth import (
     resolve_device_secret,
     sign_request,
 )
-from access_control.tests.conftest import PilotFixture, seed_user
+from access_control.tests.conftest import seed_user
 from uk_management_bot.api.dependencies import get_current_user
 
 

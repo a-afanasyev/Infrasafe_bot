@@ -230,7 +230,7 @@ def create_vehicle(
     if _active_vehicle_by_plate(db, plate.normalized) is not None:
         db.rollback()
         raise VehicleAlreadyExists(
-            f"active vehicle with this plate already exists"
+            "active vehicle with this plate already exists"
         )
     vehicle = Vehicle(
         plate_number_original=plate_number_original,
