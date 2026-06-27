@@ -64,6 +64,10 @@ COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 # Application + migrations + scripts. Migrations are required because the
 # entrypoint runs `alembic upgrade head` before launching uvicorn.
 COPY --chown=appuser:appuser uk_management_bot ./uk_management_bot
+# access_control: пилотный домен контроля доступа. Нужен в API-образе, т.к.
+# alembic env.py импортирует access_control.domain (регистрация 18 пилотных
+# таблиц в target_metadata), а entrypoint выполняет `alembic upgrade head`.
+COPY --chown=appuser:appuser access_control ./access_control
 COPY --chown=appuser:appuser alembic ./alembic
 COPY --chown=appuser:appuser alembic.ini ./
 COPY --chown=appuser:appuser scripts/entrypoint-api.sh /app/entrypoint.sh

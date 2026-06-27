@@ -1,0 +1,77 @@
+# syntax=docker/dockerfile:1.6
+#
+# UK Access API — образ доменного сервиса контроля доступа (access_control).
+#
+# Структура повторяет Dockerfile.api (multi-stage, --require-hashes, non-root
+# appuser, digest-pinned base) с отличием по миграциям (Ф7, ТЗ §14.2):
+#   - копируются ОБА пакета: access_control + uk_management_bot. Домен импортирует
+#     uk_management_bot.database.session (общий SQLAlchemy Base), .config.settings,
+#     .api.dependencies/.auth, .utils — без них образ не поднимается (ImportError
+#     при `import access_control.app.main`);
+#   - alembic НЕ копируется и НЕ запускается: миграции пилота гоняет
+#     uk-management-api (в его entrypoint `alembic upgrade head`), общая БД (§3.1).
+#     Поэтому uvicorn запускается напрямую через CMD, без entrypoint-миграций.
+#
+# Зависимости берутся из общего requirements.txt (FastAPI/uvicorn/prometheus-client
+# там уже есть); новые пакеты на Ф7 не добавляются.
+
+# База закреплена по digest (тег python:3.11-slim) — как в Dockerfile.api, чтобы
+# кэш слоя pip был стабилен и совпадал с основным образом. Бамп digest — осознанно.
+FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5 AS builder
+
+# PIP_RETRIES / PIP_DEFAULT_TIMEOUT — защита от транзиентных флапов PyPI CDN
+# (см. комментарий в Dockerfile.api).
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_RETRIES=10 \
+    PIP_DEFAULT_TIMEOUT=60 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# Lockfile с --hash sha256 — единственный источник для pip.
+COPY requirements.txt ./
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user --require-hashes --no-warn-script-location -r requirements.txt
+
+
+FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5 AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH=/home/appuser/.local/bin:$PATH
+
+# libpq5 — рантайм-половина libpq-dev (общий lockfile тянет psycopg2/asyncpg).
+# curl нужен только для docker HEALTHCHECK ниже.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq5 curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home appuser
+
+WORKDIR /app
+
+# --user install из builder; владелец appuser — non-root рантайм.
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+
+# Прикладной код. Нужны ОБА пакета: access_control импортирует общий SQLAlchemy
+# Base, settings, auth-зависимости и utils из uk_management_bot (config/locales
+# едут внутри uk_management_bot/config). alembic НЕ копируется — миграции гоняет
+# uk-management-api на общей БД (§3.1).
+COPY --chown=appuser:appuser uk_management_bot ./uk_management_bot
+COPY --chown=appuser:appuser access_control ./access_control
+
+USER appuser
+
+# Внутренняя проба liveness — стабильна для docker-compose healthcheck.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# create_app — фабрика, поэтому --factory. Один воркер: пилотный каркас.
+CMD ["uvicorn", "access_control.app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

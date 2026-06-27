@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES } from '../constants/roles'
 import { useTopbar, TopbarProvider } from '../contexts/TopbarContext'
 import { useTheme } from '../hooks/useTheme'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -18,6 +19,10 @@ import {
   MapPin,
   MonitorPlay,
   MessageSquare,
+  ShieldCheck,
+  History,
+  Database,
+  Cpu,
   BookOpen,
   Sun,
   Moon,
@@ -40,6 +45,9 @@ interface NavItem {
   labelKey: string
   Icon: React.ComponentType<{ size?: number }>
   end?: boolean
+  // Если задано — пункт виден только пользователю с одной из этих ролей.
+  // Без поля пункт виден всем (текущее поведение остальных пунктов).
+  allowedRoles?: readonly string[]
 }
 
 // ─── Navigation items ───────────────────────────────────────────────────────────
@@ -53,6 +61,14 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
   { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare },
+  // access_control §9.6: контроль доступа — только роли модуля доступа.
+  { to: '/dashboard/access', labelKey: 'nav.accessControl', Icon: ShieldCheck, end: true, allowedRoles: ACCESS_MODULE_ROLES },
+  // access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
+  { to: '/dashboard/access/history', labelKey: 'nav.accessHistory', Icon: History, allowedRoles: ACCESS_MANAGER_ROLES },
+  { to: '/dashboard/access/database', labelKey: 'nav.accessDatabase', Icon: Database, allowedRoles: ACCESS_MANAGER_ROLES },
+  // access_control: «Оборудование» — manager/system_admin (камеры/шлагбаумы/
+  // контроллеры внутри только для system_admin).
+  { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, allowedRoles: ACCESS_MANAGER_ROLES },
 ]
 
 // ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────
@@ -253,6 +269,13 @@ function SidebarContent({
   onNavClick?: () => void
 }) {
   const { t } = useTranslation()
+  const userRoles = useAuthStore((s) => s.user?.roles)
+  // Пункты с allowedRoles показываем только при совпадении роли (гард сайдбара).
+  const navItems = NAV_ITEMS.filter(
+    (item) =>
+      !item.allowedRoles ||
+      item.allowedRoles.some((r) => userRoles?.includes(r)),
+  )
   return (
     <>
       {/* Logo */}
@@ -281,7 +304,7 @@ function SidebarContent({
             {t('nav.main')}
           </div>
         )}
-        {NAV_ITEMS.map(({ to, labelKey, Icon, end }) => {
+        {navItems.map(({ to, labelKey, Icon, end }) => {
           const label = t(labelKey)
           return collapsed ? (
             <NavTooltip key={to} label={label}>

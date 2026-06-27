@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import { isTWA } from './utils/isTWA'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES } from './constants/roles'
 import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
@@ -27,6 +28,14 @@ const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
+// access_control §9.6: live-панель охраны (отдельный route group — гард ролей
+// модуля доступа, не общий admin/manager дашборда).
+const AccessControlPage = lazy(() => import('./pages/access/AccessControlPage'))
+// access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
+// Гард — ACCESS_MANAGER_ROLES (manager/system_admin; оператор охраны не входит).
+const AccessHistoryPage = lazy(() => import('./pages/access/AccessHistoryPage'))
+const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'))
+const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -98,6 +107,31 @@ export default function App() {
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
                 <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
                 <Route path="feedback" element={<PageErrorBoundary><FeedbackPage /></PageErrorBoundary>} />
+              </Route>
+
+              {/* access_control §9.6: контроль доступа — отдельный route group с
+                  гардом ролей модуля (manager/system_admin/security_operator).
+                  Вынесен из основного /dashboard, т.к. тот пускает только
+                  admin/manager, а security_operator/system_admin должны попадать
+                  на панель охраны. executor/inspector/applicant — не видят. */}
+              <Route path="/dashboard/access" element={<ProtectedRoute allowedRoles={[...ACCESS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><AccessControlPage /></PageErrorBoundary>} />
+              </Route>
+
+              {/* access_control §6/§13.2: экраны менеджера (история проездов +
+                  база доступа). Отдельный route group — гард ACCESS_MANAGER_ROLES
+                  (manager/system_admin), оператор охраны сюда не допускается. */}
+              <Route path="/dashboard/access/history" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><AccessHistoryPage /></PageErrorBoundary>} />
+              </Route>
+              <Route path="/dashboard/access/database" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><AccessDatabasePage /></PageErrorBoundary>} />
+              </Route>
+              {/* access_control: «Оборудование» (зоны/въезды/камеры/шлагбаумы/
+                  контроллеры). Гард — ACCESS_MANAGER_ROLES; камеры/шлагбаумы/
+                  контроллеры внутри доступны только system_admin (гейтинг табов). */}
+              <Route path="/dashboard/access/equipment" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><AccessEquipmentPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Resident board - public standalone page (УК landing) */}

@@ -20,7 +20,8 @@ from app.schemas import (
     ErrorResponse, MediaTagResponse, MediaCategoryEnum, FileTypeEnum,
     MediaStatusEnum, MediaTelegramLookupResponse
 )
-from app.core.config import settings
+from app.core.config import settings, TelegramChannels, FileCategories
+from app.services.media_storage import ChannelNotConfiguredError
 from aiogram.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,71 @@ async def upload_report_media(
     except Exception as e:
         logger.error(f"Failed to upload report media: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки файла отчета")
+
+
+@router.post("/upload-access", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_access_media(
+    file: UploadFile = File(..., description="Фото проезда (jpg/png)"),
+    kind: str = Form(..., description="Тип кадра: 'plate' (номер) или 'overview' (обзор)"),
+    ref: str = Form(..., description="Домен-нейтральный идентификатор, напр. 'controller|event_id'"),
+    uploaded_by: Optional[int] = Form(None, description="ID пользователя/системы"),
+    storage_service: MediaStorageService = Depends(get_storage_service)
+):
+    """
+    Домен-нейтральная загрузка фото контроля доступа в отдельный канал «access».
+
+    kind='plate'    → category=access_plate
+    kind='overview' → category=access_overview
+
+    Без request_number: вместо него домен-нейтральный ``ref`` (хранится в тегах).
+    Авторизация — X-API-Key (глобальный middleware, как у остальных /media/*).
+    """
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Имя файла не указано")
+
+        if kind not in ("plate", "overview"):
+            raise HTTPException(status_code=400, detail="kind должен быть 'plate' или 'overview'")
+
+        category = (
+            FileCategories.ACCESS_PLATE if kind == "plate"
+            else FileCategories.ACCESS_OVERVIEW
+        )
+
+        if file.size and file.size > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
+
+        if file.content_type not in settings.allowed_file_types:
+            raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
+
+        file_data = await file.read()
+
+        media_file = await storage_service.upload_domain_media(
+            channel_purpose=TelegramChannels.ACCESS,
+            category=category,
+            ref=ref,
+            file_data=file_data,
+            filename=file.filename,
+            content_type=file.content_type,
+            uploaded_by=uploaded_by,
+        )
+
+        logger.info(f"Access media uploaded successfully: {media_file.id} (ref={ref}, kind={kind})")
+
+        return MediaUploadResponse(
+            media_file=MediaFileResponse.model_validate(media_file),
+            file_url=f"/api/v1/media/{media_file.id}/file",
+            message="Файл контроля доступа успешно загружен"
+        )
+
+    except ChannelNotConfiguredError as e:
+        logger.error(f"Access upload rejected — channel not configured: {e}")
+        raise HTTPException(status_code=503, detail="access channel not configured (CHANNEL_ACCESS)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to upload access media (ref={ref}): {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки файла контроля доступа")
 
 
 @router.get("/search", response_model=MediaSearchResponse)

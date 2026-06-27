@@ -57,7 +57,363 @@
     "boardEditor": "Редактор витрины",
     "main": "Основное",
     "external": "Внешнее",
-    "feedback": "Обратная связь"
+    "feedback": "Обратная связь",
+    "accessControl": "Контроль доступа",
+    "accessHistory": "История проездов",
+    "accessDatabase": "База доступа",
+    "accessEquipment": "Оборудование"
+  },
+  "accessControl": {
+    "title": "Контроль доступа",
+    "subtitle": "Лента событий охраны в реальном времени",
+    "empty": "Пока нет событий доступа",
+    "zone": "Зона",
+    "gate": "Точка",
+    "connection": {
+      "connecting": "Подключение…",
+      "open": "На связи",
+      "closed": "Соединение разорвано",
+      "error": "Ошибка соединения"
+    },
+    "columns": {
+      "time": "Время",
+      "decision": "Решение",
+      "reason": "Причина",
+      "location": "Место",
+      "direction": "Направление",
+      "plate": "Номер",
+      "status": "Статус",
+      "source": "Источник"
+    },
+    "decision": {
+      "allow": "Разрешён",
+      "deny": "Запрещён",
+      "manual_review": "Ручная проверка"
+    },
+    "direction": {
+      "entry": "Въезд",
+      "exit": "Выезд"
+    },
+    "reason": {
+      "permanent_vehicle_allowed": "ТС в постоянном списке",
+      "guest_vehicle_allowed": "Гостевой доступ разрешён",
+      "vehicle_not_found": "ТС не найдено",
+      "access_expired": "Срок доступа истёк",
+      "manual_review_required": "Требуется ручная проверка"
+    },
+    "tabs": {
+      "live": "Live-лента",
+      "queue": "Очередь проверки",
+      "history": "История"
+    },
+    "status": {
+      "active": "Активен",
+      "blocked": "Заблокирован",
+      "archived": "В архиве",
+      "allowed": "Разрешён",
+      "denied": "Запрещён",
+      "approved": "Одобрена",
+      "rejected": "Отклонена",
+      "revoked": "Отозван",
+      "expired": "Истёк",
+      "pending": "Ожидает",
+      "pending_review": "Ручная проверка"
+    },
+    "relationType": {
+      "owner": "Собственник",
+      "tenant": "Арендатор",
+      "family": "Член семьи",
+      "service": "Сервис"
+    },
+    "actions": {
+      "addVehicle": "Добавить авто",
+      "block": "Заблокировать",
+      "unblock": "Разблокировать",
+      "archive": "В архив",
+      "createTaxiPass": "Создать taxi-пропуск",
+      "approve": "Подтвердить",
+      "reject": "Отклонить",
+      "vehicleCreated": "Автомобиль добавлен",
+      "vehicleDuplicate": "Такой автомобиль уже существует",
+      "vehicleBlocked": "Автомобиль заблокирован",
+      "vehicleUnblocked": "Автомобиль разблокирован",
+      "vehicleArchived": "Автомобиль перемещён в архив",
+      "taxiPassCreated": "Taxi-пропуск создан",
+      "requestApproved": "Заявка подтверждена",
+      "requestRejected": "Заявка отклонена"
+    },
+    "vehicleForm": {
+      "title": "Новый автомобиль",
+      "desc": "Добавьте ТС в базу доступа. Обязателен только гос. номер.",
+      "plate": "Гос. номер",
+      "platePlaceholder": "Например, 01A123BC",
+      "brand": "Марка",
+      "model": "Модель",
+      "color": "Цвет",
+      "class": "Класс ТС",
+      "country": "Страна номера",
+      "plateType": "Тип номера",
+      "apartmentId": "ID квартиры",
+      "zoneId": "ID зоны",
+      "relationType": "Отношение к квартире",
+      "relationNone": "Не указано",
+      "submit": "Добавить"
+    },
+    "statusDialog": {
+      "blockTitle": "Заблокировать автомобиль",
+      "blockDesc": "ТС {{plate}} будет заблокировано для проезда. Укажите причину — она фиксируется в журнале.",
+      "unblockTitle": "Разблокировать автомобиль",
+      "unblockDesc": "Вернуть ТС {{plate}} в активный статус?",
+      "archiveTitle": "Переместить в архив",
+      "archiveDesc": "ТС {{plate}} будет перемещено в архив и скрыто из активной базы.",
+      "reasonLabel": "Причина блокировки",
+      "reasonPlaceholder": "Опишите причину блокировки"
+    },
+    "taxiPassForm": {
+      "title": "Новый taxi-пропуск",
+      "desc": "Разовый пропуск для такси. Обязательны квартира, зона и срок действия.",
+      "apartmentId": "ID квартиры",
+      "zoneId": "ID зоны",
+      "plate": "Гос. номер",
+      "platePlaceholder": "Необязательно",
+      "validFrom": "Действует с",
+      "validUntil": "Действует до",
+      "maxEntries": "Лимит проездов",
+      "submit": "Создать пропуск"
+    },
+    "reviewDialog": {
+      "approveTitle": "Подтвердить заявку",
+      "approveDesc": "Заявка по ТС {{plate}} будет одобрена, автомобиль добавлен в базу доступа.",
+      "rejectTitle": "Отклонить заявку",
+      "rejectDesc": "Заявка по ТС {{plate}} будет отклонена.",
+      "zoneLabel": "ID зоны (необязательно)",
+      "zonePlaceholder": "Например, 1",
+      "commentLabel": "Комментарий",
+      "commentPlaceholder": "Комментарий к решению (необязательно)"
+    },
+    "eventStatus": {
+      "allowed": "Разрешён",
+      "denied": "Запрещён",
+      "pending_review": "Ручная проверка",
+      "expired": "Истёк"
+    },
+    "queue": {
+      "empty": "Нет событий на проверке",
+      "emptyDesc": "Все события обработаны",
+      "waiting": "Ожидает {{min}} мин",
+      "openAction": "Открыть с причиной",
+      "denyAction": "Отказать"
+    },
+    "resolve": {
+      "openTitle": "Открыть шлагбаум",
+      "openDesc": "Ручное открытие. Укажите шлагбаум и причину — действие фиксируется в журнале.",
+      "denyTitle": "Отказать в проезде",
+      "denyDesc": "Отклонить событие. Укажите причину отказа.",
+      "reasonLabel": "Причина",
+      "reasonPlaceholder": "Опишите причину решения",
+      "barrierLabel": "ID шлагбаума",
+      "barrierPlaceholder": "Например, 1",
+      "openConfirm": "Открыть",
+      "denyConfirm": "Отказать",
+      "openedToast": "Шлагбаум открыт",
+      "deniedToast": "В проезде отказано"
+    },
+    "detail": {
+      "title": "Событие доступа",
+      "eventId": "ID события",
+      "cameraEvent": "Событие камеры",
+      "vehicleClass": "Класс ТС",
+      "color": "Цвет",
+      "decisions": "Решения",
+      "commands": "Команды шлагбаума",
+      "manualOpenings": "Ручные открытия"
+    },
+    "photos": {
+      "title": "Фото проезда",
+      "vehicle": "Фото автомобиля",
+      "plate": "Фото номера",
+      "none": "Нет фото",
+      "enlarge": "Увеличить фото"
+    },
+    "filters": {
+      "platePlaceholder": "Поиск по номеру",
+      "allDecisions": "Все решения",
+      "allStatuses": "Все статусы",
+      "dateFrom": "С даты",
+      "dateTo": "По дату",
+      "reset": "Сбросить"
+    },
+    "pagination": {
+      "range": "{{from}}–{{to}} из {{total}}"
+    },
+    "history": {
+      "title": "История проездов",
+      "subtitle": "События доступа с фильтрами и детализацией",
+      "empty": "События не найдены"
+    },
+    "database": {
+      "title": "База доступа",
+      "subtitle": "Автомобили, пропуска и заявки жителей",
+      "vehicles": "Автомобили",
+      "passes": "Пропуска",
+      "requests": "Заявки"
+    },
+    "vehicles": {
+      "empty": "Автомобили не найдены",
+      "plate": "Номер",
+      "brandModel": "Марка и модель",
+      "color": "Цвет",
+      "class": "Класс",
+      "apartments": "Квартиры"
+    },
+    "vehicleDetail": {
+      "title": "Автомобиль",
+      "country": "Страна номера",
+      "blockedReason": "Причина блокировки",
+      "apartments": "Связанные квартиры",
+      "apartment": "Квартира",
+      "recentEvents": "Последние события"
+    },
+    "passes": {
+      "empty": "Пропуска не найдены",
+      "type": "Тип",
+      "apartment": "Квартира",
+      "validFrom": "Действует с",
+      "validUntil": "Действует до",
+      "entries": "Проезды",
+      "passType": {
+        "taxi": "Такси",
+        "guest": "Гостевой"
+      }
+    },
+    "requests": {
+      "empty": "Заявки не найдены",
+      "created": "Создана",
+      "apartment": "Квартира",
+      "relation": "Отношение",
+      "reviewedAt": "Рассмотрена",
+      "comment": "Комментарий"
+    },
+    "equipment": {
+      "title": "Оборудование",
+      "subtitle": "Зоны, въезды, камеры, шлагбаумы и контроллеры",
+      "add": "Добавить",
+      "addZone": "Добавить зону",
+      "addGate": "Добавить въезд",
+      "addCamera": "Добавить камеру",
+      "addBarrier": "Добавить шлагбаум",
+      "addController": "Добавить контроллер",
+      "deactivate": "Деактивировать",
+      "deactivateTitle": "Деактивация",
+      "deactivateConfirm": "Деактивировать «{{name}}»? Элемент перестанет использоваться, но не будет удалён.",
+      "rotateKey": "Ротировать ключ",
+      "rotateConfirmTitle": "Ротация ключа",
+      "rotateConfirm": "Сгенерировать новый API-ключ для контроллера «{{uid}}»? Старый ключ перестанет действовать немедленно.",
+      "tabs": {
+        "zones": "Зоны",
+        "gates": "Въезды",
+        "cameras": "Камеры",
+        "barriers": "Шлагбаумы",
+        "controllers": "Контроллеры"
+      },
+      "fields": {
+        "code": "Код",
+        "name": "Название",
+        "description": "Описание",
+        "offlineMode": "Режим offline",
+        "maxPermanent": "Лимит постоянных на квартиру",
+        "isActive": "Активен",
+        "zone": "Зона",
+        "gate": "Въезд",
+        "direction": "Направление",
+        "vendor": "Производитель",
+        "model": "Модель",
+        "relayType": "Тип реле",
+        "relayChannel": "Канал реле",
+        "controllerUid": "UID контроллера",
+        "ipAllowlist": "Разрешённые IP",
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+      },
+      "offlineMode": {
+        "fail_closed": "Закрыто при сбое",
+        "cached_permanent_only": "Только кэш постоянных"
+      },
+      "empty": {
+        "zones": "Зоны не найдены",
+        "gates": "Въезды не найдены",
+        "cameras": "Камеры не найдены",
+        "barriers": "Шлагбаумы не найдены",
+        "controllers": "Контроллеры не найдены"
+      },
+      "zoneForm": {
+        "createTitle": "Новая зона",
+        "editTitle": "Редактирование зоны",
+        "desc": "Параметры зоны доступа и привязка фаз (yards).",
+        "yardsLabel": "Фазы (yards)",
+        "noYards": "Фазы не привязаны",
+        "yardPlaceholder": "ID фазы",
+        "addYard": "Привязать",
+        "removeYard": "Отвязать фазу #{{id}}"
+      },
+      "gateForm": {
+        "createTitle": "Новый въезд",
+        "editTitle": "Редактирование въезда"
+      },
+      "cameraForm": {
+        "createTitle": "Новая камера",
+        "editTitle": "Редактирование камеры"
+      },
+      "barrierForm": {
+        "createTitle": "Новый шлагбаум",
+        "editTitle": "Редактирование шлагбаума"
+      },
+      "controllerForm": {
+        "createTitle": "Новый контроллер",
+        "editTitle": "Редактирование контроллера",
+        "createDesc": "После создания API-ключ будет показан один раз — сохраните его."
+      },
+      "key": {
+        "title": "API-ключ контроллера",
+        "subtitle": "Контроллер «{{uid}}»",
+        "warning": "Сохраните ключ сейчас — он показывается один раз и больше не будет доступен.",
+        "copy": "Скопировать",
+        "copied": "Ключ скопирован",
+        "done": "Готово, я сохранил ключ"
+      },
+      "toast": {
+        "zoneCreated": "Зона создана",
+        "gateCreated": "Въезд создан",
+        "cameraCreated": "Камера добавлена",
+        "barrierCreated": "Шлагбаум добавлен",
+        "controllerCreated": "Контроллер создан",
+        "saved": "Изменения сохранены",
+        "yardsSaved": "Привязка фаз обновлена",
+        "keyRotated": "Ключ обновлён",
+        "duplicate": "Такой элемент уже существует"
+      },
+      "test": {
+        "action": "Тест",
+        "title": "Тест точки въезда",
+        "subtitle": "Контроллер «{{uid}}»",
+        "desc": "Синтетический проезд прогоняется через Decision Engine — реальный шлагбаум не открывается, но событие фиксируется в истории и live-ленте.",
+        "plateLabel": "Госномер",
+        "directionLabel": "Направление",
+        "confidenceLabel": "Уверенность (0..1)",
+        "run": "Запустить",
+        "rerun": "Повторить тест",
+        "running": "Запуск…",
+        "resultTitle": "Результат",
+        "decisionId": "ID решения",
+        "eventId": "ID события",
+        "zone": "Зона",
+        "gate": "Въезд",
+        "barrier": "Шлагбаум",
+        "command": "Команда",
+        "commandCreated": "Создана ({{id}})",
+        "noCommand": "Не создана",
+        "hint": "Событие появилось в live-ленте охраны и в истории проездов."
+      }
+    }
   },
   "boardEditor": {
     "save": "Сохранить",
@@ -209,7 +565,9 @@
   "role": {
     "executor": "Исполнитель",
     "manager": "Менеджер",
-    "inspector": "Обходчик"
+    "inspector": "Обходчик",
+    "system_admin": "Системный администратор",
+    "security_operator": "Оператор охраны"
   },
   "approvalStatus": {
     "approved": "Одобрен",

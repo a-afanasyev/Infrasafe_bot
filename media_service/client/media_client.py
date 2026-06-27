@@ -17,19 +17,25 @@ class MediaServiceClient:
     Клиент для взаимодействия с Media Service API
     """
 
-    def __init__(self, base_url: str, timeout: int = 30):
+    def __init__(self, base_url: str, timeout: int = 30, api_key: Optional[str] = None):
         """
         Инициализация клиента
 
         Args:
             base_url: Базовый URL Media Service (например, http://media-service:8000)
             timeout: Таймаут запросов в секундах
+            api_key: API-ключ Media Service (SEC-022). Если задан — уходит в
+                заголовок X-API-Key на всех запросах. Обязателен, если на сервисе
+                сконфигурирован MEDIA_API_KEYS (иначе 401).
         """
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
+        self.api_key = api_key
+        headers = {"X-API-Key": api_key} if api_key else None
         self.client = httpx.AsyncClient(
             timeout=timeout,
-            base_url=f"{self.base_url}/api/v1"
+            base_url=f"{self.base_url}/api/v1",
+            headers=headers,
         )
 
     async def upload_request_media(
@@ -182,6 +188,69 @@ class MediaServiceClient:
 
         except Exception as e:
             logger.error(f"Failed to upload report media for request {request_number}: {e}")
+            raise
+
+    async def upload_access_photo(
+        self,
+        kind: str,
+        ref: str,
+        file_data: Union[bytes, BinaryIO],
+        filename: str,
+        content_type: str = "image/jpeg",
+        uploaded_by: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Загрузка фото контроля доступа в отдельный канал «access».
+
+        Домен-нейтральный метод для access_control-сервиса: вместо request_number
+        используется ``ref`` (например, "controller|event_id").
+
+        Args:
+            kind: 'plate' (фото номера) или 'overview' (обзорный кадр авто)
+            ref: домен-нейтральный идентификатор события (controller|event_id)
+            file_data: байты файла или файловый объект
+            filename: имя файла
+            content_type: MIME-тип (image/jpeg, image/png)
+            uploaded_by: ID пользователя/системы (опционально)
+
+        Returns:
+            dict: {"media_id": int, "telegram_file_id": str, "file_url": Optional[str]}
+        """
+        try:
+            if hasattr(file_data, "read"):
+                content = file_data.read()
+            else:
+                content = file_data
+
+            files = [("file", (filename, content, content_type))]
+            data = {"kind": kind, "ref": ref}
+            if uploaded_by is not None:
+                data["uploaded_by"] = str(uploaded_by)
+
+            response = await self.client.post(
+                "/media/upload-access",
+                files=files,
+                data=data,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            media_file = result["media_file"]
+            normalized = {
+                "media_id": media_file["id"],
+                "telegram_file_id": media_file.get("telegram_file_id"),
+                "file_url": result.get("file_url"),
+            }
+            logger.info(
+                f"Access photo uploaded (kind={kind}, ref={ref}): media_id={normalized['media_id']}"
+            )
+            return normalized
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error uploading access photo: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to upload access photo (kind={kind}, ref={ref}): {e}")
             raise
 
     async def get_request_media(

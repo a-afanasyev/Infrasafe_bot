@@ -28,6 +28,9 @@ class MediaCategoryEnum(str, Enum):
     DOCUMENT = "document"
     ARCHIVE = "archive"
     FEEDBACK_PHOTO = "feedback_photo"
+    # Контроль доступа (один канал «access», различение по category)
+    ACCESS_PLATE = "access_plate"
+    ACCESS_OVERVIEW = "access_overview"
 
 
 class MediaStatusEnum(str, Enum):
@@ -100,7 +103,9 @@ class MediaFileResponse(BaseModel):
     mime_type: str
     description: Optional[str] = None
     caption: Optional[str] = None
-    request_number: str
+    # Домен-нейтрально: у access-медиа (контроль доступа) request_number = None,
+    # идентификатор хранится в тегах (ref:...). Для заявок поле как и раньше.
+    request_number: Optional[str] = None
     uploaded_by_user_id: int
     category: MediaCategoryEnum
     tags: List[str] = []

@@ -57,7 +57,363 @@
     "boardEditor": "Tablo muharriri",
     "main": "Asosiy",
     "external": "Tashqi",
-    "feedback": "Qayta aloqa"
+    "feedback": "Qayta aloqa",
+    "accessControl": "Kirish nazorati",
+    "accessHistory": "O'tishlar tarixi",
+    "accessDatabase": "Kirish bazasi",
+    "accessEquipment": "Jihozlar"
+  },
+  "accessControl": {
+    "title": "Kirish nazorati",
+    "subtitle": "Xavfsizlik hodisalari jonli tasmasi",
+    "empty": "Hozircha kirish hodisalari yo'q",
+    "zone": "Hudud",
+    "gate": "Nuqta",
+    "connection": {
+      "connecting": "Ulanmoqda…",
+      "open": "Aloqada",
+      "closed": "Aloqa uzildi",
+      "error": "Ulanish xatosi"
+    },
+    "columns": {
+      "time": "Vaqt",
+      "decision": "Qaror",
+      "reason": "Sabab",
+      "location": "Joy",
+      "direction": "Yo'nalish",
+      "plate": "Raqam",
+      "status": "Holat",
+      "source": "Manba"
+    },
+    "decision": {
+      "allow": "Ruxsat berildi",
+      "deny": "Rad etildi",
+      "manual_review": "Qo'lda tekshiruv"
+    },
+    "direction": {
+      "entry": "Kirish",
+      "exit": "Chiqish"
+    },
+    "reason": {
+      "permanent_vehicle_allowed": "Doimiy ro'yxatdagi avtomobil",
+      "guest_vehicle_allowed": "Mehmon kirishi ruxsat etildi",
+      "vehicle_not_found": "Avtomobil topilmadi",
+      "access_expired": "Kirish muddati tugadi",
+      "manual_review_required": "Qo'lda tekshiruv talab qilinadi"
+    },
+    "tabs": {
+      "live": "Jonli tasma",
+      "queue": "Tekshiruv navbati",
+      "history": "Tarix"
+    },
+    "status": {
+      "active": "Faol",
+      "blocked": "Bloklangan",
+      "archived": "Arxivda",
+      "allowed": "Ruxsat berildi",
+      "denied": "Rad etildi",
+      "approved": "Tasdiqlandi",
+      "rejected": "Rad etildi",
+      "revoked": "Bekor qilindi",
+      "expired": "Muddati tugadi",
+      "pending": "Kutilmoqda",
+      "pending_review": "Qo'lda tekshiruv"
+    },
+    "relationType": {
+      "owner": "Egasi",
+      "tenant": "Ijarachi",
+      "family": "Oila a'zosi",
+      "service": "Xizmat"
+    },
+    "actions": {
+      "addVehicle": "Avto qo'shish",
+      "block": "Bloklash",
+      "unblock": "Blokdan chiqarish",
+      "archive": "Arxivga",
+      "createTaxiPass": "Taxi-ruxsatnoma yaratish",
+      "approve": "Tasdiqlash",
+      "reject": "Rad etish",
+      "vehicleCreated": "Avtomobil qo'shildi",
+      "vehicleDuplicate": "Bunday avtomobil allaqachon mavjud",
+      "vehicleBlocked": "Avtomobil bloklandi",
+      "vehicleUnblocked": "Avtomobil blokdan chiqarildi",
+      "vehicleArchived": "Avtomobil arxivga ko'chirildi",
+      "taxiPassCreated": "Taxi-ruxsatnoma yaratildi",
+      "requestApproved": "Ariza tasdiqlandi",
+      "requestRejected": "Ariza rad etildi"
+    },
+    "vehicleForm": {
+      "title": "Yangi avtomobil",
+      "desc": "TVni kirish bazasiga qo'shing. Faqat davlat raqami majburiy.",
+      "plate": "Davlat raqami",
+      "platePlaceholder": "Masalan, 01A123BC",
+      "brand": "Markasi",
+      "model": "Modeli",
+      "color": "Rangi",
+      "class": "TV sinfi",
+      "country": "Raqam davlati",
+      "plateType": "Raqam turi",
+      "apartmentId": "Xonadon ID",
+      "zoneId": "Zona ID",
+      "relationType": "Xonadonga aloqasi",
+      "relationNone": "Ko'rsatilmagan",
+      "submit": "Qo'shish"
+    },
+    "statusDialog": {
+      "blockTitle": "Avtomobilni bloklash",
+      "blockDesc": "{{plate}} TV uchun o'tish bloklanadi. Sababini ko'rsating — u jurnalga yoziladi.",
+      "unblockTitle": "Avtomobilni blokdan chiqarish",
+      "unblockDesc": "{{plate}} TVni faol holatga qaytarasizmi?",
+      "archiveTitle": "Arxivga ko'chirish",
+      "archiveDesc": "{{plate}} TV arxivga ko'chiriladi va faol bazadan yashiriladi.",
+      "reasonLabel": "Bloklash sababi",
+      "reasonPlaceholder": "Bloklash sababini yozing"
+    },
+    "taxiPassForm": {
+      "title": "Yangi taxi-ruxsatnoma",
+      "desc": "Taxi uchun bir martalik ruxsatnoma. Xonadon, zona va amal qilish muddati majburiy.",
+      "apartmentId": "Xonadon ID",
+      "zoneId": "Zona ID",
+      "plate": "Davlat raqami",
+      "platePlaceholder": "Ixtiyoriy",
+      "validFrom": "Amal qiladi:",
+      "validUntil": "Amal qilish muddati:",
+      "maxEntries": "O'tishlar limiti",
+      "submit": "Ruxsatnoma yaratish"
+    },
+    "reviewDialog": {
+      "approveTitle": "Arizani tasdiqlash",
+      "approveDesc": "{{plate}} TV bo'yicha ariza tasdiqlanadi, avtomobil kirish bazasiga qo'shiladi.",
+      "rejectTitle": "Arizani rad etish",
+      "rejectDesc": "{{plate}} TV bo'yicha ariza rad etiladi.",
+      "zoneLabel": "Zona ID (ixtiyoriy)",
+      "zonePlaceholder": "Masalan, 1",
+      "commentLabel": "Izoh",
+      "commentPlaceholder": "Qaror bo'yicha izoh (ixtiyoriy)"
+    },
+    "eventStatus": {
+      "allowed": "Ruxsat berildi",
+      "denied": "Rad etildi",
+      "pending_review": "Qo'lda tekshiruv",
+      "expired": "Muddati tugadi"
+    },
+    "queue": {
+      "empty": "Tekshiruvda hodisalar yo'q",
+      "emptyDesc": "Barcha hodisalar ko'rib chiqildi",
+      "waiting": "{{min}} daqiqa kutmoqda",
+      "openAction": "Sabab bilan ochish",
+      "denyAction": "Rad etish"
+    },
+    "resolve": {
+      "openTitle": "Shlagbaumni ochish",
+      "openDesc": "Qo'lda ochish. Shlagbaum va sababni ko'rsating — amal jurnalga yoziladi.",
+      "denyTitle": "O'tishni rad etish",
+      "denyDesc": "Hodisani rad etish. Rad etish sababini ko'rsating.",
+      "reasonLabel": "Sabab",
+      "reasonPlaceholder": "Qaror sababini yozing",
+      "barrierLabel": "Shlagbaum ID",
+      "barrierPlaceholder": "Masalan, 1",
+      "openConfirm": "Ochish",
+      "denyConfirm": "Rad etish",
+      "openedToast": "Shlagbaum ochildi",
+      "deniedToast": "O'tish rad etildi"
+    },
+    "detail": {
+      "title": "Kirish hodisasi",
+      "eventId": "Hodisa ID",
+      "cameraEvent": "Kamera hodisasi",
+      "vehicleClass": "TV sinfi",
+      "color": "Rang",
+      "decisions": "Qarorlar",
+      "commands": "Shlagbaum buyruqlari",
+      "manualOpenings": "Qo'lda ochishlar"
+    },
+    "photos": {
+      "title": "O'tish fotosi",
+      "vehicle": "Avtomobil fotosi",
+      "plate": "Raqam fotosi",
+      "none": "Foto yo'q",
+      "enlarge": "Fotoni kattalashtirish"
+    },
+    "filters": {
+      "platePlaceholder": "Raqam boʻyicha qidirish",
+      "allDecisions": "Barcha qarorlar",
+      "allStatuses": "Barcha holatlar",
+      "dateFrom": "Sanadan",
+      "dateTo": "Sanagacha",
+      "reset": "Tozalash"
+    },
+    "pagination": {
+      "range": "{{total}} dan {{from}}–{{to}}"
+    },
+    "history": {
+      "title": "O'tishlar tarixi",
+      "subtitle": "Filtr va tafsilotlar bilan kirish hodisalari",
+      "empty": "Hodisalar topilmadi"
+    },
+    "database": {
+      "title": "Kirish bazasi",
+      "subtitle": "Avtomobillar, ruxsatnomalar va aholi arizalari",
+      "vehicles": "Avtomobillar",
+      "passes": "Ruxsatnomalar",
+      "requests": "Arizalar"
+    },
+    "vehicles": {
+      "empty": "Avtomobillar topilmadi",
+      "plate": "Raqam",
+      "brandModel": "Marka va model",
+      "color": "Rang",
+      "class": "Sinf",
+      "apartments": "Xonadonlar"
+    },
+    "vehicleDetail": {
+      "title": "Avtomobil",
+      "country": "Raqam mamlakati",
+      "blockedReason": "Bloklash sababi",
+      "apartments": "Bog'langan xonadonlar",
+      "apartment": "Xonadon",
+      "recentEvents": "So'nggi hodisalar"
+    },
+    "passes": {
+      "empty": "Ruxsatnomalar topilmadi",
+      "type": "Turi",
+      "apartment": "Xonadon",
+      "validFrom": "Amal qiladi",
+      "validUntil": "Amal qilish muddati",
+      "entries": "O'tishlar",
+      "passType": {
+        "taxi": "Taksi",
+        "guest": "Mehmon"
+      }
+    },
+    "requests": {
+      "empty": "Arizalar topilmadi",
+      "created": "Yaratildi",
+      "apartment": "Xonadon",
+      "relation": "Munosabat",
+      "reviewedAt": "Ko'rib chiqildi",
+      "comment": "Izoh"
+    },
+    "equipment": {
+      "title": "Jihozlar",
+      "subtitle": "Zonalar, kirishlar, kameralar, shlagbaumlar va kontrollerlar",
+      "add": "Qo'shish",
+      "addZone": "Zona qo'shish",
+      "addGate": "Kirish qo'shish",
+      "addCamera": "Kamera qo'shish",
+      "addBarrier": "Shlagbaum qo'shish",
+      "addController": "Kontroller qo'shish",
+      "deactivate": "Faolsizlantirish",
+      "deactivateTitle": "Faolsizlantirish",
+      "deactivateConfirm": "«{{name}}» faolsizlantirilsinmi? Element ishlatilmaydi, lekin o'chirilmaydi.",
+      "rotateKey": "Kalitni almashtirish",
+      "rotateConfirmTitle": "Kalitni almashtirish",
+      "rotateConfirm": "«{{uid}}» kontrolleri uchun yangi API-kalit yaratilsinmi? Eski kalit darhol ishlamay qoladi.",
+      "tabs": {
+        "zones": "Zonalar",
+        "gates": "Kirishlar",
+        "cameras": "Kameralar",
+        "barriers": "Shlagbaumlar",
+        "controllers": "Kontrollerlar"
+      },
+      "fields": {
+        "code": "Kod",
+        "name": "Nomi",
+        "description": "Tavsif",
+        "offlineMode": "Offline rejim",
+        "maxPermanent": "Kvartiraga doimiy limiti",
+        "isActive": "Faol",
+        "zone": "Zona",
+        "gate": "Kirish",
+        "direction": "Yo'nalish",
+        "vendor": "Ishlab chiqaruvchi",
+        "model": "Model",
+        "relayType": "Rele turi",
+        "relayChannel": "Rele kanali",
+        "controllerUid": "Kontroller UID",
+        "ipAllowlist": "Ruxsat etilgan IP",
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+      },
+      "offlineMode": {
+        "fail_closed": "Nosozlikda yopiq",
+        "cached_permanent_only": "Faqat doimiylar keshi"
+      },
+      "empty": {
+        "zones": "Zonalar topilmadi",
+        "gates": "Kirishlar topilmadi",
+        "cameras": "Kameralar topilmadi",
+        "barriers": "Shlagbaumlar topilmadi",
+        "controllers": "Kontrollerlar topilmadi"
+      },
+      "zoneForm": {
+        "createTitle": "Yangi zona",
+        "editTitle": "Zonani tahrirlash",
+        "desc": "Kirish zonasi parametrlari va fazalar (yards) bog'lanishi.",
+        "yardsLabel": "Fazalar (yards)",
+        "noYards": "Fazalar bog'lanmagan",
+        "yardPlaceholder": "Faza ID",
+        "addYard": "Bog'lash",
+        "removeYard": "#{{id}} fazani uzish"
+      },
+      "gateForm": {
+        "createTitle": "Yangi kirish",
+        "editTitle": "Kirishni tahrirlash"
+      },
+      "cameraForm": {
+        "createTitle": "Yangi kamera",
+        "editTitle": "Kamerani tahrirlash"
+      },
+      "barrierForm": {
+        "createTitle": "Yangi shlagbaum",
+        "editTitle": "Shlagbaumni tahrirlash"
+      },
+      "controllerForm": {
+        "createTitle": "Yangi kontroller",
+        "editTitle": "Kontrollerni tahrirlash",
+        "createDesc": "Yaratilgandan so'ng API-kalit bir marta ko'rsatiladi — uni saqlang."
+      },
+      "key": {
+        "title": "Kontroller API-kaliti",
+        "subtitle": "«{{uid}}» kontrolleri",
+        "warning": "Kalitni hozir saqlang — u bir marta ko'rsatiladi va boshqa mavjud bo'lmaydi.",
+        "copy": "Nusxalash",
+        "copied": "Kalit nusxalandi",
+        "done": "Tayyor, kalitni saqladim"
+      },
+      "toast": {
+        "zoneCreated": "Zona yaratildi",
+        "gateCreated": "Kirish yaratildi",
+        "cameraCreated": "Kamera qo'shildi",
+        "barrierCreated": "Shlagbaum qo'shildi",
+        "controllerCreated": "Kontroller yaratildi",
+        "saved": "O'zgarishlar saqlandi",
+        "yardsSaved": "Fazalar bog'lanishi yangilandi",
+        "keyRotated": "Kalit yangilandi",
+        "duplicate": "Bunday element allaqachon mavjud"
+      },
+      "test": {
+        "action": "Test",
+        "title": "Kirish nuqtasi testi",
+        "subtitle": "Kontroller «{{uid}}»",
+        "desc": "Sintetik o‘tish Decision Engine orqali tekshiriladi — haqiqiy shlagbaum ochilmaydi, lekin hodisa tarix va jonli lentada qayd etiladi.",
+        "plateLabel": "Davlat raqami",
+        "directionLabel": "Yo‘nalish",
+        "confidenceLabel": "Ishonchlilik (0..1)",
+        "run": "Ishga tushirish",
+        "rerun": "Testni takrorlash",
+        "running": "Ishga tushmoqda…",
+        "resultTitle": "Natija",
+        "decisionId": "Qaror IDsi",
+        "eventId": "Hodisa IDsi",
+        "zone": "Hudud",
+        "gate": "Kirish",
+        "barrier": "Shlagbaum",
+        "command": "Buyruq",
+        "commandCreated": "Yaratildi ({{id}})",
+        "noCommand": "Yaratilmadi",
+        "hint": "Hodisa qo‘riqlash jonli lentasida va o‘tishlar tarixida paydo bo‘ldi."
+      }
+    }
   },
   "boardEditor": {
     "save": "Saqlash",
@@ -209,7 +565,9 @@
   "role": {
     "executor": "Ijrochi",
     "manager": "Menejer",
-    "inspector": "Nazoratchi"
+    "inspector": "Nazoratchi",
+    "system_admin": "Tizim administratori",
+    "security_operator": "Xavfsizlik operatori"
   },
   "approvalStatus": {
     "approved": "Tasdiqlangan",

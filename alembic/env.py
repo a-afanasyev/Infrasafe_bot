@@ -8,6 +8,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from uk_management_bot.database.session import Base
 from uk_management_bot.database.models import *  # noqa: F401,F403
+# Регистрируем пилотные модели access_control на том же Base.metadata, чтобы
+# autogenerate/target_metadata видел 18 таблиц домена контроля доступа (Ф2).
+import access_control.domain  # noqa: F401,E402
 from uk_management_bot.config.settings import settings
 
 config = context.config

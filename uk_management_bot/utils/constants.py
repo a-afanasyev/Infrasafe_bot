@@ -29,7 +29,17 @@ ROLE_APPLICANT = "applicant"
 ROLE_EXECUTOR = "executor"
 ROLE_MANAGER = "manager"
 ROLE_INSPECTOR = "inspector"
-USER_ROLES = [ROLE_APPLICANT, ROLE_EXECUTOR, ROLE_MANAGER, ROLE_INSPECTOR]
+# Роли модуля контроля доступа (access_control, ТЗ §3.2)
+ROLE_SYSTEM_ADMIN = "system_admin"
+ROLE_SECURITY_OPERATOR = "security_operator"
+USER_ROLES = [
+    ROLE_APPLICANT,
+    ROLE_EXECUTOR,
+    ROLE_MANAGER,
+    ROLE_INSPECTOR,
+    ROLE_SYSTEM_ADMIN,
+    ROLE_SECURITY_OPERATOR,
+]
 
 # Статусы заявок
 # Обновлено 16.10.2025: синхронизировано с settings.py и request_service.py

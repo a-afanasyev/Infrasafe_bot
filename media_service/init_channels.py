@@ -58,6 +58,19 @@ def init_channels():
             }
         ]
 
+        # access — ОПЦИОНАЛЬНЫЙ канал контроля доступа. Добавляем в инициализацию
+        # только если CHANNEL_ACCESS сконфигурирован (иначе домен не используется).
+        if settings.channel_access:
+            channels_config.append({
+                'channel_name': 'uk_media_access_private',
+                'channel_id': int(settings.channel_access),
+                'channel_username': '@uk_media_access_private',
+                'purpose': TelegramChannels.ACCESS,
+                'category': None,
+                'is_active': True,
+                'is_backup_channel': False
+            })
+
         for config in channels_config:
             # Проверяем, существует ли канал
             existing = db.query(MediaChannel).filter(
