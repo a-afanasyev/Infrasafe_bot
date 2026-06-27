@@ -49,7 +49,11 @@ insert-only/идемпотентны, но §9.7 поимённо требует
 - `access_passes.status`: active|used|expired|revoked
 - `access_decisions.decision`: allow|deny|manual_review
 - `access_decisions.status`: pending_review|allowed|allowed_manually|denied|denied_manually|expired
-- `access_decisions.reason`: permanent_vehicle_allowed|temporary_pass_allowed|vehicle_not_found|vehicle_blocked|zone_not_allowed|pass_expired|pass_already_used|low_confidence|possible_plate_clone|anti_passback_violation|manual_review_required (anti_passback в пилоте не генерируется)
+- `access_decisions.reason`: permanent_vehicle_allowed|temporary_pass_allowed|assigned_spot_allowed|spot_not_assigned|spot_rental_expired|shared_access_allowed|per_apartment_limit_exceeded|vehicle_not_found|vehicle_blocked|zone_not_allowed|pass_expired|pass_already_used|low_confidence|possible_plate_clone|anti_passback_violation|manual_review_required (anti_passback в пилоте не генерируется)
+- `parking_zones.parking_type`: assigned|shared (по умолчанию shared)
+- `parking_spots.status`: active|inactive|archived
+- `parking_spot_assignments.ownership_type`: owned|rented
+- `parking_spot_assignments.status`: active|expired|revoked|archived
 - `offline_mode`: fail_closed|cached_permanent_only (пилот — только fail_closed)
 - `edge_controllers.status`: active|inactive|decommissioned
 - `barrier_commands.status`: pending|leased|acked|dead; `command_type`: open_barrier
@@ -84,6 +88,62 @@ confidence, timestamp, признаки. Источник — `POST /camera-even
 в ОДНОЙ транзакции под advisory-lock по barrier_id → (10) при allow — idempotent
 barrier_commands (UNIQUE decision_id) → (11) ответ allow|deny|manual_review + reason
 (+ команда с command_id для allow; pending_review с deadline now()+120s для manual_review).
+
+## Тип парковки: assigned / shared (§5.1, §7, §10.3, миграция 033)
+
+Зона несёт `parking_type` (`assigned|shared`, default **shared**) + информативную
+`capacity` (ёмкость shared-зоны). Decision Engine для постоянного авто работает
+зоно-типно поверх совместимой ветки `access_rules`.
+
+**Решения владельца:**
+- Место закреплено **ЗА КВАРТИРОЙ**; авто подвязаны к квартире через
+  `vehicle_apartments`. Любой активный авто квартиры пользуется её местом.
+- Свободная (shared) зона: разрешены все авто квартир, обслуживаемых зоной
+  (`apartment→building→yard ∈ зоны` через `parking_zone_yards`). Жёсткого лимита
+  нет; есть **гибкий настраиваемый кап** на квартиру
+  (`max_permanent_vehicles_per_apartment`, по умолчанию NULL — не ограничивает).
+- Переполнение сейчас **НЕ блокируется** — только **учёт заездов** (число
+  заехавших). Реальная занятость (`заехало − выехало`) — позже, с выездными
+  камерами (presence, §10.3 — пока off).
+
+**Таблицы:**
+- `parking_spots`: `id BIGINT PK`, `zone_id FK→parking_zones`, `code`,
+  `status` (active|inactive|archived, default active), `created_at/updated_at`.
+  `UNIQUE(zone_id, code)`.
+- `parking_spot_assignments`: `id PK`, `spot_id FK→parking_spots`,
+  `apartment_id FK→apartments`, `ownership_type` (owned|rented),
+  `valid_from/valid_until TIMESTAMPTZ NULL` (срок аренды),
+  `status` (active|expired|revoked|archived, default active),
+  `approved_by_user_id FK→users NULL`, `approved_at`, `created_at/updated_at`.
+  `INDEX(apartment_id, status)`, `INDEX(spot_id, status)`. Закрепление — за
+  квартирой; авто пользуются местом через `vehicle_apartments`.
+
+**Зоно-типная логика Decision Engine (§7, постоянный авто):**
+1. Блокировка авто → `vehicle_blocked` (как раньше).
+2. **Совместимость:** найден активный `access_rule` на зону → allow
+   `permanent_vehicle_allowed` (allow-ветка сохранена, держит исходные тесты).
+3. Иначе по `zone.parking_type`:
+   - `assigned`: активное закрепление места квартиры авто в окне дат → allow
+     `assigned_spot_allowed`; есть только просроченное (`valid_until` прошёл) →
+     deny `spot_rental_expired`; закрепления нет → deny `spot_not_assigned`.
+   - `shared`: квартира обслуживается зоной → allow `shared_access_allowed`;
+     гибкий кап задан и число активных авто квартиры его превышает →
+     manual_review `per_apartment_limit_exceeded`; квартира не обслуживается зоной
+     → deny `zone_not_allowed`.
+4. Зона не найдена/без типа → deny `zone_not_allowed` (прежнее поведение).
+
+`taxi`-pass путь не изменён.
+
+**Учёт заездов** (`services/parking_occupancy.py:zone_occupancy`): по
+иммутабельному `access_events` считает разрешённые проезды зоны —
+`entries = count(allow, direction=entry)`, `exits = count(allow, direction=exit)`,
+`occupancy = entries − exits`. В пилоте `exits = 0` (выезд off), поэтому
+`occupancy == entries`; вычитание выездов заложено структурно и заработает без
+правок API после оснащения выездных камер.
+
+**Что enforce ёмкости — после выезда:** жёсткой блокировки переполнения
+(`capacity`/реальная занятость) в пилоте НЕТ; появится вместе с
+`vehicle_presence_sessions` (детект выезда, §10.3, §14.2).
 
 ## Outbox/lease barrier_commands (§9.2) — кратко
 

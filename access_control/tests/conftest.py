@@ -64,6 +64,8 @@ _ACCESS_TABLES = (
     "resident_access_requests",
     "vehicle_apartments",
     "vehicles",
+    "parking_spot_assignments",
+    "parking_spots",
     "access_cameras",
     "access_barriers",
     "access_gates",

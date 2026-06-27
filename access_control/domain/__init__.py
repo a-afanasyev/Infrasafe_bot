@@ -21,6 +21,7 @@ from .events import (
     CameraEvent,
     ControllerSyncEvent,
 )
+from .parking import ParkingSpot, ParkingSpotAssignment
 from .passes import AccessPass, AccessRule, ResidentAccessRequest
 from .territory import ParkingZone, ParkingZoneYard
 from .vehicles import Vehicle, VehicleApartment
@@ -29,6 +30,9 @@ __all__ = [
     # territory
     "ParkingZone",
     "ParkingZoneYard",
+    # parking (assigned/shared)
+    "ParkingSpot",
+    "ParkingSpotAssignment",
     # equipment
     "EdgeController",
     "AccessGate",

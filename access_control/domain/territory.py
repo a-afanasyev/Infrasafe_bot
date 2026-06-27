@@ -24,7 +24,7 @@ from .base import (
     pk_column,
     updated_at_column,
 )
-from .enums import OfflineMode, in_clause
+from .enums import OfflineMode, ParkingType, in_clause
 
 
 class ParkingZone(Base):
@@ -40,7 +40,16 @@ class ParkingZone(Base):
     offline_mode = Column(
         String(32), nullable=False, server_default=OfflineMode.FAIL_CLOSED.value
     )
+    # Тип парковки (§5.1): assigned — закреплённые за квартирой места;
+    # shared — общая зона (все авто обслуживаемых квартир). По умолчанию shared.
+    parking_type = Column(
+        String(16), nullable=False, server_default=ParkingType.SHARED.value
+    )
+    # Информативная ёмкость общей зоны (§10.3); NULL — не задана. Переполнение
+    # сейчас НЕ блокируется (учёт заездов), enforce — после оснащения выезда.
+    capacity = Column(Integer, nullable=True)
     # Лимит активных постоянных авто на квартиру (§5.3); NULL — без лимита.
+    # Для shared-зоны используется как ГИБКИЙ кап (превышение → manual_review).
     max_permanent_vehicles_per_apartment = Column(Integer, nullable=True)
     extra = Column(JSONB_PORTABLE, nullable=True)
     is_active = Column(Boolean, nullable=False, server_default="true")
@@ -51,6 +60,10 @@ class ParkingZone(Base):
         CheckConstraint(
             in_clause("offline_mode", OfflineMode),
             name="ck_parking_zones_offline_mode",
+        ),
+        CheckConstraint(
+            in_clause("parking_type", ParkingType),
+            name="ck_parking_zones_parking_type",
         ),
     )
 

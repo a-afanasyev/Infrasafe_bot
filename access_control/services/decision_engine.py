@@ -21,14 +21,18 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from access_control.domain.enums import (
     DecisionReason,
     DecisionStatus,
     DecisionType,
+    ParkingType,
 )
+from access_control.domain.parking import ParkingSpot, ParkingSpotAssignment
 from access_control.domain.passes import AccessPass, AccessRule
+from access_control.domain.territory import ParkingZone
 from access_control.domain.vehicles import Vehicle, VehicleApartment
 
 # Порог confidence по умолчанию (конфигурируемый). Ниже — аномалия (§9.4).
@@ -151,8 +155,138 @@ def _zone_rule_matches(
     return False
 
 
+def _apartment_served_by_zone(db: Session, apartment_id: int, zone_id: int) -> bool:
+    """Квартира обслуживается зоной: apartment→building→yard ∈ зоны (§5.1).
+
+    Связь зоны с фазами ЖК — через ``parking_zone_yards`` (зона↔yard); квартира
+    привязана к yard через building.
+    """
+    row = db.execute(
+        text(
+            "SELECT 1 FROM apartments a "
+            "JOIN buildings b ON a.building_id = b.id "
+            "JOIN parking_zone_yards pzy ON pzy.yard_id = b.yard_id "
+            "WHERE a.id = :apt AND pzy.zone_id = :zone LIMIT 1"
+        ),
+        {"apt": apartment_id, "zone": zone_id},
+    ).first()
+    return row is not None
+
+
+def _count_active_apartment_vehicles(
+    db: Session, apartment_id: int, moment: dt.datetime
+) -> int:
+    """Число активных авто квартиры (§5.3): active vehicle_apartments × active vehicle."""
+    links = (
+        db.query(VehicleApartment)
+        .join(Vehicle, Vehicle.id == VehicleApartment.vehicle_id)
+        .filter(
+            VehicleApartment.apartment_id == apartment_id,
+            VehicleApartment.status == "active",
+            Vehicle.status == "active",
+        )
+        .all()
+    )
+    return sum(
+        1
+        for link in links
+        if _within_window(moment, link.valid_from, link.valid_until)
+    )
+
+
+def _decide_assigned(
+    db: Session,
+    *,
+    vehicle: Vehicle,
+    apartment_ids: list[int],
+    zone_id: int | None,
+    moment: dt.datetime,
+) -> EngineDecision:
+    """assigned-зона (§5.1): место закреплено за квартирой авто.
+
+    allow ``assigned_spot_allowed`` — активное закрепление в окне дат;
+    deny ``spot_rental_expired`` — есть только просроченное (valid_until прошёл);
+    deny ``spot_not_assigned`` — закрепления нет.
+    """
+    if not apartment_ids:
+        return _deny(
+            DecisionReason.SPOT_NOT_ASSIGNED.value, matched_vehicle_id=vehicle.id
+        )
+    rows = (
+        db.query(ParkingSpotAssignment)
+        .join(ParkingSpot, ParkingSpot.id == ParkingSpotAssignment.spot_id)
+        .filter(
+            ParkingSpot.zone_id == zone_id,
+            ParkingSpot.status == "active",
+            ParkingSpotAssignment.apartment_id.in_(apartment_ids),
+            ParkingSpotAssignment.status.in_(("active", "expired")),
+        )
+        .all()
+    )
+    active_in_window = any(
+        r.status == "active"
+        and _within_window(moment, r.valid_from, r.valid_until)
+        for r in rows
+    )
+    if active_in_window:
+        return _allow(
+            DecisionReason.ASSIGNED_SPOT_ALLOWED.value,
+            matched_vehicle_id=vehicle.id,
+        )
+    expired = any(r.valid_until is not None and moment > r.valid_until for r in rows)
+    if expired:
+        return _deny(
+            DecisionReason.SPOT_RENTAL_EXPIRED.value, matched_vehicle_id=vehicle.id
+        )
+    return _deny(
+        DecisionReason.SPOT_NOT_ASSIGNED.value, matched_vehicle_id=vehicle.id
+    )
+
+
+def _decide_shared(
+    db: Session,
+    *,
+    vehicle: Vehicle,
+    apartment_ids: list[int],
+    zone: ParkingZone,
+    moment: dt.datetime,
+) -> EngineDecision:
+    """shared-зона (§5.1): разрешены все авто обслуживаемой зоной квартиры.
+
+    allow ``shared_access_allowed``; гибкий кап
+    ``max_permanent_vehicles_per_apartment`` (NULL — без лимита): превышение →
+    manual_review ``per_apartment_limit_exceeded``. Если квартира не обслуживается
+    зоной → deny ``zone_not_allowed`` (как до фичи).
+    """
+    served = [
+        apt
+        for apt in apartment_ids
+        if _apartment_served_by_zone(db, apt, zone.id)
+    ]
+    if not served:
+        return _deny(
+            DecisionReason.ZONE_NOT_ALLOWED.value, matched_vehicle_id=vehicle.id
+        )
+    cap = zone.max_permanent_vehicles_per_apartment
+    if cap is not None:
+        for apt in served:
+            if _count_active_apartment_vehicles(db, apt, moment) > cap:
+                return _manual_review(
+                    DecisionReason.PER_APARTMENT_LIMIT_EXCEEDED.value,
+                    matched_vehicle_id=vehicle.id,
+                )
+    return _allow(
+        DecisionReason.SHARED_ACCESS_ALLOWED.value, matched_vehicle_id=vehicle.id
+    )
+
+
 def _decide_permanent(db: Session, data: AnprDecisionInput) -> EngineDecision | None:
-    """Ветвь постоянного авто (§7 шаги 5–6). ``None`` — авто не найдено."""
+    """Ветвь постоянного авто (§7 шаги 5–6). ``None`` — авто не найдено.
+
+    Порядок: блокировка → СОВМЕСТИМОСТЬ (явный ``access_rule`` остаётся allow-веткой
+    ``permanent_vehicle_allowed``, держит существующие тесты) → зоно-типная логика
+    (assigned/shared) по ``parking_zones.parking_type``.
+    """
     vehicle = (
         db.query(Vehicle)
         .filter(
@@ -168,10 +302,8 @@ def _decide_permanent(db: Session, data: AnprDecisionInput) -> EngineDecision | 
             DecisionReason.VEHICLE_BLOCKED.value, matched_vehicle_id=vehicle.id
         )
     apartment_ids = _active_apartment_ids(db, vehicle.id, data.captured_at)
-    # ВСЕГДА проверяем правило зоны, передавая (возможно пустой) apartment_ids:
-    # vehicle-scoped правило (rule.vehicle_id == vehicle.id) валидно и без активных
-    # apartment-связей — short-circuit по apartment_ids давал ложный
-    # zone_not_allowed (§7 шаг 6).
+    # Совместимость: явное правило зоны (§7 шаг 6, решение CTO #5) — allow-ветка.
+    # vehicle-scoped правило валидно и без активных apartment-связей.
     rule_ok = _zone_rule_matches(
         db,
         vehicle_id=vehicle.id,
@@ -185,6 +317,30 @@ def _decide_permanent(db: Session, data: AnprDecisionInput) -> EngineDecision | 
             DecisionReason.PERMANENT_VEHICLE_ALLOWED.value,
             matched_vehicle_id=vehicle.id,
         )
+    # Зоно-типная логика парковки (§5.1).
+    zone = (
+        db.query(ParkingZone).filter(ParkingZone.id == data.zone_id).first()
+        if data.zone_id is not None
+        else None
+    )
+    parking_type = zone.parking_type if zone is not None else None
+    if parking_type == ParkingType.ASSIGNED.value:
+        return _decide_assigned(
+            db,
+            vehicle=vehicle,
+            apartment_ids=apartment_ids,
+            zone_id=data.zone_id,
+            moment=data.captured_at,
+        )
+    if parking_type == ParkingType.SHARED.value:
+        return _decide_shared(
+            db,
+            vehicle=vehicle,
+            apartment_ids=apartment_ids,
+            zone=zone,
+            moment=data.captured_at,
+        )
+    # Зона не найдена/без типа → прежнее поведение.
     return _deny(
         DecisionReason.ZONE_NOT_ALLOWED.value, matched_vehicle_id=vehicle.id
     )
