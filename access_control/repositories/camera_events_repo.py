@@ -75,6 +75,36 @@ def find_window_duplicate(
     return row[0] if row else None
 
 
+def update_photo_ref(
+    db: Session, *, controller_id: int, event_id: str, kind: str, ref: str
+) -> int | None:
+    """Обновить ссылку на фото события (``plate``/``overview``) по ключу события.
+
+    Фото проезда грузятся ОТДЕЛЬНЫМ эндпоинтом ПОСЛЕ решения (§10.2 — вне горячего
+    пути), поэтому ссылка проставляется UPDATE'ом уже существующей строки
+    ``camera_events`` по ключу идемпотентности ``(controller_id, event_id)``.
+
+    ``camera_events`` НЕ append-only (append-only §9.7 — только access_events/
+    access_decisions/manual_openings/access_audit_logs), поэтому UPDATE допустим.
+    Идемпотентно: повторная загрузка того же ``kind`` перезаписывает ссылку.
+    Возвращает ``camera_events.id`` либо ``None``, если событие не найдено.
+    """
+    if kind == "plate":
+        column = "plate_photo_url"
+    elif kind == "overview":
+        column = "overview_photo_url"
+    else:
+        raise ValueError(f"неизвестный kind фото: {kind!r} (допустимы plate|overview)")
+    row = db.execute(
+        text(
+            f"UPDATE camera_events SET {column} = :ref "
+            "WHERE controller_id = :c AND event_id = :e RETURNING id"
+        ),
+        {"ref": ref, "c": controller_id, "e": event_id},
+    ).first()
+    return row[0] if row else None
+
+
 def insert_idempotent(
     db: Session, data: "AnprIngestInput", normalized: str | None
 ) -> int | None:

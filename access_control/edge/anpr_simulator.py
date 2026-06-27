@@ -131,3 +131,43 @@ class AnprSimulator:
         )
         headers["content-type"] = "application/json"
         return self._client.post(ANPR_PATH, content=body, headers=headers)
+
+    def send_photos(
+        self,
+        *,
+        event_id: str,
+        plate_bytes: bytes | None = None,
+        overview_bytes: bytes | None = None,
+    ):
+        """Дослать синтетические фото проезда на photos-эндпоинт ПОСЛЕ решения (§10.2).
+
+        Сквозной синтетический путь (§11 — только синтетические байты, не реальные
+        ПД): подписывает multipart device-auth и шлёт на
+        ``/edge/{controller_uid}/camera-events/{event_id}/photos``. Тело multipart
+        строится один раз (фиксированный boundary) — подписанные байты совпадают с
+        отправленными (HMAC body, §9.1). Минимум один из ``plate_bytes``/
+        ``overview_bytes`` должен быть задан.
+        """
+        import httpx
+
+        files: dict[str, tuple[str, bytes, str]] = {}
+        if plate_bytes is not None:
+            files["plate"] = ("plate.jpg", plate_bytes, "image/jpeg")
+        if overview_bytes is not None:
+            files["overview"] = ("overview.jpg", overview_bytes, "image/jpeg")
+        if not files:
+            raise ValueError("send_photos: нужно хотя бы одно фото (plate/overview)")
+
+        path = f"/api/v1/access/edge/{self._uid}/camera-events/{event_id}/photos"
+        req = httpx.Request("POST", "http://testserver" + path, files=files)
+        body = req.read()
+        headers = sign_request(
+            "POST",
+            path,
+            body,
+            controller_uid=self._uid,
+            api_key=self._api_key,
+            secret=self._secret,
+        )
+        headers["content-type"] = req.headers["content-type"]
+        return self._client.post(path, content=body, headers=headers)

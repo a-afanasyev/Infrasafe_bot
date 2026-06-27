@@ -18,14 +18,17 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from access_control.domain.enums import Direction, EventSource
 from access_control.domain.equipment import EdgeController
+from access_control.integrations.media import AccessMediaClient, get_access_media_client
+from access_control.repositories import camera_events_repo
 from access_control.services.device_auth import authenticate_edge
 from access_control.services.snapshot_signing import build_snapshot, sign_snapshot
 from uk_management_bot.database.session import get_db
@@ -162,6 +165,70 @@ def post_sync_events(
             "conflicts": conflicts,
         }
     )
+
+
+# ----------------------------- camera-event photos (§11, §10.2) ----------------
+
+
+@router.post("/{controller_id}/camera-events/{event_id}/photos")
+async def post_camera_event_photos(
+    request: Request,
+    controller_id: str = Path(..., description="controller_uid (device-auth, изоляция)"),
+    event_id: str = Path(..., description="camera_events.event_id (стабильный id события)"),
+    db: Session = Depends(get_db),
+    controller: EdgeController = Depends(authenticate_edge),
+    media: AccessMediaClient = Depends(get_access_media_client),
+) -> JSONResponse:
+    """Догрузить фото проезда ПОСЛЕ решения (§10.2 — ВНЕ горячего пути ingestion).
+
+    Латентность здесь не критична (загрузка в Telegram медленная, секунды): edge
+    зовёт этот endpoint уже после fast-path решения, поэтому p95 ingestion ≤500мс
+    не страдает. Под полной device-auth (``authenticate_edge``): изоляция по
+    ``controller_id`` в пути (чужой controller → 403).
+
+    Каждый присланный кадр (``plate``/``overview``, оба опциональны) грузится в
+    ОТДЕЛЬНЫЙ канал медиа-сервиса (``kind``, ``ref=f"{controller_id}|{event_id}"``);
+    полученный ``media_id`` пишется в ``camera_events.{plate|overview}_photo_url``
+    как ``media://{media_id}``. Идемпотентно: повторная загрузка перезаписывает
+    ссылку того же ``kind``. Ответ: ``{ok, updated:[kind...]}``.
+
+    Multipart парсится вручную (``request.form()``), а не через ``File(...)``:
+    device-auth (``authenticate_edge``) уже прочитал и закэшировал тело для HMAC,
+    а декларация ``File`` заставила бы FastAPI прочитать форму ПЕРВОЙ и «съесть»
+    поток до device-auth (Stream consumed). Парсинг из кэша тела безопасен.
+    """
+    form = await request.form()
+    ref = f"{controller_id}|{event_id}"
+    updated: list[str] = []
+    for kind in ("plate", "overview"):
+        upload = form.get(kind)
+        # Берём только файловые поля (UploadFile); строковые значения игнорируем.
+        if not isinstance(upload, UploadFile):
+            continue
+        content = await upload.read()
+        result = await media.upload_access_photo(
+            kind=kind,
+            ref=ref,
+            file_data=content,
+            filename=upload.filename or f"{kind}.jpg",
+            content_type=upload.content_type or "image/jpeg",
+        )
+        media_id = result["media_id"]
+        found = camera_events_repo.update_photo_ref(
+            db,
+            controller_id=controller.id,
+            event_id=event_id,
+            kind=kind,
+            ref=f"media://{media_id}",
+        )
+        if found is None:
+            # Событие неизвестно этому контроллеру — фото некуда привязать.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="camera event not found"
+            )
+        updated.append(kind)
+    db.commit()
+    return JSONResponse(content={"ok": True, "updated": updated})
 
 
 # ------------------------------ access-snapshot (§8.2) --------------------------

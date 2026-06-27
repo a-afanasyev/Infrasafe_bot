@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
+from access_control.integrations.media import AccessMediaClient, get_access_media_client
 from access_control.services import photo_urls
 from access_control.services.management import write_audit
 from uk_management_bot.api.auth.service import verify_access_token
@@ -383,21 +384,25 @@ def _optional_actor(request: Request) -> int | None:
 
 
 @router.get("/photos/{kind}/{event_id}")
-def get_photo(
+async def get_photo(
     request: Request,
     kind: str = Path(..., description="plate|overview"),
     event_id: int = Path(..., description="camera_events.id"),
     exp: int = Query(..., description="срок действия signed-URL (unix)"),
     sig: str = Query(..., description="HMAC-подпись signed-URL"),
     db: Session = Depends(get_db),
+    media: AccessMediaClient = Depends(get_access_media_client),
 ):
     """Выдать фото события по короткоживущему signed-URL (§11).
 
     Capability по подписи (без Bearer): проверяет подпись+срок → пишет аудит
-    просмотра ``access.photo_view`` (PD-safe details) → редиректит (302) на
-    сохранённый storage-URL. Прод-долг: вместо redirect отдавать байты из
-    приватного storage (S3/MinIO) через backend. Невалидная подпись → 403,
-    протухшая → 410, отсутствующее фото/событие → 404.
+    просмотра ``access.photo_view`` (PD-safe details) → отдаёт фото:
+
+    * сохранённое значение вида ``media://{media_id}`` → СТРИМ байтов из
+      медиа-сервиса (``AccessMediaClient.fetch_file``) с корректным Content-Type;
+    * иначе (сырой storage-URL) → прежний 302 redirect (обратная совместимость).
+
+    Невалидная подпись → 403, протухшая → 410, отсутствующее фото/событие → 404.
     """
     try:
         photo_urls.verify(event_id, kind, exp, sig)
@@ -431,6 +436,15 @@ def get_photo(
         ip_address=request.client.host if request.client else None,
     )
     db.commit()
+
+    if stored.startswith("media://"):
+        # Новый путь (§11): фото лежит в медиа-сервисе — стримим байты, сырой
+        # storage/Telegram-URL наружу не уходит.
+        media_id = stored[len("media://"):]
+        content, content_type = await media.fetch_file(media_id)
+        return Response(content=content, media_type=content_type)
+
+    # Обратная совместимость: сохранённый сырой storage-URL → redirect.
     return RedirectResponse(url=stored, status_code=status.HTTP_302_FOUND)
 
 
