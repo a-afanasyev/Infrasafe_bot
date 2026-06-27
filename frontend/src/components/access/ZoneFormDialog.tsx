@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import type { CreateZonePayload, OfflineMode, ZoneRow } from '../../types/access'
+import type { CreateZonePayload, OfflineMode, ParkingType, ZoneRow } from '../../types/access'
 
 /**
  * Диалог создания/редактирования зоны. Помимо полей зоны (code/name/description/
@@ -25,6 +25,7 @@ import type { CreateZonePayload, OfflineMode, ZoneRow } from '../../types/access
  * ещё нет id). Поля зоны сохраняются по кнопке submit (POST/PATCH).
  */
 const OFFLINE_MODES: OfflineMode[] = ['fail_closed', 'cached_permanent_only']
+const PARKING_TYPES: ParkingType[] = ['assigned', 'shared']
 
 interface Props {
   open: boolean
@@ -46,6 +47,9 @@ interface FormState {
   description: string
   offlineMode: OfflineMode
   maxPermanent: string
+  parkingType: ParkingType
+  capacity: string
+  maxPermanentVehicles: string
   isActive: boolean
 }
 
@@ -56,6 +60,12 @@ function initialState(zone?: ZoneRow | null): FormState {
     description: zone?.description ?? '',
     offlineMode: zone?.offline_mode ?? 'fail_closed',
     maxPermanent: zone?.max_permanent_per_apartment != null ? String(zone.max_permanent_per_apartment) : '',
+    parkingType: zone?.parking_type ?? 'assigned',
+    capacity: zone?.capacity != null ? String(zone.capacity) : '',
+    maxPermanentVehicles:
+      zone?.max_permanent_vehicles_per_apartment != null
+        ? String(zone.max_permanent_vehicles_per_apartment)
+        : '',
     isActive: zone?.is_active ?? true,
   }
 }
@@ -91,6 +101,8 @@ export default function ZoneFormDialog({
   function handleSubmit() {
     if (!canSubmit) return
     const maxN = Number(form.maxPermanent)
+    const capN = Number(form.capacity)
+    const maxVehN = Number(form.maxPermanentVehicles)
     const payload: CreateZonePayload = {
       code: form.code.trim(),
       name: form.name.trim(),
@@ -98,6 +110,14 @@ export default function ZoneFormDialog({
       description: form.description.trim() || undefined,
       max_permanent_per_apartment:
         form.maxPermanent.trim() && Number.isFinite(maxN) ? maxN : undefined,
+      parking_type: form.parkingType,
+      // Ёмкость имеет смысл только для общей (shared) зоны.
+      capacity:
+        form.parkingType === 'shared' && form.capacity.trim() && Number.isFinite(capN)
+          ? capN
+          : undefined,
+      max_permanent_vehicles_per_apartment:
+        form.maxPermanentVehicles.trim() && Number.isFinite(maxVehN) ? maxVehN : undefined,
       ...(isEdit ? { is_active: form.isActive } : {}),
     }
     onSubmit(payload)
@@ -173,6 +193,52 @@ export default function ZoneFormDialog({
                 onChange={(e) => set({ maxPermanent: e.target.value })}
               />
             </div>
+          </div>
+
+          {/* Парковочные параметры зоны (§14.2). */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="zf-parking-type">
+                {t('accessControl.parking.fields.parkingType')}
+              </Label>
+              <Select
+                id="zf-parking-type"
+                value={form.parkingType}
+                onChange={(e) => set({ parkingType: e.target.value as ParkingType })}
+              >
+                {PARKING_TYPES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`accessControl.parking.parkingType.${p}`)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {form.parkingType === 'shared' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="zf-capacity">{t('accessControl.parking.fields.capacity')}</Label>
+                <Input
+                  id="zf-capacity"
+                  type="number"
+                  min={0}
+                  value={form.capacity}
+                  onChange={(e) => set({ capacity: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="zf-max-vehicles">
+              {t('accessControl.parking.fields.maxPermanentVehicles')}
+            </Label>
+            <Input
+              id="zf-max-vehicles"
+              type="number"
+              min={0}
+              value={form.maxPermanentVehicles}
+              onChange={(e) => set({ maxPermanentVehicles: e.target.value })}
+              placeholder={t('accessControl.parking.fields.maxPermanentVehiclesPlaceholder')}
+            />
           </div>
 
           {isEdit && (

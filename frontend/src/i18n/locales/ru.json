@@ -116,6 +116,7 @@
       "rejected": "Отклонена",
       "revoked": "Отозван",
       "expired": "Истёк",
+      "inactive": "Неактивно",
       "pending": "Ожидает",
       "pending_review": "Ручная проверка"
     },
@@ -412,6 +413,71 @@
         "commandCreated": "Создана ({{id}})",
         "noCommand": "Не создана",
         "hint": "Событие появилось в live-ленте охраны и в истории проездов."
+      }
+    },
+    "parking": {
+      "tabs": {
+        "spots": "Места",
+        "assignments": "Закрепления"
+      },
+      "addSpot": "Добавить место",
+      "addAssignment": "Закрепить место",
+      "parkingType": {
+        "assigned": "Закреплённые",
+        "shared": "Общая"
+      },
+      "ownershipType": {
+        "owned": "Собственное",
+        "rented": "Аренда"
+      },
+      "fields": {
+        "parkingType": "Тип парковки",
+        "capacity": "Ёмкость",
+        "maxPermanentVehicles": "Лимит постоянных ТС на квартиру",
+        "maxPermanentVehiclesPlaceholder": "Без ограничения, если пусто",
+        "occupancy": "Занятость",
+        "spot": "Место",
+        "apartmentId": "ID квартиры",
+        "ownershipType": "Тип владения",
+        "validFrom": "Действует с",
+        "validUntil": "Действует до"
+      },
+      "filters": {
+        "zone": "Зона",
+        "allZones": "Все зоны",
+        "spot": "Место",
+        "allSpots": "Все места",
+        "apartmentId": "ID квартиры"
+      },
+      "empty": {
+        "spots": "Места не найдены",
+        "assignments": "Закрепления не найдены"
+      },
+      "spotForm": {
+        "createTitle": "Новое место",
+        "editTitle": "Редактирование места"
+      },
+      "assignmentForm": {
+        "title": "Закрепить место",
+        "desc": "Выберите место и квартиру. Для аренды укажите срок действия.",
+        "submit": "Закрепить",
+        "validUntilRequired": "Для аренды укажите срок действия «до»."
+      },
+      "extendForm": {
+        "title": "Продлить закрепление",
+        "desc": "Укажите новый срок действия «до».",
+        "submit": "Продлить"
+      },
+      "actions": {
+        "extend": "Продлить",
+        "revoke": "Отозвать"
+      },
+      "revokeTitle": "Отзыв закрепления",
+      "revokeConfirm": "Отозвать закрепление места «{{spot}}»? Доступ по этому закреплению прекратится.",
+      "toast": {
+        "spotCreated": "Место создано",
+        "assignmentCreated": "Место закреплено",
+        "assignmentRevoked": "Закрепление отозвано"
       }
     }
   },
