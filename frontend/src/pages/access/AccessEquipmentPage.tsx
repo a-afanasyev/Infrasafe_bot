@@ -8,6 +8,7 @@ import EquipmentFormDialog, { type FormField } from '../../components/access/Equ
 import ZoneFormDialog from '../../components/access/ZoneFormDialog'
 import ConfirmDeactivateDialog from '../../components/access/ConfirmDeactivateDialog'
 import ControllerKeyDialog from '../../components/access/ControllerKeyDialog'
+import ControllerTestDialog from '../../components/access/ControllerTestDialog'
 import { AccessStatusBadge } from '../../components/access/AccessBadges'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -407,6 +408,7 @@ function ControllersPanel({ zones, gates }: { zones: ZoneRow[]; gates: GateRow[]
   const [edit, setEdit] = useState<ControllerRow | null>(null)
   const [deactivate, setDeactivate] = useState<ControllerRow | null>(null)
   const [rotateTarget, setRotateTarget] = useState<ControllerRow | null>(null)
+  const [testTarget, setTestTarget] = useState<ControllerRow | null>(null)
   // Показ api_key РОВНО ОДИН РАЗ (создание/ротация) — модалка ControllerKeyDialog.
   const [keyResult, setKeyResult] = useState<{ uid: string; apiKey: string } | null>(null)
 
@@ -451,9 +453,14 @@ function ControllersPanel({ zones, gates }: { zones: ZoneRow[]; gates: GateRow[]
         onEdit={(c) => { setEdit(c); setFormOpen(true) }}
         onDeactivate={setDeactivate}
         extraActions={(c) => (
-          <Button size="sm" variant="outline" onClick={() => setRotateTarget(c)}>
-            {t('accessControl.equipment.rotateKey')}
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={() => setTestTarget(c)}>
+              {t('accessControl.equipment.test.action')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setRotateTarget(c)}>
+              {t('accessControl.equipment.rotateKey')}
+            </Button>
+          </>
         )}
       />
 
@@ -520,6 +527,13 @@ function ControllersPanel({ zones, gates }: { zones: ZoneRow[]; gates: GateRow[]
         controllerUid={keyResult?.uid ?? null}
         apiKey={keyResult?.apiKey ?? null}
         onClose={() => setKeyResult(null)}
+      />
+
+      <ControllerTestDialog
+        controller={testTarget}
+        zones={zones}
+        gates={gates}
+        onClose={() => setTestTarget(null)}
       />
     </PanelShell>
   )

@@ -25,6 +25,8 @@ import type {
   UpdateControllerPayload,
   ControllerCreateResponse,
   RotateKeyResponse,
+  TestEventPayload,
+  TestEventResponse,
 } from '../types/access'
 
 /**
@@ -309,6 +311,27 @@ export function useRotateControllerKey() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['access-controllers'] })
       toast.success(t('accessControl.equipment.toast.keyRotated'))
+    },
+    onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
+  })
+}
+
+/**
+ * Диагностический прогон точки въезда: POST /admin/controllers/{id}/test-event.
+ * Бэкенд прогоняет синтетический ANPR через Decision Engine; событие появляется
+ * и в истории проездов, и в live-ленте охраны — поэтому инвалидируем их кэши.
+ * Результат (decision/команда) возвращается вызывающему (показ в том же диалоге);
+ * тост — только при ошибке.
+ */
+export function useTestControllerEvent() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  return useMutation<TestEventResponse, unknown, { id: number; payload: TestEventPayload }>({
+    mutationFn: ({ id, payload }) =>
+      accessClient.post(`/admin/controllers/${id}/test-event`, payload).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-events'] })
+      qc.invalidateQueries({ queryKey: ['access-passes'] })
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
   })

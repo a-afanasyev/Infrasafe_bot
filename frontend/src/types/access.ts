@@ -446,3 +446,31 @@ export interface RotateKeyResponse {
   controller_uid: string
   api_key: string
 }
+
+/**
+ * Тело POST /admin/controllers/{id}/test-event — синтетическая диагностика
+ * точки въезда. Все поля опциональны (бэкенд подставляет дефолты:
+ * plate_number=DIAG0001, direction=entry, confidence=0.99).
+ */
+export interface TestEventPayload {
+  plate_number?: string
+  direction?: GateDirection
+  confidence?: number
+}
+
+/**
+ * Ответ POST /admin/controllers/{id}/test-event — результат прогона
+ * синтетического ANPR-события через Decision Engine. `command` присутствует,
+ * только если по решению была создана команда шлагбауму.
+ */
+export interface TestEventResponse {
+  decision: string
+  status: string
+  reason: string | null
+  decision_id: number | null
+  event_id: string
+  zone_id: number | null
+  gate_id: number | null
+  barrier_id: number | null
+  command: { command_id: string; barrier_id: number } | null
+}

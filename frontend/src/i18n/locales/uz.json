@@ -390,6 +390,28 @@
         "yardsSaved": "Fazalar bog'lanishi yangilandi",
         "keyRotated": "Kalit yangilandi",
         "duplicate": "Bunday element allaqachon mavjud"
+      },
+      "test": {
+        "action": "Test",
+        "title": "Kirish nuqtasi testi",
+        "subtitle": "Kontroller «{{uid}}»",
+        "desc": "Sintetik o‘tish Decision Engine orqali tekshiriladi — haqiqiy shlagbaum ochilmaydi, lekin hodisa tarix va jonli lentada qayd etiladi.",
+        "plateLabel": "Davlat raqami",
+        "directionLabel": "Yo‘nalish",
+        "confidenceLabel": "Ishonchlilik (0..1)",
+        "run": "Ishga tushirish",
+        "rerun": "Testni takrorlash",
+        "running": "Ishga tushmoqda…",
+        "resultTitle": "Natija",
+        "decisionId": "Qaror IDsi",
+        "eventId": "Hodisa IDsi",
+        "zone": "Hudud",
+        "gate": "Kirish",
+        "barrier": "Shlagbaum",
+        "command": "Buyruq",
+        "commandCreated": "Yaratildi ({{id}})",
+        "noCommand": "Yaratilmadi",
+        "hint": "Hodisa qo‘riqlash jonli lentasida va o‘tishlar tarixida paydo bo‘ldi."
       }
     }
   },

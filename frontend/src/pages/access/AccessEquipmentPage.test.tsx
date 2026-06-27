@@ -11,6 +11,7 @@ import AccessEquipmentPage from './AccessEquipmentPage'
 
 const zone = { id: 5, code: 'Z1', name: 'Зона 1', description: null, offline_mode: 'fail_closed', max_permanent_per_apartment: null, is_active: true, yard_ids: [] }
 const gate = { id: 1, code: 'G1', zone_id: 5, direction: 'entry', name: null, is_active: true }
+const controller = { id: 9, controller_uid: 'ctrl-001', name: null, zone_id: 5, gate_id: 1, offline_mode: 'fail_closed', ip_allowlist: null, pinned_public_key_id: null, status: 'online', is_active: true }
 
 function installCommonHandlers() {
   server.use(
@@ -97,5 +98,81 @@ describe('AccessEquipmentPage — api_key контроллера', () => {
     // Закрываем модалку — ключ исчезает (повторно не показывается).
     fireEvent.click(screen.getByRole('button', { name: 'Готово, я сохранил ключ' }))
     await waitFor(() => expect(screen.queryByText('SECRET-PLAINTEXT-KEY')).not.toBeInTheDocument())
+  })
+})
+
+describe('AccessEquipmentPage — тест точки въезда (диагностика)', () => {
+  beforeEach(() => {
+    server.use(
+      http.get('*/api/v1/access/admin/zones', () =>
+        HttpResponse.json({ items: [zone], total: 1, limit: 50, offset: 0 }),
+      ),
+      http.get('*/api/v1/access/admin/gates', () =>
+        HttpResponse.json({ items: [gate], total: 1, limit: 50, offset: 0 }),
+      ),
+      http.get('*/api/v1/access/admin/cameras', () =>
+        HttpResponse.json({ items: [], total: 0, limit: 50, offset: 0 }),
+      ),
+      http.get('*/api/v1/access/admin/barriers', () =>
+        HttpResponse.json({ items: [], total: 0, limit: 50, offset: 0 }),
+      ),
+      http.get('*/api/v1/access/admin/controllers', () =>
+        HttpResponse.json({ items: [controller], total: 1, limit: 50, offset: 0 }),
+      ),
+    )
+  })
+  afterEach(() => useAuthStore.setState({ user: null, isAuthenticated: false }))
+
+  it('«Тест» открывает диалог, запуск зовёт верный эндпоинт с телом, рендерит решение', async () => {
+    let capturedUrl = ''
+    let capturedBody: unknown = null
+    server.use(
+      http.post('*/api/v1/access/admin/controllers/:id/test-event', async ({ request, params }) => {
+        capturedUrl = String(params.id)
+        capturedBody = await request.json()
+        return HttpResponse.json({
+          decision: 'allow',
+          status: 'allowed',
+          reason: 'permanent_vehicle_allowed',
+          decision_id: 77,
+          event_id: 'evt-diag-1',
+          zone_id: 5,
+          gate_id: 1,
+          barrier_id: 3,
+          command: { command_id: 'cmd-1', barrier_id: 3 },
+        })
+      }),
+    )
+    setRole('system_admin')
+    render(<AccessEquipmentPage />)
+
+    await waitFor(() => expect(screen.getByText('Контроллеры')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Контроллеры'))
+
+    // Строковое действие «Тест» открывает диалог.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Тест' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Тест' }))
+
+    await waitFor(() => expect(screen.getByText('Тест точки въезда')).toBeInTheDocument())
+
+    // Запускаем тест с дефолтным номером DIAG0001.
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить' }))
+
+    // Результат: бейдж решения + ID события из ответа.
+    await waitFor(() => expect(screen.getByText('evt-diag-1')).toBeInTheDocument())
+    expect(screen.getByText('Разрешён')).toBeInTheDocument()
+    expect(screen.getByText(/cmd-1/)).toBeInTheDocument()
+
+    // Эндпоинт и тело запроса корректны.
+    expect(capturedUrl).toBe('9')
+    expect(capturedBody).toMatchObject({ plate_number: 'DIAG0001', direction: 'entry', confidence: 0.99 })
+  })
+
+  it('действие «Тест» скрыто для не-system_admin (manager не видит таб контроллеров)', async () => {
+    setRole('manager')
+    render(<AccessEquipmentPage />)
+    await waitFor(() => expect(screen.getByText('Зоны')).toBeInTheDocument())
+    expect(screen.queryByText('Контроллеры')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Тест' })).not.toBeInTheDocument()
   })
 })
