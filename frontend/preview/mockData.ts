@@ -9,6 +9,12 @@ import type {
   VehicleRow,
   PassRow,
   AccessRequestRow,
+  ZoneRow,
+  GateRow,
+  CameraRow,
+  BarrierRow,
+  ControllerRow,
+  TestEventResponse,
 } from '../src/types/access'
 import type { AccessEvent } from '../src/hooks/useAccessSecurityFeed'
 
@@ -407,3 +413,115 @@ export const requests: AccessRequestRow[] = [
     created_at: minAgo(2400),
   },
 ]
+
+// ── (E) Оборудование — Зоны ──────────────────────────────────────────────────
+export const zones: ZoneRow[] = [
+  {
+    id: 1,
+    code: 'Z-MAIN',
+    name: 'Главный двор',
+    description: 'Центральный въезд комплекса',
+    offline_mode: 'cached_permanent_only',
+    max_permanent_per_apartment: 2,
+    is_active: true,
+    yard_ids: [1, 2],
+  },
+  {
+    id: 2,
+    code: 'Z-PARK',
+    name: 'Подземный паркинг',
+    description: 'Гостевой и резидентский паркинг',
+    offline_mode: 'fail_closed',
+    max_permanent_per_apartment: 1,
+    is_active: true,
+    yard_ids: [3],
+  },
+  {
+    id: 3,
+    code: 'Z-SERV',
+    name: 'Служебная зона',
+    description: null,
+    offline_mode: 'fail_closed',
+    max_permanent_per_apartment: null,
+    is_active: false,
+    yard_ids: [],
+  },
+]
+
+// ── (E) Оборудование — Въезды ────────────────────────────────────────────────
+export const gates: GateRow[] = [
+  { id: 1, code: 'G-MAIN-IN', zone_id: 1, direction: 'entry', name: 'Главный въезд', is_active: true },
+  { id: 2, code: 'G-MAIN-OUT', zone_id: 1, direction: 'exit', name: 'Главный выезд', is_active: true },
+  { id: 3, code: 'G-PARK-IN', zone_id: 2, direction: 'entry', name: 'Въезд в паркинг', is_active: true },
+  { id: 4, code: 'G-SERV-IN', zone_id: 3, direction: 'entry', name: 'Служебный въезд', is_active: false },
+]
+
+// ── (E) Оборудование — Камеры ────────────────────────────────────────────────
+export const cameras: CameraRow[] = [
+  { id: 1, code: 'CAM-01', gate_id: 1, direction: 'entry', name: 'ANPR главный въезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: null, is_active: true },
+  { id: 2, code: 'CAM-02', gate_id: 2, direction: 'exit', name: 'ANPR главный выезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: null, is_active: true },
+  { id: 3, code: 'CAM-03', gate_id: 3, direction: 'entry', name: 'ANPR паркинг', vendor: 'Dahua', model: 'ITC413', attributes: null, is_active: true },
+]
+
+// ── (E) Оборудование — Шлагбаумы ─────────────────────────────────────────────
+export const barriers: BarrierRow[] = [
+  { id: 1, code: 'BAR-01', gate_id: 1, name: 'Шлагбаум главный въезд', relay_type: 'NO', relay_channel: 1, config: null, is_active: true },
+  { id: 2, code: 'BAR-02', gate_id: 2, name: 'Шлагбаум главный выезд', relay_type: 'NO', relay_channel: 2, config: null, is_active: true },
+  { id: 3, code: 'BAR-03', gate_id: 3, name: 'Шлагбаум паркинг', relay_type: 'NC', relay_channel: 1, config: null, is_active: true },
+]
+
+// ── (E) Оборудование — Контроллеры ───────────────────────────────────────────
+export const controllers: ControllerRow[] = [
+  {
+    id: 1,
+    controller_uid: 'ctrl-main-01',
+    name: 'Контроллер главного въезда',
+    zone_id: 1,
+    gate_id: 1,
+    offline_mode: 'cached_permanent_only',
+    ip_allowlist: ['10.0.10.21'],
+    pinned_public_key_id: 'pk-001',
+    status: 'online',
+    is_active: true,
+  },
+  {
+    id: 2,
+    controller_uid: 'ctrl-park-01',
+    name: 'Контроллер паркинга',
+    zone_id: 2,
+    gate_id: 3,
+    offline_mode: 'fail_closed',
+    ip_allowlist: ['10.0.10.22'],
+    pinned_public_key_id: 'pk-002',
+    status: 'online',
+    is_active: true,
+  },
+  {
+    id: 3,
+    controller_uid: 'ctrl-serv-01',
+    name: 'Контроллер служебной зоны',
+    zone_id: 3,
+    gate_id: 4,
+    offline_mode: 'fail_closed',
+    ip_allowlist: null,
+    pinned_public_key_id: null,
+    status: 'offline',
+    is_active: false,
+  },
+]
+
+// ── (E) Демо-ключ контроллера (§11: синтетический, показывается один раз) ─────
+export const demoApiKey = 'ak_test_DEMO000000000000'
+
+// ── (E) Демо-результат теста точки въезда (decision=allow + команда создана) ──
+export const testResult: TestEventResponse = {
+  decision: 'allow',
+  status: 'allowed',
+  reason: 'permanent_vehicle_allowed',
+  decision_id: 7701,
+  event_id: 'evt-diag-7701',
+  zone_id: 1,
+  gate_id: 1,
+  barrier_id: 1,
+  command: { command_id: 'cmd-diag-001', barrier_id: 1 },
+}
