@@ -116,6 +116,8 @@ def create_zone(
     name: str,
     description: str | None = None,
     offline_mode: str | None = None,
+    parking_type: str | None = None,
+    capacity: int | None = None,
     max_permanent_vehicles_per_apartment: int | None = None,
     is_active: bool = True,
     ip_address: str | None = None,
@@ -126,11 +128,14 @@ def create_zone(
         code=code,
         name=name,
         description=description,
+        capacity=capacity,
         max_permanent_vehicles_per_apartment=max_permanent_vehicles_per_apartment,
         is_active=is_active,
     )
     if offline_mode is not None:
         zone.offline_mode = offline_mode
+    if parking_type is not None:
+        zone.parking_type = parking_type
     db.add(zone)
     db.flush()
     write_audit(
