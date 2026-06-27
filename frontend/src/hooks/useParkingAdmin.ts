@@ -36,7 +36,7 @@ function errorStatus(err: unknown): number | undefined {
 }
 
 /** Сериализуемые параметры запроса (без undefined-полей). */
-function cleanParams<T extends Record<string, unknown>>(filters?: T): Record<string, unknown> {
+function cleanParams<T extends object>(filters?: T): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (!filters) return out
   for (const [k, v] of Object.entries(filters)) {
