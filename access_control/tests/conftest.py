@@ -34,9 +34,14 @@ os.environ.setdefault(
 )
 os.environ.setdefault("ACCESS_DEVICE_HMAC_SEED", "pilot-test-hmac-seed")
 os.environ.setdefault("ACCESS_PHOTO_URL_SECRET", "pilot-test-photo-url-secret")
+os.environ.setdefault("ACCESS_CODE_SECRET", "pilot-test-code-secret")
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from access_control.services.code_rate_limit import (
+    InMemoryFailureStore,
+    reset_failure_store,
+)
 from access_control.services.device_auth import (
     InMemoryNonceStore,
     hash_api_key,
@@ -55,6 +60,7 @@ _ACCESS_TABLES = (
     "barrier_commands",
     "manual_openings",
     "access_audit_logs",
+    "access_entry_confirmations",
     "access_events",
     "access_decisions",
     "camera_events",
@@ -181,6 +187,8 @@ def pg_db(_pg_sessionmaker) -> Session:
     # Изоляция anti-replay nonce-store между тестами (§9.1): свежий in-memory store,
     # иначе nonce из одного теста «протекал» бы в другой.
     reset_nonce_store(InMemoryNonceStore())
+    # Изоляция rate-limit счётчиков одноразовых кодов между тестами (§9.3).
+    reset_failure_store(InMemoryFailureStore())
     try:
         yield session
     finally:

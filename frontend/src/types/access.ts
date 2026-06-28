@@ -36,6 +36,9 @@ export interface AccessEventRow {
   // отдаёт их вместе с детальной camera_event (str | null, опц. для совместимости).
   plate_photo_url?: string | null
   overview_photo_url?: string | null
+  // Ответы жителей на спорный въезд (совещательно). Опц.: строка очереди может не
+  // отдавать их — тогда индикатор в карточке очереди не показывается, только в детали.
+  resident_confirmations?: ResidentConfirmation[]
 }
 
 export interface AccessEventsFilters {
@@ -110,11 +113,23 @@ export interface ManualOpeningRow {
   created_at: string
 }
 
+/**
+ * Ответ жителя на спорный въезд (manual_review): совещательный сигнал оператору.
+ * `confirm` — житель подтвердил, что это его/ожидаемый въезд; `deny` — отрицает.
+ * Решение (open/deny) всё равно принимает оператор.
+ */
+export interface ResidentConfirmation {
+  user_id: number
+  response: 'confirm' | 'deny'
+  created_at: string
+}
+
 export interface AccessEventDetail {
   camera_event: CameraEventDetail
   decisions: DecisionRow[]
   barrier_commands: CommandRow[]
   manual_openings: ManualOpeningRow[]
+  resident_confirmations: ResidentConfirmation[]
 }
 
 // ── Авто (база данных) ──────────────────────────────────────────────────────
@@ -237,6 +252,27 @@ export interface ManualOpenResponse {
   ok: boolean
   command_id: string
   barrier_id: number
+}
+
+// ── Погашение одноразового гостевого кода (operator.py, §9.3) ─────────────────
+/** Тело POST /passes/redeem-code — оператор гасит 8-значный код гостя. */
+export interface RedeemCodePayload {
+  code: string
+  barrier_id?: number
+}
+
+/**
+ * Ответ POST /passes/redeem-code (200): код принят, пропуск погашен, команда
+ * шлагбауму создана. Раскрытие после успеха (§9.3): оператору показывается
+ * квартира + тип пропуска. Неверный код → 422 {error:"code_invalid"},
+ * блокировка по числу попыток → 429 {error:"too_many_attempts"} (общие тексты,
+ * без раскрытия деталей).
+ */
+export interface RedeemCodeResponse {
+  apartment_id: number
+  pass_type: string
+  valid_until: string | null
+  command: { command_id: string; barrier_id: number }
 }
 
 // ── Действия менеджера: мутации базы доступа (registry.py) ───────────────────

@@ -58,6 +58,18 @@ class OwnershipType(str, enum.Enum):
     RENTED = "rented"
 
 
+class EntryConfirmationResponse(str, enum.Enum):
+    """access_entry_confirmations.response — ответ жителя на спорный въезд (§9.4).
+
+    Совещательный сигнал: ``confirm`` — это мой/санкционированный въезд,
+    ``deny`` — въезд не мой/не санкционирован. Решение оператора (§9.5) от
+    этого ответа не зависит автоматически.
+    """
+
+    CONFIRM = "confirm"
+    DENY = "deny"
+
+
 class SpotAssignmentStatus(str, enum.Enum):
     """parking_spot_assignments.status."""
 

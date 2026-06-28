@@ -14,6 +14,9 @@ import {
   MapPin,
   MonitorPlay,
   MessageSquare,
+  Smartphone,
+  KeyRound,
+  UserCheck,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -27,7 +30,7 @@ import PassesTable from '@/components/access/PassesTable'
 import RequestsTable from '@/components/access/RequestsTable'
 import AccessPhotos from '@/components/access/AccessPhotos'
 import EquipmentTable, { type EquipmentColumn } from '@/components/access/EquipmentTable'
-import { AccessStatusBadge, ParkingTypeBadge } from '@/components/access/AccessBadges'
+import { AccessStatusBadge, ResidentResponseBadge, ParkingTypeBadge } from '@/components/access/AccessBadges'
 import type {
   AccessEventsFilters as Filters,
   ZoneRow,
@@ -43,6 +46,7 @@ import LiveFeedPreview from './LiveFeedPreview'
 import {
   liveEvents,
   historyEvents,
+  manualReviewEvents,
   vehicles,
   passes,
   requests,
@@ -61,7 +65,9 @@ import {
   RequestReviewApprovePreview,
   ControllerKeyPreview,
   ControllerTestPreview,
+  RedeemCodeResultPreview,
 } from './DialogPreviews'
+import { TwaVehiclesView, TwaPassesView, TwaGuestCodeView } from './TwaPreviews'
 
 /**
  * STANDALONE-превью ВСЕХ экранов контроля доступа на синтетических мок-данных
@@ -289,6 +295,25 @@ function EventDetailSection() {
             <Ctx label="Цвет" value={ev.color ?? '—'} />
           </div>
         </div>
+        {eventDetail.resident_confirmations.length > 0 && (
+          <div>
+            <SubLabel>Ответ жителя</SubLabel>
+            <p className="mt-1 text-[12px] text-text-muted">
+              Совещательно — решение принимает оператор
+            </p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {eventDetail.resident_confirmations.map((rc, i) => (
+                <div
+                  key={`${rc.user_id}-${i}`}
+                  className="flex items-center gap-2 rounded-sm border border-border-default bg-bg-surface px-3 py-2 text-[12px]"
+                >
+                  <span className="text-text-primary">Житель #{rc.user_id}</span>
+                  <ResidentResponseBadge response={rc.response} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )
@@ -564,6 +589,125 @@ function EquipmentSection() {
   )
 }
 
+// ── (F) Житель — TWA (Мини-апп) ───────────────────────────────────────────────
+// Резидентский раздел «Доступ» в Telegram Mini App: мобильная рамка (~390px,
+// тёмная Telegram-тема), три под-вида. Тонкие копии (TwaPreviews) на синтетике.
+function TwaResidentSection() {
+  return (
+    <section className="flex flex-col gap-5">
+      <SectionHeader
+        icon={<Smartphone size={22} />}
+        title="Житель — TWA (Мини-апп)"
+        subtitle="Резидентский раздел «Доступ»: авто, пропуска и одноразовый гостевой код"
+      />
+      <div className="flex flex-wrap gap-6">
+        <div className="flex flex-col gap-2">
+          <SubLabel>Авто (список + заявка + «Мои заявки»)</SubLabel>
+          <TwaVehiclesView />
+        </div>
+        <div className="flex flex-col gap-2">
+          <SubLabel>Пропуска (список + «Заказать пропуск»)</SubLabel>
+          <TwaPassesView />
+        </div>
+        <div className="flex flex-col gap-2">
+          <SubLabel>Гостевой пропуск — одноразовый код</SubLabel>
+          <TwaGuestCodeView />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── (G) Охрана — проверка гостевого кода ──────────────────────────────────────
+// RedeemCodeDialog в open-состоянии с успешным результатом (квартира + тип
+// пропуска + «Шлагбаум открыт»). Тонкая копия тела диалога (RedeemCodeResultPreview).
+function GuestCodeRedeemSection() {
+  return (
+    <section className="flex flex-col gap-5">
+      <SectionHeader
+        icon={<KeyRound size={22} />}
+        title="Охрана — проверка гостевого кода"
+        subtitle="Ввод 8-значного кода → раскрытие квартиры и открытие шлагбаума (§9.3)"
+      />
+      <div>
+        <SubLabel>Диалог проверки кода (успешный результат)</SubLabel>
+        <div className="mt-2">
+          <RedeemCodeResultPreview />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── (H) Спорный въезд — ответ жителя ──────────────────────────────────────────
+// Совещательный сигнал жителя на manual_review: бейдж «Житель подтвердил»
+// (зелёный) в строке очереди и в детали события. Решение принимает оператор.
+function DisputedEntrySection() {
+  const ev = manualReviewEvents[0]
+  return (
+    <section className="flex flex-col gap-5">
+      <SectionHeader
+        icon={<UserCheck size={22} />}
+        title="Спорный въезд — ответ жителя"
+        subtitle="Совещательный сигнал жителя в очереди и детали события — решает оператор"
+      />
+
+      {/* Строка очереди ручной проверки с компактным бейджем ответа жителя. */}
+      <div>
+        <SubLabel>Строка очереди — бейдж ответа жителя</SubLabel>
+        <div className="mt-2 flex flex-wrap items-center gap-4 rounded-default border border-amber-300/60 bg-amber-50/40 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+          <div className="min-w-[220px] flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[15px] font-semibold text-text-primary">
+                {ev.plate_number_normalized}
+              </span>
+              <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                Ожидает 2 мин
+              </span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                Житель подтвердил
+              </span>
+            </div>
+            <div className="mt-0.5 text-[12px] text-text-muted">Зона 1 · Точка 1</div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline">
+              Открыть с причиной
+            </Button>
+            <Button size="sm" variant="outline">
+              Отказать
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Блок «Ответ жителя» из детали события: бейдж + пояснение «совещательно». */}
+      <div>
+        <SubLabel>Деталь события — блок «Ответ жителя»</SubLabel>
+        <div className="mt-2 rounded-default border border-border-default bg-bg-card p-5">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wider text-text-secondary">
+            Ответ жителя
+          </h3>
+          <p className="mt-1 text-[12px] text-text-muted">
+            Совещательно — решение принимает оператор
+          </p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {(ev.resident_confirmations ?? []).map((rc, i) => (
+              <div
+                key={`${rc.user_id}-${i}`}
+                className="flex items-center gap-2 rounded-sm border border-border-default bg-bg-surface px-3 py-2 text-[12px]"
+              >
+                <span className="text-text-primary">Житель #{rc.user_id}</span>
+                <ResidentResponseBadge response={rc.response} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function Preview() {
   return (
     <div className="min-h-screen bg-bg-root p-6">
@@ -579,6 +723,12 @@ export default function Preview() {
         <DatabaseSection />
         <div className="h-px bg-border-default" />
         <EquipmentSection />
+        <div className="h-px bg-border-default" />
+        <TwaResidentSection />
+        <div className="h-px bg-border-default" />
+        <GuestCodeRedeemSection />
+        <div className="h-px bg-border-default" />
+        <DisputedEntrySection />
       </div>
     </div>
   )

@@ -54,6 +54,7 @@ from uk_management_bot.handlers.user_apartments import router as user_apartments
 # Обработчики управления дворами пользователей
 from uk_management_bot.handlers.user_yards_management import router as user_yards_router
 from uk_management_bot.handlers.feedback import router as feedback_router  # Обратная связь
+from uk_management_bot.handlers.access_control import router as access_control_router  # Контроль доступа (ТЗ §6.4)
 
 from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
@@ -372,6 +373,7 @@ async def main():
     dp.include_router(user_verification_router)  # Новый роутер верификации
     dp.include_router(clarification_replies_router)  # Роутер ответов на уточнения
     dp.include_router(feedback_router)  # Обратная связь (перед base_router)
+    dp.include_router(access_control_router)  # Контроль доступа жителя (ТЗ §6.4, перед base_router)
     dp.include_router(base_router)  # base в конце как fallback для общих команд
     
     logger.info("Бот запускается...")
@@ -384,6 +386,7 @@ async def main():
         logger.error(f"Не удалось запустить health check сервер: {e}")
         # Продолжаем работу бота даже если health сервер не запустился
     
+    resident_notify_task = None
     try:
         # Инициализируем планировщик смен
         await initialize_scheduler(bot)
@@ -394,6 +397,14 @@ async def main():
         # Отправляем уведомление о запуске
         await send_startup_notification(bot)
 
+        # Подписчик резидентских уведомлений (access:resident_notify → Telegram).
+        # Best-effort: запускается только при ACCESS_EVENT_BROKER=redis (cross-process),
+        # иначе сам залогирует и вернёт None — бот работает без уведомлений.
+        from uk_management_bot.services.access_notify_subscriber import (
+            start_resident_notify_subscriber,
+        )
+        resident_notify_task = start_resident_notify_subscriber(bot)
+
         # Запускаем бота
         await dp.start_polling(bot)
         
@@ -402,6 +413,17 @@ async def main():
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}")
     finally:
+        # Останавливаем подписчик резидентских уведомлений
+        if resident_notify_task is not None:
+            resident_notify_task.cancel()
+            try:
+                await resident_notify_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Ошибка остановки подписчика уведомлений: {e}")
+            logger.info("Подписчик резидентских уведомлений остановлен")
+
         # Останавливаем планировщик
         try:
             await stop_scheduler()

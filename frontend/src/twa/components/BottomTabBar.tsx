@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, ClipboardList, PlusCircle, CheckCircle, UserCircle } from 'lucide-react'
+import { Home, ClipboardList, PlusCircle, CheckCircle, UserCircle, Car } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
@@ -67,6 +67,7 @@ export function ApplicantTabs() {
     { path: '/twa/app/requests', icon: <ClipboardList size={20} />, label: t('twa.tabs.requests') },
     { path: '/twa/app/create', icon: <PlusCircle size={22} />, label: t('twa.tabs.create') },
     { path: '/twa/app/acceptance', icon: <CheckCircle size={20} />, label: t('twa.tabs.acceptance'), badge: acceptance.length },
+    { path: '/twa/app/access', icon: <Car size={20} />, label: t('twa.tabs.access') },
     { path: '/twa/app/profile', icon: <UserCircle size={20} />, label: t('twa.tabs.profile') },
   ]
   return <BottomTabBar tabs={tabs} />

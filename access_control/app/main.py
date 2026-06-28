@@ -22,6 +22,7 @@ from access_control.api.metrics import prometheus_router as metrics_prometheus_r
 from access_control.api.operator import router as operator_router
 from access_control.api.parking_admin import router as parking_admin_router
 from access_control.api.registry import router as registry_router
+from access_control.api.resident import router as resident_router
 from access_control.api.ws_security import router as ws_security_router
 
 
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(operator_router)
     app.include_router(registry_router)
     app.include_router(management_router)
+    app.include_router(resident_router)
     app.include_router(equipment_admin_router)
     app.include_router(parking_admin_router)
     app.include_router(diagnostics_router)

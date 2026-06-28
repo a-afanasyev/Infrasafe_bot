@@ -135,6 +135,11 @@ def get_main_keyboard_for_role(
             builder.add(KeyboardButton(text=get_text("main_menu.create_request", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.my_requests", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.acceptance", language=language)))  # Кнопка для приёмки выполненных заявок
+        # Контроль доступа (ANPR/шлагбаум, ТЗ §6.4) — личный кабинет жителя.
+        # Только approved-applicant: pending ещё не подтверждён, менеджер/админ
+        # ведут доступ через дашборд.
+        if user_status != "pending" and active_role == "applicant":
+            builder.add(KeyboardButton(text=get_text("main_menu.access_control", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
 

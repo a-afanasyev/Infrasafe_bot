@@ -7078,7 +7078,8 @@
     "switch_role": "🔀 Rolni tanlash",
     "admin_panel": "🔧 Admin panel",
     "acceptance": "✅ Qabul qilish kutilmoqda",
-    "feedback": "📝 Qayta aloqa"
+    "feedback": "📝 Qayta aloqa",
+    "access_control": "🚗 Kirish nazorati"
   },
   "validation": {
     "phone_empty": "Telefon raqami bo'sh bo'lishi mumkin emas",
@@ -8195,5 +8196,85 @@
     "delete_failed": "O'chirishni bajarib bo'lmadi. Keyinroq urinib ko'ring.",
     "request_create_failed": "Ariza yaratib bo'lmadi. Keyinroq urinib ko'ring.",
     "request_process_failed": "Arizani qayta ishlab bo'lmadi. Keyinroq urinib ko'ring."
+  },
+  "access_control": {
+    "notify": {
+      "vehicle_request_resolved": {
+        "approved": "✅ <b>Avtomobil arizangiz tasdiqlandi</b>",
+        "rejected": "❌ <b>Avtomobil arizangiz rad etildi</b>"
+      },
+      "disputed_entry": {
+        "text": "⚠️ <b>Avtomobilingiz bo'yicha bahsli kirish</b> {plate}, hudud {zone}.\n\nBu sizmisiz?",
+        "btn_confirm": "✅ Tasdiqlash",
+        "btn_deny": "❌ Rad etish"
+      },
+      "comment": "\n\n💬 Izoh: {comment}"
+    },
+    "dispute": {
+      "answered_confirm": "Rahmat, javobingiz qabul qilindi: Tasdiqlangan",
+      "answered_deny": "Rahmat, javobingiz qabul qilindi: Rad etilgan",
+      "error": "Javobni qayd etib bo'lmadi: kirish mavjud emas."
+    },
+    "not_resident": "Bo'lim faqat istiqomatchilar uchun.",
+    "menu_title": "🚗 Kirish nazorati\n\nAmalni tanlang:",
+    "btn_vehicles": "🚙 Mening avtolarim",
+    "btn_new_vehicle": "➕ Avtoga ariza",
+    "btn_requests": "📋 Mening arizalarim",
+    "btn_order_pass": "🎫 Ruxsatnoma buyurtma qilish",
+    "btn_passes": "🎟 Mening ruxsatnomalarim",
+    "btn_events": "🚦 O'tishlar",
+    "btn_skip_plate": "⏭ Raqamsiz",
+    "btn_cancel_pass": "❌ Bekor qilish {plate}",
+    "no_apartments": "Sizda tasdiqlangan xonadon yo'q.",
+    "choose_apartment": "Xonadonni tanlang:",
+    "apartment_label": "🏠 Xonadon {number}",
+    "error": "Amalni bajarib bo'lmadi. Qayta urinib ko'ring.",
+    "foreign_apartment": "Bu xonadon sizga tegishli emas.",
+    "foreign_pass": "Bu ruxsatnoma sizga tegishli emas.",
+    "relation": {
+      "owner": "Egasi",
+      "tenant": "Ijarachi",
+      "family": "Oila a'zosi",
+      "service": "Xizmat"
+    },
+    "pass_type": {
+      "taxi": "Taksi",
+      "guest": "Mehmon",
+      "delivery": "Yetkazib berish"
+    },
+    "duration": {
+      "2h": "2 soat",
+      "6h": "6 soat",
+      "24h": "Bir kun",
+      "72h": "3 kun"
+    },
+    "direction": {
+      "entry": "Kirish",
+      "exit": "Chiqish"
+    },
+    "vehicles_title": "🚙 Sizning avtolaringiz:",
+    "vehicles_empty": "Sizda hozircha avto yo'q.",
+    "requests_title": "📋 Sizning arizalaringiz:",
+    "requests_empty": "Sizda hozircha ariza yo'q.",
+    "passes_title": "🎟 Sizning ruxsatnomalaringiz:",
+    "passes_empty": "Sizda hozircha ruxsatnoma yo'q.",
+    "events_title": "🚦 So'nggi o'tishlar:",
+    "events_empty": "Hozircha o'tishlar yo'q.",
+    "vehicle": {
+      "ask_plate": "Avto raqamini kiriting:",
+      "invalid_plate": "Noto'g'ri raqam. Qayta kiriting:",
+      "ask_relation": "Bu avtoga kim bo'lasiz?",
+      "created": "✅ {plate} avto uchun ariza ko'rib chiqishga yuborildi."
+    },
+    "pass": {
+      "ask_type": "Ruxsatnoma turini tanlang:",
+      "ask_plate": "Avto raqamini kiriting (yoki o'tkazib yuboring):",
+      "ask_duration": "Ruxsatnoma qancha muddatga berilsin?",
+      "zone_not_resolved": "Avtoturargoh zonasini aniqlab bo'lmadi. Boshqaruv kompaniyasiga murojaat qiling.",
+      "created": "✅ Ruxsatnoma ({type}) {until} gacha yaratildi.",
+      "created_with_code": "✅ Mehmon ruxsatnomasi {until} gacha yaratildi.\n🔑 Bir martalik kod: {code}\nUni mehmonga bering — kod bir marta ishlaydi va keyin o'chadi.",
+      "not_found": "Ruxsatnoma topilmadi.",
+      "cancelled": "Ruxsatnoma bekor qilindi."
+    }
   }
 }

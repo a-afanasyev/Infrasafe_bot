@@ -55,6 +55,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Копируем папку uk_management_bot в контейнер
 COPY uk_management_bot/ ./uk_management_bot/
 
+# Контроль доступа (ТЗ §6.4): общий доменный слой access_control должен быть в
+# bot-образе — раздел жителя зовёт access_control.services.resident.* в процессе на
+# общей БД (как в Dockerfile.api). Зависимости лёгкие (sqlalchemy + domain-модели,
+# без fastapi) — в том же общем repo.
+COPY access_control ./access_control
+
 # Копируем тесты
 COPY tests/ ./tests/
 

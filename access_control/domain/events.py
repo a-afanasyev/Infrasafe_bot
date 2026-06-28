@@ -43,6 +43,7 @@ from .enums import (
     DecisionStatus,
     DecisionType,
     Direction,
+    EntryConfirmationResponse,
     EventSource,
     in_clause,
 )
@@ -234,6 +235,52 @@ class AccessEvent(Base, HashChainMixin):
         ),
         CheckConstraint(
             in_clause("source", EventSource), name="ck_access_events_source"
+        ),
+    )
+
+
+class AccessEntryConfirmation(Base):
+    """Ответ жителя на спорный въезд (§6.4, §9.4, §16.2).
+
+    СОВЕЩАТЕЛЬНЫЙ сигнал (решение CTO): фиксируется и показывается оператору, но
+    НЕ открывает шлагбаум и НЕ меняет ``access_decisions`` — финальное решение за
+    оператором (§9.5). НЕ append-only (в отличие от журналов/аудита §9.7):
+    допускается upsert «последнего ответа» по ``UNIQUE(decision_id, user_id)`` —
+    житель вправе передумать (confirm→deny). Каждый ответ дополнительно пишет
+    append-only ``access_audit_logs`` (там история сохраняется неизменной).
+    """
+
+    __tablename__ = "access_entry_confirmations"
+
+    id = pk_column()
+    decision_id = Column(
+        ForeignKey("access_decisions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Связь с самим спорным событием (для отчётности/джойнов с camera_events).
+    camera_event_id = Column(
+        ForeignKey("camera_events.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    apartment_id = Column(
+        Integer, ForeignKey("apartments.id", ondelete="SET NULL"), nullable=True
+    )
+    response = Column(String(8), nullable=False)
+    created_at = created_at_column()
+
+    __table_args__ = (
+        CheckConstraint(
+            in_clause("response", EntryConfirmationResponse),
+            name="ck_access_entry_confirmations_response",
+        ),
+        # Один ответ на решение от пользователя; повтор → upsert (последний ответ).
+        UniqueConstraint(
+            "decision_id", "user_id", name="uq_access_entry_confirmations_decision_user"
         ),
     )
 

@@ -116,6 +116,28 @@ export default function ManualReviewQueue({
                 <span className="rounded-full bg-amber-200/70 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[11px] font-medium">
                   {t('accessControl.queue.waiting', { min: mins })}
                 </span>
+                {/* Компактный индикатор ответа жителя (совещательно), если строка
+                    очереди его содержит. Берём последний ответ. Нет данных — скрыто. */}
+                {event.resident_confirmations && event.resident_confirmations.length > 0 && (
+                  (() => {
+                    const last = event.resident_confirmations[event.resident_confirmations.length - 1]
+                    const isConfirm = last.response === 'confirm'
+                    return (
+                      <span
+                        className={
+                          'rounded-full px-2 py-0.5 text-[11px] font-medium ' +
+                          (isConfirm
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300')
+                        }
+                      >
+                        {isConfirm
+                          ? t('accessControl.residentResponse.queueConfirmed')
+                          : t('accessControl.residentResponse.queueDenied')}
+                      </span>
+                    )
+                  })()
+                )}
               </div>
               <div className="mt-0.5 text-[12px] text-text-muted">
                 {location} · {formatDateTime(event.occurred_at ?? event.captured_at)}

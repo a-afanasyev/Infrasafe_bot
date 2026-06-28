@@ -17,6 +17,7 @@ import type {
   SpotRow,
   AssignmentRow,
   TestEventResponse,
+  RedeemCodeResponse,
 } from '../src/types/access'
 import type { AccessEvent } from '../src/hooks/useAccessSecurityFeed'
 
@@ -132,6 +133,7 @@ export const manualReviewEvents: AccessEventRow[] = [
     has_command: false,
     overview_photo_url: overviewPhoto('30B777CD'),
     plate_photo_url: platePhoto('30B777CD'),
+    resident_confirmations: [{ user_id: 45, response: 'confirm', created_at: minAgo(1) }],
   },
   {
     id: 9102,
@@ -194,6 +196,9 @@ export const eventDetail: AccessEventDetail = {
   ],
   barrier_commands: [],
   manual_openings: [],
+  resident_confirmations: [
+    { user_id: 45, response: 'confirm', created_at: minAgo(1) },
+  ],
 }
 
 // ── (A/B) История проездов ───────────────────────────────────────────────────
@@ -580,6 +585,69 @@ export const controllers: ControllerRow[] = [
 
 // ── (E) Демо-ключ контроллера (§11: синтетический, показывается один раз) ─────
 export const demoApiKey = 'ak_test_DEMO000000000000'
+
+// ── (F) Резидентский TWA (Мини-апп) — синтетика для мобильных под-видов ───────
+// Формы — подмножество src/twa/pages/access/types.ts (рендерим тонкими копиями
+// в TwaPreviews, без сети/twaClient). Номера/код вымышленные (§11).
+
+export interface TwaVehicleMock {
+  id: number
+  plate_number_original: string
+  brand: string | null
+  model: string | null
+  color: string | null
+  status: string // active | blocked | inactive
+}
+
+export interface TwaRequestMock {
+  id: number
+  plate: string
+  status: string // pending | approved | rejected
+  created_at: string
+  review_comment: string | null
+}
+
+export interface TwaPassMock {
+  id: number
+  pass_type: string // taxi | guest | delivery
+  plate: string | null
+  valid_until: string
+  used_entries: number
+  max_entries: number
+  status: string // active | revoked | expired | used
+}
+
+// Авто жителя (вкладка «Авто»).
+export const twaVehicles: TwaVehicleMock[] = [
+  { id: 1, plate_number_original: '01A123BC', brand: 'Chevrolet', model: 'Cobalt', color: 'белый', status: 'active' },
+  { id: 2, plate_number_original: '30B777CD', brand: 'Lada', model: 'Vesta', color: 'серебристый', status: 'active' },
+  { id: 3, plate_number_original: '85C456EF', brand: 'Kia', model: 'K5', color: 'чёрный', status: 'blocked' },
+]
+
+// Заявки на постоянное авто жителя (блок «Мои заявки»).
+export const twaVehicleRequests: TwaRequestMock[] = [
+  { id: 51, plate: '50E222JK', status: 'pending', created_at: minAgo(90), review_comment: null },
+  { id: 52, plate: '01A123BC', status: 'approved', created_at: minAgo(2600), review_comment: 'Документы подтверждены' },
+  { id: 53, plate: '85C456EF', status: 'rejected', created_at: minAgo(2400), review_comment: 'Нет договора аренды' },
+]
+
+// Пропуска жителя (вкладка «Пропуска»).
+export const twaPasses: TwaPassMock[] = [
+  { id: 71, pass_type: 'taxi', plate: '10D908GH', valid_until: minAgo(-120), used_entries: 1, max_entries: 2, status: 'active' },
+  { id: 72, pass_type: 'guest', plate: null, valid_until: minAgo(-30), used_entries: 0, max_entries: 1, status: 'active' },
+  { id: 73, pass_type: 'delivery', plate: '40G678NP', valid_until: minAgo(1440), used_entries: 5, max_entries: 5, status: 'expired' },
+]
+
+// Одноразовый гостевой код (§9.3): 8 цифр, plaintext, показывается один раз.
+export const twaGuestCode = '48205173'
+
+// ── (G) Охрана — результат проверки гостевого кода (RedeemCodeResponse) ───────
+export const redeemResult: RedeemCodeResponse = {
+  apartment_id: 45,
+  pass_type: 'guest',
+  valid_until: minAgo(-30),
+  command: { command_id: 'cmd-redeem-7720', barrier_id: 1 },
+}
 
 // ── (E) Демо-результат теста точки въезда (decision=allow + команда создана) ──
 export const testResult: TestEventResponse = {

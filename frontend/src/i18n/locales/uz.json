@@ -219,6 +219,22 @@
       "openedToast": "Shlagbaum ochildi",
       "deniedToast": "O'tish rad etildi"
     },
+    "redeem": {
+      "action": "Mehmon kodini tekshirish",
+      "title": "Mehmon kodini tekshirish",
+      "desc": "Yashovchi mehmonga bergan 8 xonali kodni kiriting.",
+      "codeLabel": "Mehmon kodi",
+      "codePlaceholder": "8 ta raqam",
+      "check": "Tekshirish",
+      "checkAnother": "Boshqa kodni tekshirish",
+      "apartment": "Xonadon",
+      "passType": "Ruxsatnoma turi",
+      "barrierOpened": "Shlagbaum ochildi",
+      "commandId": "Buyruq ID",
+      "errorInvalid": "Kod noto'g'ri yoki yaroqsiz",
+      "errorBlocked": "Urinishlar juda ko'p, keyinroq qayta urinib ko'ring",
+      "errorGeneric": "Kodni tekshirib bo'lmadi"
+    },
     "detail": {
       "title": "Kirish hodisasi",
       "eventId": "Hodisa ID",
@@ -228,6 +244,15 @@
       "decisions": "Qarorlar",
       "commands": "Shlagbaum buyruqlari",
       "manualOpenings": "Qo'lda ochishlar"
+    },
+    "residentResponse": {
+      "title": "Yashovchi javobi",
+      "confirmed": "Tasdiqladi",
+      "denied": "Rad etdi",
+      "advisory": "Maslahat tarzida — qarorni operator qabul qiladi",
+      "resident": "Yashovchi #{{id}}",
+      "queueConfirmed": "Yashovchi tasdiqladi",
+      "queueDenied": "Yashovchi rad etdi"
     },
     "photos": {
       "title": "O'tish fotosi",
@@ -1301,7 +1326,107 @@
       "requests": "Arizalar",
       "create": "Yaratish",
       "acceptance": "Qabul",
+      "access": "Kirish",
       "profile": "Profil"
+    },
+    "access": {
+      "title": "Kirishni boshqarish",
+      "segments": {
+        "vehicles": "Avtomobillar",
+        "passes": "Ruxsatnomalar",
+        "events": "O'tishlar"
+      },
+      "loading": "Yuklanmoqda...",
+      "error": "Yuklab bo'lmadi",
+      "apartment": {
+        "label": "Xonadon",
+        "select": "Xonadonni tanlang",
+        "none": "Tasdiqlangan xonadon yo'q. Kirish faqat o'z xonadoningiz uchun rasmiylashtiriladi."
+      },
+      "vehicles": {
+        "title": "Mening avtomobillarim",
+        "empty": "Hozircha avtomobil yo'q",
+        "requestButton": "Avtomobilga ariza berish",
+        "myRequests": "Mening arizalarim",
+        "requestsEmpty": "Arizalar yo'q"
+      },
+      "vehicleStatus": {
+        "active": "Faol",
+        "blocked": "Bloklangan",
+        "inactive": "Nofaol"
+      },
+      "vehicleRequest": {
+        "title": "Avtomobilga ariza",
+        "plate": "Davlat raqami",
+        "platePlaceholder": "01A123BC",
+        "relation": "Bog'liqlik turi",
+        "brand": "Markasi",
+        "model": "Modeli",
+        "color": "Rangi",
+        "optional": "ixtiyoriy",
+        "submit": "Arizani yuborish",
+        "success": "Ariza ko'rib chiqishga yuborildi",
+        "error": "Arizani yuborib bo'lmadi"
+      },
+      "requestStatus": {
+        "pending": "Ko'rib chiqilmoqda",
+        "approved": "Tasdiqlangan",
+        "rejected": "Rad etilgan"
+      },
+      "relation": {
+        "owner": "Egasi",
+        "tenant": "Ijarachi",
+        "family": "Oila",
+        "service": "Xizmat"
+      },
+      "passes": {
+        "title": "Ruxsatnomalar",
+        "empty": "Ruxsatnomalar yo'q",
+        "newButton": "Ruxsatnoma buyurtirish",
+        "entries": "O'tishlar",
+        "validUntil": "Amal qiladi",
+        "cancel": "Bekor qilish",
+        "cancelConfirm": "Ruxsatnoma bekor qilinsinmi?",
+        "canceled": "Ruxsatnoma bekor qilindi"
+      },
+      "passStatus": {
+        "active": "Faol",
+        "revoked": "Bekor qilingan",
+        "expired": "Muddati o'tgan",
+        "used": "Ishlatilgan"
+      },
+      "passType": {
+        "taxi": "Taksi",
+        "guest": "Mehmon",
+        "delivery": "Yetkazib berish"
+      },
+      "passNew": {
+        "title": "Yangi ruxsatnoma",
+        "type": "Ruxsatnoma turi",
+        "plate": "Davlat raqami",
+        "plateOptional": "Davlat raqami (ixtiyoriy)",
+        "validUntil": "Amal qilish muddati",
+        "submit": "Buyurtirish",
+        "success": "Ruxsatnoma yaratildi",
+        "error": "Ruxsatnoma yaratib bo'lmadi",
+        "zoneError": "Zonani aniqlab bo'lmadi. Boshqaruv kompaniyasiga murojaat qiling.",
+        "code": {
+          "title": "Ruxsatnoma yaratildi",
+          "label": "Mehmon uchun kod",
+          "copy": "Nusxalash",
+          "copied": "Nusxalandi",
+          "hint": "Kodni mehmonga bering. Faqat bir marta ko'rsatiladi — saqlab qoling.",
+          "done": "Tayyor"
+        }
+      },
+      "events": {
+        "title": "O'tishlar",
+        "empty": "Hozircha o'tishlar yo'q",
+        "in": "Kirish",
+        "out": "Chiqish",
+        "allow": "Ruxsat berilgan",
+        "deny": "Rad etilgan"
+      }
     },
     "home": {
       "title": "Ma'lumot",

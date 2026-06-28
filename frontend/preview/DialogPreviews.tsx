@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { KeyRound, AlertTriangle, Copy, FlaskConical } from 'lucide-react'
+import { KeyRound, AlertTriangle, Copy, FlaskConical, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { DecisionBadge } from '@/components/access/AccessBadges'
-import { testResult, demoApiKey } from './mockData'
+import { testResult, demoApiKey, redeemResult } from './mockData'
 
 /**
  * Инлайновые превью диалогов действий (для скриншотов). Реальные диалоги —
@@ -251,10 +251,50 @@ function ControllerTestPreview() {
   )
 }
 
+// ── (6) RedeemCodeDialog — проверка гостевого кода охраной (РЕЗУЛЬТАТ) ─────────
+// Тонкая копия тела диалога в open-состоянии с успешным результатом (§9.3):
+// квартира + тип пропуска + «Шлагбаум открыт» (command_id). Реальный диалог
+// раскрывает это только после мутации redeem — для скриншота копируем вид.
+function RedeemCodeResultPreview() {
+  const { t } = useTranslation()
+  const r = redeemResult
+  return (
+    <DialogCard
+      title={t('accessControl.redeem.title')}
+      titleIcon={<KeyRound size={18} className="text-accent" />}
+      description={t('accessControl.redeem.desc')}
+      footer={
+        <>
+          <Button variant="outline">{t('accessControl.redeem.checkAnother')}</Button>
+          <Button>{t('common.close')}</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3" data-testid="redeem-result">
+        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 size={20} />
+          <span className="text-[15px] font-semibold">{t('accessControl.redeem.barrierOpened')}</span>
+        </div>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[14px]">
+          <dt className="text-text-muted">{t('accessControl.redeem.apartment')}</dt>
+          <dd className="font-semibold text-text-primary">{r.apartment_id}</dd>
+          <dt className="text-text-muted">{t('accessControl.redeem.passType')}</dt>
+          <dd className="text-text-primary">
+            {t(`accessControl.passes.passType.${r.pass_type}`, { defaultValue: r.pass_type })}
+          </dd>
+          <dt className="text-text-muted">{t('accessControl.redeem.commandId')}</dt>
+          <dd className="font-mono text-[13px] text-text-muted break-all">{r.command.command_id}</dd>
+        </dl>
+      </div>
+    </DialogCard>
+  )
+}
+
 export {
   VehicleStatusBlockPreview,
   TaxiPassFormPreview,
   RequestReviewApprovePreview,
   ControllerKeyPreview,
   ControllerTestPreview,
+  RedeemCodeResultPreview,
 }

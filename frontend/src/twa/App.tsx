@@ -22,6 +22,9 @@ import CreatePage from './pages/applicant/CreatePage'
 import AcceptancePage from './pages/applicant/AcceptancePage'
 import ProfilePage from './pages/applicant/ProfilePage'
 import RequestDetailPage from './pages/applicant/RequestDetailPage'
+import AccessPage from './pages/access/AccessPage'
+import VehicleRequestPage from './pages/access/VehicleRequestPage'
+import PassNewPage from './pages/access/PassNewPage'
 
 // Inspector pages
 import InspectorCreatePage from './pages/inspector/CreatePage'
@@ -83,6 +86,12 @@ function TWAContent() {
         <Route path="/app/acceptance" element={<RoleGuard required="applicant" fallback="/twa"><AcceptancePage /><ApplicantTabs /></RoleGuard>} />
         <Route path="/app/profile" element={<RoleGuard required="applicant" fallback="/twa"><ProfilePage /><ApplicantTabs /></RoleGuard>} />
         <Route path="/app/requests/:number" element={<RoleGuard required="applicant" fallback="/twa"><RequestDetailPage /></RoleGuard>} />
+
+        {/* Контроль доступа жителя (ANPR/шлагбаум): авто, пропуска, проезды.
+            applicant-API /api/v1/access/* через twaClient (same-origin в проде). */}
+        <Route path="/app/access" element={<RoleGuard required="applicant" fallback="/twa"><AccessPage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/access/vehicle-request" element={<RoleGuard required="applicant" fallback="/twa"><VehicleRequestPage /></RoleGuard>} />
+        <Route path="/app/access/pass-new" element={<RoleGuard required="applicant" fallback="/twa"><PassNewPage /></RoleGuard>} />
 
         {/* Inspector route — building-level заявка с обхода (двор→дом). */}
         <Route path="/inspector" element={<RoleGuard required="inspector" fallback="/twa"><InspectorCreatePage /></RoleGuard>} />

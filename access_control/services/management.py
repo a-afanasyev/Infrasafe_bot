@@ -41,6 +41,10 @@ from access_control.domain.passes import (
 from access_control.domain.vehicles import Vehicle, VehicleApartment
 from access_control.services.hashchain import next_hash
 from access_control.services.normalization import normalize_plate
+from access_control.services.resident_notify import (
+    KIND_VEHICLE_REQUEST_RESOLVED,
+    publish_resident_notification,
+)
 
 # Направления правила доступа в пилоте — только entry (§10.3, §14.2 п.3).
 PILOT_ALLOWED_DIRECTIONS = ["entry"]
@@ -440,6 +444,9 @@ def review_request(
             replayed=True,
         )
 
+    # Получатель резидентского уведомления — автор заявки (читаем ДО commit).
+    recipient_user_id = req.created_by_user_id
+
     if action == "approve":
         vehicle = _resolve_or_create_vehicle(db, req, actor_user_id)
         if vehicle.status != VehicleStatus.ACTIVE.value:
@@ -489,9 +496,24 @@ def review_request(
         ip_address=ip_address,
     )
     db.commit()
+    final_status = req.status
+
+    # Резидентское уведомление автору заявки (§16.2): ПОСЛЕ commit, best-effort —
+    # сбой публикации не влияет на уже зафиксированное рассмотрение. PD-safe (§11):
+    # полный номер в канал не кладём (бот покажет житель его данные сам).
+    publish_resident_notification(
+        kind=KIND_VEHICLE_REQUEST_RESOLVED,
+        recipient_user_id=recipient_user_id,
+        payload={
+            "request_id": request_id,
+            "status": final_status,
+            "comment": comment,
+        },
+    )
+
     return ReviewOutcome(
         request_id=req.id,
-        status=req.status,
+        status=final_status,
         vehicle_id=result_vehicle_id,
         replayed=False,
     )

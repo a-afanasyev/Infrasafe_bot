@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheck, KeyRound } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { usePageTitle } from '../../hooks/usePageTitle'
+import RedeemCodeDialog from '../../components/access/RedeemCodeDialog'
 import AccessTabBar from '../../components/access/AccessTabBar'
 import AccessLiveFeed from '../../components/access/AccessLiveFeed'
 import ManualReviewQueue from '../../components/access/ManualReviewQueue'
@@ -60,6 +62,7 @@ export default function AccessControlPage() {
   usePageTitle(t('accessControl.title'))
   const [tab, setTab] = useState<Tab>('live')
   const [queueDetailId, setQueueDetailId] = useState<number | null>(null)
+  const [redeemOpen, setRedeemOpen] = useState(false)
 
   const tabs = [
     { key: 'live', label: t('accessControl.tabs.live') },
@@ -69,15 +72,23 @@ export default function AccessControlPage() {
 
   return (
     <div className="p-6 flex flex-col gap-5">
-      <div className="flex items-center gap-2.5">
-        <ShieldCheck className="text-accent" size={22} />
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">{t('accessControl.title')}</h1>
-          <p className="text-[13px] text-text-muted">{t('accessControl.subtitle')}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <ShieldCheck className="text-accent" size={22} />
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary">{t('accessControl.title')}</h1>
+            <p className="text-[13px] text-text-muted">{t('accessControl.subtitle')}</p>
+          </div>
         </div>
+        <Button onClick={() => setRedeemOpen(true)} className="shrink-0">
+          <KeyRound size={16} className="mr-1.5" />
+          {t('accessControl.redeem.action')}
+        </Button>
       </div>
 
       <AccessTabBar tabs={tabs} active={tab} onChange={(k) => setTab(k as Tab)} />
+
+      <RedeemCodeDialog open={redeemOpen} onClose={() => setRedeemOpen(false)} />
 
       {tab === 'live' && <AccessLiveFeed />}
       {tab === 'queue' && (
