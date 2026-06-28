@@ -13,6 +13,7 @@ RBAC (§6.3, §3.2): доступ только ролям ``security_operator``,
 """
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from typing import Literal
 
@@ -20,6 +21,12 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
+from access_control.services.code_rate_limit import (
+    get_failure_store,
+    is_blocked,
+    rate_limit_keys,
+    record_failures,
+)
 from access_control.services.lifecycle import (
     BarrierUnavailableError,
     DecisionIdMismatch,
@@ -31,6 +38,12 @@ from access_control.services.lifecycle import (
     UnknownBarrierError,
     manual_open_barrier,
     resolve_event,
+)
+from access_control.services.one_time_codes import (
+    CodeRedeemError,
+    RedeemResult,
+    hash_code,
+    redeem_code,
 )
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
@@ -120,6 +133,37 @@ class ManualOpenResponse(BaseModel):
     manual_opening_id: int
     command_id: str
     barrier_id: int
+
+
+# Лимит длины кода (§9.3 — ровно 8 цифр; max_length защищает от чрезмерного ввода).
+_CODE_MAX_LEN = 16
+
+
+class RedeemCodeRequest(BaseModel):
+    """Тело погашения одноразового кода (§9.3): код + опциональный barrier."""
+
+    code: str = Field(..., min_length=1, max_length=_CODE_MAX_LEN)
+    barrier_id: int | None = None
+
+    @model_validator(mode="after")
+    def _non_blank(self) -> "RedeemCodeRequest":
+        if not self.code.strip():
+            raise ValueError("code must be non-empty")
+        return self
+
+
+class RedeemCommand(BaseModel):
+    command_id: str
+    barrier_id: int
+
+
+class RedeemCodeResponse(BaseModel):
+    """Ответ успешного погашения (раскрытие квартиры/типа ТОЛЬКО при успехе §9.3)."""
+
+    apartment_id: int
+    pass_type: str
+    valid_until: dt.datetime | None = None
+    command: RedeemCommand
 
 
 @router.post("/events/{event_id}/resolve", response_model=ResolveResponse)
@@ -222,4 +266,60 @@ def post_manual_open(
         manual_opening_id=result.manual_opening_id,
         command_id=result.command_id,
         barrier_id=result.barrier_id,
+    )
+
+
+@router.post("/passes/redeem-code", response_model=RedeemCodeResponse)
+def post_redeem_code(
+    body: RedeemCodeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*OPERATOR_ROLES)),
+) -> RedeemCodeResponse:
+    """Проверить и атомарно погасить одноразовый гостевой код, открыв шлагбаум (§9.3).
+
+    Rate-limit/lockout по operator account + source IP + хэш кода: ≥5 неверных за
+    10 мин → 429 (даже верный код блокируется на время блока). Неудача → ОБЩАЯ
+    ошибка 422 (no enumeration: существование кода/квартиры не раскрывается).
+    Успех → раскрытие квартиры/типа + durable-команда открытия. Код НЕ логируется.
+    """
+    ip = _client_ip(request)
+    # Ключ по ХЭШУ кода, не по самому коду (§9.3 — код не выходит за пределы запроса).
+    code_hash = hash_code(body.code)
+    keys = rate_limit_keys(operator_user_id=user.id, source_ip=ip, code_hash=code_hash)
+    store = get_failure_store()
+    if is_blocked(store, keys):
+        # Блок активен (≥5 неверных за окно) — отклоняем даже верный код.
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"error": "too_many_attempts"},
+        )
+    try:
+        result: RedeemResult = redeem_code(
+            db,
+            code=body.code,
+            operator_user_id=user.id,
+            barrier_id=body.barrier_id,
+            ip_address=ip,
+        )
+    except CodeRedeemError:
+        # Неверный/истёкший/погашенный код → инкремент счётчиков; если порог достигнут
+        # — 429, иначе ОБЩАЯ ошибка (§9.3, no enumeration). Код в ответ не попадает.
+        now_blocked = record_failures(store, keys)
+        if now_blocked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"error": "too_many_attempts"},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "code_invalid", "message": "invalid or expired code"},
+        )
+    return RedeemCodeResponse(
+        apartment_id=result.apartment_id,
+        pass_type=result.pass_type,
+        valid_until=result.valid_until,
+        command=RedeemCommand(
+            command_id=result.command_id, barrier_id=result.barrier_id
+        ),
     )

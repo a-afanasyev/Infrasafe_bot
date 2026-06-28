@@ -8255,6 +8255,7 @@
       "ask_duration": "Ruxsatnoma qancha muddatga berilsin?",
       "zone_not_resolved": "Avtoturargoh zonasini aniqlab bo'lmadi. Boshqaruv kompaniyasiga murojaat qiling.",
       "created": "✅ Ruxsatnoma ({type}) {until} gacha yaratildi.",
+      "created_with_code": "✅ Mehmon ruxsatnomasi {until} gacha yaratildi.\n🔑 Bir martalik kod: {code}\nUni mehmonga bering — kod bir marta ishlaydi va keyin o'chadi.",
       "not_found": "Ruxsatnoma topilmadi.",
       "cancelled": "Ruxsatnoma bekor qilindi."
     }

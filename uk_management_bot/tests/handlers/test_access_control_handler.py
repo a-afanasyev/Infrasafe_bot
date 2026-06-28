@@ -173,7 +173,8 @@ async def test_pass_duration_single_apartment_creates_pass():
     db = _db_with_user(_user(uid=5))
     fake_pass = types.SimpleNamespace(
         pass_type="taxi", valid_until=dt.datetime(2026, 7, 1, 12, 0))
-    with patch.object(ac, "create_resident_pass", return_value=fake_pass) as m:
+    fake_created = types.SimpleNamespace(access_pass=fake_pass, one_time_code=None)
+    with patch.object(ac, "create_resident_pass", return_value=fake_created) as m:
         await ac.ac_pass_duration(cb, st, db, language="ru")
     m.assert_called_once()
     kw = m.call_args.kwargs

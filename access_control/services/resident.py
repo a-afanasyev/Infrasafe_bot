@@ -30,10 +30,14 @@ from dataclasses import dataclass
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
-from access_control.domain.enums import PassStatus, ResidentRequestStatus
+from access_control.domain.enums import PassStatus, PassType, ResidentRequestStatus
 from access_control.domain.passes import AccessPass, ResidentAccessRequest
 from access_control.services.management import write_audit
 from access_control.services.normalization import normalize_plate
+from access_control.services.one_time_codes import generate_code, hash_code
+
+# TTL одноразового гостевого кода (§9.3): не более 30 минут.
+GUEST_CODE_MAX_TTL = dt.timedelta(minutes=30)
 
 # Типы пропусков, которые житель вправе создавать самостоятельно (§6.4). Полный
 # enum (courier/service/contractor/emergency) — служебные, создаются УК/системой.
@@ -60,6 +64,19 @@ class PassNotOwned(Exception):
 
 
 @dataclass(frozen=True)
+class ResidentPassCreated:
+    """Результат создания пропуска: сам пропуск + PLAINTEXT одноразовый код (§9.3).
+
+    ``one_time_code`` НЕ None только для гостевого пропуска без номера — это
+    единственный момент, когда житель видит код (чтобы передать гостю). Код
+    нигде не сохраняется в открытом виде (в БД только HMAC-хэш) и НЕ логируется.
+    """
+
+    access_pass: AccessPass
+    one_time_code: str | None
+
+
+@dataclass(frozen=True)
 class CancelOutcome:
     """Результат отмены пропуска: финальный статус + признак повтора."""
 
@@ -70,6 +87,22 @@ class CancelOutcome:
 
 def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+def _cap_guest_ttl(valid_until: dt.datetime | None) -> dt.datetime:
+    """Ужать срок гостевого кода до ≤ now+30мин (§9.3). Возвращает aware-datetime.
+
+    Запрошенный ``valid_until`` (naive трактуется как UTC) не может превышать
+    ``now + 30 минут``; None или больший срок → cap.
+    """
+    now = _utcnow()
+    cap = now + GUEST_CODE_MAX_TTL
+    vu = valid_until
+    if vu is not None and vu.tzinfo is None:
+        vu = vu.replace(tzinfo=dt.timezone.utc)
+    if vu is None or vu > cap:
+        return cap
+    return vu
 
 
 # --------------------------- владение (§6.4) ---------------------------
@@ -183,18 +216,34 @@ def create_resident_pass(
     max_entries: int = 1,
     zone_id: int | None = None,
     ip_address: str | None = None,
-) -> AccessPass:
-    """Создать временный пропуск жителем (единая модель §5.4, §6.4).
+) -> ResidentPassCreated:
+    """Создать временный пропуск жителем (единая модель §5.4, §6.4, §9.3).
 
     Проверяет владение квартирой, резолвит зону (явный ``zone_id`` или единственная
     обслуживающая зона), нормализует номер (если задан), создаёт ``active``-пропуск
     c ``source='resident'``, ``used_entries=0``. Аудит ``access.resident_pass_create``.
+
+    Гостевой пропуск БЕЗ номера (§9.3): генерируется криптостойкий 8-значный
+    одноразовый код, в БД сохраняется ТОЛЬКО его HMAC-хэш, TTL ужимается до ≤30 мин,
+    ``max_entries=1`` (одноразовый). PLAINTEXT-код возвращается РОВНО ОДИН раз в
+    ``ResidentPassCreated.one_time_code`` (житель передаёт его гостю) и НЕ логируется.
+    Остальные пути (taxi/delivery, guest-с-номером) — прежняя логика по номеру.
     """
     _ensure_owns_apartment(db, actor_user_id, apartment_id)
     resolved_zone = _resolve_zone_id(db, apartment_id, zone_id)
     normalized = None
     if plate_number_original:
         normalized = normalize_plate(plate_number_original).normalized
+
+    # §9.3: гостевой пропуск без номера → одноразовый код вместо номера.
+    one_time_code: str | None = None
+    one_time_code_hash: str | None = None
+    if pass_type == PassType.GUEST.value and not plate_number_original:
+        one_time_code = generate_code()
+        one_time_code_hash = hash_code(one_time_code)
+        valid_until = _cap_guest_ttl(valid_until)
+        max_entries = 1  # одноразовый код
+
     ap = AccessPass(
         apartment_id=apartment_id,
         created_by_user_id=actor_user_id,
@@ -207,6 +256,7 @@ def create_resident_pass(
         max_entries=max_entries,
         used_entries=0,
         status=PassStatus.ACTIVE.value,
+        one_time_code_hash=one_time_code_hash,
         source="resident",
     )
     db.add(ap)
@@ -217,13 +267,15 @@ def create_resident_pass(
         action="access.resident_pass_create",
         entity_type="access_pass",
         entity_id=ap.id,
+        # PD-safe (§11): код НЕ пишем в аудит, только признак его наличия.
         details={"apartment_id": apartment_id, "zone_id": resolved_zone,
-                 "pass_type": pass_type, "max_entries": max_entries},
+                 "pass_type": pass_type, "max_entries": max_entries,
+                 "one_time_code": one_time_code is not None},
         ip_address=ip_address,
     )
     db.commit()
     db.refresh(ap)
-    return ap
+    return ResidentPassCreated(access_pass=ap, one_time_code=one_time_code)
 
 
 def _owns_pass(db: Session, user_id: int, ap: AccessPass) -> bool:

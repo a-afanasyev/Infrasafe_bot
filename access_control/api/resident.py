@@ -138,6 +138,17 @@ class CancelResponse(BaseModel):
     replayed: bool
 
 
+class CreatePassResponse(PassRow):
+    """Ответ создания пропуска: поля пропуска + PLAINTEXT одноразовый код (§9.3).
+
+    ``one_time_code`` присутствует РОВНО ОДИН раз — только для гостевого пропуска
+    без номера (житель передаёт код гостю). В списках (``GET /my/passes``) код
+    НЕ возвращается (там ``PassRow`` без этого поля).
+    """
+
+    one_time_code: str | None = None
+
+
 # ------------------------------ DTO событий ------------------------------
 
 
@@ -336,17 +347,23 @@ def post_request(
 # ------------------------------ WRITE: /passes ------------------------------
 
 
-@router.post("/passes", response_model=PassRow, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/passes", response_model=CreatePassResponse, status_code=status.HTTP_201_CREATED
+)
 def post_pass(
     body: CreateResidentPass,
     request: Request,
     db: Session = Depends(get_db),
     user=Depends(require_approved_roles(*RESIDENT_ROLES)),
-) -> PassRow:
+) -> CreatePassResponse:
     """Создать временный пропуск (§6.4). 403 если квартира не своя; 422 если зона
-    не определена однозначно (нужен ``zone_id``)."""
+    не определена однозначно (нужен ``zone_id``).
+
+    §9.3: гостевой пропуск без номера → в ответе РОВНО ОДИН раз возвращается
+    PLAINTEXT одноразовый код (``one_time_code``); далее он недоступен (в БД хэш).
+    """
     try:
-        ap = create_resident_pass(
+        created = create_resident_pass(
             db,
             actor_user_id=user.id,
             apartment_id=body.apartment_id,
@@ -365,7 +382,8 @@ def post_pass(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"error": "zone_not_resolved", "message": str(exc)},
         )
-    return PassRow(
+    ap = created.access_pass
+    return CreatePassResponse(
         id=ap.id,
         pass_type=ap.pass_type,
         apartment_id=ap.apartment_id,
@@ -380,6 +398,7 @@ def post_pass(
         status=ap.status,
         source=ap.source,
         created_at=ap.created_at,
+        one_time_code=created.one_time_code,
     )
 
 

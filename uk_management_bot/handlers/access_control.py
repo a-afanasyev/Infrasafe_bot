@@ -431,7 +431,7 @@ async def _finalize_pass(message: Message, state: FSMContext, db: Session, *,
         return
     valid_until = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=hours)
     try:
-        ap = create_resident_pass(
+        created = create_resident_pass(
             db,
             actor_user_id=user.id,
             apartment_id=apartment_id,
@@ -448,6 +448,15 @@ async def _finalize_pass(message: Message, state: FSMContext, db: Session, *,
         await state.clear()
         return
     await state.clear()
+    ap = created.access_pass
+    # §9.3: гостевой пропуск без номера → показываем одноразовый код РОВНО ОДИН раз
+    # (житель передаёт его гостю). В БД хранится только хэш, код больше не доступен.
+    if created.one_time_code is not None:
+        await message.answer(
+            get_text("access_control.pass.created_with_code", language=language,
+                     until=_fmt_dt(ap.valid_until), code=created.one_time_code)
+        )
+        return
     await message.answer(
         get_text("access_control.pass.created", language=language,
                  type=get_text(f"access_control.pass_type.{ap.pass_type}", language=language),
