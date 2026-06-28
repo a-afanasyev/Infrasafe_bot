@@ -333,8 +333,11 @@
         "relayChannel": "Канал реле",
         "controllerUid": "UID контроллера",
         "ipAllowlist": "Разрешённые IP",
-        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5",
+        "attributes": "Атрибуты (JSON)",
+        "config": "Конфигурация (JSON)"
       },
+      "jsonInvalid": "Невалидный JSON",
       "offlineMode": {
         "fail_closed": "Закрыто при сбое",
         "cached_permanent_only": "Только кэш постоянных"

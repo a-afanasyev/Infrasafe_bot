@@ -333,8 +333,11 @@
         "relayChannel": "Rele kanali",
         "controllerUid": "Kontroller UID",
         "ipAllowlist": "Ruxsat etilgan IP",
-        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5",
+        "attributes": "Atributlar (JSON)",
+        "config": "Konfiguratsiya (JSON)"
       },
+      "jsonInvalid": "Yaroqsiz JSON",
       "offlineMode": {
         "fail_closed": "Nosozlikda yopiq",
         "cached_permanent_only": "Faqat doimiylar keshi"

@@ -550,6 +550,7 @@ function CamerasPanel({ gates }: { gates: GateRow[] }) {
     { name: 'name', type: 'text', label: t('accessControl.equipment.fields.name') },
     { name: 'vendor', type: 'text', label: t('accessControl.equipment.fields.vendor') },
     { name: 'model', type: 'text', label: t('accessControl.equipment.fields.model') },
+    { name: 'attributes', type: 'json', label: t('accessControl.equipment.fields.attributes'), placeholder: '{ "fps": 25 }' },
     { name: 'is_active', type: 'checkbox', label: t('accessControl.equipment.fields.isActive'), editOnly: true },
   ]
 
@@ -630,6 +631,7 @@ function BarriersPanel({ gates }: { gates: GateRow[] }) {
     { name: 'name', type: 'text', label: t('accessControl.equipment.fields.name') },
     { name: 'relay_type', type: 'text', label: t('accessControl.equipment.fields.relayType') },
     { name: 'relay_channel', type: 'number', label: t('accessControl.equipment.fields.relayChannel') },
+    { name: 'config', type: 'json', label: t('accessControl.equipment.fields.config'), placeholder: '{ "pulse_ms": 500 }' },
     { name: 'is_active', type: 'checkbox', label: t('accessControl.equipment.fields.isActive'), editOnly: true },
   ]
 

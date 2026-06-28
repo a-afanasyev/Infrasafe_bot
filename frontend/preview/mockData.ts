@@ -526,14 +526,14 @@ export const gates: GateRow[] = [
 
 // ── (E) Оборудование — Камеры ────────────────────────────────────────────────
 export const cameras: CameraRow[] = [
-  { id: 1, code: 'CAM-01', gate_id: 1, direction: 'entry', name: 'ANPR главный въезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: null, is_active: true },
+  { id: 1, code: 'CAM-01', gate_id: 1, direction: 'entry', name: 'ANPR главный въезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: { fps: 25, resolution: '1920x1080' }, is_active: true },
   { id: 2, code: 'CAM-02', gate_id: 2, direction: 'exit', name: 'ANPR главный выезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: null, is_active: true },
   { id: 3, code: 'CAM-03', gate_id: 3, direction: 'entry', name: 'ANPR паркинг', vendor: 'Dahua', model: 'ITC413', attributes: null, is_active: true },
 ]
 
 // ── (E) Оборудование — Шлагбаумы ─────────────────────────────────────────────
 export const barriers: BarrierRow[] = [
-  { id: 1, code: 'BAR-01', gate_id: 1, name: 'Шлагбаум главный въезд', relay_type: 'NO', relay_channel: 1, config: null, is_active: true },
+  { id: 1, code: 'BAR-01', gate_id: 1, name: 'Шлагбаум главный въезд', relay_type: 'NO', relay_channel: 1, config: { pulse_ms: 500, auto_close_s: 8 }, is_active: true },
   { id: 2, code: 'BAR-02', gate_id: 2, name: 'Шлагбаум главный выезд', relay_type: 'NO', relay_channel: 2, config: null, is_active: true },
   { id: 3, code: 'BAR-03', gate_id: 3, name: 'Шлагбаум паркинг', relay_type: 'NC', relay_channel: 1, config: null, is_active: true },
 ]

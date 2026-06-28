@@ -71,6 +71,7 @@ class ZoneRow(_Frozen):
     capacity: int | None
     max_permanent_vehicles_per_apartment: int | None
     is_active: bool
+    yard_ids: list[int]
     created_at: dt.datetime
     updated_at: dt.datetime | None
 
@@ -165,12 +166,13 @@ ControllersPage = _page_model("ControllersPage", ControllerRow)
 # ------------------------------ row builders ------------------------------
 
 
-def _zone_row(z) -> ZoneRow:
+def _zone_row(z, yard_ids: list[int] | None = None) -> ZoneRow:
     return ZoneRow(
         id=z.id, code=z.code, name=z.name, description=z.description,
         offline_mode=z.offline_mode, parking_type=z.parking_type, capacity=z.capacity,
         max_permanent_vehicles_per_apartment=z.max_permanent_vehicles_per_apartment,
-        is_active=z.is_active, created_at=z.created_at, updated_at=z.updated_at,
+        is_active=z.is_active, yard_ids=list(yard_ids or []),
+        created_at=z.created_at, updated_at=z.updated_at,
     )
 
 
@@ -286,7 +288,11 @@ def list_zones(
     _user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
 ):
     rows, total = svc.list_zones(db, limit=limit, offset=offset)
-    return ZonesPage(items=[_zone_row(r) for r in rows], total=total, limit=limit, offset=offset)
+    yard_map = svc.get_zone_yard_ids_map(db, [r.id for r in rows])
+    return ZonesPage(
+        items=[_zone_row(r, yard_map.get(r.id, [])) for r in rows],
+        total=total, limit=limit, offset=offset,
+    )
 
 
 @router.post("/zones", response_model=ZoneRow, status_code=status.HTTP_201_CREATED)
@@ -331,7 +337,7 @@ def patch_zone(
         _raise_404(exc)
     except svc.DuplicateCode as exc:
         _raise_409_dup_code(exc)
-    return _zone_row(zone)
+    return _zone_row(zone, svc.get_zone_yard_ids(db, zone.id))
 
 
 @router.post("/zones/{zone_id}/yards", response_model=ZoneYardsResponse)
