@@ -60,6 +60,7 @@ _ACCESS_TABLES = (
     "barrier_commands",
     "manual_openings",
     "access_audit_logs",
+    "access_entry_confirmations",
     "access_events",
     "access_decisions",
     "camera_events",

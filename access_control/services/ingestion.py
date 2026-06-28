@@ -66,6 +66,10 @@ from access_control.services.metrics import (
     observe_ingestion,
 )
 from access_control.services.normalization import normalize_plate
+from access_control.services.resident_notify import (
+    KIND_DISPUTED_ENTRY,
+    publish_resident_notification,
+)
 
 DEFAULT_DEDUP_WINDOW_SECONDS = 10
 DEFAULT_COMMAND_TTL_SECONDS = 120
@@ -490,6 +494,17 @@ def _run_ingest(
     # полного номера/фото). Только для нового решения (replay-пути сюда не доходят).
     _publish_event(data=data, engine=engine, final_status=final_status, normalized=normalized)
 
+    # §6.4/§9.4/§16.2: спорный въезд (pending_review) по номеру авто жителя →
+    # адресное уведомление жителю с просьбой подтвердить (best-effort, ПОСЛЕ commit).
+    if final_status == DecisionStatus.PENDING_REVIEW.value:
+        _notify_disputed_entry(
+            db,
+            decision_id=decision.id,
+            camera_event_id=camera_event_id,
+            zone_id=data.zone_id,
+            normalized=normalized,
+        )
+
     return IngestResult(
         decision=engine.decision,
         status=final_status,
@@ -525,6 +540,52 @@ def _publish_event(
         )
     except Exception:  # noqa: BLE001 — трансляция не критична для приёма события
         logger.exception("access event publish failed (event delivered, broadcast dropped)")
+
+
+def _notify_disputed_entry(
+    db: Session,
+    *,
+    decision_id: int,
+    camera_event_id: int,
+    zone_id: int | None,
+    normalized: str | None,
+) -> None:
+    """Уведомить жителя(ей) о спорном въезде (pending_review) по его авто (§6.4, §9.4).
+
+    Адресат — житель approved-квартиры, к которой active-связью привязан vehicle с
+    этим нормализованным номером. Если номер не сопоставлен с резидентом — адресата
+    нет, ничего не публикуем. Совещательно: уведомление НЕ открывает шлагбаум.
+
+    Best-effort: любой сбой (резолв адресатов, publish) проглатывается с логом без
+    ПД — решение уже зафиксировано (§10.2: вне горячего пути латентности). PD-safe
+    (§11): в канал кладём только маскированный хвост номера и идентификаторы.
+    """
+    if not normalized:
+        return
+    try:
+        # Локальный импорт: resident зависит от management/normalization — избегаем
+        # цикла импорта на уровне модуля ingestion.
+        from access_control.services.resident import disputed_entry_recipient_ids
+
+        recipient_ids = disputed_entry_recipient_ids(db, normalized)
+        if not recipient_ids:
+            return
+        for user_id in recipient_ids:
+            publish_resident_notification(
+                kind=KIND_DISPUTED_ENTRY,
+                recipient_user_id=user_id,
+                payload={
+                    "decision_id": decision_id,
+                    "camera_event_id": camera_event_id,
+                    "zone": zone_id,
+                    "plate_masked": mask_plate(normalized),
+                    "status": DecisionStatus.PENDING_REVIEW.value,
+                },
+            )
+    except Exception:  # noqa: BLE001 — уведомление не критично для приёма события
+        logger.exception(
+            "disputed-entry resident notify failed (decision recorded, notify dropped)"
+        )
 
 
 def ingest_anpr(

@@ -145,11 +145,20 @@ class ManualOpeningRow(_Frozen):
     created_at: dt.datetime
 
 
+class ResidentConfirmationRow(_Frozen):
+    """Совещательный ответ жителя на спорный въезд (§9.4) — оператору на manual_review."""
+
+    user_id: int
+    response: str
+    created_at: dt.datetime
+
+
 class EventDetail(_Frozen):
     camera_event: CameraEventDetail
     decisions: list[DecisionRow]
     barrier_commands: list[CommandRow]
     manual_openings: list[ManualOpeningRow]
+    resident_confirmations: list[ResidentConfirmationRow]
 
 
 class ApartmentLink(_Frozen):
@@ -646,11 +655,28 @@ def get_event(
         ).mappings()
     ]
 
+    resident_confirmations = [
+        ResidentConfirmationRow(
+            user_id=r["user_id"],
+            response=r["response"],
+            created_at=r["created_at"],
+        )
+        for r in db.execute(
+            text(
+                "SELECT user_id, response, created_at "
+                "FROM access_entry_confirmations "
+                "WHERE decision_id IN :dids ORDER BY created_at, id"
+            ).bindparams(bindparam("dids", expanding=True)),
+            {"dids": decision_ids or [-1]},
+        ).mappings()
+    ]
+
     return EventDetail(
         camera_event=camera_event,
         decisions=decisions,
         barrier_commands=commands,
         manual_openings=manual_openings,
+        resident_confirmations=resident_confirmations,
     )
 
 

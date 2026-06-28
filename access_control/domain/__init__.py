@@ -17,6 +17,7 @@ from .commands import BarrierCommand
 from .equipment import AccessBarrier, AccessCamera, AccessGate, EdgeController
 from .events import (
     AccessDecision,
+    AccessEntryConfirmation,
     AccessEvent,
     CameraEvent,
     ControllerSyncEvent,
@@ -49,6 +50,7 @@ __all__ = [
     "CameraEvent",
     "AccessDecision",
     "AccessEvent",
+    "AccessEntryConfirmation",
     "ControllerSyncEvent",
     # commands
     "BarrierCommand",

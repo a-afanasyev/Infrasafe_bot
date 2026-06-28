@@ -30,7 +30,13 @@ from dataclasses import dataclass
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
-from access_control.domain.enums import PassStatus, PassType, ResidentRequestStatus
+from access_control.domain.enums import (
+    EntryConfirmationResponse,
+    PassStatus,
+    PassType,
+    ResidentRequestStatus,
+)
+from access_control.domain.events import AccessDecision
 from access_control.domain.passes import AccessPass, ResidentAccessRequest
 from access_control.services.management import write_audit
 from access_control.services.normalization import normalize_plate
@@ -63,6 +69,14 @@ class PassNotOwned(Exception):
     """Пропуск принадлежит чужой квартире/создан другим пользователем (403)."""
 
 
+class DecisionNotFound(Exception):
+    """Решение спорного въезда не найдено (404)."""
+
+
+class EntryNotOwned(Exception):
+    """Спорный въезд не относится к авто approved-квартиры пользователя (403)."""
+
+
 @dataclass(frozen=True)
 class ResidentPassCreated:
     """Результат создания пропуска: сам пропуск + PLAINTEXT одноразовый код (§9.3).
@@ -83,6 +97,15 @@ class CancelOutcome:
     pass_id: int
     status: str
     replayed: bool
+
+
+@dataclass(frozen=True)
+class EntryConfirmationOutcome:
+    """Результат подтверждения спорного въезда жителем (совещательный сигнал §9.4)."""
+
+    decision_id: int
+    response: str
+    created_at: dt.datetime
 
 
 def _utcnow() -> dt.datetime:
@@ -321,6 +344,135 @@ def cancel_resident_pass(
     db.commit()
     db.refresh(ap)
     return CancelOutcome(pass_id=ap.id, status=ap.status, replayed=False)
+
+
+# --------------------------- спорный въезд (§6.4, §9.4) ---------------------------
+
+
+def disputed_entry_recipient_ids(db: Session, normalized: str) -> list[int]:
+    """user_id жителей approved-квартир, к которым active-связью привязан авто с номером.
+
+    Адресаты уведомления о спорном въезде (§9.4): житель квартиры, к которой
+    относится авто с этим нормализованным номером (vehicle active, не archived;
+    vehicle_apartments active; user_apartments approved). Пусто — адресата нет.
+    """
+    if not normalized:
+        return []
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT ua.user_id "
+            "FROM vehicles v "
+            "JOIN vehicle_apartments va ON va.vehicle_id = v.id AND va.status = 'active' "
+            "JOIN user_apartments ua ON ua.apartment_id = va.apartment_id "
+            "  AND ua.status = 'approved' "
+            "WHERE v.plate_number_normalized = :norm AND v.status <> 'archived'"
+        ),
+        {"norm": normalized},
+    ).scalars()
+    return list(rows)
+
+
+def _owned_apartment_for_plate(
+    db: Session, *, user_id: int, normalized: str
+) -> int | None:
+    """apartment_id approved-квартиры пользователя с active-авто по номеру (или None).
+
+    Граница владения для подтверждения спорного въезда (§6.4): пользователь вправе
+    отвечать, только если номер относится к авто его approved-квартиры. ``None`` —
+    не его авто (→ 403 на границе API).
+    """
+    if not normalized:
+        return None
+    return db.execute(
+        text(
+            "SELECT va.apartment_id "
+            "FROM vehicles v "
+            "JOIN vehicle_apartments va ON va.vehicle_id = v.id AND va.status = 'active' "
+            "JOIN user_apartments ua ON ua.apartment_id = va.apartment_id "
+            "  AND ua.status = 'approved' "
+            "WHERE v.plate_number_normalized = :norm AND v.status <> 'archived' "
+            "  AND ua.user_id = :uid LIMIT 1"
+        ),
+        {"norm": normalized, "uid": user_id},
+    ).scalar()
+
+
+def confirm_disputed_entry(
+    db: Session,
+    *,
+    actor_user_id: int,
+    decision_id: int,
+    response: str,
+    ip_address: str | None = None,
+) -> EntryConfirmationOutcome:
+    """Зафиксировать ответ жителя на спорный въезд (§6.4, §9.4, §16.2). Идемпотентно.
+
+    СОВЕЩАТЕЛЬНО (решение CTO): запись фиксируется и показывается оператору, но
+    решение НЕ меняется и шлагбаум НЕ открывается — финальное решение за оператором
+    (§9.5). Граница владения (§6.4): номер спорного решения должен относиться к
+    авто approved-квартиры пользователя, иначе ``EntryNotOwned`` (403). Повтор →
+    upsert «последнего ответа» по ``UNIQUE(decision_id, user_id)``. Аудит
+    ``access.disputed_entry_response`` без полного номера (§11).
+    """
+    if response not in (
+        EntryConfirmationResponse.CONFIRM.value,
+        EntryConfirmationResponse.DENY.value,
+    ):
+        raise ValueError(f"response must be confirm|deny, got {response!r}")
+
+    decision = db.get(AccessDecision, decision_id)
+    if decision is None:
+        raise DecisionNotFound(f"decision {decision_id} not found")
+
+    normalized = db.execute(
+        text("SELECT plate_number_normalized FROM camera_events WHERE id = :ce"),
+        {"ce": decision.camera_event_id},
+    ).scalar()
+    apartment_id = _owned_apartment_for_plate(
+        db, user_id=actor_user_id, normalized=normalized or ""
+    )
+    if apartment_id is None:
+        raise EntryNotOwned(
+            f"decision {decision_id} does not relate to a vehicle of user "
+            f"{actor_user_id}"
+        )
+
+    row = db.execute(
+        text(
+            "INSERT INTO access_entry_confirmations "
+            "(decision_id, camera_event_id, user_id, apartment_id, response, created_at) "
+            "VALUES (:d, :ce, :u, :a, :r, now()) "
+            "ON CONFLICT (decision_id, user_id) DO UPDATE SET "
+            "  response = EXCLUDED.response, "
+            "  camera_event_id = EXCLUDED.camera_event_id, "
+            "  apartment_id = EXCLUDED.apartment_id, "
+            "  created_at = now() "
+            "RETURNING response, created_at"
+        ),
+        {
+            "d": decision_id,
+            "ce": decision.camera_event_id,
+            "u": actor_user_id,
+            "a": apartment_id,
+            "r": response,
+        },
+    ).mappings().one()
+    write_audit(
+        db,
+        actor_user_id=actor_user_id,
+        action="access.disputed_entry_response",
+        entity_type="access_decision",
+        entity_id=decision_id,
+        # PD-safe (§11): без полного номера — только идентификаторы/ответ.
+        details={"response": response, "apartment_id": apartment_id},
+        ip_address=ip_address,
+    )
+    db.commit()
+    return EntryConfirmationOutcome(
+        decision_id=decision_id,
+        response=row["response"],
+        created_at=row["created_at"],
+    )
 
 
 # --------------------------- READ-хелперы (§6.4) ---------------------------

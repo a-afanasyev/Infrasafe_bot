@@ -40,6 +40,8 @@ ACCESS_RESIDENT_NOTIFY_CHANNEL = "access:resident_notify"
 
 # Виды резидентских уведомлений (контракт для бота-подписчика).
 KIND_VEHICLE_REQUEST_RESOLVED = "vehicle_request_resolved"
+# Спорный въезд (manual_review) по номеру авто жителя — просьба подтвердить (§9.4).
+KIND_DISPUTED_ENTRY = "disputed_entry"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -54,6 +56,8 @@ class ResidentNotification:
     recipient_user_id: int
     request_id: int | None = None
     pass_id: int | None = None
+    decision_id: int | None = None
+    camera_event_id: int | None = None
     status: str | None = None
     plate_masked: str | None = None
     zone: int | None = None
@@ -67,6 +71,8 @@ class ResidentNotification:
             "recipient_user_id": self.recipient_user_id,
             "request_id": self.request_id,
             "pass_id": self.pass_id,
+            "decision_id": self.decision_id,
+            "camera_event_id": self.camera_event_id,
             "status": self.status,
             "plate_masked": self.plate_masked,
             "zone": self.zone,
@@ -81,6 +87,8 @@ class ResidentNotification:
             recipient_user_id=payload.get("recipient_user_id"),
             request_id=payload.get("request_id"),
             pass_id=payload.get("pass_id"),
+            decision_id=payload.get("decision_id"),
+            camera_event_id=payload.get("camera_event_id"),
             status=payload.get("status"),
             plate_masked=payload.get("plate_masked"),
             zone=payload.get("zone"),
@@ -153,6 +161,8 @@ def publish_resident_notification(
             recipient_user_id=recipient_user_id,
             request_id=payload.get("request_id"),
             pass_id=payload.get("pass_id"),
+            decision_id=payload.get("decision_id"),
+            camera_event_id=payload.get("camera_event_id"),
             status=payload.get("status"),
             plate_masked=payload.get("plate_masked"),
             zone=payload.get("zone"),

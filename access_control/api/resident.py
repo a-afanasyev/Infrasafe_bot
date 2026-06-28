@@ -40,11 +40,14 @@ from access_control.api.registry import (
 )
 from access_control.services.resident import (
     ApartmentNotOwned,
+    DecisionNotFound,
+    EntryNotOwned,
     PassNotFound,
     PassNotOwned,
     ZoneNotResolved,
     approved_apartment_ids,
     cancel_resident_pass,
+    confirm_disputed_entry,
     create_resident_pass,
     create_resident_request,
     list_resident_events,
@@ -136,6 +139,27 @@ class CancelResponse(BaseModel):
     pass_id: int
     status: str
     replayed: bool
+
+
+class ConfirmEntryRequest(BaseModel):
+    """Ответ жителя на спорный въезд (§6.4, §9.4): confirm|deny."""
+
+    response: str = Field(..., description="confirm|deny")
+
+    @model_validator(mode="after")
+    def _validate(self) -> "ConfirmEntryRequest":
+        if self.response not in ("confirm", "deny"):
+            raise ValueError("response must be confirm|deny")
+        return self
+
+
+class ConfirmEntryResponse(BaseModel):
+    """Подтверждение зафиксировано (совещательно: шлагбаум НЕ открыт)."""
+
+    ok: bool
+    decision_id: int
+    response: str
+    created_at: dt.datetime
 
 
 class CreatePassResponse(PassRow):
@@ -430,4 +454,48 @@ def post_cancel_pass(
         pass_id=outcome.pass_id,
         status=outcome.status,
         replayed=outcome.replayed,
+    )
+
+
+# ------------------------------ WRITE: /my/entries/{id}/confirm ------------------------------
+
+
+@router.post(
+    "/my/entries/{decision_id}/confirm", response_model=ConfirmEntryResponse
+)
+def post_confirm_entry(
+    body: ConfirmEntryRequest,
+    request: Request,
+    decision_id: int = Path(..., description="access_decisions.id (спорный въезд)"),
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+) -> ConfirmEntryResponse:
+    """Подтвердить/опровергнуть спорный въезд (§6.4, §9.4). Идемпотентно (upsert).
+
+    СОВЕЩАТЕЛЬНО: ответ фиксируется и показывается оператору, но решение НЕ
+    меняется и шлагбаум НЕ открывается — финальное решение за оператором (§9.5).
+    404 если решения нет; 403 если въезд не относится к авто approved-квартиры
+    пользователя.
+    """
+    try:
+        outcome = confirm_disputed_entry(
+            db,
+            actor_user_id=user.id,
+            decision_id=decision_id,
+            response=body.response,
+            ip_address=_client_ip(request),
+        )
+    except DecisionNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="decision not found"
+        )
+    except EntryNotOwned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="entry not owned"
+        )
+    return ConfirmEntryResponse(
+        ok=True,
+        decision_id=outcome.decision_id,
+        response=outcome.response,
+        created_at=outcome.created_at,
     )
