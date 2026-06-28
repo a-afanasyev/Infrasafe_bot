@@ -39,6 +39,23 @@ def _count_allowed(db: Session, zone_id: int, direction: str) -> int:
     )
 
 
+def apartment_open_sessions(db: Session, *, apartment_id: int, zone_id: int) -> int:
+    """Число ОТКРЫТЫХ presence-сессий квартиры в зоне (§10.3) — для UI занятости мест.
+
+    Реальная занятость закреплённых мест квартиры (въезд открыл сессию, выезд/ручное
+    закрытие закрыло). Сравнение с числом активных мест квартиры даёт «свободно/занято».
+    """
+    return int(
+        db.execute(
+            text(
+                "SELECT count(*) FROM vehicle_presence_sessions "
+                "WHERE apartment_id = :a AND zone_id = :z AND status = 'open'"
+            ),
+            {"a": apartment_id, "z": zone_id},
+        ).scalar_one()
+    )
+
+
 def zone_occupancy(db: Session, zone_id: int) -> ZoneOccupancy:
     """Учёт заездов зоны: число разрешённых въездов (минус выездов — задел).
 

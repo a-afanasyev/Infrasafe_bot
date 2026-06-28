@@ -45,6 +45,11 @@ from access_control.services.one_time_codes import (
     hash_code,
     redeem_code,
 )
+from access_control.services.presence import (
+    PresenceCloseResult,
+    PresenceSessionNotFound,
+    close_presence_session,
+)
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
 
@@ -266,6 +271,58 @@ def post_manual_open(
         manual_opening_id=result.manual_opening_id,
         command_id=result.command_id,
         barrier_id=result.barrier_id,
+    )
+
+
+class PresenceCloseRequest(BaseModel):
+    """Тело ручного освобождения места (§8.3): причина закрытия сессии."""
+
+    reason: str = Field(..., min_length=1, max_length=_REASON_MAX_LEN)
+
+    @model_validator(mode="after")
+    def _non_blank(self) -> "PresenceCloseRequest":
+        if not self.reason.strip():
+            raise ValueError("reason must be non-empty")
+        return self
+
+
+class PresenceCloseResponse(BaseModel):
+    session_id: int
+    status: str
+    closed_by_user_id: int | None = None
+    replayed: bool = False
+
+
+@router.post("/presence/{session_id}/close", response_model=PresenceCloseResponse)
+def post_presence_close(
+    body: PresenceCloseRequest,
+    request: Request,
+    session_id: int = Path(..., description="vehicle_presence_sessions.id"),
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*OPERATOR_ROLES)),
+) -> PresenceCloseResponse:
+    """Ручное закрытие presence-сессии (§8.3): «машина уехала, выездной камеры нет».
+
+    Освобождает место assigned-зоны. Идемпотентно (уже закрытая → сохранённый
+    результат). 404 — сессии нет. RBAC: security_operator/manager/system_admin.
+    """
+    try:
+        result: PresenceCloseResult = close_presence_session(
+            db,
+            session_id=session_id,
+            operator_user_id=user.id,
+            close_reason=body.reason.strip(),
+            ip_address=_client_ip(request),
+        )
+    except PresenceSessionNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="presence session not found"
+        )
+    return PresenceCloseResponse(
+        session_id=result.session_id,
+        status=result.status,
+        closed_by_user_id=result.closed_by_user_id,
+        replayed=result.replayed,
     )
 
 

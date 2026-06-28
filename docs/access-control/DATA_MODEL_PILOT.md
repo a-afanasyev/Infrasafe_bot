@@ -11,10 +11,8 @@
 `access_barriers`, `edge_controllers`, `vehicles`, `vehicle_apartments`,
 `access_rules`, `access_passes`, `resident_access_requests`, `camera_events`,
 `access_decisions`, `barrier_commands`, `access_events`, `manual_openings`,
-`access_audit_logs`, `controller_sync_events`.
-
-**НЕ создаётся в пилоте:** `vehicle_presence_sessions` — выезд не детектируется,
-anti-passback/presence выключены (§10.3, §14.2). Появится на этапе оснащения выезда.
+`access_audit_logs`, `controller_sync_events`, `vehicle_presence_sessions`
+(миграция 035 — выезд/presence, §8.3, §10.3).
 
 **Append-only (§9.7):** `access_events`, `access_decisions`, `manual_openings`,
 `access_audit_logs`. (`camera_events`, `controller_sync_events` — фактически
@@ -49,11 +47,13 @@ insert-only/идемпотентны, но §9.7 поимённо требует
 - `access_passes.status`: active|used|expired|revoked
 - `access_decisions.decision`: allow|deny|manual_review
 - `access_decisions.status`: pending_review|allowed|allowed_manually|denied|denied_manually|expired
-- `access_decisions.reason`: permanent_vehicle_allowed|temporary_pass_allowed|assigned_spot_allowed|spot_not_assigned|spot_rental_expired|shared_access_allowed|per_apartment_limit_exceeded|vehicle_not_found|vehicle_blocked|zone_not_allowed|pass_expired|pass_already_used|low_confidence|possible_plate_clone|anti_passback_violation|manual_review_required (anti_passback в пилоте не генерируется)
+- `access_decisions.reason`: permanent_vehicle_allowed|temporary_pass_allowed|assigned_spot_allowed|spot_not_assigned|spot_rental_expired|shared_access_allowed|per_apartment_limit_exceeded|parking_spot_occupied|vehicle_not_found|vehicle_blocked|zone_not_allowed|pass_expired|pass_already_used|low_confidence|possible_plate_clone|anti_passback_violation|manual_review_required (anti_passback в пилоте не генерируется)
 - `parking_zones.parking_type`: assigned|shared (по умолчанию shared)
 - `parking_spots.status`: active|inactive|archived
 - `parking_spot_assignments.ownership_type`: owned|rented
 - `parking_spot_assignments.status`: active|expired|revoked|archived
+- `parking_spot_assignments.enforce_limit`: BOOLEAN (default TRUE) — тумблер лимита мест
+- `vehicle_presence_sessions.status`: open|closed
 - `offline_mode`: fail_closed|cached_permanent_only (пилот — только fail_closed)
 - `edge_controllers.status`: active|inactive|decommissioned
 - `barrier_commands.status`: pending|leased|acked|dead; `command_type`: open_barrier
@@ -114,18 +114,33 @@ barrier_commands (UNIQUE decision_id) → (11) ответ allow|deny|manual_revi
   `apartment_id FK→apartments`, `ownership_type` (owned|rented),
   `valid_from/valid_until TIMESTAMPTZ NULL` (срок аренды),
   `status` (active|expired|revoked|archived, default active),
+  `enforce_limit BOOLEAN NOT NULL default TRUE` (тумблер лимита мест, миграция 035),
   `approved_by_user_id FK→users NULL`, `approved_at`, `created_at/updated_at`.
   `INDEX(apartment_id, status)`, `INDEX(spot_id, status)`. Закрепление — за
   квартирой; авто пользуются местом через `vehicle_apartments`.
+- `vehicle_presence_sessions` (миграция 035, §8.3/§10.3): `id BIGINT PK`,
+  `vehicle_id FK→vehicles`, `apartment_id FK→apartments NULL`,
+  `zone_id FK→parking_zones`, `entered_at`, `exited_at NULL`,
+  `status` (open|closed, default open), `entry_camera_event_id FK→camera_events NULL`,
+  `exit_camera_event_id FK→camera_events NULL`, `closed_by_user_id FK→users NULL`,
+  `close_reason VARCHAR(32) NULL`, `created_at`. `INDEX(zone_id, status)`,
+  `INDEX(apartment_id, zone_id, status)`, частичный
+  `UNIQUE(vehicle_id, zone_id) WHERE status='open'` (одна открытая сессия авто в
+  зоне). **Мутабельна** (open→closed UPDATE) — НЕ append-only.
 
 **Зоно-типная логика Decision Engine (§7, постоянный авто):**
 1. Блокировка авто → `vehicle_blocked` (как раньше).
 2. **Совместимость:** найден активный `access_rule` на зону → allow
    `permanent_vehicle_allowed` (allow-ветка сохранена, держит исходные тесты).
 3. Иначе по `zone.parking_type`:
-   - `assigned`: активное закрепление места квартиры авто в окне дат → allow
-     `assigned_spot_allowed`; есть только просроченное (`valid_until` прошёл) →
-     deny `spot_rental_expired`; закрепления нет → deny `spot_not_assigned`.
+   - `assigned`: активное закрепление места квартиры авто в окне дат →
+     **лимит мест (§10.3)**: если число ОТКРЫТЫХ presence-сессий квартиры в зоне
+     ≥ числа её активных мест И тумблер `enforce_limit` включён на всех активных
+     закреплениях → manual_review `parking_spot_occupied` (НЕ deny — охрана решает,
+     команда не создаётся). Иначе allow `assigned_spot_allowed`. Тумблер снят хотя
+     бы на одном закреплении → лимит не применяется (временная 2-я машина).
+     Есть только просроченное (`valid_until` прошёл) → deny `spot_rental_expired`;
+     закрепления нет → deny `spot_not_assigned`.
    - `shared`: квартира обслуживается зоной → allow `shared_access_allowed`;
      гибкий кап задан и число активных авто квартиры его превышает →
      manual_review `per_apartment_limit_exceeded`; квартира не обслуживается зоной
@@ -141,9 +156,25 @@ barrier_commands (UNIQUE decision_id) → (11) ответ allow|deny|manual_revi
 `occupancy == entries`; вычитание выездов заложено структурно и заработает без
 правок API после оснащения выездных камер.
 
-**Что enforce ёмкости — после выезда:** жёсткой блокировки переполнения
-(`capacity`/реальная занятость) в пилоте НЕТ; появится вместе с
-`vehicle_presence_sessions` (детект выезда, §10.3, §14.2).
+**Выезд и presence (миграция 035, §8.3/§10.3):** выезд приходит как ANPR-событие
+`direction='exit'` (выездные камеры подключатся позже) ИЛИ ручным закрытием
+оператором. Выезд → allow без расхода `max_entries` и без требования активного
+пропуска (§8.3), АТОМАРНО закрывает открытую presence-сессию авто в зоне (та же
+транзакция/advisory-lock, что приём). Разрешённый въезд зарегистрированного авто
+открывает presence-сессию (assigned — для лимита мест; shared — для учёта
+занятости; taxi-pass без авто сессию не открывает). Приём exit идемпотентен по
+`(controller_id, event_id)`; повтор exit ничего не меняет.
+
+**Лимит мест assigned-зоны (enforce):** реализован в пилоте поверх presence —
+число открытых сессий квартиры в зоне сравнивается с числом её активных мест.
+shared-зоны лимит мест НЕ затрагивает (только гибкий кап
+`max_permanent_vehicles_per_apartment`). Жёсткой блокировки ёмкости зоны
+(`capacity`/реальная занятость shared) по-прежнему нет — это учёт заездов.
+
+**Ручное освобождение места:** `POST /api/v1/access/presence/{session_id}/close`
+(RBAC security_operator/manager/system_admin) — закрыть открытую сессию вручную
+(«машина уехала, выездной камеры нет»): `close_reason`, `closed_by_user_id`,
+аудит `access.presence_close`. Идемпотентно (уже закрытая → сохранённый результат).
 
 ## Outbox/lease barrier_commands (§9.2) — кратко
 

@@ -35,6 +35,7 @@ from access_control.domain.enums import (
     DecisionReason,
     DecisionStatus,
     DecisionType,
+    Direction,
     EventSource,
 )
 from access_control.domain.events import AccessDecision
@@ -46,6 +47,7 @@ from access_control.repositories import (
     equipment_repo,
     manual_openings_repo,
     passes_repo,
+    presence_repo,
 )
 from access_control.services.decision_engine import (
     DEFAULT_CONFIDENCE_THRESHOLD,
@@ -267,6 +269,74 @@ def _consume_taxi(db: Session, pass_id: int) -> bool:
     return passes_repo.consume_taxi_entry(db, pass_id)
 
 
+def _decide_exit(db: Session, normalized: str | None) -> EngineDecision:
+    """Решение для выезда (§8.3): всегда allow, без расхода пропуска.
+
+    Выезд не расходует ``max_entries`` и не требует активного пропуска (§8.3).
+    Движок (entry-логика) НЕ вызывается — выезжающий авто не должен получать deny
+    по исчерпанному/просроченному пропуску. Сопоставляем авто по номеру лишь чтобы
+    закрыть его presence-сессию и связать журнал проезда; ``reason`` не выставляем
+    (выезд — не право доступа, а safety/учёт).
+    """
+    vehicle_id = (
+        access_events_repo.vehicle_id_by_plate(db, normalized) if normalized else None
+    )
+    return EngineDecision(
+        decision=DecisionType.ALLOW.value,
+        reason=None,
+        status=DecisionStatus.ALLOWED.value,
+        matched_vehicle_id=vehicle_id,
+    )
+
+
+def _open_presence_session(
+    db: Session,
+    *,
+    data: AnprIngestInput,
+    camera_event_id: int,
+    vehicle_id: int,
+) -> None:
+    """Открыть presence-сессию авто в зоне при разрешённом въезде (§10.3).
+
+    Идемпотентно (ON CONFLICT по открытой сессии авто в зоне). Открываем для любого
+    allow-въезда зарегистрированного авто (assigned — для лимита мест; shared — для
+    учёта занятости). taxi-pass без авто сессию не открывает (vehicle_id NOT NULL).
+    """
+    if data.zone_id is None:
+        return
+    apartment_id = access_events_repo.apartment_for_vehicle(db, vehicle_id)
+    presence_repo.open_session(
+        db,
+        vehicle_id=vehicle_id,
+        apartment_id=apartment_id,
+        zone_id=data.zone_id,
+        entered_at=data.captured_at,
+        entry_camera_event_id=camera_event_id,
+    )
+
+
+def _close_presence_session(
+    db: Session,
+    *,
+    data: AnprIngestInput,
+    camera_event_id: int,
+    vehicle_id: int,
+) -> None:
+    """Закрыть открытую presence-сессию авто в зоне при выезде (§8.3, §10.3).
+
+    Идемпотентно: выезд без зафиксированного въезда / повтор → 0 строк, безвредно.
+    """
+    if data.zone_id is None:
+        return
+    presence_repo.close_open_session_for_vehicle_zone(
+        db,
+        vehicle_id=vehicle_id,
+        zone_id=data.zone_id,
+        exited_at=data.captured_at,
+        exit_camera_event_id=camera_event_id,
+    )
+
+
 def _write_decision(
     db: Session,
     *,
@@ -396,6 +466,10 @@ def _run_ingest(
             reason=scope.violation,
             status=DecisionStatus.DENIED.value,
         )
+    elif data.direction == Direction.EXIT.value:
+        # §8.3: выезд не расходует пропуск и не требует активного пропуска —
+        # entry-логику движка не вызываем, выносим allow и закрываем сессию ниже.
+        engine = _decide_exit(db, normalized)
     else:
         # §10.2: чистое время Decision Engine измеряется отдельно от ingestion/DB.
         with measure(PHASE_DECISION):
@@ -485,6 +559,28 @@ def _run_ingest(
             decision_id=decision.id,
             command_ttl_seconds=command_ttl_seconds,
         )
+
+    # §8.3/§10.3: presence-сессии в той же транзакции.
+    # Выезд (allow) закрывает открытую сессию авто в зоне; разрешённый въезд
+    # зарегистрированного авто открывает её (для лимита мест / учёта занятости).
+    if (
+        engine.decision == DecisionType.ALLOW.value
+        and engine.matched_vehicle_id is not None
+    ):
+        if data.direction == Direction.EXIT.value:
+            _close_presence_session(
+                db,
+                data=data,
+                camera_event_id=camera_event_id,
+                vehicle_id=engine.matched_vehicle_id,
+            )
+        elif final_status == DecisionStatus.ALLOWED.value:
+            _open_presence_session(
+                db,
+                data=data,
+                camera_event_id=camera_event_id,
+                vehicle_id=engine.matched_vehicle_id,
+            )
 
     # §10.2: время записи транзакции (commit round-trip к БД) — отдельная фаза.
     with measure(PHASE_DB):

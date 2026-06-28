@@ -17,6 +17,22 @@ if TYPE_CHECKING:  # избегаем циклического импорта с
     from access_control.services.ingestion import AnprIngestInput
 
 
+def vehicle_id_by_plate(db: Session, normalized: str) -> int | None:
+    """id неархивного авто по нормализованному номеру (для закрытия сессии на выезде).
+
+    Выезд (§8.3) сопоставляет авто, чтобы закрыть его presence-сессию и связать
+    журнал проезда; пропуск при этом не расходуется и активность не требуется.
+    """
+    return db.execute(
+        text(
+            "SELECT id FROM vehicles "
+            "WHERE plate_number_normalized = :p AND status <> 'archived' "
+            "ORDER BY id ASC LIMIT 1"
+        ),
+        {"p": normalized},
+    ).scalar()
+
+
 def apartment_for_vehicle(db: Session, vehicle_id: int) -> int | None:
     """id активной квартиры, привязанной к авто (минимальный id), либо ``None``."""
     return db.execute(

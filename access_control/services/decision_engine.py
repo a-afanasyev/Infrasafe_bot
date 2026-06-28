@@ -34,6 +34,7 @@ from access_control.domain.parking import ParkingSpot, ParkingSpotAssignment
 from access_control.domain.passes import AccessPass, AccessRule
 from access_control.domain.territory import ParkingZone
 from access_control.domain.vehicles import Vehicle, VehicleApartment
+from access_control.repositories import presence_repo
 
 # Порог confidence по умолчанию (конфигурируемый). Ниже — аномалия (§9.4).
 DEFAULT_CONFIDENCE_THRESHOLD = 0.70
@@ -202,9 +203,14 @@ def _decide_assigned(
     zone_id: int | None,
     moment: dt.datetime,
 ) -> EngineDecision:
-    """assigned-зона (§5.1): место закреплено за квартирой авто.
+    """assigned-зона (§5.1, §10.3): место закреплено за квартирой авто.
 
-    allow ``assigned_spot_allowed`` — активное закрепление в окне дат;
+    allow ``assigned_spot_allowed`` — активное закрепление в окне дат и есть
+    свободное место (открытых presence-сессий квартиры в зоне меньше числа её
+    активных мест);
+    manual_review ``parking_spot_occupied`` — все места квартиры заняты (тумблер
+    ``enforce_limit`` включён хотя бы на одном из закреплений); охрана решает,
+    deny не выносим (§10.3, решение владельца);
     deny ``spot_rental_expired`` — есть только просроченное (valid_until прошёл);
     deny ``spot_not_assigned`` — закрепления нет.
     """
@@ -223,12 +229,26 @@ def _decide_assigned(
         )
         .all()
     )
-    active_in_window = any(
-        r.status == "active"
-        and _within_window(moment, r.valid_from, r.valid_until)
+    active_assignments = [
+        r
         for r in rows
-    )
-    if active_in_window:
+        if r.status == "active" and _within_window(moment, r.valid_from, r.valid_until)
+    ]
+    if active_assignments:
+        # Лимит мест (§10.3): применяем, только если тумблер включён на ВСЕХ
+        # активных закреплениях квартиры. Если житель/менеджер снял enforce_limit
+        # хотя бы на одном — лимит для квартиры не действует (временная 2-я машина).
+        enforce_active = all(bool(r.enforce_limit) for r in active_assignments)
+        if enforce_active:
+            spot_count = len(active_assignments)
+            open_sessions = presence_repo.count_open_for_apartment_zone(
+                db, apartment_ids=apartment_ids, zone_id=zone_id
+            )
+            if open_sessions >= spot_count:
+                return _manual_review(
+                    DecisionReason.PARKING_SPOT_OCCUPIED.value,
+                    matched_vehicle_id=vehicle.id,
+                )
         return _allow(
             DecisionReason.ASSIGNED_SPOT_ALLOWED.value,
             matched_vehicle_id=vehicle.id,

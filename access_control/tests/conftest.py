@@ -68,6 +68,7 @@ _ACCESS_TABLES = (
     "access_rules",
     "access_passes",
     "resident_access_requests",
+    "vehicle_presence_sessions",
     "vehicle_apartments",
     "vehicles",
     "parking_spot_assignments",

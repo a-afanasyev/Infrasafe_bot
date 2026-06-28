@@ -1,10 +1,10 @@
 """Ф2: регистрация пилотных моделей access_control на общем Base.metadata.
 
-Проверяет, что импорт доменного пакета регистрирует ровно 18 пилотных таблиц
-(§5.2, DATA_MODEL_PILOT «Scope таблиц») на том же declarative ``Base``, что
-использует alembic env.py и тестовый ``create_all``. Таблица выезда
-``vehicle_presence_sessions`` в пилот НЕ входит (§10.3, §14.2) и не должна
-присутствовать в metadata.
+Проверяет, что импорт доменного пакета регистрирует пилотные таблицы (§5.2,
+DATA_MODEL_PILOT «Scope таблиц») на том же declarative ``Base``, что использует
+alembic env.py и тестовый ``create_all``. Таблица выезда
+``vehicle_presence_sessions`` теперь ВХОДИТ (миграция 035: выезд/presence §8.3,
+§10.3) — итого 19 пилотных таблиц.
 
 Чисто метаданные — без подключения к БД.
 """
@@ -16,7 +16,7 @@ import access_control.domain  # noqa: F401  # pilot tables register on Base
 from uk_management_bot.database.session import Base
 
 
-# 18 пилотных таблиц (DATA_MODEL_PILOT «Scope таблиц»).
+# 19 пилотных таблиц (DATA_MODEL_PILOT «Scope таблиц» + presence, миграция 035).
 PILOT_TABLES = {
     "parking_zones",
     "parking_zone_yards",
@@ -36,19 +36,20 @@ PILOT_TABLES = {
     "manual_openings",
     "access_audit_logs",
     "controller_sync_events",
+    "vehicle_presence_sessions",
 }
 
 
 def test_all_pilot_tables_registered() -> None:
-    """Все 18 пилотных таблиц присутствуют в Base.metadata после импорта."""
+    """Все пилотные таблицы присутствуют в Base.metadata после импорта."""
     tables = set(Base.metadata.tables.keys())
     missing = PILOT_TABLES - tables
     assert not missing, f"не зарегистрированы пилотные таблицы: {sorted(missing)}"
 
 
-def test_presence_sessions_not_in_pilot() -> None:
-    """vehicle_presence_sessions вне пилота (§10.3) — не должно быть в metadata."""
-    assert "vehicle_presence_sessions" not in Base.metadata.tables
+def test_presence_sessions_in_pilot() -> None:
+    """vehicle_presence_sessions ВХОДИТ в пилот с миграции 035 (выезд §8.3, §10.3)."""
+    assert "vehicle_presence_sessions" in Base.metadata.tables
 
 
 def test_camera_events_idempotency_unique() -> None:

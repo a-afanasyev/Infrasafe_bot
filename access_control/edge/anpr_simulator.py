@@ -132,6 +132,27 @@ class AnprSimulator:
         headers["content-type"] = "application/json"
         return self._client.post(ANPR_PATH, content=body, headers=headers)
 
+    def send_exit(
+        self,
+        *,
+        plate: str,
+        event_id: str | None = None,
+        captured_at: dt.datetime | None = None,
+        confidence: float = 0.95,
+    ):
+        """Отправить синтетическое событие ВЫЕЗДА (``direction='exit'``) для e2e (§8.3).
+
+        Выезд закрывает presence-сессию авто и не расходует пропуск (§8.3, §10.3).
+        Тонкая обёртка над ``send`` с фиксированным направлением exit.
+        """
+        return self.send(
+            plate=plate,
+            event_id=event_id,
+            captured_at=captured_at,
+            direction=Direction.EXIT.value,
+            confidence=confidence,
+        )
+
     def send_photos(
         self,
         *,
