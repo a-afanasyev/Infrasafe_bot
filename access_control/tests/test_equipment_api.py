@@ -507,6 +507,41 @@ def test_zone_attach_and_detach_yards(pg_db) -> None:
     assert rem.json()["yard_ids"] == [y2]
 
 
+def test_zones_list_includes_yard_ids(pg_db) -> None:
+    """GET /admin/zones отдаёт yard_ids привязанных фаз; новая зона → []."""
+    uid = _u(pg_db, "manager")
+    c = _client(uid, "manager")
+    zone = _create_zone(c)
+
+    # Сразу после создания — пустой список (поле присутствует, не отсутствует).
+    page0 = c.get("/api/v1/access/admin/zones").json()
+    row0 = next(z for z in page0["items"] if z["id"] == zone["id"])
+    assert row0["yard_ids"] == []
+
+    y1 = _seed_yard(pg_db)
+    y2 = _seed_yard(pg_db)
+    c.post(f"/api/v1/access/admin/zones/{zone['id']}/yards", json={"add": [y1, y2]})
+
+    page = c.get("/api/v1/access/admin/zones").json()
+    row = next(z for z in page["items"] if z["id"] == zone["id"])
+    assert sorted(row["yard_ids"]) == sorted([y1, y2])
+
+
+def test_zone_patch_returns_yard_ids(pg_db) -> None:
+    """PATCH /admin/zones/{id} тоже отдаёт актуальные yard_ids."""
+    uid = _u(pg_db, "manager")
+    c = _client(uid, "manager")
+    zone = _create_zone(c)
+    y1 = _seed_yard(pg_db)
+    c.post(f"/api/v1/access/admin/zones/{zone['id']}/yards", json={"add": [y1]})
+
+    resp = c.patch(
+        f"/api/v1/access/admin/zones/{zone['id']}", json={"name": "Переименована"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["yard_ids"] == [y1]
+
+
 def test_zone_attach_unknown_yard_422(pg_db) -> None:
     uid = _u(pg_db, "manager")
     c = _client(uid, "manager")

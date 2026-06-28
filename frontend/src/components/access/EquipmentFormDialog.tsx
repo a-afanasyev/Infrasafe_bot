@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 
@@ -19,11 +20,20 @@ import { Select } from '@/components/ui/select'
  * пустые text/number/csv → не отправляются (бэкенд принимает их опционально).
  *
  * Зоны используют отдельный ZoneFormDialog (привязка фаз). JSON-поля
- * (attributes/config) в пилоте не редактируются — вне scope формы.
+ * (attributes камер / config шлагбаумов) редактируются типом 'json': textarea,
+ * пустое → не шлём; невалидный JSON (или не-объект) → ошибка под полем + submit
+ * заблокирован; валидный → парсится в объект и уходит в payload.
  */
 // 'numberSelect' — выпадающий список, значение которого отправляется числом
 // (напр. zone_id/gate_id: опции строковые, payload — number).
-export type FieldType = 'text' | 'number' | 'select' | 'numberSelect' | 'checkbox' | 'csv'
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'select'
+  | 'numberSelect'
+  | 'checkbox'
+  | 'csv'
+  | 'json'
 
 export interface FormField {
   name: string
@@ -55,7 +65,27 @@ interface Props {
 function toFieldValue(type: FieldType, raw: unknown): FieldValue {
   if (type === 'checkbox') return raw === undefined ? true : Boolean(raw)
   if (type === 'csv') return Array.isArray(raw) ? raw.join(', ') : raw == null ? '' : String(raw)
+  if (type === 'json') {
+    if (raw == null) return ''
+    // Префилл: объект → pretty-JSON; строку оставляем как есть.
+    return typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2)
+  }
   return raw == null ? '' : String(raw)
+}
+
+/** Распарсить JSON-объект. Пустое → ok без значения; не-объект/ошибка → невалидно. */
+function parseJsonObject(raw: string): { ok: boolean; value?: Record<string, unknown> } {
+  const s = raw.trim()
+  if (!s) return { ok: true }
+  try {
+    const parsed = JSON.parse(s)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return { ok: false }
+    }
+    return { ok: true, value: parsed as Record<string, unknown> }
+  } catch {
+    return { ok: false }
+  }
 }
 
 function buildInitialState(fields: FormField[], initial?: Record<string, unknown> | null): FormState {
@@ -96,7 +126,15 @@ export default function EquipmentFormDialog({
     const v = form[f.name]
     return typeof v === 'string' ? v.trim().length > 0 : true
   })
-  const canSubmit = requiredOk && !loading
+  // Ошибки JSON-полей (по текущему значению формы) — для подписи и блокировки submit.
+  const jsonErrors: Record<string, boolean> = {}
+  for (const f of visibleFields) {
+    if (f.type === 'json' && !parseJsonObject(String(form[f.name] ?? '')).ok) {
+      jsonErrors[f.name] = true
+    }
+  }
+  const jsonOk = Object.keys(jsonErrors).length === 0
+  const canSubmit = requiredOk && jsonOk && !loading
 
   function handleSubmit() {
     if (!canSubmit) return
@@ -115,6 +153,9 @@ export default function EquipmentFormDialog({
           .map((p) => p.trim())
           .filter(Boolean)
         if (parts.length > 0) payload[f.name] = parts
+      } else if (f.type === 'json') {
+        const parsed = parseJsonObject(String(v))
+        if (parsed.value !== undefined) payload[f.name] = parsed.value
       } else {
         const s = String(v).trim()
         if (s) payload[f.name] = s
@@ -146,6 +187,27 @@ export default function EquipmentFormDialog({
                   />
                   {f.label}
                 </label>
+              )
+            }
+            if (f.type === 'json') {
+              const hasError = jsonErrors[f.name]
+              return (
+                <div key={f.name} className="flex flex-col gap-1.5">
+                  <Label htmlFor={id}>{f.label}</Label>
+                  <Textarea
+                    id={id}
+                    rows={4}
+                    value={String(form[f.name] ?? '')}
+                    onChange={(e) => set(f.name, e.target.value)}
+                    placeholder={f.placeholder}
+                    className="font-mono text-[12px]"
+                  />
+                  {hasError && (
+                    <span className="text-[12px] text-red">
+                      {t('accessControl.equipment.jsonInvalid')}
+                    </span>
+                  )}
+                </div>
               )
             }
             if (f.type === 'select' || f.type === 'numberSelect') {

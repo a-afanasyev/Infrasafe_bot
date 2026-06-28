@@ -30,7 +30,7 @@ import PassesTable from '@/components/access/PassesTable'
 import RequestsTable from '@/components/access/RequestsTable'
 import AccessPhotos from '@/components/access/AccessPhotos'
 import EquipmentTable, { type EquipmentColumn } from '@/components/access/EquipmentTable'
-import { AccessStatusBadge, ResidentResponseBadge } from '@/components/access/AccessBadges'
+import { AccessStatusBadge, ResidentResponseBadge, ParkingTypeBadge } from '@/components/access/AccessBadges'
 import type {
   AccessEventsFilters as Filters,
   ZoneRow,
@@ -38,6 +38,8 @@ import type {
   CameraRow,
   BarrierRow,
   ControllerRow,
+  SpotRow,
+  AssignmentRow,
 } from '@/types/access'
 
 import LiveFeedPreview from './LiveFeedPreview'
@@ -54,6 +56,8 @@ import {
   cameras,
   barriers,
   controllers,
+  spots,
+  assignments,
 } from './mockData'
 import {
   VehicleStatusBlockPreview,
@@ -409,6 +413,8 @@ function EquipmentSection() {
   const [tab, setTab] = useState('zones')
   const tabs = [
     { key: 'zones', label: 'Зоны' },
+    { key: 'spots', label: 'Места' },
+    { key: 'assignments', label: 'Закрепления' },
     { key: 'gates', label: 'Въезды' },
     { key: 'cameras', label: 'Камеры' },
     { key: 'barriers', label: 'Шлагбаумы' },
@@ -423,13 +429,38 @@ function EquipmentSection() {
     const z = zones.find((z) => z.id === id)
     return z ? `${z.code} — ${z.name}` : `#${id}`
   }
+  const zoneCode = (id: number) => zones.find((z) => z.id === id)?.code ?? `#${id}`
+  const spotCell = (id: number) => {
+    const s = spots.find((s) => s.id === id)
+    return s ? `${zoneCode(s.zone_id)} · ${s.code}` : `#${id}`
+  }
+  const ownership = (o: string) => (o === 'owned' ? 'Собственное' : 'Аренда')
+  // Мок-занятость для shared-зон (в боевом UI подтягивается с occupancy-эндпоинта).
+  const occupancyMock: Record<number, string> = { 2: '57 / 80' }
 
   const zoneCols: EquipmentColumn<ZoneRow>[] = [
     { key: 'code', label: 'Код', render: (z) => <span className="font-mono font-semibold">{z.code}</span> },
     { key: 'name', label: 'Название', render: (z) => z.name },
+    { key: 'parking_type', label: 'Тип парковки', render: (z) => <ParkingTypeBadge type={z.parking_type ?? 'assigned'} /> },
+    { key: 'occupancy', label: 'Занятость', render: (z) => (z.parking_type === 'shared' ? <span className="font-mono">{occupancyMock[z.id] ?? '—'}</span> : <span className="text-text-muted">—</span>) },
     { key: 'offline', label: 'Offline-режим', render: (z) => offline(z.offline_mode) },
     { key: 'max', label: 'Лимит постоянных', render: (z) => dash(z.max_permanent_per_apartment) },
     { key: 'status', label: 'Статус', render: (z) => <AccessStatusBadge status={z.is_active ? 'active' : 'archived'} /> },
+  ]
+
+  const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleString() : '—')
+  const spotCols: EquipmentColumn<SpotRow>[] = [
+    { key: 'code', label: 'Код', render: (s) => <span className="font-mono font-semibold">{s.code}</span> },
+    { key: 'zone', label: 'Зона', render: (s) => zoneLabel(s.zone_id) },
+    { key: 'status', label: 'Статус', render: (s) => <AccessStatusBadge status={s.status} /> },
+  ]
+  const assignmentCols: EquipmentColumn<AssignmentRow>[] = [
+    { key: 'spot', label: 'Место', render: (a) => <span className="font-mono">{spotCell(a.spot_id)}</span> },
+    { key: 'apartment', label: 'ID квартиры', render: (a) => `#${a.apartment_id}` },
+    { key: 'ownership', label: 'Тип владения', render: (a) => ownership(a.ownership_type) },
+    { key: 'from', label: 'Действует с', render: (a) => fmtDate(a.valid_from) },
+    { key: 'until', label: 'Действует до', render: (a) => fmtDate(a.valid_until) },
+    { key: 'status', label: 'Статус', render: (a) => <AccessStatusBadge status={a.status} /> },
   ]
   const gateCols: EquipmentColumn<GateRow>[] = [
     { key: 'code', label: 'Код', render: (g) => <span className="font-mono font-semibold">{g.code}</span> },
@@ -472,6 +503,40 @@ function EquipmentSection() {
           <SubLabel>Зоны</SubLabel>
           <div className="mt-2">
             <EquipmentTable rows={zones} columns={zoneCols} emptyText="" onEdit={noop} onDeactivate={noop} />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <SubLabel>Места</SubLabel>
+            <Button size="sm" className="gap-1.5">
+              <Plus size={16} />
+              Добавить место
+            </Button>
+          </div>
+          <div className="mt-2">
+            <EquipmentTable rows={spots} columns={spotCols} emptyText="" onEdit={noop} onDeactivate={noop} />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <SubLabel>Закрепления</SubLabel>
+            <Button size="sm" className="gap-1.5">
+              <Plus size={16} />
+              Закрепить место
+            </Button>
+          </div>
+          <div className="mt-2">
+            <EquipmentTable
+              rows={assignments}
+              columns={assignmentCols}
+              emptyText=""
+              extraActions={() => (
+                <>
+                  <Button size="sm" variant="outline">Продлить</Button>
+                  <Button size="sm" variant="destructive">Отозвать</Button>
+                </>
+              )}
+            />
           </div>
         </div>
         <div>

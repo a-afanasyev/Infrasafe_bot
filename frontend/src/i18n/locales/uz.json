@@ -116,6 +116,7 @@
       "rejected": "Rad etildi",
       "revoked": "Bekor qilindi",
       "expired": "Muddati tugadi",
+      "inactive": "Faol emas",
       "pending": "Kutilmoqda",
       "pending_review": "Qo'lda tekshiruv"
     },
@@ -357,8 +358,11 @@
         "relayChannel": "Rele kanali",
         "controllerUid": "Kontroller UID",
         "ipAllowlist": "Ruxsat etilgan IP",
-        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5"
+        "ipAllowlistPlaceholder": "192.168.1.10, 10.0.0.5",
+        "attributes": "Atributlar (JSON)",
+        "config": "Konfiguratsiya (JSON)"
       },
+      "jsonInvalid": "Yaroqsiz JSON",
       "offlineMode": {
         "fail_closed": "Nosozlikda yopiq",
         "cached_permanent_only": "Faqat doimiylar keshi"
@@ -437,6 +441,71 @@
         "commandCreated": "Yaratildi ({{id}})",
         "noCommand": "Yaratilmadi",
         "hint": "Hodisa qo‘riqlash jonli lentasida va o‘tishlar tarixida paydo bo‘ldi."
+      }
+    },
+    "parking": {
+      "tabs": {
+        "spots": "Joylar",
+        "assignments": "Biriktirishlar"
+      },
+      "addSpot": "Joy qo'shish",
+      "addAssignment": "Joyni biriktirish",
+      "parkingType": {
+        "assigned": "Biriktirilgan",
+        "shared": "Umumiy"
+      },
+      "ownershipType": {
+        "owned": "Shaxsiy",
+        "rented": "Ijara"
+      },
+      "fields": {
+        "parkingType": "Parking turi",
+        "capacity": "Sig'imi",
+        "maxPermanentVehicles": "Kvartiraga doimiy TVlar chegarasi",
+        "maxPermanentVehiclesPlaceholder": "Bo'sh bo'lsa — cheklovsiz",
+        "occupancy": "Bandligi",
+        "spot": "Joy",
+        "apartmentId": "Kvartira ID",
+        "ownershipType": "Egalik turi",
+        "validFrom": "Boshlanish",
+        "validUntil": "Tugash"
+      },
+      "filters": {
+        "zone": "Zona",
+        "allZones": "Barcha zonalar",
+        "spot": "Joy",
+        "allSpots": "Barcha joylar",
+        "apartmentId": "Kvartira ID"
+      },
+      "empty": {
+        "spots": "Joylar topilmadi",
+        "assignments": "Biriktirishlar topilmadi"
+      },
+      "spotForm": {
+        "createTitle": "Yangi joy",
+        "editTitle": "Joyni tahrirlash"
+      },
+      "assignmentForm": {
+        "title": "Joyni biriktirish",
+        "desc": "Joy va kvartirani tanlang. Ijara uchun muddatni ko'rsating.",
+        "submit": "Biriktirish",
+        "validUntilRequired": "Ijara uchun «tugash» muddatini ko'rsating."
+      },
+      "extendForm": {
+        "title": "Biriktirishni uzaytirish",
+        "desc": "Yangi «tugash» muddatini ko'rsating.",
+        "submit": "Uzaytirish"
+      },
+      "actions": {
+        "extend": "Uzaytirish",
+        "revoke": "Bekor qilish"
+      },
+      "revokeTitle": "Biriktirishni bekor qilish",
+      "revokeConfirm": "«{{spot}}» joyining biriktirilishini bekor qilasizmi? Ushbu biriktirish bo'yicha ruxsat to'xtatiladi.",
+      "toast": {
+        "spotCreated": "Joy yaratildi",
+        "assignmentCreated": "Joy biriktirildi",
+        "assignmentRevoked": "Biriktirish bekor qilindi"
       }
     }
   },

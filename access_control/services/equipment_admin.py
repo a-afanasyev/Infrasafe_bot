@@ -116,6 +116,8 @@ def create_zone(
     name: str,
     description: str | None = None,
     offline_mode: str | None = None,
+    parking_type: str | None = None,
+    capacity: int | None = None,
     max_permanent_vehicles_per_apartment: int | None = None,
     is_active: bool = True,
     ip_address: str | None = None,
@@ -126,11 +128,14 @@ def create_zone(
         code=code,
         name=name,
         description=description,
+        capacity=capacity,
         max_permanent_vehicles_per_apartment=max_permanent_vehicles_per_apartment,
         is_active=is_active,
     )
     if offline_mode is not None:
         zone.offline_mode = offline_mode
+    if parking_type is not None:
+        zone.parking_type = parking_type
     db.add(zone)
     db.flush()
     write_audit(
@@ -175,6 +180,34 @@ def update_zone(
     db.commit()
     db.refresh(zone)
     return zone
+
+
+def get_zone_yard_ids(db: Session, zone_id: int) -> list[int]:
+    """yard_ids привязанных к зоне фаз (parking_zone_yards), отсортированы."""
+    rows = db.execute(
+        text("SELECT yard_id FROM parking_zone_yards WHERE zone_id = :z ORDER BY yard_id"),
+        {"z": zone_id},
+    ).scalars()
+    return list(rows)
+
+
+def get_zone_yard_ids_map(
+    db: Session, zone_ids: list[int]
+) -> dict[int, list[int]]:
+    """Batch: {zone_id: [yard_id, ...]} для набора зон (один запрос). Пустые — []."""
+    result: dict[int, list[int]] = {zid: [] for zid in zone_ids}
+    if not zone_ids:
+        return result
+    rows = db.execute(
+        text(
+            "SELECT zone_id, yard_id FROM parking_zone_yards "
+            "WHERE zone_id = ANY(:zs) ORDER BY zone_id, yard_id"
+        ),
+        {"zs": list(zone_ids)},
+    ).all()
+    for zid, yid in rows:
+        result.setdefault(zid, []).append(yid)
+    return result
 
 
 def set_zone_yards(
