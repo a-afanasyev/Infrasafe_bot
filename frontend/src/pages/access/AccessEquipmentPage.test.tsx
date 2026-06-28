@@ -30,6 +30,12 @@ function installCommonHandlers() {
     http.get('*/api/v1/access/admin/controllers', () =>
       HttpResponse.json({ items: [], total: 0, limit: 50, offset: 0 }),
     ),
+    http.get('*/api/v1/access/admin/spots', () =>
+      HttpResponse.json({ items: [], total: 0, limit: 50, offset: 0 }),
+    ),
+    http.get('*/api/v1/access/admin/spot-assignments', () =>
+      HttpResponse.json({ items: [], total: 0, limit: 50, offset: 0 }),
+    ),
   )
 }
 
@@ -49,6 +55,20 @@ describe('AccessEquipmentPage — гейтинг табов по роли', () =
     expect(screen.queryByText('Камеры')).not.toBeInTheDocument()
     expect(screen.queryByText('Шлагбаумы')).not.toBeInTheDocument()
     expect(screen.queryByText('Контроллеры')).not.toBeInTheDocument()
+  })
+
+  it('manager видит парковочные табы «Места» и «Закрепления»', async () => {
+    setRole('manager')
+    render(<AccessEquipmentPage />)
+    await waitFor(() => expect(screen.getByText('Зоны')).toBeInTheDocument())
+    expect(screen.getByText('Места')).toBeInTheDocument()
+    expect(screen.getByText('Закрепления')).toBeInTheDocument()
+
+    // Переход на «Закрепления» показывает кнопку «Закрепить место».
+    fireEvent.click(screen.getByText('Закрепления'))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Закрепить место' })).toBeInTheDocument(),
+    )
   })
 
   it('system_admin видит все 5 табов', async () => {

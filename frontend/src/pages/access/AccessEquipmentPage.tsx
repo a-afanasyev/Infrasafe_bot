@@ -9,9 +9,15 @@ import ZoneFormDialog from '../../components/access/ZoneFormDialog'
 import ConfirmDeactivateDialog from '../../components/access/ConfirmDeactivateDialog'
 import ControllerKeyDialog from '../../components/access/ControllerKeyDialog'
 import ControllerTestDialog from '../../components/access/ControllerTestDialog'
-import { AccessStatusBadge } from '../../components/access/AccessBadges'
+import SpotAssignmentFormDialog, {
+  ExtendAssignmentDialog,
+} from '../../components/access/SpotAssignmentFormDialog'
+import { AccessStatusBadge, ParkingTypeBadge } from '../../components/access/AccessBadges'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { useHasRole } from '../../hooks/useHasRole'
 import {
   useAccessZones,
@@ -32,12 +38,23 @@ import {
   useUpdateController,
   useRotateControllerKey,
 } from '../../hooks/useAccessEquipment'
+import {
+  useAccessSpots,
+  useCreateSpot,
+  useUpdateSpot,
+  useAccessSpotAssignments,
+  useCreateSpotAssignment,
+  useUpdateSpotAssignment,
+  useZoneOccupancy,
+} from '../../hooks/useParkingAdmin'
 import type {
   ZoneRow,
   GateRow,
   CameraRow,
   BarrierRow,
   ControllerRow,
+  SpotRow,
+  AssignmentRow,
 } from '../../types/access'
 
 /**
@@ -49,10 +66,33 @@ import type {
  * Route уже закрыт ACCESS_MANAGER_ROLES (App.tsx) — здесь дополнительный гейтинг
  * табов/действий по system_admin (useHasRole).
  */
-type Tab = 'zones' | 'gates' | 'cameras' | 'barriers' | 'controllers'
+type Tab = 'zones' | 'spots' | 'assignments' | 'gates' | 'cameras' | 'barriers' | 'controllers'
 
 function dash(v: unknown): React.ReactNode {
   return v === null || v === undefined || v === '' ? '—' : String(v)
+}
+
+/** Дата ISO → локальная короткая строка (или прочерк). */
+function fmtDate(v: string | null): React.ReactNode {
+  if (!v) return '—'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? v : d.toLocaleString()
+}
+
+// Ячейка занятости shared-зоны (occupancy/capacity). Для assigned-зон — прочерк.
+function ZoneOccupancyCell({ zone }: { zone: ZoneRow }) {
+  const isShared = zone.parking_type === 'shared'
+  const { data, isLoading } = useZoneOccupancy(zone.id, isShared)
+  if (!isShared) return <span className="text-text-muted">—</span>
+  if (isLoading) return <span className="text-text-muted">…</span>
+  const cap = data?.capacity ?? zone.capacity ?? null
+  if (!data) return <span className="text-text-muted">—</span>
+  return (
+    <span className="font-mono">
+      {data.occupancy}
+      {cap != null ? ` / ${cap}` : ''}
+    </span>
+  )
 }
 
 // ── Зоны ──────────────────────────────────────────────────────────────────────
@@ -74,6 +114,8 @@ function ZonesPanel({ canManage }: { canManage: boolean }) {
   const columns: EquipmentColumn<ZoneRow>[] = [
     { key: 'code', label: t('accessControl.equipment.fields.code'), render: (z) => <span className="font-mono font-semibold">{z.code}</span> },
     { key: 'name', label: t('accessControl.equipment.fields.name'), render: (z) => z.name },
+    { key: 'parking_type', label: t('accessControl.parking.fields.parkingType'), render: (z) => <ParkingTypeBadge type={z.parking_type ?? 'assigned'} /> },
+    { key: 'occupancy', label: t('accessControl.parking.fields.occupancy'), render: (z) => <ZoneOccupancyCell zone={z} /> },
     { key: 'offline', label: t('accessControl.equipment.fields.offlineMode'), render: (z) => t(`accessControl.equipment.offlineMode.${z.offline_mode}`, { defaultValue: z.offline_mode }) },
     { key: 'max', label: t('accessControl.equipment.fields.maxPermanent'), render: (z) => dash(z.max_permanent_per_apartment) },
     { key: 'yards', label: t('accessControl.equipment.zoneForm.yardsLabel'), render: (z) => (z.yard_ids && z.yard_ids.length ? z.yard_ids.map((y) => `#${y}`).join(', ') : '—') },
@@ -140,6 +182,256 @@ function ZonesPanel({ canManage }: { canManage: boolean }) {
                 { onSuccess: () => setDeactivate(null) },
               )
             }}
+          />
+        </>
+      )}
+    </PanelShell>
+  )
+}
+
+// ── Места (parking_spots) ─────────────────────────────────────────────────────
+function SpotsPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[] }) {
+  const { t } = useTranslation()
+  const [zoneFilter, setZoneFilter] = useState('')
+  const filters = zoneFilter ? { zone_id: Number(zoneFilter) } : undefined
+  const { data, isLoading, isError } = useAccessSpots(filters)
+  const create = useCreateSpot()
+  const update = useUpdateSpot()
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [edit, setEdit] = useState<SpotRow | null>(null)
+  const [deactivate, setDeactivate] = useState<SpotRow | null>(null)
+
+  const rows = data?.items ?? []
+  const zoneLabel = (id: number) => {
+    const z = zones.find((z) => z.id === id)
+    return z ? `${z.code} — ${z.name}` : `#${id}`
+  }
+  const zoneOptions = zones.map((z) => ({ value: String(z.id), label: `${z.code} — ${z.name}` }))
+  const statusOptions = (['active', 'inactive', 'archived'] as const).map((s) => ({
+    value: s,
+    label: t(`accessControl.status.${s}`),
+  }))
+
+  const fields: FormField[] = [
+    { name: 'zone_id', type: 'numberSelect', label: t('accessControl.equipment.fields.zone'), required: true, options: zoneOptions },
+    { name: 'code', type: 'text', label: t('accessControl.equipment.fields.code'), required: true },
+    { name: 'status', type: 'select', label: t('accessControl.columns.status'), required: true, options: statusOptions, editOnly: true },
+  ]
+
+  const columns: EquipmentColumn<SpotRow>[] = [
+    { key: 'code', label: t('accessControl.equipment.fields.code'), render: (s) => <span className="font-mono font-semibold">{s.code}</span> },
+    { key: 'zone', label: t('accessControl.equipment.fields.zone'), render: (s) => zoneLabel(s.zone_id) },
+    { key: 'status', label: t('accessControl.columns.status'), render: (s) => <AccessStatusBadge status={s.status} /> },
+  ]
+
+  return (
+    <PanelShell
+      canManage={canManage}
+      addLabel={t('accessControl.parking.addSpot')}
+      onAdd={() => { setEdit(null); setFormOpen(true) }}
+      isLoading={isLoading}
+      isError={isError}
+    >
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="spot-zone-filter">{t('accessControl.parking.filters.zone')}</Label>
+          <Select
+            id="spot-zone-filter"
+            value={zoneFilter}
+            onChange={(e) => setZoneFilter(e.target.value)}
+            className="w-[220px]"
+          >
+            <option value="">{t('accessControl.parking.filters.allZones')}</option>
+            {zoneOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </Select>
+        </div>
+      </div>
+
+      <EquipmentTable
+        rows={rows}
+        columns={columns}
+        emptyIcon="🅿️"
+        emptyText={t('accessControl.parking.empty.spots')}
+        onEdit={canManage ? (s) => { setEdit(s); setFormOpen(true) } : undefined}
+        onDeactivate={canManage ? setDeactivate : undefined}
+      />
+
+      {canManage && (
+        <>
+          <EquipmentFormDialog
+            open={formOpen}
+            title={edit ? t('accessControl.parking.spotForm.editTitle') : t('accessControl.parking.spotForm.createTitle')}
+            fields={fields}
+            initial={edit as Record<string, unknown> | null}
+            loading={edit ? update.isPending : create.isPending}
+            onClose={() => setFormOpen(false)}
+            onSubmit={(payload) => {
+              if (edit) {
+                // PATCH /admin/spots/{id} принимает только code/status.
+                update.mutate(
+                  { id: edit.id, payload: { code: payload.code as string, status: payload.status as SpotRow['status'] } },
+                  { onSuccess: () => setFormOpen(false) },
+                )
+              } else {
+                create.mutate(payload as never, { onSuccess: () => setFormOpen(false) })
+              }
+            }}
+          />
+          <ConfirmDeactivateDialog
+            open={deactivate !== null}
+            label={deactivate?.code ?? ''}
+            loading={update.isPending}
+            onClose={() => setDeactivate(null)}
+            onConfirm={() => {
+              if (!deactivate) return
+              update.mutate(
+                { id: deactivate.id, payload: { status: 'inactive' } },
+                { onSuccess: () => setDeactivate(null) },
+              )
+            }}
+          />
+        </>
+      )}
+    </PanelShell>
+  )
+}
+
+// ── Закрепления (spot_assignments) ────────────────────────────────────────────
+function AssignmentsPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[] }) {
+  const { t } = useTranslation()
+  // Все места — для select закрепления, фильтра и подписи строк.
+  const spotsQuery = useAccessSpots()
+  const spots = spotsQuery.data?.items ?? []
+
+  const [spotFilter, setSpotFilter] = useState('')
+  const [apartmentFilter, setApartmentFilter] = useState('')
+  const apartmentNum = Number(apartmentFilter)
+  const filters = {
+    ...(spotFilter ? { spot_id: Number(spotFilter) } : {}),
+    ...(apartmentFilter.trim() && Number.isFinite(apartmentNum) ? { apartment_id: apartmentNum } : {}),
+  }
+  const { data, isLoading, isError } = useAccessSpotAssignments(filters)
+  const create = useCreateSpotAssignment()
+  const update = useUpdateSpotAssignment()
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [revoke, setRevoke] = useState<AssignmentRow | null>(null)
+  const [extend, setExtend] = useState<AssignmentRow | null>(null)
+
+  const rows = data?.items ?? []
+  const zoneCode = (id: number) => zones.find((z) => z.id === id)?.code ?? `#${id}`
+  const spotById = (id: number) => spots.find((s) => s.id === id)
+  const spotLabel = (s: SpotRow) => `${zoneCode(s.zone_id)} · ${s.code}`
+  const spotCell = (id: number) => {
+    const s = spotById(id)
+    return s ? spotLabel(s) : `#${id}`
+  }
+  const spotOptions = spots.map((s) => ({ value: String(s.id), label: spotLabel(s) }))
+
+  const columns: EquipmentColumn<AssignmentRow>[] = [
+    { key: 'spot', label: t('accessControl.parking.fields.spot'), render: (a) => <span className="font-mono">{spotCell(a.spot_id)}</span> },
+    { key: 'apartment', label: t('accessControl.parking.fields.apartmentId'), render: (a) => `#${a.apartment_id}` },
+    { key: 'ownership', label: t('accessControl.parking.fields.ownershipType'), render: (a) => t(`accessControl.parking.ownershipType.${a.ownership_type}`, { defaultValue: a.ownership_type }) },
+    { key: 'from', label: t('accessControl.parking.fields.validFrom'), render: (a) => fmtDate(a.valid_from) },
+    { key: 'until', label: t('accessControl.parking.fields.validUntil'), render: (a) => fmtDate(a.valid_until) },
+    { key: 'status', label: t('accessControl.columns.status'), render: (a) => <AccessStatusBadge status={a.status} /> },
+  ]
+
+  return (
+    <PanelShell
+      canManage={canManage}
+      addLabel={t('accessControl.parking.addAssignment')}
+      onAdd={() => setFormOpen(true)}
+      isLoading={isLoading}
+      isError={isError}
+    >
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="asg-spot-filter">{t('accessControl.parking.filters.spot')}</Label>
+          <Select
+            id="asg-spot-filter"
+            value={spotFilter}
+            onChange={(e) => setSpotFilter(e.target.value)}
+            className="w-[220px]"
+          >
+            <option value="">{t('accessControl.parking.filters.allSpots')}</option>
+            {spotOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="asg-apt-filter">{t('accessControl.parking.filters.apartmentId')}</Label>
+          <Input
+            id="asg-apt-filter"
+            type="number"
+            value={apartmentFilter}
+            onChange={(e) => setApartmentFilter(e.target.value)}
+            className="w-[140px]"
+          />
+        </div>
+      </div>
+
+      <EquipmentTable
+        rows={rows}
+        columns={columns}
+        emptyIcon="🔗"
+        emptyText={t('accessControl.parking.empty.assignments')}
+        extraActions={
+          canManage
+            ? (a) => (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setExtend(a)}>
+                    {t('accessControl.parking.actions.extend')}
+                  </Button>
+                  {a.status === 'active' && (
+                    <Button size="sm" variant="destructive" onClick={() => setRevoke(a)}>
+                      {t('accessControl.parking.actions.revoke')}
+                    </Button>
+                  )}
+                </>
+              )
+            : undefined
+        }
+      />
+
+      {canManage && (
+        <>
+          <SpotAssignmentFormDialog
+            open={formOpen}
+            spots={spots}
+            spotLabel={spotLabel}
+            loading={create.isPending}
+            onClose={() => setFormOpen(false)}
+            onSubmit={(payload) => create.mutate(payload, { onSuccess: () => setFormOpen(false) })}
+          />
+          <ExtendAssignmentDialog
+            open={extend !== null}
+            loading={update.isPending}
+            onClose={() => setExtend(null)}
+            onSubmit={(payload) => {
+              if (!extend) return
+              update.mutate({ id: extend.id, payload }, { onSuccess: () => setExtend(null) })
+            }}
+          />
+          <ConfirmDeactivateDialog
+            open={revoke !== null}
+            label={revoke ? spotCell(revoke.spot_id) : ''}
+            loading={update.isPending}
+            onClose={() => setRevoke(null)}
+            onConfirm={() => {
+              if (!revoke) return
+              update.mutate(
+                { id: revoke.id, payload: { status: 'revoked' } },
+                { onSuccess: () => setRevoke(null) },
+              )
+            }}
+            title={t('accessControl.parking.revokeTitle')}
+            message={t('accessControl.parking.revokeConfirm', { spot: spotCell(revoke?.spot_id ?? 0) })}
+            confirmLabel={t('accessControl.parking.actions.revoke')}
           />
         </>
       )}
@@ -258,6 +550,7 @@ function CamerasPanel({ gates }: { gates: GateRow[] }) {
     { name: 'name', type: 'text', label: t('accessControl.equipment.fields.name') },
     { name: 'vendor', type: 'text', label: t('accessControl.equipment.fields.vendor') },
     { name: 'model', type: 'text', label: t('accessControl.equipment.fields.model') },
+    { name: 'attributes', type: 'json', label: t('accessControl.equipment.fields.attributes'), placeholder: '{ "fps": 25 }' },
     { name: 'is_active', type: 'checkbox', label: t('accessControl.equipment.fields.isActive'), editOnly: true },
   ]
 
@@ -338,6 +631,7 @@ function BarriersPanel({ gates }: { gates: GateRow[] }) {
     { name: 'name', type: 'text', label: t('accessControl.equipment.fields.name') },
     { name: 'relay_type', type: 'text', label: t('accessControl.equipment.fields.relayType') },
     { name: 'relay_channel', type: 'number', label: t('accessControl.equipment.fields.relayChannel') },
+    { name: 'config', type: 'json', label: t('accessControl.equipment.fields.config'), placeholder: '{ "pulse_ms": 500 }' },
     { name: 'is_active', type: 'checkbox', label: t('accessControl.equipment.fields.isActive'), editOnly: true },
   ]
 
@@ -591,6 +885,8 @@ export default function AccessEquipmentPage() {
 
   const tabs = [
     { key: 'zones', label: t('accessControl.equipment.tabs.zones') },
+    { key: 'spots', label: t('accessControl.parking.tabs.spots') },
+    { key: 'assignments', label: t('accessControl.parking.tabs.assignments') },
     { key: 'gates', label: t('accessControl.equipment.tabs.gates') },
     ...(isAdmin
       ? [
@@ -618,6 +914,8 @@ export default function AccessEquipmentPage() {
       <AccessTabBar tabs={tabs} active={activeTab} onChange={(k) => setTab(k as Tab)} />
 
       {activeTab === 'zones' && <ZonesPanel canManage />}
+      {activeTab === 'spots' && <SpotsPanel canManage zones={zones} />}
+      {activeTab === 'assignments' && <AssignmentsPanel canManage zones={zones} />}
       {activeTab === 'gates' && <GatesPanel canManage zones={zones} />}
       {activeTab === 'cameras' && isAdmin && <CamerasPanel gates={gates} />}
       {activeTab === 'barriers' && isAdmin && <BarriersPanel gates={gates} />}

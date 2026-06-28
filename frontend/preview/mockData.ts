@@ -14,6 +14,8 @@ import type {
   CameraRow,
   BarrierRow,
   ControllerRow,
+  SpotRow,
+  AssignmentRow,
   TestEventResponse,
 } from '../src/types/access'
 import type { AccessEvent } from '../src/hooks/useAccessSecurityFeed'
@@ -423,6 +425,9 @@ export const zones: ZoneRow[] = [
     description: 'Центральный въезд комплекса',
     offline_mode: 'cached_permanent_only',
     max_permanent_per_apartment: 2,
+    parking_type: 'assigned',
+    capacity: null,
+    max_permanent_vehicles_per_apartment: 2,
     is_active: true,
     yard_ids: [1, 2],
   },
@@ -433,6 +438,9 @@ export const zones: ZoneRow[] = [
     description: 'Гостевой и резидентский паркинг',
     offline_mode: 'fail_closed',
     max_permanent_per_apartment: 1,
+    parking_type: 'shared',
+    capacity: 80,
+    max_permanent_vehicles_per_apartment: 1,
     is_active: true,
     yard_ids: [3],
   },
@@ -443,8 +451,68 @@ export const zones: ZoneRow[] = [
     description: null,
     offline_mode: 'fail_closed',
     max_permanent_per_apartment: null,
+    parking_type: 'assigned',
+    capacity: null,
+    max_permanent_vehicles_per_apartment: null,
     is_active: false,
     yard_ids: [],
+  },
+]
+
+// ── (E) Парковка — Места (parking_spots) ─────────────────────────────────────
+export const spots: SpotRow[] = [
+  { id: 1, zone_id: 1, code: 'A-01', status: 'active' },
+  { id: 2, zone_id: 1, code: 'A-02', status: 'active' },
+  { id: 3, zone_id: 1, code: 'A-03', status: 'inactive' },
+  { id: 4, zone_id: 2, code: 'P-101', status: 'active' },
+  { id: 5, zone_id: 2, code: 'P-102', status: 'archived' },
+]
+
+// ── (E) Парковка — Закрепления (spot_assignments) ────────────────────────────
+export const assignments: AssignmentRow[] = [
+  {
+    id: 1,
+    spot_id: 1,
+    apartment_id: 12,
+    ownership_type: 'owned',
+    valid_from: minAgo(60000),
+    valid_until: null,
+    status: 'active',
+    approved_by_user_id: 7,
+    approved_at: minAgo(60000),
+  },
+  {
+    id: 2,
+    spot_id: 4,
+    apartment_id: 45,
+    ownership_type: 'rented',
+    valid_from: minAgo(20000),
+    valid_until: minAgo(-43200),
+    status: 'active',
+    approved_by_user_id: 7,
+    approved_at: minAgo(20000),
+  },
+  {
+    id: 3,
+    spot_id: 2,
+    apartment_id: 78,
+    ownership_type: 'rented',
+    valid_from: minAgo(90000),
+    valid_until: minAgo(4320),
+    status: 'expired',
+    approved_by_user_id: 7,
+    approved_at: minAgo(90000),
+  },
+  {
+    id: 4,
+    spot_id: 3,
+    apartment_id: 23,
+    ownership_type: 'owned',
+    valid_from: minAgo(120000),
+    valid_until: null,
+    status: 'revoked',
+    approved_by_user_id: 7,
+    approved_at: minAgo(120000),
   },
 ]
 
@@ -458,14 +526,14 @@ export const gates: GateRow[] = [
 
 // ── (E) Оборудование — Камеры ────────────────────────────────────────────────
 export const cameras: CameraRow[] = [
-  { id: 1, code: 'CAM-01', gate_id: 1, direction: 'entry', name: 'ANPR главный въезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: null, is_active: true },
+  { id: 1, code: 'CAM-01', gate_id: 1, direction: 'entry', name: 'ANPR главный въезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: { fps: 25, resolution: '1920x1080' }, is_active: true },
   { id: 2, code: 'CAM-02', gate_id: 2, direction: 'exit', name: 'ANPR главный выезд', vendor: 'Hikvision', model: 'iDS-2CD7A46', attributes: null, is_active: true },
   { id: 3, code: 'CAM-03', gate_id: 3, direction: 'entry', name: 'ANPR паркинг', vendor: 'Dahua', model: 'ITC413', attributes: null, is_active: true },
 ]
 
 // ── (E) Оборудование — Шлагбаумы ─────────────────────────────────────────────
 export const barriers: BarrierRow[] = [
-  { id: 1, code: 'BAR-01', gate_id: 1, name: 'Шлагбаум главный въезд', relay_type: 'NO', relay_channel: 1, config: null, is_active: true },
+  { id: 1, code: 'BAR-01', gate_id: 1, name: 'Шлагбаум главный въезд', relay_type: 'NO', relay_channel: 1, config: { pulse_ms: 500, auto_close_s: 8 }, is_active: true },
   { id: 2, code: 'BAR-02', gate_id: 2, name: 'Шлагбаум главный выезд', relay_type: 'NO', relay_channel: 2, config: null, is_active: true },
   { id: 3, code: 'BAR-03', gate_id: 3, name: 'Шлагбаум паркинг', relay_type: 'NC', relay_channel: 1, config: null, is_active: true },
 ]
