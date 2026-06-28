@@ -77,6 +77,13 @@ class AssignmentRow(_Frozen):
     valid_from: dt.datetime | None
     valid_until: dt.datetime | None
     status: str
+    # Тумблер лимита мест (§10.3): TRUE — авто квартиры сверх числа её мест →
+    # manual_review parking_spot_occupied; FALSE — лимит временно снят.
+    enforce_limit: bool
+    # Занятость (§10.3, «занято X из Y»): occupied — открытые presence-сессии
+    # квартиры в зоне места; spots — число её активных закреплений в этой зоне.
+    occupied: int
+    spots: int
     approved_by_user_id: int | None
     approved_at: dt.datetime | None
     created_at: dt.datetime
@@ -110,11 +117,13 @@ def _spot_row(s) -> SpotRow:
     )
 
 
-def _assignment_row(a) -> AssignmentRow:
+def _assignment_row(db: Session, a) -> AssignmentRow:
+    occupied, spots = svc.assignment_occupancy(db, a)
     return AssignmentRow(
         id=a.id, spot_id=a.spot_id, apartment_id=a.apartment_id,
         ownership_type=a.ownership_type, valid_from=a.valid_from,
         valid_until=a.valid_until, status=a.status,
+        enforce_limit=bool(a.enforce_limit), occupied=occupied, spots=spots,
         approved_by_user_id=a.approved_by_user_id, approved_at=a.approved_at,
         created_at=a.created_at, updated_at=a.updated_at,
     )
@@ -234,6 +243,8 @@ class AssignmentCreate(BaseModel):
 class AssignmentPatch(BaseModel):
     status: AssignmentStatusLit | None = None
     valid_until: dt.datetime | None = None
+    # Тумблер лимита мест (§10.3) — менеджер включает/снимает enforce_limit.
+    enforce_limit: bool | None = None
 
 
 @router.get("/spot-assignments", response_model=AssignmentsPage)
@@ -251,7 +262,8 @@ def list_spot_assignments(
         limit=limit, offset=offset,
     )
     return AssignmentsPage(
-        items=[_assignment_row(r) for r in rows], total=total, limit=limit, offset=offset
+        items=[_assignment_row(db, r) for r in rows], total=total, limit=limit,
+        offset=offset,
     )
 
 
@@ -276,7 +288,7 @@ def create_spot_assignment(
         _raise_422_ref(exc)
     except svc.RentedRequiresValidUntil as exc:
         _raise_422_rented(exc)
-    return _assignment_row(assignment)
+    return _assignment_row(db, assignment)
 
 
 @router.patch("/spot-assignments/{assignment_id}", response_model=AssignmentRow)
@@ -295,7 +307,7 @@ def patch_spot_assignment(
         )
     except svc.NotFound as exc:
         _raise_404(exc)
-    return _assignment_row(assignment)
+    return _assignment_row(db, assignment)
 
 
 # =============================== ЗАНЯТОСТЬ ЗОНЫ ===============================

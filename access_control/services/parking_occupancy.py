@@ -56,6 +56,30 @@ def apartment_open_sessions(db: Session, *, apartment_id: int, zone_id: int) -> 
     )
 
 
+def apartment_spot_occupancy(
+    db: Session, *, apartment_id: int, zone_id: int
+) -> tuple[int, int]:
+    """``(occupied, spots)`` для квартиры в зоне — «занято X из Y» для UI (§10.3).
+
+    ``occupied`` — открытые presence-сессии квартиры в зоне (реальная занятость);
+    ``spots`` — число её АКТИВНЫХ закреплений мест в этой зоне. Источник тот же,
+    что использует лимит мест в Decision Engine, без дублирования логики.
+    """
+    occupied = apartment_open_sessions(db, apartment_id=apartment_id, zone_id=zone_id)
+    spots = int(
+        db.execute(
+            text(
+                "SELECT count(*) FROM parking_spot_assignments psa "
+                "JOIN parking_spots ps ON ps.id = psa.spot_id "
+                "WHERE psa.apartment_id = :a AND ps.zone_id = :z "
+                "  AND psa.status = 'active'"
+            ),
+            {"a": apartment_id, "z": zone_id},
+        ).scalar_one()
+    )
+    return occupied, spots
+
+
 def zone_occupancy(db: Session, zone_id: int) -> ZoneOccupancy:
     """Учёт заездов зоны: число разрешённых въездов (минус выездов — задел).
 

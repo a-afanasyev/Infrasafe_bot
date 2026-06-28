@@ -37,8 +37,10 @@ from access_control.domain.enums import (
     ResidentRequestStatus,
 )
 from access_control.domain.events import AccessDecision
+from access_control.domain.parking import ParkingSpotAssignment
 from access_control.domain.passes import AccessPass, ResidentAccessRequest
 from access_control.services.management import write_audit
+from access_control.services.parking_occupancy import apartment_spot_occupancy
 from access_control.services.normalization import normalize_plate
 from access_control.services.one_time_codes import generate_code, hash_code
 
@@ -77,6 +79,14 @@ class EntryNotOwned(Exception):
     """Спорный въезд не относится к авто approved-квартиры пользователя (403)."""
 
 
+class SpotAssignmentNotFound(Exception):
+    """Закрепление парковочного места не найдено (404)."""
+
+
+class SpotAssignmentNotOwned(Exception):
+    """Закрепление относится к чужой квартире (403)."""
+
+
 @dataclass(frozen=True)
 class ResidentPassCreated:
     """Результат создания пропуска: сам пропуск + PLAINTEXT одноразовый код (§9.3).
@@ -106,6 +116,15 @@ class EntryConfirmationOutcome:
     decision_id: int
     response: str
     created_at: dt.datetime
+
+
+@dataclass(frozen=True)
+class SpotLimitToggleOutcome:
+    """Результат переключения тумблера лимита места (§6.4, §10.3)."""
+
+    assignment_id: int
+    enforce_limit: bool
+    replayed: bool
 
 
 def _utcnow() -> dt.datetime:
@@ -475,6 +494,61 @@ def confirm_disputed_entry(
     )
 
 
+# --------------------------- тумблер лимита места (§6.4, §10.3) ---------------------------
+
+
+def toggle_resident_spot_limit(
+    db: Session,
+    *,
+    actor_user_id: int,
+    assignment_id: int,
+    enabled: bool,
+    ip_address: str | None = None,
+) -> SpotLimitToggleOutcome:
+    """Включить/выключить ``enforce_limit`` на закреплении СВОЕЙ квартиры (§6.4).
+
+    Сценарий «2-я машина на 10 минут»: житель временно снимает лимит места своей
+    квартиры (``enabled=False``) → авто сверх числа мест пускают без проверки
+    занятости; ``enabled=True`` возвращает лимит. Граница владения (§6.4):
+    закрепление должно относиться к approved-квартире пользователя, иначе
+    ``SpotAssignmentNotOwned`` (403); нет такого закрепления →
+    ``SpotAssignmentNotFound`` (404). Идемпотентно: повтор того же значения →
+    ``replayed=True`` без второй аудит-строки. Аудит
+    ``access.resident_toggle_spot_limit`` (PD-safe).
+    """
+    assignment = db.get(ParkingSpotAssignment, assignment_id)
+    if assignment is None:
+        raise SpotAssignmentNotFound(f"spot assignment {assignment_id} not found")
+    if assignment.apartment_id not in approved_apartment_ids(db, actor_user_id):
+        raise SpotAssignmentNotOwned(
+            f"spot assignment {assignment_id} does not belong to user {actor_user_id}"
+        )
+    if bool(assignment.enforce_limit) == enabled:
+        return SpotLimitToggleOutcome(
+            assignment_id=assignment.id,
+            enforce_limit=bool(assignment.enforce_limit),
+            replayed=True,
+        )
+    assignment.enforce_limit = enabled
+    db.flush()
+    write_audit(
+        db,
+        actor_user_id=actor_user_id,
+        action="access.resident_toggle_spot_limit",
+        entity_type="parking_spot_assignment",
+        entity_id=assignment.id,
+        details={"enforce_limit": enabled},
+        ip_address=ip_address,
+    )
+    db.commit()
+    db.refresh(assignment)
+    return SpotLimitToggleOutcome(
+        assignment_id=assignment.id,
+        enforce_limit=bool(assignment.enforce_limit),
+        replayed=False,
+    )
+
+
 # --------------------------- READ-хелперы (§6.4) ---------------------------
 
 
@@ -613,6 +687,40 @@ def list_resident_requests(
         {**params, "limit": limit, "offset": offset},
     ).mappings()
     return [dict(r) for r in rows], total
+
+
+def list_resident_spot_assignments(db: Session, *, user_id: int) -> list[dict]:
+    """Закрепления парковочных мест approved-квартир жителя (§6.4, «Моё место»).
+
+    Возвращает плоские строки с кодом места, зоной (id/код/имя), типом владения,
+    сроком, ``enforce_limit`` и занятостью (``occupied``/``spots`` — «занято X из
+    Y»). Чужие квартиры не отдаются (граница владения §6.4). Закреплений у жителя
+    немного — без пагинации.
+    """
+    apts = approved_apartment_ids(db, user_id)
+    if not apts:
+        return []
+    stmt = text(
+        "SELECT psa.id, psa.spot_id, ps.code AS spot_code, ps.zone_id, "
+        " pz.code AS zone_code, pz.name AS zone_name, psa.apartment_id, "
+        " psa.ownership_type, psa.valid_from, psa.valid_until, psa.status, "
+        " psa.enforce_limit "
+        "FROM parking_spot_assignments psa "
+        "JOIN parking_spots ps ON ps.id = psa.spot_id "
+        "JOIN parking_zones pz ON pz.id = ps.zone_id "
+        "WHERE psa.apartment_id IN :apts "
+        "ORDER BY psa.id DESC"
+    ).bindparams(bindparam("apts", expanding=True))
+    out: list[dict] = []
+    for r in db.execute(stmt, {"apts": apts}).mappings():
+        row = dict(r)
+        occupied, spots = apartment_spot_occupancy(
+            db, apartment_id=row["apartment_id"], zone_id=row["zone_id"]
+        )
+        row["occupied"] = occupied
+        row["spots"] = spots
+        out.append(row)
+    return out
 
 
 def list_resident_events(

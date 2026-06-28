@@ -32,6 +32,7 @@ from access_control.services.equipment_admin import (
     _zone_exists,
 )
 from access_control.services.management import write_audit
+from access_control.services.parking_occupancy import apartment_spot_occupancy
 
 __all__ = [
     "DuplicateCode",
@@ -44,6 +45,7 @@ __all__ = [
     "list_spot_assignments",
     "create_spot_assignment",
     "update_spot_assignment",
+    "assignment_occupancy",
 ]
 
 
@@ -74,6 +76,23 @@ def _apartment_exists(db: Session, apartment_id: int) -> bool:
 
 def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+def assignment_occupancy(db: Session, assignment: ParkingSpotAssignment) -> tuple[int, int]:
+    """``(occupied, spots)`` для квартиры закрепления в зоне его места (§10.3).
+
+    Резолвит зону по ``spot_id`` и делегирует ``parking_occupancy`` (реюз источника
+    лимита мест). Для UI «занято X из Y» в выдаче закреплений.
+    """
+    zone_id = db.execute(
+        text("SELECT zone_id FROM parking_spots WHERE id = :s"),
+        {"s": assignment.spot_id},
+    ).scalar()
+    if zone_id is None:
+        return 0, 0
+    return apartment_spot_occupancy(
+        db, apartment_id=assignment.apartment_id, zone_id=zone_id
+    )
 
 
 # =============================== МЕСТА (parking_spots) ===============================
