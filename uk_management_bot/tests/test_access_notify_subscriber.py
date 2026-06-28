@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from access_control.services.resident_notify import KIND_VEHICLE_REQUEST_RESOLVED
 from uk_management_bot.services.access_notify_subscriber import (
     build_notification_text,
