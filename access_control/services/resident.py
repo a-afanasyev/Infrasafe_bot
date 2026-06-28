@@ -285,3 +285,170 @@ def user_vehicle_plates(db: Session, apartment_ids: list[int]) -> list[str]:
     ).bindparams(bindparam("apts", expanding=True))
     rows = db.execute(stmt, {"apts": apartment_ids}).scalars()
     return [p for p in rows if p]
+
+
+# --------------------------- READ-списки (§6.4) ---------------------------
+#
+# Единый источник для клиентов без бизнес-логики (бот И TWA, §4 п.4-5): и REST-роутер
+# ``api/resident.py``, и Telegram-бот зовут ОДНИ функции — SQL и граница владения не
+# дублируются. Возвращают ``(rows, total)`` где ``rows`` — список dict (плоские
+# строки БД); presentation (pydantic-DTO для API, текст для бота) делает клиент.
+
+# Пагинация (общие дефолты для всех списков жителя).
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 200
+
+_VEHICLE_COLS = (
+    "v.id, v.plate_number_original, v.plate_number_normalized, v.plate_country, "
+    "v.plate_type, v.make, v.model, v.color, v.vehicle_class, v.status, "
+    "v.blocked_reason, v.blocked_by_user_id, v.blocked_at"
+)
+
+_VEHICLE_OWNED = (
+    "EXISTS (SELECT 1 FROM vehicle_apartments va WHERE va.vehicle_id = v.id "
+    "AND va.status = 'active' AND va.apartment_id IN :apts)"
+)
+
+
+def approved_apartments(db: Session, user_id: int) -> list[dict]:
+    """approved-квартиры пользователя с номером для выбора в UI (§6.4).
+
+    Возвращает ``[{"id", "apartment_number"}]`` отсортированными по id. Нужен
+    клиенту (боту/TWA), когда у жителя несколько квартир и требуется выбор.
+    """
+    apts = approved_apartment_ids(db, user_id)
+    if not apts:
+        return []
+    stmt = text(
+        "SELECT id, apartment_number FROM apartments WHERE id IN :apts ORDER BY id"
+    ).bindparams(bindparam("apts", expanding=True))
+    return [dict(r) for r in db.execute(stmt, {"apts": apts}).mappings()]
+
+
+def list_resident_vehicles(
+    db: Session, *, user_id: int, limit: int = DEFAULT_LIMIT, offset: int = 0
+) -> tuple[list[dict], int]:
+    """Авто, активно привязанные к approved-квартирам жителя (§6.4)."""
+    apts = approved_apartment_ids(db, user_id)
+    if not apts:
+        return [], 0
+    params = {"apts": apts}
+    total = db.execute(
+        text(f"SELECT count(*) FROM vehicles v WHERE {_VEHICLE_OWNED}").bindparams(
+            bindparam("apts", expanding=True)
+        ),
+        params,
+    ).scalar_one()
+    rows = db.execute(
+        text(
+            f"SELECT {_VEHICLE_COLS} FROM vehicles v WHERE {_VEHICLE_OWNED} "
+            "ORDER BY v.created_at DESC, v.id DESC LIMIT :limit OFFSET :offset"
+        ).bindparams(bindparam("apts", expanding=True)),
+        {**params, "limit": limit, "offset": offset},
+    ).mappings()
+    return [dict(r) for r in rows], total
+
+
+def list_resident_passes(
+    db: Session, *, user_id: int, status: str | None = None,
+    limit: int = DEFAULT_LIMIT, offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Пропуска квартир жителя ИЛИ созданные им самим (§6.4). Фильтр ``status``."""
+    apts = approved_apartment_ids(db, user_id)
+    conds = ["(created_by_user_id = :uid OR apartment_id IN :apts)"]
+    params: dict = {"uid": user_id, "apts": apts or [-1]}
+    if status is not None:
+        conds.append("status = :status")
+        params["status"] = status
+    where = " WHERE " + " AND ".join(conds)
+    total = db.execute(
+        text(f"SELECT count(*) FROM access_passes {where}").bindparams(
+            bindparam("apts", expanding=True)
+        ),
+        params,
+    ).scalar_one()
+    rows = db.execute(
+        text(
+            "SELECT id, pass_type, apartment_id, created_by_user_id, zone_id, "
+            " plate_number_original, plate_number_normalized, valid_from, valid_until, "
+            " max_entries, used_entries, status, source, created_at "
+            f"FROM access_passes {where} "
+            "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
+        ).bindparams(bindparam("apts", expanding=True)),
+        {**params, "limit": limit, "offset": offset},
+    ).mappings()
+    return [dict(r) for r in rows], total
+
+
+def list_resident_requests(
+    db: Session, *, user_id: int, status: str | None = None,
+    limit: int = DEFAULT_LIMIT, offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Заявки жителя на постоянный авто: созданные им ИЛИ по его квартирам (§6.4)."""
+    apts = approved_apartment_ids(db, user_id)
+    conds = ["(created_by_user_id = :uid OR apartment_id IN :apts)"]
+    params: dict = {"uid": user_id, "apts": apts or [-1]}
+    if status is not None:
+        conds.append("status = :status")
+        params["status"] = status
+    where = " WHERE " + " AND ".join(conds)
+    total = db.execute(
+        text(f"SELECT count(*) FROM resident_access_requests {where}").bindparams(
+            bindparam("apts", expanding=True)
+        ),
+        params,
+    ).scalar_one()
+    rows = db.execute(
+        text(
+            "SELECT id, apartment_id, created_by_user_id, vehicle_id, "
+            " plate_number_original, plate_number_normalized, relation_type, status, "
+            " reviewed_by_user_id, reviewed_at, review_comment, created_at "
+            f"FROM resident_access_requests {where} "
+            "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
+        ).bindparams(bindparam("apts", expanding=True)),
+        {**params, "limit": limit, "offset": offset},
+    ).mappings()
+    return [dict(r) for r in rows], total
+
+
+def list_resident_events(
+    db: Session, *, user_id: int, limit: int = DEFAULT_LIMIT, offset: int = 0
+) -> tuple[list[dict], int]:
+    """События проезда по авто/квартирам жителя (§6.4: только свои события).
+
+    Сопоставление: ``apartment_id`` ∈ approved-квартиры жителя ИЛИ
+    ``plate_number_normalized`` ∈ номера авто его квартир (покрывает и постоянный
+    авто, и taxi-pass, где apartment_id у события может отсутствовать).
+    """
+    apts = approved_apartment_ids(db, user_id)
+    plates = user_vehicle_plates(db, apts)
+    conds: list[str] = []
+    params: dict = {}
+    if apts:
+        conds.append("apartment_id IN :apts")
+        params["apts"] = apts
+    if plates:
+        conds.append("plate_number_normalized IN :plates")
+        params["plates"] = plates
+    if not conds:
+        return [], 0
+    where = " WHERE (" + " OR ".join(conds) + ")"
+    binds = []
+    if apts:
+        binds.append(bindparam("apts", expanding=True))
+    if plates:
+        binds.append(bindparam("plates", expanding=True))
+    total = db.execute(
+        text(f"SELECT count(*) FROM access_events {where}").bindparams(*binds),
+        params,
+    ).scalar_one()
+    rows = db.execute(
+        text(
+            "SELECT id, event_id, occurred_at, direction, gate_id, zone_id, "
+            " apartment_id, plate_number_normalized, decision, reason "
+            f"FROM access_events {where} "
+            "ORDER BY occurred_at DESC, id DESC LIMIT :limit OFFSET :offset"
+        ).bindparams(*binds),
+        {**params, "limit": limit, "offset": offset},
+    ).mappings()
+    return [dict(r) for r in rows], total

@@ -47,7 +47,10 @@ from access_control.services.resident import (
     cancel_resident_pass,
     create_resident_pass,
     create_resident_request,
-    user_vehicle_plates,
+    list_resident_events,
+    list_resident_passes,
+    list_resident_requests,
+    list_resident_vehicles,
 )
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
@@ -164,17 +167,6 @@ class ResidentEventsPage(BaseModel):
 
 # ------------------------------ READ: /my/vehicles ------------------------------
 
-_VEHICLE_COLS = (
-    "v.id, v.plate_number_original, v.plate_number_normalized, v.plate_country, "
-    "v.plate_type, v.make, v.model, v.color, v.vehicle_class, v.status, "
-    "v.blocked_reason, v.blocked_by_user_id, v.blocked_at"
-)
-
-_VEHICLE_OWNED = (
-    "EXISTS (SELECT 1 FROM vehicle_apartments va WHERE va.vehicle_id = v.id "
-    "AND va.status = 'active' AND va.apartment_id IN :apts)"
-)
-
 
 def _owned_apartment_links(db: Session, vehicle_ids: list[int],
                            apartment_ids: list[int]) -> dict[int, list[ApartmentLink]]:
@@ -217,25 +209,10 @@ def my_vehicles(
     user=Depends(require_approved_roles(*RESIDENT_ROLES)),
 ) -> VehiclesPage:
     """Авто, активно привязанные к approved-квартирам жителя (§6.4)."""
+    rows, total = list_resident_vehicles(db, user_id=user.id, limit=limit, offset=offset)
+    if not rows:
+        return VehiclesPage(items=[], total=total, limit=limit, offset=offset)
     apts = approved_apartment_ids(db, user.id)
-    if not apts:
-        return VehiclesPage(items=[], total=0, limit=limit, offset=offset)
-    params = {"apts": apts}
-    total = db.execute(
-        text(f"SELECT count(*) FROM vehicles v WHERE {_VEHICLE_OWNED}").bindparams(
-            bindparam("apts", expanding=True)
-        ),
-        params,
-    ).scalar_one()
-    rows = list(
-        db.execute(
-            text(
-                f"SELECT {_VEHICLE_COLS} FROM vehicles v WHERE {_VEHICLE_OWNED} "
-                "ORDER BY v.created_at DESC, v.id DESC LIMIT :limit OFFSET :offset"
-            ).bindparams(bindparam("apts", expanding=True)),
-            {**params, "limit": limit, "offset": offset},
-        ).mappings()
-    )
     links = _owned_apartment_links(db, [r["id"] for r in rows], apts)
     items = [
         VehicleRow(
@@ -271,29 +248,9 @@ def my_passes(
     user=Depends(require_approved_roles(*RESIDENT_ROLES)),
 ) -> PassesPage:
     """Пропуска квартир жителя ИЛИ созданные им самим (§6.4). Фильтр ``status``."""
-    apts = approved_apartment_ids(db, user.id)
-    conds = ["(created_by_user_id = :uid OR apartment_id IN :apts)"]
-    params: dict = {"uid": user.id, "apts": apts or [-1]}
-    if status_ is not None:
-        conds.append("status = :status")
-        params["status"] = status_
-    where = " WHERE " + " AND ".join(conds)
-    total = db.execute(
-        text(f"SELECT count(*) FROM access_passes {where}").bindparams(
-            bindparam("apts", expanding=True)
-        ),
-        params,
-    ).scalar_one()
-    rows = db.execute(
-        text(
-            "SELECT id, pass_type, apartment_id, created_by_user_id, zone_id, "
-            " plate_number_original, plate_number_normalized, valid_from, valid_until, "
-            " max_entries, used_entries, status, source, created_at "
-            f"FROM access_passes {where} "
-            "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
-        ).bindparams(bindparam("apts", expanding=True)),
-        {**params, "limit": limit, "offset": offset},
-    ).mappings()
+    rows, total = list_resident_passes(
+        db, user_id=user.id, status=status_, limit=limit, offset=offset
+    )
     items = [PassRow(**r) for r in rows]
     return PassesPage(items=items, total=total, limit=limit, offset=offset)
 
@@ -310,29 +267,9 @@ def my_requests(
     user=Depends(require_approved_roles(*RESIDENT_ROLES)),
 ) -> RequestsPage:
     """Заявки жителя на постоянный авто: созданные им ИЛИ по его квартирам (§6.4)."""
-    apts = approved_apartment_ids(db, user.id)
-    conds = ["(created_by_user_id = :uid OR apartment_id IN :apts)"]
-    params: dict = {"uid": user.id, "apts": apts or [-1]}
-    if status_ is not None:
-        conds.append("status = :status")
-        params["status"] = status_
-    where = " WHERE " + " AND ".join(conds)
-    total = db.execute(
-        text(f"SELECT count(*) FROM resident_access_requests {where}").bindparams(
-            bindparam("apts", expanding=True)
-        ),
-        params,
-    ).scalar_one()
-    rows = db.execute(
-        text(
-            "SELECT id, apartment_id, created_by_user_id, vehicle_id, "
-            " plate_number_original, plate_number_normalized, relation_type, status, "
-            " reviewed_by_user_id, reviewed_at, review_comment, created_at "
-            f"FROM resident_access_requests {where} "
-            "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
-        ).bindparams(bindparam("apts", expanding=True)),
-        {**params, "limit": limit, "offset": offset},
-    ).mappings()
+    rows, total = list_resident_requests(
+        db, user_id=user.id, status=status_, limit=limit, offset=offset
+    )
     items = [RequestRow(**r) for r in rows]
     return RequestsPage(items=items, total=total, limit=limit, offset=offset)
 
@@ -353,37 +290,7 @@ def my_events(
     ``plate_number_normalized`` ∈ номера авто его квартир (покрывает и постоянный
     авто, и taxi-pass, где apartment_id у события может отсутствовать).
     """
-    apts = approved_apartment_ids(db, user.id)
-    plates = user_vehicle_plates(db, apts)
-    conds: list[str] = []
-    params: dict = {}
-    if apts:
-        conds.append("apartment_id IN :apts")
-        params["apts"] = apts
-    if plates:
-        conds.append("plate_number_normalized IN :plates")
-        params["plates"] = plates
-    if not conds:
-        return ResidentEventsPage(items=[], total=0, limit=limit, offset=offset)
-    where = " WHERE (" + " OR ".join(conds) + ")"
-    binds = []
-    if apts:
-        binds.append(bindparam("apts", expanding=True))
-    if plates:
-        binds.append(bindparam("plates", expanding=True))
-    total = db.execute(
-        text(f"SELECT count(*) FROM access_events {where}").bindparams(*binds),
-        params,
-    ).scalar_one()
-    rows = db.execute(
-        text(
-            "SELECT id, event_id, occurred_at, direction, gate_id, zone_id, "
-            " apartment_id, plate_number_normalized, decision, reason "
-            f"FROM access_events {where} "
-            "ORDER BY occurred_at DESC, id DESC LIMIT :limit OFFSET :offset"
-        ).bindparams(*binds),
-        {**params, "limit": limit, "offset": offset},
-    ).mappings()
+    rows, total = list_resident_events(db, user_id=user.id, limit=limit, offset=offset)
     items = [ResidentEventRow(**r) for r in rows]
     return ResidentEventsPage(items=items, total=total, limit=limit, offset=offset)
 
