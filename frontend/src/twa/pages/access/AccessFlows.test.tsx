@@ -16,6 +16,7 @@ vi.mock('../../hooks/useTelegramSDK', () => ({
 import VehiclesTab from './VehiclesTab'
 import PassesTab from './PassesTab'
 import PassNewPage from './PassNewPage'
+import SpotsTab from './SpotsTab'
 
 const vehiclesPage = {
   items: [
@@ -59,6 +60,62 @@ describe('TWA Access — VehiclesTab', () => {
     expect(screen.getByText('Активен')).toBeInTheDocument()
     // Заявок нет
     expect(await screen.findByText('Заявок нет')).toBeInTheDocument()
+  })
+})
+
+describe('TWA Access — SpotsTab «Моё место»', () => {
+  beforeEach(() => server.resetHandlers())
+
+  const spotsPage = {
+    items: [
+      {
+        id: 4,
+        spot_id: 3,
+        spot_code: 'A-01',
+        zone_id: 5,
+        zone_code: 'Z1',
+        zone_name: 'Подземный паркинг',
+        apartment_id: 12,
+        ownership_type: 'owned',
+        valid_from: null,
+        valid_until: null,
+        status: 'active',
+        enforce_limit: true,
+        occupied: 1,
+        spots: 2,
+      },
+    ],
+    total: 1,
+  }
+
+  it('рендерит место, зону, занятость «1 из 2» и переключатель', async () => {
+    server.use(http.get('*/api/v1/access/my/spots', () => HttpResponse.json(spotsPage)))
+    render(<SpotsTab />)
+    expect(await screen.findByText('A-01')).toBeInTheDocument()
+    expect(screen.getByText(/Подземный паркинг/)).toBeInTheDocument()
+    expect(screen.getByText('1 из 2')).toBeInTheDocument()
+    expect(screen.getByRole('switch')).toBeInTheDocument()
+  })
+
+  it('переключатель зовёт POST toggle-limit с enabled=false', async () => {
+    let body: unknown = null
+    server.use(
+      http.get('*/api/v1/access/my/spots', () => HttpResponse.json(spotsPage)),
+      http.post('*/api/v1/access/my/spot-assignments/4/toggle-limit', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ ok: true, assignment_id: 4, enforce_limit: false, replayed: false })
+      }),
+    )
+    render(<SpotsTab />)
+    const toggle = await screen.findByRole('switch')
+    await userEvent.click(toggle)
+    await waitFor(() => expect(body).toMatchObject({ enabled: false }))
+  })
+
+  it('пустой список → подсказка', async () => {
+    server.use(http.get('*/api/v1/access/my/spots', () => HttpResponse.json({ items: [], total: 0 })))
+    render(<SpotsTab />)
+    expect(await screen.findByText('У вас пока нет закреплённых мест')).toBeInTheDocument()
   })
 })
 

@@ -106,6 +106,32 @@ export interface ApartmentOption {
   full_address: string
 }
 
+/** Закрепление парковочного места квартиры жителя (GET /my/spots, «Моё место»). */
+export interface SpotAssignmentRow {
+  id: number
+  spot_id: number
+  spot_code: string
+  zone_id: number
+  zone_code: string
+  zone_name: string
+  apartment_id: number
+  ownership_type: string
+  valid_from: string | null
+  valid_until: string | null
+  status: string
+  /** Тумблер лимита: TRUE — лишние авто на проверку охране; FALSE — лимит снят. */
+  enforce_limit: boolean
+  /** Занятость «занято X из Y». */
+  occupied: number
+  spots: number
+}
+
+/** Конверт /my/spots (только items + total). */
+export interface SpotAssignmentsPage {
+  items: SpotAssignmentRow[]
+  total: number
+}
+
 /** Базовый путь applicant-API контроля доступа (same-origin в проде). */
 export const ACCESS_BASE = '/api/v1/access'
 

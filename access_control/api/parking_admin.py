@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from access_control.repositories import presence_repo
 from access_control.services import equipment_admin as eq_svc
 from access_control.services import parking_admin as svc
 from access_control.services.parking_occupancy import zone_occupancy
@@ -35,6 +36,8 @@ router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-parking"])
 
 # Парковка (места/закрепления/занятость) — настройка зон (§6.2): менеджер+админ.
 ZONE_GATE_ROLES = ("manager", "system_admin")
+# Просмотр открытых presence-сессий («освободить место»): + охрана (§6.3, §10.3).
+PRESENCE_VIEW_ROLES = ("manager", "system_admin", "security_operator")
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -106,8 +109,19 @@ def _page_model(name: str, row_type):
     })
 
 
+class PresenceSessionRow(_Frozen):
+    # Открытая presence-сессия для admin-UI «освободить место» (§10.3).
+    id: int
+    vehicle_id: int
+    plate_normalized: str | None
+    apartment_id: int | None
+    zone_id: int
+    entered_at: dt.datetime
+
+
 SpotsPage = _page_model("SpotsPage", SpotRow)
 AssignmentsPage = _page_model("AssignmentsPage", AssignmentRow)
+PresencePage = _page_model("PresencePage", PresenceSessionRow)
 
 
 def _spot_row(s) -> SpotRow:
@@ -331,4 +345,31 @@ def get_zone_occupancy(
     return OccupancyRow(
         zone_id=occ.zone_id, entries=occ.entries, exits=occ.exits,
         occupancy=occ.occupancy, capacity=zone.capacity,
+    )
+
+
+# =============================== ОТКРЫТЫЕ PRESENCE-СЕССИИ ===============================
+
+
+@router.get("/presence", response_model=PresencePage)
+def list_open_presence(
+    zone_id: int | None = Query(None),
+    apartment_id: int | None = Query(None),
+    limit: int = _limit_q(),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _user=Depends(require_approved_roles(*PRESENCE_VIEW_ROLES)),
+):
+    """Список ОТКРЫТЫХ presence-сессий (§10.3) — для выбора сессии под закрытие.
+
+    Фронт показывает их в действии «Освободить место»; само закрытие —
+    ``POST /api/v1/access/presence/{session_id}/close``. RBAC: manager/
+    system_admin/security_operator. Фильтры ``zone_id``/``apartment_id``.
+    """
+    rows, total = presence_repo.list_open_sessions(
+        db, zone_id=zone_id, apartment_id=apartment_id, limit=limit, offset=offset
+    )
+    return PresencePage(
+        items=[PresenceSessionRow(**r) for r in rows], total=total, limit=limit,
+        offset=offset,
     )

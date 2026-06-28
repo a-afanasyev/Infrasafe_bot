@@ -99,7 +99,8 @@
       "guest_vehicle_allowed": "Mehmon kirishi ruxsat etildi",
       "vehicle_not_found": "Avtomobil topilmadi",
       "access_expired": "Kirish muddati tugadi",
-      "manual_review_required": "Qo'lda tekshiruv talab qilinadi"
+      "manual_review_required": "Qo'lda tekshiruv talab qilinadi",
+      "parking_spot_occupied": "Kvartira joylari band"
     },
     "tabs": {
       "live": "Jonli tasma",
@@ -464,6 +465,9 @@
         "maxPermanentVehicles": "Kvartiraga doimiy TVlar chegarasi",
         "maxPermanentVehiclesPlaceholder": "Bo'sh bo'lsa — cheklovsiz",
         "occupancy": "Bandligi",
+        "occupied": "Band",
+        "occupiedOf": "{{spots}} dan {{occupied}}",
+        "enforceLimit": "Chegara",
         "spot": "Joy",
         "apartmentId": "Kvartira ID",
         "ownershipType": "Egalik turi",
@@ -498,14 +502,25 @@
       },
       "actions": {
         "extend": "Uzaytirish",
-        "revoke": "Bekor qilish"
+        "revoke": "Bekor qilish",
+        "freePlace": "Joyni bo'shatish"
       },
       "revokeTitle": "Biriktirishni bekor qilish",
       "revokeConfirm": "«{{spot}}» joyining biriktirilishini bekor qilasizmi? Ushbu biriktirish bo'yicha ruxsat to'xtatiladi.",
+      "enforceLimitHint": "Yoqilgan — kvartiraning ortiqcha avtolari qo'riqchi tekshiruviga; o'chirilgan — chegara olib tashlangan",
+      "freePlace": {
+        "title": "Joyni bo'shatish",
+        "desc": "Sessiyasini yopib joyni bo'shatish uchun zonadagi avtoni tanlang.",
+        "empty": "Bu kvartira bo'yicha ochiq sessiyalar yo'q",
+        "enteredAt": "Kirish",
+        "confirm": "Bo'shatish",
+        "reason": "Qo'riqchi tomonidan joy bo'shatildi"
+      },
       "toast": {
         "spotCreated": "Joy yaratildi",
         "assignmentCreated": "Joy biriktirildi",
-        "assignmentRevoked": "Biriktirish bekor qilindi"
+        "assignmentRevoked": "Biriktirish bekor qilindi",
+        "placeFreed": "Joy bo'shatildi"
       }
     }
   },
@@ -1333,6 +1348,7 @@
       "title": "Kirishni boshqarish",
       "segments": {
         "vehicles": "Avtomobillar",
+        "spots": "Joyim",
         "passes": "Ruxsatnomalar",
         "events": "O'tishlar"
       },
@@ -1349,6 +1365,20 @@
         "requestButton": "Avtomobilga ariza berish",
         "myRequests": "Mening arizalarim",
         "requestsEmpty": "Arizalar yo'q"
+      },
+      "spots": {
+        "title": "Mening joyim",
+        "empty": "Sizda hali biriktirilgan joylar yo'q",
+        "occupiedOf": "{{spots}} dan {{occupied}}",
+        "validUntil": "Amal qiladi",
+        "enforceLimit": "Ortiqcha avtolarga cheklov",
+        "enforceLimitHint": "Ikkinchi mashinani vaqtincha kiritish uchun o'chiring",
+        "limitOn": "Cheklov yoqildi",
+        "limitOff": "Cheklov olib tashlandi",
+        "ownershipType": {
+          "owned": "Shaxsiy",
+          "rented": "Ijara"
+        }
       },
       "vehicleStatus": {
         "active": "Faol",

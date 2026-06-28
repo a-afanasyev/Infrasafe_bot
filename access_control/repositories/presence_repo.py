@@ -100,6 +100,43 @@ def get_session(db: Session, session_id: int) -> VehiclePresenceSession | None:
     return db.get(VehiclePresenceSession, session_id)
 
 
+def list_open_sessions(
+    db: Session,
+    *,
+    zone_id: int | None = None,
+    apartment_id: int | None = None,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict], int]:
+    """ОТКРЫТЫЕ presence-сессии (для admin-UI выбора сессии под закрытие, §10.3).
+
+    Возвращает ``(items, total)``; каждый item — ``{id, vehicle_id,
+    plate_normalized, apartment_id, zone_id, entered_at}`` (номер из ``vehicles``
+    для подсказки оператору). Фильтры ``zone_id``/``apartment_id`` опциональны.
+    """
+    where = "WHERE s.status = 'open'"
+    params: dict = {}
+    if zone_id is not None:
+        where += " AND s.zone_id = :z"
+        params["z"] = zone_id
+    if apartment_id is not None:
+        where += " AND s.apartment_id = :a"
+        params["a"] = apartment_id
+    base = "FROM vehicle_presence_sessions s LEFT JOIN vehicles v ON v.id = s.vehicle_id "
+    total = int(db.execute(text("SELECT count(*) " + base + where), params).scalar() or 0)
+    rows = db.execute(
+        text(
+            "SELECT s.id, s.vehicle_id, v.plate_number_normalized AS plate_normalized, "
+            "s.apartment_id, s.zone_id, s.entered_at "
+            + base
+            + where
+            + " ORDER BY s.entered_at DESC, s.id DESC LIMIT :lim OFFSET :off"
+        ),
+        {**params, "lim": limit, "off": offset},
+    ).mappings().all()
+    return [dict(r) for r in rows], total
+
+
 def close_session_manual(
     db: Session,
     *,

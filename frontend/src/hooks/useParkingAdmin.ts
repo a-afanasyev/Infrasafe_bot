@@ -15,6 +15,10 @@ import type {
   CreateAssignmentPayload,
   UpdateAssignmentPayload,
   ZoneOccupancy,
+  PresenceSessionRow,
+  PresenceFilters,
+  ClosePresencePayload,
+  ClosePresenceResponse,
 } from '../types/access'
 
 /**
@@ -155,5 +159,40 @@ export function useZoneOccupancy(zoneId: number, enabled = true) {
     queryFn: () => accessClient.get(`/admin/zones/${zoneId}/occupancy`).then((r) => r.data),
     enabled,
     staleTime: STALE_MS,
+  })
+}
+
+// ── Открытые presence-сессии (admin «Освободить место», §10.3) ────────────────
+/**
+ * GET /admin/presence — открытые presence-сессии (фильтры zone_id/apartment_id).
+ * Используется в диалоге «Освободить место»: оператор/менеджер выбирает сессию
+ * для ручного закрытия. `enabled=false`, пока диалог закрыт (не лишних запросов).
+ */
+export function useOpenPresenceSessions(filters?: PresenceFilters, enabled = true) {
+  return useQuery<AccessPage<PresenceSessionRow>>({
+    queryKey: ['access-presence', filters ?? {}],
+    queryFn: () =>
+      accessClient.get('/admin/presence', { params: cleanParams(filters) }).then((r) => r.data),
+    enabled,
+    staleTime: STALE_MS,
+  })
+}
+
+/**
+ * POST /presence/{id}/close — ручное закрытие сессии (освобождение места).
+ * Инвалидирует и список сессий, и закрепления (занятость «X из Y» обновляется).
+ */
+export function useClosePresenceSession() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  return useMutation<ClosePresenceResponse, unknown, { id: number; payload: ClosePresencePayload }>({
+    mutationFn: ({ id, payload }) =>
+      accessClient.post(`/presence/${id}/close`, payload).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-presence'] })
+      qc.invalidateQueries({ queryKey: ['access-spot-assignments'] })
+      toast.success(t('accessControl.parking.toast.placeFreed'))
+    },
+    onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
   })
 }

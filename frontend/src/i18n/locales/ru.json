@@ -99,7 +99,8 @@
       "guest_vehicle_allowed": "Гостевой доступ разрешён",
       "vehicle_not_found": "ТС не найдено",
       "access_expired": "Срок доступа истёк",
-      "manual_review_required": "Требуется ручная проверка"
+      "manual_review_required": "Требуется ручная проверка",
+      "parking_spot_occupied": "Места квартиры заняты"
     },
     "tabs": {
       "live": "Live-лента",
@@ -464,6 +465,9 @@
         "maxPermanentVehicles": "Лимит постоянных ТС на квартиру",
         "maxPermanentVehiclesPlaceholder": "Без ограничения, если пусто",
         "occupancy": "Занятость",
+        "occupied": "Занято",
+        "occupiedOf": "{{occupied}} из {{spots}}",
+        "enforceLimit": "Лимит",
         "spot": "Место",
         "apartmentId": "ID квартиры",
         "ownershipType": "Тип владения",
@@ -498,14 +502,25 @@
       },
       "actions": {
         "extend": "Продлить",
-        "revoke": "Отозвать"
+        "revoke": "Отозвать",
+        "freePlace": "Освободить место"
       },
       "revokeTitle": "Отзыв закрепления",
       "revokeConfirm": "Отозвать закрепление места «{{spot}}»? Доступ по этому закреплению прекратится.",
+      "enforceLimitHint": "Включено — лишние авто квартиры на проверку охране; выключено — лимит снят",
+      "freePlace": {
+        "title": "Освободить место",
+        "desc": "Выберите авто внутри зоны, чтобы закрыть его сессию и освободить место.",
+        "empty": "Открытых сессий по этой квартире нет",
+        "enteredAt": "Въезд",
+        "confirm": "Освободить",
+        "reason": "Освобождение места охраной"
+      },
       "toast": {
         "spotCreated": "Место создано",
         "assignmentCreated": "Место закреплено",
-        "assignmentRevoked": "Закрепление отозвано"
+        "assignmentRevoked": "Закрепление отозвано",
+        "placeFreed": "Место освобождено"
       }
     }
   },
@@ -1343,6 +1358,7 @@
       "title": "Контроль доступа",
       "segments": {
         "vehicles": "Авто",
+        "spots": "Место",
         "passes": "Пропуска",
         "events": "Проезды"
       },
@@ -1359,6 +1375,20 @@
         "requestButton": "Подать заявку на авто",
         "myRequests": "Мои заявки",
         "requestsEmpty": "Заявок нет"
+      },
+      "spots": {
+        "title": "Моё место",
+        "empty": "У вас пока нет закреплённых мест",
+        "occupiedOf": "{{occupied}} из {{spots}}",
+        "validUntil": "Действует до",
+        "enforceLimit": "Ограничение на лишние авто",
+        "enforceLimitHint": "Выключите, чтобы временно впустить вторую машину",
+        "limitOn": "Ограничение включено",
+        "limitOff": "Ограничение снято",
+        "ownershipType": {
+          "owned": "Собственное",
+          "rented": "Аренда"
+        }
       },
       "vehicleStatus": {
         "active": "Активен",

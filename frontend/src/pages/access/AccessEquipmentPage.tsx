@@ -12,6 +12,7 @@ import ControllerTestDialog from '../../components/access/ControllerTestDialog'
 import SpotAssignmentFormDialog, {
   ExtendAssignmentDialog,
 } from '../../components/access/SpotAssignmentFormDialog'
+import FreePlaceDialog from '../../components/access/FreePlaceDialog'
 import { AccessStatusBadge, ParkingTypeBadge } from '../../components/access/AccessBadges'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -320,6 +321,7 @@ function AssignmentsPanel({ canManage, zones }: { canManage: boolean; zones: Zon
   const [formOpen, setFormOpen] = useState(false)
   const [revoke, setRevoke] = useState<AssignmentRow | null>(null)
   const [extend, setExtend] = useState<AssignmentRow | null>(null)
+  const [freePlace, setFreePlace] = useState<AssignmentRow | null>(null)
 
   const rows = data?.items ?? []
   const zoneCode = (id: number) => zones.find((z) => z.id === id)?.code ?? `#${id}`
@@ -335,6 +337,31 @@ function AssignmentsPanel({ canManage, zones }: { canManage: boolean; zones: Zon
     { key: 'spot', label: t('accessControl.parking.fields.spot'), render: (a) => <span className="font-mono">{spotCell(a.spot_id)}</span> },
     { key: 'apartment', label: t('accessControl.parking.fields.apartmentId'), render: (a) => `#${a.apartment_id}` },
     { key: 'ownership', label: t('accessControl.parking.fields.ownershipType'), render: (a) => t(`accessControl.parking.ownershipType.${a.ownership_type}`, { defaultValue: a.ownership_type }) },
+    {
+      key: 'enforce',
+      label: t('accessControl.parking.fields.enforceLimit'),
+      render: (a) => (
+        <input
+          type="checkbox"
+          role="switch"
+          aria-label={t('accessControl.parking.fields.enforceLimit')}
+          title={t('accessControl.parking.enforceLimitHint')}
+          checked={a.enforce_limit}
+          disabled={!canManage || update.isPending}
+          onChange={() => update.mutate({ id: a.id, payload: { enforce_limit: !a.enforce_limit } })}
+          className="h-4 w-4 cursor-pointer accent-emerald-500"
+        />
+      ),
+    },
+    {
+      key: 'occupied',
+      label: t('accessControl.parking.fields.occupied'),
+      render: (a) => (
+        <span className="font-mono">
+          {t('accessControl.parking.fields.occupiedOf', { occupied: a.occupied, spots: a.spots })}
+        </span>
+      ),
+    },
     { key: 'from', label: t('accessControl.parking.fields.validFrom'), render: (a) => fmtDate(a.valid_from) },
     { key: 'until', label: t('accessControl.parking.fields.validUntil'), render: (a) => fmtDate(a.valid_until) },
     { key: 'status', label: t('accessControl.columns.status'), render: (a) => <AccessStatusBadge status={a.status} /> },
@@ -387,6 +414,9 @@ function AssignmentsPanel({ canManage, zones }: { canManage: boolean; zones: Zon
                   <Button size="sm" variant="outline" onClick={() => setExtend(a)}>
                     {t('accessControl.parking.actions.extend')}
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => setFreePlace(a)}>
+                    {t('accessControl.parking.actions.freePlace')}
+                  </Button>
                   {a.status === 'active' && (
                     <Button size="sm" variant="destructive" onClick={() => setRevoke(a)}>
                       {t('accessControl.parking.actions.revoke')}
@@ -396,6 +426,12 @@ function AssignmentsPanel({ canManage, zones }: { canManage: boolean; zones: Zon
               )
             : undefined
         }
+      />
+
+      <FreePlaceDialog
+        apartmentId={freePlace?.apartment_id ?? null}
+        zoneId={freePlace ? (spotById(freePlace.spot_id)?.zone_id ?? null) : null}
+        onClose={() => setFreePlace(null)}
       />
 
       {canManage && (

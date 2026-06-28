@@ -369,3 +369,90 @@ def test_presence_router_registered() -> None:
     app = create_app()
     paths = {route.path for route in app.routes}
     assert "/api/v1/access/presence/{session_id}/close" in paths
+
+
+# ------------------- admin: список открытых presence-сессий -------------------
+
+
+def test_admin_presence_route_registered() -> None:
+    paths = {route.path for route in create_app().routes}
+    assert "/api/v1/access/admin/presence" in paths
+
+
+def test_admin_presence_requires_auth_401(pg_db, pilot: PilotFixture) -> None:
+    _seed_open_session(pg_db, pilot)
+    resp = TestClient(create_app()).get("/api/v1/access/admin/presence")
+    assert resp.status_code == 401
+
+
+def test_admin_presence_applicant_403(pg_db, pilot: PilotFixture) -> None:
+    uid = seed_user(pg_db, roles="applicant")
+    app = create_app()
+    app.dependency_overrides[get_current_user] = _fake_user(uid, "applicant")
+    resp = TestClient(app).get("/api/v1/access/admin/presence")
+    assert resp.status_code == 403
+
+
+def test_admin_presence_manager_lists_open_session(pg_db, pilot: PilotFixture) -> None:
+    sid = _seed_open_session(pg_db, pilot)
+    uid = seed_user(pg_db, roles="manager")
+    app = create_app()
+    app.dependency_overrides[get_current_user] = _fake_user(uid, "manager")
+    resp = TestClient(app).get("/api/v1/access/admin/presence")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert set(body.keys()) >= {"items", "total", "limit", "offset"}
+    assert body["total"] >= 1
+    row = next(it for it in body["items"] if it["id"] == sid)
+    assert row["zone_id"] == pilot.zone_id
+    assert row["apartment_id"] == pilot.apartment_id
+    assert row["plate_normalized"] == "01A009AA"
+    assert row["entered_at"] is not None
+
+
+def test_admin_presence_security_operator_ok(pg_db, pilot: PilotFixture) -> None:
+    _seed_open_session(pg_db, pilot)
+    uid = seed_user(pg_db, roles="security_operator")
+    app = create_app()
+    app.dependency_overrides[get_current_user] = _fake_user(uid, "security_operator")
+    resp = TestClient(app).get("/api/v1/access/admin/presence")
+    assert resp.status_code == 200
+
+
+def test_admin_presence_filter_by_zone_and_apartment(pg_db, pilot: PilotFixture) -> None:
+    sid = _seed_open_session(pg_db, pilot)
+    uid = seed_user(pg_db, roles="manager")
+    app = create_app()
+    app.dependency_overrides[get_current_user] = _fake_user(uid, "manager")
+    client = TestClient(app)
+
+    by_zone = client.get(f"/api/v1/access/admin/presence?zone_id={pilot.zone_id}").json()
+    assert any(it["id"] == sid for it in by_zone["items"])
+    by_apt = client.get(
+        f"/api/v1/access/admin/presence?apartment_id={pilot.apartment_id}"
+    ).json()
+    assert any(it["id"] == sid for it in by_apt["items"])
+
+    # Несуществующая зона → пусто.
+    empty = client.get("/api/v1/access/admin/presence?zone_id=999999").json()
+    assert empty["total"] == 0
+    assert empty["items"] == []
+
+
+def test_admin_presence_excludes_closed_session(pg_db, pilot: PilotFixture) -> None:
+    sid = _seed_open_session(pg_db, pilot)
+    operator = seed_user(pg_db, roles="manager")
+    app = create_app()
+    app.dependency_overrides[get_current_user] = _fake_user(operator, "manager")
+    client = TestClient(app)
+
+    before = client.get("/api/v1/access/admin/presence").json()
+    assert any(it["id"] == sid for it in before["items"])
+
+    closed = client.post(
+        f"/api/v1/access/presence/{sid}/close", json={"reason": "освободить место"}
+    )
+    assert closed.status_code == 200, closed.text
+
+    after = client.get("/api/v1/access/admin/presence").json()
+    assert all(it["id"] != sid for it in after["items"])
