@@ -24,6 +24,8 @@ import type {
   CreateTaxiPassPayload,
   ReviewRequestPayload,
   ReviewRequestResponse,
+  RedeemCodePayload,
+  RedeemCodeResponse,
 } from '../types/access'
 
 /**
@@ -121,6 +123,19 @@ export function useManualOpenBarrier() {
       accessClient
         .post(`/barriers/${barrierId}/manual-open`, { reason })
         .then((r) => r.data),
+  })
+}
+
+/**
+ * Погашение одноразового гостевого кода оператором (POST /passes/redeem-code, §9.3).
+ * RBAC бэкенда: security_operator/manager/system_admin (= ACCESS_MODULE_ROLES).
+ * Без toast — результат (квартира/ошибка) показывается прямо в диалоге, чтобы
+ * 422/429 раскрывались общим текстом без деталей.
+ */
+export function useRedeemGuestCode() {
+  return useMutation<RedeemCodeResponse, unknown, RedeemCodePayload>({
+    mutationFn: (payload) =>
+      accessClient.post('/passes/redeem-code', payload).then((r) => r.data),
   })
 }
 

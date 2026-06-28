@@ -218,6 +218,22 @@
       "openedToast": "Shlagbaum ochildi",
       "deniedToast": "O'tish rad etildi"
     },
+    "redeem": {
+      "action": "Mehmon kodini tekshirish",
+      "title": "Mehmon kodini tekshirish",
+      "desc": "Yashovchi mehmonga bergan 8 xonali kodni kiriting.",
+      "codeLabel": "Mehmon kodi",
+      "codePlaceholder": "8 ta raqam",
+      "check": "Tekshirish",
+      "checkAnother": "Boshqa kodni tekshirish",
+      "apartment": "Xonadon",
+      "passType": "Ruxsatnoma turi",
+      "barrierOpened": "Shlagbaum ochildi",
+      "commandId": "Buyruq ID",
+      "errorInvalid": "Kod noto'g'ri yoki yaroqsiz",
+      "errorBlocked": "Urinishlar juda ko'p, keyinroq qayta urinib ko'ring",
+      "errorGeneric": "Kodni tekshirib bo'lmadi"
+    },
     "detail": {
       "title": "Kirish hodisasi",
       "eventId": "Hodisa ID",
@@ -1315,7 +1331,15 @@
         "submit": "Buyurtirish",
         "success": "Ruxsatnoma yaratildi",
         "error": "Ruxsatnoma yaratib bo'lmadi",
-        "zoneError": "Zonani aniqlab bo'lmadi. Boshqaruv kompaniyasiga murojaat qiling."
+        "zoneError": "Zonani aniqlab bo'lmadi. Boshqaruv kompaniyasiga murojaat qiling.",
+        "code": {
+          "title": "Ruxsatnoma yaratildi",
+          "label": "Mehmon uchun kod",
+          "copy": "Nusxalash",
+          "copied": "Nusxalandi",
+          "hint": "Kodni mehmonga bering. Faqat bir marta ko'rsatiladi — saqlab qoling.",
+          "done": "Tayyor"
+        }
       },
       "events": {
         "title": "O'tishlar",

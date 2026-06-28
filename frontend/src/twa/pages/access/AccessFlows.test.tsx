@@ -161,4 +161,57 @@ describe('TWA Access — PassNewPage', () => {
     expect(captured!.max_entries).toBe(1)
     expect(typeof captured!.valid_until).toBe('string')
   })
+
+  it('guest без номера: показывает одноразовый код один раз + копирование (§9.3)', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    server.use(
+      http.get('*/api/v2/profile/apartments', () =>
+        HttpResponse.json([{ apartment_id: 7, full_address: 'Дом 1, кв. 5' }]),
+      ),
+      http.post('*/api/v1/access/passes', () =>
+        HttpResponse.json({
+          id: 100,
+          pass_type: 'guest',
+          apartment_id: 7,
+          created_by_user_id: 1,
+          zone_id: 1,
+          plate_number_original: null,
+          plate_number_normalized: null,
+          valid_from: null,
+          valid_until: '2026-07-01T12:00:00Z',
+          max_entries: 1,
+          used_entries: 0,
+          status: 'active',
+          source: 'resident',
+          created_at: '2026-06-28T10:00:00Z',
+          one_time_code: '48217305',
+        }),
+      ),
+    )
+
+    render(<PassNewPage />)
+
+    // guest выбран по умолчанию; задаём срок и отправляем.
+    expect(await screen.findByText('🏠 Дом 1, кв. 5')).toBeInTheDocument()
+    const dt = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    fireEvent.change(dt, { target: { value: '2026-07-01T15:00' } })
+
+    const submit = screen.getByRole('button', { name: 'Заказать' })
+    await waitFor(() => expect(submit).toBeEnabled())
+    await userEvent.click(submit)
+
+    // Код виден крупно (data-testid), с пояснением «один раз».
+    const code = await screen.findByTestId('one-time-code')
+    expect(code).toHaveTextContent('48217305')
+    expect(
+      screen.getByText('Передайте код гостю. Показывается один раз — сохраните.'),
+    ).toBeInTheDocument()
+
+    // Копирование кладёт код в буфер обмена.
+    await userEvent.click(screen.getByRole('button', { name: 'Скопировать' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('48217305'))
+    expect(await screen.findByRole('button', { name: 'Скопировано' })).toBeInTheDocument()
+  })
 })

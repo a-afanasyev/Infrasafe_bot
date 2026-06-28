@@ -8,7 +8,12 @@ import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import ApartmentSelect from './ApartmentSelect'
 import { useApartments } from './useApartments'
-import { ACCESS_BASE, RESIDENT_PASS_TYPES, type ResidentPassType } from './types'
+import {
+  ACCESS_BASE,
+  RESIDENT_PASS_TYPES,
+  type ResidentPassType,
+  type PassCreateResponse,
+} from './types'
 
 /**
  * Форма «Заказать пропуск» (POST /api/v1/access/passes).
@@ -28,6 +33,10 @@ export default function PassNewPage() {
   const [passType, setPassType] = useState<ResidentPassType>('guest')
   const [plate, setPlate] = useState('')
   const [validUntil, setValidUntil] = useState('')
+  // Одноразовый код гостя (§9.3): приходит только для guest-пропуска без номера.
+  // Пока он показан — рендерим экран успеха с кодом вместо формы.
+  const [oneTimeCode, setOneTimeCode] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => showBackButton(() => navigate(-1)), [showBackButton, navigate])
 
@@ -37,19 +46,27 @@ export default function PassNewPage() {
     }
   }, [apartments, apartmentId])
 
-  const createMutation = useMutation({
+  const createMutation = useMutation<PassCreateResponse, unknown, void>({
     mutationFn: () =>
-      twaClient.post(`${ACCESS_BASE}/passes`, {
-        apartment_id: apartmentId,
-        pass_type: passType,
-        valid_until: new Date(validUntil).toISOString(),
-        plate_number_original: plate.trim() || undefined,
-        max_entries: 1,
-      }),
-    onSuccess: () => {
+      twaClient
+        .post<PassCreateResponse>(`${ACCESS_BASE}/passes`, {
+          apartment_id: apartmentId,
+          pass_type: passType,
+          valid_until: new Date(validUntil).toISOString(),
+          plate_number_original: plate.trim() || undefined,
+          max_entries: 1,
+        })
+        .then((r) => r.data),
+    onSuccess: (data) => {
       haptic('notification')
-      toast.success(t('twa.access.passNew.success'))
       queryClient.invalidateQueries({ queryKey: ['twa', 'access', 'passes'] })
+      // guest без номера → бэкенд вернул одноразовый код: показываем его
+      // жителю один раз. Иначе — обычное подтверждение и возврат к списку.
+      if (data.one_time_code) {
+        setOneTimeCode(data.one_time_code)
+        return
+      }
+      toast.success(t('twa.access.passNew.success'))
       navigate('/twa/app/access')
     },
     onError: (err: unknown) => {
@@ -67,6 +84,60 @@ export default function PassNewPage() {
 
   const canSubmit =
     apartmentId != null && validUntil.trim().length > 0 && !createMutation.isPending
+
+  async function copyCode() {
+    if (!oneTimeCode) return
+    try {
+      await navigator.clipboard.writeText(oneTimeCode)
+      setCopied(true)
+      haptic('notification')
+      toast.success(t('twa.access.passNew.code.copied'))
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }
+
+  // Экран успеха с одноразовым кодом гостя (§9.3): показывается ОДИН РАЗ.
+  if (oneTimeCode) {
+    return (
+      <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
+        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+          {t('twa.access.passNew.code.title')}
+        </h1>
+
+        <div className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-6 text-center">
+          <p className="text-[13px] text-gray-500 dark:text-gray-400 mb-3">
+            {t('twa.access.passNew.code.label')}
+          </p>
+          <div
+            data-testid="one-time-code"
+            className="font-mono text-3xl font-bold tracking-[0.3em] text-gray-900 dark:text-gray-100 mb-5 select-all"
+          >
+            {oneTimeCode}
+          </div>
+          <button
+            type="button"
+            onClick={copyCode}
+            className="w-full bg-emerald-500 text-white py-3 rounded-xl font-semibold active:scale-[0.98] transition-transform"
+          >
+            {copied ? t('twa.access.passNew.code.copied') : t('twa.access.passNew.code.copy')}
+          </button>
+        </div>
+
+        <p className="mt-4 text-[13px] text-amber-600 dark:text-amber-400 text-center px-2">
+          {t('twa.access.passNew.code.hint')}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => navigate('/twa/app/access')}
+          className="mt-auto w-full border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-3 rounded-xl font-semibold"
+        >
+          {t('twa.access.passNew.code.done')}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">

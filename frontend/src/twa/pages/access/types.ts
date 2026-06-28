@@ -60,6 +60,16 @@ export interface PassRow {
   created_at: string
 }
 
+/**
+ * Ответ POST /passes — созданный пропуск + одноразовый код (§9.3).
+ * `one_time_code` приходит ТОЛЬКО для guest-пропуска без номера (8 цифр,
+ * plaintext, показывается жителю РОВНО ОДИН РАЗ). Для taxi/delivery/guest-с-
+ * номером поле = null.
+ */
+export interface PassCreateResponse extends PassRow {
+  one_time_code?: string | null
+}
+
 /** Заявка на постоянный авто (GET /my/requests, POST /requests). */
 export interface RequestRow {
   id: number
