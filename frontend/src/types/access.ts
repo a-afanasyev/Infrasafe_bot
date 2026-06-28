@@ -36,6 +36,9 @@ export interface AccessEventRow {
   // отдаёт их вместе с детальной camera_event (str | null, опц. для совместимости).
   plate_photo_url?: string | null
   overview_photo_url?: string | null
+  // Ответы жителей на спорный въезд (совещательно). Опц.: строка очереди может не
+  // отдавать их — тогда индикатор в карточке очереди не показывается, только в детали.
+  resident_confirmations?: ResidentConfirmation[]
 }
 
 export interface AccessEventsFilters {
@@ -110,11 +113,23 @@ export interface ManualOpeningRow {
   created_at: string
 }
 
+/**
+ * Ответ жителя на спорный въезд (manual_review): совещательный сигнал оператору.
+ * `confirm` — житель подтвердил, что это его/ожидаемый въезд; `deny` — отрицает.
+ * Решение (open/deny) всё равно принимает оператор.
+ */
+export interface ResidentConfirmation {
+  user_id: number
+  response: 'confirm' | 'deny'
+  created_at: string
+}
+
 export interface AccessEventDetail {
   camera_event: CameraEventDetail
   decisions: DecisionRow[]
   barrier_commands: CommandRow[]
   manual_openings: ManualOpeningRow[]
+  resident_confirmations: ResidentConfirmation[]
 }
 
 // ── Авто (база данных) ──────────────────────────────────────────────────────

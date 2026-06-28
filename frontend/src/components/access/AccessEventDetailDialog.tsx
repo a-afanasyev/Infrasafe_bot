@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { useAccessEventDetail } from '../../hooks/useAccessRegistry'
-import { DecisionBadge } from './AccessBadges'
+import { DecisionBadge, ResidentResponseBadge } from './AccessBadges'
 import AccessPhotos from './AccessPhotos'
 import { formatDateTime } from '../../utils/accessFormat'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -122,6 +122,30 @@ export default function AccessEventDetailDialog({ eventId, onClose }: Props) {
                 </div>
               )}
             </Section>
+
+            {/* Ответ жителя на спорный въезд (§14): совещательный сигнал —
+                оператор всё равно решает open/deny. Пустой массив — не показываем. */}
+            {data.resident_confirmations.length > 0 && (
+              <Section title={t('accessControl.residentResponse.title')}>
+                <p className="text-[12px] text-text-muted">
+                  {t('accessControl.residentResponse.advisory')}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {data.resident_confirmations.map((rc, i) => (
+                    <div
+                      key={`${rc.user_id}-${rc.created_at}-${i}`}
+                      className="flex items-center gap-2 rounded-sm border border-border-default bg-bg-surface px-3 py-2 text-[12px]"
+                    >
+                      <span className="text-text-primary">
+                        {t('accessControl.residentResponse.resident', { id: rc.user_id })}
+                      </span>
+                      <ResidentResponseBadge response={rc.response} />
+                      <span className="ml-auto text-text-muted">{formatDateTime(rc.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
 
             {/* Команды шлагбаума */}
             <Section title={t('accessControl.detail.commands')}>

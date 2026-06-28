@@ -45,3 +45,19 @@ export function AccessStatusBadge({ status }: { status: string | null }) {
   const label = t(`accessControl.status.${status}`, { defaultValue: status })
   return <span className={cn(PILL, STATUS_CLASS[status] ?? FALLBACK_CLASS)}>{label}</span>
 }
+
+// Ответ жителя на спорный въезд: «Подтвердил» (зелёный) / «Отклонил» (красный).
+// Совещательный сигнал — решение всё равно за оператором.
+const RESIDENT_RESPONSE_CLASS: Record<string, string> = {
+  confirm: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+  deny: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+}
+
+export function ResidentResponseBadge({ response }: { response: 'confirm' | 'deny' }) {
+  const { t } = useTranslation()
+  const label =
+    response === 'confirm'
+      ? t('accessControl.residentResponse.confirmed')
+      : t('accessControl.residentResponse.denied')
+  return <span className={cn(PILL, RESIDENT_RESPONSE_CLASS[response] ?? FALLBACK_CLASS)}>{label}</span>
+}

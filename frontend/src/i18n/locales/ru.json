@@ -244,6 +244,15 @@
       "commands": "Команды шлагбаума",
       "manualOpenings": "Ручные открытия"
     },
+    "residentResponse": {
+      "title": "Ответ жителя",
+      "confirmed": "Подтвердил",
+      "denied": "Отклонил",
+      "advisory": "Совещательно — решение принимает оператор",
+      "resident": "Житель #{{id}}",
+      "queueConfirmed": "Житель подтвердил",
+      "queueDenied": "Житель отклонил"
+    },
     "photos": {
       "title": "Фото проезда",
       "vehicle": "Фото автомобиля",

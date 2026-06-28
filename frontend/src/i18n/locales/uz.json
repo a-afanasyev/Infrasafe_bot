@@ -244,6 +244,15 @@
       "commands": "Shlagbaum buyruqlari",
       "manualOpenings": "Qo'lda ochishlar"
     },
+    "residentResponse": {
+      "title": "Yashovchi javobi",
+      "confirmed": "Tasdiqladi",
+      "denied": "Rad etdi",
+      "advisory": "Maslahat tarzida — qarorni operator qabul qiladi",
+      "resident": "Yashovchi #{{id}}",
+      "queueConfirmed": "Yashovchi tasdiqladi",
+      "queueDenied": "Yashovchi rad etdi"
+    },
     "photos": {
       "title": "O'tish fotosi",
       "vehicle": "Avtomobil fotosi",

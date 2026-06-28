@@ -30,8 +30,12 @@ import json
 import logging
 import os
 
+from aiogram.types import InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 from access_control.services.resident_notify import (
     ACCESS_RESIDENT_NOTIFY_CHANNEL,
+    KIND_DISPUTED_ENTRY,
     KIND_VEHICLE_REQUEST_RESOLVED,
     ResidentNotification,
 )
@@ -76,6 +80,17 @@ def build_notification_text(
     Возвращает ``None`` для неизвестного вида/статуса (нечего слать).
     Комментарий менеджера (если есть) дописывается отдельной строкой.
     """
+    if notification.kind == KIND_DISPUTED_ENTRY:
+        # PD-safe (§11): в тексте только маскированный хвост номера и номер зоны.
+        plate = (notification.plate_masked or "").strip() or "—"
+        zone = notification.zone if notification.zone is not None else "—"
+        return get_text(
+            "access_control.notify.disputed_entry.text",
+            language=language,
+            plate=plate,
+            zone=zone,
+        )
+
     if notification.kind != KIND_VEHICLE_REQUEST_RESOLVED:
         return None
 
@@ -99,6 +114,37 @@ def build_notification_text(
             "access_control.notify.comment", language=language, comment=comment
         )
     return base
+
+
+def build_reply_markup(
+    notification: ResidentNotification, language: str
+) -> InlineKeyboardMarkup | None:
+    """Инлайн-клавиатура уведомления (или ``None``, если кнопки не нужны).
+
+    Только спорный въезд (§9.4) несёт кнопки «Подтвердить/Отклонить»; нажатие
+    приходит коллбэком ``acc_dispute:{decision_id}:{confirm|deny}`` (≤64 байта).
+    Прочие виды уведомлений — без клавиатуры.
+    """
+    if notification.kind != KIND_DISPUTED_ENTRY:
+        return None
+    decision_id = notification.decision_id
+    if decision_id is None:
+        return None
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=get_text(
+            "access_control.notify.disputed_entry.btn_confirm", language=language
+        ),
+        callback_data=f"acc_dispute:{decision_id}:confirm",
+    )
+    kb.button(
+        text=get_text(
+            "access_control.notify.disputed_entry.btn_deny", language=language
+        ),
+        callback_data=f"acc_dispute:{decision_id}:deny",
+    )
+    kb.adjust(2)
+    return kb.as_markup()
 
 
 def _resolve_recipient(db, recipient_user_id: int) -> User | None:
@@ -141,8 +187,9 @@ async def handle_payload(bot, db, payload: dict) -> None:
         )
         return
 
+    reply_markup = build_reply_markup(notification, language)
     try:
-        await bot.send_message(user.telegram_id, text)
+        await bot.send_message(user.telegram_id, text, reply_markup=reply_markup)
         logger.info(
             "resident notify delivered: kind=%s status=%s recipient_id=%s",
             notification.kind,

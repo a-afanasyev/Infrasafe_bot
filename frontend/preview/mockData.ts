@@ -130,6 +130,7 @@ export const manualReviewEvents: AccessEventRow[] = [
     has_command: false,
     overview_photo_url: overviewPhoto('30B777CD'),
     plate_photo_url: platePhoto('30B777CD'),
+    resident_confirmations: [{ user_id: 45, response: 'confirm', created_at: minAgo(1) }],
   },
   {
     id: 9102,
@@ -192,6 +193,9 @@ export const eventDetail: AccessEventDetail = {
   ],
   barrier_commands: [],
   manual_openings: [],
+  resident_confirmations: [
+    { user_id: 45, response: 'confirm', created_at: minAgo(1) },
+  ],
 }
 
 // ── (A/B) История проездов ───────────────────────────────────────────────────

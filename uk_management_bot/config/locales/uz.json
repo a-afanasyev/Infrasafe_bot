@@ -8203,7 +8203,17 @@
         "approved": "✅ <b>Avtomobil arizangiz tasdiqlandi</b>",
         "rejected": "❌ <b>Avtomobil arizangiz rad etildi</b>"
       },
+      "disputed_entry": {
+        "text": "⚠️ <b>Avtomobilingiz bo'yicha bahsli kirish</b> {plate}, hudud {zone}.\n\nBu sizmisiz?",
+        "btn_confirm": "✅ Tasdiqlash",
+        "btn_deny": "❌ Rad etish"
+      },
       "comment": "\n\n💬 Izoh: {comment}"
+    },
+    "dispute": {
+      "answered_confirm": "Rahmat, javobingiz qabul qilindi: Tasdiqlangan",
+      "answered_deny": "Rahmat, javobingiz qabul qilindi: Rad etilgan",
+      "error": "Javobni qayd etib bo'lmadi: kirish mavjud emas."
     },
     "not_resident": "Bo'lim faqat istiqomatchilar uchun.",
     "menu_title": "🚗 Kirish nazorati\n\nAmalni tanlang:",

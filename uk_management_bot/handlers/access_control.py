@@ -26,11 +26,14 @@ from sqlalchemy.orm import Session
 
 from access_control.services.resident import (
     ApartmentNotOwned,
+    DecisionNotFound,
+    EntryNotOwned,
     PassNotFound,
     PassNotOwned,
     ZoneNotResolved,
     approved_apartments,
     cancel_resident_pass,
+    confirm_disputed_entry,
     create_resident_pass,
     create_resident_request,
     list_resident_events,
@@ -487,6 +490,67 @@ async def ac_cancel_pass(callback: CallbackQuery, db: Session, language: str = "
         return
     await callback.answer(get_text("access_control.pass.cancelled", language=language),
                           show_alert=True)
+
+
+# --------------------------- спорный въезд (§9.4) ---------------------------
+#
+# Бот шлёт жителю уведомление о спорном въезде с кнопками «Подтвердить/Отклонить»
+# (см. services/access_notify_subscriber.build_reply_markup, callback_data
+# ``acc_dispute:{decision_id}:{confirm|deny}``). Нажатие фиксируется ОБЩИМ сервисом
+# ``confirm_disputed_entry`` на своей sync-сессии. Ответ СОВЕЩАТЕЛЬНЫЙ (§9.5): бот
+# шлагбаум НЕ открывает, только фиксирует мнение жителя. Идемпотентно: повтор —
+# upsert последнего ответа в сервисе. ПД (номер) в логи не пишем (§11).
+
+_DISPUTE_RESPONSES = ("confirm", "deny")
+
+
+@router.callback_query(F.data.startswith("acc_dispute:"))
+async def ac_dispute_response(callback: CallbackQuery, db: Session, language: str = "ru"):
+    """Зафиксировать ответ жителя на спорный въезд (§6.4, §9.4). Идемпотентно."""
+    parts = (callback.data or "").split(":")
+    if len(parts) != 3 or parts[2] not in _DISPUTE_RESPONSES:
+        await callback.answer()
+        return
+    response = parts[2]
+    try:
+        decision_id = int(parts[1])
+    except ValueError:
+        await callback.answer()
+        return
+
+    user = _resolve_resident(db, callback.from_user.id)
+    if user is None:
+        await callback.answer(
+            get_text("access_control.not_resident", language=language), show_alert=True
+        )
+        return
+
+    try:
+        confirm_disputed_entry(
+            db, actor_user_id=user.id, decision_id=decision_id, response=response
+        )
+    except (DecisionNotFound, EntryNotOwned):
+        # Чужой/недоступный въезд — не раскрываем детали, чужое сообщение не правим.
+        await callback.answer(
+            get_text("access_control.dispute.error", language=language), show_alert=True
+        )
+        return
+    except Exception:  # noqa: BLE001 — сбой сервиса не должен ронять хендлер
+        logger.warning("disputed entry response failed (no PD)")
+        await callback.answer(
+            get_text("access_control.error", language=language), show_alert=True
+        )
+        return
+
+    answered = get_text(
+        f"access_control.dispute.answered_{response}", language=language
+    )
+    await callback.answer(answered)
+    # Правим сообщение и убираем клавиатуру (edit_text без reply_markup снимает кнопки).
+    try:
+        await callback.message.edit_text(answered)
+    except Exception:  # noqa: BLE001 — сообщение могло устареть/быть недоступно
+        pass
 
 
 # --------------------------- рендер (без ПД в логах) ---------------------------

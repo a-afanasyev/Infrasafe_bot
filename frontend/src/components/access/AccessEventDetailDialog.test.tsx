@@ -31,6 +31,7 @@ const detail = {
   decisions: [],
   barrier_commands: [],
   manual_openings: [],
+  resident_confirmations: [],
 }
 
 describe('AccessEventDetailDialog', () => {
@@ -46,5 +47,36 @@ describe('AccessEventDetailDialog', () => {
       'src',
       'data:image/svg+xml,<svg/>plate',
     )
+  })
+
+  it('показывает ответ жителя (подтвердил/отклонил) при непустом resident_confirmations', async () => {
+    const withConfirmations = {
+      ...detail,
+      resident_confirmations: [
+        { user_id: 42, response: 'confirm', created_at: new Date().toISOString() },
+        { user_id: 77, response: 'deny', created_at: new Date().toISOString() },
+      ],
+    }
+    server.use(
+      http.get('*/api/v1/access/events/2', () => HttpResponse.json(withConfirmations)),
+    )
+    render(<AccessEventDetailDialog eventId={2} onClose={() => {}} />)
+    await waitFor(() =>
+      expect(screen.getByText('Ответ жителя')).toBeInTheDocument(),
+    )
+    expect(screen.getByText('Подтвердил')).toBeInTheDocument()
+    expect(screen.getByText('Отклонил')).toBeInTheDocument()
+    expect(screen.getByText('Совещательно — решение принимает оператор')).toBeInTheDocument()
+  })
+
+  it('не показывает секцию ответа жителя при пустом resident_confirmations', async () => {
+    server.use(
+      http.get('*/api/v1/access/events/1', () => HttpResponse.json(detail)),
+    )
+    render(<AccessEventDetailDialog eventId={1} onClose={() => {}} />)
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'Фото автомобиля' })).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Ответ жителя')).not.toBeInTheDocument()
   })
 })

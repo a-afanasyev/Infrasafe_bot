@@ -27,7 +27,7 @@ import PassesTable from '@/components/access/PassesTable'
 import RequestsTable from '@/components/access/RequestsTable'
 import AccessPhotos from '@/components/access/AccessPhotos'
 import EquipmentTable, { type EquipmentColumn } from '@/components/access/EquipmentTable'
-import { AccessStatusBadge } from '@/components/access/AccessBadges'
+import { AccessStatusBadge, ResidentResponseBadge } from '@/components/access/AccessBadges'
 import type {
   AccessEventsFilters as Filters,
   ZoneRow,
@@ -285,6 +285,25 @@ function EventDetailSection() {
             <Ctx label="Цвет" value={ev.color ?? '—'} />
           </div>
         </div>
+        {eventDetail.resident_confirmations.length > 0 && (
+          <div>
+            <SubLabel>Ответ жителя</SubLabel>
+            <p className="mt-1 text-[12px] text-text-muted">
+              Совещательно — решение принимает оператор
+            </p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {eventDetail.resident_confirmations.map((rc, i) => (
+                <div
+                  key={`${rc.user_id}-${i}`}
+                  className="flex items-center gap-2 rounded-sm border border-border-default bg-bg-surface px-3 py-2 text-[12px]"
+                >
+                  <span className="text-text-primary">Житель #{rc.user_id}</span>
+                  <ResidentResponseBadge response={rc.response} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )
