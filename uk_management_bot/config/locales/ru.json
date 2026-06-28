@@ -8197,6 +8197,13 @@
     "request_process_failed": "Не удалось обработать заявку. Попробуйте позже."
   },
   "access_control": {
+    "notify": {
+      "vehicle_request_resolved": {
+        "approved": "✅ <b>Ваша заявка на автомобиль одобрена</b>",
+        "rejected": "❌ <b>Ваша заявка на автомобиль отклонена</b>"
+      },
+      "comment": "\n\n💬 Комментарий: {comment}"
+    },
     "not_resident": "Раздел доступен только жителям.",
     "menu_title": "🚗 Контроль доступа\n\nВыберите действие:",
     "btn_vehicles": "🚙 Мои авто",

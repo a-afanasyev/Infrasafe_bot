@@ -8198,6 +8198,13 @@
     "request_process_failed": "Arizani qayta ishlab bo'lmadi. Keyinroq urinib ko'ring."
   },
   "access_control": {
+    "notify": {
+      "vehicle_request_resolved": {
+        "approved": "✅ <b>Avtomobil arizangiz tasdiqlandi</b>",
+        "rejected": "❌ <b>Avtomobil arizangiz rad etildi</b>"
+      },
+      "comment": "\n\n💬 Izoh: {comment}"
+    },
     "not_resident": "Bo'lim faqat istiqomatchilar uchun.",
     "menu_title": "🚗 Kirish nazorati\n\nAmalni tanlang:",
     "btn_vehicles": "🚙 Mening avtolarim",

@@ -386,6 +386,7 @@ async def main():
         logger.error(f"Не удалось запустить health check сервер: {e}")
         # Продолжаем работу бота даже если health сервер не запустился
     
+    resident_notify_task = None
     try:
         # Инициализируем планировщик смен
         await initialize_scheduler(bot)
@@ -396,6 +397,14 @@ async def main():
         # Отправляем уведомление о запуске
         await send_startup_notification(bot)
 
+        # Подписчик резидентских уведомлений (access:resident_notify → Telegram).
+        # Best-effort: запускается только при ACCESS_EVENT_BROKER=redis (cross-process),
+        # иначе сам залогирует и вернёт None — бот работает без уведомлений.
+        from uk_management_bot.services.access_notify_subscriber import (
+            start_resident_notify_subscriber,
+        )
+        resident_notify_task = start_resident_notify_subscriber(bot)
+
         # Запускаем бота
         await dp.start_polling(bot)
         
@@ -404,6 +413,17 @@ async def main():
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}")
     finally:
+        # Останавливаем подписчик резидентских уведомлений
+        if resident_notify_task is not None:
+            resident_notify_task.cancel()
+            try:
+                await resident_notify_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Ошибка остановки подписчика уведомлений: {e}")
+            logger.info("Подписчик резидентских уведомлений остановлен")
+
         # Останавливаем планировщик
         try:
             await stop_scheduler()
