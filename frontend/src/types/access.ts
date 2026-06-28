@@ -573,6 +573,12 @@ export interface AssignmentRow {
   valid_from: string | null
   valid_until: string | null
   status: AssignmentStatus
+  // Тумблер лимита мест (§10.3): TRUE — авто квартиры сверх числа её мест →
+  // manual_review parking_spot_occupied; FALSE — лимит временно снят.
+  enforce_limit: boolean
+  // Занятость assigned-зоны (§10.3, «занято X из Y»).
+  occupied: number
+  spots: number
   approved_by_user_id: number | null
   approved_at: string | null
 }
@@ -601,6 +607,8 @@ export interface CreateAssignmentPayload {
 export interface UpdateAssignmentPayload {
   status?: AssignmentStatus
   valid_until?: string
+  // Менеджер включает/снимает лимит мест на закреплении (§10.3).
+  enforce_limit?: boolean
 }
 
 // ── Парковка: занятость зоны (occupancy) ──────────────────────────────────────
@@ -611,4 +619,34 @@ export interface ZoneOccupancy {
   exits: number
   occupancy: number
   capacity: number | null
+}
+
+// ── Парковка: открытые presence-сессии (admin «Освободить место», §10.3) ───────
+/** Открытая presence-сессия (GET /admin/presence) — авто внутри зоны. */
+export interface PresenceSessionRow {
+  id: number
+  vehicle_id: number
+  plate_normalized: string | null
+  apartment_id: number | null
+  zone_id: number
+  entered_at: string
+}
+
+export interface PresenceFilters {
+  zone_id?: number
+  apartment_id?: number
+  limit?: number
+  offset?: number
+}
+
+/** Тело POST /presence/{id}/close — ручное закрытие сессии (освободить место). */
+export interface ClosePresencePayload {
+  reason: string
+}
+
+export interface ClosePresenceResponse {
+  session_id: number
+  status: string
+  closed_by_user_id: number | null
+  replayed: boolean
 }

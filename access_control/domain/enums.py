@@ -79,6 +79,17 @@ class SpotAssignmentStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
+class PresenceStatus(str, enum.Enum):
+    """vehicle_presence_sessions.status (§10.3): открытая/закрытая сессия присутствия.
+
+    Въезд открывает сессию (``open``), выезд/ручное освобождение закрывает
+    (``closed``). «Занятость» места = число открытых сессий квартиры в зоне.
+    """
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
 class PassType(str, enum.Enum):
     """access_passes.pass_type (логика пилота — только ``taxi``)."""
 
@@ -139,6 +150,9 @@ class DecisionReason(str, enum.Enum):
     SPOT_RENTAL_EXPIRED = "spot_rental_expired"
     SHARED_ACCESS_ALLOWED = "shared_access_allowed"
     PER_APARTMENT_LIMIT_EXCEEDED = "per_apartment_limit_exceeded"
+    # Лимит мест assigned-зоны (§10.3): все купленные/арендованные места квартиры
+    # заняты открытыми presence-сессиями → лишний авто на ручной разбор охраны.
+    PARKING_SPOT_OCCUPIED = "parking_spot_occupied"
     VEHICLE_NOT_FOUND = "vehicle_not_found"
     VEHICLE_BLOCKED = "vehicle_blocked"
     ZONE_NOT_ALLOWED = "zone_not_allowed"

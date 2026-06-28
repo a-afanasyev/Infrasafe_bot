@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import VehiclesTab from './VehiclesTab'
 import PassesTab from './PassesTab'
 import EventsTab from './EventsTab'
+import SpotsTab from './SpotsTab'
 
-type Segment = 'vehicles' | 'passes' | 'events'
+type Segment = 'vehicles' | 'spots' | 'passes' | 'events'
 
-const SEGMENTS: Segment[] = ['vehicles', 'passes', 'events']
+const SEGMENTS: Segment[] = ['vehicles', 'spots', 'passes', 'events']
 
 /**
  * Раздел «Контроль доступа» жителя (applicant).
@@ -42,6 +43,7 @@ export default function AccessPage() {
       </div>
 
       {segment === 'vehicles' && <VehiclesTab />}
+      {segment === 'spots' && <SpotsTab />}
       {segment === 'passes' && <PassesTab />}
       {segment === 'events' && <EventsTab />}
     </div>

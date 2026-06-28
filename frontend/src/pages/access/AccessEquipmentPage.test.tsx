@@ -82,6 +82,92 @@ describe('AccessEquipmentPage — гейтинг табов по роли', () =
   })
 })
 
+describe('AccessEquipmentPage — таб «Закрепления»: лимит/занятость/освободить', () => {
+  const spot = { id: 3, zone_id: 5, code: 'A-01', status: 'active' }
+  const assignment = {
+    id: 4,
+    spot_id: 3,
+    apartment_id: 12,
+    ownership_type: 'owned',
+    valid_from: null,
+    valid_until: null,
+    status: 'active',
+    enforce_limit: true,
+    occupied: 1,
+    spots: 2,
+    approved_by_user_id: 7,
+    approved_at: null,
+  }
+
+  beforeEach(() => {
+    installCommonHandlers()
+    server.use(
+      http.get('*/api/v1/access/admin/spots', () =>
+        HttpResponse.json({ items: [spot], total: 1, limit: 50, offset: 0 }),
+      ),
+      http.get('*/api/v1/access/admin/spot-assignments', () =>
+        HttpResponse.json({ items: [assignment], total: 1, limit: 50, offset: 0 }),
+      ),
+    )
+  })
+  afterEach(() => useAuthStore.setState({ user: null, isAuthenticated: false }))
+
+  async function openAssignmentsTab() {
+    setRole('manager')
+    render(<AccessEquipmentPage />)
+    await waitFor(() => expect(screen.getByText('Закрепления')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Закрепления'))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Закрепить место' })).toBeInTheDocument(),
+    )
+  }
+
+  it('рендерит занятость «1 из 2»', async () => {
+    await openAssignmentsTab()
+    expect(await screen.findByText('1 из 2')).toBeInTheDocument()
+  })
+
+  it('переключатель лимита зовёт PATCH с enforce_limit=false', async () => {
+    let body: unknown = null
+    server.use(
+      http.patch('*/api/v1/access/admin/spot-assignments/4', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ ...assignment, enforce_limit: false })
+      }),
+    )
+    await openAssignmentsTab()
+    const toggle = await screen.findByRole('switch')
+    fireEvent.click(toggle)
+    await waitFor(() => expect(body).toMatchObject({ enforce_limit: false }))
+  })
+
+  it('«Освободить место» открывает список сессий и закрывает выбранную', async () => {
+    let closed: number | null = null
+    server.use(
+      http.get('*/api/v1/access/admin/presence', () =>
+        HttpResponse.json({
+          items: [
+            { id: 11, vehicle_id: 9, plate_normalized: '01A001AA', apartment_id: 12, zone_id: 5, entered_at: '2026-06-28T10:00:00Z' },
+          ],
+          total: 1,
+          limit: 50,
+          offset: 0,
+        }),
+      ),
+      http.post('*/api/v1/access/presence/11/close', () => {
+        closed = 11
+        return HttpResponse.json({ session_id: 11, status: 'closed', closed_by_user_id: 7, replayed: false })
+      }),
+    )
+    await openAssignmentsTab()
+    fireEvent.click(await screen.findByRole('button', { name: 'Освободить место' }))
+    // В диалоге появилась сессия с номером авто.
+    expect(await screen.findByText('01A001AA')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Освободить' }))
+    await waitFor(() => expect(closed).toBe(11))
+  })
+})
+
 describe('AccessEquipmentPage — api_key контроллера', () => {
   beforeEach(installCommonHandlers)
   afterEach(() => useAuthStore.setState({ user: null, isAuthenticated: false }))

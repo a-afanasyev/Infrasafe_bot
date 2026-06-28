@@ -44,6 +44,8 @@ from access_control.services.resident import (
     EntryNotOwned,
     PassNotFound,
     PassNotOwned,
+    SpotAssignmentNotFound,
+    SpotAssignmentNotOwned,
     ZoneNotResolved,
     approved_apartment_ids,
     cancel_resident_pass,
@@ -53,7 +55,9 @@ from access_control.services.resident import (
     list_resident_events,
     list_resident_passes,
     list_resident_requests,
+    list_resident_spot_assignments,
     list_resident_vehicles,
+    toggle_resident_spot_limit,
 )
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
@@ -200,6 +204,51 @@ class ResidentEventsPage(BaseModel):
     offset: int
 
 
+# ------------------------------ DTO «Моё место» ------------------------------
+
+
+class SpotAssignmentRow(BaseModel):
+    """Закрепление места квартиры жителя (§6.4, «Моё место»)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    spot_id: int
+    spot_code: str
+    zone_id: int
+    zone_code: str
+    zone_name: str
+    apartment_id: int
+    ownership_type: str
+    valid_from: dt.datetime | None
+    valid_until: dt.datetime | None
+    status: str
+    enforce_limit: bool
+    # Занятость (§10.3, «занято X из Y»).
+    occupied: int
+    spots: int
+
+
+class SpotAssignmentsPage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    items: list[SpotAssignmentRow]
+    total: int
+
+
+class ToggleLimitRequest(BaseModel):
+    """Тело переключения тумблера лимита места (§6.4): on/off."""
+
+    enabled: bool
+
+
+class ToggleLimitResponse(BaseModel):
+    ok: bool
+    assignment_id: int
+    enforce_limit: bool
+    replayed: bool
+
+
 # ------------------------------ READ: /my/vehicles ------------------------------
 
 
@@ -328,6 +377,68 @@ def my_events(
     rows, total = list_resident_events(db, user_id=user.id, limit=limit, offset=offset)
     items = [ResidentEventRow(**r) for r in rows]
     return ResidentEventsPage(items=items, total=total, limit=limit, offset=offset)
+
+
+# ------------------------------ READ: /my/spots ------------------------------
+
+
+@router.get("/my/spots", response_model=SpotAssignmentsPage)
+def my_spots(
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+) -> SpotAssignmentsPage:
+    """Закрепления парковочных мест квартир жителя (§6.4, «Моё место»).
+
+    Отдаёт код места, зону, тип владения, срок, ``enforce_limit`` и занятость
+    (``occupied``/``spots`` — «занято X из Y»). Только свои квартиры (§6.4).
+    """
+    rows = list_resident_spot_assignments(db, user_id=user.id)
+    items = [SpotAssignmentRow(**r) for r in rows]
+    return SpotAssignmentsPage(items=items, total=len(items))
+
+
+# ------------------------------ WRITE: /my/spot-assignments/{id}/toggle-limit ------------------------------
+
+
+@router.post(
+    "/my/spot-assignments/{assignment_id}/toggle-limit",
+    response_model=ToggleLimitResponse,
+)
+def post_toggle_spot_limit(
+    body: ToggleLimitRequest,
+    request: Request,
+    assignment_id: int = Path(..., description="parking_spot_assignments.id"),
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+) -> ToggleLimitResponse:
+    """Включить/выключить лимит места на СВОЁМ закреплении (§6.4, §10.3).
+
+    Сценарий «2-я машина на 10 минут»: ``enabled=False`` снимает лимит (авто сверх
+    числа мест пускают), ``enabled=True`` возвращает. Идемпотентно. 404 если
+    закрепления нет; 403 если квартира не своя.
+    """
+    try:
+        outcome = toggle_resident_spot_limit(
+            db,
+            actor_user_id=user.id,
+            assignment_id=assignment_id,
+            enabled=body.enabled,
+            ip_address=_client_ip(request),
+        )
+    except SpotAssignmentNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="spot assignment not found"
+        )
+    except SpotAssignmentNotOwned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="spot assignment not owned"
+        )
+    return ToggleLimitResponse(
+        ok=True,
+        assignment_id=outcome.assignment_id,
+        enforce_limit=outcome.enforce_limit,
+        replayed=outcome.replayed,
+    )
 
 
 # ------------------------------ WRITE: /requests ------------------------------

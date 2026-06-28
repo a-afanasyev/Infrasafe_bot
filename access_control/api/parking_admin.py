@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from access_control.repositories import presence_repo
 from access_control.services import equipment_admin as eq_svc
 from access_control.services import parking_admin as svc
 from access_control.services.parking_occupancy import zone_occupancy
@@ -35,6 +36,8 @@ router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-parking"])
 
 # Парковка (места/закрепления/занятость) — настройка зон (§6.2): менеджер+админ.
 ZONE_GATE_ROLES = ("manager", "system_admin")
+# Просмотр открытых presence-сессий («освободить место»): + охрана (§6.3, §10.3).
+PRESENCE_VIEW_ROLES = ("manager", "system_admin", "security_operator")
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -77,6 +80,13 @@ class AssignmentRow(_Frozen):
     valid_from: dt.datetime | None
     valid_until: dt.datetime | None
     status: str
+    # Тумблер лимита мест (§10.3): TRUE — авто квартиры сверх числа её мест →
+    # manual_review parking_spot_occupied; FALSE — лимит временно снят.
+    enforce_limit: bool
+    # Занятость (§10.3, «занято X из Y»): occupied — открытые presence-сессии
+    # квартиры в зоне места; spots — число её активных закреплений в этой зоне.
+    occupied: int
+    spots: int
     approved_by_user_id: int | None
     approved_at: dt.datetime | None
     created_at: dt.datetime
@@ -99,8 +109,19 @@ def _page_model(name: str, row_type):
     })
 
 
+class PresenceSessionRow(_Frozen):
+    # Открытая presence-сессия для admin-UI «освободить место» (§10.3).
+    id: int
+    vehicle_id: int
+    plate_normalized: str | None
+    apartment_id: int | None
+    zone_id: int
+    entered_at: dt.datetime
+
+
 SpotsPage = _page_model("SpotsPage", SpotRow)
 AssignmentsPage = _page_model("AssignmentsPage", AssignmentRow)
+PresencePage = _page_model("PresencePage", PresenceSessionRow)
 
 
 def _spot_row(s) -> SpotRow:
@@ -110,11 +131,13 @@ def _spot_row(s) -> SpotRow:
     )
 
 
-def _assignment_row(a) -> AssignmentRow:
+def _assignment_row(db: Session, a) -> AssignmentRow:
+    occupied, spots = svc.assignment_occupancy(db, a)
     return AssignmentRow(
         id=a.id, spot_id=a.spot_id, apartment_id=a.apartment_id,
         ownership_type=a.ownership_type, valid_from=a.valid_from,
         valid_until=a.valid_until, status=a.status,
+        enforce_limit=bool(a.enforce_limit), occupied=occupied, spots=spots,
         approved_by_user_id=a.approved_by_user_id, approved_at=a.approved_at,
         created_at=a.created_at, updated_at=a.updated_at,
     )
@@ -234,6 +257,8 @@ class AssignmentCreate(BaseModel):
 class AssignmentPatch(BaseModel):
     status: AssignmentStatusLit | None = None
     valid_until: dt.datetime | None = None
+    # Тумблер лимита мест (§10.3) — менеджер включает/снимает enforce_limit.
+    enforce_limit: bool | None = None
 
 
 @router.get("/spot-assignments", response_model=AssignmentsPage)
@@ -251,7 +276,8 @@ def list_spot_assignments(
         limit=limit, offset=offset,
     )
     return AssignmentsPage(
-        items=[_assignment_row(r) for r in rows], total=total, limit=limit, offset=offset
+        items=[_assignment_row(db, r) for r in rows], total=total, limit=limit,
+        offset=offset,
     )
 
 
@@ -276,7 +302,7 @@ def create_spot_assignment(
         _raise_422_ref(exc)
     except svc.RentedRequiresValidUntil as exc:
         _raise_422_rented(exc)
-    return _assignment_row(assignment)
+    return _assignment_row(db, assignment)
 
 
 @router.patch("/spot-assignments/{assignment_id}", response_model=AssignmentRow)
@@ -295,7 +321,7 @@ def patch_spot_assignment(
         )
     except svc.NotFound as exc:
         _raise_404(exc)
-    return _assignment_row(assignment)
+    return _assignment_row(db, assignment)
 
 
 # =============================== ЗАНЯТОСТЬ ЗОНЫ ===============================
@@ -319,4 +345,31 @@ def get_zone_occupancy(
     return OccupancyRow(
         zone_id=occ.zone_id, entries=occ.entries, exits=occ.exits,
         occupancy=occ.occupancy, capacity=zone.capacity,
+    )
+
+
+# =============================== ОТКРЫТЫЕ PRESENCE-СЕССИИ ===============================
+
+
+@router.get("/presence", response_model=PresencePage)
+def list_open_presence(
+    zone_id: int | None = Query(None),
+    apartment_id: int | None = Query(None),
+    limit: int = _limit_q(),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _user=Depends(require_approved_roles(*PRESENCE_VIEW_ROLES)),
+):
+    """Список ОТКРЫТЫХ presence-сессий (§10.3) — для выбора сессии под закрытие.
+
+    Фронт показывает их в действии «Освободить место»; само закрытие —
+    ``POST /api/v1/access/presence/{session_id}/close``. RBAC: manager/
+    system_admin/security_operator. Фильтры ``zone_id``/``apartment_id``.
+    """
+    rows, total = presence_repo.list_open_sessions(
+        db, zone_id=zone_id, apartment_id=apartment_id, limit=limit, offset=offset
+    )
+    return PresencePage(
+        items=[PresenceSessionRow(**r) for r in rows], total=total, limit=limit,
+        offset=offset,
     )

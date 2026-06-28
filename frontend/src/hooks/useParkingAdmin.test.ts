@@ -16,6 +16,8 @@ import {
   useCreateSpotAssignment,
   useUpdateSpotAssignment,
   useZoneOccupancy,
+  useOpenPresenceSessions,
+  useClosePresenceSession,
 } from './useParkingAdmin'
 
 // Тосты мутаций мокаем (как в useAccessEquipment.test) — проверяем текст i18n.
@@ -178,7 +180,7 @@ describe('useUpdateSpotAssignment', () => {
   it('PATCH valid_until (продление) → toast «сохранено»', async () => {
     server.use(
       http.patch('*/api/v1/access/admin/spot-assignments/4', () =>
-        HttpResponse.json({ id: 4, spot_id: 1, apartment_id: 23, ownership_type: 'rented', valid_from: null, valid_until: '2027-01-01T00:00:00Z', status: 'active', approved_by_user_id: 7, approved_at: null }),
+        HttpResponse.json({ id: 4, spot_id: 1, apartment_id: 23, ownership_type: 'rented', valid_from: null, valid_until: '2027-01-01T00:00:00Z', status: 'active', enforce_limit: true, occupied: 0, spots: 1, approved_by_user_id: 7, approved_at: null }),
       ),
     )
     const qc = makeClient()
@@ -186,6 +188,82 @@ describe('useUpdateSpotAssignment', () => {
     result.current.mutate({ id: 4, payload: { valid_until: '2027-01-01T00:00:00Z' } })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(toast.success).toHaveBeenCalledWith('Изменения сохранены')
+  })
+
+  it('PATCH enforce_limit → отправляет тело + инвалидирует + toast', async () => {
+    let body: unknown = null
+    server.use(
+      http.patch('*/api/v1/access/admin/spot-assignments/4', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ id: 4, spot_id: 1, apartment_id: 23, ownership_type: 'owned', valid_from: null, valid_until: null, status: 'active', enforce_limit: false, occupied: 1, spots: 1, approved_by_user_id: 7, approved_at: null })
+      }),
+    )
+    const qc = makeClient()
+    const spy = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(() => useUpdateSpotAssignment(), { wrapper: wrapperFor(qc) })
+    result.current.mutate({ id: 4, payload: { enforce_limit: false } })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(body).toMatchObject({ enforce_limit: false })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['access-spot-assignments'] })
+    expect(toast.success).toHaveBeenCalledWith('Изменения сохранены')
+  })
+})
+
+describe('useOpenPresenceSessions', () => {
+  it('GET /admin/presence с фильтром apartment_id', async () => {
+    let seenUrl = ''
+    server.use(
+      http.get('*/api/v1/access/admin/presence', ({ request }) => {
+        seenUrl = request.url
+        return HttpResponse.json({
+          items: [{ id: 11, vehicle_id: 3, plate_normalized: '01A001AA', apartment_id: 12, zone_id: 5, entered_at: '2026-06-28T10:00:00Z' }],
+          total: 1,
+          limit: 50,
+          offset: 0,
+        })
+      }),
+    )
+    const qc = makeClient()
+    const { result } = renderHook(() => useOpenPresenceSessions({ apartment_id: 12 }), { wrapper: wrapperFor(qc) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(seenUrl).toContain('/admin/presence')
+    expect(seenUrl).toContain('apartment_id=12')
+    expect(result.current.data?.items[0].plate_normalized).toBe('01A001AA')
+  })
+
+  it('enabled=false не делает запрос', async () => {
+    let called = false
+    server.use(
+      http.get('*/api/v1/access/admin/presence', () => {
+        called = true
+        return HttpResponse.json({ items: [], total: 0, limit: 50, offset: 0 })
+      }),
+    )
+    const qc = makeClient()
+    renderHook(() => useOpenPresenceSessions(undefined, false), { wrapper: wrapperFor(qc) })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(called).toBe(false)
+  })
+})
+
+describe('useClosePresenceSession', () => {
+  it('POST /presence/{id}/close + инвалидирует presence И закрепления + toast', async () => {
+    let body: unknown = null
+    server.use(
+      http.post('*/api/v1/access/presence/11/close', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ session_id: 11, status: 'closed', closed_by_user_id: 7, replayed: false })
+      }),
+    )
+    const qc = makeClient()
+    const spy = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(() => useClosePresenceSession(), { wrapper: wrapperFor(qc) })
+    result.current.mutate({ id: 11, payload: { reason: 'машина уехала' } })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(body).toMatchObject({ reason: 'машина уехала' })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['access-presence'] })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['access-spot-assignments'] })
+    expect(toast.success).toHaveBeenCalledWith('Место освобождено')
   })
 })
 

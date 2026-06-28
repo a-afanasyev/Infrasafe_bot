@@ -5,10 +5,12 @@
 использует alembic ``env.py`` и тестовый ``create_all``. Поэтому достаточно
 ``import access_control.domain``, чтобы таблицы попали в ``Base.metadata``.
 
-``vehicle_presence_sessions`` сюда НЕ входит — вне пилота (§10.3, §14.2).
+``vehicle_presence_sessions`` теперь ВХОДИТ (миграция 035): добавлен функционал
+выезда/presence (§8.3, §10.3) — въезд открывает сессию, выезд закрывает; занятость
+assigned-мест считается по открытым сессиям.
 
 Группировка по файлам: territory, equipment, vehicles, passes, events,
-commands, audit. Enum'ы — в ``enums``.
+commands, audit, parking (+presence). Enum'ы — в ``enums``.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from .events import (
     CameraEvent,
     ControllerSyncEvent,
 )
-from .parking import ParkingSpot, ParkingSpotAssignment
+from .parking import ParkingSpot, ParkingSpotAssignment, VehiclePresenceSession
 from .passes import AccessPass, AccessRule, ResidentAccessRequest
 from .territory import ParkingZone, ParkingZoneYard
 from .vehicles import Vehicle, VehicleApartment
@@ -31,9 +33,10 @@ __all__ = [
     # territory
     "ParkingZone",
     "ParkingZoneYard",
-    # parking (assigned/shared)
+    # parking (assigned/shared) + presence (выезд §10.3)
     "ParkingSpot",
     "ParkingSpotAssignment",
+    "VehiclePresenceSession",
     # equipment
     "EdgeController",
     "AccessGate",
