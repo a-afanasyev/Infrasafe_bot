@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 import uk_management_bot.handlers.access_control as ac
 from access_control.services.resident import DecisionNotFound, EntryNotOwned
 
