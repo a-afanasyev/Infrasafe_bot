@@ -91,7 +91,21 @@ function parseJsonObject(raw: string): { ok: boolean; value?: Record<string, unk
 function buildInitialState(fields: FormField[], initial?: Record<string, unknown> | null): FormState {
   const state: FormState = {}
   for (const f of fields) {
-    state[f.name] = toFieldValue(f.type, initial?.[f.name])
+    let value = toFieldValue(f.type, initial?.[f.name])
+    // Обязательный <select> без плейсхолдера визуально показывает первую опцию
+    // «выбранной», но в state значение пустое → requiredOk=false → submit
+    // заблокирован навсегда (особенно при единственной опции, где onChange не
+    // вызвать). Префилл первой опцией приводит state в соответствие с UI.
+    if (
+      value === '' &&
+      f.required &&
+      (f.type === 'select' || f.type === 'numberSelect') &&
+      f.options &&
+      f.options.length > 0
+    ) {
+      value = f.options[0].value
+    }
+    state[f.name] = value
   }
   return state
 }
