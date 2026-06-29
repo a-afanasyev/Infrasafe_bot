@@ -25,28 +25,35 @@ export const publicClient = axios.create({
 
 let refreshPromise: Promise<void> | null = null
 
+/**
+ * Cookie-based session refresh, deduplicated across concurrent 401s and shared
+ * by every API client (main apiClient + domain accessClient). The server reads
+ * the uk_refresh httpOnly cookie and sets a fresh uk_access cookie in the
+ * response — no body, no token plumbing in JS. On failure the user is sent to
+ * the login page and the rejection propagates.
+ */
+export function refreshSession(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post(`${BASE_URL}/api/v2/auth/refresh`, undefined, { withCredentials: true })
+      .then(() => undefined)
+      .catch((err) => {
+        window.location.href = LOGIN_URL
+        throw err
+      })
+      .finally(() => { refreshPromise = null })
+  }
+  return refreshPromise
+}
+
 apiClient.interceptors.response.use(
   (r) => r,
   async (error) => {
     const originalRequest = error.config as (typeof error.config) & { _retry?: boolean }
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
-
-      // Cookie-based refresh — server reads uk_refresh from httpOnly cookie,
-      // sets a fresh uk_access cookie in the response. No body, no token plumbing.
-      if (!refreshPromise) {
-        refreshPromise = axios
-          .post(`${BASE_URL}/api/v2/auth/refresh`, undefined, { withCredentials: true })
-          .then(() => undefined)
-          .catch((err) => {
-            window.location.href = LOGIN_URL
-            throw err
-          })
-          .finally(() => { refreshPromise = null })
-      }
-
       try {
-        await refreshPromise
+        await refreshSession()
         return apiClient(originalRequest)
       } catch (refreshError) {
         return Promise.reject(refreshError)
