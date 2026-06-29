@@ -216,6 +216,48 @@ def test_mask_plate_keeps_only_tail() -> None:
     assert "01A001" not in masked
 
 
+# ───────────────────── BUG-3: idempotent close (auth-reject / disconnect) ─────
+
+
+class _FakeWS:
+    """Минимальный stub WebSocket для проверки _safe_close (без сети)."""
+
+    def __init__(self, state, *, raise_runtime: bool = False) -> None:
+        self.client_state = state
+        self._raise_runtime = raise_runtime
+        self.close_calls = 0
+
+    async def close(self, code: int = 1000) -> None:
+        self.close_calls += 1
+        if self._raise_runtime:
+            raise RuntimeError("Unexpected ASGI message 'websocket.close'")
+
+
+@pytest.mark.asyncio
+async def test_safe_close_skips_when_disconnected() -> None:
+    """Уже разорванное соединение → close НЕ вызывается (нет двойного close)."""
+    from starlette.websockets import WebSocketState
+
+    from access_control.api.ws_security import _safe_close
+
+    ws = _FakeWS(WebSocketState.DISCONNECTED)
+    await _safe_close(ws, code=1008)
+    assert ws.close_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_safe_close_swallows_runtime_error() -> None:
+    """close() на гонке (клиент отвалился) бросает RuntimeError → глушится."""
+    from starlette.websockets import WebSocketState
+
+    from access_control.api.ws_security import _safe_close
+
+    ws = _FakeWS(WebSocketState.CONNECTING, raise_runtime=True)
+    # Не должно поднять исключение наружу (иначе трейсбек в лог при auth-reject).
+    await _safe_close(ws, code=1008)
+    assert ws.close_calls == 1
+
+
 # ───────────────────── Ф6: router подключён ───────────────────────────────────
 
 

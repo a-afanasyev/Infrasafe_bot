@@ -66,12 +66,27 @@ def _has_query_token(websocket: WebSocket) -> bool:
     return any(key in websocket.query_params for key in _FORBIDDEN_QUERY_TOKEN_KEYS)
 
 
+async def _safe_close(websocket: WebSocket, code: int = 1000) -> None:
+    """Закрыть WS, не падая на уже разорванном соединении.
+
+    Если клиент отвалился до/во время handshake, повторный ``close`` бросает
+    ``RuntimeError`` («Unexpected ASGI message 'websocket.close'») — глушим его,
+    как и в ``_stream_events`` finally, чтобы не сорить трейсбеками в лог.
+    """
+    if websocket.client_state == WebSocketState.DISCONNECTED:
+        return
+    try:
+        await websocket.close(code=code)
+    except RuntimeError:
+        pass
+
+
 @router.websocket("/ws/v1/access/security")
 async def ws_security(websocket: WebSocket) -> None:
     """WS-панель охраны: аутентификация (§9.6) + live-поток событий (§15.13)."""
     # §9.6: JWT в query string запрещён — отклоняем ДО accept.
     if _has_query_token(websocket):
-        await websocket.close(code=WS_POLICY_VIOLATION)
+        await _safe_close(websocket, code=WS_POLICY_VIOLATION)
         return
 
     cookie_token = websocket.cookies.get("uk_access") or websocket.cookies.get(
@@ -81,7 +96,7 @@ async def ws_security(websocket: WebSocket) -> None:
     if cookie_token:
         # Путь cookie: проверяем роли ДО accept, отказ — close без accept.
         if not _authorized_roles(verify_access_token(cookie_token)):
-            await websocket.close(code=WS_POLICY_VIOLATION)
+            await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
         await websocket.accept()
     # TODO(accepted-risk L3, post-pilot): роли проверяются один раз при коннекте; при
@@ -93,11 +108,11 @@ async def ws_security(websocket: WebSocket) -> None:
         try:
             first = await websocket.receive_json()
         except (WebSocketDisconnect, ValueError, KeyError):
-            await websocket.close(code=WS_POLICY_VIOLATION)
+            await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
         token = first.get("token") if isinstance(first, dict) else None
         if not token or not _authorized_roles(verify_access_token(token)):
-            await websocket.close(code=WS_POLICY_VIOLATION)
+            await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
 
     await _stream_events(websocket)
@@ -121,8 +136,4 @@ async def _stream_events(websocket: WebSocket) -> None:
         logger.exception("ws security stream error")
     finally:
         subscription.close()
-        if websocket.client_state != WebSocketState.DISCONNECTED:
-            try:
-                await websocket.close()
-            except RuntimeError:
-                pass
+        await _safe_close(websocket)

@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+import { refreshSession } from './client'
+
 /**
  * HTTP-клиент домена контроля доступа (`uk-access-api`).
  *
@@ -64,3 +66,26 @@ accessClient.interceptors.request.use((config) => {
   }
   return config
 })
+
+// 401 на cookie-пути (прод, путь «а»): web-сессия (uk_access) истекла по TTL,
+// пока охрана не дёргала основной UK-API. Переиспользуем общий cookie-refresh
+// (он ставит свежий uk_access) и повторяем запрос один раз — экран охраны не
+// валится в «Ошибка» до перезагрузки. В dev cookieless-пути (есть devToken)
+// cookie-refresh не поможет → пропускаем, оставляя прежнее поведение.
+accessClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config as (typeof error.config) & { _retry?: boolean }
+    const isAuthError = error.response?.status === 401
+    if (isAuthError && originalRequest && !originalRequest._retry && !resolveDevToken()) {
+      originalRequest._retry = true
+      try {
+        await refreshSession()
+        return accessClient(originalRequest)
+      } catch (refreshError) {
+        return Promise.reject(refreshError)
+      }
+    }
+    return Promise.reject(error)
+  },
+)
