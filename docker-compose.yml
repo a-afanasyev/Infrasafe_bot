@@ -151,8 +151,10 @@ services:
       #   MEDIA_API_KEY     — X-API-Key медиа-сервиса (секрет → из .env, не хардкод).
       - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
     # Отдельный host-порт (uk-management-api занимает 8085); контейнерный порт 8080.
+    # Дефолт 8087: на shared-деплое с InfraSafe порт 8086 занят influxdb. Edge
+    # ходит в access-api:8080 по docker-сети, host-порт нужен лишь для localhost.
     ports:
-      - "127.0.0.1:8086:8080"
+      - "127.0.0.1:${ACCESS_API_HOST_PORT:-8087}:8080"
     depends_on:
       postgres:
         condition: service_healthy
