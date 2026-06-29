@@ -11,12 +11,12 @@
 - [x] **A2 — миграции** `024→035` применены entrypoint'ом `api` под `uk_bot`; 4 append-only триггера стоят; роль `access_app_rw` штатно self-skip (uk_bot без CREATEROLE); 15 access-таблиц. Бэкап до миграции: `uk_pre_access_2026-06-29-155506.dump`.
 - [x] **A4 — `access-api` поднят**, healthy, без `RuntimeError`. ⚠️ **Host-порт 8086 занят `infrasafe-influxdb-1`** → переехал на **8087** (edge ходит по docker-сети `access-api:8080`, не через host-порт). В репо порт сделан конфигурируемым `${ACCESS_API_HOST_PORT:-8087}`; на проде временно hardcode 8087 → после коммита фикса сбросить дивергенцию: `git checkout docker-compose.yml && git pull`.
 - [x] **A5 — бот ребилнут**, подписчик `access:resident_notify` слушает (redis-broker).
-- [ ] **B — InfraSafe allowlist** (2 префикса `/api/v1/access/`, `/ws/v1/access/`) — не сделано.
-- [ ] **D — TG-канал `access` + `CHANNEL_ACCESS`** — не сделано (фото проездов вернут 503 до настройки).
+- [x] **D — TG-канал `access`** — `CHANNEL_ACCESS=-1004419783881` (`uk_media_access_private`), media-service пересобран + `init_channels.py`; end-to-end заливка `POST /media/upload-access` = HTTP 201, фото в канале.
+- [ ] **B — InfraSafe allowlist** (2 location на `uk-access-api:8080`) — **передано InfraSafe 2026-06-29, ждём раскатку** (см. раздел B).
 - [ ] **A3 — точки въезда в UI** — не сделано.
 - [ ] **E — прод-smoke** — после B/D/A3.
 
-Полный порядок остатка: **D (TG-канал) → B (InfraSafe) → A3 (точки въезда в UI) → E (smoke)**.
+Полный порядок остатка: **B (InfraSafe edge) → A3 (точки въезда в UI) → E (smoke)**.
 
 ---
 
@@ -44,17 +44,18 @@
 
 ---
 
-## B. InfraSafe (внешнее, их сторона)
+## B. InfraSafe (внешнее, их сторона) — передано 2026-06-29, ждём раскатку
 
-Прод-edge проксирует `/uk/api/*` по **prefix-allowlist** (SEC-22). Репозиторный `Caddyfile` уже маршрутизирует access-роуты на `access-api:8080`, но **прод-edge — отдельный конфиг InfraSafe**. Передать им:
+Прод-edge = `infrasafe-nginx-1` (`nginx.production.conf`), нашего `uk-caddy` на проде нет → nginx проксирует `/uk/*` прямо в наши контейнеры. nginx подключён к `uk-network` + `infrasafe_leaflet-network` → резолвит наши сервисы. Нужны 2 выделенных `location` (длиннее `^~ /uk/api/` и `^~ /uk/ws/v2/` → longest-prefix перехватит):
 
-- [ ] **B1. Добавить в allowlist два префикса:**
-  - `/api/v1/access/` → `access-api:8080` (REST)
-  - `/ws/v1/access/` → `access-api:8080` (**WebSocket**, live-экран охраны §9.6 — нужен `Upgrade`/`Connection` passthrough)
-- [ ] **B2. Слеш на конце обязателен.** ⚠️ Урок прошлого инцидента: `profile/` без слеша не матчил bare-путь и валил вход. Префиксы должны матчить именно `/api/v1/access/...`.
-- [ ] **B3. WS — same-origin** (cookie-сессия передаётся), иначе панель охраны не подключится.
+- [ ] **B1. REST:** `^~ /uk/api/v1/access/` → `rewrite ^/uk/api/(.*)$ /api/$1` → **`uk-access-api:8080`** (= `/api/v1/access/X`).
+- [ ] **B2. WebSocket:** `^~ /uk/ws/v1/access/` → `rewrite ^/uk/ws/(.*)$ /ws/$1` → **`uk-access-api:8080`**, `Upgrade`/`Connection` + `read/send timeout 86400s` (live-экран охраны §9.6).
+- **Upstream-имя:** резолвятся оба (`uk-access-api` = container_name, `access-api` = compose-alias, оба → один контейнер на `uk-network`); договорились на **`uk-access-api:8080`** ради консистентности с их `uk-management-api:8080`.
+- **Rate-limit:** их зона `uk_api` (~120 r/min/IP burst 60) для пилота достаточна — через edge идёт только дашборд/TWA (human), ingestion камер/шлагбаумов НЕ через edge (device-auth внутри). Поднять только если операторы за одним NAT-IP ловят 429.
+- **CSP не трогать** — `connect-src` `/uk/`-страниц уже содержит `'self'` + `wss://infrasafe.uz` (WS same-origin).
+- **Проверка после reload:** `curl -ski https://infrasafe.uz/uk/api/v1/access/events` → **401/403 = ок**, **404 = location не подхватился**, **502 = не то DNS-имя**.
 
-> До B1 любой access-эндпоинт на проде отдаёт 404 на edge.
+> До раскатки любой access-эндпоинт на проде отдаёт 404 на edge; дашборд/TWA и A3-через-UI недоступны.
 
 ---
 
