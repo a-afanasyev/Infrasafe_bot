@@ -54,6 +54,7 @@ export default function TaxiPassFormDialog({ open, loading, onClose, onSubmit }:
   const { t } = useTranslation()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [zoneIds, setZoneIds] = useState<number[]>([])
+  const [zonesSyncedFor, setZonesSyncedFor] = useState<number | null>(null)
 
   const [prevOpen, setPrevOpen] = useState(false)
   if (open !== prevOpen) {
@@ -74,7 +75,6 @@ export default function TaxiPassFormDialog({ open, loading, onClose, onSubmit }:
   )
 
   // Дефолт «зона = адрес»: при загрузке зон новой квартиры отметить первую.
-  const [zonesSyncedFor, setZonesSyncedFor] = useState<number | null>(null)
   if (apartmentValid && servingZones && zonesSyncedFor !== apartmentId) {
     setZonesSyncedFor(apartmentId)
     setZoneIds(servingZones.length ? [servingZones[0].id] : [])
