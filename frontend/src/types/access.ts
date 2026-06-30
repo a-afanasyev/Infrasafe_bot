@@ -218,6 +218,8 @@ export interface VehicleDetail {
   vehicle: VehicleRow
   apartments: ApartmentLink[]
   apartment_details: ApartmentDetail[]
+  // Явные зоны доступа авто (активные access_rules) — отмеченные чекбоксы в правке.
+  rule_zones: ZoneRef[]
   recent_events: VehicleEventRow[]
 }
 
@@ -247,12 +249,13 @@ export interface PassesFilters {
   offset?: number
 }
 
-/** Деталь пропуска (GET /passes/{id}) — заявитель/адрес/зона. */
+/** Деталь пропуска (GET /passes/{id}) — заявитель/адрес/зона + кандидаты-зоны. */
 export interface PassDetail {
   pass: PassRow
   applicant: ApplicantInfo | null
   address: AddressInfo | null
   zone: ZoneRef | null
+  serving_zones: ZoneRef[]
 }
 
 // ── Заявки жителей ──────────────────────────────────────────────────────────
@@ -366,20 +369,23 @@ export interface UpdateVehiclePayload {
   vehicle_class?: string | null
   apartment_id?: number
   relation_type?: VehicleRelationType
+  // Явные зоны доступа авто (чекбоксы). Передан → синхронизируется набор правил.
+  zone_ids?: number[]
 }
 
-/** Тело PATCH /passes/{id} — правка пропуска (срок/лимит/номер/отзыв). */
+/** Тело PATCH /passes/{id} — правка пропуска (срок/лимит/номер/зона/отзыв). */
 export interface UpdatePassPayload {
   valid_until?: string
   max_entries?: number
   plate_number_original?: string | null
+  zone_id?: number | null
   status?: 'revoked'
 }
 
-/** Тело POST /passes/taxi — разовый/временный taxi-пропуск. */
+/** Тело POST /passes/taxi — разовый/временный taxi-пропуск. zone_id опц.: дефолт по адресу. */
 export interface CreateTaxiPassPayload {
   apartment_id: number
-  zone_id: number
+  zone_id?: number
   valid_until: string
   plate_number_original?: string
   valid_from?: string
@@ -390,7 +396,7 @@ export interface CreateTaxiPassPayload {
 export interface ReviewRequestPayload {
   action: 'approve' | 'reject'
   comment?: string
-  zone_id?: number
+  zone_ids?: number[]
 }
 
 export interface ReviewRequestResponse {

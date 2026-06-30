@@ -483,8 +483,11 @@ def test_create_pass_zone_resolve_single(pg_db, pilot: PilotFixture) -> None:
     assert resp.json()["zone_id"] == pilot.zone_id
 
 
-def test_create_pass_zone_resolve_multiple_422(pg_db, pilot: PilotFixture) -> None:
-    """Несколько зон обслуживают квартиру и zone_id не задан → 422."""
+def test_create_pass_zone_resolve_multiple_defaults_first(
+    pg_db, pilot: PilotFixture
+) -> None:
+    """Несколько зон обслуживают квартиру и zone_id не задан → дефолт: первая зона
+    адреса (минимальный id), не ошибка (§ зона привязана к адресу жителя)."""
     from access_control.domain.territory import ParkingZone
     import uuid as _uuid
 
@@ -496,12 +499,14 @@ def test_create_pass_zone_resolve_multiple_422(pg_db, pilot: PilotFixture) -> No
     pg_db.add(zone2)
     pg_db.flush()
     _link_zone_yard(pg_db, zone2.id, yard)
+    pg_db.commit()
     resp = _client(uid).post(
         "/api/v1/access/passes",
         json={"apartment_id": pilot.apartment_id, "pass_type": "taxi",
               "valid_until": (utcnow() + dt.timedelta(hours=2)).isoformat()},
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["zone_id"] == min(pilot.zone_id, zone2.id)
 
 
 def test_create_pass_zone_unresolvable_422(pg_db, pilot: PilotFixture) -> None:

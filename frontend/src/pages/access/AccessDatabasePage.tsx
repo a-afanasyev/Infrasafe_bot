@@ -348,10 +348,10 @@ function RequestsPanel({ canManage }: { canManage: boolean }) {
           target={reviewTarget}
           loading={reviewRequest.isPending}
           onClose={() => setReviewTarget(null)}
-          onSubmit={({ action, comment, zoneId }) => {
+          onSubmit={({ action, comment, zoneIds }) => {
             if (!reviewTarget) return
             reviewRequest.mutate(
-              { requestId: reviewTarget.request.id, payload: { action, comment, zone_id: zoneId } },
+              { requestId: reviewTarget.request.id, payload: { action, comment, zone_ids: zoneIds } },
               { onSuccess: () => setReviewTarget(null) },
             )
           }}

@@ -9,14 +9,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { useApartmentServingZones } from '../../hooks/useAccessRegistry'
+import ZoneCheckboxes from './ZoneCheckboxes'
 import type { AccessRequestRow } from '../../types/access'
 
 /**
- * Диалог рассмотрения заявки жителя: подтверждение (опц. зона + комментарий) или
- * отклонение (комментарий). Комментарий опционален, зона — только при approve.
+ * Диалог рассмотрения заявки жителя: подтверждение (зоны чекбоксами + опц.
+ * комментарий) или отклонение (комментарий). Зоны — кандидаты по адресу жителя,
+ * по умолчанию отмечены все обслуживающие зоны (§ зона привязана к адресу).
  */
 export interface ReviewTarget {
   request: AccessRequestRow
@@ -27,36 +29,56 @@ interface Props {
   target: ReviewTarget | null
   loading?: boolean
   onClose: () => void
-  onSubmit: (data: { action: 'approve' | 'reject'; comment?: string; zoneId?: number }) => void
+  onSubmit: (data: {
+    action: 'approve' | 'reject'
+    comment?: string
+    zoneIds?: number[]
+  }) => void
 }
 
 export default function RequestReviewDialog({ target, loading, onClose, onSubmit }: Props) {
   const { t } = useTranslation()
   const [comment, setComment] = useState('')
-  const [zoneId, setZoneId] = useState('')
+  const [zoneIds, setZoneIds] = useState<number[]>([])
+
+  const isApprove = target?.action === 'approve'
+  const { data: servingZones } = useApartmentServingZones(
+    isApprove ? (target?.request.apartment_id ?? null) : null,
+  )
 
   // Сброс полей при смене target (render-time, как в ResolveDialog).
+  const [zonesSyncedFor, setZonesSyncedFor] = useState<number | null>(null)
   const [prevTarget, setPrevTarget] = useState<ReviewTarget | null>(null)
   if (target !== prevTarget) {
     setPrevTarget(target)
     if (target) {
       setComment('')
-      setZoneId('')
+      setZoneIds([])
+      setZonesSyncedFor(null)
     }
   }
 
+  // Дефолт «зона = адрес»: когда зоны загрузились — отметить все обслуживающие.
+  if (
+    isApprove &&
+    servingZones &&
+    target &&
+    zonesSyncedFor !== target.request.id
+  ) {
+    setZonesSyncedFor(target.request.id)
+    setZoneIds(servingZones.map((z) => z.id))
+  }
+
   const isOpen = target !== null
-  const isApprove = target?.action === 'approve'
   const plate =
     target?.request.plate_number_original ?? target?.request.plate_number_normalized ?? ''
 
   function handleSubmit() {
     if (!target || loading) return
-    const zoneNum = Number(zoneId)
     onSubmit({
       action: target.action,
       comment: comment.trim() ? comment.trim() : undefined,
-      zoneId: isApprove && zoneId.trim() && Number.isFinite(zoneNum) ? zoneNum : undefined,
+      zoneIds: isApprove ? zoneIds : undefined,
     })
   }
 
@@ -79,13 +101,12 @@ export default function RequestReviewDialog({ target, loading, onClose, onSubmit
         <div className="flex flex-col gap-3">
           {isApprove && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="review-zone">{t('accessControl.reviewDialog.zoneLabel')}</Label>
-              <Input
-                id="review-zone"
-                type="number"
-                value={zoneId}
-                onChange={(e) => setZoneId(e.target.value)}
-                placeholder={t('accessControl.reviewDialog.zonePlaceholder')}
+              <Label>{t('accessControl.reviewDialog.zoneLabel')}</Label>
+              <ZoneCheckboxes
+                zones={servingZones ?? []}
+                selected={zoneIds}
+                onChange={setZoneIds}
+                emptyText={t('accessControl.reviewDialog.noZones')}
               />
             </div>
           )}

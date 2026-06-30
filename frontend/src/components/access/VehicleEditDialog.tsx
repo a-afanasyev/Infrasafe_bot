@@ -14,10 +14,12 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useAccessVehicleDetail } from '../../hooks/useAccessRegistry'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import ZoneCheckboxes from './ZoneCheckboxes'
 import type {
   UpdateVehiclePayload,
   VehicleDetail,
   VehicleRelationType,
+  ZoneRef,
 } from '../../types/access'
 
 /**
@@ -44,6 +46,15 @@ interface FormState {
   vehicleClass: string
   apartmentId: string
   relationType: string
+  zoneIds: number[]
+}
+
+/** Кандидаты-зоны: обслуживающие зоны квартир авто + уже выданные явные (rule_zones). */
+function candidateZones(detail: VehicleDetail): ZoneRef[] {
+  const map = new Map<number, ZoneRef>()
+  for (const ap of detail.apartment_details) for (const z of ap.zones) map.set(z.id, z)
+  for (const z of detail.rule_zones) if (!map.has(z.id)) map.set(z.id, z)
+  return [...map.values()].sort((a, b) => a.id - b.id)
 }
 
 function initial(detail: VehicleDetail): FormState {
@@ -59,12 +70,13 @@ function initial(detail: VehicleDetail): FormState {
     vehicleClass: v.vehicle_class ?? '',
     apartmentId: owner ? String(owner.apartment_id) : '',
     relationType: owner?.relation_type ?? '',
+    zoneIds: detail.rule_zones.map((z) => z.id),
   }
 }
 
 const BLANK: FormState = {
   plate: '', country: '', plateType: '', brand: '', model: '', color: '',
-  vehicleClass: '', apartmentId: '', relationType: '',
+  vehicleClass: '', apartmentId: '', relationType: '', zoneIds: [],
 }
 
 export default function VehicleEditDialog({ vehicleId, loading, onClose, onSubmit }: Props) {
@@ -94,6 +106,7 @@ export default function VehicleEditDialog({ vehicleId, loading, onClose, onSubmi
       model: trimmedOrNull(form.model),
       color: trimmedOrNull(form.color),
       vehicle_class: trimmedOrNull(form.vehicleClass),
+      zone_ids: form.zoneIds,
     }
     const apt = Number(form.apartmentId)
     if (form.apartmentId.trim() && Number.isFinite(apt)) {
@@ -202,6 +215,23 @@ export default function VehicleEditDialog({ vehicleId, loading, onClose, onSubmi
                 </Select>
               </div>
             </div>
+          </div>
+
+          <div className="border-t border-border-default pt-3 flex flex-col gap-2">
+            <h3 className="text-[12px] font-semibold uppercase tracking-wider text-text-secondary">
+              {t('accessControl.vehicleEdit.zones')}
+            </h3>
+            <p className="text-[12px] text-text-muted">
+              {t('accessControl.vehicleEdit.zonesHint')}
+            </p>
+            {detail && (
+              <ZoneCheckboxes
+                zones={candidateZones(detail)}
+                selected={form.zoneIds}
+                onChange={(ids) => set({ zoneIds: ids })}
+                emptyText={t('accessControl.vehicleEdit.noZones')}
+              />
+            )}
           </div>
         </div>
 

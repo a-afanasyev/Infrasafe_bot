@@ -11,11 +11,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useApartmentServingZones } from '../../hooks/useAccessRegistry'
+import ZoneCheckboxes from './ZoneCheckboxes'
 import type { CreateTaxiPassPayload } from '../../types/access'
 
 /**
- * Диалог-форма создания taxi-пропуска (POST /passes/taxi). Обязательны квартира,
- * зона и срок действия «до». Даты — datetime-local; в payload уходят как ISO.
+ * Диалог-форма создания taxi-пропуска (POST /passes/taxi). Обязательны квартира и
+ * срок действия «до». Зона выбирается чекбоксом из обслуживающих зон адреса (по
+ * умолчанию первая); если не выбрана — бэкенд подставит зону адреса жителя.
  */
 interface Props {
   open: boolean
@@ -26,7 +29,6 @@ interface Props {
 
 interface FormState {
   apartmentId: string
-  zoneId: string
   validFrom: string
   validUntil: string
   plate: string
@@ -35,7 +37,6 @@ interface FormState {
 
 const EMPTY: FormState = {
   apartmentId: '',
-  zoneId: '',
   validFrom: '',
   validUntil: '',
   plate: '',
@@ -52,32 +53,42 @@ function toIso(local: string): string | undefined {
 export default function TaxiPassFormDialog({ open, loading, onClose, onSubmit }: Props) {
   const { t } = useTranslation()
   const [form, setForm] = useState<FormState>(EMPTY)
+  const [zoneIds, setZoneIds] = useState<number[]>([])
 
   const [prevOpen, setPrevOpen] = useState(false)
   if (open !== prevOpen) {
     setPrevOpen(open)
-    if (open) setForm(EMPTY)
+    if (open) {
+      setForm(EMPTY)
+      setZoneIds([])
+      setZonesSyncedFor(null)
+    }
   }
 
   const set = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }))
 
   const apartmentId = Number(form.apartmentId)
-  const zoneId = Number(form.zoneId)
+  const apartmentValid = form.apartmentId.trim().length > 0 && Number.isFinite(apartmentId)
+  const { data: servingZones } = useApartmentServingZones(
+    apartmentValid ? apartmentId : null,
+  )
+
+  // Дефолт «зона = адрес»: при загрузке зон новой квартиры отметить первую.
+  const [zonesSyncedFor, setZonesSyncedFor] = useState<number | null>(null)
+  if (apartmentValid && servingZones && zonesSyncedFor !== apartmentId) {
+    setZonesSyncedFor(apartmentId)
+    setZoneIds(servingZones.length ? [servingZones[0].id] : [])
+  }
+
   const validUntilIso = toIso(form.validUntil)
-  const canSubmit =
-    form.apartmentId.trim().length > 0 &&
-    Number.isFinite(apartmentId) &&
-    form.zoneId.trim().length > 0 &&
-    Number.isFinite(zoneId) &&
-    !!validUntilIso &&
-    !loading
+  const canSubmit = apartmentValid && !!validUntilIso && !loading
 
   function handleSubmit() {
     if (!canSubmit || !validUntilIso) return
     const maxEntriesNum = Number(form.maxEntries)
     const payload: CreateTaxiPassPayload = {
       apartment_id: apartmentId,
-      zone_id: zoneId,
+      zone_id: zoneIds[0],
       valid_until: validUntilIso,
       valid_from: toIso(form.validFrom),
       plate_number_original: form.plate.trim() ? form.plate.trim() : undefined,
@@ -96,25 +107,25 @@ export default function TaxiPassFormDialog({ open, loading, onClose, onSubmit }:
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tp-apartment">{t('accessControl.taxiPassForm.apartmentId')}</Label>
-              <Input
-                id="tp-apartment"
-                type="number"
-                value={form.apartmentId}
-                onChange={(e) => set({ apartmentId: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tp-zone">{t('accessControl.taxiPassForm.zoneId')}</Label>
-              <Input
-                id="tp-zone"
-                type="number"
-                value={form.zoneId}
-                onChange={(e) => set({ zoneId: e.target.value })}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="tp-apartment">{t('accessControl.taxiPassForm.apartmentId')}</Label>
+            <Input
+              id="tp-apartment"
+              type="number"
+              value={form.apartmentId}
+              onChange={(e) => set({ apartmentId: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>{t('accessControl.taxiPassForm.zone')}</Label>
+            <ZoneCheckboxes
+              zones={servingZones ?? []}
+              selected={zoneIds}
+              onChange={setZoneIds}
+              mode="single"
+              emptyText={t('accessControl.taxiPassForm.noZones')}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

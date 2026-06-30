@@ -210,6 +210,8 @@ class VehicleDetail(_Frozen):
     vehicle: VehicleRow
     apartments: list[ApartmentLink]
     apartment_details: list["ApartmentDetail"] = []
+    # Явные зоны доступа авто (активные access_rules) — отмеченные чекбоксы в правке.
+    rule_zones: list["ZoneRef"] = []
     recent_events: list[VehicleEventRow]
 
 
@@ -315,12 +317,13 @@ class RequestDetail(_Frozen):
 
 
 class PassDetail(_Frozen):
-    """Деталь пропуска: заявитель + адрес + зона."""
+    """Деталь пропуска: заявитель + адрес + зона + обслуживающие зоны (кандидаты)."""
 
     pass_record: PassRow = Field(serialization_alias="pass")
     applicant: ApplicantInfo | None
     address: AddressInfo | None
     zone: ZoneRef | None
+    serving_zones: list[ZoneRef] = []
 
 
 # VehicleDetail.apartment_details ссылается на ApartmentDetail (определён ниже).
@@ -495,6 +498,19 @@ def _zone_ref(db: Session, zone_id: int | None) -> ZoneRef | None:
         {"id": zone_id},
     ).mappings().first()
     return ZoneRef(id=r["id"], code=r["code"], name=r["name"]) if r else None
+
+
+def _rule_zones_for(db: Session, vehicle_id: int) -> list[ZoneRef]:
+    """Зоны активных vehicle-scoped правил доступа (отмеченные чекбоксы в правке авто)."""
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT z.id, z.code, z.name FROM access_rules ar "
+            "JOIN parking_zones z ON z.id = ar.zone_id "
+            "WHERE ar.vehicle_id = :vid AND ar.is_active = true ORDER BY z.id"
+        ),
+        {"vid": vehicle_id},
+    ).mappings()
+    return [ZoneRef(id=r["id"], code=r["code"], name=r["name"]) for r in rows]
 
 
 def _vehicle_row(r, links: list[ApartmentLink]) -> VehicleRow:
@@ -956,8 +972,20 @@ def get_vehicle(
         vehicle=_vehicle_row(r, links),
         apartments=links,
         apartment_details=apartment_details,
+        rule_zones=_rule_zones_for(db, vehicle_id),
         recent_events=recent,
     )
+
+
+@router.get("/apartments/{apartment_id}/serving-zones", response_model=list[ZoneRef])
+def get_apartment_serving_zones(
+    apartment_id: int = Path(..., description="apartments.id"),
+    db: Session = Depends(get_db),
+    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+) -> list[ZoneRef]:
+    """Обслуживающие зоны квартиры (apartment→yard→zone) — кандидаты-чекбоксы для
+    форм создания пропуска/привязки зон, когда деталь объекта ещё не загружена."""
+    return _serving_zones_for(db, [apartment_id]).get(apartment_id, [])
 
 
 # ------------------------------ /passes ------------------------------
@@ -1033,6 +1061,9 @@ def get_pass(
         applicant=applicant,
         address=address,
         zone=_zone_ref(db, r["zone_id"]),
+        serving_zones=_serving_zones_for(db, [r["apartment_id"]]).get(
+            r["apartment_id"], []
+        ),
     )
 
 

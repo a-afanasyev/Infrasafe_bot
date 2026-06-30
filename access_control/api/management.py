@@ -113,23 +113,28 @@ class UpdateVehicleRequest(BaseModel):
     vehicle_class: str | None = Field(None, max_length=_TEXT_MAX_LEN)
     apartment_id: int | None = None
     relation_type: Literal["owner", "tenant", "family", "service"] | None = None
+    # Явные зоны доступа авто (чекбоксы). Передан → синхронизируется набор правил.
+    zone_ids: list[int] | None = None
 
 
 class UpdatePassRequest(BaseModel):
     """Правка пропуска (§13.2). PATCH: применяются только переданные поля.
 
     ``status='revoked'`` отзывает пропуск (иное значение не принимается).
+    ``zone_id`` меняет зону пропуска (None — снять ограничение зоной).
     """
 
     valid_until: dt.datetime | None = None
     max_entries: int | None = Field(None, ge=1, le=100)
     plate_number_original: str | None = Field(None, max_length=_PLATE_MAX_LEN)
+    zone_id: int | None = None
     status: Literal["revoked"] | None = None
 
 
 class TaxiPassRequest(BaseModel):
     apartment_id: int
-    zone_id: int
+    # zone_id опционален: None → дефолт по адресу жителя (первая обслуживающая зона).
+    zone_id: int | None = None
     valid_until: dt.datetime
     plate_number_original: str | None = Field(None, max_length=_PLATE_MAX_LEN)
     valid_from: dt.datetime | None = None
@@ -145,7 +150,9 @@ class TaxiPassRequest(BaseModel):
 class ReviewRequest(BaseModel):
     action: Literal["approve", "reject"]
     comment: str | None = Field(None, max_length=_COMMENT_MAX_LEN)
+    # Зоны при approve (чекбоксы). zone_ids приоритетнее одиночного zone_id.
     zone_id: int | None = None
+    zone_ids: list[int] | None = None
 
 
 class ReviewResponse(BaseModel):
@@ -383,6 +390,7 @@ def post_review(
             actor_user_id=user.id,
             comment=body.comment,
             zone_id=body.zone_id,
+            zone_ids=body.zone_ids,
             ip_address=_client_ip(request),
         )
     except RequestNotFound:

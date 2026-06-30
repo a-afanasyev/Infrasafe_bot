@@ -30,6 +30,7 @@ import type {
   RedeemCodeResponse,
   AccessRequestDetail,
   PassDetail,
+  ZoneRef,
 } from '../types/access'
 
 /**
@@ -85,6 +86,24 @@ export function useAccessVehicleDetail(vehicleId: number | null) {
     queryKey: ['access-vehicle-detail', vehicleId],
     queryFn: () => accessClient.get(`/vehicles/${vehicleId}`).then((r) => r.data),
     enabled: vehicleId !== null,
+    staleTime: STALE_MS,
+  })
+}
+
+// ── Зоны парковки квартиры (кандидаты-чекбоксы) ──────────────────────────────
+/**
+ * Обслуживающие зоны квартиры (apartment→yard→zone) для чекбоксов в формах
+ * создания пропуска/правки заявки, когда деталь объекта ещё не загружена.
+ * Запрос включается только при валидном apartmentId.
+ */
+export function useApartmentServingZones(apartmentId: number | null) {
+  return useQuery<ZoneRef[]>({
+    queryKey: ['apartment-serving-zones', apartmentId],
+    queryFn: () =>
+      accessClient
+        .get(`/apartments/${apartmentId}/serving-zones`)
+        .then((r) => r.data),
+    enabled: apartmentId !== null && Number.isFinite(apartmentId),
     staleTime: STALE_MS,
   })
 }
