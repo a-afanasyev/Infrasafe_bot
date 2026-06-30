@@ -5,18 +5,23 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useAccessVehicleDetail } from '../../hooks/useAccessRegistry'
 import { AccessStatusBadge, DecisionBadge } from './AccessBadges'
 import { formatDateTime } from '../../utils/accessFormat'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import { formatAddress, formatApplicant, formatZones } from '../../utils/accessMeta'
 
 /**
- * Деталь автомобиля: атрибуты + связи с квартирами + последние события проезда.
+ * Деталь автомобиля: атрибуты + владелец (квартира/житель/адрес/зона) + последние
+ * события проезда. `onEdit` (если задан) показывает кнопку правки карточки.
  */
 interface Props {
   vehicleId: number | null
   onClose: () => void
+  onEdit?: () => void
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -28,7 +33,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export default function VehicleDetailDialog({ vehicleId, onClose }: Props) {
+export default function VehicleDetailDialog({ vehicleId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
   const { data, isLoading, isError } = useAccessVehicleDetail(vehicleId)
 
@@ -79,27 +84,45 @@ export default function VehicleDetailDialog({ vehicleId, onClose }: Props) {
               )}
             </div>
 
-            {/* Связи с квартирами */}
+            {/* Владелец: квартира + житель + адрес + зона */}
             <div className="flex flex-col gap-2">
               <h3 className="text-[12px] font-semibold uppercase tracking-wider text-text-secondary">
-                {t('accessControl.vehicleDetail.apartments')}
+                {t('accessControl.vehicleDetail.owner')}
               </h3>
-              {data.apartments.length === 0 ? (
+              {data.apartment_details.length === 0 ? (
                 <p className="text-[13px] text-text-muted">—</p>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  {data.apartments.map((a) => (
+                  {data.apartment_details.map((a) => (
                     <div
                       key={`${a.apartment_id}-${a.relation_type}`}
-                      className="flex items-center gap-2 rounded-sm border border-border-default bg-bg-surface px-3 py-2 text-[12px]"
+                      className="flex flex-col gap-1 rounded-sm border border-border-default bg-bg-surface px-3 py-2 text-[12px]"
                     >
-                      <span className="text-text-primary">
-                        {t('accessControl.vehicleDetail.apartment')} #{a.apartment_id}
-                      </span>
-                      <span className="text-text-muted">{a.relation_type}</span>
-                      <span className="ml-auto">
-                        <AccessStatusBadge status={a.status} />
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-text-primary">
+                          {t('accessControl.vehicleDetail.apartment')} #{a.apartment_id}
+                        </span>
+                        <span className="text-text-muted">
+                          {t(`accessControl.relationType.${a.relation_type}`, {
+                            defaultValue: a.relation_type,
+                          })}
+                        </span>
+                        <span className="ml-auto">
+                          <AccessStatusBadge status={a.status} />
+                        </span>
+                      </div>
+                      <div className="text-text-secondary">
+                        {t('accessControl.meta.resident')}:{' '}
+                        {a.residents.length > 0
+                          ? a.residents.map((r) => formatApplicant(r)).join('; ')
+                          : '—'}
+                      </div>
+                      <div className="text-text-muted">
+                        {t('accessControl.meta.address')}: {formatAddress(a.address, t)}
+                      </div>
+                      <div className="text-text-muted">
+                        {t('accessControl.meta.zone')}: {formatZones(a.zones)}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -133,6 +156,12 @@ export default function VehicleDetailDialog({ vehicleId, onClose }: Props) {
               )}
             </div>
           </div>
+        )}
+
+        {data && onEdit && (
+          <DialogFooter>
+            <Button onClick={onEdit}>{t('common.edit')}</Button>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

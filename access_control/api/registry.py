@@ -20,7 +20,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
@@ -209,6 +209,7 @@ class VehicleEventRow(_Frozen):
 class VehicleDetail(_Frozen):
     vehicle: VehicleRow
     apartments: list[ApartmentLink]
+    apartment_details: list["ApartmentDetail"] = []
     recent_events: list[VehicleEventRow]
 
 
@@ -256,6 +257,74 @@ class RequestsPage(_Frozen):
     total: int
     limit: int
     offset: int
+
+
+# --- Обогащение деталей: заявитель / адрес / зона (§6.2, экран менеджера) ---
+
+
+class ApplicantInfo(_Frozen):
+    """PD-обогащение: данные жителя (заявитель/владелец) для экрана менеджера."""
+
+    user_id: int
+    name: str | None
+    phone: str | None
+    username: str | None
+    telegram_id: int | None
+
+
+class AddressInfo(_Frozen):
+    """Адрес квартиры: apartment→building→yard (справочник адресов)."""
+
+    apartment_id: int
+    apartment_number: str | None
+    entrance: str | None
+    floor: str | None
+    building_id: int | None
+    building_address: str | None
+    yard_id: int | None
+    yard_name: str | None
+
+
+class ZoneRef(_Frozen):
+    """Краткая ссылка на зону парковки."""
+
+    id: int
+    code: str | None
+    name: str | None
+
+
+class ApartmentDetail(_Frozen):
+    """Связь авто↔квартира, обогащённая адресом, жителями и зонами (карточка авто)."""
+
+    apartment_id: int
+    relation_type: str
+    status: str
+    address: AddressInfo | None
+    residents: list[ApplicantInfo]
+    zones: list[ZoneRef]
+
+
+class RequestDetail(_Frozen):
+    """Деталь заявки на авто: заявитель + адрес + обслуживающие зоны + авто."""
+
+    request: RequestRow
+    applicant: ApplicantInfo | None
+    address: AddressInfo | None
+    serving_zones: list[ZoneRef]
+    vehicle: VehicleRow | None
+
+
+class PassDetail(_Frozen):
+    """Деталь пропуска: заявитель + адрес + зона."""
+
+    pass_record: PassRow = Field(serialization_alias="pass")
+    applicant: ApplicantInfo | None
+    address: AddressInfo | None
+    zone: ZoneRef | None
+
+
+# VehicleDetail.apartment_details ссылается на ApartmentDetail (определён ниже).
+VehicleDetail.model_rebuild()
 
 
 # ------------------------------ хелперы ------------------------------
@@ -331,6 +400,101 @@ def _apartments_for(db: Session, vehicle_ids: list[int]) -> dict[int, list[Apart
             )
         )
     return out
+
+
+def _applicants_for(db: Session, user_ids: list[int | None]) -> dict[int, ApplicantInfo]:
+    """Данные жителей (users) по id — для заявителя/владельца (без N+1)."""
+    ids = [u for u in {*user_ids} if u is not None]
+    if not ids:
+        return {}
+    stmt = text(
+        "SELECT id, first_name, last_name, username, phone, telegram_id "
+        "FROM users WHERE id IN :ids"
+    ).bindparams(bindparam("ids", expanding=True))
+    out: dict[int, ApplicantInfo] = {}
+    for r in db.execute(stmt, {"ids": ids}).mappings():
+        name = " ".join(x for x in (r["first_name"], r["last_name"]) if x) or None
+        out[r["id"]] = ApplicantInfo(
+            user_id=r["id"], name=name, phone=r["phone"],
+            username=r["username"], telegram_id=r["telegram_id"],
+        )
+    return out
+
+
+def _addresses_for(db: Session, apartment_ids: list[int | None]) -> dict[int, AddressInfo]:
+    """Адрес квартир (apartment→building→yard) по id (без N+1)."""
+    ids = [a for a in {*apartment_ids} if a is not None]
+    if not ids:
+        return {}
+    stmt = text(
+        "SELECT a.id AS apartment_id, a.apartment_number::text AS apartment_number, "
+        " a.entrance::text AS entrance, a.floor::text AS floor, "
+        " b.id AS building_id, b.address AS building_address, "
+        " y.id AS yard_id, y.name AS yard_name "
+        "FROM apartments a "
+        "LEFT JOIN buildings b ON b.id = a.building_id "
+        "LEFT JOIN yards y ON y.id = b.yard_id "
+        "WHERE a.id IN :ids"
+    ).bindparams(bindparam("ids", expanding=True))
+    return {
+        r["apartment_id"]: AddressInfo(**r)
+        for r in db.execute(stmt, {"ids": ids}).mappings()
+    }
+
+
+def _serving_zones_for(db: Session, apartment_ids: list[int | None]) -> dict[int, list[ZoneRef]]:
+    """Зоны, обслуживающие квартиру (apartment→building→yard ∈ parking_zone_yards)."""
+    ids = [a for a in {*apartment_ids} if a is not None]
+    if not ids:
+        return {}
+    stmt = text(
+        "SELECT a.id AS apartment_id, z.id AS zone_id, z.code, z.name "
+        "FROM apartments a "
+        "JOIN buildings b ON b.id = a.building_id "
+        "JOIN parking_zone_yards pzy ON pzy.yard_id = b.yard_id "
+        "JOIN parking_zones z ON z.id = pzy.zone_id "
+        "WHERE a.id IN :ids ORDER BY z.id"
+    ).bindparams(bindparam("ids", expanding=True))
+    out: dict[int, list[ZoneRef]] = {a: [] for a in ids}
+    for r in db.execute(stmt, {"ids": ids}).mappings():
+        out[r["apartment_id"]].append(
+            ZoneRef(id=r["zone_id"], code=r["code"], name=r["name"])
+        )
+    return out
+
+
+def _residents_for(db: Session, apartment_ids: list[int | None]) -> dict[int, list[ApplicantInfo]]:
+    """Жители квартир (user_apartments approved → users) — владельцы для карточки авто."""
+    ids = [a for a in {*apartment_ids} if a is not None]
+    if not ids:
+        return {}
+    stmt = text(
+        "SELECT ua.apartment_id, u.id, u.first_name, u.last_name, u.username, "
+        " u.phone, u.telegram_id "
+        "FROM user_apartments ua JOIN users u ON u.id = ua.user_id "
+        "WHERE ua.apartment_id IN :ids AND ua.status = 'approved' ORDER BY u.id"
+    ).bindparams(bindparam("ids", expanding=True))
+    out: dict[int, list[ApplicantInfo]] = {a: [] for a in ids}
+    for r in db.execute(stmt, {"ids": ids}).mappings():
+        name = " ".join(x for x in (r["first_name"], r["last_name"]) if x) or None
+        out[r["apartment_id"]].append(
+            ApplicantInfo(
+                user_id=r["id"], name=name, phone=r["phone"],
+                username=r["username"], telegram_id=r["telegram_id"],
+            )
+        )
+    return out
+
+
+def _zone_ref(db: Session, zone_id: int | None) -> ZoneRef | None:
+    """Краткая ссылка на зону по id (для пропуска)."""
+    if zone_id is None:
+        return None
+    r = db.execute(
+        text("SELECT id, code, name FROM parking_zones WHERE id = :id"),
+        {"id": zone_id},
+    ).mappings().first()
+    return ZoneRef(id=r["id"], code=r["code"], name=r["name"]) if r else None
 
 
 def _vehicle_row(r, links: list[ApartmentLink]) -> VehicleRow:
@@ -773,8 +937,26 @@ def get_vehicle(
             {"norm": r["plate_number_normalized"], "n": VEHICLE_RECENT_EVENTS},
         ).mappings()
     ]
+    apt_ids = [link.apartment_id for link in links]
+    addr = _addresses_for(db, apt_ids)
+    residents = _residents_for(db, apt_ids)
+    zones = _serving_zones_for(db, apt_ids)
+    apartment_details = [
+        ApartmentDetail(
+            apartment_id=link.apartment_id,
+            relation_type=link.relation_type,
+            status=link.status,
+            address=addr.get(link.apartment_id),
+            residents=residents.get(link.apartment_id, []),
+            zones=zones.get(link.apartment_id, []),
+        )
+        for link in links
+    ]
     return VehicleDetail(
-        vehicle=_vehicle_row(r, links), apartments=links, recent_events=recent
+        vehicle=_vehicle_row(r, links),
+        apartments=links,
+        apartment_details=apartment_details,
+        recent_events=recent,
     )
 
 
@@ -822,6 +1004,38 @@ def list_passes(
     return PassesPage(items=items, total=total, limit=limit, offset=offset)
 
 
+@router.get("/passes/{pass_id}", response_model=PassDetail)
+def get_pass(
+    pass_id: int = Path(..., description="access_passes.id"),
+    db: Session = Depends(get_db),
+    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+) -> PassDetail:
+    """Деталь пропуска + заявитель (житель), адрес квартиры и зона."""
+    r = db.execute(
+        text(
+            "SELECT id, pass_type, apartment_id, created_by_user_id, zone_id, "
+            " plate_number_original, plate_number_normalized, valid_from, valid_until, "
+            " max_entries, used_entries, status, source, created_at "
+            "FROM access_passes WHERE id = :id"
+        ),
+        {"id": pass_id},
+    ).mappings().first()
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="pass not found"
+        )
+    applicant = _applicants_for(db, [r["created_by_user_id"]]).get(
+        r["created_by_user_id"]
+    )
+    address = _addresses_for(db, [r["apartment_id"]]).get(r["apartment_id"])
+    return PassDetail(
+        pass_record=PassRow(**r),
+        applicant=applicant,
+        address=address,
+        zone=_zone_ref(db, r["zone_id"]),
+    )
+
+
 # ------------------------------ /requests ------------------------------
 
 
@@ -864,3 +1078,49 @@ def list_requests(
     ).mappings()
     items = [RequestRow(**r) for r in rows]
     return RequestsPage(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/requests/{request_id}", response_model=RequestDetail)
+def get_request(
+    request_id: int = Path(..., description="resident_access_requests.id"),
+    db: Session = Depends(get_db),
+    _user=Depends(require_approved_roles(*VEHICLES_REQUESTS_ROLES)),
+) -> RequestDetail:
+    """Деталь заявки на авто + заявитель (житель), адрес, обслуживающие зоны и авто."""
+    r = db.execute(
+        text(
+            "SELECT id, apartment_id, created_by_user_id, vehicle_id, "
+            " plate_number_original, plate_number_normalized, relation_type, status, "
+            " reviewed_by_user_id, reviewed_at, review_comment, created_at "
+            "FROM resident_access_requests WHERE id = :id"
+        ),
+        {"id": request_id},
+    ).mappings().first()
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="request not found"
+        )
+    applicant = _applicants_for(db, [r["created_by_user_id"]]).get(
+        r["created_by_user_id"]
+    )
+    address = _addresses_for(db, [r["apartment_id"]]).get(r["apartment_id"])
+    serving_zones = _serving_zones_for(db, [r["apartment_id"]]).get(
+        r["apartment_id"], []
+    )
+    vehicle = None
+    if r["vehicle_id"] is not None:
+        vr = db.execute(
+            text(f"SELECT {_VEHICLE_COLS} FROM vehicles v WHERE id = :id"),
+            {"id": r["vehicle_id"]},
+        ).mappings().first()
+        if vr is not None:
+            vehicle = _vehicle_row(
+                vr, _apartments_for(db, [vr["id"]]).get(vr["id"], [])
+            )
+    return RequestDetail(
+        request=RequestRow(**r),
+        applicant=applicant,
+        address=address,
+        serving_zones=serving_zones,
+        vehicle=vehicle,
+    )

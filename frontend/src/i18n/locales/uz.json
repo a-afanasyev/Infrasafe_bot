@@ -155,7 +155,11 @@
       "vehicleArchived": "Avtomobil arxivga ko'chirildi",
       "taxiPassCreated": "Taxi-ruxsatnoma yaratildi",
       "requestApproved": "Ariza tasdiqlandi",
-      "requestRejected": "Ariza rad etildi"
+      "requestRejected": "Ariza rad etildi",
+      "vehicleUpdated": "Avtomobil kartasi yangilandi",
+      "passUpdated": "Ruxsatnoma yangilandi",
+      "passRevoked": "Ruxsatnoma bekor qilindi",
+      "revokePass": "Ruxsatnomani bekor qilish"
     },
     "vehicleForm": {
       "title": "Yangi avtomobil",
@@ -311,8 +315,31 @@
       "country": "Raqam mamlakati",
       "blockedReason": "Bloklash sababi",
       "apartments": "Bog'langan xonadonlar",
+      "owner": "Egasi",
       "apartment": "Xonadon",
       "recentEvents": "So'nggi hodisalar"
+    },
+    "meta": {
+      "applicant": "Ariza beruvchi",
+      "resident": "Yashovchi",
+      "address": "Manzil",
+      "zone": "Parkovka hududi",
+      "apt": "xon. {{n}}"
+    },
+    "requestDetail": {
+      "title": "Avtomobilga ariza",
+      "servingZones": "Xizmat ko'rsatuvchi hududlar",
+      "linkedVehicle": "Bog'langan avtomobil"
+    },
+    "passDetail": {
+      "title": "Ruxsatnoma",
+      "editTitle": "Tahrirlash",
+      "maxEntries": "Kirishlar limiti"
+    },
+    "vehicleEdit": {
+      "title": "Avtomobilni tahrirlash",
+      "desc": "Avtomobil va egasi ma'lumotlarini o'zgartiring.",
+      "owner": "Egasi"
     },
     "passes": {
       "empty": "Ruxsatnomalar topilmadi",

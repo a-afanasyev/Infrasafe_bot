@@ -10,6 +10,7 @@ import EmptyState from '../shared/EmptyState'
  */
 interface Props {
   passes: PassRow[]
+  onSelect?: (pass: PassRow) => void
 }
 
 function HeaderCell({ children }: { children: React.ReactNode }) {
@@ -20,7 +21,7 @@ function HeaderCell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function PassesTable({ passes }: Props) {
+export default function PassesTable({ passes, onSelect }: Props) {
   const { t } = useTranslation()
 
   if (passes.length === 0) {
@@ -51,7 +52,12 @@ export default function PassesTable({ passes }: Props) {
             return (
               <tr
                 key={p.id}
-                className={cn('transition-colors duration-100', !isLast && 'border-b border-border-default')}
+                onClick={() => onSelect?.(p)}
+                className={cn(
+                  'transition-colors duration-100',
+                  !isLast && 'border-b border-border-default',
+                  onSelect && 'cursor-pointer hover:bg-bg-surface',
+                )}
               >
                 <td className="px-3 py-2.5 text-[13px] text-text-primary whitespace-nowrap">
                   {t(`accessControl.passes.passType.${p.pass_type}`, { defaultValue: p.pass_type })}

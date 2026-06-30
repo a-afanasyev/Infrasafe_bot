@@ -179,9 +179,45 @@ export interface VehicleEventRow {
   status: string | null
 }
 
+// ── Обогащение деталей: заявитель / адрес / зона ────────────────────────────
+export interface ApplicantInfo {
+  user_id: number
+  name: string | null
+  phone: string | null
+  username: string | null
+  telegram_id: number | null
+}
+
+export interface AddressInfo {
+  apartment_id: number
+  apartment_number: string | null
+  entrance: string | null
+  floor: string | null
+  building_id: number | null
+  building_address: string | null
+  yard_id: number | null
+  yard_name: string | null
+}
+
+export interface ZoneRef {
+  id: number
+  code: string | null
+  name: string | null
+}
+
+export interface ApartmentDetail {
+  apartment_id: number
+  relation_type: string
+  status: string
+  address: AddressInfo | null
+  residents: ApplicantInfo[]
+  zones: ZoneRef[]
+}
+
 export interface VehicleDetail {
   vehicle: VehicleRow
   apartments: ApartmentLink[]
+  apartment_details: ApartmentDetail[]
   recent_events: VehicleEventRow[]
 }
 
@@ -211,6 +247,14 @@ export interface PassesFilters {
   offset?: number
 }
 
+/** Деталь пропуска (GET /passes/{id}) — заявитель/адрес/зона. */
+export interface PassDetail {
+  pass: PassRow
+  applicant: ApplicantInfo | null
+  address: AddressInfo | null
+  zone: ZoneRef | null
+}
+
 // ── Заявки жителей ──────────────────────────────────────────────────────────
 export interface AccessRequestRow {
   id: number
@@ -232,6 +276,15 @@ export interface AccessRequestsFilters {
   apartment_id?: number
   limit?: number
   offset?: number
+}
+
+/** Деталь заявки (GET /requests/{id}) — заявитель/адрес/обслуживающие зоны/авто. */
+export interface AccessRequestDetail {
+  request: AccessRequestRow
+  applicant: ApplicantInfo | null
+  address: AddressInfo | null
+  serving_zones: ZoneRef[]
+  vehicle: VehicleRow | null
 }
 
 // ── Действия охраны (operator.py) ───────────────────────────────────────────
@@ -300,6 +353,27 @@ export type VehicleStatus = 'active' | 'blocked' | 'archived'
 export interface UpdateVehicleStatusPayload {
   status: VehicleStatus
   reason?: string
+}
+
+/** Тело PATCH /vehicles/{id} — правка карточки (атрибуты/номер/владелец). */
+export interface UpdateVehiclePayload {
+  plate_number_original?: string
+  plate_country?: string | null
+  plate_type?: string | null
+  brand?: string | null
+  model?: string | null
+  color?: string | null
+  vehicle_class?: string | null
+  apartment_id?: number
+  relation_type?: VehicleRelationType
+}
+
+/** Тело PATCH /passes/{id} — правка пропуска (срок/лимит/номер/отзыв). */
+export interface UpdatePassPayload {
+  valid_until?: string
+  max_entries?: number
+  plate_number_original?: string | null
+  status?: 'revoked'
 }
 
 /** Тело POST /passes/taxi — разовый/временный taxi-пропуск. */
