@@ -185,19 +185,18 @@ def _serving_zone_ids(db: Session, apartment_id: int) -> list[int]:
 
 
 def _resolve_zone_id(db: Session, apartment_id: int, zone_id: int | None) -> int:
-    """Определить зону пропуска (§ зоно-резолв). Явный zone_id имеет приоритет."""
+    """Определить зону пропуска (§ зоно-резолв). Явный zone_id имеет приоритет.
+
+    Иначе — дефолт по адресу жителя: первая (минимальный id) обслуживающая зона
+    квартиры. Если адресу не сопоставлена ни одна зона — ``ZoneNotResolved`` (422).
+    """
     if zone_id is not None:
         return zone_id
-    serving = _serving_zone_ids(db, apartment_id)
-    if len(serving) == 1:
+    serving = sorted(_serving_zone_ids(db, apartment_id))
+    if serving:
         return serving[0]
     raise ZoneNotResolved(
-        "zone_id is required: "
-        + (
-            "no parking zone serves this apartment"
-            if not serving
-            else "multiple parking zones serve this apartment"
-        )
+        "zone_id is required: no parking zone serves this apartment"
     )
 
 

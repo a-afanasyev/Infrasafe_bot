@@ -193,6 +193,8 @@
       "desc": "Taxi uchun bir martalik ruxsatnoma. Xonadon, zona va amal qilish muddati majburiy.",
       "apartmentId": "Xonadon ID",
       "zoneId": "Zona ID",
+      "zone": "Parking zonasi",
+      "noZones": "Xonadonni kiriting — zonalar manzil bo'yicha qo'yiladi.",
       "plate": "Davlat raqami",
       "platePlaceholder": "Ixtiyoriy",
       "validFrom": "Amal qiladi:",
@@ -205,8 +207,9 @@
       "approveDesc": "{{plate}} TV bo'yicha ariza tasdiqlanadi, avtomobil kirish bazasiga qo'shiladi.",
       "rejectTitle": "Arizani rad etish",
       "rejectDesc": "{{plate}} TV bo'yicha ariza rad etiladi.",
-      "zoneLabel": "Zona ID (ixtiyoriy)",
+      "zoneLabel": "Parking zonalari",
       "zonePlaceholder": "Masalan, 1",
+      "noZones": "Arizachi manziliga bog'langan zonalar yo'q.",
       "commentLabel": "Izoh",
       "commentPlaceholder": "Qaror bo'yicha izoh (ixtiyoriy)"
     },
@@ -334,12 +337,17 @@
     "passDetail": {
       "title": "Ruxsatnoma",
       "editTitle": "Tahrirlash",
-      "maxEntries": "Kirishlar limiti"
+      "maxEntries": "Kirishlar limiti",
+      "zone": "Parking zonasi",
+      "noZones": "Manzilga bog'langan zonalar yo'q."
     },
     "vehicleEdit": {
       "title": "Avtomobilni tahrirlash",
       "desc": "Avtomobil va egasi ma'lumotlarini o'zgartiring.",
-      "owner": "Egasi"
+      "owner": "Egasi",
+      "zones": "Parking zonalari",
+      "zonesHint": "Avtomobilga ruxsat etilgan zonalarni belgilang.",
+      "noZones": "Mavjud zonalar yo'q (manzil parking zonasiga bog'lanmagan)."
     },
     "passes": {
       "empty": "Ruxsatnomalar topilmadi",

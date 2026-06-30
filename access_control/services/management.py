@@ -23,6 +23,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from access_control.domain.audit import AccessAuditLog
@@ -207,6 +208,83 @@ def _add_zone_rule(
     )
 
 
+def serving_zone_ids(db: Session, apartment_id: int) -> list[int]:
+    """Зоны, обслуживающие квартиру (apartment→building→yard ∈ parking_zone_yards).
+
+    Используется как дефолт «зона = адрес жителя» (пропуск) и для проверки/набора
+    кандидатов при правке зон авто. Отсортировано по id (детерминированный дефолт).
+    """
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT z.id FROM apartments a "
+            "JOIN buildings b ON b.id = a.building_id "
+            "JOIN parking_zone_yards pzy ON pzy.yard_id = b.yard_id "
+            "JOIN parking_zones z ON z.id = pzy.zone_id "
+            "WHERE a.id = :apt ORDER BY z.id"
+        ),
+        {"apt": apartment_id},
+    ).scalars()
+    return list(rows)
+
+
+def _active_vehicle_apartment_id(db: Session, vehicle_id: int) -> int | None:
+    """apartment_id текущей активной связи авто (для apartment_id новых правил)."""
+    link = (
+        db.query(VehicleApartment)
+        .filter(
+            VehicleApartment.vehicle_id == vehicle_id,
+            VehicleApartment.status == VehicleApartmentStatus.ACTIVE.value,
+        )
+        .order_by(VehicleApartment.id)
+        .first()
+    )
+    return link.apartment_id if link is not None else None
+
+
+def _sync_vehicle_zone_rules(
+    db: Session,
+    *,
+    vehicle_id: int,
+    apartment_id: int | None,
+    zone_ids: list[int],
+    actor_user_id: int,
+) -> None:
+    """Привести vehicle-scoped правила доступа к набору зон (чекбоксы, §7 шаг 6).
+
+    Активные правила на зоны вне набора деактивируются; для зон без активного
+    правила реактивируется существующее неактивное либо создаётся новое. Так авто
+    оказывается явно разрешён ровно в выбранных зонах.
+    """
+    target = {int(z) for z in zone_ids}
+    rules = (
+        db.query(AccessRule)
+        .filter(AccessRule.vehicle_id == vehicle_id)
+        .all()
+    )
+    active_zones: set[int] = set()
+    for rule in rules:
+        if not rule.is_active:
+            continue
+        if rule.zone_id in target:
+            active_zones.add(rule.zone_id)
+        else:
+            rule.is_active = False
+    for zid in sorted(target - active_zones):
+        revived = next(
+            (r for r in rules if r.zone_id == zid and not r.is_active), None
+        )
+        if revived is not None:
+            revived.is_active = True
+        else:
+            _add_zone_rule(
+                db,
+                vehicle_id=vehicle_id,
+                apartment_id=apartment_id,
+                zone_id=zid,
+                actor_user_id=actor_user_id,
+            )
+
+
 # --------------------------- публичные операции ---------------------------
 
 
@@ -382,11 +460,12 @@ def update_vehicle(
 ) -> Vehicle:
     """Отредактировать карточку авто (§6.2). ``fields`` — только переданные ключи
     среди plate_number_original/plate_country/plate_type/brand/model/color/
-    vehicle_class/apartment_id/relation_type (PATCH-семантика).
+    vehicle_class/apartment_id/relation_type/zone_ids (PATCH-семантика).
 
     Смена номера ре-нормализуется (§12) и проверяется на активный дубль (409,
     исключая сам авто). apartment_id → перепривязка владельца; relation_type без
-    apartment_id обновляет отношение текущей активной связи. Аудит.
+    apartment_id обновляет отношение текущей активной связи. ``zone_ids`` (если
+    передан) синхронизирует явные правила доступа авто к зонам. Аудит.
     """
     now = now or _utcnow()
     vehicle = db.get(Vehicle, vehicle_id)
@@ -445,6 +524,19 @@ def update_vehicle(
             link.relation_type = fields["relation_type"]
 
     db.flush()
+
+    # Синхронизация явных правил зон (чекбоксы) — после flush, чтобы перепривязка
+    # владельца уже была видна при выборе apartment_id для новых правил.
+    if fields.get("zone_ids") is not None:
+        _sync_vehicle_zone_rules(
+            db,
+            vehicle_id=vehicle.id,
+            apartment_id=_active_vehicle_apartment_id(db, vehicle.id),
+            zone_ids=fields["zone_ids"],
+            actor_user_id=actor_user_id,
+        )
+        db.flush()
+
     write_audit(
         db,
         actor_user_id=actor_user_id,
@@ -467,7 +559,7 @@ def create_taxi_pass(
     *,
     actor_user_id: int,
     apartment_id: int,
-    zone_id: int,
+    zone_id: int | None = None,
     valid_until: dt.datetime,
     plate_number_original: str | None = None,
     valid_from: dt.datetime | None = None,
@@ -477,8 +569,13 @@ def create_taxi_pass(
     """Создать taxi-пропуск (§13.2, единая модель §5.4). Аудит.
 
     Номер нормализуется, если задан. ``status=active``, ``used_entries=0``,
-    ``created_by_user_id=актор``, ``source=manager``.
+    ``created_by_user_id=актор``, ``source=manager``. ``zone_id=None`` → дефолт по
+    адресу жителя (первая обслуживающая зона квартиры); может остаться None, если
+    зона адресу не сопоставлена (пропуск тогда не ограничен зоной).
     """
+    if zone_id is None:
+        serving = serving_zone_ids(db, apartment_id)
+        zone_id = serving[0] if serving else None
     normalized = None
     if plate_number_original:
         normalized = normalize_plate(plate_number_original).normalized
@@ -525,11 +622,14 @@ def update_pass(
     valid_until/max_entries/plate_number_original/status (PATCH-семантика).
 
     ``status='revoked'`` отзывает пропуск; иное значение status игнорируется (отзыв
-    необратим в пилоте). Номер ре-нормализуется. Аудит.
+    необратим в пилоте). Номер ре-нормализуется. ``zone_id`` (если передан) меняет
+    зону пропуска (None — снять ограничение зоной). Аудит.
     """
     ap = db.get(AccessPass, pass_id)
     if ap is None:
         raise PassNotFound(f"pass {pass_id} not found")
+    if "zone_id" in fields:
+        ap.zone_id = fields["zone_id"]
     if "valid_until" in fields:
         ap.valid_until = fields["valid_until"]
     if "max_entries" in fields:
@@ -593,13 +693,15 @@ def review_request(
     actor_user_id: int,
     comment: str | None = None,
     zone_id: int | None = None,
+    zone_ids: list[int] | None = None,
     ip_address: str | None = None,
     now: dt.datetime | None = None,
 ) -> ReviewOutcome:
     """Рассмотреть заявку жителя (§6.2 «подтверждение заявок», §4 п.7).
 
-    ``approve``: создать/активировать авто + связь(active) + (опц.) правило зоны,
+    ``approve``: создать/активировать авто + связь(active) + (опц.) правила зон,
     перевести заявку в ``approved``. ``reject``: статус ``rejected`` + comment.
+    Зоны: ``zone_ids`` (чекбоксы) приоритетнее одиночного ``zone_id`` (back-compat).
     Идемпотентно: повторное рассмотрение завершённой заявки возвращает сохранённый
     результат (``replayed=True``), не создавая дублей. Аудит.
     """
@@ -622,6 +724,12 @@ def review_request(
     # Получатель резидентского уведомления — автор заявки (читаем ДО commit).
     recipient_user_id = req.created_by_user_id
 
+    # Зоны правил: чекбоксы (zone_ids) приоритетнее одиночного zone_id (back-compat).
+    effective_zones = (
+        zone_ids if zone_ids is not None
+        else ([zone_id] if zone_id is not None else [])
+    )
+
     if action == "approve":
         vehicle = _resolve_or_create_vehicle(db, req, actor_user_id)
         if vehicle.status != VehicleStatus.ACTIVE.value:
@@ -637,12 +745,12 @@ def review_request(
             actor_user_id=actor_user_id,
             now=now,
         )
-        if zone_id is not None:
+        for zid in effective_zones:
             _add_zone_rule(
                 db,
                 vehicle_id=vehicle.id,
                 apartment_id=req.apartment_id,
-                zone_id=zone_id,
+                zone_id=zid,
                 actor_user_id=actor_user_id,
             )
         req.status = ResidentRequestStatus.APPROVED.value
@@ -667,7 +775,7 @@ def review_request(
         action=audit_action,
         entity_type="resident_access_request",
         entity_id=req.id,
-        details={"zone_id": zone_id, "vehicle_id": result_vehicle_id},
+        details={"zone_ids": effective_zones, "vehicle_id": result_vehicle_id},
         ip_address=ip_address,
     )
     db.commit()

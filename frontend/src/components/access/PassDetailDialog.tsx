@@ -15,6 +15,7 @@ import { useAccessPassDetail, useUpdatePass } from '../../hooks/useAccessRegistr
 import { AccessStatusBadge } from './AccessBadges'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import { MetaField, ApplicantAddressZones } from './AccessMeta'
+import ZoneCheckboxes from './ZoneCheckboxes'
 import type { UpdatePassPayload, ZoneRef } from '../../types/access'
 
 /**
@@ -45,6 +46,7 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
   const [validUntil, setValidUntil] = useState('')
   const [maxEntries, setMaxEntries] = useState('')
   const [plate, setPlate] = useState('')
+  const [zoneIds, setZoneIds] = useState<number[]>([])
 
   // Префилл формы при загрузке пропуска (render-time sync по id).
   const [syncId, setSyncId] = useState<number | null>(null)
@@ -53,6 +55,7 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
     setValidUntil(toLocalInput(pass.valid_until))
     setMaxEntries(String(pass.max_entries))
     setPlate(pass.plate_number_original ?? pass.plate_number_normalized ?? '')
+    setZoneIds(pass.zone_id != null ? [pass.zone_id] : [])
   }
 
   const editable = canManage && pass?.status === 'active'
@@ -64,6 +67,7 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
     const me = Number(maxEntries)
     if (Number.isFinite(me) && me >= 1) payload.max_entries = me
     payload.plate_number_original = plate.trim() || null
+    payload.zone_id = zoneIds[0] ?? null
     updatePass.mutate({ passId: pass.id, payload }, { onSuccess: onClose })
   }
 
@@ -76,6 +80,14 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
   }
 
   const zoneList: ZoneRef[] = data?.zone ? [data.zone] : []
+
+  // Кандидаты зоны пропуска: обслуживающие зоны адреса + текущая (если вне набора).
+  const zoneCandidates: ZoneRef[] = (() => {
+    const map = new Map<number, ZoneRef>()
+    for (const z of data?.serving_zones ?? []) map.set(z.id, z)
+    if (data?.zone && !map.has(data.zone.id)) map.set(data.zone.id, data.zone)
+    return [...map.values()].sort((a, b) => a.id - b.id)
+  })()
 
   return (
     <Dialog open={passId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -147,6 +159,16 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
                       className="font-mono"
                     />
                   </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('accessControl.passDetail.zone')}</Label>
+                  <ZoneCheckboxes
+                    zones={zoneCandidates}
+                    selected={zoneIds}
+                    onChange={setZoneIds}
+                    mode="single"
+                    emptyText={t('accessControl.passDetail.noZones')}
+                  />
                 </div>
               </div>
             ) : (
