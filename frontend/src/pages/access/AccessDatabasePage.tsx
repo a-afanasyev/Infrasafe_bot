@@ -6,12 +6,15 @@ import AccessTabBar from '../../components/access/AccessTabBar'
 import VehiclesTable from '../../components/access/VehiclesTable'
 import VehicleDetailDialog from '../../components/access/VehicleDetailDialog'
 import VehicleFormDialog from '../../components/access/VehicleFormDialog'
+import VehicleEditDialog from '../../components/access/VehicleEditDialog'
 import VehicleStatusDialog, {
   type StatusTarget,
 } from '../../components/access/VehicleStatusDialog'
 import TaxiPassFormDialog from '../../components/access/TaxiPassFormDialog'
 import PassesTable from '../../components/access/PassesTable'
+import PassDetailDialog from '../../components/access/PassDetailDialog'
 import RequestsTable from '../../components/access/RequestsTable'
+import RequestDetailDialog from '../../components/access/RequestDetailDialog'
 import RequestReviewDialog, {
   type ReviewTarget,
 } from '../../components/access/RequestReviewDialog'
@@ -23,6 +26,7 @@ import {
   useAccessRequests,
   useCreateVehicle,
   useUpdateVehicleStatus,
+  useUpdateVehicle,
   useCreateTaxiPass,
   useReviewRequest,
 } from '../../hooks/useAccessRegistry'
@@ -52,12 +56,14 @@ function VehiclesPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation()
   const [filters, setFilters] = useState<VehiclesFilters>({ limit: PAGE_LIMIT, offset: 0 })
   const [detailId, setDetailId] = useState<number | null>(null)
+  const [editId, setEditId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [statusTarget, setStatusTarget] = useState<StatusTarget | null>(null)
   const { data, isLoading, isError } = useAccessVehicles(filters)
 
   const createVehicle = useCreateVehicle()
   const updateStatus = useUpdateVehicleStatus()
+  const updateVehicle = useUpdateVehicle()
 
   const rowActions = canManage
     ? {
@@ -129,10 +135,33 @@ function VehiclesPanel({ canManage }: { canManage: boolean }) {
         </>
       )}
 
-      <VehicleDetailDialog vehicleId={detailId} onClose={() => setDetailId(null)} />
+      <VehicleDetailDialog
+        vehicleId={detailId}
+        onClose={() => setDetailId(null)}
+        onEdit={
+          canManage
+            ? () => {
+                setEditId(detailId)
+                setDetailId(null)
+              }
+            : undefined
+        }
+      />
 
       {canManage && (
         <>
+          <VehicleEditDialog
+            vehicleId={editId}
+            loading={updateVehicle.isPending}
+            onClose={() => setEditId(null)}
+            onSubmit={(payload) => {
+              if (editId === null) return
+              updateVehicle.mutate(
+                { vehicleId: editId, payload },
+                { onSuccess: () => setEditId(null) },
+              )
+            }}
+          />
           <VehicleFormDialog
             open={formOpen}
             loading={createVehicle.isPending}
@@ -164,6 +193,7 @@ function PassesPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation()
   const [filters, setFilters] = useState<PassesFilters>({ limit: PAGE_LIMIT, offset: 0 })
   const [formOpen, setFormOpen] = useState(false)
+  const [passDetailId, setPassDetailId] = useState<number | null>(null)
   const { data, isLoading, isError } = useAccessPasses(filters)
   const createTaxiPass = useCreateTaxiPass()
 
@@ -201,7 +231,7 @@ function PassesPanel({ canManage }: { canManage: boolean }) {
         <p className="text-[13px] text-red">{t('common.error')}</p>
       ) : (
         <>
-          <PassesTable passes={data?.items ?? []} />
+          <PassesTable passes={data?.items ?? []} onSelect={(p) => setPassDetailId(p.id)} />
           <AccessPagination
             total={data?.total ?? 0}
             limit={filters.limit ?? PAGE_LIMIT}
@@ -210,6 +240,12 @@ function PassesPanel({ canManage }: { canManage: boolean }) {
           />
         </>
       )}
+
+      <PassDetailDialog
+        passId={passDetailId}
+        canManage={canManage}
+        onClose={() => setPassDetailId(null)}
+      />
 
       {canManage && (
         <TaxiPassFormDialog
@@ -230,8 +266,10 @@ function RequestsPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation()
   const [filters, setFilters] = useState<AccessRequestsFilters>({ limit: PAGE_LIMIT, offset: 0 })
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null)
+  const [detailId, setDetailId] = useState<number | null>(null)
   const { data, isLoading, isError } = useAccessRequests(filters)
   const reviewRequest = useReviewRequest()
+  const detailRow = data?.items.find((r) => r.id === detailId) ?? null
 
   const rowActions = canManage
     ? {
@@ -270,7 +308,11 @@ function RequestsPanel({ canManage }: { canManage: boolean }) {
         <p className="text-[13px] text-red">{t('common.error')}</p>
       ) : (
         <>
-          <RequestsTable requests={data?.items ?? []} actions={rowActions} />
+          <RequestsTable
+            requests={data?.items ?? []}
+            actions={rowActions}
+            onSelect={(r) => setDetailId(r.id)}
+          />
           <AccessPagination
             total={data?.total ?? 0}
             limit={filters.limit ?? PAGE_LIMIT}
@@ -279,6 +321,27 @@ function RequestsPanel({ canManage }: { canManage: boolean }) {
           />
         </>
       )}
+
+      <RequestDetailDialog
+        requestId={detailId}
+        onClose={() => setDetailId(null)}
+        onApprove={
+          canManage && detailRow
+            ? () => {
+                setReviewTarget({ request: detailRow, action: 'approve' })
+                setDetailId(null)
+              }
+            : undefined
+        }
+        onReject={
+          canManage && detailRow
+            ? () => {
+                setReviewTarget({ request: detailRow, action: 'reject' })
+                setDetailId(null)
+              }
+            : undefined
+        }
+      />
 
       {canManage && (
         <RequestReviewDialog

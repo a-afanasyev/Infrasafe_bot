@@ -21,11 +21,15 @@ import type {
   ManualOpenResponse,
   CreateVehiclePayload,
   UpdateVehicleStatusPayload,
+  UpdateVehiclePayload,
   CreateTaxiPassPayload,
+  UpdatePassPayload,
   ReviewRequestPayload,
   ReviewRequestResponse,
   RedeemCodePayload,
   RedeemCodeResponse,
+  AccessRequestDetail,
+  PassDetail,
 } from '../types/access'
 
 /**
@@ -95,12 +99,30 @@ export function useAccessPasses(filters: PassesFilters = {}) {
   })
 }
 
+export function useAccessPassDetail(passId: number | null) {
+  return useQuery<PassDetail>({
+    queryKey: ['access-pass-detail', passId],
+    queryFn: () => accessClient.get(`/passes/${passId}`).then((r) => r.data),
+    enabled: passId !== null,
+    staleTime: STALE_MS,
+  })
+}
+
 // ── Заявки ──────────────────────────────────────────────────────────────────
 export function useAccessRequests(filters: AccessRequestsFilters = {}) {
   return useQuery<AccessPage<AccessRequestRow>>({
     queryKey: ['access-requests', filters],
     queryFn: () =>
       accessClient.get('/requests', { params: cleanParams(filters) }).then((r) => r.data),
+    staleTime: STALE_MS,
+  })
+}
+
+export function useAccessRequestDetail(requestId: number | null) {
+  return useQuery<AccessRequestDetail>({
+    queryKey: ['access-request-detail', requestId],
+    queryFn: () => accessClient.get(`/requests/${requestId}`).then((r) => r.data),
+    enabled: requestId !== null,
     staleTime: STALE_MS,
   })
 }
@@ -193,6 +215,27 @@ export function useUpdateVehicleStatus() {
   })
 }
 
+/** Правка карточки авто (PATCH /vehicles/{id}): атрибуты/номер/владелец. */
+export function useUpdateVehicle() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  return useMutation<VehicleRow, unknown, { vehicleId: number; payload: UpdateVehiclePayload }>({
+    mutationFn: ({ vehicleId, payload }) =>
+      accessClient.patch(`/vehicles/${vehicleId}`, payload).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-vehicles'] })
+      qc.invalidateQueries({ queryKey: ['access-vehicle-detail'] })
+      toast.success(t('accessControl.actions.vehicleUpdated'))
+    },
+    onError: (err) =>
+      toast.error(
+        errorStatus(err) === 409
+          ? t('accessControl.actions.vehicleDuplicate')
+          : safeErrorMessage(err, t('common.error')),
+      ),
+  })
+}
+
 /** Создание taxi-пропуска (POST /passes/taxi). */
 export function useCreateTaxiPass() {
   const { t } = useTranslation()
@@ -202,6 +245,26 @@ export function useCreateTaxiPass() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['access-passes'] })
       toast.success(t('accessControl.actions.taxiPassCreated'))
+    },
+    onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
+  })
+}
+
+/** Правка пропуска (PATCH /passes/{id}): продление/лимит/номер/отзыв. */
+export function useUpdatePass() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  return useMutation<PassRow, unknown, { passId: number; payload: UpdatePassPayload }>({
+    mutationFn: ({ passId, payload }) =>
+      accessClient.patch(`/passes/${passId}`, payload).then((r) => r.data),
+    onSuccess: (_data, { payload }) => {
+      qc.invalidateQueries({ queryKey: ['access-passes'] })
+      qc.invalidateQueries({ queryKey: ['access-pass-detail'] })
+      toast.success(
+        payload.status === 'revoked'
+          ? t('accessControl.actions.passRevoked')
+          : t('accessControl.actions.passUpdated'),
+      )
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
   })

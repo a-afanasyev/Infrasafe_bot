@@ -155,7 +155,11 @@
       "vehicleArchived": "Автомобиль перемещён в архив",
       "taxiPassCreated": "Taxi-пропуск создан",
       "requestApproved": "Заявка подтверждена",
-      "requestRejected": "Заявка отклонена"
+      "requestRejected": "Заявка отклонена",
+      "vehicleUpdated": "Карточка авто обновлена",
+      "passUpdated": "Пропуск обновлён",
+      "passRevoked": "Пропуск отозван",
+      "revokePass": "Отозвать пропуск"
     },
     "vehicleForm": {
       "title": "Новый автомобиль",
@@ -311,8 +315,31 @@
       "country": "Страна номера",
       "blockedReason": "Причина блокировки",
       "apartments": "Связанные квартиры",
+      "owner": "Владелец",
       "apartment": "Квартира",
       "recentEvents": "Последние события"
+    },
+    "meta": {
+      "applicant": "Заявитель",
+      "resident": "Житель",
+      "address": "Адрес",
+      "zone": "Зона парковки",
+      "apt": "кв. {{n}}"
+    },
+    "requestDetail": {
+      "title": "Заявка на авто",
+      "servingZones": "Обслуживающие зоны",
+      "linkedVehicle": "Связанный автомобиль"
+    },
+    "passDetail": {
+      "title": "Пропуск",
+      "editTitle": "Редактирование",
+      "maxEntries": "Лимит въездов"
+    },
+    "vehicleEdit": {
+      "title": "Редактирование авто",
+      "desc": "Измените данные автомобиля и владельца.",
+      "owner": "Владелец"
     },
     "passes": {
       "empty": "Пропуска не найдены",

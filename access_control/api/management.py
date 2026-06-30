@@ -31,6 +31,7 @@ from access_control.domain.passes import AccessPass
 from access_control.domain.vehicles import Vehicle, VehicleApartment
 from access_control.services.management import (
     InvalidReviewAction,
+    PassNotFound,
     RequestNotFound,
     VehicleAlreadyExists,
     VehicleNotFound,
@@ -38,6 +39,8 @@ from access_control.services.management import (
     create_vehicle,
     review_request,
     set_vehicle_status,
+    update_pass,
+    update_vehicle,
 )
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
@@ -90,6 +93,38 @@ class VehicleStatusRequest(BaseModel):
         if self.status == "blocked" and not (self.reason and self.reason.strip()):
             raise ValueError("blocked status requires non-empty reason")
         return self
+
+
+class UpdateVehicleRequest(BaseModel):
+    """Правка карточки авто (§6.2). PATCH: применяются только переданные поля.
+
+    Смена ``plate_number_original`` ре-нормализуется и проверяется на дубль.
+    ``apartment_id``/``relation_type`` — перепривязка владельца.
+    """
+
+    plate_number_original: str | None = Field(
+        None, min_length=1, max_length=_PLATE_MAX_LEN
+    )
+    plate_country: str | None = Field(None, max_length=8)
+    plate_type: str | None = Field(None, max_length=_TEXT_MAX_LEN)
+    brand: str | None = Field(None, max_length=_TEXT_MAX_LEN)
+    model: str | None = Field(None, max_length=_TEXT_MAX_LEN)
+    color: str | None = Field(None, max_length=_TEXT_MAX_LEN)
+    vehicle_class: str | None = Field(None, max_length=_TEXT_MAX_LEN)
+    apartment_id: int | None = None
+    relation_type: Literal["owner", "tenant", "family", "service"] | None = None
+
+
+class UpdatePassRequest(BaseModel):
+    """Правка пропуска (§13.2). PATCH: применяются только переданные поля.
+
+    ``status='revoked'`` отзывает пропуск (иное значение не принимается).
+    """
+
+    valid_until: dt.datetime | None = None
+    max_entries: int | None = Field(None, ge=1, le=100)
+    plate_number_original: str | None = Field(None, max_length=_PLATE_MAX_LEN)
+    status: Literal["revoked"] | None = None
 
 
 class TaxiPassRequest(BaseModel):
@@ -245,6 +280,43 @@ def patch_vehicle_status(
     return _vehicle_response(db, vehicle)
 
 
+@router.patch("/vehicles/{vehicle_id}", response_model=VehicleRow)
+def patch_vehicle(
+    body: UpdateVehicleRequest,
+    request: Request,
+    vehicle_id: int = Path(..., description="vehicles.id"),
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+) -> VehicleRow:
+    """Отредактировать карточку авто (§6.2): атрибуты, номер, привязка владельца.
+
+    409 при смене номера на активный дубль; 404 если авто нет.
+    """
+    fields = body.model_dump(exclude_unset=True)
+    try:
+        vehicle = update_vehicle(
+            db,
+            vehicle_id=vehicle_id,
+            actor_user_id=user.id,
+            fields=fields,
+            ip_address=_client_ip(request),
+        )
+    except VehicleNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="vehicle not found"
+        )
+    except VehicleAlreadyExists as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "vehicle_already_exists", "message": str(exc)},
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+    return _vehicle_response(db, vehicle)
+
+
 @router.post(
     "/passes/taxi", response_model=PassRow, status_code=status.HTTP_201_CREATED
 )
@@ -266,6 +338,31 @@ def post_taxi_pass(
         max_entries=body.max_entries,
         ip_address=_client_ip(request),
     )
+    return _pass_response(ap)
+
+
+@router.patch("/passes/{pass_id}", response_model=PassRow)
+def patch_pass(
+    body: UpdatePassRequest,
+    request: Request,
+    pass_id: int = Path(..., description="access_passes.id"),
+    db: Session = Depends(get_db),
+    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+) -> PassRow:
+    """Отредактировать пропуск (§13.2): срок/лимит/номер; status=revoked — отзыв."""
+    fields = body.model_dump(exclude_unset=True)
+    try:
+        ap = update_pass(
+            db,
+            pass_id=pass_id,
+            actor_user_id=user.id,
+            fields=fields,
+            ip_address=_client_ip(request),
+        )
+    except PassNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="pass not found"
+        )
     return _pass_response(ap)
 
 

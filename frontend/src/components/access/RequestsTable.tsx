@@ -20,6 +20,7 @@ export interface RequestRowActions {
 interface Props {
   requests: AccessRequestRow[]
   actions?: RequestRowActions
+  onSelect?: (request: AccessRequestRow) => void
 }
 
 function HeaderCell({ children }: { children: React.ReactNode }) {
@@ -30,7 +31,7 @@ function HeaderCell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function RequestsTable({ requests, actions }: Props) {
+export default function RequestsTable({ requests, actions, onSelect }: Props) {
   const { t } = useTranslation()
 
   if (requests.length === 0) {
@@ -62,7 +63,12 @@ export default function RequestsTable({ requests, actions }: Props) {
             return (
               <tr
                 key={r.id}
-                className={cn('transition-colors duration-100', !isLast && 'border-b border-border-default')}
+                onClick={() => onSelect?.(r)}
+                className={cn(
+                  'transition-colors duration-100',
+                  !isLast && 'border-b border-border-default',
+                  onSelect && 'cursor-pointer hover:bg-bg-surface',
+                )}
               >
                 <td className="px-3 py-2.5 text-[13px] text-text-secondary whitespace-nowrap">
                   {formatDateTime(r.created_at)}
@@ -84,7 +90,7 @@ export default function RequestsTable({ requests, actions }: Props) {
                   {r.review_comment ?? '—'}
                 </td>
                 {actions && (
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     {r.status === 'pending' ? (
                       <div className="flex flex-wrap gap-1.5">
                         <Button size="sm" onClick={() => actions.onApprove(r)}>

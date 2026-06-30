@@ -69,6 +69,10 @@ class RequestNotFound(Exception):
     """Заявка жителя не найдена (404)."""
 
 
+class PassNotFound(Exception):
+    """Пропуск не найден (404)."""
+
+
 class InvalidReviewAction(Exception):
     """Недопустимое действие рассмотрения (422)."""
 
@@ -331,6 +335,133 @@ def set_vehicle_status(
     return vehicle
 
 
+def _relink_apartment(
+    db: Session,
+    *,
+    vehicle_id: int,
+    apartment_id: int,
+    relation_type: str,
+    actor_user_id: int,
+    now: dt.datetime,
+) -> None:
+    """Перепривязать авто к квартире (§5.3): архивирует прочие активные связи,
+    ставит/активирует связь к указанной квартире с заданным отношением."""
+    links = (
+        db.query(VehicleApartment)
+        .filter(VehicleApartment.vehicle_id == vehicle_id)
+        .all()
+    )
+    for link in links:
+        if (
+            link.apartment_id != apartment_id
+            and link.status == VehicleApartmentStatus.ACTIVE.value
+        ):
+            link.status = VehicleApartmentStatus.ARCHIVED.value
+    _ensure_active_link(
+        db,
+        vehicle_id=vehicle_id,
+        apartment_id=apartment_id,
+        relation_type=relation_type,
+        actor_user_id=actor_user_id,
+        now=now,
+    )
+    # _ensure_active_link не меняет relation_type существующей связи — обновим явно.
+    target = next((link for link in links if link.apartment_id == apartment_id), None)
+    if target is not None:
+        target.relation_type = relation_type
+
+
+def update_vehicle(
+    db: Session,
+    *,
+    vehicle_id: int,
+    actor_user_id: int,
+    fields: dict,
+    ip_address: str | None = None,
+    now: dt.datetime | None = None,
+) -> Vehicle:
+    """Отредактировать карточку авто (§6.2). ``fields`` — только переданные ключи
+    среди plate_number_original/plate_country/plate_type/brand/model/color/
+    vehicle_class/apartment_id/relation_type (PATCH-семантика).
+
+    Смена номера ре-нормализуется (§12) и проверяется на активный дубль (409,
+    исключая сам авто). apartment_id → перепривязка владельца; relation_type без
+    apartment_id обновляет отношение текущей активной связи. Аудит.
+    """
+    now = now or _utcnow()
+    vehicle = db.get(Vehicle, vehicle_id)
+    if vehicle is None:
+        raise VehicleNotFound(f"vehicle {vehicle_id} not found")
+
+    if "plate_number_original" in fields:
+        original = (fields["plate_number_original"] or "").strip()
+        if not original:
+            raise ValueError("plate_number_original must be non-empty")
+        country = fields.get("plate_country", vehicle.plate_country)
+        plate = normalize_plate(original, country)
+        dup = _active_vehicle_by_plate(db, plate.normalized)
+        if dup is not None and dup.id != vehicle.id:
+            db.rollback()
+            raise VehicleAlreadyExists(
+                "active vehicle with this plate already exists"
+            )
+        vehicle.plate_number_original = original
+        vehicle.plate_number_normalized = plate.normalized
+        vehicle.plate_country = plate.country
+        vehicle.plate_type = fields.get("plate_type", plate.type)
+        vehicle.recognition_key = plate.recognition_key
+    else:
+        if "plate_country" in fields:
+            vehicle.plate_country = fields["plate_country"]
+        if "plate_type" in fields:
+            vehicle.plate_type = fields["plate_type"]
+    if "brand" in fields:
+        vehicle.make = fields["brand"]
+    for key in ("model", "color", "vehicle_class"):
+        if key in fields:
+            setattr(vehicle, key, fields[key])
+
+    relation = fields.get("relation_type") or DEFAULT_RELATION_TYPE
+    if fields.get("apartment_id") is not None:
+        _relink_apartment(
+            db,
+            vehicle_id=vehicle.id,
+            apartment_id=fields["apartment_id"],
+            relation_type=relation,
+            actor_user_id=actor_user_id,
+            now=now,
+        )
+    elif fields.get("relation_type"):
+        link = (
+            db.query(VehicleApartment)
+            .filter(
+                VehicleApartment.vehicle_id == vehicle.id,
+                VehicleApartment.status == VehicleApartmentStatus.ACTIVE.value,
+            )
+            .order_by(VehicleApartment.id)
+            .first()
+        )
+        if link is not None:
+            link.relation_type = fields["relation_type"]
+
+    db.flush()
+    write_audit(
+        db,
+        actor_user_id=actor_user_id,
+        action="access.vehicle_update",
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        details={
+            "fields": sorted(fields.keys()),
+            "apartment_id": fields.get("apartment_id"),
+        },
+        ip_address=ip_address,
+    )
+    db.commit()
+    db.refresh(vehicle)
+    return vehicle
+
+
 def create_taxi_pass(
     db: Session,
     *,
@@ -375,6 +506,50 @@ def create_taxi_pass(
         entity_id=ap.id,
         details={"apartment_id": apartment_id, "zone_id": zone_id,
                  "max_entries": max_entries},
+        ip_address=ip_address,
+    )
+    db.commit()
+    db.refresh(ap)
+    return ap
+
+
+def update_pass(
+    db: Session,
+    *,
+    pass_id: int,
+    actor_user_id: int,
+    fields: dict,
+    ip_address: str | None = None,
+) -> AccessPass:
+    """Отредактировать пропуск (§13.2). ``fields`` — переданные ключи среди
+    valid_until/max_entries/plate_number_original/status (PATCH-семантика).
+
+    ``status='revoked'`` отзывает пропуск; иное значение status игнорируется (отзыв
+    необратим в пилоте). Номер ре-нормализуется. Аудит.
+    """
+    ap = db.get(AccessPass, pass_id)
+    if ap is None:
+        raise PassNotFound(f"pass {pass_id} not found")
+    if "valid_until" in fields:
+        ap.valid_until = fields["valid_until"]
+    if "max_entries" in fields:
+        ap.max_entries = fields["max_entries"]
+    if "plate_number_original" in fields:
+        original = fields["plate_number_original"]
+        ap.plate_number_original = original
+        ap.plate_number_normalized = (
+            normalize_plate(original).normalized if original else None
+        )
+    if fields.get("status") == PassStatus.REVOKED.value:
+        ap.status = PassStatus.REVOKED.value
+    db.flush()
+    write_audit(
+        db,
+        actor_user_id=actor_user_id,
+        action="access.pass_update",
+        entity_type="access_pass",
+        entity_id=ap.id,
+        details={"fields": sorted(fields.keys())},
         ip_address=ip_address,
     )
     db.commit()
