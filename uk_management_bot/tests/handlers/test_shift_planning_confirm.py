@@ -104,10 +104,10 @@ class TestPlanWeeklyScheduleConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.manual_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.manual_planning.ShiftPlanningService"
         ) as MockService:
             await handle_weekly_planning(cb, state, db=db, roles=["manager"])
 
@@ -134,12 +134,12 @@ class TestPlanWeeklyScheduleConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.manual_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.manual_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_planning_menu",
+            "uk_management_bot.handlers.shift_management.manual_planning.get_planning_menu",
             return_value=MagicMock(),
         ):
             svc = MockService.return_value
@@ -161,12 +161,12 @@ class TestPlanWeeklyScheduleConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.manual_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.manual_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_planning_menu",
+            "uk_management_bot.handlers.shift_management.manual_planning.get_planning_menu",
             return_value=MagicMock(),
         ) as mock_menu:
             await handle_weekly_planning_cancel(cb, state, db=db, roles=["manager"])
@@ -191,10 +191,10 @@ class TestAutoPlanWeekConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService:
             await handle_auto_plan_week(cb, state, db=db, roles=["manager"])
             MockService.assert_not_called()
@@ -216,12 +216,12 @@ class TestAutoPlanWeekConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_auto_planning_keyboard",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_auto_planning_keyboard",
             return_value=MagicMock(),
         ):
             svc = MockService.return_value
@@ -244,12 +244,12 @@ class TestAutoPlanWeekConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_auto_planning_keyboard",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_auto_planning_keyboard",
             return_value=MagicMock(),
         ) as mock_kb:
             await handle_auto_plan_week_cancel(
@@ -274,10 +274,10 @@ class TestAutoPlanMonthConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService:
             await handle_auto_plan_month(cb, state, db=db, roles=["manager"])
             MockService.assert_not_called()
@@ -299,12 +299,12 @@ class TestAutoPlanMonthConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_auto_planning_keyboard",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_auto_planning_keyboard",
             return_value=MagicMock(),
         ):
             svc = MockService.return_value
@@ -328,12 +328,12 @@ class TestAutoPlanMonthConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_auto_planning_keyboard",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_auto_planning_keyboard",
             return_value=MagicMock(),
         ):
             await handle_auto_plan_month_cancel(
@@ -359,10 +359,10 @@ class TestAutoPlanTomorrowConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService:
             await handle_auto_plan_tomorrow(
                 cb, state, db=db, roles=["manager"]
@@ -395,12 +395,12 @@ class TestAutoPlanTomorrowConfirmDialog:
         db.query.return_value = q
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_auto_planning_keyboard",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_auto_planning_keyboard",
             return_value=MagicMock(),
         ):
             await handle_auto_plan_tomorrow_confirm(
@@ -422,12 +422,12 @@ class TestAutoPlanTomorrowConfirmDialog:
         db = _make_db()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.auto_planning.ShiftPlanningService"
         ) as MockService, patch(
-            "uk_management_bot.handlers.shift_management.get_auto_planning_keyboard",
+            "uk_management_bot.handlers.shift_management.auto_planning.get_auto_planning_keyboard",
             return_value=MagicMock(),
         ):
             await handle_auto_plan_tomorrow_cancel(

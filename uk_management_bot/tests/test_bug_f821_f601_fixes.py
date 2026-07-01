@@ -56,7 +56,7 @@ async def test_delete_yard_error_branch_no_crash(monkeypatch):
 # --- #3 handle_date_selection: template-not-found branch used `lang` early ----
 @pytest.mark.asyncio
 async def test_handle_date_selection_no_template_no_crash(monkeypatch):
-    monkeypatch.setattr(shift_mgmt, "get_user_language", lambda *a, **k: "ru")
+    monkeypatch.setattr(shift_mgmt.manual_planning, "get_user_language", lambda *a, **k: "ru")
 
     cb = _callback("select_date:0")
     state = MagicMock()
