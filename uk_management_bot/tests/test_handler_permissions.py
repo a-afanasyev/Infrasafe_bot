@@ -250,7 +250,7 @@ class TestBugBot004ExecutorOwnRequest:
 
     @pytest.mark.asyncio
     async def test_executor_with_direct_assignment_has_access(self):
-        from uk_management_bot.handlers.requests import handle_view_request
+        from uk_management_bot.handlers.requests.listing import handle_view_request
 
         cb = _make_callback(data="view_request_250520-001")
         state = _make_state()
@@ -286,10 +286,10 @@ class TestBugBot004ExecutorOwnRequest:
         db_session.query.side_effect = _query
 
         with patch(
-            "uk_management_bot.handlers.requests.session_scope",
+            "uk_management_bot.handlers.requests.shared.session_scope",
             new=_fake_scope(db_session),
         ), patch(
-            "uk_management_bot.handlers.requests.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.requests.listing.get_user_language", return_value="ru"
         ), patch(
             "uk_management_bot.utils.request_helpers.format_request_details",
             return_value="details",
@@ -307,7 +307,7 @@ class TestBugBot004ExecutorOwnRequest:
 
     @pytest.mark.asyncio
     async def test_executor_without_assignment_or_ownership_denied(self):
-        from uk_management_bot.handlers.requests import handle_view_request
+        from uk_management_bot.handlers.requests.listing import handle_view_request
 
         cb = _make_callback(data="view_request_250520-002")
         state = _make_state()
@@ -343,10 +343,10 @@ class TestBugBot004ExecutorOwnRequest:
         db_session.query.side_effect = _query
 
         with patch(
-            "uk_management_bot.handlers.requests.session_scope",
+            "uk_management_bot.handlers.requests.shared.session_scope",
             new=_fake_scope(db_session),
         ), patch(
-            "uk_management_bot.handlers.requests.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.requests.listing.get_user_language", return_value="ru"
         ), patch(
             "uk_management_bot.utils.request_helpers.format_request_details",
             return_value="details",
