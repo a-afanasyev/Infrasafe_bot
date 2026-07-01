@@ -95,10 +95,10 @@ class TestBug014ShiftExecutorAssignmentBackButton:
         db.close = MagicMock()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language",
+            "uk_management_bot.handlers.shift_management.analytics.get_user_language",
             return_value="ru",
         ), patch(
-            "uk_management_bot.handlers.shift_management.get_text",
+            "uk_management_bot.handlers.shift_management.analytics.get_text",
             side_effect=lambda key, **kw: key,
         ):
             from uk_management_bot.handlers.shift_management import (

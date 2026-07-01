@@ -110,9 +110,9 @@ class TestBugBot003ManagerAnalyticsAccess:
         }
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.shift_management.analytics.get_user_language", return_value="ru"
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.analytics.ShiftPlanningService"
         ) as MockSvc:
             svc = MockSvc.return_value
             svc.get_comprehensive_analytics = AsyncMock(return_value=analytics_payload)
@@ -152,9 +152,9 @@ class TestBugBot003ManagerAnalyticsAccess:
         }
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.shift_management.analytics.get_user_language", return_value="ru"
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.analytics.ShiftPlanningService"
         ) as MockSvc:
             svc = MockSvc.return_value
             svc.predict_workload = AsyncMock(return_value=prediction_payload)
@@ -188,9 +188,9 @@ class TestBugBot003ManagerAnalyticsAccess:
         }
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.shift_management.analytics.get_user_language", return_value="ru"
         ), patch(
-            "uk_management_bot.handlers.shift_management.ShiftPlanningService"
+            "uk_management_bot.handlers.shift_management.analytics.ShiftPlanningService"
         ) as MockSvc:
             svc = MockSvc.return_value
             svc.get_optimization_recommendations = AsyncMock(return_value=rec_payload)
@@ -212,7 +212,7 @@ class TestBugBot003ManagerAnalyticsAccess:
         state = _make_state()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.shift_management.analytics.get_user_language", return_value="ru"
         ):
             await handle_monthly_analytics(
                 cb, state, db=db, roles=["manager"], user=_make_user()
@@ -231,7 +231,7 @@ class TestBugBot003ManagerAnalyticsAccess:
         state = _make_state()
 
         with patch(
-            "uk_management_bot.handlers.shift_management.get_user_language", return_value="ru"
+            "uk_management_bot.handlers.shift_management.analytics.get_user_language", return_value="ru"
         ):
             await handle_efficiency_analysis(
                 cb, state, db=db, roles=["manager"], user=_make_user()
