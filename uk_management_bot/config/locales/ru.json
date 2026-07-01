@@ -7019,7 +7019,6 @@
     "invite_secret_set": "INVITE_SECRET установлен",
     "admin_password_secure": "Безопасный пароль админа",
     "redis_enabled": "Redis включен",
-    "notifications_enabled": "Уведомления включены",
     "admin_count": "Количество админов",
     "detailed_error_title": "Ошибка детальной проверки",
     "ping_response": "🏓 Pong! Bot is alive and responding."

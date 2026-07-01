@@ -170,9 +170,6 @@ class Settings:
     INFRASAFE_REQUESTS_INVENTORY_URL = os.getenv("INFRASAFE_REQUESTS_INVENTORY_URL", "")
     RECONCILE_REQUESTS_ENABLED = os.getenv("RECONCILE_REQUESTS_ENABLED", "false").lower() == "true"
 
-    # Notifications (DEAD-13: NOTIFICATION_RETRY_COUNT удалён — 0 чтений)
-    ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "True").lower() == "true"
-    
     # Request Categories
     # DEPRECATED (FS-04): источник истины категорий — канон EN-ключи в
     # keyboards.requests.CANONICAL_CATEGORY_KEYS (+ resolve_category_key /
