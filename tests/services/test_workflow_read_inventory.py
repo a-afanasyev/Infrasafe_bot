@@ -154,9 +154,13 @@ BASELINE: set[tuple[str, str, str]] = {
     # ORM-слоем в services/admin_handler_service.py (см. ниже). В хендлере
     # остаются ТОЛЬКО сравнения статуса/флага на УЖЕ ЗАГРУЖЕННОМ объекте
     # (выбор клавиатуры/текста UI): cmp:r/cmp:request status + if:r is_returned.
-    ('uk_management_bot/handlers/admin.py', 'cmp:r', 'status'),
-    ('uk_management_bot/handlers/admin.py', 'cmp:request', 'status'),
-    ('uk_management_bot/handlers/admin.py', 'if:r', 'is_returned'),
+    # AUD3-06: admin.py разбит на пакет handlers/admin/ — те же UI-сравнения,
+    # разнесены по под-модулям views/lists/actions/materials.
+    ('uk_management_bot/handlers/admin/actions.py', 'cmp:request', 'status'),
+    ('uk_management_bot/handlers/admin/lists.py', 'cmp:r', 'status'),
+    ('uk_management_bot/handlers/admin/lists.py', 'cmp:request', 'status'),
+    ('uk_management_bot/handlers/admin/lists.py', 'if:r', 'is_returned'),
+    ('uk_management_bot/handlers/admin/materials.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/clarification_replies.py', 'cmp:request', 'status'),
     # PR2a-6: request_reports.py:118,239 переведены на is_awaiting_applicant
     # (возвращённые исключены) — сняты из read-baseline.

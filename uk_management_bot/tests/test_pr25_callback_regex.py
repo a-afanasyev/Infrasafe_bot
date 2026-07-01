@@ -90,7 +90,7 @@ async def test_admin_purchase_opens_materials_without_status_change(monkeypatch)
     NOT flip the request status (the removed requests.py duplicate set 'Закуп'
     immediately, skipping material entry)."""
     from unittest.mock import AsyncMock, MagicMock
-    import uk_management_bot.handlers.admin as admin
+    import uk_management_bot.handlers.admin.actions as admin
     from uk_management_bot.states.request_status import RequestStatusStates
 
     monkeypatch.setattr(admin, "has_admin_access", lambda **kwargs: True)
