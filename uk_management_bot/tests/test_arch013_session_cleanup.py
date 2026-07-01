@@ -69,13 +69,14 @@ class TestPatternA_RequestsCategoryFilter:
         return fake_scope
 
     async def test_happy_path_closes_single_session(self):
-        from uk_management_bot.handlers import requests as mod
+        from uk_management_bot.handlers.requests import myrequests as mod
+        from uk_management_bot.handlers.requests import shared as shared_mod
 
         cb = _callback()
         cb.data = "categoryfilter_electricity"
         closed, opens = [], []
 
-        with patch.object(mod, "session_scope", self._scope_factory(closed, opens)), \
+        with patch.object(shared_mod, "session_scope", self._scope_factory(closed, opens)), \
              patch.object(mod, "get_user_language", return_value="ru"), \
              patch.object(mod, "show_my_requests", new=AsyncMock()):
             await mod.handle_category_filter(cb, state=MagicMock())
@@ -84,13 +85,14 @@ class TestPatternA_RequestsCategoryFilter:
         assert len(closed) == 1         # and closed
 
     async def test_exception_path_closes_and_opens_no_second_session(self):
-        from uk_management_bot.handlers import requests as mod
+        from uk_management_bot.handlers.requests import myrequests as mod
+        from uk_management_bot.handlers.requests import shared as shared_mod
 
         cb = _callback()
         cb.data = "categoryfilter_electricity"
         closed, opens = [], []
 
-        with patch.object(mod, "session_scope", self._scope_factory(closed, opens)), \
+        with patch.object(shared_mod, "session_scope", self._scope_factory(closed, opens)), \
              patch.object(mod, "get_user_language", return_value="ru"), \
              patch.object(mod, "show_my_requests", new=AsyncMock(side_effect=RuntimeError("boom"))), \
              patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key):

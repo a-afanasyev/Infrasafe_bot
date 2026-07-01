@@ -167,9 +167,13 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/handlers/request_status_management.py', 'in_:Request', 'status'),
     # PR-29.2 (ARCH-01): cmp:r/req/request — сравнения статуса на УЖЕ
     # ЗАГРУЖЕННОМ объекте (выбор клавиатуры/ветки UI) — ОСТАЮТСЯ в хендлере.
-    ('uk_management_bot/handlers/requests.py', 'cmp:r', 'status'),
-    ('uk_management_bot/handlers/requests.py', 'cmp:req', 'status'),
-    ('uk_management_bot/handlers/requests.py', 'cmp:request', 'status'),
+    # AUD3-06: requests.py разбит на пакет handlers/requests/ — те же UI-сравнения
+    # разнесены по под-модулям listing/myrequests.
+    ('uk_management_bot/handlers/requests/listing.py', 'cmp:r', 'status'),
+    ('uk_management_bot/handlers/requests/listing.py', 'cmp:req', 'status'),
+    ('uk_management_bot/handlers/requests/listing.py', 'cmp:request', 'status'),
+    ('uk_management_bot/handlers/requests/myrequests.py', 'cmp:r', 'status'),
+    ('uk_management_bot/handlers/requests/myrequests.py', 'cmp:request', 'status'),
     # PR-29.2: `Request.status.in_([...])` в запросах переехал из хендлера в
     # services/request_handler_service.py (см. ниже) вместе с ORM-слоем.
     ('uk_management_bot/handlers/shifts.py', 'in_:Request', 'status'),
