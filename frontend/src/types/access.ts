@@ -651,6 +651,8 @@ export interface AssignmentRow {
   id: number
   spot_id: number
   apartment_id: number
+  // Полный адрес квартиры-владельца места (для отображения вместо #id).
+  address?: AddressInfo | null
   ownership_type: OwnershipType
   valid_from: string | null
   valid_until: string | null

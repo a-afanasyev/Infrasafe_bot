@@ -333,6 +333,9 @@ def test_assignment_create_owned(pg_db, pilot) -> None:
     assert body["valid_until"] is None
     assert body["approved_by_user_id"] is not None
     assert body["approved_at"] is not None
+    # Обогащение адресом квартиры-владельца места (для UI вместо #id).
+    assert body["address"]["apartment_id"] == pilot.apartment_id
+    assert body["address"]["building_address"] is not None
 
 
 def test_assignment_create_rented_with_term(pg_db, pilot) -> None:

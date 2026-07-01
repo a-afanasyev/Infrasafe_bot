@@ -14,6 +14,7 @@ import SpotAssignmentFormDialog, {
 } from '../../components/access/SpotAssignmentFormDialog'
 import FreePlaceDialog from '../../components/access/FreePlaceDialog'
 import { AccessStatusBadge, ParkingTypeBadge } from '../../components/access/AccessBadges'
+import { formatAddress } from '../../utils/accessMeta'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -335,7 +336,7 @@ function AssignmentsPanel({ canManage, zones }: { canManage: boolean; zones: Zon
 
   const columns: EquipmentColumn<AssignmentRow>[] = [
     { key: 'spot', label: t('accessControl.parking.fields.spot'), render: (a) => <span className="font-mono">{spotCell(a.spot_id)}</span> },
-    { key: 'apartment', label: t('accessControl.parking.fields.apartmentId'), render: (a) => `#${a.apartment_id}` },
+    { key: 'apartment', label: t('accessControl.parking.fields.owner'), render: (a) => formatAddress(a.address, t) },
     { key: 'ownership', label: t('accessControl.parking.fields.ownershipType'), render: (a) => t(`accessControl.parking.ownershipType.${a.ownership_type}`, { defaultValue: a.ownership_type }) },
     {
       key: 'enforce',

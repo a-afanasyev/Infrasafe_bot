@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from access_control.api.registry import AddressInfo, _addresses_for
 from access_control.repositories import presence_repo
 from access_control.services import equipment_admin as eq_svc
 from access_control.services import parking_admin as svc
@@ -76,6 +77,8 @@ class AssignmentRow(_Frozen):
     id: int
     spot_id: int
     apartment_id: int
+    # Полный адрес квартиры-владельца места (apartment→building→yard) для UI.
+    address: AddressInfo | None = None
     ownership_type: str
     valid_from: dt.datetime | None
     valid_until: dt.datetime | None
@@ -133,8 +136,9 @@ def _spot_row(s) -> SpotRow:
 
 def _assignment_row(db: Session, a) -> AssignmentRow:
     occupied, spots = svc.assignment_occupancy(db, a)
+    address = _addresses_for(db, [a.apartment_id]).get(a.apartment_id)
     return AssignmentRow(
-        id=a.id, spot_id=a.spot_id, apartment_id=a.apartment_id,
+        id=a.id, spot_id=a.spot_id, apartment_id=a.apartment_id, address=address,
         ownership_type=a.ownership_type, valid_from=a.valid_from,
         valid_until=a.valid_until, status=a.status,
         enforce_limit=bool(a.enforce_limit), occupied=occupied, spots=spots,
