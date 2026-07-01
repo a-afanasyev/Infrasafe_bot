@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram.types import CallbackQuery
 
-import uk_management_bot.handlers.user_management as um
+import uk_management_bot.handlers.user_management.listing as um
 from uk_management_bot.handlers.user_management import router as user_router
 from uk_management_bot.states.user_management import UserManagementStates
 

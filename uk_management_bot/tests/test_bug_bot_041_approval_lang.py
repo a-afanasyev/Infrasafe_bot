@@ -33,11 +33,11 @@ def _assert_uz(send_message_mock):
     """The notification text and the restart button must both be in uz."""
     send_message_mock.assert_awaited_once()
     kwargs = send_message_mock.await_args.kwargs
-    assert kwargs["text"] == um.get_text(_MSG_KEY, language="uz"), (
+    assert kwargs["text"] == um.panels.get_text(_MSG_KEY, language="uz"), (
         "approval notification text must use the user's language (uz), not hardcoded ru"
     )
     button_text = kwargs["reply_markup"].inline_keyboard[0][0].text
-    assert button_text == um.get_text(_BTN_KEY, language="uz"), (
+    assert button_text == um.panels.get_text(_BTN_KEY, language="uz"), (
         "restart button must use the user's language (uz), not hardcoded ru"
     )
 
@@ -59,7 +59,7 @@ async def test_quick_verify_user_notifies_in_user_language(monkeypatch):
         "uk_management_bot.services.notification_service.NotificationService",
         MagicMock(return_value=fake_notif),
     )
-    monkeypatch.setattr(um, "has_admin_access", lambda **kw: True)
+    monkeypatch.setattr(um.panels, "has_admin_access", lambda **kw: True)
 
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = target_user
@@ -70,7 +70,7 @@ async def test_quick_verify_user_notifies_in_user_language(monkeypatch):
     callback.answer = AsyncMock()
     callback.bot.send_message = AsyncMock()
 
-    await um.quick_verify_user(
+    await um.panels.quick_verify_user(
         callback, db=db, roles=["manager"], user=MagicMock(), language="ru"
     )
 
@@ -83,14 +83,14 @@ async def test_process_approval_comment_notifies_in_user_language(monkeypatch):
 
     fake_auth = MagicMock()
     fake_auth.approve_user = MagicMock(return_value=True)
-    monkeypatch.setattr(um, "AuthService", MagicMock(return_value=fake_auth))
+    monkeypatch.setattr(um.fsm, "AuthService", MagicMock(return_value=fake_auth))
 
     fake_mgmt = MagicMock()
     fake_mgmt.get_user_by_id = MagicMock(return_value=target_user)
     fake_mgmt.format_user_info = MagicMock(return_value="info")
-    monkeypatch.setattr(um, "UserManagementService", MagicMock(return_value=fake_mgmt))
+    monkeypatch.setattr(um.fsm, "UserManagementService", MagicMock(return_value=fake_mgmt))
     # downstream keyboard builder is irrelevant to this test; keep it inert
-    monkeypatch.setattr(um, "get_user_actions_keyboard", lambda *a, **k: None)
+    monkeypatch.setattr(um.fsm, "get_user_actions_keyboard", lambda *a, **k: None)
 
     db = MagicMock()
     state = MagicMock()
@@ -102,6 +102,6 @@ async def test_process_approval_comment_notifies_in_user_language(monkeypatch):
     message.answer = AsyncMock()
     message.bot.send_message = AsyncMock()
 
-    await um.process_approval_comment(message, state, db=db, language="ru")
+    await um.fsm.process_approval_comment(message, state, db=db, language="ru")
 
     _assert_uz(message.bot.send_message)

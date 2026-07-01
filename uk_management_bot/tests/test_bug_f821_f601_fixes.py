@@ -73,7 +73,7 @@ async def test_handle_date_selection_no_template_no_crash(monkeypatch):
 # --- #5 process_document_request: no-access branch called get_main_keyboard ---
 @pytest.mark.asyncio
 async def test_process_document_request_no_access_no_crash(monkeypatch):
-    monkeypatch.setattr(user_mgmt, "has_admin_access", lambda **k: False)
+    monkeypatch.setattr(user_mgmt.fsm, "has_admin_access", lambda **k: False)
 
     message = MagicMock()
     message.from_user.id = 1
@@ -82,7 +82,7 @@ async def test_process_document_request_no_access_no_crash(monkeypatch):
     state = MagicMock()
     state.clear = AsyncMock()
 
-    await user_mgmt.process_document_request(
+    await user_mgmt.fsm.process_document_request(
         message, state, MagicMock(), roles=[], user=MagicMock(), language="ru"
     )
 
