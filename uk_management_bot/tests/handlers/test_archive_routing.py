@@ -149,7 +149,7 @@ class TestAdminArchiveHandler:
 
     @pytest.mark.asyncio
     async def test_manager_archive_runs_admin_archive_query(self):
-        from uk_management_bot.handlers.admin import list_archive_requests
+        from uk_management_bot.handlers.admin.lists import list_archive_requests
 
         msg = _make_message(text="📦 Архив")
 
@@ -170,9 +170,9 @@ class TestAdminArchiveHandler:
         user.active_role = "manager"
 
         with patch(
-            "uk_management_bot.handlers.admin.has_admin_access", return_value=True
+            "uk_management_bot.handlers.admin.lists.has_admin_access", return_value=True
         ), patch(
-            "uk_management_bot.handlers.admin.get_manager_main_keyboard",
+            "uk_management_bot.handlers.admin.lists.get_manager_main_keyboard",
             return_value=MagicMock(),
         ):
             await list_archive_requests(

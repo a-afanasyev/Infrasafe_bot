@@ -75,7 +75,7 @@ class TestAdminClarifyHandlerOpensFlow:
 
     @pytest.mark.asyncio
     async def test_admin_handler_sets_state_and_edits_prompt(self):
-        from uk_management_bot.handlers.admin import handle_clarify_request
+        from uk_management_bot.handlers.admin.actions import handle_clarify_request
 
         # Build a fake Request row.
         request = MagicMock()
@@ -101,12 +101,12 @@ class TestAdminClarifyHandlerOpensFlow:
         state = _make_state()
 
         with patch(
-            "uk_management_bot.handlers.admin.has_admin_access", return_value=True
+            "uk_management_bot.handlers.admin.actions.has_admin_access", return_value=True
         ), patch(
-            "uk_management_bot.handlers.admin.get_category_display",
+            "uk_management_bot.handlers.admin.actions.get_category_display",
             return_value="Электрика",
         ), patch(
-            "uk_management_bot.handlers.admin.resolve_category_key",
+            "uk_management_bot.handlers.admin.actions.resolve_category_key",
             return_value="electricity",
         ):
             await handle_clarify_request(
@@ -139,7 +139,7 @@ class TestAdminClarifyHandlerOpensFlow:
     @pytest.mark.asyncio
     async def test_admin_handler_rejects_when_request_missing(self):
         """Missing request → user-facing 'not found' alert (NOT generic Ошибка)."""
-        from uk_management_bot.handlers.admin import handle_clarify_request
+        from uk_management_bot.handlers.admin.actions import handle_clarify_request
 
         # db.query(...).filter(...).first() → None
         query = MagicMock()
@@ -157,7 +157,7 @@ class TestAdminClarifyHandlerOpensFlow:
         state = _make_state()
 
         with patch(
-            "uk_management_bot.handlers.admin.has_admin_access", return_value=True
+            "uk_management_bot.handlers.admin.actions.has_admin_access", return_value=True
         ):
             await handle_clarify_request(
                 cb,

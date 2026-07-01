@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import uk_management_bot.handlers.admin as admin
+import uk_management_bot.handlers.admin.actions as admin
 
 
 def _callback(data: str):

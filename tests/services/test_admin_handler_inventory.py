@@ -29,11 +29,16 @@ import ast
 import re
 from pathlib import Path
 
-HANDLER_PATH = (
+# AUD3-06: admin.py разбит на пакет handlers/admin/ — сканируем все модули пакета.
+HANDLER_DIR = (
     Path(__file__).resolve().parents[2]
-    / "uk_management_bot" / "handlers" / "admin.py"
+    / "uk_management_bot" / "handlers" / "admin"
 )
-HANDLER_REL = "uk_management_bot/handlers/admin.py"
+PACKAGE_FILES = sorted(HANDLER_DIR.glob("*.py"))
+
+
+def _relpath(p: Path) -> str:
+    return f"uk_management_bot/handlers/admin/{p.name}"
 
 # session-методы, считающиеся прямым ORM при вызове на db|session|db_session
 ORM_METHODS = frozenset({
@@ -53,29 +58,31 @@ def _receiver_name(node: ast.expr) -> str:
     return type(node).__name__
 
 
-def collect_orm_sites(path: Path = HANDLER_PATH) -> set[tuple[str, str]]:
-    """→ {(relpath, signal)} прямого ORM в хендлере."""
+def collect_orm_sites(files: list[Path] = PACKAGE_FILES) -> set[tuple[str, str]]:
+    """→ {(relpath, signal)} прямого ORM во всех модулях admin-пакета."""
     sites: set[tuple[str, str]] = set()
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        fn = node.func
-        # db.execute(...) / session.scalars(...) / db.query(...) / db.add(...)
-        if isinstance(fn, ast.Attribute):
-            recv = fn.value
-            recv_name = recv.id if isinstance(recv, ast.Name) else None
-            if recv_name in ORM_RECEIVERS:
-                if fn.attr in ORM_METHODS:
-                    sites.add((HANDLER_REL, f"{recv_name}.{fn.attr}"))
+    for path in files:
+        rel = _relpath(path)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            # db.execute(...) / session.scalars(...) / db.query(...) / db.add(...)
+            if isinstance(fn, ast.Attribute):
+                recv = fn.value
+                recv_name = recv.id if isinstance(recv, ast.Name) else None
+                if recv_name in ORM_RECEIVERS:
+                    if fn.attr in ORM_METHODS:
+                        sites.add((rel, f"{recv_name}.{fn.attr}"))
+                    elif fn.attr == "query":
+                        sites.add((rel, f"{recv_name}.query"))
+                # <recv>.query(...) на любом получателе (legacy Query API)
                 elif fn.attr == "query":
-                    sites.add((HANDLER_REL, f"{recv_name}.query"))
-            # <recv>.query(...) на любом получателе (legacy Query API)
-            elif fn.attr == "query":
-                sites.add((HANDLER_REL, f"{_receiver_name(recv)}.query"))
-        # top-level select(/update(/delete(/insert(
-        elif isinstance(fn, ast.Name) and fn.id in QUERY_BUILDERS:
-            sites.add((HANDLER_REL, f"{fn.id}()"))
+                    sites.add((rel, f"{_receiver_name(recv)}.query"))
+            # top-level select(/update(/delete(/insert(
+            elif isinstance(fn, ast.Name) and fn.id in QUERY_BUILDERS:
+                sites.add((rel, f"{fn.id}()"))
     return sites
 
 
@@ -107,18 +114,19 @@ def test_admin_handler_has_no_direct_orm():
 
 
 def test_admin_handler_has_no_next_get_db():
-    """CODE-04: ни одного `next(get_db())` (admin.py получает db инъекцией)."""
-    source = HANDLER_PATH.read_text(encoding="utf-8")
+    """CODE-04: ни одного `next(get_db())` (admin-пакет получает db инъекцией)."""
     # Учитываем только живой код: исключаем строки-комментарии и docstring-упоминания
     matches = []
-    for lineno, line in enumerate(source.splitlines(), 1):
-        stripped = line.lstrip()
-        if stripped.startswith("#") or "``" in line:
-            continue
-        if re.search(r"next\(\s*get_db\(\)\s*\)", line):
-            matches.append((lineno, line.strip()))
+    for path in PACKAGE_FILES:
+        rel = _relpath(path)
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.lstrip()
+            if stripped.startswith("#") or "``" in line:
+                continue
+            if re.search(r"next\(\s*get_db\(\)\s*\)", line):
+                matches.append((rel, lineno, line.strip()))
     assert not matches, (
-        "Найден legacy `next(get_db())` в handlers/admin.py "
+        "Найден legacy `next(get_db())` в handlers/admin/ "
         "(CODE-04: db инъецируется middleware):\n"
-        + "\n".join(f"  L{ln}: {txt}" for ln, txt in matches)
+        + "\n".join(f"  {rel} L{ln}: {txt}" for rel, ln, txt in matches)
     )
