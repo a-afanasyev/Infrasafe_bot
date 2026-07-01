@@ -215,7 +215,6 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
             "invite_secret_set": bool(settings.INVITE_SECRET),
             "admin_password_secure": settings.ADMIN_PASSWORD != "12345" and settings.ADMIN_PASSWORD != "dev_password_change_me",
             "redis_enabled": settings.USE_REDIS_RATE_LIMIT,
-            "notifications_enabled": settings.ENABLE_NOTIFICATIONS,
             "admin_users_count": len(settings.ADMIN_USER_IDS)
         }
 
@@ -227,7 +226,6 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
         invite_secret_set_text = get_text("health.invite_secret_set", language=lang)
         admin_password_secure_text = get_text("health.admin_password_secure", language=lang)
         redis_enabled_text = get_text("health.redis_enabled", language=lang)
-        notifications_enabled_text = get_text("health.notifications_enabled", language=lang)
         admin_count_text = get_text("health.admin_count", language=lang)
         checked_at_text = get_text("health.checked_at", language=lang)
 
@@ -247,7 +245,6 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
 └ {invite_secret_set_text}: {'✅' if config_info['invite_secret_set'] else '❌'}
 └ {admin_password_secure_text}: {'✅' if config_info['admin_password_secure'] else '❌'}
 └ {redis_enabled_text}: {'✅' if config_info['redis_enabled'] else '⚠️'}
-└ {notifications_enabled_text}: {'✅' if config_info['notifications_enabled'] else '⚠️'}
 └ {admin_count_text}: {config_info['admin_users_count']}
 
 🕐 {checked_at_text}: {datetime.now().strftime('%H:%M:%S %d.%m.%Y')}

@@ -7019,7 +7019,6 @@
     "invite_secret_set": "INVITE_SECRET o'rnatilgan",
     "admin_password_secure": "Admin paroli xavfsiz",
     "redis_enabled": "Redis yoqilgan",
-    "notifications_enabled": "Bildirishnomalar yoqilgan",
     "admin_count": "Adminlar soni",
     "detailed_error_title": "Batafsil tekshirishda xatolik",
     "ping_response": "🏓 Pong! Bot ishlayapti va javob bermoqda."

@@ -122,25 +122,9 @@ def validate_canonical_urgency(value):
         raise ValueError(f"urgency must be one of: {list(URGENCY_VALUES)}")
     return key
 
-# Категории заявок
-# TASK 17 Этап B: DEPRECATED - больше не используется напрямую в фильтрах и валидации
-# Используйте CATEGORY_INTERNAL_KEYS из uk_management_bot.keyboards.requests
-# для работы с категориями. Для отображения используйте get_category_display().
-# Для обратной совместимости с legacy данными используйте resolve_category_key().
-#
-# Этот список оставлен только для обратной совместимости и будет удалён в будущем.
-# Вместо него используйте:
-#   from uk_management_bot.keyboards.requests import CATEGORY_INTERNAL_KEYS, get_category_display
-REQUEST_CATEGORIES = [
-    "Электрика",
-    "Сантехника",
-    "Отопление",
-    "Лифт",
-    "Уборка",
-    "Благоустройство",
-    "Безопасность",
-    "Интернет/ТВ"
-]
+# Категории заявок: используйте CATEGORY_INTERNAL_KEYS / get_category_display()
+# из uk_management_bot.keyboards.requests. Legacy-список REQUEST_CATEGORIES удалён
+# (AUD3-29): потребителей не осталось после закрытия AUD3-22.
 
 # Срочность заявок — канонический список ключей (выведен из URGENCY_VALUES).
 REQUEST_URGENCIES = list(URGENCY_VALUES)

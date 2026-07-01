@@ -131,8 +131,7 @@ class TestBuildShiftEndedMessage:
         user = _make_user()
         shift = _make_shift(start_time=start, end_time=end)
         msg = build_shift_ended_message(user, shift, for_channel=False)
-        assert "1" in msg   # 1 hour
-        assert "30" in msg  # 30 minutes
+        assert msg == "✅ Смена завершена в 02.04.2026 10:30. Длительность: 1 ч 30 мин"
 
     def test_channel_message_contains_user_id(self):
         start = datetime(2026, 4, 2, 9, 0, 0)

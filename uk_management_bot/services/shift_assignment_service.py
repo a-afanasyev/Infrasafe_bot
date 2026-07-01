@@ -1218,8 +1218,6 @@ class ShiftAssignmentService:
         if shift.specialization_focus:
             if request.specialization in shift.specialization_focus:
                 score += 0.4
-            elif any(spec in shift.specialization_focus for spec in [request.specialization]):
-                score += 0.2
 
         # Проверяем географическую близость (вес 30%)
         if shift.geographic_zone and hasattr(request, 'location'):

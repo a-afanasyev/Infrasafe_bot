@@ -386,7 +386,6 @@ class TestDetailedHealthCheckCommand:
             mock_settings.INVITE_SECRET = "secret_key"
             mock_settings.ADMIN_PASSWORD = "strong_password_123!"
             mock_settings.USE_REDIS_RATE_LIMIT = False
-            mock_settings.ENABLE_NOTIFICATIONS = True
             mock_settings.ADMIN_USER_IDS = [111, 222]
 
             await detailed_health_check_command(msg, db, roles=["manager"])
