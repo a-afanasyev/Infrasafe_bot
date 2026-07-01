@@ -518,6 +518,7 @@
         "enforceLimit": "Лимит",
         "spot": "Место",
         "apartmentId": "ID квартиры",
+        "owner": "Владелец места (адрес)",
         "ownershipType": "Тип владения",
         "validFrom": "Действует с",
         "validUntil": "Действует до"
