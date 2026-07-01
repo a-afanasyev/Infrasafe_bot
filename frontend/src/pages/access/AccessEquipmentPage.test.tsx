@@ -9,7 +9,7 @@ import AccessEquipmentPage from './AccessEquipmentPage'
 // Раздел «Оборудование»: гейтинг табов по роли + показ api_key контроллера РОВНО
 // ОДИН РАЗ в модалке (и его отсутствие в таблице).
 
-const zone = { id: 5, code: 'Z1', name: 'Зона 1', description: null, offline_mode: 'fail_closed', max_permanent_per_apartment: null, is_active: true, yard_ids: [] }
+const zone = { id: 5, code: 'Z1', name: 'Зона 1', description: null, offline_mode: 'fail_closed', max_permanent_vehicles_per_apartment: null, is_active: true, yard_ids: [] }
 const gate = { id: 1, code: 'G1', zone_id: 5, direction: 'entry', name: null, is_active: true }
 const controller = { id: 9, controller_uid: 'ctrl-001', name: null, zone_id: 5, gate_id: 1, offline_mode: 'fail_closed', ip_allowlist: null, pinned_public_key_id: null, status: 'online', is_active: true }
 

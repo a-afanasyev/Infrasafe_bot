@@ -431,10 +431,11 @@ export interface ZoneRow {
   name: string
   description: string | null
   offline_mode: OfflineMode
-  max_permanent_per_apartment: number | null
   // Парковочные параметры зоны (см. ParkingType).
   parking_type?: ParkingType
   capacity?: number | null
+  // Лимит постоянных ТС на квартиру (единственное поле лимита; бэкенд принимает
+  // его на запись под ключом max_permanent_per_apartment — см. CreateZonePayload).
   max_permanent_vehicles_per_apartment?: number | null
   is_active: boolean
   yard_ids?: number[]
@@ -445,10 +446,11 @@ export interface CreateZonePayload {
   name: string
   description?: string
   offline_mode: OfflineMode
+  // Лимит постоянных ТС на квартиру. Ключ записи бэкенда (мапится в столбец
+  // max_permanent_vehicles_per_apartment).
   max_permanent_per_apartment?: number
   parking_type?: ParkingType
   capacity?: number
-  max_permanent_vehicles_per_apartment?: number
   is_active?: boolean
 }
 

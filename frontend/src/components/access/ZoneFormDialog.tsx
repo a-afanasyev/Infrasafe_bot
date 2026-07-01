@@ -46,7 +46,6 @@ interface FormState {
   name: string
   description: string
   offlineMode: OfflineMode
-  maxPermanent: string
   parkingType: ParkingType
   capacity: string
   maxPermanentVehicles: string
@@ -59,7 +58,6 @@ function initialState(zone?: ZoneRow | null): FormState {
     name: zone?.name ?? '',
     description: zone?.description ?? '',
     offlineMode: zone?.offline_mode ?? 'fail_closed',
-    maxPermanent: zone?.max_permanent_per_apartment != null ? String(zone.max_permanent_per_apartment) : '',
     parkingType: zone?.parking_type ?? 'assigned',
     capacity: zone?.capacity != null ? String(zone.capacity) : '',
     maxPermanentVehicles:
@@ -100,7 +98,6 @@ export default function ZoneFormDialog({
 
   function handleSubmit() {
     if (!canSubmit) return
-    const maxN = Number(form.maxPermanent)
     const capN = Number(form.capacity)
     const maxVehN = Number(form.maxPermanentVehicles)
     const payload: CreateZonePayload = {
@@ -108,15 +105,14 @@ export default function ZoneFormDialog({
       name: form.name.trim(),
       offline_mode: form.offlineMode,
       description: form.description.trim() || undefined,
-      max_permanent_per_apartment:
-        form.maxPermanent.trim() && Number.isFinite(maxN) ? maxN : undefined,
       parking_type: form.parkingType,
       // Ёмкость имеет смысл только для общей (shared) зоны.
       capacity:
         form.parkingType === 'shared' && form.capacity.trim() && Number.isFinite(capN)
           ? capN
           : undefined,
-      max_permanent_vehicles_per_apartment:
+      // Единственный лимит постоянных ТС на квартиру (ключ записи бэкенда).
+      max_permanent_per_apartment:
         form.maxPermanentVehicles.trim() && Number.isFinite(maxVehN) ? maxVehN : undefined,
       ...(isEdit ? { is_active: form.isActive } : {}),
     }
@@ -169,30 +165,19 @@ export default function ZoneFormDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="zf-offline">{t('accessControl.equipment.fields.offlineMode')}</Label>
-              <Select
-                id="zf-offline"
-                value={form.offlineMode}
-                onChange={(e) => set({ offlineMode: e.target.value as OfflineMode })}
-              >
-                {OFFLINE_MODES.map((m) => (
-                  <option key={m} value={m}>
-                    {t(`accessControl.equipment.offlineMode.${m}`)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="zf-max">{t('accessControl.equipment.fields.maxPermanent')}</Label>
-              <Input
-                id="zf-max"
-                type="number"
-                value={form.maxPermanent}
-                onChange={(e) => set({ maxPermanent: e.target.value })}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="zf-offline">{t('accessControl.equipment.fields.offlineMode')}</Label>
+            <Select
+              id="zf-offline"
+              value={form.offlineMode}
+              onChange={(e) => set({ offlineMode: e.target.value as OfflineMode })}
+            >
+              {OFFLINE_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {t(`accessControl.equipment.offlineMode.${m}`)}
+                </option>
+              ))}
+            </Select>
           </div>
 
           {/* Парковочные параметры зоны (§14.2). */}
