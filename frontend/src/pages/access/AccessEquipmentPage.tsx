@@ -118,7 +118,7 @@ function ZonesPanel({ canManage }: { canManage: boolean }) {
     { key: 'parking_type', label: t('accessControl.parking.fields.parkingType'), render: (z) => <ParkingTypeBadge type={z.parking_type ?? 'assigned'} /> },
     { key: 'occupancy', label: t('accessControl.parking.fields.occupancy'), render: (z) => <ZoneOccupancyCell zone={z} /> },
     { key: 'offline', label: t('accessControl.equipment.fields.offlineMode'), render: (z) => t(`accessControl.equipment.offlineMode.${z.offline_mode}`, { defaultValue: z.offline_mode }) },
-    { key: 'max', label: t('accessControl.equipment.fields.maxPermanent'), render: (z) => dash(z.max_permanent_per_apartment) },
+    { key: 'max', label: t('accessControl.parking.fields.maxPermanentVehicles'), render: (z) => dash(z.max_permanent_vehicles_per_apartment) },
     { key: 'yards', label: t('accessControl.equipment.zoneForm.yardsLabel'), render: (z) => (z.yard_ids && z.yard_ids.length ? z.yard_ids.map((y) => `#${y}`).join(', ') : '—') },
     { key: 'status', label: t('accessControl.columns.status'), render: (z) => <AccessStatusBadge status={z.is_active ? 'active' : 'archived'} /> },
   ]
