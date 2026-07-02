@@ -18,7 +18,6 @@ import type {
   AccessRequestsFilters,
   ResolvePayload,
   ResolveResponse,
-  ManualOpenResponse,
   CreateVehiclePayload,
   UpdateVehicleStatusPayload,
   UpdateVehiclePayload,
@@ -155,15 +154,6 @@ export function useResolveEvent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['access-events'] })
     },
-  })
-}
-
-export function useManualOpenBarrier() {
-  return useMutation<ManualOpenResponse, unknown, { barrierId: number; reason: string }>({
-    mutationFn: ({ barrierId, reason }) =>
-      accessClient
-        .post(`/barriers/${barrierId}/manual-open`, { reason })
-        .then((r) => r.data),
   })
 }
 

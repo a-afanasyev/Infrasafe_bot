@@ -304,12 +304,6 @@ export interface ResolveResponse {
   status: string
 }
 
-export interface ManualOpenResponse {
-  ok: boolean
-  command_id: string
-  barrier_id: number
-}
-
 // ── Погашение одноразового гостевого кода (operator.py, §9.3) ─────────────────
 /** Тело POST /passes/redeem-code — оператор гасит 8-значный код гостя. */
 export interface RedeemCodePayload {

@@ -5,16 +5,13 @@ import logging
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import legacy_primary_role, parse_roles_safe
+from uk_management_bot.utils.auth_helpers import legacy_primary_role
 from uk_management_bot.utils.validators import validate_description
 from uk_management_bot.utils.constants import (
     REQUEST_URGENCIES,
     URGENCY_DEFAULT,
     normalize_urgency,
     REQUEST_STATUSES,
-    ROLE_APPLICANT,
-    ROLE_EXECUTOR,
-    ROLE_MANAGER,
 )
 from uk_management_bot.services.notification_service import notify_status_changed
 from uk_management_bot.services.webhook_payloads import (
@@ -231,94 +228,6 @@ class RequestService:
             logger.error(f"Ошибка поиска пользователя по telegram_id {telegram_id}: {e}")
             return None
 
-    def is_transition_allowed(self, current_status: str, target_status: str) -> bool:
-        """
-        Матрица допустимых переходов статусов.
-
-        Обновлено 08.03.2026:
-        - Из "Выполнена" разрешён прямой переход в "Принято" (приёмка заявителем)
-        - Из "Исполнено" разрешён переход обратно в "Выполнена" (re-confirm менеджером)
-
-        Workflow:
-        Новая -> В работе -> Выполнена -> Принято
-                    ↓         ↓    ↑
-               Уточнение ↔ Закуп  ↓ (re-confirm)
-                              Исполнено (возврат заявителем)
-        """
-        allowed: Dict[str, List[str]] = {
-            # Новая заявка: менеджер сразу переводит в работу или вспомогательные статусы
-            "Новая": ["В работе", "Закуп", "Уточнение", "Отменена"],
-
-            # В работе: исполнитель выполняет или запрашивает уточнение/закуп
-            "В работе": ["Уточнение", "Закуп", "Выполнена", "Отменена"],
-
-            # Уточнение: можно вернуть в работу или перейти к закупу
-            "Уточнение": ["В работе", "Закуп", "Отменена"],
-
-            # Закуп: после закупки возврат в работу или уточнение
-            "Закуп": ["В работе", "Уточнение", "Отменена"],
-
-            # Выполнена: исполнитель завершил, менеджер проверяет
-            # +Принято (прямая приёмка), сохранить Исполнено (return-flow)
-            "Выполнена": ["Принято", "Исполнено", "В работе", "Отменена"],
-
-            # Исполнено: заявитель вернул, менеджер может re-confirm (Выполнена) или другие действия
-            "Исполнено": ["Выполнена", "Принято", "В работе", "Отменена"],
-
-            # Принято: финальный статус, заявитель принял работу
-            "Принято": [],
-
-            # Отменена: финальный статус
-            "Отменена": [],
-        }
-        return target_status in allowed.get(current_status, [])
-
-    def is_role_allowed_for_transition(
-        self,
-        actor: User,
-        request: Request,
-        target_status: str
-    ) -> bool:
-        # Определяем активную роль пользователя (новая система ролей)
-        active_role = actor.active_role or legacy_primary_role(actor)
-        
-        # Получаем список всех ролей пользователя (COD-01: канонический парсер, JSON+CSV)
-        user_roles = parse_roles_safe(actor.roles)
-
-        # Fallback к старому полю role если новая система не настроена
-        if not user_roles:
-            legacy = legacy_primary_role(actor)
-            if legacy:
-                user_roles = [legacy]
-        
-        # Заявитель: отмена своей "Новой", приёмка/возврат из "Выполнена" и legacy "Исполнено"
-        if active_role == ROLE_APPLICANT:
-            is_owner = request.user_id == actor.id
-            if is_owner and request.status == "Новая" and target_status == "Отменена":
-                return True
-            # Приёмка из "Выполнена" (основной путь)
-            if is_owner and request.status == "Выполнена" and target_status == "Принято":
-                return True
-            # Возврат из "Выполнена" в return-flow
-            if is_owner and request.status == "Выполнена" and target_status == "Исполнено":
-                return True
-            # Legacy: приёмка и возврат из "Исполнено"
-            if is_owner and request.status == "Исполнено" and target_status == "Принято":
-                return True
-            if is_owner and request.status == "Исполнено" and target_status == "В работе":
-                return True
-            return False
-        
-        # Исполнитель: может брать в работу и менять рабочие статусы
-        if active_role == ROLE_EXECUTOR:
-            return target_status in ["В работе", "Уточнение", "Закуп", "Выполнена"]
-        
-        # Менеджер и Админ: широкие права
-        if active_role in [ROLE_MANAGER, "admin"]:
-            return True
-            
-        return False
-
     def update_status_by_actor(
         self,
         request_number: str,
@@ -332,9 +241,9 @@ class RequestService:
         """Обновление статуса заявки актором (бот).
 
         SSOT-кластер #1, PR2c: тонкий адаптер над `run_command_sync` —
-        единым каноническим writer'ом workflow-переходов. Прежняя матрица
-        переходов (`is_transition_allowed`) и ролей (`is_role_allowed_for_
-        transition`) больше НЕ используются здесь: авторизацию, допустимость
+        единым каноническим writer'ом workflow-переходов. Прежняя локальная
+        матрица переходов/ролей (`is_transition_allowed`/`is_role_allowed_for_
+        transition`) удалена как мёртвый код (DED-01): авторизацию, допустимость
         перехода, смену и repeat-политику решает канон (utils/request_workflow)
         ПОД локом, внутри своей транзакции. Сигнатура и форма ответа
         ({success, message, request}) сохранены для совместимости вызывающих.

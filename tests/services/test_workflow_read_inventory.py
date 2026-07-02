@@ -199,7 +199,8 @@ BASELINE: set[tuple[str, str, str]] = {
     # канон-нормализацией A: значения статусов сохраняются по обе стороны cutover.
     ('uk_management_bot/services/request_handler_service.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/request_service.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/services/request_service.py', 'cmp:request', 'status'),
+    # DED-01: `cmp:request`-чтение удалено вместе с мёртвым
+    # is_role_allowed_for_transition (авторизацию решает канон workflow).
     ('uk_management_bot/services/shift_analytics.py', 'cmp:r', 'status'),
     ('uk_management_bot/services/shift_analytics.py', 'cmp:request', 'status'),
     ('uk_management_bot/services/shift_assignment_service.py', 'cmp:Request', 'status'),
