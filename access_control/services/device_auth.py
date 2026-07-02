@@ -195,17 +195,23 @@ _default_store: NonceStore | None = None
 def get_nonce_store() -> NonceStore:
     """Синглтон nonce-store. Backend выбирается env ``ACCESS_NONCE_BACKEND``.
 
-    ``memory`` (дефолт для пилота/тестов) — ``InMemoryNonceStore``; ``redis`` —
-    ``RedisNonceStore`` из ``settings.REDIS_URL`` (синхронный клиент, проверяется
-    ``ping``). При ``redis`` и недоступном Redis — FATAL (RuntimeError), БЕЗ тихого
-    отката на in-memory (M2): иначе anti-replay молча деградирует на нескольких
-    воркерах и replay проходит на другом воркере. In-memory допустим только когда
-    backend явно ``memory``.
+    Явный env — высший приоритет: ``redis`` → ``RedisNonceStore`` из
+    ``settings.REDIS_URL`` (синхронный клиент, проверяется ``ping``); ``memory`` →
+    ``InMemoryNonceStore``. При ОТСУТСТВИИ переменной дефолт зависит от
+    ``settings.DEBUG`` (SEC-02/аудит #4, fail-closed): в проде (``DEBUG=false``) —
+    ``redis``, в dev/тестах — ``memory``. Раньше дефолт был безусловно ``memory``:
+    на multi-worker проде anti-replay становился process-local и replay проходил
+    на другом воркере. При ``redis`` и недоступном Redis — FATAL (RuntimeError),
+    БЕЗ тихого отката на in-memory (M2).
     """
     global _default_store
     if _default_store is not None:
         return _default_store
-    backend = os.getenv("ACCESS_NONCE_BACKEND", "memory").lower()
+    backend = os.getenv("ACCESS_NONCE_BACKEND")
+    if backend is None:
+        from uk_management_bot.config.settings import settings
+        backend = "memory" if settings.DEBUG else "redis"
+    backend = backend.lower()
     if backend == "redis":
         try:
             import redis  # type: ignore

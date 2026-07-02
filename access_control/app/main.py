@@ -3,7 +3,8 @@
 Фабрика ``create_app()`` строит приложение и подключает все пилотные роутеры
 (§13): health, ingestion, edge long-poll/ack, edge equipment, operator/admin,
 WS-панель охраны и health/latency-метрики (§10.2). Swagger (`/docs`,
-`/openapi.json`) включён по умолчанию; в проде гейтится env ``ACCESS_ENABLE_DOCS``.
+`/openapi.json`) по умолчанию **выключен в проде** (fail-closed, SEC-01/аудит #4):
+явный ``ACCESS_ENABLE_DOCS`` — высший приоритет, иначе гейтится ``DEBUG``.
 """
 import os
 
@@ -27,15 +28,20 @@ from access_control.api.ws_security import router as ws_security_router
 
 
 def _docs_enabled() -> bool:
-    """Включён ли Swagger. По умолчанию да (dev); прод может выключить env'ом.
+    """Включён ли Swagger (fail-closed по умолчанию, SEC-03/аудит #4).
 
-    ``ACCESS_ENABLE_DOCS`` ∈ {1,true,yes,on} → включено; остальное → выключено.
-    Отсутствие переменной = включено (удобство dev/пилота).
+    ``ACCESS_ENABLE_DOCS`` ∈ {1,true,yes,on} → включено; иное явное значение →
+    выключено (высший приоритет — ops может форсировать в любую сторону).
+    При ОТСУТСТВИИ переменной решение делегируется ``settings.DEBUG``: в dev
+    (``DEBUG=true``) Swagger включён для удобства, в проде (``DEBUG=false``)
+    выключен. Раньше отсутствие переменной означало «включено» — забытый env в
+    проде раскрывал весь API-контур (`/docs` `/redoc` `/openapi.json`).
     """
     raw = os.getenv("ACCESS_ENABLE_DOCS")
-    if raw is None:
-        return True
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    from uk_management_bot.config.settings import settings
+    return bool(settings.DEBUG)
 
 
 def create_app() -> FastAPI:
@@ -43,7 +49,8 @@ def create_app() -> FastAPI:
 
     Returns:
         FastAPI: приложение со всеми пилотными роутерами §13 + health/latency
-        метриками §10.2. Swagger гейтится ``ACCESS_ENABLE_DOCS`` (дефолт — вкл).
+        метриками §10.2. Swagger гейтится ``ACCESS_ENABLE_DOCS``/``DEBUG``
+        (fail-closed: в проде по умолчанию выключен).
     """
     docs_on = _docs_enabled()
     app = FastAPI(

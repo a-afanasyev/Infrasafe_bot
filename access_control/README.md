@@ -27,9 +27,9 @@ PostgreSQL, Redis, каталог пользователей и адресов (
 | `REDIS_URL` | общий Redis | да |
 | `ACCESS_SNAPSHOT_SIGNING_SEED` | приватный seed Ed25519 подписи offline-snapshot (§8.2), 64 hex | да |
 | `ACCESS_DEVICE_HMAC_SEED` | seed пер-устройственного HMAC device-auth (§9.1) | да |
-| `ACCESS_NONCE_BACKEND` | `redis` (прод/много воркеров) или `memory` | да (compose: `redis`) |
+| `ACCESS_NONCE_BACKEND` | `redis` (прод/много воркеров) или `memory`; дефолт зависит от `DEBUG` (прод→`redis`, dev→`memory`) | нет (compose: `redis`) |
 | `ACCESS_EVENT_BROKER` | `redis` (много воркеров) или `memory` | да (compose: `redis`) |
-| `ACCESS_ENABLE_DOCS` | Swagger `/docs` (дефолт включён) | нет |
+| `ACCESS_ENABLE_DOCS` | Swagger `/docs`; дефолт зависит от `DEBUG` (прод→выкл, dev→вкл) | нет |
 
 Общего дефолтного значения для seed-ов в коде НЕТ (§9.1/§11): без них сервис
 падает `RuntimeError`. Сгенерировать:
@@ -60,12 +60,14 @@ curl -s http://127.0.0.1:8086/health        # {"status":"ok","service":"uk-acces
 
 ## Swagger
 
-При включённых docs (дефолт):
+Дефолт **fail-closed** (SEC-03): при `DEBUG=false` (прод) docs выключены,
+при `DEBUG=true` (dev) — включены. Явный `ACCESS_ENABLE_DOCS` перебивает `DEBUG`
+в любую сторону. При включённых docs:
 
 - Swagger UI: `http://127.0.0.1:8086/docs`
 - OpenAPI JSON: `http://127.0.0.1:8086/openapi.json`
 
-Выключить в проде: `ACCESS_ENABLE_DOCS=false`.
+Форсировать в проде: `ACCESS_ENABLE_DOCS=true` (включить) / `=false` (выключить).
 
 ## Эндпоинты (§13)
 

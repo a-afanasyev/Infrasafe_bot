@@ -35,6 +35,11 @@ os.environ.setdefault(
 os.environ.setdefault("ACCESS_DEVICE_HMAC_SEED", "pilot-test-hmac-seed")
 os.environ.setdefault("ACCESS_PHOTO_URL_SECRET", "pilot-test-photo-url-secret")
 os.environ.setdefault("ACCESS_CODE_SECRET", "pilot-test-code-secret")
+# SEC-02: дефолт nonce/lockout backend теперь зависит от DEBUG (в проде → redis).
+# Набор гоняется без redis-сервиса для юнит-части, поэтому явно пиним ``memory``,
+# чтобы get_nonce_store()/get_failure_store() не уходили в redis по дефолту.
+# ``setdefault`` — реальный env стенда (redis) не перетирается.
+os.environ.setdefault("ACCESS_NONCE_BACKEND", "memory")
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
