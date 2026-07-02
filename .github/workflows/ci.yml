@@ -272,6 +272,19 @@ jobs:
           cache-from: type=gha
           cache-to: "type=gha,mode=max"
 
+      # PRC-04: uk-access-api — живой prod-сервис; его сборку тоже гейтим в CI,
+      # чтобы поломка Dockerfile.access ловилась до деплоя. Отдельный cache-scope,
+      # чтобы не тереть gha-кэш bot/api.
+      - name: Build access image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.access
+          push: false
+          load: false
+          cache-from: type=gha,scope=access
+          cache-to: "type=gha,mode=max,scope=access"
+
   frontend:
     name: frontend (build + lint + test)
     runs-on: ubuntu-latest
