@@ -99,20 +99,6 @@ export function useAllApartments(yardId?: number | null, buildingId?: number | n
   })
 }
 
-export function useSearchApartments(query: string) {
-  return useQuery<ApartmentBrief[]>({
-    queryKey: ['apartments', 'search', query],
-    queryFn: () =>
-      apiClient
-        .get('/api/v2/addresses/apartments/search', {
-          params: { q: query },
-        })
-        .then(r => r.data),
-    enabled: query.length >= 2,
-    staleTime: 30_000,
-  })
-}
-
 export function useApartmentDetail(apartmentId: number | null) {
   return useQuery<ApartmentDetail>({
     queryKey: ['apartment-detail', apartmentId],
