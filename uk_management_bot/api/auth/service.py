@@ -77,9 +77,15 @@ def create_access_token(
 
 def verify_access_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+    # SEC-01: purpose-scoped tokens (mfa_token from /login) are signed with the
+    # same key and carry `sub`; without this check they pass as full access
+    # tokens, bypassing the OTP second factor. Access tokens never set `purpose`.
+    if payload.get("purpose"):
+        return None
+    return payload
 
 
 def create_refresh_token_value() -> str:
