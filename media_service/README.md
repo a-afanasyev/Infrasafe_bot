@@ -143,6 +143,13 @@ DELETE /api/v1/media/{media_id}
 
 ## Интеграция с основным ботом
 
+> **Примечание.** `media_service/client/` — эталонный/публикуемый клиентский SDK
+> сервиса (вбит в media-образ, `Dockerfile: COPY client/`). In-repo потребители
+> используют **собственные** клиенты, т.к. их образы не содержат `media_service/`:
+> бот — `uk_management_bot/integrations/media_client.py`, access_control —
+> `access_control/integrations/media.py`. Это осознанный выбор границы деплоя;
+> данный SDK — для внешних/будущих потребителей и как справочный контракт API.
+
 ### Пример использования клиента
 
 ```python
