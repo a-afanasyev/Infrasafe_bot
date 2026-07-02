@@ -2,7 +2,12 @@
 
 HTTP-слой (httpx) МОКается — проверяем, что клиент формирует правильный запрос
 к POST /media/upload-access и нормализует ответ в dict(media_id, telegram_file_id,
-file_url). Используется access_control-сервисом.
+file_url).
+
+ВНИМАНИЕ: это эталонный клиентский SDK media-сервиса (`media_service/client/`).
+Сам access_control-сервис его НЕ импортирует — он ходит в media-сервис через
+собственный `access_control/integrations/media.py` (raw REST). Здесь мы лишь
+покрываем контракт `upload_access_photo` эталонного клиента.
 """
 import sys
 from pathlib import Path
