@@ -24,7 +24,7 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.status_display import get_status_with_emoji
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import has_admin_access, legacy_primary_role
+from uk_management_bot.utils.auth_helpers import has_admin_access, legacy_primary_role, parse_roles_safe
 from uk_management_bot.filters import RoleFilter
 from datetime import datetime, timezone
 
@@ -149,12 +149,9 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
     if roles:
         has_access = any(role in ['admin', 'manager'] for role in roles)
     elif user and user.roles:
-        try:
-            import json
-            user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-            has_access = any(role in ['admin', 'manager'] for role in user_roles)
-        except Exception:
-            pass
+        # COD-01: канонический парсер ролей (JSON+CSV)
+        user_roles = parse_roles_safe(user.roles)
+        has_access = any(role in ['admin', 'manager'] for role in user_roles)
     
     print(f"🔧 Доступ к админ панели: {'✅ Есть' if has_access else '❌ Нет'}")
     

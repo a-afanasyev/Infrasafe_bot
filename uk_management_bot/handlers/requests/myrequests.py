@@ -17,6 +17,7 @@ from uk_management_bot.services.request_service import RequestService
 
 # Localization imports - TASK 17 Phase 2
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, STATUS_EMOJI
 # Single Source of Truth for button texts - TASK 17 Entry Handler Fix
 
@@ -55,15 +56,8 @@ async def show_my_requests(message: Message, state: FSMContext):
                 await message.answer(get_text("common.user_not_found", language=lang))
                 return
 
-            # Определяем роль пользователя
-            user_roles = []
-            if user.roles:
-                try:
-                    import json
-                    user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
-                    user_roles = []
+            # Определяем роль пользователя (COD-01: канонический парсер, JSON+CSV)
+            user_roles = parse_roles_safe(user.roles)
 
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 

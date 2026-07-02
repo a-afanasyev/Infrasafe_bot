@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +33,9 @@ class ProfileService:
                 logger.warning(f"Пользователь с telegram_id={telegram_id} не найден")
                 return None
             
-            # Парсим роли из JSON
-            roles = ["applicant"]  # дефолт
-            try:
-                if user.roles:
-                    parsed_roles = json.loads(user.roles)
-                    if isinstance(parsed_roles, list):
-                        roles = [str(r) for r in parsed_roles if isinstance(r, str)]
-            except (json.JSONDecodeError, TypeError):
-                logger.warning(f"Ошибка парсинга ролей для пользователя {telegram_id}: {user.roles}")
-            
+            # Парсим роли (COD-01: канонический парсер, JSON+CSV)
+            roles = parse_roles_safe(user.roles) or ["applicant"]
+
             # Активная роль
             active_role = user.active_role or roles[0] if roles else "applicant"
             if active_role not in roles:

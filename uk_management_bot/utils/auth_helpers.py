@@ -29,6 +29,11 @@ def parse_roles_safe(roles_value: Optional[str]) -> List[str]:
     if not roles_value:
         return []
 
+    # Уже список (напр. значение прокинуто из middleware/DTO, а не из TEXT-колонки):
+    # нормализуем к списку строк без повторного парсинга (COD-01).
+    if isinstance(roles_value, list):
+        return [str(r) for r in roles_value if isinstance(r, str)]
+
     try:
         # Сначала пробуем как JSON массив
         parsed = json.loads(roles_value)
@@ -59,14 +64,10 @@ def has_admin_access(roles: Optional[List[str]] = None, user: Optional[User] = N
     
     # Fallback проверка через user объект
     if user:
-        # Проверяем новое поле roles
-        if user.roles:
-            try:
-                user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                if isinstance(user_roles, list) and any(role in ['admin', 'manager'] for role in user_roles):
-                    return True
-            except Exception as e:
-                logger.warning(f"Ошибка парсинга ролей пользователя {user.telegram_id}: {e}")
+        # Проверяем новое поле roles (COD-01: канонический парсер, JSON+CSV)
+        user_roles = parse_roles_safe(getattr(user, "roles", None))
+        if any(role in ['admin', 'manager'] for role in user_roles):
+            return True
 
     return False
 
@@ -90,15 +91,10 @@ def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] 
         # Проверяем активную роль
         if user.active_role == "executor":
             return True
-            
-        # Проверяем новое поле roles
-        if user.roles:
-            try:
-                user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                if isinstance(user_roles, list) and "executor" in user_roles:
-                    return True
-            except Exception as e:
-                logger.warning(f"Ошибка парсинга ролей пользователя {user.telegram_id}: {e}")
+
+        # Проверяем новое поле roles (COD-01: канонический парсер, JSON+CSV)
+        if "executor" in parse_roles_safe(getattr(user, "roles", None)):
+            return True
 
     return False
 

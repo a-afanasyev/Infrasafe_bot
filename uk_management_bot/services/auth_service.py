@@ -12,6 +12,7 @@ from uk_management_bot.utils.auth_helpers import (
     legacy_role_filter,
     sync_legacy_role,
     legacy_primary_role,
+    parse_roles_safe,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,14 +81,7 @@ class AuthService:
             sync_legacy_role(user, role)
             # CODE-10: добавляем роль в roles-массив и при непустом
             # (логика как в process_invite_join), а не только при пустом.
-            current_roles = []
-            if user.roles:
-                try:
-                    current_roles = json.loads(user.roles)
-                    if not isinstance(current_roles, list):
-                        current_roles = []
-                except json.JSONDecodeError:
-                    current_roles = []
+            current_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
             if role not in current_roles:
                 current_roles.append(role)
                 user.roles = json.dumps(current_roles)
@@ -140,16 +134,8 @@ class AuthService:
             
             # Добавляем роль если её нет
             role = invite_data["role"]
-            current_roles = []
-            
-            if user.roles:
-                try:
-                    current_roles = json.loads(user.roles)
-                    if not isinstance(current_roles, list):
-                        current_roles = []
-                except json.JSONDecodeError:
-                    current_roles = []
-            
+            current_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
+
             # Добавляем новую роль если её нет
             if role not in current_roles:
                 current_roles.append(role)
@@ -357,15 +343,8 @@ class AuthService:
                 logger.warning(f"Недопустимая роль: {role}")
                 return False
             
-            # Получаем текущие роли
-            current_roles = []
-            if user.roles:
-                try:
-                    current_roles = json.loads(user.roles)
-                    if not isinstance(current_roles, list):
-                        current_roles = []
-                except json.JSONDecodeError:
-                    current_roles = []
+            # Получаем текущие роли (COD-01: канонический парсер, JSON+CSV)
+            current_roles = parse_roles_safe(user.roles)
             
             # Проверяем, есть ли уже такая роль
             if role in current_roles:
@@ -428,15 +407,8 @@ class AuthService:
                 logger.warning(f"Пользователь {user_id} не найден для удаления роли")
                 return False
             
-            # Получаем текущие роли
-            current_roles = []
-            if user.roles:
-                try:
-                    current_roles = json.loads(user.roles)
-                    if not isinstance(current_roles, list):
-                        current_roles = []
-                except json.JSONDecodeError:
-                    current_roles = []
+            # Получаем текущие роли (COD-01: канонический парсер, JSON+CSV)
+            current_roles = parse_roles_safe(user.roles)
             
             # Проверяем, есть ли такая роль
             if role not in current_roles:
@@ -494,13 +466,12 @@ class AuthService:
         """
         try:
             user = self.db.query(User).filter(User.id == user_id).first()
-            if not user or not user.roles:
+            if not user:
                 return []
-            
-            roles = json.loads(user.roles)
-            return roles if isinstance(roles, list) else []
-            
-        except (json.JSONDecodeError, Exception) as e:
+            # COD-01: канонический парсер (JSON+CSV)
+            return parse_roles_safe(user.roles)
+
+        except Exception as e:
             logger.error(f"Ошибка получения ролей пользователя {user_id}: {e}")
             return []
     
@@ -515,18 +486,12 @@ class AuthService:
         if not user or user.status != "approved":
             return False
             
-        # Проверяем роли в новом формате
+        # Проверяем роли в новом формате (COD-01: канонический парсер, JSON+CSV)
         # CODE-08: роль "admin" никто не выдаёт — проверяем только "manager".
-        try:
-            if user.roles:
-                parsed_roles = json.loads(user.roles)
-                if isinstance(parsed_roles, list):
-                    return "manager" in parsed_roles
-        except (ValueError, TypeError):
-            # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
-            logger.warning(f"is_user_manager: битый JSON в user.roles (telegram_id={telegram_id}), fallback к legacy-роли")
+        if "manager" in parse_roles_safe(user.roles):
+            return True
 
-        # Fallback к legacy-роли через резолвер
+        # Fallback к legacy-роли (active_role) через резолвер
         return legacy_primary_role(user) == "manager"
     
     async def is_user_executor(self, telegram_id: int) -> bool:
@@ -539,15 +504,9 @@ class AuthService:
         if user.active_role == "executor":
             return True
             
-        # Проверяем наличие роли в списке ролей
-        try:
-            if user.roles:
-                parsed_roles = json.loads(user.roles)
-                if isinstance(parsed_roles, list) and "executor" in parsed_roles:
-                    return True
-        except (ValueError, TypeError):
-            # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
-            logger.warning(f"is_user_executor: битый JSON в user.roles (telegram_id={telegram_id}), fallback к legacy-роли")
+        # Проверяем наличие роли в списке ролей (COD-01: канонический парсер, JSON+CSV)
+        if "executor" in parse_roles_safe(user.roles):
+            return True
 
         # Fallback к legacy-роли через резолвер
         return legacy_primary_role(user) == "executor"
@@ -606,14 +565,8 @@ class AuthService:
         if not user:
             return False
         # Собираем список ролей из нового поля или fallback к старому
-        roles_list = []
-        try:
-            if user.roles:
-                parsed = json.loads(user.roles)
-                if isinstance(parsed, list):
-                    roles_list = [str(r) for r in parsed if isinstance(r, str)]
-        except Exception:
-            roles_list = []
+        # (COD-01: канонический парсер, JSON+CSV)
+        roles_list = parse_roles_safe(user.roles)
         if not roles_list:
             legacy = legacy_primary_role(user)
             if legacy:

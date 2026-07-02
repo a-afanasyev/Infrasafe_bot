@@ -27,7 +27,7 @@ from uk_management_bot.keyboards.employee_management import (
     get_employee_edit_keyboard,
 )
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import has_admin_access, sync_legacy_role
+from uk_management_bot.utils.auth_helpers import has_admin_access, sync_legacy_role, parse_roles_safe
 from uk_management_bot.database.models.user import User
 import json
 from datetime import datetime
@@ -831,14 +831,8 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: S
             )
             return
         
-        # Получаем текущие роли
-        user_roles = []
-        if employee.roles:
-            try:
-                user_roles = json.loads(employee.roles)
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"Ошибка парсинга ролей пользователя {employee.id}: {e}")
-                user_roles = []
+        # Получаем текущие роли (COD-01: канонический парсер, JSON+CSV)
+        user_roles = parse_roles_safe(employee.roles)
         
         # Сохраняем данные в FSM
         await state.update_data({
@@ -1324,13 +1318,8 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
         if user:
             logger.debug(f" Найден пользователь для обновления ролей: {user.id}")
             
-            old_roles = []
-            if user.roles:
-                try:
-                    old_roles = json.loads(user.roles)
-                except Exception:
-                    old_roles = []
-            
+            old_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
+
             logger.debug(f" Старые роли: {old_roles}, новые роли: {current_roles}")
             
             user.roles = json.dumps(current_roles)

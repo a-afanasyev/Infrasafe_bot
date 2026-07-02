@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 logger = logging.getLogger(__name__)
 
@@ -417,16 +418,8 @@ class SpecializationService:
     # ═══ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ═══
     
     def _is_executor(self, user: User) -> bool:
-        """Проверить, является ли пользователь исполнителем"""
-        try:
-            if not user.roles:
-                return False
-            
-            roles = json.loads(user.roles)
-            return 'executor' in roles
-            
-        except (json.JSONDecodeError, Exception):
-            return False
+        """Проверить, является ли пользователь исполнителем (COD-01: JSON+CSV)"""
+        return 'executor' in parse_roles_safe(user.roles)
     
     def _create_audit_log(self, action: str, updated_by: int, target_user_id: int,
                          old_specializations: List[str], new_specializations: List[str],

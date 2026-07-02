@@ -297,10 +297,13 @@ class TestFormatUserRoles:
         assert "roles.none" in result
 
     @patch("uk_management_bot.services.user_management_service.get_text", side_effect=lambda key, **kw: key)
-    def test_invalid_json_roles(self, mock_get_text):
+    def test_non_json_roles_parsed_as_csv(self, mock_get_text):
+        # COD-01: canonical parser treats non-JSON as CSV; the token is formatted
+        # as a (garbage) role rather than collapsing to roles.none. roles.none
+        # is reserved for the empty/NULL case (test_empty_roles above).
         user = _FakeUser(roles="not-json")
         result = self.svc._format_user_roles(user)
-        assert "roles.none" in result
+        assert "roles.not-json" in result
 
 
 # ===== _format_user_specializations =====
@@ -417,11 +420,17 @@ class TestGetUserRoleList:
         user = _FakeUser(roles=None)
         assert self.svc.get_user_role_list(user) == []
 
-    def test_invalid_json(self):
+    def test_non_json_parsed_as_csv(self):
+        # COD-01: canonical parser treats a non-JSON string as CSV.
         user = _FakeUser(roles="bad-json")
-        assert self.svc.get_user_role_list(user) == []
+        assert self.svc.get_user_role_list(user) == ["bad-json"]
+
+    def test_csv_roles(self):
+        user = _FakeUser(roles="applicant,manager")
+        assert self.svc.get_user_role_list(user) == ["applicant", "manager"]
 
     def test_non_list_json(self):
+        # Valid JSON that isn't a list (e.g. an object) → [] (not CSV-parsed).
         user = _FakeUser(roles='{"key": "value"}')
         assert self.svc.get_user_role_list(user) == []
 
