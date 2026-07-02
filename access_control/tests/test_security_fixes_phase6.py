@@ -146,6 +146,117 @@ def test_memory_nonce_store_default_ok(monkeypatch) -> None:
         device_auth.reset_nonce_store(device_auth.InMemoryNonceStore())
 
 
+def test_nonce_backend_default_is_redis_in_prod(monkeypatch) -> None:
+    """SEC-02: без ACCESS_NONCE_BACKEND и DEBUG=false дефолт → redis (fail-closed).
+
+    Раньше отсутствие переменной означало ``memory`` — на multi-worker проде
+    anti-replay становился process-local и replay проходил на другом воркере.
+    Проверяем, что теперь прод-путь уходит в redis (недоступный redis → FATAL,
+    что и подтверждает выбор redis-ветки, а не тихий in-memory).
+    """
+    import redis
+
+    from access_control.services import device_auth
+    from uk_management_bot.config.settings import settings
+
+    class _BoomRedis:
+        def ping(self):  # noqa: ANN001
+            raise ConnectionError("redis down")
+
+    monkeypatch.delenv("ACCESS_NONCE_BACKEND", raising=False)
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(redis.Redis, "from_url", classmethod(lambda cls, *a, **k: _BoomRedis()))
+    device_auth.reset_nonce_store(None)
+    try:
+        with pytest.raises(RuntimeError):
+            device_auth.get_nonce_store()
+    finally:
+        device_auth.reset_nonce_store(device_auth.InMemoryNonceStore())
+
+
+def test_nonce_backend_default_is_memory_in_dev(monkeypatch) -> None:
+    """SEC-02: без env и DEBUG=true дефолт → memory (dev-удобство сохранено)."""
+    from access_control.services import device_auth
+    from uk_management_bot.config.settings import settings
+
+    monkeypatch.delenv("ACCESS_NONCE_BACKEND", raising=False)
+    monkeypatch.setattr(settings, "DEBUG", True)
+    device_auth.reset_nonce_store(None)
+    try:
+        assert isinstance(device_auth.get_nonce_store(), device_auth.InMemoryNonceStore)
+    finally:
+        device_auth.reset_nonce_store(device_auth.InMemoryNonceStore())
+
+
+def test_failure_backend_default_is_redis_in_prod(monkeypatch) -> None:
+    """SEC-02: lockout-счётчик — тот же fail-closed дефолт, что и nonce-store."""
+    import redis
+
+    from access_control.services import code_rate_limit
+    from uk_management_bot.config.settings import settings
+
+    class _BoomRedis:
+        def ping(self):  # noqa: ANN001
+            raise ConnectionError("redis down")
+
+    monkeypatch.delenv("ACCESS_NONCE_BACKEND", raising=False)
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(redis.Redis, "from_url", classmethod(lambda cls, *a, **k: _BoomRedis()))
+    code_rate_limit.reset_failure_store(None)
+    try:
+        with pytest.raises(RuntimeError):
+            code_rate_limit.get_failure_store()
+    finally:
+        code_rate_limit.reset_failure_store(code_rate_limit.InMemoryFailureStore())
+
+
+# ----------------------- SEC-03: Swagger fail-closed -----------------------
+
+
+def test_docs_disabled_by_default_in_prod(monkeypatch) -> None:
+    """SEC-03: без ACCESS_ENABLE_DOCS и DEBUG=false Swagger выключен (fail-closed).
+
+    Раньше отсутствие переменной = включено → забытый env в проде раскрывал
+    `/docs` `/redoc` `/openapi.json`. Теперь дефолт следует DEBUG.
+    """
+    from access_control.app import main
+    from uk_management_bot.config.settings import settings
+
+    monkeypatch.delenv("ACCESS_ENABLE_DOCS", raising=False)
+    monkeypatch.setattr(settings, "DEBUG", False)
+    assert main._docs_enabled() is False
+
+    app = main.create_app()
+    assert app.docs_url is None
+    assert app.redoc_url is None
+    assert app.openapi_url is None
+
+
+def test_docs_enabled_in_dev_by_default(monkeypatch) -> None:
+    """SEC-03: в dev (DEBUG=true) Swagger по-прежнему включён без env."""
+    from access_control.app import main
+    from uk_management_bot.config.settings import settings
+
+    monkeypatch.delenv("ACCESS_ENABLE_DOCS", raising=False)
+    monkeypatch.setattr(settings, "DEBUG", True)
+    assert main._docs_enabled() is True
+
+
+def test_docs_explicit_env_overrides_debug(monkeypatch) -> None:
+    """SEC-03: явный ACCESS_ENABLE_DOCS имеет высший приоритет над DEBUG."""
+    from access_control.app import main
+    from uk_management_bot.config.settings import settings
+
+    # Явное «выкл» перебивает DEBUG=true
+    monkeypatch.setattr(settings, "DEBUG", True)
+    monkeypatch.setenv("ACCESS_ENABLE_DOCS", "0")
+    assert main._docs_enabled() is False
+    # Явное «вкл» перебивает DEBUG=false
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setenv("ACCESS_ENABLE_DOCS", "1")
+    assert main._docs_enabled() is True
+
+
 # ----------------------- endpoint-части (postgres-only) -----------------------
 
 

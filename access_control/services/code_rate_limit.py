@@ -108,15 +108,22 @@ _default_store: FailureCounterStore | None = None
 def get_failure_store() -> FailureCounterStore:
     """Синглтон счётчика. Backend — env ``ACCESS_NONCE_BACKEND`` (как у nonce-store).
 
-    ``memory`` (дефолт пилота/тестов) — ``InMemoryFailureStore``; ``redis`` —
-    ``RedisFailureStore`` из ``settings.REDIS_URL``. При ``redis`` и недоступном
-    Redis — FATAL (RuntimeError), БЕЗ тихого отката на in-memory (M2): иначе на
-    нескольких воркерах лимит молча обходится сменой воркера.
+    Явный env — высший приоритет: ``redis`` → ``RedisFailureStore`` из
+    ``settings.REDIS_URL``; ``memory`` → ``InMemoryFailureStore``. При ОТСУТСТВИИ
+    переменной дефолт зависит от ``settings.DEBUG`` (SEC-02/аудит #4, fail-closed):
+    в проде (``DEBUG=false``) — ``redis``, в dev/тестах — ``memory``. Раньше дефолт
+    был безусловно ``memory``: на multi-worker проде lockout-счётчик становился
+    process-local и обходился сменой воркера. При ``redis`` и недоступном Redis —
+    FATAL (RuntimeError), БЕЗ тихого отката на in-memory (M2).
     """
     global _default_store
     if _default_store is not None:
         return _default_store
-    backend = os.getenv("ACCESS_NONCE_BACKEND", "memory").lower()
+    backend = os.getenv("ACCESS_NONCE_BACKEND")
+    if backend is None:
+        from uk_management_bot.config.settings import settings
+        backend = "memory" if settings.DEBUG else "redis"
+    backend = backend.lower()
     if backend == "redis":
         try:
             import redis  # type: ignore
