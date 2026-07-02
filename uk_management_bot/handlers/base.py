@@ -15,6 +15,7 @@ from uk_management_bot.keyboards.base import (
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
 from uk_management_bot.services.notification_service import async_notify_role_switched
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.filters import RoleFilter
@@ -209,19 +210,12 @@ async def handle_regular_start(message: Message, db: Session, roles: list[str] =
     # Фолбэк: если middleware не передал корректные roles/active_role — берём из БД пользователя
     roles = roles or ["applicant"]
     active_role = active_role or roles[0]
-    try:
-        import json
-        db_roles = []
-        if getattr(user, "roles", None):
-            parsed = json.loads(user.roles)
-            if isinstance(parsed, list) and parsed:
-                db_roles = [str(r) for r in parsed if isinstance(r, str)]
-        if db_roles:
-            roles = db_roles
-        if getattr(user, "active_role", None):
-            active_role = user.active_role if user.active_role in roles else roles[0]
-    except Exception:
-        pass
+    # COD-01: канонический парсер ролей (JSON+CSV)
+    db_roles = parse_roles_safe(getattr(user, "roles", None))
+    if db_roles:
+        roles = db_roles
+    if getattr(user, "active_role", None):
+        active_role = user.active_role if user.active_role in roles else roles[0]
 
     await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, user.status, language=lang))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
@@ -260,19 +254,12 @@ async def handle_restart_bot(callback: CallbackQuery, db: Session, roles: list[s
         # Формируем клавиатуру в зависимости от роли
         roles = roles or ["applicant"]
         active_role = active_role or roles[0]
-        try:
-            import json
-            db_roles = []
-            if getattr(user, "roles", None):
-                parsed = json.loads(user.roles)
-                if isinstance(parsed, list) and parsed:
-                    db_roles = [str(r) for r in parsed if isinstance(r, str)]
-            if db_roles:
-                roles = db_roles
-            if getattr(user, "active_role", None):
-                active_role = user.active_role if user.active_role in roles else roles[0]
-        except Exception:
-            pass
+        # COD-01: канонический парсер ролей (JSON+CSV)
+        db_roles = parse_roles_safe(getattr(user, "roles", None))
+        if db_roles:
+            roles = db_roles
+        if getattr(user, "active_role", None):
+            active_role = user.active_role if user.active_role in roles else roles[0]
         
         # Отправляем новое сообщение с обновленным меню
         await callback.message.answer(
@@ -394,17 +381,8 @@ async def show_profile(message: Message, db: Session, roles: list[str] = None, a
         user_roles = profile_data.get('roles', ['applicant'])
         user_active_role = profile_data.get('active_role', 'applicant')
         
-        # Парсим роли из JSON строки, если это строка
-        if isinstance(user_roles, str):
-            try:
-                import json
-                user_roles = json.loads(user_roles)
-            except Exception:
-                user_roles = ['applicant']
-        
-        # Убеждаемся, что user_roles - это список
-        if not isinstance(user_roles, list):
-            user_roles = ['applicant']
+        # Парсим роли (COD-01: канонический парсер, JSON+CSV+list)
+        user_roles = parse_roles_safe(user_roles) or ['applicant']
         
         # Добавляем кнопку редактирования к профилю
         keyboard = get_role_switch_inline(user_roles, user_active_role, language=lang)

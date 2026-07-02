@@ -14,6 +14,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.states.shift_management import ExecutorAssignmentStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 from ._router import router
 from .shared import _db_scope, translate_specializations
@@ -319,18 +320,9 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
             available_executors = []
             for user in all_users:
-                try:
-                    import json
-                    if user.roles:
-                        parsed_roles = json.loads(user.roles)
-                        if isinstance(parsed_roles, list) and 'executor' in parsed_roles:
-                            available_executors.append(user)
-                    elif user.active_role == 'executor':
-                        available_executors.append(user)
-                except Exception:
-                    # Если не удалось распарсить JSON, проверяем active_role
-                    if user.active_role == 'executor':
-                        available_executors.append(user)
+                # COD-01: канонический парсер ролей (JSON+CSV)
+                if 'executor' in parse_roles_safe(user.roles) or user.active_role == 'executor':
+                    available_executors.append(user)
 
             # Фильтруем по специализации если указана в specialization_focus
             if shift.specialization_focus and isinstance(shift.specialization_focus, list):

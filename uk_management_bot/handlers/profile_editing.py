@@ -16,6 +16,7 @@ from uk_management_bot.keyboards.profile import (
 )
 from uk_management_bot.keyboards.base import get_role_switch_inline
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -74,18 +75,9 @@ async def handle_cancel_profile_edit(callback: CallbackQuery, state: FSMContext,
             await callback.answer(get_text("profile_editing.handlers.user_not_found", language=lang), show_alert=True)
             return
         
-        # Парсим роли
-        import json
-        roles = ["applicant"]
-        try:
-            if user.roles:
-                parsed_roles = json.loads(user.roles)
-                if isinstance(parsed_roles, list):
-                    roles = [str(r) for r in parsed_roles if isinstance(r, str)]
-        except (json.JSONDecodeError, TypeError, AttributeError) as e:
-            logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
-            roles = ["applicant"]
-        
+        # Парсим роли (COD-01: канонический парсер, JSON+CSV)
+        roles = parse_roles_safe(user.roles) or ["applicant"]
+
         active_role = user.active_role or roles[0] if roles else "applicant"
         
         # Форматируем профиль

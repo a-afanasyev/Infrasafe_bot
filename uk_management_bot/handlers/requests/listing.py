@@ -1,5 +1,7 @@
 """Просмотр/пагинация/редактирование/отмена/одобрение заявки; query-хелперы."""
 
+import json
+
 from aiogram import F
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest
@@ -17,6 +19,7 @@ from uk_management_bot.services.request_service import RequestService
 
 # Localization imports - TASK 17 Phase 2
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, STATUS_EMOJI
 # Single Source of Truth for button texts - TASK 17 Entry Handler Fix
 
@@ -82,7 +85,6 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             # Определяем активную роль пользователя
             # WR-10: единый канон-парсер ролей вместо хрупкого ручного
             # strip('[]').replace('"','').split(', ') по JSON-строке.
-            from uk_management_bot.utils.auth_helpers import parse_roles_safe
             user_roles = parse_roles_safe(user.roles)
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
@@ -209,14 +211,8 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
                 return
 
-            # Определяем роль пользователя
-            user_roles = []
-            if user.roles:
-                try:
-                    import json
-                    user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                except (json.JSONDecodeError, TypeError):
-                    user_roles = []
+            # Определяем роль пользователя (COD-01: канонический парсер, JSON+CSV)
+            user_roles = parse_roles_safe(user.roles)
 
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
@@ -282,7 +278,6 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
         media_count = 0
         if has_media:
             try:
-                import json
                 media_files = json.loads(request.media_files) if isinstance(request.media_files, str) else request.media_files
                 media_count = len(media_files) if media_files else 0
                 if media_count == 0:
@@ -394,15 +389,8 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
                 await callback.answer()
                 return
 
-            # Определяем роль пользователя
-            user_roles = []
-            if user.roles:
-                try:
-                    import json
-                    user_roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"Ошибка парсинга ролей пользователя {user.id}: {e}")
-                    user_roles = []
+            # Определяем роль пользователя (COD-01: канонический парсер, JSON+CSV)
+            user_roles = parse_roles_safe(user.roles)
 
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
@@ -415,7 +403,6 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
                 # Получаем специализации исполнителя (может быть несколько)
                 if user.specialization:
                     try:
-                        import json
                         if isinstance(user.specialization, str) and user.specialization.startswith('['):
                             executor_specializations = json.loads(user.specialization)
                         else:

@@ -112,12 +112,29 @@ class TestGetUserProfileData:
         result = service.get_user_profile_data(100)
         assert "executor" in result["roles"]
 
-    def test_defaults_roles_to_applicant_on_parse_error(self):
+    def test_non_json_roles_parsed_as_csv(self):
+        # COD-01: get_user_profile_data delegates to canonical parse_roles_safe.
+        # A single non-JSON token is treated as one CSV role; the "applicant"
+        # default only applies to an empty/NULL roles value.
         user = _make_user(roles="not-valid-json")
         db = _make_db(user=user)
         service = ProfileService(db)
         result = service.get_user_profile_data(100)
+        assert result["roles"] == ["not-valid-json"]
+
+    def test_defaults_roles_to_applicant_when_empty(self):
+        user = _make_user(roles=None)
+        db = _make_db(user=user)
+        service = ProfileService(db)
+        result = service.get_user_profile_data(100)
         assert result["roles"] == ["applicant"]
+
+    def test_csv_roles_parsed(self):
+        user = _make_user(roles="applicant,executor")
+        db = _make_db(user=user)
+        service = ProfileService(db)
+        result = service.get_user_profile_data(100)
+        assert result["roles"] == ["applicant", "executor"]
 
     def test_active_role_corrected_if_not_in_roles(self):
         user = _make_user(

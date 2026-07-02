@@ -532,14 +532,26 @@ class TestGetUserRoles:
 
         assert roles == []
 
-    def test_returns_empty_on_invalid_json(self):
+    def test_non_json_string_parsed_as_csv(self):
+        # COD-01: get_user_roles delegates to the canonical parse_roles_safe,
+        # which treats a non-JSON string as CSV. A single garbage token yields a
+        # single-element list (harmless — it matches no real role downstream).
+        # Previously the inline json.loads raised and returned [].
         user = _make_user(roles="not-json")
         db = _make_db(user=user)
 
         service = AuthService(db)
         roles = service.get_user_roles(1)
 
-        assert roles == []
+        assert roles == ["not-json"]
+
+    def test_csv_roles_parsed(self):
+        # COD-01: legacy CSV roles column now parses correctly (was [] before).
+        user = _make_user(roles="executor,manager")
+        db = _make_db(user=user)
+
+        service = AuthService(db)
+        assert service.get_user_roles(1) == ["executor", "manager"]
 
     def test_returns_empty_when_roles_is_none(self):
         user = _make_user(roles=None)
@@ -618,37 +630,38 @@ class TestStatusChecks:
         assert await service.is_user_executor(100) is False
 
     @pytest.mark.asyncio
-    async def test_is_user_manager_broken_roles_json_warns_and_falls_back(self, caplog):
-        """ARCH-04: битый JSON ролей — warning + fallback, не молча.
-
-        PR-31/DB-060: legacy .role column dropped. Fallback now goes through
-        legacy_primary_role() → active_role, so we drive the fallback via active_role.
+    async def test_is_user_manager_unusable_roles_falls_back_to_active_role(self):
+        """COD-01: неразбираемая строка ролей → роль не найдена среди распарсенных
+        (canonical parse_roles_safe трактует её как CSV-мусор, "manager" там нет),
+        поэтому падаем в legacy_primary_role() → active_role="manager" → True.
+        Прежний ARCH-04 warning убран: под каноническим парсером «битого JSON»
+        как ошибки больше нет (строка — валидный CSV).
         """
         user = _make_user(status="approved", roles="{broken json", active_role="manager")
         db = _make_db(user=user)
 
         service = AuthService(db)
-        with caplog.at_level("WARNING"):
-            assert await service.is_user_manager(100) is True
-        assert any("битый JSON" in r.message for r in caplog.records)
+        assert await service.is_user_manager(100) is True
 
     @pytest.mark.asyncio
-    async def test_is_user_executor_broken_roles_json_warns(self, caplog):
-        """ARCH-04: то же для is_user_executor — битый JSON логируется, не молча.
-
-        PR-31/DB-060: legacy .role column dropped. is_user_executor checks
-        active_role=="executor" FIRST (short-circuit, no warning), поэтому здесь
-        active_role не executor — мы доходим до разбора roles, ловим битый JSON,
-        видим warning, и fallback через legacy_primary_role() даёт active_role,
-        которая не "executor" → False. Проверяем именно видимость warning.
+    async def test_is_user_executor_unusable_roles_falls_back(self):
+        """COD-01: та же семантика для is_user_executor. active_role="applicant"
+        (не executor), в распарсенных ролях executor'а нет → False, без warning.
         """
         user = _make_user(status="approved", roles="{broken json", active_role="applicant")
         db = _make_db(user=user)
 
         service = AuthService(db)
-        with caplog.at_level("WARNING"):
-            assert await service.is_user_executor(100) is False
-        assert any("битый JSON" in r.message for r in caplog.records)
+        assert await service.is_user_executor(100) is False
+
+    @pytest.mark.asyncio
+    async def test_is_user_manager_csv_roles(self):
+        """COD-01: legacy CSV-роли теперь распознаются (раньше давали False)."""
+        user = _make_user(status="approved", roles="applicant,manager", active_role="manager")
+        db = _make_db(user=user)
+
+        service = AuthService(db)
+        assert await service.is_user_manager(100) is True
 
 
 # ---------------------------------------------------------------------------

@@ -66,11 +66,14 @@ class TestGetUserProfileData:
         assert result["roles"] == ["applicant"]
         assert result["active_role"] == "applicant"
 
-    def test_user_with_invalid_json_roles(self):
+    def test_user_with_non_json_roles_parsed_as_csv(self):
+        # COD-01: canonical parse_roles_safe treats a non-JSON string as CSV;
+        # a single garbage token → single-element list (default applicant only
+        # applies to empty/NULL). Previously json.loads raised → applicant.
         user = _FakeUser(roles="not-json")
         self.db.query.return_value.filter.return_value.first.return_value = user
         result = self.svc.get_user_profile_data(100)
-        assert result["roles"] == ["applicant"]
+        assert result["roles"] == ["not-json"]
 
     def test_user_with_csv_specialization(self):
         user = _FakeUser(specialization="electricity,plumbing")

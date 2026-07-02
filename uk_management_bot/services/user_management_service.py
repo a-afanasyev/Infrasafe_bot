@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles_safe
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
@@ -559,13 +559,10 @@ class UserManagementService:
     def _format_user_roles(self, user: User, language: str = 'ru') -> str:
         """Форматировать роли пользователя"""
         try:
-            if not user.roles:
+            roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
+            if not roles:
                 return get_text("roles.none", language=language)
-            
-            roles = json.loads(user.roles)
-            if not isinstance(roles, list):
-                return get_text("roles.none", language=language)
-            
+
             role_names = []
             for role in roles:
                 role_text = get_text(f"roles.{role}", language=language)
@@ -587,11 +584,9 @@ class UserManagementService:
             if not user.specialization:
                 return ""
             
-            # Проверяем, есть ли роль executor
-            if user.roles:
-                roles = json.loads(user.roles)
-                if 'executor' not in roles:
-                    return ""
+            # Проверяем, есть ли роль executor (COD-01: JSON+CSV)
+            if 'executor' not in parse_roles_safe(user.roles):
+                return ""
             
             specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
             if not specializations:
@@ -629,45 +624,20 @@ class UserManagementService:
     
     def is_user_staff(self, user: User) -> bool:
         """Проверить, является ли пользователь сотрудником"""
-        try:
-            if not user.roles:
-                return False
-            
-            roles = json.loads(user.roles)
-            return 'executor' in roles or 'manager' in roles or 'inspector' in roles
-
-        except (json.JSONDecodeError, Exception):
-            return False
+        # COD-01: канонический парсер (JSON+CSV)
+        roles = parse_roles_safe(user.roles)
+        return 'executor' in roles or 'manager' in roles or 'inspector' in roles
 
     def is_user_employee(self, user: User) -> bool:
         """Проверить, является ли пользователь сотрудником (executor, manager или inspector)"""
-        try:
-            if not user.roles:
-                return False
-
-            # Проверяем через LIKE для JSON
-            return (
-                user.roles and (
-                    '"executor"' in user.roles or
-                    '"manager"' in user.roles or
-                    '"inspector"' in user.roles
-                )
-            )
-            
-        except Exception:
-            return False
+        # COD-01: канонический парсер (JSON+CSV) вместо substring-проверки по сырой
+        # строке — substring '"executor"' не матчил CSV-формат.
+        roles = parse_roles_safe(user.roles)
+        return any(r in roles for r in ('executor', 'manager', 'inspector'))
     
     def get_user_role_list(self, user: User) -> List[str]:
-        """Получить список ролей пользователя"""
-        try:
-            if not user.roles:
-                return []
-            
-            roles = json.loads(user.roles)
-            return roles if isinstance(roles, list) else []
-            
-        except (json.JSONDecodeError, Exception):
-            return []
+        """Получить список ролей пользователя (COD-01: JSON+CSV)"""
+        return parse_roles_safe(user.roles)
     
     # ═══ МЕТОДЫ ДЛЯ РАБОТЫ С СОТРУДНИКАМИ ═══
     

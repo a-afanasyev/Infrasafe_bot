@@ -5,7 +5,7 @@ import logging
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import legacy_primary_role
+from uk_management_bot.utils.auth_helpers import legacy_primary_role, parse_roles_safe
 from uk_management_bot.utils.validators import validate_description
 from uk_management_bot.utils.constants import (
     REQUEST_URGENCIES,
@@ -282,18 +282,9 @@ class RequestService:
         # Определяем активную роль пользователя (новая система ролей)
         active_role = actor.active_role or legacy_primary_role(actor)
         
-        # Получаем список всех ролей пользователя
-        user_roles = []
-        try:
-            if actor.roles:
-                import json
-                parsed_roles = json.loads(actor.roles)
-                if isinstance(parsed_roles, list):
-                    user_roles = parsed_roles
-        except (ValueError, TypeError):
-            # ARCH-04: битый JSON ролей — не глотать молча, видимый warning.
-            logger.warning(f"is_role_allowed_for_transition: битый JSON в user.roles (user_id={actor.id}), fallback к user.role")
-        
+        # Получаем список всех ролей пользователя (COD-01: канонический парсер, JSON+CSV)
+        user_roles = parse_roles_safe(actor.roles)
+
         # Fallback к старому полю role если новая система не настроена
         if not user_roles:
             legacy = legacy_primary_role(actor)

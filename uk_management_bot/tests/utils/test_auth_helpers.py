@@ -45,12 +45,21 @@ class TestParseRolesSafe:
         result = parse_roles_safe("[]")
         assert result == []
 
-    def test_list_input_is_not_string_returns_empty(self):
-        # parse_roles_safe expects Optional[str]; passing a list is falsy only if empty
-        # A non-empty list is truthy — json.loads will fail, CSV branch checks isinstance(str)
-        # So a non-empty list results in []
+    def test_list_input_passthrough(self):
+        # COD-01: parse_roles_safe now normalises an already-list value (a role list
+        # propagated from middleware/DTO, not from the TEXT column) instead of
+        # returning []. This makes it a drop-in for the old
+        # `json.loads(x) if isinstance(x, str) else x` idiom at ~28 call sites.
         result = parse_roles_safe(["applicant", "executor"])  # type: ignore[arg-type]
-        assert result == []
+        assert result == ["applicant", "executor"]
+
+    def test_list_input_filters_non_strings(self):
+        # Non-string members are dropped (defensive — roles are always strings).
+        result = parse_roles_safe(["manager", 42, None, "executor"])  # type: ignore[arg-type]
+        assert result == ["manager", "executor"]
+
+    def test_empty_list_returns_empty(self):
+        assert parse_roles_safe([]) == []  # type: ignore[arg-type]
 
     def test_returns_list_of_strings(self):
         result = parse_roles_safe('["applicant", "executor"]')
