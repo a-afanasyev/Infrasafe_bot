@@ -24,7 +24,7 @@ class Yard(Base):
     name = Column(String(200), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
 
-    # GPS координаты центра двора для GeoOptimizer
+    # GPS координаты центра двора для гео-расчётов
     gps_latitude = Column(Float, nullable=True)
     gps_longitude = Column(Float, nullable=True)
 
