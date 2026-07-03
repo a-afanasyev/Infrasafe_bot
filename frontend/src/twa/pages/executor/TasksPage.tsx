@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import type { TwaRequest } from '../../types'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
@@ -19,11 +20,11 @@ export default function TasksPage() {
   })
 
   const activeStatuses = ['В работе', 'Закуп', 'Уточнение', 'Новая']
-  const active = requests.filter((r: any) => activeStatuses.includes(r.status))
+  const active = requests.filter((r: TwaRequest) => activeStatuses.includes(r.status))
 
   // Group by status
-  const grouped = activeStatuses.reduce((acc: Record<string, any[]>, status) => {
-    const items = active.filter((r: any) => r.status === status)
+  const grouped = activeStatuses.reduce((acc: Record<string, TwaRequest[]>, status) => {
+    const items = active.filter((r: TwaRequest) => r.status === status)
     if (items.length > 0) acc[status] = items
     return acc
   }, {})
@@ -45,7 +46,7 @@ export default function TasksPage() {
       {Object.entries(grouped).map(([status, items]) => (
         <div key={status} className="mb-4">
           <h2 className="text-[12px] font-semibold text-gray-500 uppercase mb-2">{status} ({items.length})</h2>
-          {items.map((req: any) => (
+          {items.map((req: TwaRequest) => (
             <RequestCard
               key={req.request_number}
               requestNumber={req.request_number}

@@ -171,6 +171,7 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
   useEffect(() => {
     closedByCaller.current = false
     connectRef.current = connect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- подписка на WebSocket-фид на mount; setState происходит в колбэках соединения
     connect()
     return () => {
       closedByCaller.current = true

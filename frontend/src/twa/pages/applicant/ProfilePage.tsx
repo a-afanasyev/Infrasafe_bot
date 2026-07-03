@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { TwaApartment } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { twaClient } from '../../twaClient'
@@ -66,7 +67,7 @@ export default function ProfilePage() {
           <span className="font-semibold text-[13px]">{t('twa.profile.myAddresses')}</span>
         </div>
         {apartments.length === 0 && <p className="text-[12px] text-gray-400">{t('twa.profile.noAddresses')}</p>}
-        {apartments.map((a: any) => (
+        {apartments.map((a: TwaApartment) => (
           <div key={a.apartment_id} className="text-[12px] text-gray-600 dark:text-gray-400 py-1">{a.full_address}</div>
         ))}
       </div>

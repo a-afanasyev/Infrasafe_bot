@@ -22,6 +22,7 @@ export default function ShiftPage() {
 
   // Timer
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренная синхронизация таймера смены с внешним состоянием shift
     if (!currentShift?.start_time) { setElapsed(''); return }
     const start = new Date(currentShift.start_time).getTime()
     const tick = () => {

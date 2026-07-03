@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-import { useTopbar } from '../contexts/TopbarContext'
+import { useTopbar } from '../contexts/topbar'
 import {
   useShiftSchedule,
   useShiftStats,

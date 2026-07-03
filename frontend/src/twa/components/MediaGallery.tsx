@@ -138,6 +138,7 @@ function MediaThumb({ id, isVideo, onOpen }: ThumbProps) {
 
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс состояния ошибки перед загрузкой медиа при смене id
     setErrored(false)
     twaClient
       .get(`/api/v2/media/${id}/file`, { responseType: 'blob' })

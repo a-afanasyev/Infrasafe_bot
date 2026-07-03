@@ -78,7 +78,7 @@ export default function InspectorCreatePage() {
         DRAFT_KEY,
         JSON.stringify({ step, yardId, buildingId, buildingLabel, category, description, urgency } satisfies Draft)
       )
-    } catch {}
+    } catch { /* sessionStorage может быть недоступен (private mode) — черновик не сохраняем */ }
   }, [step, yardId, buildingId, buildingLabel, category, description, urgency])
 
   const { data: yards = [] } = useQuery<Yard[]>({
@@ -102,7 +102,7 @@ export default function InspectorCreatePage() {
     setUrgency('low')
     setPhotos([])
     setUploadProgress(null)
-    try { sessionStorage.removeItem(DRAFT_KEY) } catch {}
+    try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* sessionStorage недоступен — черновик уже неактуален */ }
   }
 
   // Загрузка фото через прокси (как в applicant-flow): последовательно, любой
@@ -259,9 +259,9 @@ export default function InspectorCreatePage() {
       {createMutation.isError && (
         <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
           {(() => {
-            const err = createMutation.error as any
+            const err = createMutation.error as { response?: { data?: { detail?: unknown } }; message?: string }
             const detail = err?.response?.data?.detail
-            if (Array.isArray(detail)) return detail.map((d: any) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
+            if (Array.isArray(detail)) return detail.map((d: { loc?: (string | number)[]; msg?: string }) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
             if (typeof detail === 'string') return detail
             return err?.message || t('common.error')
           })()}

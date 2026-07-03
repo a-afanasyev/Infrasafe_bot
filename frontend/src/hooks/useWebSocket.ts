@@ -44,6 +44,7 @@ export function useWebSocket(
         return
       }
       attemptsRef.current += 1
+      // eslint-disable-next-line react-hooks/immutability -- намеренная рекурсивная ссылка на connect для reconnect (стабильна: connect мемоизирован по endpoint)
       reconnectTimer.current = setTimeout(connect, 3000)
     }
   }, [endpoint])

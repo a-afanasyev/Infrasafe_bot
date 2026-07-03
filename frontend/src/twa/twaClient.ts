@@ -52,8 +52,8 @@ twaClient.interceptors.response.use(
           // leaving the app silently 401ing on every subsequent request.
           try {
             return await twaClient(originalRequest)
-          } catch (retryErr: any) {
-            if (retryErr?.response?.status === 401) {
+          } catch (retryErr: unknown) {
+            if (axios.isAxiosError(retryErr) && retryErr.response?.status === 401) {
               window.dispatchEvent(new CustomEvent('twa:auth-failed'))
             }
             return Promise.reject(retryErr)

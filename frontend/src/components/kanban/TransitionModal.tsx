@@ -32,13 +32,14 @@ interface Props {
   onCancel: () => void
 }
 
-export default function TransitionModal({ requestNumber: _requestNumber, targetStatus, onConfirm, onCancel }: Props) {
+export default function TransitionModal({ targetStatus, onConfirm, onCancel }: Props) {
   const { t } = useTranslation()
   const [executorId, setExecutorId] = useState<number | 'duty' | ''>('')
   const [text, setText] = useState('')
   const { data: employees = [] } = useEmployees({ verification_status: 'verified' })
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс полей формы при смене целевого статуса
     setExecutorId('')
     setText('')
   }, [targetStatus])

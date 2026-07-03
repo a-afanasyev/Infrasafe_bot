@@ -3,7 +3,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useTranslation } from 'react-i18next'
 import RequestCard from './RequestCard'
 import type { KanbanColumn as TColumn } from '../../hooks/useKanban'
-import { isTransitionAllowed, FROZEN_STATUSES } from './KanbanBoard'
+import { isTransitionAllowed, FROZEN_STATUSES } from './transitions'
 import { tStatus } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 

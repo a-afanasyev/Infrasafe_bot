@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTopbar } from '../contexts/TopbarContext'
+import { useTopbar } from '../contexts/topbar'
 import {
   useEmployees,
   useApproveEmployee,
@@ -40,7 +40,7 @@ export default function EmployeesPage() {
   })
 
   useEffect(() => {
-    try { localStorage.setItem('employees_view_mode', viewMode) } catch {}
+    try { localStorage.setItem('employees_view_mode', viewMode) } catch { /* localStorage недоступен — режим отображения не персистим */ }
   }, [viewMode])
 
   const apiFilters: Record<string, string | boolean | undefined> = {
@@ -67,6 +67,7 @@ export default function EmployeesPage() {
   const blockEmployee = useBlockEmployee()
   const unblockEmployee = useUnblockEmployee()
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; список зависимостей сохранён как есть во избежание пересоздания коллбэка при смене локали
   const handleBlockToggle = useCallback((e: EmployeeBrief) => {
     const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
     const isBlocked = e.status === 'blocked'
@@ -93,6 +94,7 @@ export default function EmployeesPage() {
   ).length
   const verified = employees.filter(e => e.verification_status === 'verified').length
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; deps=[search] сохранены во избежание пересоздания узла topbar-действий
   const actionsNode = useMemo(() => (
     <div className="flex items-center gap-2">
       <Input

@@ -46,6 +46,7 @@ export default function AddObjectModal({ open, onClose, yards, preselectedYardId
   useEffect(() => {
     if (open) {
       if (preselectedYardId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренная инициализация формы при открытии модалки
         setObjectType('building')
         setSelectedYardId(preselectedYardId)
       } else {

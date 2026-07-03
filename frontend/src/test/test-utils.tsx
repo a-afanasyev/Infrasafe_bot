@@ -25,6 +25,7 @@ function makeQueryClient() {
   })
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- тест-утилита, не рантайм-компонент
 function AllProviders({ children }: { children: ReactNode }) {
   // Fresh QueryClient per mount so cache never leaks between tests.
   const queryClient = makeQueryClient()
@@ -45,5 +46,6 @@ function customRenderHook<R>(callback: () => R) {
   return renderHook(callback, { wrapper: AllProviders })
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- тест-утилита, реэкспорт RTL, не рантайм-компонент
 export * from '@testing-library/react'
 export { customRender as render, customRenderHook as renderHook }

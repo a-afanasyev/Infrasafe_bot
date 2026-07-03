@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { TwaRequest } from '../../types'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
@@ -66,7 +67,7 @@ export default function AcceptancePage() {
         </div>
       )}
 
-      {requests.map((req: any) => (
+      {requests.map((req: TwaRequest) => (
         <div key={req.request_number} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 mb-3 overflow-hidden">
           <div
             onClick={() => setExpanded(expanded === req.request_number ? null : req.request_number)}

@@ -84,7 +84,7 @@ export default function CreatePage() {
         DRAFT_KEY,
         JSON.stringify({ step, category, addressType, addressId, addressLabel, description, urgency } satisfies Draft)
       )
-    } catch {}
+    } catch { /* sessionStorage может быть недоступен (private mode) — черновик не сохраняем */ }
   }, [step, category, addressType, addressId, addressLabel, description, urgency])
   // TWA-16: track per-photo upload progress.
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
@@ -106,6 +106,7 @@ export default function CreatePage() {
       : addresses.yards
     const stillValid = pool.some((a) => a.id === addressId)
     if (!stillValid) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс невалидного выбора адреса после загрузки свежих наборов
       setAddressType(null)
       setAddressId(null)
       setAddressLabel('')
@@ -173,7 +174,7 @@ export default function CreatePage() {
         toast.success('Заявка создана')
       }
       setUploadProgress(null)
-      try { sessionStorage.removeItem(DRAFT_KEY) } catch {}
+      try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* sessionStorage недоступен — черновик уже неактуален */ }
       navigate('/twa/app/requests')
     },
     onError: (err: unknown) => {
@@ -277,9 +278,9 @@ export default function CreatePage() {
       {createMutation.isError && (
         <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
           {(() => {
-            const err = createMutation.error as any
+            const err = createMutation.error as { response?: { data?: { detail?: unknown } }; message?: string }
             const detail = err?.response?.data?.detail
-            if (Array.isArray(detail)) return detail.map((d: any) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
+            if (Array.isArray(detail)) return detail.map((d: { loc?: (string | number)[]; msg?: string }) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
             if (typeof detail === 'string') return detail
             return err?.message || t('common.error')
           })()}
