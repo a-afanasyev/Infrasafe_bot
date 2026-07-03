@@ -41,8 +41,6 @@ jobs:
     # PRC-02 (audit #4): SURFACE type errors without blocking. Полное внедрение
     # mypy — отдельная многонедельная работа (~3118 ошибок сегодня); эта джоба
     # даёт видимость, флипнуть в ratchet/blocking по мере падения счётчика.
-    # continue-on-error → отчёт есть, красный CI не даёт.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -54,10 +52,13 @@ jobs:
       - name: Install mypy
         run: pip install mypy==1.7.1
 
+      # continue-on-error НА ШАГЕ (не на джобе): шаг fail-soft → джоба зелёная
+      # (чек не красный, не блокирует merge), а вывод mypy остаётся в логах.
       # --ignore-missing-imports: сторонние стабы не требуются (как в pre-commit);
       # --explicit-package-bases + exclude tests/venv: обходит коллизию имён
       # пакетов (дубли __init__.py в tests), иначе mypy падает до проверки.
       - name: Mypy (advisory)
+        continue-on-error: true
         run: mypy --ignore-missing-imports --explicit-package-bases --exclude '(/tests/|/venv/)' uk_management_bot
 
   pip-audit:
