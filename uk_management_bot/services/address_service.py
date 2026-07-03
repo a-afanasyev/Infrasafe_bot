@@ -716,36 +716,22 @@ class AddressService:
     @staticmethod
     def format_apartment_address(apartment: Apartment) -> str:
         """
-        Форматировать адрес квартиры для отображения
+        Форматировать адрес квартиры для отображения.
+
+        COD-05: делегирует в канонический `request_address.format_apartment_address`
+        (единый формат «ул. Ленина 10, кв. 42 (Двор А)» — дом первым; detached-
+        safety внутри него). Локальный импорт — во избежание цикла на загрузке.
 
         Args:
             apartment: Объект Apartment с загруженными связями
 
         Returns:
-            str: Отформатированный адрес (например: "Квартира 42, ул. Ленина 10 (Двор А)")
+            str: Отформатированный адрес (например: "ул. Ленина 10, кв. 42 (Двор А)")
         """
-        # Захватываем номер ДО доступа к relationships: у detached-объекта
-        # обращение к relationship кинет DetachedInstanceError, и тогда fallback
-        # не должен повторно трогать ORM-атрибуты (они тоже могут быть expired).
-        try:
-            number = apartment.apartment_number
-        except (AttributeError, DetachedInstanceError):
-            number = "?"
-
-        try:
-            address_parts = [f"Квартира {number}"]
-
-            if apartment.building:
-                address_parts.append(apartment.building.address)
-
-                if apartment.building.yard:
-                    address_parts.append(f"({apartment.building.yard.name})")
-
-            return ", ".join(address_parts)
-
-        except (AttributeError, DetachedInstanceError):
-            logger.exception("format_apartment_address failed")
-            return f"Квартира {number}"
+        from uk_management_bot.services.request_address import (
+            format_apartment_address as _format,
+        )
+        return _format(apartment)
 
     # ============= STEPWISE ADDRESS SELECTION FOR REQUEST CREATION =============
 
