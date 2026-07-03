@@ -27,8 +27,11 @@ repos:
     rev: v1.7.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-all]
-        args: [--ignore-missing-imports]
+        # PRC-02 (audit #4): `types-all` — заброшенный/deprecated мета-пакет,
+        # ломал установку хука. `--ignore-missing-imports` уже игнорирует
+        # отсутствующие сторонние стабы, поэтому доп-зависимости не нужны.
+        # Флаги согласованы с CI-джобой mypy (обход коллизии имён в tests).
+        args: [--ignore-missing-imports, --explicit-package-bases, --exclude, '(/tests/|/venv/)']
 
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
