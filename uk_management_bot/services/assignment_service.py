@@ -5,7 +5,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from datetime import datetime, timezone
 import logging
 
@@ -27,8 +27,6 @@ logger = logging.getLogger(__name__)
 # Интеграция с новыми сервисами ЭТАПА 3
 try:
     from uk_management_bot.services.smart_dispatcher import SmartDispatcher
-    from uk_management_bot.services.assignment_optimizer import AssignmentOptimizer
-    from uk_management_bot.services.geo_optimizer import GeoOptimizer
     ADVANCED_ASSIGNMENT_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Расширенные сервисы назначения недоступны: {e}")
@@ -185,8 +183,8 @@ class AssignmentService:
     def reassign_executor(self, request_number: str, new_executor_id: int) -> bool:
         """Лёгкая переброска исполнителя при ребалансировке смен (SSOT PR2d).
 
-        Системная оптимизация (smart_dispatcher.balance_workload /
-        assignment_optimizer), а НЕ новое назначение: обновляем executor_id
+        Системная оптимизация (напр. ребалансировка нагрузки смен),
+        а НЕ новое назначение: обновляем executor_id
         активного индивидуального RequestAssignment + request.executor_id
         IN PLACE — без cancel/recreate строки, без уведомлений. Коммит — на
         вызывающем (метод вызывается внутри его транзакции/сессии). Так
@@ -411,158 +409,6 @@ class AssignmentService:
             logger.error(f"Ошибка умного назначения заявки {request_number}: {e}")
             return None
     
-    def optimize_assignments(self, algorithm: str = "hybrid") -> Dict[str, Any]:
-        """
-        Оптимизация существующих назначений
-        
-        Args:
-            algorithm: Алгоритм оптимизации (greedy, genetic, simulated_annealing, hybrid)
-            
-        Returns:
-            Dict[str, Any]: Результат оптимизации
-        """
-        if not ADVANCED_ASSIGNMENT_AVAILABLE:
-            logger.warning("Оптимизация назначений недоступна")
-            return {"error": "Сервис оптимизации недоступен"}
-        
-        try:
-            optimizer = AssignmentOptimizer(self.db)
-            result = optimizer.optimize_assignments(algorithm)
-            
-            logger.info(f"Оптимизация назначений завершена: {result.improvement_score:.2f} улучшение")
-            
-            return {
-                "success": True,
-                "algorithm": result.algorithm_used,
-                "initial_assignments": result.initial_assignments,
-                "optimized_assignments": result.optimized_assignments,
-                "improvement_score": result.improvement_score,
-                "processing_time": result.processing_time,
-                "changes_made": len(result.changes_made)
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка оптимизации назначений: {e}")
-            return {"error": str(e)}
-    
-    def optimize_routes_for_date(self, date: datetime, executor_ids: Optional[List[int]] = None) -> List[Dict[str, Any]]:
-        """
-        Оптимизация маршрутов исполнителей на дату
-        
-        Args:
-            date: Дата для оптимизации
-            executor_ids: Список ID исполнителей (если None - все)
-            
-        Returns:
-            List[Dict[str, Any]]: Результаты оптимизации маршрутов
-        """
-        if not ADVANCED_ASSIGNMENT_AVAILABLE:
-            logger.warning("Геооптимизация недоступна")
-            return []
-        
-        try:
-            geo_optimizer = GeoOptimizer(self.db)
-            results = geo_optimizer.optimize_daily_routes(date, executor_ids)
-            
-            route_summaries = []
-            for result in results:
-                route_summaries.append({
-                    "executor_id": result.executor_id,
-                    "total_distance_km": result.total_distance_km,
-                    "estimated_travel_time": result.estimated_travel_time,
-                    "fuel_savings_percent": result.fuel_savings_percent,
-                    "time_savings_minutes": result.time_savings_minutes,
-                    "route_efficiency_score": result.route_efficiency_score,
-                    "number_of_points": len(result.optimized_points),
-                    "improvements": result.improvements
-                })
-            
-            logger.info(f"Оптимизировано {len(results)} маршрутов на {date.date()}")
-            return route_summaries
-            
-        except Exception as e:
-            logger.error(f"Ошибка оптимизации маршрутов: {e}")
-            return []
-    
-    def auto_assign_urgent_requests(self) -> Dict[str, Any]:
-        """
-        Автоматическое назначение срочных заявок
-        
-        Returns:
-            Dict[str, Any]: Результат обработки срочных заявок
-        """
-        if not ADVANCED_ASSIGNMENT_AVAILABLE:
-            logger.warning("Автоназначение срочных заявок недоступно")
-            return {"error": "Сервис автоназначения недоступен"}
-        
-        try:
-            dispatcher = SmartDispatcher(self.db)
-            result = dispatcher.handle_urgent_requests()
-            
-            return {
-                "success": True,
-                "processed_requests": result.get("processed_requests", 0),
-                "assigned_requests": result.get("assigned_requests", 0),
-                "failed_assignments": result.get("failed_assignments", 0),
-                "processing_time": result.get("processing_time", 0),
-                "details": result.get("details", [])
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка автоназначения срочных заявок: {e}")
-            return {"error": str(e)}
-    
-    def get_assignment_recommendations(self, request_number: str) -> List[Dict[str, Any]]:
-        """
-        Получение рекомендаций по назначению заявки
-        
-        Args:
-            request_number: Номер заявки
-            
-        Returns:
-            List[Dict[str, Any]]: Список рекомендаций
-        """
-        if not ADVANCED_ASSIGNMENT_AVAILABLE:
-            logger.warning("Рекомендации по назначению недоступны")
-            return []
-        
-        try:
-            request = self._get_request_by_number(request_number)
-            if not request:
-                return []
-            
-            dispatcher = SmartDispatcher(self.db)
-            
-            # Получаем активные смены
-            from uk_management_bot.database.models.shift import Shift
-            shifts = self.db.query(Shift).filter(Shift.status.in_(['active', 'planned'])).all()
-            
-            recommendations = []
-            for shift in shifts[:5]:  # Топ-5 рекомендаций
-                score = dispatcher.calculate_assignment_score(request, shift)
-                
-                recommendations.append({
-                    "shift_id": shift.id,
-                    "executor_id": shift.user_id,
-                    "executor_name": shift.user.full_name if shift.user else "Неизвестно",
-                    "total_score": score.total_score,
-                    "specialization_score": score.specialization_score,
-                    "geography_score": score.geography_score,
-                    "workload_score": score.workload_score,
-                    "rating_score": score.rating_score,
-                    "urgency_score": score.urgency_score,
-                    "recommendation_reason": f"Общий балл: {score.total_score:.2f}"
-                })
-            
-            # Сортируем по убыванию общего балла
-            recommendations.sort(key=lambda x: x["total_score"], reverse=True)
-            
-            return recommendations
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения рекомендаций для заявки {request_number}: {e}")
-            return []
-
     def _get_request_by_number(self, request_number: str) -> Optional[Request]:
         """Возвращает заявку по её номеру."""
         if not request_number:

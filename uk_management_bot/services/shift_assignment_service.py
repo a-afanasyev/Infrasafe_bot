@@ -20,7 +20,6 @@ from uk_management_bot.utils.auth_helpers import (
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.assignment_service import AssignmentService
-from uk_management_bot.services.smart_dispatcher import SmartDispatcher
 from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.utils.constants import ROLE_EXECUTOR
 import logging
@@ -73,7 +72,6 @@ class ShiftAssignmentService:
     def __init__(self, db: Session):
         self.db = db
         self.assignment_service = AssignmentService(db)
-        self.smart_dispatcher = SmartDispatcher(db)
         self.notification_service = NotificationService(db)
 
         # Веса для расчета оценки назначения
@@ -554,7 +552,7 @@ class ShiftAssignmentService:
 
     def _calculate_geographic_score(self, shift: Shift, executor: User) -> float:
         """Рассчитывает географическую близость исполнителя к зоне смены"""
-        # Базовая реализация - можно интегрировать с GeoOptimizer
+        # Базовая реализация — фиксированный нейтральный балл
         return 0.5
 
     def _calculate_conflict_penalties(self, shift: Shift, executor: User) -> float:

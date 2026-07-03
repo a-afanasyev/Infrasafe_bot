@@ -63,7 +63,6 @@ def _make_service():
     db = MagicMock()
     with (
         patch("uk_management_bot.services.shift_assignment_service.AssignmentService"),
-        patch("uk_management_bot.services.shift_assignment_service.SmartDispatcher"),
         patch("uk_management_bot.services.shift_assignment_service.NotificationService"),
     ):
         service = ShiftAssignmentService(db)

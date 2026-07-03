@@ -17,7 +17,7 @@ class Building(Base):
     address = Column(String(300), nullable=False, index=True)  # Полный адрес здания
     yard_id = Column(Integer, ForeignKey("yards.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    # GPS координаты здания для GeoOptimizer
+    # GPS координаты здания для гео-расчётов
     gps_latitude = Column(Float, nullable=True)
     gps_longitude = Column(Float, nullable=True)
 

@@ -189,8 +189,6 @@ BASELINE: set[tuple[str, str, str]] = {
     # статусов сохраняются по обе стороны cutover.
     ('uk_management_bot/services/admin_handler_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/admin_handler_service.py', 'in_:Request', 'status'),
-    ('uk_management_bot/services/assignment_optimizer.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/services/geo_optimizer.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/metrics_manager.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/recommendation_engine.py', 'cmp:Request', 'status'),
     # PR-29.2 (ARCH-01): ORM resident/executor-хендлера заявок вынесен сюда из
