@@ -1285,7 +1285,7 @@ class ShiftAssignmentService:
                 try:
                     # Отменяем старое назначение
                     assignment.status = 'cancelled'
-                    assignment.cancelled_at = datetime.utcnow()
+                    assignment.cancelled_at = datetime.now(timezone.utc)
 
                     # Пытаемся найти новое назначение
                     self.auto_assign_requests_to_shift_executors(target_date)

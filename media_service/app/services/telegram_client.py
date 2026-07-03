@@ -192,17 +192,9 @@ class TelegramClientService:
     async def close(self):
         """
         Закрытие соединения
+
+        ARC-01: закрывать явно (`await close()` / async-context), НЕ из `__del__` —
+        деструктор с `create_task(self.close())` на deprecated `get_event_loop()`
+        мог оставить aiohttp-сессию незакрытой (утечка соединения) без сигнала.
         """
         await self.bot.session.close()
-
-    def __del__(self):
-        """
-        Деструктор для закрытия соединения
-        """
-        try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.close())
-        except:
-            pass
