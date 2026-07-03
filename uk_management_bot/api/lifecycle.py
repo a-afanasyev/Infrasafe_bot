@@ -83,6 +83,28 @@ async def lifespan(app: FastAPI):
     except Exception:
         _logger.exception("Rate-limit backend probe failed")
 
+    # COD-03: register a single API-process Bot as the shared notification bot.
+    # API endpoints notify via notification_service._get_shared_bot() (feedback,
+    # transfer/acceptance reminders); without registration that helper lazily
+    # creates a Bot whose aiohttp session is never closed (leak). Here we own one
+    # HTML bot on the uvicorn loop and close it on shutdown.
+    api_bot = None
+    try:
+        from aiogram import Bot
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
+        from uk_management_bot.services.notification_service import set_shared_bot
+
+        api_bot = Bot(
+            token=settings.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        set_shared_bot(api_bot)
+        app.state.notification_bot = api_bot
+        _logger.info("API notification bot registered")
+    except Exception:
+        _logger.exception("Failed to register API notification bot")
+
     task = None
     reconcile_task = None
     retention_task = None
@@ -102,6 +124,14 @@ async def lifespan(app: FastAPI):
                 await bg_task
             except asyncio.CancelledError:
                 pass
+    # Close the API notification bot + reset the shared-bot global.
+    try:
+        from uk_management_bot.services.notification_service import set_shared_bot
+        if api_bot is not None:
+            await api_bot.session.close()
+        set_shared_bot(None)
+    except Exception:
+        _logger.exception("Error closing API notification bot")
     # Dispose DB connection pools
     try:
         from uk_management_bot.database.session import async_engine

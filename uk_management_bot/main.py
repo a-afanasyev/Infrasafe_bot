@@ -71,7 +71,6 @@ from uk_management_bot.utils.health_server import start_health_server, stop_heal
 
 # Планировщик смен
 from uk_management_bot.utils.shift_scheduler import start_scheduler, stop_scheduler, get_scheduler_status
-from uk_management_bot.services.notification_service import NotificationService
 
 # Интеграции
 from uk_management_bot.integrations import get_media_client, close_media_client
@@ -81,21 +80,20 @@ setup_structured_logging()
 logger = get_logger(__name__, component="main")
 
 async def initialize_scheduler(bot: Bot):
-    """Инициализация планировщика смен"""
-    try:
-        # Создаем сервис уведомлений
-        db = SessionLocal()
-        notification_service = NotificationService(db)
+    """Инициализация планировщика смен.
 
-        # Запускаем планировщик
-        await start_scheduler(notification_service)
+    COD-02: НЕ создаём здесь долгоживущий ``NotificationService`` с сессией,
+    которую тут же закрываем — job'ы строят свой ``NotificationService`` на
+    свежей сессии (см. ShiftScheduler._notifier). Передаём только бот.
+    """
+    try:
+        # Запускаем планировщик (уведомления — через единый диспетчерский бот)
+        await start_scheduler(bot=bot)
         logger.info("Планировщик смен запущен успешно")
 
         # Получаем и логируем статус
         status = await get_scheduler_status()
         logger.info(f"Планировщик: {status['jobs_count']} задач активно")
-
-        db.close()
 
     except Exception as e:
         logger.error(f"Ошибка инициализации планировщика: {e}")
@@ -191,6 +189,12 @@ async def main():
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+
+    # COD-03: регистрируем ЕДИНЫЙ диспетчерский бот как shared-bot для всех
+    # notification-путей (планировщик, notify_user) → нет второго aiogram Bot
+    # с отдельной aiohttp-сессией, нет хазарда «Event loop is closed».
+    from uk_management_bot.services.notification_service import set_shared_bot
+    set_shared_bot(bot)
 
     # BUG-BOT-001: Verify configured BOT_USERNAME matches token-derived username.
     # Mismatch produces broken invite links (e.g. https://t.me/<wrong_bot>?start=...).
@@ -440,6 +444,12 @@ async def main():
         # Останавливаем health сервер
         stop_health_server()
         await bot.session.close()
+        # Сброс shared-bot: не оставляем глобалку на закрытую сессию (reload/тесты).
+        try:
+            from uk_management_bot.services.notification_service import set_shared_bot
+            set_shared_bot(None)
+        except Exception:
+            pass
 
         # Закрываем DB-пулы (engine уже импортирован на уровне модуля)
         try:

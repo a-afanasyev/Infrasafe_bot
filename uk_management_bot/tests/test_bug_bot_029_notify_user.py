@@ -8,7 +8,10 @@ BUG-BOT-029: `ShiftTransferService.process_expired_transfers` вызывал
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import asyncio
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 
@@ -37,8 +40,10 @@ class TestBugBot029NotifyUser:
         result = svc.notify_user(user_id=999, title="t", message="m")
         assert result is None
 
-    def test_notify_user_sends_to_telegram_id(self) -> None:
-        """Если user найден — отправка идёт через send_to_user(bot, telegram_id, text)."""
+    @pytest.mark.asyncio
+    async def test_notify_user_sends_on_running_loop(self) -> None:
+        """COD-03: при живом loop отправка планируется через create_task и
+        реально выполняется (send_to_user awaited с bot, telegram_id, text)."""
         from uk_management_bot.services.notification_service import NotificationService
 
         user = MagicMock()
@@ -52,15 +57,39 @@ class TestBugBot029NotifyUser:
         svc = NotificationService(db=db, bot=bot)
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user"
+            "uk_management_bot.services.notification_service.send_to_user",
+            new=AsyncMock(return_value=True),
         ) as mock_send:
             svc.notify_user(user_id=1, title="Hello", message="World")
+            await asyncio.sleep(0.05)  # даём созданной задаче выполниться
 
-        mock_send.assert_called_once()
-        args = mock_send.call_args.args
+        mock_send.assert_awaited_once()
+        args = mock_send.await_args.args
         assert args[0] is bot
         assert args[1] == 555
         assert "Hello" in args[2] and "World" in args[2]
+
+    def test_notify_user_no_running_loop_skips(self) -> None:
+        """COD-03: без running loop НЕ крутим asyncio.run на шаренном боте —
+        log-and-skip (send_to_user не вызывается), без исключения."""
+        from uk_management_bot.services.notification_service import NotificationService
+
+        user = MagicMock()
+        user.id = 1
+        user.telegram_id = 555
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = user
+
+        svc = NotificationService(db=db, bot=MagicMock())
+
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new=AsyncMock(),
+        ) as mock_send:
+            svc.notify_user(user_id=1, title="Hello", message="World")
+
+        mock_send.assert_not_called()
 
     def test_shift_transfer_service_uses_existing_method(self) -> None:
         """`ShiftTransferService` обращается к `notify_user`, а метод теперь существует."""

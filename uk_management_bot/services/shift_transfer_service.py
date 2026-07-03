@@ -31,6 +31,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.shift_assignment import ShiftAssignment
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer as ShiftTransferModel
 from uk_management_bot.services.notification_service import NotificationService
+from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.utils.specializations import has_required_specs
 
 logger = logging.getLogger(__name__)
@@ -444,9 +445,12 @@ class ShiftTransferService:
     def notify_managers_new_transfer(self, transfer: ShiftTransferModel) -> None:
         """Best-effort уведомление approved-менеджеров о новой передаче."""
         try:
+            # Канонический фильтр роли (закавыченный JSON-токен, не substring),
+            # approved и не soft-deleted — как в feedback-рассылке.
             managers = self.db.query(User).filter(
-                User.roles.contains("manager"),
+                legacy_role_filter("manager"),
                 User.status == "approved",
+                User.deleted_at.is_(None),
             ).all()
             for manager in managers:
                 self.notification_service.notify_user(
