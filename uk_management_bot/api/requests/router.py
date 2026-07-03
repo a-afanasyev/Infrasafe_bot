@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,6 +50,8 @@ from uk_management_bot.utils.request_workflow import (
 )
 from uk_management_bot.utils import constants as C
 from uk_management_bot.api.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -743,4 +746,6 @@ async def remind_applicant(
         await bot.send_message(chat_id=applicant.telegram_id, text=text, parse_mode="HTML")
         return {"ok": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send reminder: {e}")
+        # COD-07: не раскрывать детали исключения в теле ответа (info-leak).
+        logger.error(f"remind_applicant: не удалось отправить напоминание: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reminder")

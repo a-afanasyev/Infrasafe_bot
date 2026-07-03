@@ -24,6 +24,13 @@ class TestBugBot012AddressLocalization:
         assert "xon." in result, f"Ожидался 'xon.' в '{result}'"
         assert "54" in result
 
+    @pytest.mark.parametrize("number", ["12А", "3/1", "5Б"])
+    def test_uz_freeform_apartment_number_localized(self, number):
+        """COD-09: freeform-номера квартир ('12А', '3/1') тоже локализуются."""
+        result = localize_address(f"ул. Ленина 10, кв. {number}", language="uz")
+        assert "кв." not in result, f"UZ-адрес содержит 'кв.': '{result}'"
+        assert number in result, f"Номер '{number}' потерялся: '{result}'"
+
     def test_uz_building_short_replaced(self):
         result = localize_address("д. 14, кв. 54", language="uz")
         assert "д. " not in result, f"UZ-адрес содержит 'д.': '{result}'"
