@@ -146,25 +146,14 @@ def require_role(required_roles: List[str]):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Debug: посмотрим что приходит
-            logger.debug(f"require_role debug: args={len(args)}, kwargs_keys={list(kwargs.keys())}")
-            
             # Получаем event (первый аргумент или из kwargs)
             event = args[0] if args else kwargs.get("event")
-            
-            # Получаем db из kwargs или извлекаем из контекста
+
+            # db приходит из middleware DI (kwargs). COD-06: удалён мёртвый блок
+            # «извлечь db из Bot.get_current()» — он не выполнял никаких действий
+            # (единственной веткой был `pass`).
             db = kwargs.get("db")
-            if not db and event:
-                # Пытаемся получить db из контекста события
-                try:
-                    from aiogram import Bot
-                    bot = Bot.get_current()
-                    if bot and hasattr(bot, '_dispatcher'):
-                        # Получаем db из dispatcher context
-                        pass  # Это сложно, лучше получить из kwargs или БД напрямую
-                except Exception:
-                    pass
-            
+
             # Получаем telegram_id из event
             telegram_id = None
             if event:
@@ -183,12 +172,9 @@ def require_role(required_roles: List[str]):
                     if user:
                         from uk_management_bot.utils.auth_helpers import get_user_roles as _get_user_roles
                         user_roles = _get_user_roles(user)
-                        logger.debug(f"require_role: получили роли из БД: {user_roles}")
                 except Exception as e:
                     logger.warning(f"Ошибка получения ролей из БД: {e}")
-            
-            logger.debug(f"require_role check: user_roles={user_roles}, required_roles={required_roles}, user={user}")
-            
+
             # Проверяем права доступа
             has_access = False
             if user_roles:
@@ -223,9 +209,7 @@ def require_role(required_roles: List[str]):
                     logger.warning(f"Не удалось отправить сообщение об отсутствии прав: {e}")
                 
                 return None
-            
-            logger.debug(f"Access granted for user {user.telegram_id if user else telegram_id or 'unknown'}")
-            
+
             # Если права есть, выполняем хэндлер
             return await func(*args, **kwargs)
         
