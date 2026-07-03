@@ -111,3 +111,44 @@ async def test_applicant_blocked_user_403(api_client, seed_user, seed_apartment,
         headers=_bearer(99500),
         json={"full_name": "Иван", "phone": "+998901112233", "apartment_id": apt_id})
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_applicant_privileged_pending_rejected_403(api_client, async_db, seed_apartment, mock_notify):
+    """SEC-06: self-регистрация НЕ должна перетирать pre-provisioned аккаунт.
+
+    Pending-аккаунт с ролью executor (заведён менеджером) при валидном тикете НЕ
+    должен получить перезапись ФИО/телефона и active_role="applicant" — 403, поля
+    остаются нетронутыми.
+    """
+    import json
+    from sqlalchemy import select
+    from uk_management_bot.database.models.user import User
+    u = User(
+        telegram_id=99600, status="pending",
+        first_name="Пётр", last_name="Смирнов", phone="+998900000000",
+        roles=json.dumps(["executor"]), active_role="executor",
+    )
+    async_db.add(u)
+    await async_db.flush()
+    apt_id = (await seed_apartment()).id
+    r = await api_client.post("/api/v2/registration/applicant",
+        headers=_bearer(99600),
+        json={"full_name": "Иван Иванов", "phone": "+998901112233", "apartment_id": apt_id})
+    assert r.status_code == 403
+    user = (await async_db.execute(select(User).where(User.telegram_id == 99600))).scalar_one()
+    assert user.first_name == "Пётр"
+    assert user.last_name == "Смирнов"
+    assert user.phone == "+998900000000"
+    assert user.active_role == "executor"
+
+
+@pytest.mark.asyncio
+async def test_applicant_plain_pending_still_allowed(api_client, async_db, seed_user, seed_apartment, mock_notify):
+    """SEC-06 не должен над-блокировать: pending без ролей (обычный инвайт) → 200."""
+    await seed_user(telegram_id=99700, status="pending")  # roles не заданы
+    apt_id = (await seed_apartment()).id
+    r = await api_client.post("/api/v2/registration/applicant",
+        headers=_bearer(99700),
+        json={"full_name": "Иван Иванов", "phone": "+998901112233", "apartment_id": apt_id})
+    assert r.status_code == 200 and r.json()["status"] == "pending"

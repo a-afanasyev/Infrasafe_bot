@@ -8,7 +8,7 @@ WS-панель охраны и health/latency-метрики (§10.2). Swagger 
 """
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from access_control import __version__
 from access_control.api.camera_events import router as camera_events_router
@@ -61,6 +61,24 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs_on else None,
         openapi_url="/openapi.json" if docs_on else None,
     )
+    # SEC-05 (аудит #4): baseline security-заголовки на каждом ответе — паритет
+    # с бот-API (api/main.py). `setdefault` отдаёт приоритет edge-прокси (если он
+    # уже выставил заголовок — не перетираем, лишь заполняем пробелы). API отдаёт
+    # JSON и не встраивается во фреймы → X-Frame-Options: DENY безопасен. HSTS
+    # действует только по HTTPS (публичный edge), на внутреннем HTTP-хопе инертен.
+    @app.middleware("http")
+    async def _security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+        return response
+
     app.include_router(health_router)
     app.include_router(metrics_prometheus_router)
     app.include_router(metrics_json_router)

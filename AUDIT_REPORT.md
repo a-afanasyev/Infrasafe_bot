@@ -1,119 +1,111 @@
-# Аудит проекта UK Management — 2026-06-15
+# Аудит проекта UK Management — 2026-07-02 (audit #4)
 
-Полный read-only аудит монорепо (aiogram 3 бот + FastAPI API + React-дашборд + media_service, PostgreSQL/Alembic, Redis, Docker). Все находки подтверждены чтением кода; ссылки в формате `файл:строка`. Анализ распараллелен по фазам 1–5 через субагентов, результаты агрегированы; ключевые P1 перепроверены вручную.
+Полный read-only аудит монорепо: aiogram 3 бот + FastAPI API + React-дашборд + `media_service` + `access_control`, PostgreSQL/Alembic, Redis, Docker. Все находки подтверждены чтением кода; ссылки `файл:строка`. Фазы 1–5 распараллелены по субагентам, агрегированы автором; **headline P1 (MFA-bypass) и ключевые P2 перепроверены вручную по исходникам**.
 
-> Это аудит #3. Предыдущий (#2, 2026-06-12, рев. `7ace460`) сохранён в истории git. Часть его P0 (outbox-сериализация доставки, frontend rules-of-hooks, мёртвые сервисы) с тех пор закрыта волнами closure-plan — этот аудит отражает текущее состояние `main` (`a6e52ff`).
-> Метод: фазы 2–5 — параллельные субагенты; headline-находки (`user.role` в shift-сервисах, coverage-omit, set-password) перепроверены автором по исходникам.
+> Это аудит #4. Предыдущий (#3, 2026-06-15) сохранён в истории git. С тех пор: 4 god-файла хендлеров разбиты на пакеты (`user_management/`, `admin/`, `requests/`, `shift_management/`, PR #177–#180), backlog-сводка приведена к P0=0/P1=0 (#181). Этот аудит отражает `main` @ `3d7077c`.
+> Метод: 5 параллельных субагентов (Arch/Code/Dead-code/Security/Practices) + ручная верификация P1.
 
 ---
 
 ## 1. Executive summary
 
-Кодовая база зрелая и, для своего размера (~94k строк прод-кода), на удивление чистая и хорошо защищённая. Безопасность — выше среднего: ни одной P0-уязвимости, секреты не захардкожены и fail-fast в проде, JWT/IDOR/CORS/HMAC/rate-limit реализованы корректно с явными SEC-комментариями. Переусложнения нет: ни одной «абстракции на будущее», зависимости чистые, мёртвого кода почти нет.
+Кодовая база пилота — в целом крепкая, с **сильным фундаментом безопасности** (криптография токенов, IDOR-гейтинг API, отсутствие SQL-инъекций/SSRF/десериализации) и **зрелым CI** (hash-pinned deps, блокирующие ruff + pip-audit + два pytest-набора на реальном Postgres, tsc-gate). Транзакционный outbox (`webhook_sender.py`) и генерация номеров заявок — референс-качества.
 
-Главный реальный риск — **корректность, а не безопасность**: автоназначение и планирование смен фильтруют исполнителей по устаревшему скалярному полю `user.role`, которое CLAUDE.md прямо запрещает (канон — JSON-массив `user.roles`). Исполнитель, у которого роль только в `roles`, невидим для автоназначения — пайплайн может молча находить ноль/не тех исполнителей. Независимо обнаружено двумя субагентами и подтверждено вручную (`shift_assignment_service.py:741,769,904`; `shift_planning_service.py:423`).
+Главный риск — **одна подтверждённая уязвимость High: обход второго фактора (MFA) через token-type confusion** — промежуточный `mfa_token`, выдаваемый после пароля и до Telegram-OTP, принимается как полноценный access-token, полностью аннулируя OTP на 5 минут для владельца пароля. Фикс маленький и локальный.
 
-Архитектурный долг сконцентрирован в god-файлах хендлеров (shift_management.py 3966, requests.py 2869, admin.py 2855 строк) с прямым ORM в презентационном слое (252 вызова `db.query` в handlers/) и широкими `except Exception` (784 шт.). Инженерные пробелы — процессные: в CI нет сканеров безопасности (bandit/pip-audit/npm audit), mypy только в pre-commit (не в CI), покрытие измеряется, но не гейтится, а весь слой хендлеров исключён из покрытия; ruff проверяет только изменённые строки, оставляя ~670 нарушений в легаси. P0 нет; список действий управляем точечными PR.
+Структурный долг: прямой ORM в хендлерах через протекающую идиому `next(get_db())` на ~90 сайтах (сейчас сбалансированы `try/finally`, активной течи нет, но слой презентации смешан с data-access); god-сервис `ShiftAssignmentService` (1318 строк); кластер «умного назначения/оптимизации» (~5000 строк) с низким внешним fan-in — возможно спекулятивная сложность. ~1600 строк подтверждённого мёртвого кода (SDK `media_service/client/`, orphan-страницы TWA, вытесненная матрица переходов). CI силён, но backend-coverage не гейтится, mypy/eslint — advisory, путь миграции «с нуля» и образ `access-api` не тестируются в CI. `access_control` имеет несколько fail-open-по-умолчанию конфиг-острых-углов (Swagger, memory-backend для nonce/lockout) — закрыть до масштабирования на несколько воркеров.
 
 ---
 
-## 2. Scorecard
+## 2. Scorecard (1–10)
 
-| Фаза | Оценка | Обоснование |
-|---|---|---|
-| Архитектура | **6/10** | Сильный фундамент (outbox/webhook-resilience, разделение секретов, валидация outbound-URL), но god-файлы, ORM в хендлерах и легаси `user.role`. |
-| Код | **6/10** | Хорошая транзакционная дисциплина в `request_service`, но P1-баг `user.role`, naive/aware datetime, пути без rollback, дублирование проверок ролей. |
-| Простота | **8/10** | Нет dead-абстракций, фабрик, single-impl интерфейсов; зависимости чистые; только мелкий on-disk мусор. |
-| Безопасность | **8/10** | Нет P0; корректные JWT/IDOR/CORS/HMAC/секреты/rate-limit; только P2/P3 hardening и транзитивные CVE. |
-| Практики | **6/10** | Линейные миграции, блокирующие тесты, hash-pinned deps, pre-commit — но нет CI-security-scan, mypy вне CI, покрытие не гейтится (+ handlers исключены), нет README. |
+| Фаза | Оценка | Обоснование (одно предложение) |
+|------|:---:|------|
+| **Архитектура** | 6 | Здоровое разделение API↔бот и наличие сервис-слоя, но прямой ORM в хендлерах (~90 сайтов), god-сервис 1318 строк и спекулятивный ~5000-строчный кластер назначения тянут вниз. |
+| **Код** | 7 | Security-critical пути построены добротно и tz-aware, но расхождение парсинга ролей, шаренная сессия планировщика и пробелы в тестах чтения. |
+| **Простота** | 6 | ~1600 строк мёртвого кода + ~5000-строчный кластер оптимизации с низким fan-in; в остальном разумно. |
+| **Безопасность** | 7 | Отличная гигиена крипто/authz/инъекций; одна реальная MFA-bypass (High) + fail-open-по-умолчанию в `access_control`. |
+| **Практики** | 7 | Сильный CI (hash-pinned, блокирующие ruff+pip-audit+2×pytest на Postgres), но coverage не гейтится, mypy/eslint advisory, миграция «с нуля» не тестируется. |
 
 ---
 
 ## 3. Находки
 
-Severity: **P0** критично · **P1** высокая · **P2** средняя · **P3** низкая. Effort: S/M/L.
+**P0 — критично:** нет.
 
-| ID | Sev | Категория | Файл:строка | Описание | Рекомендация | Effort |
-|---|---|---|---|---|---|---|
-| F-01 | **P1** | Корректность / doc-vs-reality | `services/shift_assignment_service.py:741,769,904`; `services/shift_planning_service.py:423`; `handlers/shift_management.py:2998` | Автоназначение/планирование фильтруют исполнителей по **deprecated** `user.role` без fallback на `roles`-массив; CLAUDE.md запрещает `user.role` (дефолт `applicant`). Пайплайн может молча находить 0/не тех исполнителей. | Заменить на `User.roles.contains('executor')` / `auth_helpers.has_executor_access` (паттерн уже в `user_management_service.py:227`). | M |
-| F-02 | **P1** | Практики / безопасность | `.github/workflows/ci.yml` | В CI нет никакого сканирования безопасности (bandit/pip-audit/npm audit/CodeQL/Trivy). | Добавить job `pip-audit` + `npm audit --audit-level=high`; опц. bandit/CodeQL. | M |
-| F-03 | **P1** | Практики / типы | `.github/workflows/ci.yml`; `.pre-commit-config.yaml:26` | mypy есть только в pre-commit, в CI отсутствует → регрессии типов проходят, если контрибьютор пропустил pre-commit. | Добавить mypy-шаг в CI (scoped, non-blocking→ratchet). | M |
-| F-04 | **P1** | Покрытие | `pyproject.toml:18-24` | Покрытие **не гейтится** (нет `--cov-fail-under`) и `omit` исключает весь `uk_management_bot/handlers/*` — слой хендлеров невидим для coverage. Правила требуют 80%. | Убрать `handlers/*` из omit (или мерить отдельно); добавить `--cov-fail-under=N` ratchet. | M |
-| F-05 | **P2** | Конкурентность | `services/notification_service.py:498` | `notify_user` (sync) делает `loop.create_task(send_to_user(...))` без удержания ссылки — задача может быть GC'нута, ошибки доставки теряются. Критичный путь уже на `notify_user_async` (эта волна). | Хранить ref в set с done-callback или мигрировать оставшихся sync-вызывающих на `notify_user_async`. | M |
-| F-06 | **P2** | Связность | `handlers/shift_management.py` 3966; `requests.py` 2869; `admin.py` 2855; `user_management.py` 2427 | God-файлы: несвязанные под-домены в одном (шаблоны+автоплан+планирование; review+invites+панели+закуп). Цель из правил — <800 строк. | Разбить по под-доменам. | L |
-| F-07 | **P2** | Утечка слоёв | `handlers/admin.py` 52× `db.query`, `shift_management.py` 39×, `user_management.py` 16× — 252 в handlers/ | Прямой ORM + бизнес-логика в презентационном слое (`admin.py:109 auto_assign_request_by_category`). Нетестируемо без Telegram-объектов. | Вынести в `services/*`; хендлер → сервис → ответ. | L |
-| F-08 | **P2** | Ресилентность | `services/redis_pubsub.py:22,39,61` | `aioredis.from_url(...)` без `socket_timeout`/`socket_connect_timeout` — зависший Redis блокирует publish/SSE бессрочно. | Добавить `socket_timeout`, `socket_connect_timeout`, `health_check_interval`. | S |
-| F-09 | **P2** | Ресилентность | `services/notification_service.py:101,111,266,295,324,356` | `bot.send_message(...)` без per-call timeout; медленный Telegram стопорит broadcast-циклы. | Default request timeout на сессии бота / per-call `request_timeout`. | S |
-| F-10 | **P2** | Обработка ошибок | handlers/ 784× `except Exception`, 13× `except: pass` (`shift_management.py` 79, `user_management.py` 51) | Широкий catch-and-continue прячет корневую причину за generic-сообщениями; 13 мест глушат полностью. | Сузить типы; гарантировать `exc_info=True`; убрать `pass`. | M |
-| F-11 | **P2** | Корректность (tz) | `services/shift_assignment_service.py:992`; `services/shift_planning_service.py:452` | naive `datetime.now()` сравнивается с tz-aware `timestamptz` (пишется UTC) → смещение на UTC-offset сервера. | Везде `datetime.now(timezone.utc)`. | S |
-| F-12 | **P2** | Корректность | `services/shift_assignment_service.py:1046` | `reassign_on_absence` в `except` возвращает ошибку **без** `self.db.rollback()` после мутаций — грязная сессия. | Добавить `rollback()` (паттерн из `request_service.py`). | S |
-| F-13 | **P2** | Корректность | `services/shift_assignment_service.py:182` | Кандидаты сортируются по score, но оценивается только `[0]`; при конфликте у топа — провал без перебора. Ранжирование бесполезно. | Перебирать отсортированных до прохождения conflict-check. | M |
-| F-14 | **P2** | Дублирование | `handlers/requests.py:1150,1304,1383,1488,1587,1900…` (10+ инлайн `active_role == "executor"`) | `auth_helpers` импортирован ~9 хендлерами; остальные дублируют сравнения строк ролей — дрейф, теряется multi-role кейс. | Все проверки ролей через `auth_helpers`. | M |
-| F-15 | **P2** | Хрупкость | ~22 хендлера, `request_assignment.py:41` `callback.data.split("_")[-1]` | Парсинг callback-data строковым split без единого кодека; `_` в payload тихо ломает разбор. | aiogram `CallbackData`-фабрики / общий парсер. | M |
-| F-16 | **P2** | Auth (A07) | `api/auth/router.py:343-360` + `auth/schemas.py:50` | `/auth/set-password` гейтится только `get_current_user`, нет `current_password` — валидный access-token молча перезаписывает пароль (фронт — «смена пароля»). | Требовать+проверять `current_password`, если `password_hash` уже задан. | S |
-| F-17 | **P2** | Зависимости (A06) | `requirements.txt` (aiohttp 3.13.5) | 2 CVE в `aiohttp` (RCE `CookieJar.load`, cookie-leak). **Не эксплуатируется** (приложение на `httpx`, aiohttp транзитивный, `CookieJar.load` не вызывается). | Поднять aiohttp ≥3.14.0 при refresh deps. | S |
-| F-18 | **P2** | Зависимости (A06) | `frontend/package-lock` (form-data 4.0.x) | High: CRLF-инъекция в транзитивном `form-data`; низкая эксплуатируемость (имена полей под контролем). | `npm audit fix` → ≥4.0.6. | S |
-| F-19 | **P2** | Линтинг (scope) | `ci/ruff_changed_lines.py`; `pyproject.toml:33` | Ruff только по изменённым строкам → ~670 нарушений в легаси не чинятся; `media_service/scripts/docs` ещё `extend-exclude`. | Закрыть follow-up чистки → full-repo `ruff check` блокирующим. | L |
-| F-20 | **P2** | Линтинг FE | `frontend/eslint.config.js`; `ci.yml:180` | ESLint не блокирующий (`continue-on-error`, ~59 ошибок) и не type-aware. `tsc -b` частично компенсирует. | Сжечь ошибки → убрать `continue-on-error`; typed-конфиг. | M |
-| F-21 | **P2** | Документация | корень репо | Нет root `README.md` — онбординг на CLAUDE.md + `make help`. | Добавить README (стек, quickstart, тесты, env). | S |
-| F-22 | **P2** | Мёртвый код | `handlers/requests.py:53-54` | Дублирующий + неиспользуемый импорт (`REQUEST_CATEGORIES`/`REQUEST_URGENCIES`; модуль читает `settings.REQUEST_CATEGORIES`). | Удалить обе строки. | S |
-| F-23 | **P3** | Корректность | `services/shift_assignment_service.py:1214` | Тавтологичная ветка `elif any(spec in ... for spec in [request.specialization])` идентична предыдущему `if` → `+0.2` недостижим. | Удалить или реализовать fuzzy-match. | S |
-| F-24 | **P3** | Качество тестов | `services/test_notification_service.py:134` | `assert "1" in msg` — подстрока матчит почти любой текст, длительность не проверяется. | Ассертить полную локализованную строку. | S |
-| F-25 | **P3** | Качество тестов | `tests/test_shift_assignment_service.py:217+` | Скоринговые тесты мокают всю `db.query().filter().count()` — арифметика проверена, SQL-фильтры нет. | ≥1 sqlite-интеграционный тест на реальный запрос. | M |
-| F-26 | **P3** | Качество тестов | `tests/test_request_workflow.py:50`, `test_handler_shifts.py:70`, `test_api_executor_shifts.py:373` | Хардкод дат; часть «active shift»-ассертов поплывёт с реальным временем. | freezegun / `utcnow`-фикстура. | M |
-| F-27 | **P3** | Обработка ошибок | `services/shift_assignment_service.py:439,487` | Broad-except возвращает «безопасный дефолт» (0.5 / busy=True / None), маскируя DB-ошибки. | Сузить типы; давать ошибкам всплывать. | M |
-| F-28 | **P3** | YAGNI | `config/settings.py:174` + `handlers/health.py:218` | Флаг `ENABLE_NOTIFICATIONS` ничего не гейтит кроме поля в health-JSON. | Подключить к notification-пути или удалить. | S |
-| F-29 | **P3** | Мёртвый код | `utils/constants.py:115-135` | Блок `REQUEST_CATEGORIES` помечен `DEPRECATED`, держится из-за мёртвого импорта F-22. | После F-22 — удалить (~20 строк). | S |
-| F-30 | **P3** | Чистота репо | `mappings/handlers_mapping.json` | Трекается в git, 0 ссылок в коде. | Подтвердить отсутствие внешнего потребителя → `git rm`. | S |
-| F-31 | **P3** | Чистота репо | корень: `*.png` (~30, ~4–6 МБ), `ruvector.db`, `uk_management.db`, `.coverage`, `__pycache__/` | On-disk мусор в корне (gitignored, но захламляет дерево/IDE). | Удалить с диска / в `docs/`; gitignore `*.db`/`.coverage`. | S |
-| F-32 | **P3** | Misconfig (A05) | `api/main.py:371-391` | `/api/v2/announcements` без auth (сейчас статичный плейсхолдер, утечки нет; риск при DB-backed). | `Depends(get_current_user)` при переводе на динамику. | S |
-| F-33 | **P3** | Insecure Design (A04) | `api/rate_limit.py:32-40` | Rate-limiter **fail-open**: при падении Redis → per-worker in-memory счётчики (ослабляет brute-force login/registration). Митигировано SEC-062 алертом. | Пилот — accepted-risk; рассмотреть fail-closed на auth-роутах. | M |
-| F-34 | **P3** | Logging (A09) | `api/main.py:514,618`; `integrations/media_client.py:118` | Логируется `resp.text[:200]` downstream media-сервиса — низкий риск, но захват неожиданных тел. | Логировать статус + статическое сообщение. | S |
-| F-35 | **P3** | Misconfig (A05) — требует подтверждения | `api/rate_limit_keys.py:50-62` | Доверие `X-Real-IP` безопасно только при инварианте «api не торчит наружу, только nginx». При прямом экспозе — подделка обходит per-IP лимит. | Задать `RATE_LIMIT_TRUSTED_PROXIES` = peer-IP nginx в проде. | S |
-| F-36 | **P3** | Конфиг | `config/settings.py` (`ADMIN_PASSWORD` dev-fallback; `INFRASAFE_SYSTEM_USER_TELEGRAM_ID=0`; прод-хосты в дефолте `CORS_ORIGINS`) | Безопасно в проде (raise при `not DEBUG`), но: молчаливый dev-пароль при случайном `DEBUG=true`; sentinel id `0` без валидации; прод-origin'ы захардкожены. | WARNING при dev-fallback; валидация id≠0; убрать прод-хосты из дефолта. | S |
-| F-37 | **P3** | Конкурентность | `database/session.py:9,25,47,98` | Сосуществуют sync `SessionLocal` и async `AsyncSessionLocal`; sync-SQLAlchemy в aiogram-loop блокирует event loop под нагрузкой; `session_scope()` есть, но 0 потребителей. | Async для горячих путей / threadpool; миграция на `session_scope()`. | L |
-| F-38 | **P3** | Релизы | репо-wide | Нет git-тегов/CHANGELOG; деплой — ручной `docker compose`; `images-build` без push; версия API захардкожена `2.0.0`. | Version-теги + CHANGELOG или явный release-runbook. | M |
+| ID | Severity | Категория | Файл:строка | Описание | Рекомендация | Трудозатраты |
+|----|----------|-----------|-------------|----------|--------------|:---:|
+| ~~SEC-01~~ ✅ ЗАКРЫТО | **P1** | AuthN (OWASP A07) | `api/auth/service.py:78-82`, `:160-169`; `api/dependencies.py:61`; `api/auth/router.py:203` | **MFA-bypass через token-type confusion (ПОДТВЕРЖДЕНО вручную).** `mfa_token` (в теле ответа `/login` до OTP) подписан тем же `SECRET_KEY`, несёт `sub`; `verify_access_token` не проверяет `purpose`, поэтому `get_current_user` принимает его как access-token, а `require_roles` берёт роли из БД-пользователя. Владелец email+пароля получает полный доступ на 5 мин без OTP. **Исправлено PR #182 (73bf638), задеплоено на прод 2026-07-02, проверено живьём.** | ~~В `verify_access_token` отклонять токены с `purpose`; регресс-тест.~~ Сделано: `purpose`-токены отклоняются + 3 регресс-теста. | **S** |
+| ~~SEC-02~~ ✅ ЗАКРЫТО | P2 | Config fail-open (A05) | `access_control/services/device_auth.py:208`, `code_rate_limit.py:119` | Anti-replay nonce и lockout-счётчик по умолчанию `ACCESS_NONCE_BACKEND="memory"` — в multi-worker prod становятся process-local: реплей edge-запроса на другом воркере и обход lockout размазыванием попыток. Тихо при небезопасном дефолте. **Исправлено PR #183: дефолт backend теперь зависит от `DEBUG` (прод→redis, dev→memory).** | ~~Дефолт → redis в prod~~ Сделано: дефолт → redis при `DEBUG=false` + регресс-тесты. | **S** |
+| ~~SEC-03~~ ✅ ЗАКРЫТО | P2 | Exposure (A05) | `access_control/app/main.py:29-38` | Swagger/OpenAPI **fail-open**: без `ACCESS_ENABLE_DOCS=0` `/docs` `/redoc` `/openapi.json` раскрывают весь API-контур. Бот-API (`api/main.py:57-61`) корректно fail-closed. **Исправлено PR #183: `_docs_enabled` теперь fail-closed (дефолт следует `DEBUG`).** | ~~Инвертировать дефолт на opt-in.~~ Сделано: fail-closed по `DEBUG`, явный env перебивает + регресс-тесты. | **S** |
+| ~~COD-01~~ ✅ ЗАКРЫТО | P1* | Correctness/Duplication | `services/request_service.py:288-296`, `specialization_service.py:425`, `auth_service.py:500`, `user_management_service.py:565/592/636/666`, `handlers/base.py:216`, `handlers/requests/listing.py:217` | Инлайн `json.loads(user.roles)` (~20 сайтов) расходился с каноническим `parse_roles_safe` (JSON+CSV). `roles`=`Column(Text)` → CSV-строка возможна (legacy); на ней инлайн-парсер давал `[]`/`False` → **исполнителю тихо отказывали в правах**. **Диагностика прода: 0 CSV-значений (8 юзеров, 2 NULL) → фактически P2, живой эксплуатации нет. Исправлено PR #184 (af1c0cf), прод 2026-07-02, проверено живьём (все юзеры парсятся идентично, NULL→[] без TypeError).** | ~~Все сайты → `parse_roles_safe`.~~ Сделано: ~20 сайтов → `parse_roles_safe` + list-passthrough + регресс. | **M** |
+| ~~COD-02~~ ✅ ЗАКРЫТО | P2 | Resource (session lifetime) | `main.py:87-98`, `utils/shift_scheduler.py`, `notification_service.py` | `db=SessionLocal()` → `NotificationService(db)` на app-lifetime singleton → `db.close()`. **PR #188 (a6009da), прод 2026-07-03:** `initialize_scheduler` больше не держит закрытую сессию; ShiftScheduler получил `_notifier(db)` seam — job'ы строят сервис на своей свежей сессии; стартовое уведомление через `session_scope`. | ~~Короткоживущая сессия на каждый send.~~ Сделано. | **M** |
+| ~~COD-03~~ ✅ ЗАКРЫТО | P2 | Correctness (async) | `services/notification_service.py` | `notify_user` `asyncio.run`-fallback на шаренном боте + второй ленивый `Bot` → «Event loop is closed». **PR #188: единый бот на процесс (`set_shared_bot`, main.py + API lifespan), `notify_user` без asyncio.run + done-callback; ⚠ ПОБОЧНО вскрыто и починено: `send_manager_notification`/`send_shift_reminder` НЕ существовали → уведомления планировщика молча мертвы с 2025-09-26 (теперь реализованы, канал+DM менеджерам / DM исполнителю). Прод 2026-07-03, живьём: 0 «Event loop is closed».** | ~~Использовать `notify_user_async`.~~ Сделано + реализованы мёртвые методы. | **M** |
+| ARC-01 | P2 | Error handling (leak) | `media_service/app/services/telegram_client.py:198-208` | `__del__` вызывает deprecated `get_event_loop()` в bare `except:` и планирует `create_task(self.close())` из деструктора → aiohttp-сессия может не закрыться (утечка соединения) без сигнала. | Убрать `__del__`; явный `close()`/async-context (`:537-547`). | **S** |
+| ARC-02 | P2 | Resilience | `access_control/services/event_broadcaster.py:199-215` | WS-pubsub reader `get_message(timeout=None)` блокирует корутину бессрочно; `close()` best-effort. Нельзя отменить/увидеть shutdown при зависшем Redis (ср. `access_notify_subscriber.py:236`). *требует подтверждения* | Конечный `timeout`+цикл. | **S** |
+| ARC-03 | P2 | Coupling (god-object) | `services/shift_assignment_service.py:67-1242` | 1318 строк, 35 методов: скоринг, балансировка, конфликты, matching, кэш нагрузки, аудит, уведомления. Диффузная ответственность. | Разбить на Scorer/Balancer/ConflictResolver/RequestMatcher. | **L** |
+| ARC-04 | P2 | Overengineering | `services/assignment_optimizer.py` (1033), `smart_dispatcher.py` (725), `geo_optimizer.py` (671), `recommendation_engine.py` (833), `metrics_manager.py` (932) | Кластер ~5000 строк эвристик с низким внешним fan-in (2 точки входа). **Не мёртвый код**, но большая поверхность под assignment-flow пилота. *требует подтверждения рантайм-использования глубоких путей.* | Трассировать call-path'ы; если спекулятивно — за флаг/defer. | **M (иссл.)** |
+| ARC-05 | P2 | Layering | `handlers/*` (~90 сайтов, 14 файлов): `shifts.py:117`, `request_assignment.py:44-229`, `user_verification.py:95`, `address_yards.py:101` | Прямой `db.query`/`db.execute` + `db=next(get_db())`. `database/session.py:79-95` документирует течь `next(get_db())` и вводит `session_scope()` (ARCH-013) — но им ~13 сайтов против ~90. Сейчас сбалансированы `try/finally` (течи нет), но хрупко и смешивает data-access в презентацию. | Дозавершить `session_scope()`; lint-запрет `next(get_db())`; ORM вниз в сервисы. | **L** |
+| ARC-06 | P2 | Consistency | `api/auth/router.py:129-356`, `api/feedback/router.py:192-276`, `api/requests/stats_router.py:83-242`, `api/registration/router.py:49-131` | FastAPI-роутеры встраивают `db.execute(select(...))`+бизнес-логику инлайн вместо сервисов — дублируют запросы (user-by-telegram_id и в хендлерах, и в `auth/router.py`). | Вынести общие запросы в сервисы. | **M–L** |
+| PRC-01 | P2 | CI/Coverage | `ci.yml:143-144`, `pyproject.toml:24-37` | Unit-suite — голый `pytest -q` без `--cov`; `[tool.coverage]` не вызывается; порог 80% на backend не измеряется (только `access-control-tests` с `--cov` без порога). | `--cov=uk_management_bot` + ratchet-floor. | **S–M** |
+| PRC-02 | P2 | CI/Types | `.pre-commit-config.yaml:26-31`, `ci.yml` (0 mypy) | mypy только в pre-commit → типизация advisory. Хук использует deprecated `types-all`. *требует подтверждения* | CI-джоба mypy (non-blocking→ratchet); заменить `types-all`. | **M** |
+| PRC-03 | P2 | CI/Lint | `ci.yml:294-296` | Frontend eslint — `continue-on-error: true` (≈59 legacy `no-explicit-any`); новые нарушения не валят CI. `tsc -b` — реальный блокирующий гейт. | Ratchet lint / lint changed-files блокирующе. | **M** |
+| ~~PRC-04~~ ✅ ЗАКРЫТО | P2 | CI/Build | `ci.yml` images-build | `images-build` собирал `Dockerfile`+`Dockerfile.api`, но НЕ `Dockerfile.access` (`uk-access-api` — живой prod-сервис). **PR #187 (84dbb2c): добавлен шаг «Build access image» (отдельный gha cache-scope). CI-only, деплой не нужен.** | ~~Добавить build `Dockerfile.access`.~~ Сделано. | **S** |
+| PRC-05 | P2 | DB/Migrations | `ci.yml:135-139` | Нет baseline-миграции: `upgrade head` на пустой БД падает; CI обходит через `create_all()`→`stamp 006`→`upgrade head`. Схема model-derived, не migration-derived: баги 001–006 и дрейф моделей↔миграций невидимы (ср. прошлый инцидент `audit_logs int4`). | Squashed baseline `001_initial` + CI-проверка пустого autogenerate-diff. | **L** |
+| COD-04 | P2 | Tests | `tests/test_request_service.py:91,135,163`; `tests/services/test_shift_service.py:250-270,416-424` | Read/search/stats `RequestService` — `@skip` («covered by Postgres»), но Postgres-suite покрывает лишь генерацию номеров. Shift-тесты хрупко привязаны к `db.query`-порядку; `test_notes_passed_to_shift` проверяет только `db.add.assert_called()`. | in-memory SQLite; ассерт на captured-объекте. | **M** |
+| COD-05 | P2 | Duplication | `services/address_service.py:717` vs `services/request_address.py:87` | Два `format_apartment_address` с разным выводом («Квартира 42, ул. Ленина 10» vs «ул. Ленина 10, кв. 42»). | Консолидировать на `request_address.py`. | **M** |
+| ~~DED-01~~ ✅ ЗАКРЫТО | P3 | Dead code | `services/request_service.py:234-329` | **ПОДТВЕРЖДЕНО** (нет вызывающих): `is_transition_allowed`+`is_role_allowed_for_transition` (~88 строк), вытеснены `run_command`. **Удалено PR #185 (d7b706c), прод 2026-07-02** — +осиротевшие импорты, docstring, baseline `test_workflow_read_inventory`. | ~~Удалить.~~ Сделано. | **S** |
+| DED-02 ✅ lite-fix | P3 | ~~Dead~~ → Duplication | `media_service/client/media_client.py` (669), `client/integration_helper.py` (394), `client/__init__.py` | **НЕ мёртвый код (ре-аудит 2026-07-02).** **PR #186 (cb6ad5c): заполнен пустой `__init__.py` (документированный импорт починен), убран ложный docstring, README-заметка. Полная консолидация отклонена (образ бота не содержит media_service/).** Это документированный интеграционный SDK media-микросервиса: README «Интеграция с основным ботом» показывает `from media_service.client import ...`; вбит в media-образ (`Dockerfile COPY client/`) как дистрибутив (сам сервис его НЕ импортирует, `app.main`); `media_client.py` активно поддерживается (обновлён 2026-06-27, access-канал). Реальные проблемы: (1) в монорепо **никто не потребляет** — бот форкнул `integrations/media_client.py`, access_control — `integrations/media.py`, три копии **разошлись** (SDK имеет `upload_access_photo`/`get_media_by_telegram_file_id`, бот-копия — нет); (2) **документированный импорт сломан** — `__init__.py` пуст (0 байт), `from media_service.client import MediaServiceClient` не сработает (тест обходит через `sys.path.insert`); (3) docstring теста «Используется access_control-сервисом» ложный. | **НЕ удалять** (внешний интеграционный контракт). Либо: заполнить `__init__.py` (re-export) + держать SDK как канон и свести потребителей на него; либо задокументировать как «published artifact, in-repo потребители намеренно свои». | **M** |
+| ~~DED-03~~ ✅ ЗАКРЫТО | P3 | Dead code (frontend) | `src/pages/twa/TWAHomePage.tsx`, `TWARequestDetailPage.tsx`, `src/twa/components/Timeline.tsx` + хуки `useManualOpenBarrier`/`useSearchApartments` (+тип `ManualOpenResponse`) | **ПОДТВЕРЖДЕНО** (0 импортёров): orphan-дубли живых `src/twa/pages/applicant/*`. ~410 строк. **Удалено PR #185 (d7b706c), прод 2026-07-02.** ⚠ `useTemplate` не существует (живой `useTemplates`); `constants.ts:21` НЕ трогали — там живой `CATEGORIES_WITH_REPAIR`. | ~~Удалить; `tsc -b`+`vitest`.~~ Сделано (tsc+300 vitest passed). | **S** |
+| DED-04 | P3 | Dead code / forward-looking | `access_control/services/{review_expiry,photo_retention,barrier_worker}.py`, `edge/command_consumer.py`, `media_service/frontend/server.py` (53) | Незапланированные воркеры (нет scheduler) + edge-код без entrypoint — pilot-плюмбинг с deferred edge-rollout. *требует подтверждения* → **флаг, не удалять** (кроме `frontend/server.py` — dev-cruft, удалить). | Флаг/защита; `frontend/server.py` удалить. | **S** |
+| COD-06 | P3 | Readability | `middlewares/auth.py:137-236` | `require_role` — 100 строк, dead no-op блок (`:159-166` `except: pass  # Это сложно...`), тяжёлые prod `logger.debug`+re-query из БД. | Удалить мёртвый блок; ужать. | **M** |
+| COD-07 | P3 | Info leak | `api/requests/router.py:745-746` | `remind_applicant` возвращает сырое исключение в теле 500 (`detail=f"...: {e}"`). | Не отдавать `{e}`. | **S** |
+| COD-08 | P3 | Correctness | `services/shift_assignment_service.py:1288` | Наивный `datetime.utcnow()` — единственный выброс среди tz-aware кода (own comment `:997`). | → `datetime.now(timezone.utc)`. | **S** |
+| COD-09 | P3 | i18n | `utils/address_helpers.py:63-74` | `localize_address` конвертит только числовые номера квартир (`кв\.\s*(\d+)`); `apartment_number` freeform (`"12А"`) → UZ частичная локализация (building-ветка шире). | Расширить regex до `[\w/-]+`. | **S** |
+| SEC-04 | P3 ✅ ЗАКРЫТО | Access control | `access_control/api/metrics.py:33,43` | `GET /metrics` и `/api/v1/access/metrics` без role-gate — раскрывают инвентарь контроллеров/бэклог (числа, PD-safe). | ✅ JSON-метрики гейтятся `require_approved_roles("manager","system_admin")` (401/403); Prometheus-текст — internal (сеть/edge). | **S** |
+| SEC-05 | P3 ✅ ЗАКРЫТО | Headers | `access_control/app/main.py` | Нет security-заголовков (X-Frame/CSP/HSTS/nosniff), в отличие от бот-API (`api/main.py:106-115`). | ✅ Middleware `_security_headers` (nosniff/DENY/Referrer-Policy/HSTS) через `setdefault` — паритет с бот-API, edge может переопределить. | **S** |
+| SEC-06 | P3 ✅ ЗАКРЫТО | Registration | `api/registration/router.py:101-108`; `tickets.py:14-38` | Валидный тикет для pending non-applicant аккаунта перезаписывает `first_name/last_name/phone`+`active_role="applicant"` (self-scoped). | ✅ `_reject_if_privileged`: self-регистрация pending-аккаунта с non-applicant ролью → 403 (поля не перетираются). Single-use jti — follow-up (реплей self-scoped в TTL, митиг. `3/min`). | **S** |
+| SEC-07 | P3 | Web (rate-limit) | `api/rate_limit.py:39,60-75` | Rate-limiter fail-open на storage-сбое — **документированный accepted-risk**; auth защищён `auth_ratelimit_guard` (fail-closed). Остаток: non-auth fail-open; guard зависит от приватного `_storage_dead`. | Пин slowapi + тест на `_storage_dead`. | **M** |
+| DEP-01 | P3 | Deps (CVE) | `requirements.txt`; `ci.yml:61-72` | 11 CVE в `aiohttp 3.13.5` (fix 3.14.x), подавлены — обосновано (aiogram 3.28.2 капит `aiohttp<3.14`). Accepted-risk на network-facing dep. | Тикет на bump aiogram. | **M (внешн.)** |
+| PRC-06 | P3 | Repo hygiene | git-tracked: `AUDIT_REPORT.md`, `UK-WEBHOOK-SENDER-SERVICE-TZ.md`, `uz-board.yml`, `nginx.conf` | One-off артефакты в корне. (`.gitignore:166 *.png` корректно держит ~40 root-скриншотов и `*.db`/`.coverage` вне git — проверено.) | Перенести в `docs/`. | **S** |
+| PRC-07 | P3 | CI/Format | `.pre-commit-config.yaml:12-37`, `ci.yml` | black+isort только в pre-commit, не в CI; `E501/E203` делегированы прочь от ruff → неформатированный код не блокируется. | `ruff format --check` + `ruff check --select I`. | **S** |
+| DED-05 | P3 | Frontend deps | `components/ui/dropdown-menu.tsx:3` | Umbrella `radix-ui` (1 сайт) сосуществует с индивидуальными `@radix-ui/react-*`. *требует подтверждения* | Одна конвенция (−1..3 dep). | **S** |
 
-### Чисто (без действий)
-- **Зависимости Python/JS** — все используются; `requirements.txt` — корректный `uv pip compile --generate-hashes`; depcheck-флаг `tailwindcss` — false-positive (Tailwind v4 через vite-плагин).
-- **Переусложнение** — нет ABC/Protocol/Factory/Strategy/single-impl интерфейсов в прод-коде.
-- **Инъекции** — нет raw-SQL с интерполяцией (все `text()` статичны), нет `os.system/subprocess/eval`, LIKE-поиск экранирует `%_\`, SSRF нет (outbound-URL фиксирован env).
-- **Утечки ресурсов** — все `next(get_db())` (169) спарены с `finally: close()`; aiohttp-сессий не текут; фоновые задачи API корректно `cancel()`+`await` на shutdown.
-- **Миграции** — линейная история (один head `020`), без множественных голов.
-- **Безопасность (сделано хорошо):** секреты fail-fast в проде + запрет `JWT_SECRET==INVITE_SECRET`; HS256 с выделенным секретом, MFA `iss/purpose`, OTP `SystemRandom`+`hmac.compare_digest`, токены `secrets.token_*`, bcrypt; IDOR-контроль через `check_request_access`/`dependencies_access`; CORS без wildcard, security-headers, httponly+secure+samesite cookies, `/docs` off в проде; Telegram initData HMAC с свежим `auth_date`.
+\* COD-01 severity зависит от наличия CSV-строк в prod `users.roles` (P1 если есть, иначе P2).
 
 ---
 
 ## 4. Top-10 quick wins (макс. эффект / мин. усилия)
 
-1. **F-01** — `user.role` → `roles.contains('executor')` в shift-сервисах (M; чинит молчаливый прод-баг автоназначения). 
-2. **F-02** — `pip-audit` + `npm audit` в CI (M). 
-3. **F-04** — убрать `handlers/*` из coverage-omit + `--cov-fail-under` (M). 
-4. **F-22** — удалить дублирующий импорт `requests.py:53-54` (S). 
-5. **F-16** — `current_password` в `/auth/set-password` (S). 
-6. **F-17/F-18** — aiohttp ≥3.14, `npm audit fix` form-data (S). 
-7. **F-08/F-09** — таймауты на Redis и `bot.send_message` (S). 
-8. **F-11** — `datetime.now(timezone.utc)` в shift-запросах (S). 
-9. **F-21** — root `README.md` (S). 
-10. **F-03** — mypy в CI (non-blocking ratchet) (S добавить). 
+1. ~~**SEC-01 (S, P1)** — закрыть MFA-bypass~~ ✅ **СДЕЛАНО** (PR #182, прод 2026-07-02): `purpose`-токены отклоняются в `verify_access_token` + 3 регресс-теста.
+2. ~~**SEC-03 (S)** — fail-closed Swagger~~ ✅ **СДЕЛАНО** (PR #183): `_docs_enabled` следует `DEBUG`, явный env перебивает.
+3. ~~**SEC-02 (S)** — дефолт nonce/lockout backend → redis~~ ✅ **СДЕЛАНО** (PR #183): дефолт зависит от `DEBUG` (прод→redis).
+4. **DED-01+02+03 (S–M)** — удалить ~1600 строк подтверждённого мёртвого кода; прогнать тесты.
+5. **ARC-01 (S)** — убрать `__del__` в `media_service/telegram_client.py` (утечка соединения).
+6. **COD-08 (S)** — `utcnow()` → `now(timezone.utc)`.
+7. **COD-07 (S)** — не отдавать сырое `{e}` в 500 `remind_applicant`.
+8. **PRC-04 (S)** — добавить сборку `Dockerfile.access` в `images-build`.
+9. **SEC-04 (S)** — role-gate на JSON `/access/metrics`.
+10. **PRC-01 (S–M)** — включить `--cov` на unit-suite (начать измерять backend-coverage).
 
 ---
 
-## 5. Roadmap рефакторинга (P0→P2 с учётом зависимостей)
+## 5. Roadmap рефакторинга (P1 → P2, с зависимостями)
 
-**P0:** нет.
+**Волна 1 — Безопасность (сразу):** SEC-01 (MFA-bypass) → SEC-03 (Swagger fail-closed) → SEC-02 (nonce/lockout redis-дефолт). Независимы, малы, high-value. Затем SEC-04/05/06 пакетом.
 
-**Волна 1 — Корректность + защита от регрессий (сначала, дёшево):**
-1. F-01 (`user.role` в shift-сервисах) — прод-критичный баг автоназначения; одновременно F-25 (sqlite-тест на реальный SQL-фильтр) фиксирует поведение.
-2. F-11, F-12, F-13 — корректность shift-сервисов (тот же модуль, вместе с F-01).
-3. CI-гейты, чтобы долг не рос: F-02 (security-scan), F-03 (mypy), F-04 (coverage). Их — раньше крупного рефакторинга.
+**Волна 2 — Корректность:** COD-01 (parse_roles_safe везде) — сначала подтвердить CSV в prod (`SELECT roles FROM users WHERE roles NOT LIKE '[%'`); устранение DED-01 попутно убирает один сайт COD-01. COD-02 (сессия планировщика) → COD-03 (`notify_user_async`) — вместе. COD-08/09/05 — мелкие, параллельно.
 
-**Волна 2 — Точечные P2 (S/M, независимы):**
-4. F-16 (set-password), F-17/F-18 (deps), F-08/F-09 (timeouts), F-22 (dead import), F-21 (README), F-05 (notify task-tracking).
+**Волна 3 — Мёртвый код и практики (низкий риск, || волне 2):** DED-01/02/03/04 → PRC-04 (access-образ в CI) → PRC-01 (coverage) → PRC-07 (format-check). PRC-05 (baseline-миграция) — отдельным треком.
 
-**Волна 3 — Структурный долг (L, после гейтов и тестов):**
-5. F-14 (роли через `auth_helpers`) + F-15 (кодек callback-data) — снижают дублирование, готовят к декомпозиции.
-6. F-07 (вынести ORM/логику в сервисы) → затем F-06 (разбить god-файлы). Порядок: сначала логику в сервисы (тестируемо), потом дробить тонкие хендлеры. Требует F-04 (coverage на handlers) как страховку.
-7. F-37 (async-DB / `session_scope()`) — самый дорогой, последним, инкрементально по горячим путям.
+**Волна 4 — Структурный долг (недели):** ARC-04 (трассировать/квантануть кластер назначения — **макс. экономия, если спекулятивен**) → ARC-03 (декомпозиция `ShiftAssignmentService`) → ARC-05 (`next(get_db())`→`session_scope()` + lint) → ARC-06 (сервис-слой API). Сперва ARC-04, чтобы не рефакторить удаляемое.
 
-**Параллельно/фоном:** F-10 (сужение except), F-19/F-20 (линтинг), уборка P3 (F-23…F-38) по мере касания файлов.
+---
+
+## Что сделано хорошо (кратко)
+
+- **`services/webhook_sender.py`** — эталонный транзакционный outbox: claim/lease под `FOR UPDATE SKIP LOCKED`, HTTP вне транзакции, compare-and-set finalize по `claim_token`, at-least-once + идемпотентный приёмник, tz-aware. Сильнейший модуль репо.
+- **Криптография/authz** — JWT с пиннингом `HS256` (нет alg-confusion), отдельный `JWT_SECRET` fail-fast, refresh=opaque `token_hex`+SHA-256+rotation, OTP на CSPRNG+`compare_digest`, invite/TWA HMAC+freshness-guard. Инъекций (SQL/command/SSRF/deserialization) не найдено. IDOR-гейтинг бот-API добротный.
+- **`request_number_service.py`** — атомарный `INSERT … ON CONFLICT … RETURNING`, gap-safe, реальный 24-txn Postgres concurrency-тест.
+- **Config** (`config/settings.py:90-115`) — fail-fast без секретов в prod, запрет дефолта `12345`, разделение `INVITE_SECRET`/`JWT_SECRET`.
+- **CI** — hash-pinned runtime deps, блокирующие ruff (whole-scope) + pip-audit + два pytest-набора на реальном `postgres:15`+`redis:7`, tsc-b build-gate, TS strict. Alembic — линейная цепочка, single head 035.
