@@ -530,6 +530,99 @@ class TestNotificationService:
         assert "Title" in call_text
         assert "Body text" in call_text
 
+    # ── send_manager_notification (COD: канал + DM approved-менеджерам) ──
+    @pytest.mark.asyncio
+    async def test_send_manager_notification_dms_managers_and_channel(self):
+        svc, db, bot = self._make_service()
+        with patch(
+            "uk_management_bot.services.feedback_service.manager_telegram_ids_sync",
+            return_value=[111, 222],
+        ), patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock, return_value=True,
+        ) as m_user, patch(
+            "uk_management_bot.services.notification_service.send_to_channel",
+            new_callable=AsyncMock,
+        ) as m_chan:
+            await svc.send_manager_notification("T", "B")
+        assert m_user.await_count == 2
+        assert {c.args[1] for c in m_user.await_args_list} == {111, 222}
+        m_chan.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_send_manager_notification_no_managers_still_posts_channel(self):
+        svc, db, bot = self._make_service()
+        with patch(
+            "uk_management_bot.services.feedback_service.manager_telegram_ids_sync",
+            return_value=[],
+        ), patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock,
+        ) as m_user, patch(
+            "uk_management_bot.services.notification_service.send_to_channel",
+            new_callable=AsyncMock,
+        ) as m_chan:
+            await svc.send_manager_notification("T", "B")
+        m_user.assert_not_called()
+        m_chan.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_send_manager_notification_recipient_failure_not_raised(self):
+        svc, db, bot = self._make_service()
+        with patch(
+            "uk_management_bot.services.feedback_service.manager_telegram_ids_sync",
+            return_value=[111],
+        ), patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock, return_value=False,
+        ) as m_user, patch(
+            "uk_management_bot.services.notification_service.send_to_channel",
+            new_callable=AsyncMock,
+        ):
+            await svc.send_manager_notification("T", "B")  # не бросает
+        m_user.assert_awaited_once()
+
+    # ── send_shift_reminder (COD: DM исполнителю, локализованно) ──
+    @pytest.mark.asyncio
+    async def test_send_shift_reminder_dms_executor_localized(self):
+        user = _make_user(telegram_id=777, user_id=42, language="ru")
+        svc, db, bot = self._make_service(user)
+        shift = _make_shift(shift_id=5, start_time=datetime(2026, 7, 3, 9, 0))
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock, return_value=True,
+        ) as m_user, patch(
+            "uk_management_bot.services.notification_service.get_text",
+            side_effect=lambda k, **kw: k,
+        ):
+            await svc.send_shift_reminder(executor_id=42, shift=shift, time_until="1ч 30м")
+        m_user.assert_awaited_once()
+        assert m_user.await_args.args[1] == 777
+        assert "notifications.shift_reminder_title" in m_user.await_args.args[2]
+
+    @pytest.mark.asyncio
+    async def test_send_shift_reminder_missing_executor_skips(self):
+        svc, db, bot = self._make_service(user=None)
+        shift = _make_shift(shift_id=5)
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock,
+        ) as m_user:
+            await svc.send_shift_reminder(executor_id=999, shift=shift, time_until="1ч")
+        m_user.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_shift_reminder_no_telegram_id_skips(self):
+        user = _make_user(telegram_id=None, user_id=42)
+        svc, db, bot = self._make_service(user)
+        shift = _make_shift(shift_id=5)
+        with patch(
+            "uk_management_bot.services.notification_service.send_to_user",
+            new_callable=AsyncMock,
+        ) as m_user:
+            await svc.send_shift_reminder(executor_id=42, shift=shift, time_until="1ч")
+        m_user.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_does_not_raise_when_bot_send_fails(self):
         user = _make_user(telegram_id=502)
@@ -935,3 +1028,29 @@ class TestAsyncNotifyMultipleDocumentsRequest:
 
         mock_user.assert_called_once()
         mock_channel.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# set_shared_bot / _get_shared_bot registry (COD-03 single-bot)
+# ---------------------------------------------------------------------------
+
+class TestSharedBotRegistry:
+    def test_registered_bot_returned(self):
+        from uk_management_bot.services import notification_service as ns
+        sentinel = object()
+        try:
+            ns.set_shared_bot(sentinel)
+            assert ns._get_shared_bot() is sentinel
+        finally:
+            ns.set_shared_bot(None)
+
+    def test_reset_then_lazy_fallback_creates_bot(self):
+        from uk_management_bot.services import notification_service as ns
+        ns.set_shared_bot(None)
+        try:
+            with patch("aiogram.Bot", return_value="lazy-bot") as MockBot:
+                got = ns._get_shared_bot()
+            assert got == "lazy-bot"
+            MockBot.assert_called_once()
+        finally:
+            ns.set_shared_bot(None)

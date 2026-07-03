@@ -207,8 +207,26 @@ async def async_notify_multiple_documents_request(bot, db: Session, user: User, 
 _shared_bot = None
 
 
+def set_shared_bot(bot) -> None:
+    """Зарегистрировать (или сбросить через ``None``) единственный Bot процесса.
+
+    Прод: bot-процесс (`main.py`) и API-lifespan (`api/lifecycle.py`) регистрируют
+    свой инстанс диспетчерского бота; тесты сбрасывают в ``None`` в teardown.
+    Регистрация имеет приоритет над ленивым fallback в ``_get_shared_bot`` —
+    так в bot-процессе notification-путь использует ЕДИНЫЙ бот на loop полла
+    (убирает второй aiohttp-сессионный бот и хазард «Event loop is closed»).
+    """
+    global _shared_bot
+    _shared_bot = bot
+
+
 def _get_shared_bot():
-    """Get or create a shared Bot instance for sending notifications."""
+    """Return the registered shared Bot, or lazily create one as a fallback.
+
+    Ленивый fallback СОХРАНЁН намеренно: API-процесс и edge-пути вызывают
+    ``_get_shared_bot()`` напрямую и не должны падать, если регистрация
+    (``set_shared_bot``) по какой-то причине не произошла.
+    """
     global _shared_bot
     if _shared_bot is None:
         from aiogram import Bot
@@ -498,10 +516,34 @@ class NotificationService:
             import asyncio
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(send_to_user(bot, user.telegram_id, text))
             except RuntimeError:
-                # Нет запущенного loop — выполняем синхронно через asyncio.run
-                asyncio.run(send_to_user(bot, user.telegram_id, text))
+                # COD-03: нет running loop — НЕ крутим asyncio.run на шаренном боте
+                # (aiohttp-сессия привязана к loop полла → «Event loop is closed»).
+                # Все sync-вызыватели живут внутри async-флоу, так что в проде сюда
+                # не попадаем; лог фиксирует нештатный (скрипт/тест) путь.
+                logger.warning(
+                    f"notify_user: нет running loop — уведомление user_id={user_id} пропущено"
+                )
+                return
+
+            # Fire-and-forget на живом loop, но с done-callback: конец тихого
+            # проглатывания — ошибки/недоставка/отмена отправки логируются.
+            task = loop.create_task(send_to_user(bot, user.telegram_id, text))
+
+            def _log_send_result(t: "asyncio.Task") -> None:
+                try:
+                    if t.cancelled():
+                        logger.warning(f"notify_user: отправка отменена user_id={user_id}")
+                        return
+                    exc = t.exception()
+                    if exc is not None:
+                        logger.warning(f"notify_user: ошибка отправки user_id={user_id}: {exc!r}")
+                    elif t.result() is False:
+                        logger.warning(f"notify_user: не доставлено user_id={user_id}")
+                except Exception as cb_e:
+                    logger.warning(f"notify_user: done-callback error user_id={user_id}: {cb_e}")
+
+            task.add_done_callback(_log_send_result)
         except Exception as e:
             logger.warning(f"notify_user: ошибка отправки user_id={user_id}: {e}")
 
@@ -539,6 +581,64 @@ class NotificationService:
             logger.info(f"Системное уведомление отправлено: {title}")
         except Exception as e:
             logger.warning(f"Ошибка отправки системного уведомления: {e}")
+
+    async def send_manager_notification(self, title: str, message: str) -> None:
+        """Уведомление менеджерам: DM каждому approved-менеджеру + ops-канал.
+
+        Аудитория берётся из канонического ``manager_telegram_ids_sync`` (approved,
+        не soft-deleted, роль manager) — единый источник с feedback-рассылкой.
+        Best-effort: сбой отдельного получателя логируется, не бросается.
+        Ранее метод не существовал → вызовы планировщика молча падали (COD).
+        """
+        # Локальный импорт: избегаем циклического импорта на загрузке модуля.
+        from uk_management_bot.services.feedback_service import manager_telegram_ids_sync
+
+        bot = self._get_bot()
+        text = f"{title}\n{message}" if title else message
+        try:
+            tg_ids = manager_telegram_ids_sync(self.db)
+        except Exception as e:
+            logger.error(f"send_manager_notification: ошибка выборки менеджеров: {e}")
+            tg_ids = []
+
+        sent = 0
+        for tg_id in tg_ids:
+            if await send_to_user(bot, tg_id, text):
+                sent += 1
+            else:
+                logger.warning(f"send_manager_notification: не доставлено tg={tg_id}")
+
+        await send_to_channel(bot, text)  # ops-канал (гейт _resolve_channel_id)
+        logger.info(
+            f"send_manager_notification: доставлено {sent}/{len(tg_ids)} менеджерам; "
+            f"канал={'on' if _resolve_channel_id() else 'off'}"
+        )
+
+    async def send_shift_reminder(self, executor_id: int, shift, time_until: str) -> None:
+        """Напоминание исполнителю о предстоящей смене (только DM, локализованно).
+
+        ``executor_id`` — внутренний ``User.id`` (= ``shift.user_id``), резолвится
+        по ``self.db``. Ранее метод не существовал → вызовы планировщика молча
+        падали (COD).
+        """
+        user = self.db.query(User).filter(User.id == executor_id).first()
+        if not user or not user.telegram_id:
+            logger.warning(
+                f"send_shift_reminder: исполнитель user_id={executor_id} не найден / без telegram_id"
+            )
+            return
+
+        lang = self._get_user_lang(user)
+        started = shift.start_time.strftime('%d.%m.%Y %H:%M') if getattr(shift, "start_time", None) else ""
+        title = get_text('notifications.shift_reminder_title', language=lang)
+        body = get_text(
+            'notifications.shift_reminder_body',
+            language=lang,
+            time_until=time_until,
+            started=started,
+        )
+        if not await send_to_user(self._get_bot(), user.telegram_id, f"{title}\n{body}"):
+            logger.warning(f"send_shift_reminder: не доставлено user_id={executor_id}")
 
 
 # ====== Request status notifications (3.4) ======

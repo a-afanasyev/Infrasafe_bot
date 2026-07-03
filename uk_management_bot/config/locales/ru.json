@@ -8113,6 +8113,8 @@
     "main": "📋 Главное меню"
   },
   "notifications": {
+    "shift_reminder_title": "⏰ Напоминание о смене",
+    "shift_reminder_body": "Ваша смена начнётся через {time_until} (в {started}).",
     "admin_requested_documents": "📋 **Администратор запросил документы**",
     "required_document": "🔍 **Требуемый документ:** {doc_name}",
     "required_documents": "🔍 **Требуемые документы:**\n{doc_list}",

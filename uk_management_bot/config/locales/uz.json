@@ -8114,6 +8114,8 @@
     "main": "📋 Asosiy menyu"
   },
   "notifications": {
+    "shift_reminder_title": "⏰ Smena haqida eslatma",
+    "shift_reminder_body": "Sizning smenangiz {time_until} dan so'ng boshlanadi ({started}).",
     "admin_requested_documents": "📋 **Administrator hujjatlarni so'radi**",
     "required_document": "🔍 **Talab qilinadigan hujjat:** {doc_name}",
     "required_documents": "🔍 **Talab qilinadigan hujjatlar:**\n{doc_list}",

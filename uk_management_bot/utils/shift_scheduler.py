@@ -21,9 +21,12 @@ logger = logging.getLogger(__name__)
 class ShiftScheduler:
     """Планировщик задач для автоматизации работы с сменами"""
 
-    def __init__(self, notification_service: Optional[NotificationService] = None):
+    def __init__(self, notification_service: Optional[NotificationService] = None, bot=None):
         self.scheduler = AsyncIOScheduler()
+        # Инжектируемый сервис (тестовый seam). В проде остаётся None, а
+        # уведомления строятся per-job на свежей сессии через self._notifier().
         self.notification_service = notification_service
+        self._bot = bot
         self.is_running = False
 
         # Статистика выполнения задач
@@ -36,6 +39,18 @@ class ShiftScheduler:
             'auto_assign_requests': {'success': 0, 'failed': 0, 'last_run': None},
             'sync_assignments': {'success': 0, 'failed': 0, 'last_run': None}
         }
+
+    @property
+    def _notifications_enabled(self) -> bool:
+        """Уведомления включены, если инжектирован сервис (тесты) или задан бот (прод)."""
+        return self.notification_service is not None or self._bot is not None
+
+    def _notifier(self, db) -> NotificationService:
+        """Вернуть инжектированный сервис (тесты) либо построить свежий per-job
+        сервис на сессии job'а + едином диспетчерском боте (COD-02)."""
+        if self.notification_service is not None:
+            return self.notification_service
+        return NotificationService(db, bot=self._bot)
 
     def setup_jobs(self):
         """Настройка всех задач планировщика"""
@@ -144,12 +159,14 @@ class ShiftScheduler:
                 self.is_running = True
                 logger.info("Планировщик смен запущен")
 
-                # Отправляем уведомление о запуске
-                if self.notification_service:
-                    await self.notification_service.send_system_notification(
-                        "🤖 Планировщик смен запущен",
-                        "Автоматическое управление сменами активировано"
-                    )
+                # Отправляем уведомление о запуске (короткоживущая сессия)
+                if self._notifications_enabled:
+                    from uk_management_bot.database.session import session_scope
+                    with session_scope() as db:
+                        await self._notifier(db).send_system_notification(
+                            "🤖 Планировщик смен запущен",
+                            "Автоматическое управление сменами активировано"
+                        )
 
         except Exception as e:
             logger.error(f"Ошибка запуска планировщика: {e}")
@@ -204,8 +221,8 @@ class ShiftScheduler:
                 logger.info(f"Автосоздание смен завершено: {result['total_created']} смен создано")
 
                 # Отправляем уведомление если создано много смен
-                if self.notification_service and result['total_created'] > 10:
-                    await self.notification_service.send_manager_notification(
+                if self._notifications_enabled and result['total_created'] > 10:
+                    await self._notifier(db).send_manager_notification(
                         "🏗️ Автосоздание смен завершено",
                         f"Создано {result['total_created']} новых смен на ближайшие 7 дней"
                     )
@@ -269,8 +286,8 @@ class ShiftScheduler:
                     logger.info(f"Обработано {result['processed_count']} истекших передач")
 
                     # Уведомляем менеджеров
-                    if self.notification_service:
-                        await self.notification_service.send_manager_notification(
+                    if self._notifications_enabled:
+                        await self._notifier(db).send_manager_notification(
                             "⏰ Обработка истекших передач",
                             f"Автоматически обработано {result['processed_count']} передач"
                         )
@@ -323,7 +340,7 @@ class ShiftScheduler:
         """Уведомления о предстоящих сменах"""
         task_name = 'notify_upcoming'
         try:
-            if not self.notification_service:
+            if not self._notifications_enabled:
                 return
 
             db = SessionLocal()
@@ -351,7 +368,7 @@ class ShiftScheduler:
                         hours = int(time_until.total_seconds() / 3600)
                         minutes = int((time_until.total_seconds() % 3600) / 60)
 
-                        await self.notification_service.send_shift_reminder(
+                        await self._notifier(db).send_shift_reminder(
                             executor_id=shift.user_id,
                             shift=shift,
                             time_until=f"{hours}ч {minutes}м"
@@ -422,8 +439,8 @@ class ShiftScheduler:
                 logger.info(f"Еженедельное планирование завершено: {result['statistics']['total_shifts']} смен запланировано")
 
                 # Уведомляем менеджеров о результатах планирования
-                if self.notification_service and result['statistics']['total_shifts'] > 0:
-                    await self.notification_service.send_manager_notification(
+                if self._notifications_enabled and result['statistics']['total_shifts'] > 0:
+                    await self._notifier(db).send_manager_notification(
                         "📅 Еженедельное планирование",
                         f"Запланировано {result['statistics']['total_shifts']} смен на следующую неделю"
                     )
@@ -461,8 +478,8 @@ class ShiftScheduler:
                     logger.info(f"Автоназначение заявок завершено: {total_assigned} заявок назначено")
 
                     # Уведомляем менеджеров о значительных назначениях
-                    if self.notification_service and total_assigned > 5:
-                        await self.notification_service.send_manager_notification(
+                    if self._notifications_enabled and total_assigned > 5:
+                        await self._notifier(db).send_manager_notification(
                             "📋 Автоназначение заявок",
                             f"Автоматически назначено {total_assigned} заявок исполнителям смен"
                         )
@@ -502,8 +519,8 @@ class ShiftScheduler:
                     logger.info(f"Синхронизация завершена: {total_reassigned} переназначений")
 
                     # Уведомляем менеджеров о переназначениях
-                    if self.notification_service and total_reassigned > 0:
-                        await self.notification_service.send_manager_notification(
+                    if self._notifications_enabled and total_reassigned > 0:
+                        await self._notifier(db).send_manager_notification(
                             "🔄 Синхронизация назначений",
                             f"Переназначено {total_reassigned} заявок в соответствии со сменами"
                         )
@@ -528,11 +545,17 @@ def get_scheduler() -> ShiftScheduler:
     return _scheduler_instance
 
 
-async def start_scheduler(notification_service: Optional[NotificationService] = None):
-    """Запустить планировщик смен"""
+async def start_scheduler(notification_service: Optional[NotificationService] = None, bot=None):
+    """Запустить планировщик смен.
+
+    Прод передаёт ``bot`` (единый диспетчерский) — уведомления строятся per-job.
+    ``notification_service`` сохранён для инъекции в тестах (backward-compat).
+    """
     scheduler = get_scheduler()
-    if notification_service:
+    if notification_service is not None:
         scheduler.notification_service = notification_service
+    if bot is not None:
+        scheduler._bot = bot
     await scheduler.start()
 
 

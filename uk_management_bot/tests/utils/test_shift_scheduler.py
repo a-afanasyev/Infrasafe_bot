@@ -404,3 +404,49 @@ class TestNotifyUpcomingShifts:
 
         mock_notif.send_shift_reminder.assert_awaited_once()
         assert sched.task_stats["notify_upcoming"]["success"] == 1
+
+
+# ---------------------------------------------------------------------------
+# bot seam (COD-02/03): prod passes bot, jobs build fresh per-session notifier
+# ---------------------------------------------------------------------------
+
+class TestShiftSchedulerBotSeam:
+    def test_disabled_without_service_and_bot(self):
+        sched = _make_scheduler()
+        assert sched._notifications_enabled is False
+
+    def test_enabled_with_bot_only(self):
+        from uk_management_bot.utils.shift_scheduler import ShiftScheduler
+        with patch("uk_management_bot.utils.shift_scheduler.AsyncIOScheduler"):
+            sched = ShiftScheduler(bot=MagicMock())
+        assert sched._notifications_enabled is True
+
+    def test_enabled_with_injected_service(self):
+        sched = _make_scheduler(notification_service=MagicMock())
+        assert sched._notifications_enabled is True
+
+    def test_notifier_returns_injected_service(self):
+        mock_notif = MagicMock()
+        sched = _make_scheduler(notification_service=mock_notif)
+        assert sched._notifier(MagicMock()) is mock_notif
+
+    def test_notifier_builds_fresh_service_with_bot(self):
+        from uk_management_bot.utils.shift_scheduler import ShiftScheduler
+        fake_bot = MagicMock()
+        with patch("uk_management_bot.utils.shift_scheduler.AsyncIOScheduler"):
+            sched = ShiftScheduler(bot=fake_bot)
+        db = MagicMock()
+        with patch("uk_management_bot.utils.shift_scheduler.NotificationService") as MockNS:
+            notifier = sched._notifier(db)
+        MockNS.assert_called_once_with(db, bot=fake_bot)
+        assert notifier is MockNS.return_value
+
+    def test_start_scheduler_sets_bot(self):
+        from uk_management_bot.utils import shift_scheduler as ss
+        fake_bot = MagicMock()
+        with patch("uk_management_bot.utils.shift_scheduler.AsyncIOScheduler"):
+            sched = ss.ShiftScheduler()
+        with patch.object(ss, "get_scheduler", return_value=sched), \
+                patch.object(sched, "start", new=AsyncMock()):
+            asyncio.get_event_loop().run_until_complete(ss.start_scheduler(bot=fake_bot))
+        assert sched._bot is fake_bot
