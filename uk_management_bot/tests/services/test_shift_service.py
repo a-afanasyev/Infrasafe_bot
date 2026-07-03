@@ -266,8 +266,10 @@ class TestStartShift:
             service = ShiftService(db)
             service.start_shift(100, notes="Test note")
 
-        # Shift was added (captured or via mock)
-        db.add.assert_called()
+        # COD-04: ассерт на ЗАХВАЧЕННЫЙ объект, а не только факт db.add() —
+        # проверяем, что заметки реально проставлены на созданную смену.
+        assert len(created_shifts) == 1, "ожидалась одна созданная смена"
+        assert created_shifts[0].notes == "Test note"
 
     def test_db_commit_failure_returns_error(self):
         user = _make_user(roles='["executor"]')
