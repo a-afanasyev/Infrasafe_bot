@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.orm.exc import DetachedInstanceError
 
 from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment, User
