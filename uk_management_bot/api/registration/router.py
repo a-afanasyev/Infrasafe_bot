@@ -107,11 +107,29 @@ async def register_applicant(
         r.add("applicant")
         u.roles = json.dumps(sorted(r))
 
+    def _reject_if_privileged(u: User) -> None:
+        """SEC-06: self-регистрация НЕ должна перетирать pre-provisioned аккаунт.
+
+        Валидный тикет привязан к telegram_id, но если этот аккаунт уже наделён
+        ролью, отличной от ``applicant`` (executor/manager/inspector/
+        security_operator — заведён менеджером), самостоятельная заявка
+        перезаписала бы ``first_name/last_name/phone`` и выставила
+        ``active_role="applicant"``. Отклоняем — такой аккаунт ведёт менеджер.
+        """
+        privileged = set(parse_roles_safe(u.roles)) - {"applicant"}
+        if privileged:
+            raise HTTPException(
+                status_code=403,
+                detail="Аккаунт уже имеет роль в системе — обратитесь к менеджеру",
+            )
+
     user = (await db.execute(select(User).where(User.telegram_id == telegram_id))).scalar_one_or_none()
     if user and user.status == "blocked":
         raise HTTPException(status_code=403, detail="Пользователь заблокирован")
     if user and user.status == "approved":
         raise HTTPException(status_code=409, detail="Уже зарегистрирован")
+    if user is not None:
+        _reject_if_privileged(user)
     if user is None:
         user = User(telegram_id=telegram_id, status="pending")
         db.add(user)
@@ -125,6 +143,7 @@ async def register_applicant(
             raise HTTPException(status_code=403, detail="Пользователь заблокирован")
         if user.status == "approved":
             raise HTTPException(status_code=409, detail="Уже зарегистрирован")
+        _reject_if_privileged(user)
         _apply_applicant_fields(user)
         await db.flush()
 

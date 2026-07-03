@@ -43,3 +43,15 @@ def test_health_endpoint_returns_ok() -> None:
     assert payload["service"] == "uk-access-api"
     assert isinstance(payload["version"], str)
     assert payload["version"]
+
+
+def test_security_headers_present_on_every_response() -> None:
+    """SEC-05 (аудит #4): baseline security-заголовки на ответах (паритет бот-API)."""
+    app = create_app()
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert "max-age=" in response.headers["Strict-Transport-Security"]

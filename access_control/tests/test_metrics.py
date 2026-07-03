@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import types
 
 from fastapi.testclient import TestClient
 
@@ -28,6 +29,16 @@ from access_control.tests.conftest import (
     seed_permanent_vehicle,
     utcnow,
 )
+from uk_management_bot.api.dependencies import get_current_user
+
+
+def _authed_client(role: str, status: str = "approved") -> TestClient:
+    """TestClient с подменённым USER-API актором (SEC-04: JSON-метрики под RBAC)."""
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: types.SimpleNamespace(
+        id=1, roles=json.dumps([role]), active_role=role, status=status
+    )
+    return TestClient(app)
 
 # Мягкий бюджет одиночного решения для CI (§15.16): локальная сеть пилота
 # укладывается в 500 мс (decision-p95 §10.2), но CI-раннер существенно медленнее —
@@ -167,13 +178,39 @@ def test_prometheus_endpoint_exposes_phase_latency(pg_db, pilot) -> None:
 
 
 def test_json_metrics_endpoint_returns_phases_and_budget(pg_db, pilot) -> None:
-    resp = TestClient(create_app()).get("/api/v1/access/metrics")
+    resp = _authed_client("manager").get("/api/v1/access/metrics")
     assert resp.status_code == 200
     body = resp.json()
     assert "phases" in body
     assert "budget" in body
     assert "within_budget" in body["budget"]
     assert "queue" in body
+
+
+# ── SEC-04: RBAC на JSON-метриках (Prometheus-текст остаётся internal) ─────────
+def test_json_metrics_requires_auth_401(pg_db, pilot) -> None:
+    """Без auth JSON-сводка недоступна (раскрывала инвентарь контроллеров/бэклог)."""
+    resp = TestClient(create_app()).get("/api/v1/access/metrics")
+    assert resp.status_code == 401
+
+
+def test_json_metrics_forbidden_for_non_manager_403(pg_db, pilot) -> None:
+    """applicant/security_operator и пр. → 403 на JSON-метриках."""
+    assert _authed_client("applicant").get("/api/v1/access/metrics").status_code == 403
+    assert _authed_client("security_operator").get(
+        "/api/v1/access/metrics"
+    ).status_code == 403
+
+
+def test_json_metrics_system_admin_allowed(pg_db, pilot) -> None:
+    resp = _authed_client("system_admin").get("/api/v1/access/metrics")
+    assert resp.status_code == 200
+
+
+def test_prometheus_metrics_stays_open_for_internal_scrape(pg_db, pilot) -> None:
+    """Prometheus-текст (/metrics) НЕ гейтится — скрейпит внутренний Prometheus."""
+    resp = TestClient(create_app()).get("/metrics")
+    assert resp.status_code == 200
 
 
 def test_metrics_output_contains_no_plate_number_pd(pg_db, pilot) -> None:
@@ -199,7 +236,7 @@ def test_metrics_output_contains_no_plate_number_pd(pg_db, pilot) -> None:
     )
     # Ни prometheus-текст, ни JSON-сводка не содержат номер автомобиля (§11).
     prom = TestClient(create_app()).get("/metrics").text
-    js = json.dumps(TestClient(create_app()).get("/api/v1/access/metrics").json())
+    js = json.dumps(_authed_client("manager").get("/api/v1/access/metrics").json())
     assert secret_plate not in prom
     assert secret_plate not in js
     # И прямой сериализатор реестра тоже PD-safe.

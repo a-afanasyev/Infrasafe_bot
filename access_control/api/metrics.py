@@ -21,9 +21,17 @@ from sqlalchemy.orm import Session
 
 from access_control.services import metrics
 from access_control.services.barrier_worker import queue_metrics
+from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
 
 logger = logging.getLogger(__name__)
+
+# SEC-04 (аудит #4): JSON-сводка раскрывает инвентарь контроллеров/бэклог очереди
+# (числа, PD-safe, но операционно чувствительны) → гейтим на manager/system_admin.
+# Prometheus-текст (/metrics) остаётся без role-gate: его скрейпит внутренний
+# Prometheus (bearer-JWT недоступен скрейперу), доступ ограничивается на
+# сети/edge (не публикуется наружу).
+METRICS_ROLES = ("manager", "system_admin")
 
 # /metrics — без префикса (конвенция Prometheus). JSON-сводка — под /api/v1/access.
 prometheus_router = APIRouter(tags=["access-metrics"])
@@ -41,8 +49,14 @@ def get_prometheus_metrics(db: Session = Depends(get_db)) -> Response:
 
 
 @json_router.get("/metrics")
-def get_json_metrics(db: Session = Depends(get_db)) -> JSONResponse:
-    """JSON-сводка задержки (перцентили + бюджет §10.2) и очереди barrier_commands."""
+def get_json_metrics(
+    db: Session = Depends(get_db),
+    _user=Depends(require_approved_roles(*METRICS_ROLES)),
+) -> JSONResponse:
+    """JSON-сводка задержки (перцентили + бюджет §10.2) и очереди barrier_commands.
+
+    RBAC (SEC-04): только manager/system_admin (approved); иначе 403, без auth → 401.
+    """
     payload = metrics.latency_snapshot_payload()
     payload["queue"] = _queue_summary(db)
     return JSONResponse(content=payload)
