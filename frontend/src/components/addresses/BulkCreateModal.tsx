@@ -110,7 +110,7 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
 
               {bulkCreate.error && (
                 <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                  {(bulkCreate.error as any)?.response?.data?.detail || (bulkCreate.error as Error).message || t('addressForms.createError')}
+                  {(bulkCreate.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || (bulkCreate.error as Error).message || t('addressForms.createError')}
                 </div>
               )}
             </>

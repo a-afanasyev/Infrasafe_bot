@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { TwaRequest } from '../../types'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
@@ -37,7 +38,7 @@ export default function PurchasePage() {
     },
   })
 
-  const purchases = requests.filter((r: any) => r.status === 'Закуп')
+  const purchases = requests.filter((r: TwaRequest) => r.status === 'Закуп')
 
   return (
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -52,7 +53,7 @@ export default function PurchasePage() {
         </div>
       )}
 
-      {purchases.map((req: any) => (
+      {purchases.map((req: TwaRequest) => (
         <div key={req.request_number} className="mb-2">
           <RequestCard
             requestNumber={req.request_number}

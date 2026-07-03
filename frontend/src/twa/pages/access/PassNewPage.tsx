@@ -42,6 +42,7 @@ export default function PassNewPage() {
 
   useEffect(() => {
     if (apartmentId == null && apartments.length === 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- автоселект единственной квартиры после загрузки списка
       setApartmentId(apartments[0].apartment_id)
     }
   }, [apartments, apartmentId])

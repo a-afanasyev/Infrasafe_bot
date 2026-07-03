@@ -1,17 +1,6 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { ReactNode } from 'react'
-
-interface TopbarContextValue {
-  actions: ReactNode
-  setActions: (node: ReactNode) => void
-  clearActions: () => void
-}
-
-const TopbarContext = createContext<TopbarContextValue>({
-  actions: null,
-  setActions: () => {},
-  clearActions: () => {},
-})
+import { TopbarContext } from './topbar'
 
 export function TopbarProvider({ children }: { children: ReactNode }) {
   const [actions, setActionsState] = useState<ReactNode>(null)
@@ -25,9 +14,3 @@ export function TopbarProvider({ children }: { children: ReactNode }) {
     </TopbarContext.Provider>
   )
 }
-
-export function useTopbar() {
-  return useContext(TopbarContext)
-}
-
-export { TopbarContext }

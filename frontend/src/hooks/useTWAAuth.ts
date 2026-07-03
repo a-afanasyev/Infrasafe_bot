@@ -19,6 +19,7 @@ export function useTWAAuth() {
 
   useEffect(() => {
     if (isTWA() && !isAuthenticated) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренная установка loading-состояния перед async-авторизацией на mount
       setIsLoading(true)
       setIsError(false)
       const init_data = getTWAInitData()

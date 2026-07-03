@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { TwaRequest } from '../../types'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +22,7 @@ export default function RequestsPage() {
   })
 
   const activeStatuses = ['Новая', 'В работе', 'Закуп', 'Уточнение']
-  const filtered = requests.filter((r: any) =>
+  const filtered = requests.filter((r: TwaRequest) =>
     filter === 'active'
       ? activeStatuses.includes(r.status)
       : !activeStatuses.includes(r.status)
@@ -56,7 +57,7 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {filtered.map((req: any) => (
+      {filtered.map((req: TwaRequest) => (
         <RequestCard
           key={req.request_number}
           requestNumber={req.request_number}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTopbar } from '../contexts/TopbarContext'
+import { useTopbar } from '../contexts/topbar'
 import {
   useTemplates,
   useUpdateTemplate,

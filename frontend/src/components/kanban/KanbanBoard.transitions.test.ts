@@ -4,7 +4,7 @@ import {
   VALID_TRANSITIONS,
   FROZEN_STATUSES,
   inProgressNeedsExecutorModal,
-} from './KanbanBoard'
+} from './transitions'
 
 // Bug: дроп заявки из «Закуп» в «В работе» давал 422. «В работе» открывал
 // модалку выбора исполнителя и слал executor_id, но из «Закуп»/«Уточнение»/

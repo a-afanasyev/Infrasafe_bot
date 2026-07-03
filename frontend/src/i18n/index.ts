@@ -7,7 +7,9 @@ import uz from './locales/uz.json'
 // Detect Telegram WebApp language (for TWA context)
 function getTelegramLanguage(): string | undefined {
   try {
-    const tg = (window as any).Telegram?.WebApp
+    const tg = (window as unknown as {
+      Telegram?: { WebApp?: { initDataUnsafe?: { user?: { language_code?: string } } } }
+    }).Telegram?.WebApp
     const lang = tg?.initDataUnsafe?.user?.language_code
     if (lang === 'uz') return 'uz'
     if (lang) return 'ru' // any other language falls back to Russian

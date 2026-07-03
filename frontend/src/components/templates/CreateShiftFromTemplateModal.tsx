@@ -44,6 +44,7 @@ export default function CreateShiftFromTemplateModal({ isOpen, onClose, template
   // selection never leaks into the next create.
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс полей к дефолтам при открытии модалки
       setDate(today())
       setSelected([])
       setError(null)

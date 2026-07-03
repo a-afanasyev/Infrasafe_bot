@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import type { TwaRequest } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'
@@ -17,9 +18,9 @@ export default function ArchivePage() {
   })
 
   const archiveStatuses = ['Выполнена', 'Исполнено', 'Принято', 'Отменена']
-  const archive = requests.filter((r: any) => archiveStatuses.includes(r.status))
+  const archive = requests.filter((r: TwaRequest) => archiveStatuses.includes(r.status))
 
-  const completedCount = archive.filter((r: any) => ['Выполнена', 'Исполнено', 'Принято'].includes(r.status)).length
+  const completedCount = archive.filter((r: TwaRequest) => ['Выполнена', 'Исполнено', 'Принято'].includes(r.status)).length
 
   return (
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -40,7 +41,7 @@ export default function ArchivePage() {
         </div>
       )}
 
-      {archive.map((req: any) => (
+      {archive.map((req: TwaRequest) => (
         <RequestCard
           key={req.request_number}
           requestNumber={req.request_number}

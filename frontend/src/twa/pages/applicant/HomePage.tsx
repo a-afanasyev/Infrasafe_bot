@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import type { TwaAnnouncement } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { Bell, Phone, Clock } from 'lucide-react'
@@ -17,7 +18,7 @@ export default function HomePage() {
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.home.title')}</h1>
 
-      {data?.announcements?.map((a: any) => (
+      {data?.announcements?.map((a: TwaAnnouncement) => (
         <div key={a.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3 border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2 mb-2">
             {a.type === 'contact' ? <Phone size={16} className="text-emerald-500" /> : <Bell size={16} className="text-blue-500" />}

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES } from '../constants/roles'
-import { useTopbar, TopbarProvider } from '../contexts/TopbarContext'
+import { TopbarProvider } from '../contexts/TopbarContext'
+import { useTopbar } from '../contexts/topbar'
 import { useTheme } from '../hooks/useTheme'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
@@ -416,6 +417,7 @@ export default function DashboardLayout() {
 
   // Reset manual toggle when crossing breakpoints
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс ручного тумблера при смене брейкпоинта
     setManualToggle(null)
   }, [isDesktop, isTablet])
 

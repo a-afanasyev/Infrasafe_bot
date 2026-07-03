@@ -1,7 +1,32 @@
 import { useEffect, useState, useCallback } from 'react'
 
-function getTg(): any {
-  return (window as any).Telegram?.WebApp ?? null
+interface TelegramHapticFeedback {
+  impactOccurred: (style: string) => void
+  notificationOccurred: (type: string) => void
+  selectionChanged: () => void
+}
+
+interface TelegramBackButton {
+  show: () => void
+  hide: () => void
+  onClick: (cb: () => void) => void
+  offClick: (cb: () => void) => void
+}
+
+export interface TelegramWebApp {
+  ready: () => void
+  expand: () => void
+  close: () => void
+  initData: string
+  initDataUnsafe: Record<string, unknown>
+  themeParams: Record<string, string>
+  colorScheme: 'light' | 'dark'
+  HapticFeedback?: TelegramHapticFeedback
+  BackButton?: TelegramBackButton
+}
+
+function getTg(): TelegramWebApp | null {
+  return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp ?? null
 }
 
 /**
@@ -15,7 +40,7 @@ function getTg(): any {
  * fallback even on a fresh open.
  */
 export function useTelegramSDK() {
-  const [tg, setTg] = useState<any>(() => getTg())
+  const [tg, setTg] = useState<TelegramWebApp | null>(() => getTg())
   const [initData, setInitData] = useState<string>(() => getTg()?.initData ?? '')
 
   useEffect(() => {
@@ -27,7 +52,7 @@ export function useTelegramSDK() {
       try {
         t.ready()
         t.expand()
-      } catch {}
+      } catch { /* SDK может быть недоступен вне Telegram — игнорируем */ }
       if (cancelled) return true
       setTg(t)
       if (t.initData) setInitData(t.initData)
@@ -56,7 +81,7 @@ export function useTelegramSDK() {
       if (type === 'impact') tg?.HapticFeedback?.impactOccurred('light')
       else if (type === 'notification') tg?.HapticFeedback?.notificationOccurred('success')
       else tg?.HapticFeedback?.selectionChanged()
-    } catch {}
+    } catch { /* HapticFeedback отсутствует в старых клиентах — игнорируем */ }
   }, [tg])
 
   const showBackButton = useCallback((onClick: () => void) => {

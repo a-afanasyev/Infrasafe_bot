@@ -340,11 +340,12 @@ jobs:
 
       - run: npm ci
 
-      # Lint surfaces pre-existing debt (~59 errors today, mostly no-explicit-any).
-      # Non-blocking so CI isn't red on legacy debt; clean-up is a separate ticket.
-      - name: Lint (non-blocking)
+      # PRC-03 (audit #4): eslint теперь BLOCKING. Все 60 legacy-ошибок устранены
+      # (no-explicit-any→unknown/типы, вынос не-компонентных экспортов, обоснованный
+      # eslint-disable для намеренных react-hooks-паттернов); `npm run lint`
+      # (`eslint .`) падает только на errors (0 сейчас), 8 warnings терпимы.
+      - name: Lint (blocking)
         run: npm run lint
-        continue-on-error: true
 
       # `npm run build` = `tsc -b && vite build` — the real typecheck + build gate.
       - run: npm run build

@@ -31,7 +31,7 @@ export default function LoginPage() {
   const next = safeNextPath(searchParams.get('next'))
 
   useEffect(() => {
-    ;(window as any).onTelegramAuth = async (tgUser: unknown) => {
+    ;(window as unknown as { onTelegramAuth?: (u: unknown) => void }).onTelegramAuth = async (tgUser: unknown) => {
       // FE-04: внешний payload от Telegram-виджета — валидируем до POST.
       if (!isValidTelegramAuth(tgUser)) {
         setError(t('login.telegramError'))
@@ -81,7 +81,7 @@ export default function LoginPage() {
     }
 
     return () => {
-      delete (window as any).onTelegramAuth
+      delete (window as unknown as { onTelegramAuth?: (u: unknown) => void }).onTelegramAuth
     }
   }, [login, navigate, t, next])
 
