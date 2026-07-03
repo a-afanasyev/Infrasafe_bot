@@ -140,8 +140,12 @@ jobs:
 
       # pyproject.toml drives the run: testpaths=[uk_management_bot] (colocated
       # unit/handlers/service suite), asyncio_mode=auto, --import-mode=importlib.
+      # PRC-01 (audit #4): measure backend coverage. `coverage run` reads
+      # [tool.coverage.run] from pyproject (source=uk_management_bot, handlers/
+      # tests omitted); the API suite below appends (`-a`) into the same data
+      # file, and a final ratchet step enforces the combined floor.
       - name: Run unit suite (uk_management_bot)
-        run: pytest -q
+        run: coverage run -m pytest -q
 
       # API + integration/SSOT-gate suite. Lives under tests/ with its own
       # sqlite conftests (tests/api → in-memory aiosqlite + dependency
@@ -157,7 +161,15 @@ jobs:
         # suite above keeps running with webhooks disabled.
         env:
           INFRASAFE_WEBHOOK_ENABLED: "true"
-        run: pytest -q tests/api tests/services
+        run: coverage run -a -m pytest -q tests/api tests/services
+
+      # PRC-01 (audit #4): ratchet-floor on combined backend coverage. Regression
+      # guard set just below the current measured 66.0% — RAISE as coverage grows,
+      # never lower. Not the aspirational 80%: this only prevents backsliding.
+      - name: Coverage floor (ratchet)
+        run: |
+          coverage report
+          coverage report --fail-under=65
 
   access-control-tests:
     name: access-control-tests (postgres)
