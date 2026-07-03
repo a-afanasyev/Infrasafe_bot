@@ -311,7 +311,8 @@ class TestFormatApartmentAddressDetached:
                 raise DetachedInstanceError("detached")
 
         result = AddressService.format_apartment_address(_DetachedApartment())
-        assert result == "Квартира 42"
+        # COD-05: канонический формат «дом первым» → fallback без здания = «кв. N».
+        assert result == "кв. 42"
 
     def test_detached_number_falls_back_to_placeholder(self):
         from uk_management_bot.services.address_service import AddressService
@@ -326,7 +327,7 @@ class TestFormatApartmentAddressDetached:
                 raise DetachedInstanceError("detached")
 
         result = AddressService.format_apartment_address(_FullyDetached())
-        assert result == "Квартира ?"
+        assert result == "кв. ?"
 
 
 class TestSanitizedLocaleKeysHaveNoErrorPlaceholder:

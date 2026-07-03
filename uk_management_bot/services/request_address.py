@@ -28,6 +28,7 @@ from sqlalchemy import select, and_, or_, exists
 from sqlalchemy.orm import contains_eager
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 from uk_management_bot.database.models import (
     Apartment,
@@ -85,14 +86,23 @@ def format_building_address(building: Building) -> str:
 
 
 def format_apartment_address(apartment: Apartment) -> str:
-    building = apartment.building
-    yard_name = building.yard.name if (building and building.yard) else None
-    base = (
-        f"{building.address}, кв. {apartment.apartment_number}"
-        if building
-        else f"кв. {apartment.apartment_number}"
-    )
-    return f"{base} ({yard_name})" if yard_name else base
+    """Канонический форматтер адреса квартиры (COD-05): «дом, кв. N (двор)».
+
+    Единый источник истины — на него делегирует и `AddressService`. Захватываем
+    номер ДО доступа к relationships: у detached-объекта обращение к relationship
+    кинет DetachedInstanceError, и тогда fallback не должен повторно трогать ORM.
+    """
+    try:
+        number = apartment.apartment_number
+    except (AttributeError, DetachedInstanceError):
+        number = "?"
+    try:
+        building = apartment.building
+        yard_name = building.yard.name if (building and building.yard) else None
+        base = f"{building.address}, кв. {number}" if building else f"кв. {number}"
+        return f"{base} ({yard_name})" if yard_name else base
+    except (AttributeError, DetachedInstanceError):
+        return f"кв. {number}"
 
 
 def _check_level_allowed(role: str, address_type: str) -> None:
