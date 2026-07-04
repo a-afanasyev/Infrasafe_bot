@@ -285,14 +285,14 @@ class TestAnalyzeWorkloadDistribution:
     def test_no_assigned_shifts(self):
         service, _ = _make_service()
         shifts = [_make_shift(shift_id=i, user_id=None) for i in range(3)]
-        result = service._analyze_workload_distribution(shifts)
+        result = service.workload_balancer._analyze_workload_distribution(shifts)
         assert result["unassigned_shifts"] == 3
         assert result["is_balanced"] is False
 
     def test_balanced_one_executor(self):
         service, _ = _make_service()
         shifts = [_make_shift(shift_id=i, user_id=1) for i in range(3)]
-        result = service._analyze_workload_distribution(shifts)
+        result = service.workload_balancer._analyze_workload_distribution(shifts)
         assert result["is_balanced"] is True
         assert result["unique_executors"] == 1
 
@@ -302,13 +302,13 @@ class TestAnalyzeWorkloadDistribution:
             [_make_shift(shift_id=i, user_id=1) for i in range(5)] +
             [_make_shift(shift_id=i + 10, user_id=2) for i in range(1)]
         )
-        result = service._analyze_workload_distribution(shifts)
+        result = service.workload_balancer._analyze_workload_distribution(shifts)
         assert result["is_balanced"] is False
 
     def test_stats_keys_present(self):
         service, _ = _make_service()
         shifts = [_make_shift(user_id=1)]
-        result = service._analyze_workload_distribution(shifts)
+        result = service.workload_balancer._analyze_workload_distribution(shifts)
         for key in ("total_shifts", "assigned_shifts", "unassigned_shifts", "avg_load", "max_load", "min_load"):
             assert key in result
 
@@ -456,7 +456,7 @@ class TestCheckAssignmentConflicts:
         q = MagicMock()
         q.filter.return_value.first.return_value = None
         db.query.return_value = q
-        conflicts = service._check_assignment_conflicts(shift, 999)
+        conflicts = service.conflict_detector._check_assignment_conflicts(shift, 999)
         assert len(conflicts) == 1
         assert conflicts[0].severity == "critical"
         assert conflicts[0].type == "executor_not_found"
@@ -470,7 +470,7 @@ class TestCheckAssignmentConflicts:
         q = MagicMock()
         q.filter.return_value.first.return_value = executor
         db.query.return_value = q
-        conflicts = service._check_assignment_conflicts(shift, executor.id)
+        conflicts = service.conflict_detector._check_assignment_conflicts(shift, executor.id)
         types = [c.type for c in conflicts]
         assert "invalid_role" in types
 
@@ -482,7 +482,7 @@ class TestCheckAssignmentConflicts:
         q = MagicMock()
         q.filter.return_value.first.return_value = executor
         db.query.return_value = q
-        conflicts = service._check_assignment_conflicts(shift, executor.id)
+        conflicts = service.conflict_detector._check_assignment_conflicts(shift, executor.id)
         assert conflicts == []
 
 
@@ -513,7 +513,7 @@ class TestAssignSingleShift:
         score.reasons = []
 
         service.scoring_engine._evaluate_executors_for_shift = MagicMock(return_value=[score])
-        service._check_assignment_conflicts = MagicMock(return_value=[])
+        service.conflict_detector._check_assignment_conflicts = MagicMock(return_value=[])
         db.add = MagicMock()
         db.commit = MagicMock()
 
@@ -537,8 +537,8 @@ class TestAssignSingleShift:
         conflict.severity = "critical"
 
         service.scoring_engine._evaluate_executors_for_shift = MagicMock(return_value=[score])
-        service._check_assignment_conflicts = MagicMock(return_value=[conflict])
-        service._conflict_to_dict = MagicMock(return_value={})
+        service.conflict_detector._check_assignment_conflicts = MagicMock(return_value=[conflict])
+        service.conflict_detector._conflict_to_dict = MagicMock(return_value={})
 
         result = service._assign_single_shift(shift, [executor])
 

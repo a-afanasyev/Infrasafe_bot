@@ -402,6 +402,259 @@ class ScoringEngine:
         return penalties
 
 
+class WorkloadBalancer:
+    """Балансировка нагрузки исполнителей (извлечено из ShiftAssignmentService, ARC-03).
+    Владеет ребаланс-мутациями (shift.user_id + db.commit); зависит от ScoringEngine."""
+
+    def __init__(self, db: Session, scoring_engine: 'ScoringEngine'):
+        self.db = db
+        self.scoring_engine = scoring_engine
+
+    def balance_executor_workload(self, target_date: date = None) -> Dict[str, Any]:
+        """
+        Балансирует нагрузку между исполнителями на указанную дату
+
+        Args:
+            target_date: Дата для балансировки (по умолчанию завтра)
+
+        Returns:
+            Dict с результатами балансировки
+        """
+        try:
+            if not target_date:
+                target_date = date.today() + timedelta(days=1)
+
+            logger.info(f"Начало балансировки нагрузки на {target_date}")
+
+            # Получаем все смены на указанную дату
+            shifts = self.db.query(Shift).filter(
+                and_(
+                    func.date(Shift.planned_start_time) == target_date,
+                    Shift.status == 'planned'
+                )
+            ).all()
+
+            if not shifts:
+                return {'message': f'Нет смен для балансировки на {target_date}'}
+
+            # Анализируем текущее распределение
+            distribution = self._analyze_workload_distribution(shifts)
+
+            # Если нагрузка уже сбалансирована, ничего не делаем
+            if distribution['is_balanced']:
+                return {
+                    'message': 'Нагрузка уже сбалансирована',
+                    'distribution': distribution
+                }
+
+            # Выполняем перераспределение
+            rebalance_result = self._rebalance_shifts(shifts, distribution)
+
+            return {
+                'target_date': target_date,
+                'initial_distribution': distribution,
+                'rebalancing_performed': True,
+                'rebalance_result': rebalance_result
+            }
+
+        except Exception as e:
+            logger.error(f"Ошибка балансировки нагрузки: {e}")
+            return {'error': str(e)}
+    def _analyze_workload_distribution(self, shifts: List[Shift]) -> Dict[str, Any]:
+        """Анализирует распределение нагрузки между исполнителями"""
+
+        # Подсчитываем смены по исполнителям
+        executor_loads = {}
+        unassigned_shifts = 0
+
+        for shift in shifts:
+            if shift.user_id:
+                executor_loads[shift.user_id] = executor_loads.get(shift.user_id, 0) + 1
+            else:
+                unassigned_shifts += 1
+
+        if not executor_loads:
+            return {
+                'total_shifts': len(shifts),
+                'unassigned_shifts': unassigned_shifts,
+                'is_balanced': False,
+                'message': 'Все смены неназначены'
+            }
+
+        # Статистика распределения
+        loads = list(executor_loads.values())
+        avg_load = sum(loads) / len(loads)
+        max_load = max(loads)
+        min_load = min(loads)
+        load_variance = sum((load - avg_load) ** 2 for load in loads) / len(loads)
+
+        # Считаем распределение сбалансированным, если разброс небольшой
+        is_balanced = (max_load - min_load) <= 1 and load_variance < 1.0
+
+        return {
+            'total_shifts': len(shifts),
+            'assigned_shifts': len(shifts) - unassigned_shifts,
+            'unassigned_shifts': unassigned_shifts,
+            'unique_executors': len(executor_loads),
+            'executor_loads': executor_loads,
+            'avg_load': avg_load,
+            'max_load': max_load,
+            'min_load': min_load,
+            'load_variance': load_variance,
+            'is_balanced': is_balanced
+        }
+    def _rebalance_shifts(self, shifts: List[Shift], distribution: Dict[str, Any]) -> Dict[str, Any]:
+        """Выполняет перераспределение смен для балансировки нагрузки"""
+
+        # Находим перегруженных и недогруженных исполнителей
+        executor_loads = distribution['executor_loads']
+        avg_load = distribution['avg_load']
+
+        overloaded = []
+        underloaded = []
+
+        for executor_id, load in executor_loads.items():
+            if load > avg_load + 1:
+                overloaded.append((executor_id, load))
+            elif load < avg_load - 1:
+                underloaded.append((executor_id, load))
+
+        if not overloaded or not underloaded:
+            return {'message': 'Нет возможности для перераспределения'}
+
+        # Пытаемся перераспределить смены
+        redistributions = []
+
+        for overloaded_executor, overload in overloaded:
+            # Находим смены этого исполнителя, которые можно перенести
+            executor_shifts = [s for s in shifts if s.user_id == overloaded_executor]
+
+            for shift in executor_shifts:
+                if len(underloaded) == 0:
+                    break
+
+                # Пытаемся найти подходящего недогруженного исполнителя
+                for i, (underloaded_executor, underload) in enumerate(underloaded):
+                    executor = self.db.query(User).filter(User.id == underloaded_executor).first()
+
+                    if executor and self._can_assign_shift(shift, executor):
+                        # Выполняем перенос
+                        old_executor_id = shift.user_id
+                        shift.user_id = underloaded_executor
+                        shift.assigned_at = datetime.now(timezone.utc)
+
+                        redistributions.append({
+                            'shift_id': shift.id,
+                            'from_executor': old_executor_id,
+                            'to_executor': underloaded_executor
+                        })
+
+                        # Обновляем счетчики
+                        underloaded[i] = (underloaded_executor, underload + 1)
+                        if underload + 1 >= avg_load:
+                            underloaded.pop(i)
+
+                        break
+
+                # Прекращаем, если достигли среднего уровня
+                current_load = len([s for s in shifts if s.user_id == overloaded_executor])
+                if current_load <= avg_load + 1:
+                    break
+
+        if redistributions:
+            self.db.commit()
+
+        return {
+            'redistributions_performed': len(redistributions),
+            'redistributions': redistributions
+        }
+    def _can_assign_shift(self, shift: Shift, executor: User) -> bool:
+        """Проверяет, можно ли назначить смену исполнителю"""
+        # Базовая проверка - можно расширить
+        return (
+            ROLE_EXECUTOR in get_user_roles(executor) and
+            executor.status == 'approved' and
+            self.scoring_engine._calculate_availability_score(shift, executor) > 0.5
+        )
+
+
+class ConflictDetector:
+    """Детекция конфликтов назначения (извлечено из ShiftAssignmentService, ARC-03).
+    Read-only детекция; зависит от ScoringEngine."""
+
+    def __init__(self, db: Session, scoring_engine: 'ScoringEngine'):
+        self.db = db
+        self.scoring_engine = scoring_engine
+
+    def _check_assignment_conflicts(
+        self,
+        shift: Shift,
+        executor_id: int
+    ) -> List[AssignmentConflict]:
+        """Проверяет конфликты при назначении исполнителя на смену"""
+        conflicts = []
+
+        executor = self.db.query(User).filter(User.id == executor_id).first()
+        if not executor:
+            conflicts.append(AssignmentConflict(
+                type="executor_not_found",
+                executor_id=executor_id,
+                shift_id=shift.id,
+                description="Исполнитель не найден",
+                severity="critical",
+                can_resolve=False
+            ))
+            return conflicts
+
+        # Проверка роли
+        if ROLE_EXECUTOR not in get_user_roles(executor):
+            conflicts.append(AssignmentConflict(
+                type="invalid_role",
+                executor_id=executor_id,
+                shift_id=shift.id,
+                description=f"Неверная роль: {get_active_role(executor)}, требуется: {ROLE_EXECUTOR}",
+                severity="high",
+                can_resolve=False
+            ))
+
+        # Проверка статуса
+        if executor.status != 'approved':
+            conflicts.append(AssignmentConflict(
+                type="invalid_status",
+                executor_id=executor_id,
+                shift_id=shift.id,
+                description=f"Неверный статус: {executor.status}, требуется: approved",
+                severity="high",
+                can_resolve=True,
+                resolution_suggestion="Подтвердить статус исполнителя"
+            ))
+
+        # Проверка пересечений смен
+        if self.scoring_engine._calculate_availability_score(shift, executor) == 0.0:
+            conflicts.append(AssignmentConflict(
+                type="time_conflict",
+                executor_id=executor_id,
+                shift_id=shift.id,
+                description="Пересечение с другой сменой",
+                severity="critical",
+                can_resolve=True,
+                resolution_suggestion="Изменить время смены или найти другого исполнителя"
+            ))
+
+        return conflicts
+    def _conflict_to_dict(self, conflict: AssignmentConflict) -> Dict[str, Any]:
+        """Преобразует конфликт в словарь"""
+        return {
+            'type': conflict.type,
+            'executor_id': conflict.executor_id,
+            'shift_id': conflict.shift_id,
+            'description': conflict.description,
+            'severity': conflict.severity,
+            'can_resolve': conflict.can_resolve,
+            'resolution_suggestion': conflict.resolution_suggestion
+        }
+
+
 class ShiftAssignmentService:
     """
     Сервис для автоматического назначения исполнителей на смены
@@ -424,6 +677,8 @@ class ShiftAssignmentService:
         }
 
         self.scoring_engine = ScoringEngine(db, self.weights)
+        self.workload_balancer = WorkloadBalancer(db, self.scoring_engine)
+        self.conflict_detector = ConflictDetector(db, self.scoring_engine)
 
     # ========== ОСНОВНЫЕ МЕТОДЫ АВТОНАЗНАЧЕНИЯ ==========
 
@@ -537,13 +792,13 @@ class ShiftAssignmentService:
             best_executor = executor_scores[0]
 
             # Проверяем конфликты
-            conflicts = self._check_assignment_conflicts(shift, best_executor.executor_id)
+            conflicts = self.conflict_detector._check_assignment_conflicts(shift, best_executor.executor_id)
 
             if conflicts and any(c.severity in ['high', 'critical'] for c in conflicts):
                 return {
                     'success': False,
                     'shift_id': shift.id,
-                    'conflicts': [self._conflict_to_dict(c) for c in conflicts],
+                    'conflicts': [self.conflict_detector._conflict_to_dict(c) for c in conflicts],
                     'attempted_executor': best_executor.executor_id
                 }
 
@@ -588,233 +843,10 @@ class ShiftAssignmentService:
     # ========== МЕТОДЫ БАЛАНСИРОВКИ НАГРУЗКИ ==========
 
     def balance_executor_workload(self, target_date: date = None) -> Dict[str, Any]:
-        """
-        Балансирует нагрузку между исполнителями на указанную дату
+        return self.workload_balancer.balance_executor_workload(target_date)
 
-        Args:
-            target_date: Дата для балансировки (по умолчанию завтра)
-
-        Returns:
-            Dict с результатами балансировки
-        """
-        try:
-            if not target_date:
-                target_date = date.today() + timedelta(days=1)
-
-            logger.info(f"Начало балансировки нагрузки на {target_date}")
-
-            # Получаем все смены на указанную дату
-            shifts = self.db.query(Shift).filter(
-                and_(
-                    func.date(Shift.planned_start_time) == target_date,
-                    Shift.status == 'planned'
-                )
-            ).all()
-
-            if not shifts:
-                return {'message': f'Нет смен для балансировки на {target_date}'}
-
-            # Анализируем текущее распределение
-            distribution = self._analyze_workload_distribution(shifts)
-
-            # Если нагрузка уже сбалансирована, ничего не делаем
-            if distribution['is_balanced']:
-                return {
-                    'message': 'Нагрузка уже сбалансирована',
-                    'distribution': distribution
-                }
-
-            # Выполняем перераспределение
-            rebalance_result = self._rebalance_shifts(shifts, distribution)
-
-            return {
-                'target_date': target_date,
-                'initial_distribution': distribution,
-                'rebalancing_performed': True,
-                'rebalance_result': rebalance_result
-            }
-
-        except Exception as e:
-            logger.error(f"Ошибка балансировки нагрузки: {e}")
-            return {'error': str(e)}
-
-    def _analyze_workload_distribution(self, shifts: List[Shift]) -> Dict[str, Any]:
-        """Анализирует распределение нагрузки между исполнителями"""
-
-        # Подсчитываем смены по исполнителям
-        executor_loads = {}
-        unassigned_shifts = 0
-
-        for shift in shifts:
-            if shift.user_id:
-                executor_loads[shift.user_id] = executor_loads.get(shift.user_id, 0) + 1
-            else:
-                unassigned_shifts += 1
-
-        if not executor_loads:
-            return {
-                'total_shifts': len(shifts),
-                'unassigned_shifts': unassigned_shifts,
-                'is_balanced': False,
-                'message': 'Все смены неназначены'
-            }
-
-        # Статистика распределения
-        loads = list(executor_loads.values())
-        avg_load = sum(loads) / len(loads)
-        max_load = max(loads)
-        min_load = min(loads)
-        load_variance = sum((load - avg_load) ** 2 for load in loads) / len(loads)
-
-        # Считаем распределение сбалансированным, если разброс небольшой
-        is_balanced = (max_load - min_load) <= 1 and load_variance < 1.0
-
-        return {
-            'total_shifts': len(shifts),
-            'assigned_shifts': len(shifts) - unassigned_shifts,
-            'unassigned_shifts': unassigned_shifts,
-            'unique_executors': len(executor_loads),
-            'executor_loads': executor_loads,
-            'avg_load': avg_load,
-            'max_load': max_load,
-            'min_load': min_load,
-            'load_variance': load_variance,
-            'is_balanced': is_balanced
-        }
-
-    def _rebalance_shifts(self, shifts: List[Shift], distribution: Dict[str, Any]) -> Dict[str, Any]:
-        """Выполняет перераспределение смен для балансировки нагрузки"""
-
-        # Находим перегруженных и недогруженных исполнителей
-        executor_loads = distribution['executor_loads']
-        avg_load = distribution['avg_load']
-
-        overloaded = []
-        underloaded = []
-
-        for executor_id, load in executor_loads.items():
-            if load > avg_load + 1:
-                overloaded.append((executor_id, load))
-            elif load < avg_load - 1:
-                underloaded.append((executor_id, load))
-
-        if not overloaded or not underloaded:
-            return {'message': 'Нет возможности для перераспределения'}
-
-        # Пытаемся перераспределить смены
-        redistributions = []
-
-        for overloaded_executor, overload in overloaded:
-            # Находим смены этого исполнителя, которые можно перенести
-            executor_shifts = [s for s in shifts if s.user_id == overloaded_executor]
-
-            for shift in executor_shifts:
-                if len(underloaded) == 0:
-                    break
-
-                # Пытаемся найти подходящего недогруженного исполнителя
-                for i, (underloaded_executor, underload) in enumerate(underloaded):
-                    executor = self.db.query(User).filter(User.id == underloaded_executor).first()
-
-                    if executor and self._can_assign_shift(shift, executor):
-                        # Выполняем перенос
-                        old_executor_id = shift.user_id
-                        shift.user_id = underloaded_executor
-                        shift.assigned_at = datetime.now(timezone.utc)
-
-                        redistributions.append({
-                            'shift_id': shift.id,
-                            'from_executor': old_executor_id,
-                            'to_executor': underloaded_executor
-                        })
-
-                        # Обновляем счетчики
-                        underloaded[i] = (underloaded_executor, underload + 1)
-                        if underload + 1 >= avg_load:
-                            underloaded.pop(i)
-
-                        break
-
-                # Прекращаем, если достигли среднего уровня
-                current_load = len([s for s in shifts if s.user_id == overloaded_executor])
-                if current_load <= avg_load + 1:
-                    break
-
-        if redistributions:
-            self.db.commit()
-
-        return {
-            'redistributions_performed': len(redistributions),
-            'redistributions': redistributions
-        }
-
-    def _can_assign_shift(self, shift: Shift, executor: User) -> bool:
-        """Проверяет, можно ли назначить смену исполнителю"""
-        # Базовая проверка - можно расширить
-        return (
-            ROLE_EXECUTOR in get_user_roles(executor) and
-            executor.status == 'approved' and
-            self.scoring_engine._calculate_availability_score(shift, executor) > 0.5
-        )
 
     # ========== МЕТОДЫ УПРАВЛЕНИЯ КОНФЛИКТАМИ ==========
-
-    def _check_assignment_conflicts(
-        self,
-        shift: Shift,
-        executor_id: int
-    ) -> List[AssignmentConflict]:
-        """Проверяет конфликты при назначении исполнителя на смену"""
-        conflicts = []
-
-        executor = self.db.query(User).filter(User.id == executor_id).first()
-        if not executor:
-            conflicts.append(AssignmentConflict(
-                type="executor_not_found",
-                executor_id=executor_id,
-                shift_id=shift.id,
-                description="Исполнитель не найден",
-                severity="critical",
-                can_resolve=False
-            ))
-            return conflicts
-
-        # Проверка роли
-        if ROLE_EXECUTOR not in get_user_roles(executor):
-            conflicts.append(AssignmentConflict(
-                type="invalid_role",
-                executor_id=executor_id,
-                shift_id=shift.id,
-                description=f"Неверная роль: {get_active_role(executor)}, требуется: {ROLE_EXECUTOR}",
-                severity="high",
-                can_resolve=False
-            ))
-
-        # Проверка статуса
-        if executor.status != 'approved':
-            conflicts.append(AssignmentConflict(
-                type="invalid_status",
-                executor_id=executor_id,
-                shift_id=shift.id,
-                description=f"Неверный статус: {executor.status}, требуется: approved",
-                severity="high",
-                can_resolve=True,
-                resolution_suggestion="Подтвердить статус исполнителя"
-            ))
-
-        # Проверка пересечений смен
-        if self.scoring_engine._calculate_availability_score(shift, executor) == 0.0:
-            conflicts.append(AssignmentConflict(
-                type="time_conflict",
-                executor_id=executor_id,
-                shift_id=shift.id,
-                description="Пересечение с другой сменой",
-                severity="critical",
-                can_resolve=True,
-                resolution_suggestion="Изменить время смены или найти другого исполнителя"
-            ))
-
-        return conflicts
 
     def resolve_assignment_conflicts(
         self,
@@ -840,7 +872,7 @@ class ShiftAssignmentService:
                 return {'error': 'У смены нет назначенного исполнителя'}
 
             # Проверяем конфликты
-            conflicts = self._check_assignment_conflicts(shift, shift.user_id)
+            conflicts = self.conflict_detector._check_assignment_conflicts(shift, shift.user_id)
 
             if not conflicts:
                 return {'message': 'Конфликтов не найдено'}
@@ -863,7 +895,7 @@ class ShiftAssignmentService:
                 'total_conflicts': len(conflicts),
                 'resolved_conflicts': len(resolved_conflicts),
                 'unresolved_conflicts': len(unresolved_conflicts),
-                'conflicts_details': [self._conflict_to_dict(c) for c in unresolved_conflicts]
+                'conflicts_details': [self.conflict_detector._conflict_to_dict(c) for c in unresolved_conflicts]
             }
 
         except Exception as e:
@@ -896,18 +928,6 @@ class ShiftAssignmentService:
         except Exception as e:
             logger.error(f"Ошибка автоматического разрешения конфликта: {e}")
             return {'resolved': False, 'reason': str(e)}
-
-    def _conflict_to_dict(self, conflict: AssignmentConflict) -> Dict[str, Any]:
-        """Преобразует конфликт в словарь"""
-        return {
-            'type': conflict.type,
-            'executor_id': conflict.executor_id,
-            'shift_id': conflict.shift_id,
-            'description': conflict.description,
-            'severity': conflict.severity,
-            'can_resolve': conflict.can_resolve,
-            'resolution_suggestion': conflict.resolution_suggestion
-        }
 
     # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
