@@ -95,45 +95,45 @@ class TestCalculateSpecializationMatch:
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=None)
         executor = _make_executor(specialization=None)
-        assert service._calculate_specialization_match(shift, executor) == 0.5
+        assert service.scoring_engine._calculate_specialization_match(shift, executor) == 0.5
 
     def test_executor_no_specialization_returns_blocking(self):
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=["plumbing"])
         executor = _make_executor(specialization=None)
-        assert service._calculate_specialization_match(shift, executor) == -1.0
+        assert service.scoring_engine._calculate_specialization_match(shift, executor) == -1.0
 
     def test_missing_required_spec_returns_blocking(self):
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=["plumbing", "electric"])
         executor = _make_executor(specialization=["plumbing"])
-        assert service._calculate_specialization_match(shift, executor) == -1.0
+        assert service.scoring_engine._calculate_specialization_match(shift, executor) == -1.0
 
     def test_exact_match_returns_one(self):
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=["plumbing"])
         executor = _make_executor(specialization=["plumbing"])
-        assert service._calculate_specialization_match(shift, executor) == 1.0
+        assert service.scoring_engine._calculate_specialization_match(shift, executor) == 1.0
 
     def test_superset_returns_high(self):
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=["plumbing"])
         executor = _make_executor(specialization=["plumbing", "electric"])
-        assert service._calculate_specialization_match(shift, executor) == 0.9
+        assert service.scoring_engine._calculate_specialization_match(shift, executor) == 0.9
 
     def test_string_specialization_parsed(self):
         service, _ = _make_service()
         import json
         shift = _make_shift(specialization_focus=["plumbing"])
         executor = _make_executor(specialization=json.dumps(["plumbing"]))
-        result = service._calculate_specialization_match(shift, executor)
+        result = service.scoring_engine._calculate_specialization_match(shift, executor)
         assert result >= 0.9
 
     def test_invalid_json_string_treated_as_single_spec(self):
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=["plumbing"])
         executor = _make_executor(specialization="plumbing")
-        result = service._calculate_specialization_match(shift, executor)
+        result = service.scoring_engine._calculate_specialization_match(shift, executor)
         assert result == 1.0
 
 
@@ -146,38 +146,38 @@ class TestCalculateRatingScore:
         service, _ = _make_service()
         executor = _make_executor(rating=None)
         del executor.rating  # simulate missing attribute
-        score = service._calculate_rating_score(executor)
+        score = service.scoring_engine._calculate_rating_score(executor)
         assert score == 0.5
 
     def test_rating_none_returns_neutral(self):
         service, _ = _make_service()
         executor = _make_executor(rating=None)
-        assert service._calculate_rating_score(executor) == 0.5
+        assert service.scoring_engine._calculate_rating_score(executor) == 0.5
 
     def test_max_rating_5_returns_one(self):
         service, _ = _make_service()
         executor = _make_executor(rating=5.0)
-        assert service._calculate_rating_score(executor) == 1.0
+        assert service.scoring_engine._calculate_rating_score(executor) == 1.0
 
     def test_min_rating_1_returns_zero(self):
         service, _ = _make_service()
         executor = _make_executor(rating=1.0)
-        assert service._calculate_rating_score(executor) == 0.0
+        assert service.scoring_engine._calculate_rating_score(executor) == 0.0
 
     def test_mid_rating_3_returns_half(self):
         service, _ = _make_service()
         executor = _make_executor(rating=3.0)
-        assert service._calculate_rating_score(executor) == 0.5
+        assert service.scoring_engine._calculate_rating_score(executor) == 0.5
 
     def test_clamps_above_five(self):
         service, _ = _make_service()
         executor = _make_executor(rating=10.0)
-        assert service._calculate_rating_score(executor) == 1.0
+        assert service.scoring_engine._calculate_rating_score(executor) == 1.0
 
     def test_clamps_below_one(self):
         service, _ = _make_service()
         executor = _make_executor(rating=0.0)
-        assert service._calculate_rating_score(executor) == 0.0
+        assert service.scoring_engine._calculate_rating_score(executor) == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ class TestCalculatePreferenceScore:
         service, _ = _make_service()
         shift = _make_shift()
         executor = _make_executor()
-        assert service._calculate_preference_score(shift, executor) == 0.5
+        assert service.scoring_engine._calculate_preference_score(shift, executor) == 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ class TestCalculateGeographicScore:
         service, _ = _make_service()
         shift = _make_shift()
         executor = _make_executor()
-        assert service._calculate_geographic_score(shift, executor) == 0.5
+        assert service.scoring_engine._calculate_geographic_score(shift, executor) == 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +221,7 @@ class TestCalculateWorkloadScore:
         request_q.filter.return_value.count.return_value = 0
         db.query.side_effect = [shift_q, request_q]
 
-        score = service._calculate_workload_score(shift, executor)
+        score = service.scoring_engine._calculate_workload_score(shift, executor)
         assert score == 1.0
 
     def test_max_shifts_and_requests_returns_zero(self):
@@ -235,7 +235,7 @@ class TestCalculateWorkloadScore:
         request_q.filter.return_value.count.return_value = 10
         db.query.side_effect = [shift_q, request_q]
 
-        score = service._calculate_workload_score(shift, executor)
+        score = service.scoring_engine._calculate_workload_score(shift, executor)
         assert score == 0.0
 
     def test_db_error_returns_neutral(self):
@@ -243,7 +243,7 @@ class TestCalculateWorkloadScore:
         shift = _make_shift()
         executor = _make_executor()
         db.query.side_effect = Exception("DB error")
-        score = service._calculate_workload_score(shift, executor)
+        score = service.scoring_engine._calculate_workload_score(shift, executor)
         assert score == 0.5
 
 
@@ -261,7 +261,7 @@ class TestCalculateConflictPenalties:
         q.filter.return_value.count.return_value = 2
         db.query.return_value = q
 
-        penalty = service._calculate_conflict_penalties(shift, executor)
+        penalty = service.scoring_engine._calculate_conflict_penalties(shift, executor)
         assert penalty == 0.0
 
     def test_many_shifts_adds_penalty(self):
@@ -273,7 +273,7 @@ class TestCalculateConflictPenalties:
         q.filter.return_value.count.return_value = 5
         db.query.return_value = q
 
-        penalty = service._calculate_conflict_penalties(shift, executor)
+        penalty = service.scoring_engine._calculate_conflict_penalties(shift, executor)
         assert penalty == 0.3
 
 
@@ -466,7 +466,7 @@ class TestCheckAssignmentConflicts:
         shift = _make_shift()
         executor = _make_executor(role="applicant")
         # availability score > 0.5 → no time conflict
-        service._calculate_availability_score = MagicMock(return_value=1.0)
+        service.scoring_engine._calculate_availability_score = MagicMock(return_value=1.0)
         q = MagicMock()
         q.filter.return_value.first.return_value = executor
         db.query.return_value = q
@@ -478,7 +478,7 @@ class TestCheckAssignmentConflicts:
         service, db = _make_service()
         shift = _make_shift()
         executor = _make_executor(role=ROLE_EXECUTOR, status="approved")
-        service._calculate_availability_score = MagicMock(return_value=1.0)
+        service.scoring_engine._calculate_availability_score = MagicMock(return_value=1.0)
         q = MagicMock()
         q.filter.return_value.first.return_value = executor
         db.query.return_value = q
@@ -495,7 +495,7 @@ class TestAssignSingleShift:
     def test_no_executors_returns_failure(self):
         service, db = _make_service()
         shift = _make_shift()
-        service._evaluate_executors_for_shift = MagicMock(return_value=[])
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(return_value=[])
 
         result = service._assign_single_shift(shift, [])
         assert result["success"] is False
@@ -512,7 +512,7 @@ class TestAssignSingleShift:
         score.total_score = 0.8
         score.reasons = []
 
-        service._evaluate_executors_for_shift = MagicMock(return_value=[score])
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(return_value=[score])
         service._check_assignment_conflicts = MagicMock(return_value=[])
         db.add = MagicMock()
         db.commit = MagicMock()
@@ -536,7 +536,7 @@ class TestAssignSingleShift:
         conflict = MagicMock()
         conflict.severity = "critical"
 
-        service._evaluate_executors_for_shift = MagicMock(return_value=[score])
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(return_value=[score])
         service._check_assignment_conflicts = MagicMock(return_value=[conflict])
         service._conflict_to_dict = MagicMock(return_value={})
 
@@ -550,7 +550,7 @@ class TestAssignSingleShift:
         shift = _make_shift()
         executor = _make_executor()
 
-        service._evaluate_executors_for_shift = MagicMock(side_effect=Exception("boom"))
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(side_effect=Exception("boom"))
 
         result = service._assign_single_shift(shift, [executor])
         assert result["success"] is False
@@ -565,7 +565,7 @@ class TestEvaluateExecutorsForShift:
     def test_no_executors_returns_empty(self):
         service, _ = _make_service()
         shift = _make_shift()
-        result = service._evaluate_executors_for_shift(shift, [])
+        result = service.scoring_engine._evaluate_executors_for_shift(shift, [])
         assert result == []
 
     def test_skips_executors_with_zero_score(self):
@@ -576,9 +576,9 @@ class TestEvaluateExecutorsForShift:
         zero_score = MagicMock()
         zero_score.total_score = 0.0
 
-        service._calculate_executor_score = MagicMock(return_value=zero_score)
+        service.scoring_engine._calculate_executor_score = MagicMock(return_value=zero_score)
 
-        result = service._evaluate_executors_for_shift(shift, [executor])
+        result = service.scoring_engine._evaluate_executors_for_shift(shift, [executor])
         assert result == []
 
     def test_includes_executors_with_positive_score(self):
@@ -589,7 +589,7 @@ class TestEvaluateExecutorsForShift:
         positive_score = MagicMock()
         positive_score.total_score = 0.7
 
-        service._calculate_executor_score = MagicMock(return_value=positive_score)
+        service.scoring_engine._calculate_executor_score = MagicMock(return_value=positive_score)
 
-        result = service._evaluate_executors_for_shift(shift, [executor])
+        result = service.scoring_engine._evaluate_executors_for_shift(shift, [executor])
         assert len(result) == 1
