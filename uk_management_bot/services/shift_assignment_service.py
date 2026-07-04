@@ -63,186 +63,13 @@ class AssignmentConflict:
     resolution_suggestion: Optional[str] = None
 
 
-class ShiftAssignmentService:
-    """
-    Сервис для автоматического назначения исполнителей на смены
-    Использует ИИ-алгоритмы для оптимального распределения нагрузки
-    """
+class ScoringEngine:
+    """Скоринг соответствия исполнителя смене (извлечено из ShiftAssignmentService, ARC-03).
+    Read-only: использует self.db и self.weights, без побочных эффектов."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, weights: Dict[str, float]):
         self.db = db
-        self.assignment_service = AssignmentService(db)
-        self.notification_service = NotificationService(db)
-
-        # Веса для расчета оценки назначения
-        self.weights = {
-            'specialization': 0.35,  # Соответствие специализации
-            'workload': 0.25,        # Текущая загруженность
-            'rating': 0.15,          # Рейтинг исполнителя
-            'availability': 0.10,    # Доступность
-            'preference': 0.10,      # Предпочтения исполнителя
-            'geographic': 0.05       # Географическая близость
-        }
-
-    # ========== ОСНОВНЫЕ МЕТОДЫ АВТОНАЗНАЧЕНИЯ ==========
-
-    def auto_assign_executors_to_shifts(
-        self,
-        shifts: List[Shift],
-        force_reassign: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Автоматически назначает исполнителей на список смен
-
-        Args:
-            shifts: Список смен для назначения
-            force_reassign: Переназначить даже если исполнитель уже назначен
-
-        Returns:
-            Dict с результатами назначения
-        """
-        try:
-            logger.info(f"Начало автоназначения для {len(shifts)} смен")
-
-            results = {
-                'total_shifts': len(shifts),
-                'successful_assignments': 0,
-                'failed_assignments': 0,
-                'conflicts_found': 0,
-                'assignments': [],
-                'conflicts': [],
-                'warnings': []
-            }
-
-            # Фильтруем смены для назначения
-            shifts_to_assign = []
-            for shift in shifts:
-                if not shift.user_id or force_reassign:
-                    shifts_to_assign.append(shift)
-                else:
-                    results['warnings'].append(f"Смена {shift.id} уже имеет назначенного исполнителя")
-
-            if not shifts_to_assign:
-                logger.info("Нет смен для назначения")
-                return results
-
-            # Получаем всех доступных исполнителей
-            available_executors = self._get_available_executors()
-
-            if not available_executors:
-                logger.error("Нет доступных исполнителей")
-                results['warnings'].append("Нет доступных исполнителей")
-                return results
-
-            # Назначаем исполнителей по одному, учитывая предыдущие назначения
-            for shift in shifts_to_assign:
-                assignment_result = self._assign_single_shift(shift, available_executors)
-
-                if assignment_result['success']:
-                    results['successful_assignments'] += 1
-                    results['assignments'].append(assignment_result)
-
-                    # Обновляем информацию о назначенном исполнителе
-                    executor_id = assignment_result['executor_id']
-                    self._update_executor_workload_cache(executor_id)
-
-                else:
-                    results['failed_assignments'] += 1
-                    if assignment_result.get('conflicts'):
-                        results['conflicts'].extend(assignment_result['conflicts'])
-                        results['conflicts_found'] += len(assignment_result['conflicts'])
-
-            # Создаем записи аудита
-            self._create_assignment_audit(results)
-
-            # Отправляем уведомления о назначениях
-            if results['successful_assignments'] > 0:
-                self._notify_successful_assignments(results['assignments'])
-
-            logger.info(f"Автоназначение завершено: {results['successful_assignments']}/{results['total_shifts']} успешно")
-
-            return results
-
-        except Exception as e:
-            logger.error(f"Ошибка автоназначения исполнителей: {e}")
-            return {
-                'total_shifts': len(shifts),
-                'successful_assignments': 0,
-                'failed_assignments': len(shifts),
-                'error': str(e)
-            }
-
-    def _assign_single_shift(
-        self,
-        shift: Shift,
-        available_executors: List[User]
-    ) -> Dict[str, Any]:
-        """Назначает исполнителя на одну смену"""
-        try:
-            # Получаем оценки всех исполнителей для этой смены
-            executor_scores = self._evaluate_executors_for_shift(shift, available_executors)
-
-            if not executor_scores:
-                return {
-                    'success': False,
-                    'shift_id': shift.id,
-                    'error': 'Нет подходящих исполнителей'
-                }
-
-            # Сортируем по убыванию оценки
-            executor_scores.sort(key=lambda x: x.total_score, reverse=True)
-
-            # Пробуем назначить лучшего исполнителя
-            best_executor = executor_scores[0]
-
-            # Проверяем конфликты
-            conflicts = self._check_assignment_conflicts(shift, best_executor.executor_id)
-
-            if conflicts and any(c.severity in ['high', 'critical'] for c in conflicts):
-                return {
-                    'success': False,
-                    'shift_id': shift.id,
-                    'conflicts': [self._conflict_to_dict(c) for c in conflicts],
-                    'attempted_executor': best_executor.executor_id
-                }
-
-            # Выполняем назначение
-            shift.user_id = best_executor.executor_id
-            shift.assigned_at = datetime.now(timezone.utc)
-            shift.assigned_by_user_id = None  # Системное назначение
-
-            # Создаем запись аудита
-            audit = AuditLog(
-                user_id=best_executor.executor_id,
-                action="SHIFT_AUTO_ASSIGNED",
-                details={
-                    "shift_id": shift.id,
-                    "executor_id": best_executor.executor_id,
-                    "assignment_score": best_executor.total_score,
-                    "reasons": best_executor.reasons,
-                    "conflicts": len(conflicts) if conflicts else 0
-                }
-            )
-            self.db.add(audit)
-            self.db.commit()
-
-            return {
-                'success': True,
-                'shift_id': shift.id,
-                'executor_id': best_executor.executor_id,
-                'executor_name': best_executor.executor_name,
-                'assignment_score': best_executor.total_score,
-                'reasons': best_executor.reasons,
-                'minor_conflicts': len([c for c in conflicts if c.severity in ['low', 'medium']]) if conflicts else 0
-            }
-
-        except Exception as e:
-            logger.error(f"Ошибка назначения исполнителя на смену {shift.id}: {e}")
-            return {
-                'success': False,
-                'shift_id': shift.id,
-                'error': str(e)
-            }
+        self.weights = weights
 
     def _evaluate_executors_for_shift(
         self,
@@ -574,6 +401,190 @@ class ShiftAssignmentService:
 
         return penalties
 
+
+class ShiftAssignmentService:
+    """
+    Сервис для автоматического назначения исполнителей на смены
+    Использует ИИ-алгоритмы для оптимального распределения нагрузки
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.assignment_service = AssignmentService(db)
+        self.notification_service = NotificationService(db)
+
+        # Веса для расчета оценки назначения
+        self.weights = {
+            'specialization': 0.35,  # Соответствие специализации
+            'workload': 0.25,        # Текущая загруженность
+            'rating': 0.15,          # Рейтинг исполнителя
+            'availability': 0.10,    # Доступность
+            'preference': 0.10,      # Предпочтения исполнителя
+            'geographic': 0.05       # Географическая близость
+        }
+
+        self.scoring_engine = ScoringEngine(db, self.weights)
+
+    # ========== ОСНОВНЫЕ МЕТОДЫ АВТОНАЗНАЧЕНИЯ ==========
+
+    def auto_assign_executors_to_shifts(
+        self,
+        shifts: List[Shift],
+        force_reassign: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Автоматически назначает исполнителей на список смен
+
+        Args:
+            shifts: Список смен для назначения
+            force_reassign: Переназначить даже если исполнитель уже назначен
+
+        Returns:
+            Dict с результатами назначения
+        """
+        try:
+            logger.info(f"Начало автоназначения для {len(shifts)} смен")
+
+            results = {
+                'total_shifts': len(shifts),
+                'successful_assignments': 0,
+                'failed_assignments': 0,
+                'conflicts_found': 0,
+                'assignments': [],
+                'conflicts': [],
+                'warnings': []
+            }
+
+            # Фильтруем смены для назначения
+            shifts_to_assign = []
+            for shift in shifts:
+                if not shift.user_id or force_reassign:
+                    shifts_to_assign.append(shift)
+                else:
+                    results['warnings'].append(f"Смена {shift.id} уже имеет назначенного исполнителя")
+
+            if not shifts_to_assign:
+                logger.info("Нет смен для назначения")
+                return results
+
+            # Получаем всех доступных исполнителей
+            available_executors = self._get_available_executors()
+
+            if not available_executors:
+                logger.error("Нет доступных исполнителей")
+                results['warnings'].append("Нет доступных исполнителей")
+                return results
+
+            # Назначаем исполнителей по одному, учитывая предыдущие назначения
+            for shift in shifts_to_assign:
+                assignment_result = self._assign_single_shift(shift, available_executors)
+
+                if assignment_result['success']:
+                    results['successful_assignments'] += 1
+                    results['assignments'].append(assignment_result)
+
+                    # Обновляем информацию о назначенном исполнителе
+                    executor_id = assignment_result['executor_id']
+                    self._update_executor_workload_cache(executor_id)
+
+                else:
+                    results['failed_assignments'] += 1
+                    if assignment_result.get('conflicts'):
+                        results['conflicts'].extend(assignment_result['conflicts'])
+                        results['conflicts_found'] += len(assignment_result['conflicts'])
+
+            # Создаем записи аудита
+            self._create_assignment_audit(results)
+
+            # Отправляем уведомления о назначениях
+            if results['successful_assignments'] > 0:
+                self._notify_successful_assignments(results['assignments'])
+
+            logger.info(f"Автоназначение завершено: {results['successful_assignments']}/{results['total_shifts']} успешно")
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Ошибка автоназначения исполнителей: {e}")
+            return {
+                'total_shifts': len(shifts),
+                'successful_assignments': 0,
+                'failed_assignments': len(shifts),
+                'error': str(e)
+            }
+
+    def _assign_single_shift(
+        self,
+        shift: Shift,
+        available_executors: List[User]
+    ) -> Dict[str, Any]:
+        """Назначает исполнителя на одну смену"""
+        try:
+            # Получаем оценки всех исполнителей для этой смены
+            executor_scores = self.scoring_engine._evaluate_executors_for_shift(shift, available_executors)
+
+            if not executor_scores:
+                return {
+                    'success': False,
+                    'shift_id': shift.id,
+                    'error': 'Нет подходящих исполнителей'
+                }
+
+            # Сортируем по убыванию оценки
+            executor_scores.sort(key=lambda x: x.total_score, reverse=True)
+
+            # Пробуем назначить лучшего исполнителя
+            best_executor = executor_scores[0]
+
+            # Проверяем конфликты
+            conflicts = self._check_assignment_conflicts(shift, best_executor.executor_id)
+
+            if conflicts and any(c.severity in ['high', 'critical'] for c in conflicts):
+                return {
+                    'success': False,
+                    'shift_id': shift.id,
+                    'conflicts': [self._conflict_to_dict(c) for c in conflicts],
+                    'attempted_executor': best_executor.executor_id
+                }
+
+            # Выполняем назначение
+            shift.user_id = best_executor.executor_id
+            shift.assigned_at = datetime.now(timezone.utc)
+            shift.assigned_by_user_id = None  # Системное назначение
+
+            # Создаем запись аудита
+            audit = AuditLog(
+                user_id=best_executor.executor_id,
+                action="SHIFT_AUTO_ASSIGNED",
+                details={
+                    "shift_id": shift.id,
+                    "executor_id": best_executor.executor_id,
+                    "assignment_score": best_executor.total_score,
+                    "reasons": best_executor.reasons,
+                    "conflicts": len(conflicts) if conflicts else 0
+                }
+            )
+            self.db.add(audit)
+            self.db.commit()
+
+            return {
+                'success': True,
+                'shift_id': shift.id,
+                'executor_id': best_executor.executor_id,
+                'executor_name': best_executor.executor_name,
+                'assignment_score': best_executor.total_score,
+                'reasons': best_executor.reasons,
+                'minor_conflicts': len([c for c in conflicts if c.severity in ['low', 'medium']]) if conflicts else 0
+            }
+
+        except Exception as e:
+            logger.error(f"Ошибка назначения исполнителя на смену {shift.id}: {e}")
+            return {
+                'success': False,
+                'shift_id': shift.id,
+                'error': str(e)
+            }
+
     # ========== МЕТОДЫ БАЛАНСИРОВКИ НАГРУЗКИ ==========
 
     def balance_executor_workload(self, target_date: date = None) -> Dict[str, Any]:
@@ -743,7 +754,7 @@ class ShiftAssignmentService:
         return (
             ROLE_EXECUTOR in get_user_roles(executor) and
             executor.status == 'approved' and
-            self._calculate_availability_score(shift, executor) > 0.5
+            self.scoring_engine._calculate_availability_score(shift, executor) > 0.5
         )
 
     # ========== МЕТОДЫ УПРАВЛЕНИЯ КОНФЛИКТАМИ ==========
@@ -792,7 +803,7 @@ class ShiftAssignmentService:
             ))
 
         # Проверка пересечений смен
-        if self._calculate_availability_score(shift, executor) == 0.0:
+        if self.scoring_engine._calculate_availability_score(shift, executor) == 0.0:
             conflicts.append(AssignmentConflict(
                 type="time_conflict",
                 executor_id=executor_id,
@@ -964,7 +975,7 @@ class ShiftAssignmentService:
             if not available_executors:
                 return None
 
-            executor_scores = self._evaluate_executors_for_shift(shift, available_executors)
+            executor_scores = self.scoring_engine._evaluate_executors_for_shift(shift, available_executors)
             if not executor_scores:
                 return None
 
