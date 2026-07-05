@@ -112,13 +112,16 @@ class TestGetExecutorStatusActionsKeyboard:
             result = get_executor_status_actions_keyboard("260101-001", "В работе")
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_in_progress_has_three_status_specific_buttons(self):
-        """For В работе status, 3 extra action buttons + 3 common = 6 total."""
+    def test_in_progress_has_four_status_specific_buttons(self):
+        """For В работе status, 4 extra action buttons + 3 common = 7 total
+        (закуп-текст + списание материалов + уточнение + завершение)."""
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.request_status import get_executor_status_actions_keyboard
             result = get_executor_status_actions_keyboard("260101-001", "В работе")
         texts = _flat_texts(result)
-        assert len(texts) == 6  # 3 status-specific + add_comment + view_comments + back
+        assert len(texts) == 7  # 4 status-specific + add_comment + view_comments + back
+        cbs = _flat_cbs(result)
+        assert any(cb.startswith("matissue_start_") for cb in cbs)
 
     def test_purchase_status_has_return_to_work(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):

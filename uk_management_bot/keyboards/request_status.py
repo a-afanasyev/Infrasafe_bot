@@ -99,6 +99,12 @@ def get_executor_status_actions_keyboard(request_number: str, current_status: st
             ],
             [
                 InlineKeyboardButton(
+                    text=get_text("request_status.keyboards.materials", language=language),
+                    callback_data=RequestCallbackHelper.create_callback_data_with_request_number("matissue_start_", request_number)
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text=get_text("request_status.keyboards.request_clarification", language=language),
                     callback_data=RequestCallbackHelper.create_callback_data_with_request_number("request_clarification_", request_number)
                 )

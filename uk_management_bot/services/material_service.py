@@ -229,6 +229,61 @@ def get_material_stock_sync(db: Session, material_id: int) -> Decimal:
     return Decimal(str(stock))
 
 
+def guard_executor_issue(db: Session, *, request_number: str,
+                         telegram_id: int):
+    """Guard списания исполнителем (ARCH-01: ORM вне хендлера).
+
+    Returns:
+        (request, user, err_key): err_key — ключ локали при отказе, иначе None.
+        Проверки: заявка существует; статус «В работе»; актор — назначенный
+        исполнитель заявки.
+    """
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.utils.constants import REQUEST_STATUS_IN_PROGRESS
+
+    request = (db.query(Request)
+               .filter(Request.request_number == request_number).first())
+    if request is None:
+        return None, None, "errors.request_not_found"
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if user is None:
+        return request, None, "common.user_not_found"
+    if request.status != REQUEST_STATUS_IN_PROGRESS:
+        return request, user, "materials.issue.wrong_status"
+    if request.executor_id != user.id:
+        return request, user, "materials.issue.not_executor"
+    return request, user, None
+
+
+def issue_material_with_comment(db: Session, *, material_id: int, qty,
+                                created_by: int, request_number: str,
+                                comment_text: str) -> MaterialIssue:
+    """Бот-путь: списание + RequestComment(type='material') + commit —
+    ОДНА транзакция (упало что-то одно → откатилось всё).
+
+    Отдельная обёртка поверх чистого ``issue_material_sync`` (тот комментариев
+    не пишет и не коммитит — его использует и API-паритет тестов).
+    """
+    from uk_management_bot.database.models.request_comment import RequestComment
+
+    try:
+        issue = issue_material_sync(
+            db, material_id=material_id, qty=qty, created_by=created_by,
+            doc_type="request", request_number=request_number,
+        )
+        db.add(RequestComment(
+            request_number=request_number,
+            user_id=created_by,
+            comment_text=comment_text,
+            comment_type="material",
+        ))
+        db.commit()
+        return issue
+    except Exception:
+        db.rollback()
+        raise
+
+
 def issue_material_sync(db: Session, *, material_id: int, qty,
                         created_by: int, doc_type: str = "request",
                         request_number: Optional[str] = None,

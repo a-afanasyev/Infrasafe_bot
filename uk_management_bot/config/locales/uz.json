@@ -4634,7 +4634,8 @@
       "quick_clarification": "❓ Aniqlashtirish",
       "quick_completed": "✅ Bajarildi",
       "quick_approved": "👍 Qabul qilindi",
-      "comment": "📝 Izoh"
+      "comment": "📝 Izoh",
+      "materials": "📦 Materiallar"
     }
   },
   "requests": {
@@ -8276,6 +8277,32 @@
       "created_with_code": "✅ Mehmon ruxsatnomasi {until} gacha yaratildi.\n🔑 Bir martalik kod: {code}\nUni mehmonga bering — kod bir marta ishlaydi va keyin o'chadi.",
       "not_found": "Ruxsatnoma topilmadi.",
       "cancelled": "Ruxsatnoma bekor qilindi."
+    }
+  },
+  "materials": {
+    "units": {
+      "pcs": "dona",
+      "m": "m",
+      "m2": "m²",
+      "l": "l",
+      "kg": "kg",
+      "pack": "o'ram",
+      "set": "to'plam"
+    },
+    "issue": {
+      "select_material": "№{request_number} arizaga hisobdan chiqarish uchun materialni tanlang:",
+      "no_materials": "Omborda qoldig'i musbat materiallar yo'q.",
+      "enter_quantity": "«{name}» — qoldiq {stock} {unit}.\nHisobdan chiqarish miqdorini kiriting:",
+      "invalid_quantity": "Noto'g'ri miqdor. Noldan katta son kiriting (kasr qismi 3 xonagacha).",
+      "not_enough": "Omborda yetarli emas: qoldiq {stock} {unit}.",
+      "confirm": "№{request_number} arizaga hisobdan chiqarish:\n{name} — {qty} {unit}?",
+      "success": "✅ Hisobdan chiqarildi: {name} — {qty} {unit} (ariza №{request_number}).",
+      "comment": "📦 Списано: {name} — {qty} {unit}",
+      "cancelled": "Hisobdan chiqarish bekor qilindi.",
+      "not_executor": "Materiallarni faqat arizaga tayinlangan ijrochi hisobdan chiqara oladi.",
+      "wrong_status": "Hisobdan chiqarish faqat «Ishda» holatidagi arizalar uchun mavjud.",
+      "material_unavailable": "Material hisobdan chiqarish uchun mavjud emas.",
+      "error": "Hisobdan chiqarishda xatolik. Qayta urinib ko'ring."
     }
   }
 }
