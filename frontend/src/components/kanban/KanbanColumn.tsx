@@ -115,7 +115,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
 
   return (
     <div className={cn(
-      'flex min-h-0 min-w-[240px] max-w-[260px] shrink-0 flex-col rounded-[14px] border transition-all duration-200',
+      'flex min-w-[240px] max-w-[260px] shrink-0 flex-col rounded-[14px] border transition-all duration-200',
       isHoveredValid
         ? cn(
             STATUS_BORDER_ACTIVE[column.status] ?? 'border-accent/40',
@@ -131,7 +131,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
               : 'border-border-default bg-bg-surface',
     )}>
       {/* Column header */}
-      <div className="flex items-center gap-[7px] justify-between px-3 pt-[11px] pb-2.5 border-b border-border-default shrink-0">
+      <div className="sticky top-0 z-10 flex items-center gap-[7px] justify-between rounded-t-[14px] bg-inherit px-3 pt-[11px] pb-2.5 border-b border-border-default shrink-0">
         <div className="flex items-center gap-[7px]">
           <span className={cn('w-[7px] h-[7px] rounded-full shrink-0', dotClass)} />
           <span className="font-[family-name:var(--font-display)] font-bold text-[13px] text-text-primary">
@@ -146,7 +146,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
       {/* Cards area */}
       <div
         ref={setNodeRef}
-        className="min-h-0 flex-1 overflow-y-auto p-2 pb-1"
+        className="p-2 pb-1"
       >
         <SortableContext
           items={column.requests.map((r) => r.request_number)}
