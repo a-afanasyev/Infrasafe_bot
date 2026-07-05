@@ -274,20 +274,23 @@ def issue_material_sync(db: Session, *, material_id: int, qty,
 
 
 # ===========================================================================
-# Общий apply (одинаков для sync/async: обе сессии дают .add и мутацию ORM-объектов)
+# Общий apply: чистые шаги (декремент/сборка строк) + тонкие sync/async-зеркала
+# (flush — корутина на AsyncSession, поэтому единой функции быть не может)
 # ===========================================================================
 
-def _apply_issue(db, batches: list[MaterialReceipt],
-                 allocations: list[Allocation], *, material: Material,
-                 qty: Decimal, doc_type: str, request_number: Optional[str],
-                 reason: Optional[str], created_by: int,
-                 reversal_of_receipt_id: Optional[int] = None) -> MaterialIssue:
-    """Применить аллокации: декремент партий + insert issue/allocations."""
+def _decrement_batches(batches: list[MaterialReceipt],
+                       allocations: list[Allocation]) -> None:
     by_id = {b.id: b for b in batches}
     for alloc in allocations:
         receipt = by_id[alloc.receipt_id]
         receipt.qty_remaining = Decimal(str(receipt.qty_remaining)) - alloc.qty
-    issue = MaterialIssue(
+
+
+def _build_issue(allocations: list[Allocation], *, material: Material,
+                 qty: Decimal, doc_type: str, request_number: Optional[str],
+                 reason: Optional[str], created_by: int,
+                 reversal_of_receipt_id: Optional[int]) -> MaterialIssue:
+    return MaterialIssue(
         material_id=material.id,
         doc_type=doc_type,
         qty=qty,
@@ -299,19 +302,61 @@ def _apply_issue(db, batches: list[MaterialReceipt],
         unit=material.unit,
         created_by=created_by,
     )
+
+
+def _build_allocations(issue_id: int,
+                       allocations: list[Allocation]) -> list[MaterialIssueAllocation]:
+    return [
+        MaterialIssueAllocation(
+            issue_id=issue_id,
+            receipt_id=a.receipt_id,
+            qty=a.qty,
+            unit_price=a.unit_price,
+            amount=a.amount,
+        )
+        for a in allocations
+    ]
+
+
+def _apply_issue(db: Session, batches: list[MaterialReceipt],
+                 allocations: list[Allocation], *, material: Material,
+                 qty: Decimal, doc_type: str, request_number: Optional[str],
+                 reason: Optional[str], created_by: int,
+                 reversal_of_receipt_id: Optional[int] = None) -> MaterialIssue:
+    """Sync-apply: декремент партий + insert issue/allocations (без commit)."""
+    _decrement_batches(batches, allocations)
+    issue = _build_issue(
+        allocations, material=material, qty=qty, doc_type=doc_type,
+        request_number=request_number, reason=reason, created_by=created_by,
+        reversal_of_receipt_id=reversal_of_receipt_id,
+    )
     db.add(issue)
     db.flush()
-    for alloc in allocations:
-        db.add(
-            MaterialIssueAllocation(
-                issue_id=issue.id,
-                receipt_id=alloc.receipt_id,
-                qty=alloc.qty,
-                unit_price=alloc.unit_price,
-                amount=alloc.amount,
-            )
-        )
+    for row in _build_allocations(issue.id, allocations):
+        db.add(row)
     db.flush()
+    return issue
+
+
+async def _apply_issue_async(db: AsyncSession, batches: list[MaterialReceipt],
+                             allocations: list[Allocation], *, material: Material,
+                             qty: Decimal, doc_type: str,
+                             request_number: Optional[str],
+                             reason: Optional[str], created_by: int,
+                             reversal_of_receipt_id: Optional[int] = None
+                             ) -> MaterialIssue:
+    """Async-зеркало _apply_issue (различие только в await flush)."""
+    _decrement_batches(batches, allocations)
+    issue = _build_issue(
+        allocations, material=material, qty=qty, doc_type=doc_type,
+        request_number=request_number, reason=reason, created_by=created_by,
+        reversal_of_receipt_id=reversal_of_receipt_id,
+    )
+    db.add(issue)
+    await db.flush()
+    for row in _build_allocations(issue.id, allocations):
+        db.add(row)
+    await db.flush()
     return issue
 
 
@@ -481,7 +526,7 @@ async def issue_material(db: AsyncSession, *, material_id: int, qty,
          for b in batches],
         qty,
     )
-    return _apply_issue(
+    return await _apply_issue_async(
         db, list(batches), allocations,
         material=material, qty=qty, doc_type=doc_type,
         request_number=request_number, reason=reason, created_by=created_by,
@@ -657,7 +702,7 @@ async def _reverse_receipt(db: AsyncSession, *, material_id: int,
         receipt_id=receipt.id, qty=qty, unit_price=unit_price,
         amount=money(qty * unit_price),
     )
-    return _apply_issue(
+    return await _apply_issue_async(
         db, [receipt], [allocation],
         material=material, qty=qty, doc_type="shortage",
         request_number=None, reason=reason, created_by=created_by,
