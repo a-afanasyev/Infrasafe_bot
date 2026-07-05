@@ -36,6 +36,9 @@ from .board_config import BoardConfig
 # Обратная связь (жалобы/пожелания)
 from .feedback import Feedback
 
+# Складской учёт материалов (закупки и движение матсредств)
+from .material import Material, MaterialReceipt, MaterialIssue, MaterialIssueAllocation
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -75,6 +78,10 @@ __all__ = [
     'BoardConfig',
     'Feedback',
     'RequestNumberCounter',
+    'Material',
+    'MaterialReceipt',
+    'MaterialIssue',
+    'MaterialIssueAllocation',
 ]
 
 # Добавляем модели заявок, если они доступны (импортированы в try-блоке выше).
