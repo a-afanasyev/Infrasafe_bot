@@ -3,14 +3,16 @@
 Сценарий (FSM MaterialIssueStates): кнопка «📦 Материалы» в карточке заявки
 «В работе» → выбор материала (инлайн-список с остатками, пагинация) → ввод
 количества → подтверждение → списание + RequestComment (type='material')
-одной транзакцией (``material_service.issue_material_with_comment``).
+одной транзакцией (``request_handler_service.issue_material_with_comment``).
 
 Guard жёсткий (кнопка — не защита, callback можно вызвать напрямую): заявка
 существует; статус «В работе»; ``request.executor_id == user.id``; материал
 активен; остаток > 0. Статус/исполнитель перепроверяются на финальном
 подтверждении, количество жёстко валидируется внутри лока сервиса.
 
-ARCH-01: хендлер — тонкий FSM/UI-слой, весь ORM в services/material_service.py.
+ARCH-01: хендлер — тонкий FSM/UI-слой; доменный ORM в material_service, бот-глю
+(guard + комментарий+commit) — в request_handler_service (штатный дом ORM
+этого хендлера), material_service остаётся чистым от бот-специфики.
 """
 import logging
 import re
@@ -31,10 +33,12 @@ from uk_management_bot.services.material_service import (
     MaterialServiceError,
     MaterialValidationError,
     get_material_stock_sync,
-    guard_executor_issue,
-    issue_material_with_comment,
     list_materials_with_stock,
     parse_qty,
+)
+from uk_management_bot.services.request_handler_service import (
+    guard_executor_issue,
+    issue_material_with_comment,
 )
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 from uk_management_bot.states.material_issue import MaterialIssueStates

@@ -125,6 +125,8 @@ export interface IssueCard {
   unit: MaterialUnit
   created_by: number
   created_at: string | null
+  /** by-request: расход полностью сторнирован (не входит в total_cost) */
+  is_reversed?: boolean
 }
 
 export interface RequestMaterialsOut {

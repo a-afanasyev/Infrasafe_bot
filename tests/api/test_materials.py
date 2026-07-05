@@ -252,6 +252,14 @@ async def test_adjustment_inventory_surplus_and_shortage(client: AsyncClient):
     })
     assert resp.status_code == 422
 
+    # unit_price при shortage → 422 (цена недостачи считается FIFO, поле
+    # несовместимо — не игнорируется молча)
+    resp = await client.post(f"{BASE}/adjustments", json={
+        "material_id": m["id"], "direction": "shortage", "qty": "1",
+        "unit_price": "5.00", "reason": "x",
+    })
+    assert resp.status_code == 422
+
 
 # ── Корректировки: сторно ───────────────────────────────────────────
 
@@ -292,6 +300,13 @@ async def test_reverse_issue_restores_batches_by_price(client: AsyncClient,
     # qty при сторно запрещён → 422
     resp = await client.post(f"{BASE}/adjustments", json={
         "material_id": m["id"], "direction": "surplus", "qty": "1",
+        "reason": "x", "reversal_of_issue_id": issue["id"],
+    })
+    assert resp.status_code == 422
+
+    # unit_price при сторно запрещён → 422 (цены берутся из исходных аллокаций)
+    resp = await client.post(f"{BASE}/adjustments", json={
+        "material_id": m["id"], "direction": "surplus", "unit_price": "5.00",
         "reason": "x", "reversal_of_issue_id": issue["id"],
     })
     assert resp.status_code == 422
@@ -504,6 +519,36 @@ async def test_by_request_report(client: AsyncClient, db_session: AsyncSession,
     report = (await client.get(f"{BASE}/by-request/260705-001")).json()
     assert len(report["items"]) == 2
     assert _d(report["total_cost"]) == _d("500.00")
+
+
+@pytest.mark.asyncio
+async def test_by_request_excludes_reversed_issue(client: AsyncClient,
+                                                  db_session: AsyncSession,
+                                                  manager_user: User):
+    """Полностью сторнированный расход помечается is_reversed и не входит
+    в total_cost — карточка заявки не показывает отменённую себестоимость."""
+    await _mk_request(db_session, manager_user)
+    m = await _mk_material(client)
+    await _mk_receipt(client, m["id"], "10", "100.00")
+    kept = (await client.post(f"{BASE}/issues", json={
+        "material_id": m["id"], "qty": "2", "doc_type": "request",
+        "request_number": "260705-001",
+    })).json()
+    wrong = (await client.post(f"{BASE}/issues", json={
+        "material_id": m["id"], "qty": "3", "doc_type": "request",
+        "request_number": "260705-001",
+    })).json()
+    resp = await client.post(f"{BASE}/adjustments", json={
+        "material_id": m["id"], "direction": "surplus",
+        "reason": "ошибочное списание", "reversal_of_issue_id": wrong["id"],
+    })
+    assert resp.status_code == 201
+
+    report = (await client.get(f"{BASE}/by-request/260705-001")).json()
+    by_id = {item["id"]: item for item in report["items"]}
+    assert by_id[kept["id"]]["is_reversed"] is False
+    assert by_id[wrong["id"]]["is_reversed"] is True
+    assert _d(report["total_cost"]) == _d("200.00")  # только не-сторнированный
 
 
 @pytest.mark.asyncio

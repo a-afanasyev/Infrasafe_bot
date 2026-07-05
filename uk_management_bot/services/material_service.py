@@ -229,61 +229,6 @@ def get_material_stock_sync(db: Session, material_id: int) -> Decimal:
     return Decimal(str(stock))
 
 
-def guard_executor_issue(db: Session, *, request_number: str,
-                         telegram_id: int):
-    """Guard списания исполнителем (ARCH-01: ORM вне хендлера).
-
-    Returns:
-        (request, user, err_key): err_key — ключ локали при отказе, иначе None.
-        Проверки: заявка существует; статус «В работе»; актор — назначенный
-        исполнитель заявки.
-    """
-    from uk_management_bot.database.models.user import User
-    from uk_management_bot.utils.constants import REQUEST_STATUS_IN_PROGRESS
-
-    request = (db.query(Request)
-               .filter(Request.request_number == request_number).first())
-    if request is None:
-        return None, None, "errors.request_not_found"
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if user is None:
-        return request, None, "common.user_not_found"
-    if request.status != REQUEST_STATUS_IN_PROGRESS:
-        return request, user, "materials.issue.wrong_status"
-    if request.executor_id != user.id:
-        return request, user, "materials.issue.not_executor"
-    return request, user, None
-
-
-def issue_material_with_comment(db: Session, *, material_id: int, qty,
-                                created_by: int, request_number: str,
-                                comment_text: str) -> MaterialIssue:
-    """Бот-путь: списание + RequestComment(type='material') + commit —
-    ОДНА транзакция (упало что-то одно → откатилось всё).
-
-    Отдельная обёртка поверх чистого ``issue_material_sync`` (тот комментариев
-    не пишет и не коммитит — его использует и API-паритет тестов).
-    """
-    from uk_management_bot.database.models.request_comment import RequestComment
-
-    try:
-        issue = issue_material_sync(
-            db, material_id=material_id, qty=qty, created_by=created_by,
-            doc_type="request", request_number=request_number,
-        )
-        db.add(RequestComment(
-            request_number=request_number,
-            user_id=created_by,
-            comment_text=comment_text,
-            comment_type="material",
-        ))
-        db.commit()
-        return issue
-    except Exception:
-        db.rollback()
-        raise
-
-
 def issue_material_sync(db: Session, *, material_id: int, qty,
                         created_by: int, doc_type: str = "request",
                         request_number: Optional[str] = None,
@@ -620,6 +565,13 @@ async def adjust(db: AsyncSession, *, material_id: int, direction: str,
         raise MaterialValidationError(
             "qty запрещён при сторно: объём берётся из исходной операции"
         )
+    # Матрица полей: unit_price имеет смысл ТОЛЬКО у инвентаризационного
+    # излишка; при shortage цена считается FIFO, при сторно — из исходной
+    # операции. Несовместимое поле не игнорируем молча — 422.
+    if unit_price is not None and (is_reversal or direction == "shortage"):
+        raise MaterialValidationError(
+            "unit_price допустим только при инвентаризационном излишке (surplus)"
+        )
     if not is_reversal and qty is None:
         raise MaterialValidationError("qty обязателен для инвентаризационной корректировки")
 
@@ -897,7 +849,13 @@ async def list_operations(db: AsyncSession, *, op_type: Optional[str] = None,
 
 
 async def get_request_materials(db: AsyncSession, request_number: str) -> dict:
-    """Списания по заявке + суммарная себестоимость."""
+    """Списания по заявке + суммарная себестоимость.
+
+    Полностью сторнированные расходы (есть surplus-партии с
+    ``reversal_of_issue_id``) помечаются ``is_reversed`` и НЕ входят в
+    ``total_cost`` — сторно = «материал не израсходован», карточка заявки
+    не должна показывать отменённую себестоимость как использованную.
+    """
     rows = (
         (
             await db.execute(
@@ -912,8 +870,26 @@ async def get_request_materials(db: AsyncSession, request_number: str) -> dict:
         .scalars()
         .all()
     )
-    total = money(sum((Decimal(str(i.total_cost)) for i in rows), Decimal("0")))
-    return {"request_number": request_number, "items": rows, "total_cost": total}
+    reversed_ids: set[int] = set()
+    if rows:
+        reversed_ids = {
+            r[0]
+            for r in (
+                await db.execute(
+                    select(MaterialReceipt.reversal_of_issue_id.distinct()).where(
+                        MaterialReceipt.reversal_of_issue_id.in_(
+                            [i.id for i in rows]
+                        )
+                    )
+                )
+            ).all()
+        }
+    total = Decimal("0")
+    for issue in rows:
+        issue.is_reversed = issue.id in reversed_ids  # динамический атрибут для схемы
+        if not issue.is_reversed:
+            total += Decimal(str(issue.total_cost))
+    return {"request_number": request_number, "items": rows, "total_cost": money(total)}
 
 
 async def get_procurement(db: AsyncSession) -> dict:

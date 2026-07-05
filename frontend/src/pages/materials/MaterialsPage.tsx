@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Package, Download, Plus, ArrowDownToLine, ArrowUpFromLine, Scale, Pencil, Undo2 } from 'lucide-react'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -370,9 +371,13 @@ export default function MaterialsPage() {
                         className="bg-bg-card border border-border-default rounded-default p-3 text-[13px]"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-text-primary">
+                          {/* deep-link читает KanbanPage (?request=) — открывает карточку */}
+                          <Link
+                            to={`/dashboard?request=${req.request_number}`}
+                            className="font-semibold text-accent hover:underline"
+                          >
                             №{req.request_number}
-                          </span>
+                          </Link>
                           {req.executor_name && (
                             <span className="text-text-muted">{req.executor_name}</span>
                           )}

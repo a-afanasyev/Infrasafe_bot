@@ -1940,7 +1940,8 @@
     },
     "requestBlock": {
       "title": "Materiallar",
-      "total": "Jami tannarx: {{total}}"
+      "total": "Jami tannarx: {{total}}",
+      "reversed": "storno qilingan"
     },
     "toast": {
       "created": "Material yaratildi",

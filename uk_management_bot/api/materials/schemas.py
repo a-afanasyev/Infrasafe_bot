@@ -109,6 +109,9 @@ class IssueCard(BaseModel):
     unit: str
     created_by: int
     created_at: Optional[datetime] = None
+    # Заполняется только отчётом by-request: расход полностью сторнирован
+    # (не входит в total_cost отчёта)
+    is_reversed: bool = False
 
     model_config = {"from_attributes": True}
 

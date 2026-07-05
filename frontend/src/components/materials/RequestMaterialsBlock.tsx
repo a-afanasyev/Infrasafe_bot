@@ -25,9 +25,21 @@ export default function RequestMaterialsBlock({ requestNumber }: { requestNumber
       </span>
       <ul className="flex flex-col gap-0.5">
         {data.items.map((item) => (
-          <li key={item.id} className="text-text-primary text-[13px]">
+          <li
+            key={item.id}
+            className={
+              item.is_reversed
+                ? 'text-text-muted line-through text-[13px]'
+                : 'text-text-primary text-[13px]'
+            }
+          >
             {item.material_name} — {fmtQty(item.qty)} {unitLabel(item.unit)}
             <span className="text-text-muted"> · {fmtMoney(item.total_cost)}</span>
+            {item.is_reversed && (
+              <span className="no-underline text-text-muted">
+                {' '}({t('materials.requestBlock.reversed')})
+              </span>
+            )}
           </li>
         ))}
       </ul>
