@@ -183,17 +183,22 @@ export default function KanbanBoard({ onCardClick }: Props) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="kanban-hscroll flex min-h-0 flex-1 items-stretch gap-2.5 overflow-x-auto overflow-y-hidden pb-2.5">
-          {columns.map((col) => (
-            <KanbanColumn
-              key={col.status}
-              column={col}
-              onCardClick={onCardClick}
-              activeDragStatus={activeDragStatus}
-              overColumnId={overColumnId}
-              overItemId={overItemId}
-            />
-          ))}
+        {/* Внешний div скроллит всю доску; внутренний min-h-full + items-stretch тянут
+            все колонки до высоты самой длинной, чтобы sticky-заголовки (top-0) держались
+            даже у пустых/коротких колонок до самого низа прокрутки. */}
+        <div className="kanban-hscroll min-h-0 flex-1 overflow-auto pb-2.5">
+          <div className="flex min-h-full items-stretch gap-2.5">
+            {columns.map((col) => (
+              <KanbanColumn
+                key={col.status}
+                column={col}
+                onCardClick={onCardClick}
+                activeDragStatus={activeDragStatus}
+                overColumnId={overColumnId}
+                overItemId={overItemId}
+              />
+            ))}
+          </div>
         </div>
 
         <DragOverlay dropAnimation={null}>
