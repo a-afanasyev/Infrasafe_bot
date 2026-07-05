@@ -2,23 +2,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.exc import OperationalError, ProgrammingError
 from pydantic import BaseModel
-import logging
 
 from uk_management_bot.api.dependencies import get_db, require_roles
-from uk_management_bot.database.models.request import Request
+from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter()
-
-# «Возвращена» (канон cutover PR3+4): до cutover кодировалась как «Исполнено»
-# и входила в closed-набор статистики; добавлена рядом для сохранения прежней
-# классификации (наружу = «Исполнено» по проекции).
-CLOSED_STATUSES = ["Выполнена", "Исполнено", "Возвращена", "Принято", "Отменена"]
 
 
 # ---------------------------------------------------------------------------
@@ -79,27 +69,12 @@ async def get_request_stats(
     now_utc = datetime.now(timezone.utc)
     period_start = now_utc - timedelta(days=days)
 
-    # --- by_day: created counts per day ---
-    created_by_day_result = await db.execute(
-        select(func.date(Request.created_at), func.count())
-        .where(Request.created_at >= period_start)
-        .group_by(func.date(Request.created_at))
-    )
+    # --- by_day: created + closed counts per day ---
     created_map: dict[str, int] = {
-        str(row[0]): row[1] for row in created_by_day_result.all()
+        str(row[0]): row[1] for row in await stats_service.created_by_day(db, period_start=period_start)
     }
-
-    # --- by_day: closed counts per day ---
-    closed_by_day_result = await db.execute(
-        select(func.date(Request.completed_at), func.count())
-        .where(
-            Request.completed_at.isnot(None),
-            Request.completed_at >= period_start,
-        )
-        .group_by(func.date(Request.completed_at))
-    )
     closed_map: dict[str, int] = {
-        str(row[0]): row[1] for row in closed_by_day_result.all()
+        str(row[0]): row[1] for row in await stats_service.closed_by_day(db, period_start=period_start)
     }
 
     # Build full day list (one entry per day, including today)
@@ -118,79 +93,34 @@ async def get_request_stats(
     # дубли (напр. «Сантехника»+«plumbing» → один plumbing), иначе аналитика
     # двоит дольки. Defense-in-depth: корректно и до миграции данных.
     from uk_management_bot.keyboards.requests import resolve_category_key
-    cat_result = await db.execute(
-        select(Request.category, func.count())
-        .where(Request.created_at >= period_start)
-        .group_by(Request.category)
-    )
     by_category: dict[str, int] = {}
-    for raw, count in cat_result.all():
+    for raw, count in await stats_service.count_by_category(db, period_start=period_start):
         if not raw:
             continue
         key = resolve_category_key(raw)
         by_category[key] = by_category.get(key, 0) + count
 
     # --- by_status: open requests only (not in CLOSED_STATUSES), scoped to period ---
-    status_result = await db.execute(
-        select(Request.status, func.count())
-        .where(
-            Request.status.not_in(CLOSED_STATUSES),
-            Request.created_at >= period_start,
-        )
-        .group_by(Request.status)
-    )
-    by_status: dict[str, int] = {row[0]: row[1] for row in status_result.all() if row[0]}
+    by_status: dict[str, int] = {
+        row[0]: row[1]
+        for row in await stats_service.count_by_status(db, period_start=period_start)
+        if row[0]
+    }
 
     # --- top_executors ---
     # First, get top executors by completed count (no epoch extraction here)
-    exec_result = await db.execute(
-        select(
-            Request.executor_id,
-            func.count().label("completed"),
-        )
-        .where(
-            Request.status.in_(CLOSED_STATUSES),
-            Request.completed_at >= period_start,
-            Request.executor_id.isnot(None),
-        )
-        .group_by(Request.executor_id)
-        .order_by(func.count().desc())
-        .limit(10)
-    )
-    exec_rows = exec_result.all()
+    exec_rows = await stats_service.top_executors_counts(db, period_start=period_start)
 
     # Compute avg_hours per executor separately to isolate epoch extraction
     exec_ids = [row[0] for row in exec_rows]
-    avg_hours_map: dict[int, Optional[float]] = {}
-    if exec_ids:
-        try:
-            ah_result = await db.execute(
-                select(
-                    Request.executor_id,
-                    func.avg(
-                        func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
-                    ),
-                )
-                .where(
-                    Request.executor_id.in_(exec_ids),
-                    Request.completed_at.isnot(None),
-                    Request.assigned_at.isnot(None),
-                    Request.created_at >= period_start,
-                )
-                .group_by(Request.executor_id)
-            )
-            for uid, avg_h in ah_result.all():
-                avg_hours_map[uid] = float(avg_h) if avg_h is not None else None
-        except (OperationalError, ProgrammingError) as e:
-            logger.warning("DB doesn't support epoch extraction: %s", e)
+    avg_hours_map = await stats_service.top_executors_avg_hours(
+        db, executor_ids=exec_ids, period_start=period_start
+    )
 
     # Batch-load executor users
-    exec_user_ids = [row[0] for row in exec_rows]
-    exec_users_map: dict[int, User] = {}
-    if exec_user_ids:
-        u_result = await db.execute(select(User).where(User.id.in_(exec_user_ids)))
-        for u in u_result.scalars().all():
-            exec_users_map[u.id] = u
+    exec_users_map: dict[int, User] = {
+        u.id: u for u in await stats_service.load_users_by_ids(db, ids=exec_ids)
+    }
 
     top_executors: list[ExecutorStat] = []
     for row in exec_rows:
@@ -214,20 +144,6 @@ async def get_request_stats(
         'completed': 'completed',
         'cancelled': 'cancelled', 'rejected': 'cancelled',
     }
-    recent_q = (
-        select(
-            Request.request_number,
-            Request.status,
-            Request.created_at,
-            User.first_name,
-            User.last_name,
-        )
-        .outerjoin(User, Request.executor_id == User.id)
-        .where(Request.created_at >= period_start)
-        .order_by(Request.created_at.desc())
-        .limit(20)
-    )
-    recent_rows = (await db.execute(recent_q)).all()
     recent_actions: list[ActivityItem] = [
         ActivityItem(
             event_type=STATUS_TO_EVENT.get(row.status, 'created'),
@@ -235,36 +151,16 @@ async def get_request_stats(
             executor_name=f"{row.first_name or ''} {row.last_name or ''}".strip() or None,
             created_at=row.created_at,
         )
-        for row in recent_rows
+        for row in await stats_service.recent_actions(db, period_start=period_start)
     ]
 
     # --- total_requests ---
-    total_result = await db.execute(
-        select(func.count(Request.request_number)).where(Request.created_at >= period_start)
-    )
-    total_requests: int = total_result.scalar() or 0
+    total_requests: int = await stats_service.total_requests(db, period_start=period_start)
 
     # --- avg_resolution_hours ---
-    avg_resolution_hours: Optional[float] = None
-    try:
-        avg_res_result = await db.execute(
-            select(
-                func.avg(
-                    func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
-                )
-            )
-            .where(
-                Request.status.in_(CLOSED_STATUSES),
-                Request.completed_at >= period_start,
-                Request.completed_at.isnot(None),
-                Request.assigned_at.isnot(None),
-            )
-        )
-        avg_res_scalar = avg_res_result.scalar()
-        avg_resolution_hours = float(avg_res_scalar) if avg_res_scalar is not None else None
-    except (OperationalError, ProgrammingError) as e:
-        logger.warning("DB doesn't support epoch extraction: %s", e)
-        avg_resolution_hours = None
+    avg_resolution_hours: Optional[float] = await stats_service.avg_resolution_hours(
+        db, period_start=period_start
+    )
 
     return RequestStatsOut(
         by_day=by_day,
