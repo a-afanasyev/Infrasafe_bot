@@ -22,7 +22,7 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import session_scope
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
@@ -79,28 +79,21 @@ async def _lang(event) -> str:
 def _approved_inspector(telegram_id: int) -> bool:
     from uk_management_bot.api.dependencies import _parse_user_roles
 
-    db = next(get_db())
-    try:
+    with session_scope() as db:
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user or user.status != "approved":
             return False
         return "inspector" in _parse_user_roles(user)
-    finally:
-        db.close()
 
 
 def _active_yards() -> list[tuple[int, str]]:
-    db = next(get_db())
-    try:
+    with session_scope() as db:
         yards = db.query(Yard).filter(Yard.is_active.is_(True)).order_by(Yard.name).all()
         return [(y.id, y.name) for y in yards]
-    finally:
-        db.close()
 
 
 def _active_buildings(yard_id: int) -> list[tuple[int, str]]:
-    db = next(get_db())
-    try:
+    with session_scope() as db:
         yard = db.query(Yard).filter(Yard.id == yard_id, Yard.is_active.is_(True)).first()
         if not yard:
             return []
@@ -111,8 +104,6 @@ def _active_buildings(yard_id: int) -> list[tuple[int, str]]:
             .all()
         )
         return [(b.id, b.address) for b in buildings]
-    finally:
-        db.close()
 
 
 def _paged_keyboard(items: list[tuple[int, str]], prefix: str, page: int, language: str,
@@ -229,8 +220,7 @@ async def inspector_building_selected(callback: CallbackQuery, state: FSMContext
     building_id = int(callback.data.split(":", 1)[1])
 
     # Резолв при выборе (дом+двор активны). Принадлежность для inspector не нужна.
-    db = next(get_db())
-    try:
+    with session_scope() as db:
         user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not user:
             await callback.answer(get_text("errors.default", language=lang), show_alert=True)
@@ -240,8 +230,6 @@ async def inspector_building_selected(callback: CallbackQuery, state: FSMContext
         except AddressResolutionError:
             await callback.answer(get_text("requests.address_not_available", language=lang), show_alert=True)
             return
-    finally:
-        db.close()
 
     await state.update_data(
         address_type="building", address_id=building_id, address=resolved.canonical_address,
@@ -365,14 +353,11 @@ async def inspector_confirm(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     from uk_management_bot.handlers.requests import save_request
 
-    db = next(get_db())
-    try:
+    with session_scope() as db:
         request_number = await save_request(
             data, callback.from_user.id, db, callback.bot,
             source="inspector", role="inspector",
         )
-    finally:
-        db.close()
 
     await state.clear()
     if request_number:
