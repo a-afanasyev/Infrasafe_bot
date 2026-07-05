@@ -101,6 +101,13 @@ body.light {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   background: var(--color-bg-root);
   color: var(--color-text-primary);
@@ -109,3 +116,23 @@ body {
   padding: 0;
 }
 
+/* Всегда видимый скроллбар доски канбана: на macOS overlay-бары скрыты, пока не
+   скроллишь, а горизонтальную прокрутку мышью без бара сделать нельзя. Явный
+   стиль ::-webkit-scrollbar заставляет Chrome/Safari показывать бар постоянно. */
+.kanban-hscroll {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--color-border-default) transparent;
+}
+.kanban-hscroll::-webkit-scrollbar {
+  height: 10px;
+}
+.kanban-hscroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kanban-hscroll::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 6px;
+}
+.kanban-hscroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

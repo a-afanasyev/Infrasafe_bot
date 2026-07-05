@@ -115,7 +115,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
 
   return (
     <div className={cn(
-      'flex flex-col min-w-[240px] max-w-[260px] rounded-[14px] border transition-all duration-200',
+      'flex min-h-0 min-w-[240px] max-w-[260px] shrink-0 flex-col rounded-[14px] border transition-all duration-200',
       isHoveredValid
         ? cn(
             STATUS_BORDER_ACTIVE[column.status] ?? 'border-accent/40',
@@ -146,7 +146,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
       {/* Cards area */}
       <div
         ref={setNodeRef}
-        className="flex-1 min-h-[120px] p-2 pb-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto p-2 pb-1"
       >
         <SortableContext
           items={column.requests.map((r) => r.request_number)}

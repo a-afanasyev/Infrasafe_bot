@@ -189,6 +189,14 @@ BASELINE: set[tuple[str, str, str]] = {
     # статусов сохраняются по обе стороны cutover.
     ('uk_management_bot/services/admin_handler_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/admin_handler_service.py', 'in_:Request', 'status'),
+    # Складской учёт: вкладка «На закуп» показывает открытые заявки в статусе
+    # «Закуп» (точечный SQL-фильтр `Request.status == REQUEST_STATUS_PURCHASE`
+    # в material_service), а guard_executor_issue (request_handler_service,
+    # бот-глю списания) проверяет загруженный `request.status == «В работе»`.
+    # Оба статуса не участвуют в dual-read канон-нормализации A — сырые
+    # чтения осознанны.
+    ('uk_management_bot/services/material_service.py', 'cmp:Request', 'status'),
+    ('uk_management_bot/services/request_handler_service.py', 'cmp:request', 'status'),
     ('uk_management_bot/services/metrics_manager.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/recommendation_engine.py', 'cmp:Request', 'status'),
     # PR-29.2 (ARCH-01): ORM resident/executor-хендлера заявок вынесен сюда из

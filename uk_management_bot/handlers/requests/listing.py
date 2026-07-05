@@ -305,8 +305,11 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
             elif request.status == "В работе":
                 complete_text = get_text("buttons.complete", language=lang) or "✅ Выполнена"
                 purchase_text = get_text("buttons.purchase", language=lang) or "💰 Нужен закуп"
+                materials_text = get_text("request_status.keyboards.materials", language=lang) or "📦 Материалы"
                 rows.append([InlineKeyboardButton(text=complete_text, callback_data=f"executor_complete_{request.request_number}")])
                 rows.append([InlineKeyboardButton(text=purchase_text, callback_data=f"executor_purchase_{request.request_number}")])
+                # Складской учёт: списание материалов на заявку (FSM matissue_*)
+                rows.append([InlineKeyboardButton(text=materials_text, callback_data=f"matissue_start_{request.request_number}")])
             elif request.status == "Закуп":
                 back_to_work_text = get_text("buttons.back_to_work", language=lang) or "🔄 Вернуть в работу"
                 rows.append([InlineKeyboardButton(text=back_to_work_text, callback_data=f"executor_work_{request.request_number}")])

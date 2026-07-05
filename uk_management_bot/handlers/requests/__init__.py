@@ -5,7 +5,7 @@ router, save_request, show_my_requests, _get_user_language, query-хелперы
 Порядок импорта под-модулей = порядок регистрации хендлеров.
 """
 from ._router import router
-from . import create, create_callbacks, listing, myrequests, executor  # noqa: F401
+from . import create, create_callbacks, listing, myrequests, executor, materials  # noqa: F401
 from .shared import (
     _get_user_language,
     _CANCEL_REQUEST_NUMBER_RE,

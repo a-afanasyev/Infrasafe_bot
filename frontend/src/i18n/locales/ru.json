@@ -58,10 +58,13 @@
     "main": "Основное",
     "external": "Внешнее",
     "feedback": "Обратная связь",
+    "groupPersonnel": "Персонал",
     "accessControl": "Контроль доступа",
+    "accessOverview": "Обзор",
     "accessHistory": "История проездов",
     "accessDatabase": "База доступа",
-    "accessEquipment": "Оборудование"
+    "accessEquipment": "Оборудование",
+    "materials": "Склад"
   },
   "accessControl": {
     "title": "Контроль доступа",
@@ -1833,5 +1836,131 @@
     "sourceBot": "Бот",
     "sourceTwa": "Mini App",
     "alreadyReplied": "Ответ отправлен"
+  },
+  "materials": {
+    "title": "Склад материалов",
+    "subtitle": "Закупки, остатки и движение материальных средств",
+    "tabs": {
+      "stock": "Остатки",
+      "operations": "Журнал операций",
+      "procurement": "На закуп"
+    },
+    "units": {
+      "pcs": "шт",
+      "m": "м",
+      "m2": "м²",
+      "l": "л",
+      "kg": "кг",
+      "pack": "упак",
+      "set": "компл"
+    },
+    "actions": {
+      "newMaterial": "Материал",
+      "receipt": "Приход",
+      "issue": "Расход",
+      "adjustment": "Корректировка"
+    },
+    "columns": {
+      "name": "Материал",
+      "unit": "Ед.",
+      "category": "Категория",
+      "stock": "Остаток",
+      "stockValue": "Сумма",
+      "minStock": "Мин. остаток",
+      "date": "Дата",
+      "opType": "Операция",
+      "qty": "Кол-во",
+      "amount": "Сумма",
+      "request": "Заявка",
+      "detail": "Детали",
+      "toBuy": "Докупить"
+    },
+    "opType": {
+      "receipt": "Приход",
+      "issue": "Расход"
+    },
+    "docType": {
+      "purchase": "закупка",
+      "surplus": "излишек/сторно",
+      "request": "по заявке",
+      "household": "хознужды",
+      "shortage": "недостача/сторно"
+    },
+    "stock": {
+      "search": "Поиск по названию…",
+      "onlyLow": "Только дефицит",
+      "empty": "Материалы не найдены",
+      "lowBadge": "мало"
+    },
+    "operations": {
+      "allTypes": "Все операции",
+      "allMaterials": "Все материалы",
+      "receipt": "Приход",
+      "issue": "Расход",
+      "empty": "Операций нет"
+    },
+    "procurement": {
+      "empty": "Дефицита нет — все остатки выше минимума",
+      "openRequests": "Заявки в статусе «Закуп»"
+    },
+    "form": {
+      "createTitle": "Новый материал",
+      "editTitle": "Материал",
+      "name": "Название",
+      "unit": "Единица измерения",
+      "category": "Категория",
+      "minStock": "Минимальный остаток",
+      "isActive": "Активен",
+      "material": "Материал",
+      "selectMaterial": "— выберите материал —",
+      "qty": "Количество",
+      "reason": "Причина",
+      "note": "Примечание"
+    },
+    "receipt": {
+      "title": "Приход материала",
+      "unitPrice": "Цена за ед.",
+      "supplier": "Поставщик",
+      "docNumber": "№ документа",
+      "docDate": "Дата документа",
+      "submit": "Оприходовать"
+    },
+    "issue": {
+      "title": "Расход материала",
+      "target": "Назначение",
+      "byRequest": "На заявку",
+      "household": "Хознужды",
+      "requestNumber": "Номер заявки",
+      "submit": "Списать"
+    },
+    "adjustment": {
+      "title": "Корректировка (инвентаризация)",
+      "subtitle": "Излишек оприходуется партией, недостача списывается по FIFO",
+      "direction": "Тип",
+      "surplus": "Излишек (+)",
+      "shortage": "Недостача (−)",
+      "submit": "Провести"
+    },
+    "reversal": {
+      "action": "Сторно",
+      "issueTitle": "Сторно расхода",
+      "receiptTitle": "Сторно прихода",
+      "summary": "{{name}} — {{qty}} {{unit}}.",
+      "issueHint": "Сторно полное и однократное: материал вернётся партиями по исходным ценам.",
+      "receiptHint": "Возможно только для нетронутой партии (ничего не списано).",
+      "submit": "Сторнировать"
+    },
+    "requestBlock": {
+      "title": "Материалы",
+      "total": "Итого себестоимость: {{total}}",
+      "reversed": "сторнировано"
+    },
+    "toast": {
+      "created": "Материал создан",
+      "updated": "Материал обновлён",
+      "receiptCreated": "Приход проведён",
+      "issueCreated": "Расход проведён",
+      "adjustmentCreated": "Корректировка проведена"
+    }
   }
 }
