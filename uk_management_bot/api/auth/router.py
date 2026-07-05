@@ -21,6 +21,9 @@ from uk_management_bot.api.auth.service import (
     create_mfa_token, verify_mfa_token, generate_otp, store_otp, verify_otp, send_otp_via_bot,
 )
 from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
+from uk_management_bot.api.users.queries import (
+    get_user_by_telegram_id, get_user_by_id, require_user_by_id,
+)
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.refresh_token import RefreshToken
 from uk_management_bot.config.settings import settings
@@ -126,8 +129,7 @@ async def login_telegram_widget(
     if not isinstance(raw_payload, dict) or not verify_telegram_widget(raw_payload):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Telegram auth data")
 
-    result = await db.execute(select(User).where(User.telegram_id == data.id))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_telegram_id(db, data.id)
     if not user or user.status != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
@@ -153,8 +155,7 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
     if not telegram_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No user id in initData")
 
-    result = await db.execute(select(User).where(User.telegram_id == int(telegram_id)))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_telegram_id(db, int(telegram_id))
     if not user or user.status != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
@@ -225,8 +226,7 @@ async def verify_login_otp(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error_msg)
 
     # OTP verified — issue full tokens (Web flow)
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_id(db, user_id)
     if not user or user.status != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
@@ -243,8 +243,7 @@ async def resend_otp(request: Request, data: MFARequiredResponse, db: AsyncSessi
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA session expired")
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_id(db, user_id)
     if not user or not user.telegram_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")
 
@@ -286,8 +285,7 @@ async def refresh_token(
 
     # Rotate: revoke old, issue new
     rt.revoked_at = datetime.now(timezone.utc)
-    user_result = await db.execute(select(User).where(User.id == rt.user_id))
-    user = user_result.scalar_one()
+    user = await require_user_by_id(db, rt.user_id)
 
     if user.status != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
@@ -353,8 +351,7 @@ async def set_password(
     if len(data.password) < 8:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too short (min 8)")
 
-    result = await db.execute(select(User).where(User.id == user.id))
-    db_user = result.scalar_one()
+    db_user = await require_user_by_id(db, user.id)
 
     # AUD3-16 (A07): if a password already exists this is a CHANGE — require the
     # current password so a replayed/stolen access token alone can't overwrite

@@ -8,6 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db
+from uk_management_bot.api.users.queries import (
+    get_user_by_telegram_id, require_user_by_telegram_id,
+)
 from uk_management_bot.api.rate_limit import limiter, auth_ratelimit_guard
 from uk_management_bot.api.auth.service import verify_twa_init_data
 from uk_management_bot.config.settings import settings
@@ -46,9 +49,7 @@ def _resolve_telegram_id(init_data: str) -> tuple[int, dict]:
 async def start(request: Request, body: StartIn, db: AsyncSession = Depends(get_db)):
     telegram_id, tg = _resolve_telegram_id(body.init_data)
 
-    existing = (await db.execute(
-        select(User).where(User.telegram_id == telegram_id)
-    )).scalar_one_or_none()
+    existing = await get_user_by_telegram_id(db, telegram_id)
     if existing and existing.status == "blocked":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Пользователь заблокирован")
     if existing and existing.status == "approved":
@@ -123,7 +124,7 @@ async def register_applicant(
                 detail="Аккаунт уже имеет роль в системе — обратитесь к менеджеру",
             )
 
-    user = (await db.execute(select(User).where(User.telegram_id == telegram_id))).scalar_one_or_none()
+    user = await get_user_by_telegram_id(db, telegram_id)
     if user and user.status == "blocked":
         raise HTTPException(status_code=403, detail="Пользователь заблокирован")
     if user and user.status == "approved":
@@ -138,7 +139,7 @@ async def register_applicant(
         await db.flush()
     except IntegrityError:
         await db.rollback()
-        user = (await db.execute(select(User).where(User.telegram_id == telegram_id))).scalar_one()
+        user = await require_user_by_telegram_id(db, telegram_id)
         if user.status == "blocked":
             raise HTTPException(status_code=403, detail="Пользователь заблокирован")
         if user.status == "approved":
