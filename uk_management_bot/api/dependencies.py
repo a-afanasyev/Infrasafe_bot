@@ -3,8 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.database.models.user import User
+from uk_management_bot.api.users.queries import get_user_by_id
 from uk_management_bot.utils.auth_helpers import legacy_primary_role, parse_roles_safe
-from sqlalchemy import select
 from typing import AsyncGenerator, Optional
 
 security = HTTPBearer(auto_error=False)
@@ -71,8 +71,7 @@ async def get_current_user(
     except (ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
-    result = await db.execute(select(User).where(User.id == uid))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_id(db, uid)
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
