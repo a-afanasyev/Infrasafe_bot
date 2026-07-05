@@ -4,7 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import { isTWA } from './utils/isTWA'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES } from './constants/roles'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES } from './constants/roles'
 import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
@@ -36,6 +36,8 @@ const AccessControlPage = lazy(() => import('./pages/access/AccessControlPage'))
 const AccessHistoryPage = lazy(() => import('./pages/access/AccessHistoryPage'))
 const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'))
 const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
+// Складской учёт материалов (приход/расход по заявкам). Гард — MATERIALS_MODULE_ROLES.
+const MaterialsPage = lazy(() => import('./pages/materials/MaterialsPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -132,6 +134,12 @@ export default function App() {
                   контроллеры внутри доступны только system_admin (гейтинг табов). */}
               <Route path="/dashboard/access/equipment" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessEquipmentPage /></PageErrorBoundary>} />
+              </Route>
+
+              {/* Складской учёт материалов: номенклатура, остатки, журнал
+                  операций, «на закуп». Гард — MATERIALS_MODULE_ROLES. */}
+              <Route path="/dashboard/materials" element={<ProtectedRoute allowedRoles={[...MATERIALS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><MaterialsPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Resident board - public standalone page (УК landing) */}

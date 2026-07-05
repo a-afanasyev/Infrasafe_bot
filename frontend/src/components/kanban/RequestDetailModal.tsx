@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import TransitionModal, { type TransitionData } from './TransitionModal'
+import RequestMaterialsBlock from '../materials/RequestMaterialsBlock'
 import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal } from './transitions'
 
 // TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
@@ -446,6 +447,11 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                   <span className="text-text-primary">{request.completion_report}</span>
                 </div>
               )}
+              {/* Складской учёт: списанные материалы + себестоимость
+                  (рендерится только MATERIALS_MODULE_ROLES и при наличии списаний) */}
+              <div className="bg-bg-surface border border-border-default rounded-[10px] px-3 py-2.5 text-[13px] empty:hidden">
+                <RequestMaterialsBlock requestNumber={request.request_number} />
+              </div>
               {request.return_reason && (
                 <div className="bg-red/8 border border-red/20 rounded-[10px] px-3 py-2.5 text-[13px]">
                   <span className="font-semibold text-red">{t('kanban.returnReason')} </span>

@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES } from '../constants/roles'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES } from '../constants/roles'
 import { TopbarProvider } from '../contexts/TopbarContext'
 import { useTopbar } from '../contexts/topbar'
 import { useTheme } from '../hooks/useTheme'
@@ -35,7 +35,7 @@ import {
   KeyRound,
   ChevronUp,
   ChevronDown,
-} from 'lucide-react'
+  Package,} from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -70,6 +70,8 @@ const NAV_ITEMS: NavItem[] = [
   // access_control: «Оборудование» — manager/system_admin (камеры/шлагбаумы/
   // контроллеры внутри только для system_admin).
   { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, allowedRoles: ACCESS_MANAGER_ROLES },
+  // Складской учёт материалов (manager/system_admin)
+  { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, allowedRoles: MATERIALS_MODULE_ROLES },
 ]
 
 // ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────

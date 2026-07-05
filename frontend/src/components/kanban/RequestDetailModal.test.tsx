@@ -7,7 +7,12 @@ import RequestDetailModal from './RequestDetailModal'
 
 // useHasRole gates the manager-only urgency editor — mock it per test.
 const mockHasRole = vi.fn()
-vi.mock('../../hooks/useHasRole', () => ({ useHasRole: (r: string) => mockHasRole(r) }))
+vi.mock('../../hooks/useHasRole', () => ({
+  useHasRole: (r: string) => mockHasRole(r),
+  // RequestMaterialsBlock (склад) гейтится useHasAnyRole — в этих тестах
+  // блок не участвует, всегда выключен.
+  useHasAnyRole: () => false,
+}))
 
 function noop() {}
 

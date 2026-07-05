@@ -61,7 +61,8 @@
     "accessControl": "Kirish nazorati",
     "accessHistory": "O'tishlar tarixi",
     "accessDatabase": "Kirish bazasi",
-    "accessEquipment": "Jihozlar"
+    "accessEquipment": "Jihozlar",
+    "materials": "Ombor"
   },
   "accessControl": {
     "title": "Kirish nazorati",
@@ -1823,5 +1824,130 @@
     "sourceBot": "Bot",
     "sourceTwa": "Mini App",
     "alreadyReplied": "Javob yuborilgan"
+  },
+  "materials": {
+    "title": "Materiallar ombori",
+    "subtitle": "Xaridlar, qoldiqlar va moddiy vositalar harakati",
+    "tabs": {
+      "stock": "Qoldiqlar",
+      "operations": "Amaliyotlar jurnali",
+      "procurement": "Xaridga"
+    },
+    "units": {
+      "pcs": "dona",
+      "m": "m",
+      "m2": "m²",
+      "l": "l",
+      "kg": "kg",
+      "pack": "o'ram",
+      "set": "to'plam"
+    },
+    "actions": {
+      "newMaterial": "Material",
+      "receipt": "Kirim",
+      "issue": "Chiqim",
+      "adjustment": "Tuzatish"
+    },
+    "columns": {
+      "name": "Material",
+      "unit": "Birlik",
+      "category": "Kategoriya",
+      "stock": "Qoldiq",
+      "stockValue": "Summa",
+      "minStock": "Min. qoldiq",
+      "date": "Sana",
+      "opType": "Amaliyot",
+      "qty": "Miqdor",
+      "amount": "Summa",
+      "request": "Ariza",
+      "detail": "Tafsilot",
+      "toBuy": "Xarid qilish"
+    },
+    "opType": {
+      "receipt": "Kirim",
+      "issue": "Chiqim"
+    },
+    "docType": {
+      "purchase": "xarid",
+      "surplus": "ortiqcha/storno",
+      "request": "ariza bo'yicha",
+      "household": "xo'jalik",
+      "shortage": "kamomad/storno"
+    },
+    "stock": {
+      "search": "Nomi bo'yicha qidirish…",
+      "onlyLow": "Faqat kamomad",
+      "empty": "Materiallar topilmadi",
+      "lowBadge": "kam"
+    },
+    "operations": {
+      "allTypes": "Barcha amaliyotlar",
+      "allMaterials": "Barcha materiallar",
+      "receipt": "Kirim",
+      "issue": "Chiqim",
+      "empty": "Amaliyotlar yo'q"
+    },
+    "procurement": {
+      "empty": "Kamomad yo'q — barcha qoldiqlar minimumdan yuqori",
+      "openRequests": "«Xarid» holatidagi arizalar"
+    },
+    "form": {
+      "createTitle": "Yangi material",
+      "editTitle": "Material",
+      "name": "Nomi",
+      "unit": "O'lchov birligi",
+      "category": "Kategoriya",
+      "minStock": "Minimal qoldiq",
+      "isActive": "Faol",
+      "material": "Material",
+      "selectMaterial": "— materialni tanlang —",
+      "qty": "Miqdor",
+      "reason": "Sabab",
+      "note": "Izoh"
+    },
+    "receipt": {
+      "title": "Material kirimi",
+      "unitPrice": "Birlik narxi",
+      "supplier": "Yetkazib beruvchi",
+      "docNumber": "Hujjat №",
+      "docDate": "Hujjat sanasi",
+      "submit": "Kirim qilish"
+    },
+    "issue": {
+      "title": "Material chiqimi",
+      "target": "Maqsad",
+      "byRequest": "Arizaga",
+      "household": "Xo'jalik ehtiyojlari",
+      "requestNumber": "Ariza raqami",
+      "submit": "Hisobdan chiqarish"
+    },
+    "adjustment": {
+      "title": "Tuzatish (inventarizatsiya)",
+      "subtitle": "Ortiqcha partiya sifatida kirim qilinadi, kamomad FIFO bo'yicha chiqariladi",
+      "direction": "Turi",
+      "surplus": "Ortiqcha (+)",
+      "shortage": "Kamomad (−)",
+      "submit": "O'tkazish"
+    },
+    "reversal": {
+      "action": "Storno",
+      "issueTitle": "Chiqim stornosi",
+      "receiptTitle": "Kirim stornosi",
+      "summary": "{{name}} — {{qty}} {{unit}}.",
+      "issueHint": "Storno to'liq va bir martalik: material asl narxlarda partiyalar bilan qaytadi.",
+      "receiptHint": "Faqat tegilmagan partiya uchun mumkin (hech narsa chiqarilmagan).",
+      "submit": "Storno qilish"
+    },
+    "requestBlock": {
+      "title": "Materiallar",
+      "total": "Jami tannarx: {{total}}"
+    },
+    "toast": {
+      "created": "Material yaratildi",
+      "updated": "Material yangilandi",
+      "receiptCreated": "Kirim o'tkazildi",
+      "issueCreated": "Chiqim o'tkazildi",
+      "adjustmentCreated": "Tuzatish o'tkazildi"
+    }
   }
 }

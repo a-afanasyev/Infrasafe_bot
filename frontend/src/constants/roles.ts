@@ -60,3 +60,13 @@ export const ACCESS_MANAGER_ROLES: readonly UserRole[] = [
   'manager',
   'system_admin',
 ] as const
+
+/**
+ * Роли модуля складского учёта материалов (номенклатура, приход/расход,
+ * остатки, журнал, «на закуп»). Исполнитель списывает материалы через
+ * Telegram-бот — web-доступ ему не нужен.
+ */
+export const MATERIALS_MODULE_ROLES: readonly UserRole[] = [
+  'manager',
+  'system_admin',
+] as const
