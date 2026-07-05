@@ -116,6 +116,46 @@ body {
   padding: 0;
 }
 
+/* Компактный список <select>. По умолчанию macOS-Chrome отдаёт список опций
+   рендеру ОС — он крупный (~24-30px строки) и игнорирует CSS. С appearance:
+   base-select (Chrome/Edge, включён в ui/select.tsx) список рисует сам браузер,
+   и эти правила задают ему тему приложения и 14px. Псевдо ::picker/::picker-icon
+   существуют только при base-select, поэтому глобальные селекторы безопасны —
+   в браузерах без поддержки остаётся нативный список. */
+select::picker(select) {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+}
+select option {
+  font-size: 14px;
+  line-height: 1.2;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  background: transparent;
+}
+select option:hover,
+select option:focus {
+  background: var(--color-bg-card-hover);
+}
+select option:checked {
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+}
+select option::checkmark {
+  display: none;
+}
+select::picker-icon {
+  color: var(--color-text-muted);
+  transition: transform 0.2s;
+}
+select:open::picker-icon {
+  transform: rotate(180deg);
+}
+
 /* Всегда видимый скроллбар доски канбана: на macOS overlay-бары скрыты, пока не
    скроллишь, а горизонтальную прокрутку мышью без бара сделать нельзя. Явный
    стиль ::-webkit-scrollbar заставляет Chrome/Safari показывать бар постоянно. */
