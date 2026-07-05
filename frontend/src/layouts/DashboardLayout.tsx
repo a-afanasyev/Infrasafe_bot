@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES } from '../constants/roles'
@@ -35,54 +35,202 @@ import {
   KeyRound,
   ChevronUp,
   ChevronDown,
-  Package,} from 'lucide-react'
+  Package,
+} from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
+type IconType = React.ComponentType<{ size?: number }>
 type SidebarState = 'expanded' | 'collapsed' | 'hidden'
 
-interface NavItem {
+interface NavLeaf {
   to: string
   labelKey: string
-  Icon: React.ComponentType<{ size?: number }>
+  Icon: IconType
   end?: boolean
   // Если задано — пункт виден только пользователю с одной из этих ролей.
   // Без поля пункт виден всем (текущее поведение остальных пунктов).
   allowedRoles?: readonly string[]
 }
 
-// ─── Navigation items ───────────────────────────────────────────────────────────
+// Раскрываемая группа: заголовок-аккордеон, внутри — обычные пункты.
+// Группа видна, если после role-фильтра остался хотя бы один дочерний пункт.
+interface NavGroup {
+  groupKey: string
+  labelKey: string
+  Icon: IconType
+  children: NavLeaf[]
+}
 
-const NAV_ITEMS: NavItem[] = [
+type NavEntry = NavLeaf | NavGroup
+
+const isGroup = (e: NavEntry): e is NavGroup => 'children' in e
+
+// ─── Navigation structure ───────────────────────────────────────────────────────
+
+const NAV_ENTRIES: NavEntry[] = [
   { to: '/dashboard/analytics', labelKey: 'nav.analytics', Icon: LayoutGrid },
   { to: '/dashboard', labelKey: 'nav.requests', Icon: ListChecks, end: true },
-  { to: '/dashboard/employees', labelKey: 'nav.employees', Icon: Users },
-  { to: '/dashboard/shifts', labelKey: 'nav.shifts', Icon: Clock },
-  { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2 },
+  // Персонал: сотрудники + смены + шаблоны смен под единым раскрываемым пунктом.
+  {
+    groupKey: 'personnel',
+    labelKey: 'nav.groupPersonnel',
+    Icon: Users,
+    children: [
+      { to: '/dashboard/employees', labelKey: 'nav.employees', Icon: Users },
+      { to: '/dashboard/shifts', labelKey: 'nav.shifts', Icon: Clock },
+      { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2 },
+    ],
+  },
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
   { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare },
-  // access_control §9.6: контроль доступа — только роли модуля доступа.
-  { to: '/dashboard/access', labelKey: 'nav.accessControl', Icon: ShieldCheck, end: true, allowedRoles: ACCESS_MODULE_ROLES },
-  // access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
-  { to: '/dashboard/access/history', labelKey: 'nav.accessHistory', Icon: History, allowedRoles: ACCESS_MANAGER_ROLES },
-  { to: '/dashboard/access/database', labelKey: 'nav.accessDatabase', Icon: Database, allowedRoles: ACCESS_MANAGER_ROLES },
-  // access_control: «Оборудование» — manager/system_admin (камеры/шлагбаумы/
-  // контроллеры внутри только для system_admin).
-  { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, allowedRoles: ACCESS_MANAGER_ROLES },
+  // Контроль доступа: обзор + история проездов + база доступа + оборудование.
+  {
+    groupKey: 'access',
+    labelKey: 'nav.accessControl',
+    Icon: ShieldCheck,
+    children: [
+      // access_control §9.6: обзор модуля — роли модуля доступа.
+      { to: '/dashboard/access', labelKey: 'nav.accessOverview', Icon: ShieldCheck, end: true, allowedRoles: ACCESS_MODULE_ROLES },
+      // access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
+      { to: '/dashboard/access/history', labelKey: 'nav.accessHistory', Icon: History, allowedRoles: ACCESS_MANAGER_ROLES },
+      { to: '/dashboard/access/database', labelKey: 'nav.accessDatabase', Icon: Database, allowedRoles: ACCESS_MANAGER_ROLES },
+      // «Оборудование» — manager/system_admin (камеры/шлагбаумы/контроллеры внутри
+      // только для system_admin).
+      { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, allowedRoles: ACCESS_MANAGER_ROLES },
+    ],
+  },
   // Складской учёт материалов (manager/system_admin)
   { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, allowedRoles: MATERIALS_MODULE_ROLES },
 ]
 
-// ─── Simple tooltip for collapsed sidebar ───────────────────────────────────────
+// Пункт «внешнего» блока (табло жителей) — вынесен отдельным листом.
+const RESIDENT_BOARD_LEAF: NavLeaf = {
+  to: '/resident-board',
+  labelKey: 'nav.residentBoard',
+  Icon: BookOpen,
+}
+
+// Виден ли пункт текущим ролям (без allowedRoles — виден всем).
+const isVisibleTo = (item: { allowedRoles?: readonly string[] }, roles?: string[]) =>
+  !item.allowedRoles || item.allowedRoles.some((r) => roles?.includes(r))
+
+// ─── Single nav leaf (optional indent for group children) ───────────────────────
+
+function NavLeafLink({
+  leaf,
+  indent = false,
+  onClick,
+}: {
+  leaf: NavLeaf
+  indent?: boolean
+  onClick?: () => void
+}) {
+  const { t } = useTranslation()
+  const { to, labelKey, Icon, end } = leaf
+
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onClick}
+      className={({ isActive }) =>
+        cn(
+          'mb-0.5 flex items-center gap-2.5 rounded-sm border-l-[3px] py-[9px] text-sm no-underline transition-all',
+          indent ? 'pl-9 pr-3' : 'px-3',
+          isActive
+            ? 'border-accent bg-accent-dim font-semibold text-accent'
+            : 'border-transparent text-text-secondary hover:bg-bg-surface',
+        )
+      }
+    >
+      <Icon size={16} />
+      {t(labelKey)}
+    </NavLink>
+  )
+}
 
 function NavTooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="group relative">
       {children}
-      <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 rounded-sm bg-bg-card px-2.5 py-1.5 text-xs font-medium text-text-primary opacity-0 shadow-lg ring-1 ring-border-default transition-opacity group-hover:opacity-100">
+      <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-sm bg-bg-card px-2.5 py-1.5 text-xs font-medium text-text-primary opacity-0 shadow-lg ring-1 ring-border-default transition-opacity group-hover:opacity-100">
         {label}
       </div>
+    </div>
+  )
+}
+
+function CollapsedNavLeafLink({ leaf }: { leaf: NavLeaf }) {
+  const { t } = useTranslation()
+  const { to, labelKey, Icon, end } = leaf
+
+  return (
+    <NavTooltip label={t(labelKey)}>
+      <NavLink
+        to={to}
+        end={end}
+        className={({ isActive }) =>
+          cn(
+            'mb-0.5 flex items-center justify-center rounded-sm p-2.5 text-sm transition-all',
+            isActive
+              ? 'bg-accent-dim font-semibold text-accent'
+              : 'text-text-secondary hover:bg-bg-surface',
+          )
+        }
+      >
+        <Icon size={18} />
+      </NavLink>
+    </NavTooltip>
+  )
+}
+
+// ─── Collapsible nav group (accordion header + indented children) ────────────────
+
+function NavGroupBlock({
+  group,
+  open,
+  onToggle,
+  active,
+  onNavClick,
+}: {
+  group: NavGroup
+  open: boolean
+  onToggle: () => void
+  active: boolean
+  onNavClick?: () => void
+}) {
+  const { t } = useTranslation()
+  const label = t(group.labelKey)
+  const { Icon } = group
+
+  return (
+    <div className="mb-0.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={`nav-group-${group.groupKey}`}
+        className={cn(
+          'flex w-full items-center gap-2.5 rounded-sm border-l-[3px] border-transparent px-3 py-[9px] text-sm transition-all',
+          active ? 'font-semibold text-accent' : 'text-text-secondary hover:bg-bg-surface',
+        )}
+      >
+        <Icon size={16} />
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown
+          size={14}
+          className={cn('shrink-0 transition-transform', open ? '' : '-rotate-90')}
+        />
+      </button>
+      {open && (
+        <div id={`nav-group-${group.groupKey}`} className="mt-0.5">
+          {group.children.map((child) => (
+            <NavLeafLink key={child.to} leaf={child} indent onClick={onNavClick} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -103,14 +251,12 @@ function TopbarInner({
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-[100] flex h-[var(--topbar-h)] items-center gap-3 border-b border-border-default px-6 backdrop-blur-[20px]',
-        'bg-bg-sidebar/80',
+        'fixed top-0 right-0 z-[100] flex h-[var(--topbar-h)] items-center gap-3 border-b border-border-default bg-bg-sidebar/80 px-3 backdrop-blur-[20px] sm:px-6',
         sidebarState === 'expanded' && 'left-[var(--sidebar-w)]',
         sidebarState === 'collapsed' && 'left-[var(--sidebar-w-collapsed)]',
         sidebarState === 'hidden' && 'left-0',
       )}
     >
-      {/* Hamburger for hidden sidebar */}
       {sidebarState === 'hidden' && (
         <Button
           variant="ghost"
@@ -194,7 +340,6 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
           {initials}
         </div>
 
-        {/* Name + role (only when expanded) */}
         {!collapsed && (
           <>
             <div className="min-w-0 flex-1 text-left">
@@ -262,7 +407,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-// ─── Sidebar content (shared between desktop and mobile overlay) ────────────────
+// ─── Sidebar content ─────────────────────────────────────────────────────────────
 
 function SidebarContent({
   collapsed,
@@ -272,18 +417,45 @@ function SidebarContent({
   onNavClick?: () => void
 }) {
   const { t } = useTranslation()
+  const location = useLocation()
   const userRoles = useAuthStore((s) => s.user?.roles)
-  // Пункты с allowedRoles показываем только при совпадении роли (гард сайдбара).
-  const navItems = NAV_ITEMS.filter(
-    (item) =>
-      !item.allowedRoles ||
-      item.allowedRoles.some((r) => userRoles?.includes(r)),
-  )
+
+  // Role-фильтр (гард сайдбара): группы отдают только видимых детей, пустые группы
+  // скрываются; листья — как раньше.
+  const entries: NavEntry[] = NAV_ENTRIES.map((entry) => {
+    if (isGroup(entry)) {
+      const children = entry.children.filter((c) => isVisibleTo(c, userRoles))
+      return children.length ? { ...entry, children } : null
+    }
+    return isVisibleTo(entry, userRoles) ? entry : null
+  }).filter((e): e is NavEntry => e !== null)
+
+  // Активность дочернего пункта: end → точное совпадение, иначе — префикс пути.
+  const isChildActive = (child: NavLeaf) =>
+    child.end ? location.pathname === child.to : location.pathname.startsWith(child.to)
+  const isGroupActive = (g: NavGroup) => g.children.some(isChildActive)
+
+  // Открытость групп: явный тумблер пользователя, по умолчанию — открыта активная.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  // При навигации авто-раскрываем группу с активным маршрутом, даже если её ранее
+  // свернули вручную (render-time adjust вместо effect — паттерн FE-034). Без этого
+  // сохранённый false «залипает» и активный пункт остаётся скрытым после перехода.
+  const [seenPath, setSeenPath] = useState(location.pathname)
+  if (location.pathname !== seenPath) {
+    setSeenPath(location.pathname)
+    const activeGroup = entries.find((e): e is NavGroup => isGroup(e) && isGroupActive(e))
+    if (activeGroup) setOpenGroups((s) => ({ ...s, [activeGroup.groupKey]: true }))
+  }
+  const toggleGroup = (g: NavGroup) => {
+    const currentlyOpen = openGroups[g.groupKey] ?? isGroupActive(g)
+    setOpenGroups((s) => ({ ...s, [g.groupKey]: !currentlyOpen }))
+  }
+
   return (
     <>
       {/* Logo */}
       <div className={cn('px-5 pt-5 pb-4', collapsed && 'flex justify-center px-3')}>
-        <div className={cn('flex items-center gap-3', collapsed && 'flex-col gap-0')}>
+        <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
           <img
             src={`${import.meta.env.BASE_URL}infrasafe-logo.svg`}
             alt="InfraSafe"
@@ -301,50 +473,30 @@ function SidebarContent({
       </div>
 
       {/* Nav */}
-      <nav className={cn('flex-1 overflow-y-auto', collapsed ? 'px-2 py-2' : 'px-3 py-2')}>
+      <nav className={cn('flex-1 overflow-y-auto py-2', collapsed ? 'px-2' : 'px-3')}>
         {!collapsed && (
           <div className="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
             {t('nav.main')}
           </div>
         )}
-        {navItems.map(({ to, labelKey, Icon, end }) => {
-          const label = t(labelKey)
-          return collapsed ? (
-            <NavTooltip key={to} label={label}>
-              <NavLink
-                to={to}
-                end={end}
-                onClick={onNavClick}
-                className={({ isActive }) =>
-                  cn(
-                    'mb-0.5 flex items-center justify-center rounded-sm p-2.5 text-sm transition-all',
-                    isActive
-                      ? 'bg-accent-dim text-accent font-semibold'
-                      : 'text-text-secondary hover:bg-bg-surface',
-                  )
-                }
-              >
-                <Icon size={18} />
-              </NavLink>
-            </NavTooltip>
+        {entries.map((entry) => {
+          if (collapsed) {
+            return isGroup(entry)
+              ? entry.children.map((child) => <CollapsedNavLeafLink key={child.to} leaf={child} />)
+              : <CollapsedNavLeafLink key={entry.to} leaf={entry} />
+          }
+
+          return isGroup(entry) ? (
+            <NavGroupBlock
+              key={entry.groupKey}
+              group={entry}
+              open={openGroups[entry.groupKey] ?? isGroupActive(entry)}
+              onToggle={() => toggleGroup(entry)}
+              active={isGroupActive(entry)}
+              onNavClick={onNavClick}
+            />
           ) : (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={onNavClick}
-              className={({ isActive }) =>
-                cn(
-                  'mb-0.5 flex items-center gap-2.5 rounded-sm border-l-[3px] px-3 py-[9px] text-sm no-underline transition-all',
-                  isActive
-                    ? 'border-accent bg-accent-dim font-semibold text-accent'
-                    : 'border-transparent text-text-secondary hover:bg-bg-surface',
-                )
-              }
-            >
-              <Icon size={16} />
-              {label}
-            </NavLink>
+            <NavLeafLink key={entry.to} leaf={entry} onClick={onNavClick} />
           )
         })}
 
@@ -355,38 +507,9 @@ function SidebarContent({
           </div>
         )}
         {collapsed ? (
-          <NavTooltip label={t('nav.residentBoard')}>
-            <NavLink
-              to="/resident-board"
-              onClick={onNavClick}
-              className={({ isActive }) =>
-                cn(
-                  'mt-2 flex items-center justify-center rounded-sm p-2.5 text-sm transition-all',
-                  isActive
-                    ? 'bg-accent-dim text-accent font-semibold'
-                    : 'text-text-secondary hover:bg-bg-surface',
-                )
-              }
-            >
-              <BookOpen size={18} />
-            </NavLink>
-          </NavTooltip>
+          <CollapsedNavLeafLink leaf={RESIDENT_BOARD_LEAF} />
         ) : (
-          <NavLink
-            to="/resident-board"
-            onClick={onNavClick}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-sm border-l-[3px] px-3 py-[9px] text-sm no-underline transition-all',
-                isActive
-                  ? 'border-accent bg-accent-dim font-semibold text-accent'
-                  : 'border-transparent text-text-secondary hover:bg-bg-surface',
-              )
-            }
-          >
-            <BookOpen size={16} />
-            {t('nav.residentBoard')}
-          </NavLink>
+          <NavLeafLink leaf={RESIDENT_BOARD_LEAF} onClick={onNavClick} />
         )}
       </nav>
 
@@ -403,118 +526,100 @@ export default function DashboardLayout() {
   const isDesktop = useMediaQuery('(min-width: 1280px)')
   const isTablet = useMediaQuery('(min-width: 1024px)')
   const isMobile = !isTablet
-
-  // Manual toggle override: user can force collapsed/expanded
   const [manualToggle, setManualToggle] = useState<'expanded' | 'collapsed' | null>(null)
-  // Mobile overlay
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Compute sidebar state
-  const sidebarState: SidebarState = (() => {
-    if (isMobile) return 'hidden'
-    if (manualToggle) return manualToggle
-    if (isDesktop) return 'expanded'
-    return 'collapsed'
-  })()
+  const sidebarState: SidebarState = isMobile
+    ? 'hidden'
+    : manualToggle ?? (isDesktop ? 'expanded' : 'collapsed')
 
-  // Reset manual toggle when crossing breakpoints
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс ручного тумблера при смене брейкпоинта
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the explicit state after a breakpoint change
     setManualToggle(null)
   }, [isDesktop, isTablet])
 
-  // Close mobile overlay on navigation
   const closeMobileMenu = useCallback(() => setMobileOpen(false), [])
 
-  // Close mobile menu on Escape
   useEffect(() => {
     if (!mobileOpen) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false)
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false)
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [mobileOpen])
 
-  // Toggle between expanded/collapsed
   const toggleSidebar = () => {
-    if (sidebarState === 'expanded') {
-      setManualToggle('collapsed')
-    } else {
-      setManualToggle('expanded')
-    }
+    setManualToggle(sidebarState === 'expanded' ? 'collapsed' : 'expanded')
   }
 
   return (
     <TopbarProvider>
-      {/* ── Desktop/Tablet Sidebar ── */}
-      {sidebarState !== 'hidden' && (
-        <aside
+      <div className="h-dvh overflow-hidden bg-bg-root">
+        {sidebarState !== 'hidden' && (
+          <aside
+            className={cn(
+              'fixed top-0 left-0 z-[200] flex h-dvh flex-col border-r border-border-default bg-bg-sidebar transition-[width] duration-200',
+              sidebarState === 'expanded'
+                ? 'w-[var(--sidebar-w)]'
+                : 'w-[var(--sidebar-w-collapsed)]',
+            )}
+          >
+            <SidebarContent collapsed={sidebarState === 'collapsed'} />
+
+            <div className={cn('border-t border-border-default px-3 py-2', sidebarState === 'collapsed' && 'flex justify-center')}>
+              <Button
+                variant="ghost"
+                size={sidebarState === 'collapsed' ? 'icon' : 'sm'}
+                onClick={toggleSidebar}
+                aria-label={sidebarState === 'expanded' ? t('sidebar.collapseMenu') : t('sidebar.expandMenu')}
+                className={cn(
+                  'text-text-muted hover:text-text-primary',
+                  sidebarState === 'expanded' && 'w-full justify-start gap-2',
+                )}
+              >
+                {sidebarState === 'expanded' ? (
+                  <>
+                    <PanelLeftClose size={16} />
+                    <span className="text-xs">{t('sidebar.collapse')}</span>
+                  </>
+                ) : (
+                  <PanelLeftOpen size={16} />
+                )}
+              </Button>
+            </div>
+          </aside>
+        )}
+
+        {isMobile && mobileOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-sm"
+              onClick={closeMobileMenu}
+              aria-hidden="true"
+            />
+            <aside className="fixed top-0 left-0 z-[260] flex h-dvh w-[min(280px,85vw)] flex-col border-r border-border-default bg-bg-sidebar shadow-2xl">
+              <SidebarContent collapsed={false} onNavClick={closeMobileMenu} />
+            </aside>
+          </>
+        )}
+
+        <TopbarInner
+          sidebarState={sidebarState}
+          onToggleMobile={() => setMobileOpen((open) => !open)}
+        />
+
+        <main
           className={cn(
-            'fixed top-0 left-0 z-[200] flex h-screen flex-col border-r border-border-default bg-bg-sidebar transition-[width] duration-200',
-            sidebarState === 'expanded' ? 'w-[var(--sidebar-w)]' : 'w-[var(--sidebar-w-collapsed)]',
+            'fixed right-0 bottom-0 top-[var(--topbar-h)] overflow-auto bg-bg-root',
+            sidebarState === 'expanded' && 'left-[var(--sidebar-w)]',
+            sidebarState === 'collapsed' && 'left-[var(--sidebar-w-collapsed)]',
+            sidebarState === 'hidden' && 'left-0',
           )}
         >
-          <SidebarContent collapsed={sidebarState === 'collapsed'} />
-
-          {/* Toggle button */}
-          <div className={cn('border-t border-border-default px-3 py-2', sidebarState === 'collapsed' && 'flex justify-center')}>
-            <Button
-              variant="ghost"
-              size={sidebarState === 'collapsed' ? 'icon' : 'sm'}
-              onClick={toggleSidebar}
-              aria-label={sidebarState === 'expanded' ? t('sidebar.collapseMenu') : t('sidebar.expandMenu')}
-              className={cn(
-                'text-text-muted hover:text-text-primary',
-                sidebarState === 'expanded' && 'w-full justify-start gap-2',
-              )}
-            >
-              {sidebarState === 'expanded' ? (
-                <>
-                  <PanelLeftClose size={16} />
-                  <span className="text-xs">{t('sidebar.collapse')}</span>
-                </>
-              ) : (
-                <PanelLeftOpen size={16} />
-              )}
-            </Button>
-          </div>
-        </aside>
-      )}
-
-      {/* ── Mobile Sidebar Overlay ── */}
-      {isMobile && mobileOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-sm transition-opacity"
-            onClick={closeMobileMenu}
-            aria-hidden="true"
-          />
-          {/* Sidebar panel */}
-          <aside className="fixed top-0 left-0 z-[260] flex h-screen w-[280px] flex-col border-r border-border-default bg-bg-sidebar shadow-2xl">
-            <SidebarContent collapsed={false} onNavClick={closeMobileMenu} />
-          </aside>
-        </>
-      )}
-
-      {/* ── Topbar ── */}
-      <TopbarInner
-        sidebarState={sidebarState}
-        onToggleMobile={() => setMobileOpen(o => !o)}
-      />
-
-      {/* ── Main content ── */}
-      <main
-        className={cn(
-          'mt-[var(--topbar-h)] min-h-[calc(100vh-var(--topbar-h))] bg-bg-root overflow-y-auto',
-          sidebarState === 'expanded' && 'ml-[var(--sidebar-w)]',
-          sidebarState === 'collapsed' && 'ml-[var(--sidebar-w-collapsed)]',
-          sidebarState === 'hidden' && 'ml-0',
-        )}
-      >
-        <Outlet />
-      </main>
+          <Outlet />
+        </main>
+      </div>
     </TopbarProvider>
   )
 }

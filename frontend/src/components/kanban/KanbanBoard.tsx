@@ -183,7 +183,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-2.5 overflow-x-auto pb-4 h-full items-start">
+        <div className="kanban-hscroll flex min-h-0 flex-1 items-stretch gap-2.5 overflow-x-auto overflow-y-hidden pb-2.5">
           {columns.map((col) => (
             <KanbanColumn
               key={col.status}

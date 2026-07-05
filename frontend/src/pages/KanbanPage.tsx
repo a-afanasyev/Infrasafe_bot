@@ -64,7 +64,7 @@ export default function KanbanPage() {
   }, [t, setActions, clearActions])
 
   return (
-    <div className="p-6 h-full">
+    <div className="flex h-full min-h-0 flex-col p-6">
       <KanbanBoard onCardClick={setSelectedRequest} />
       <CallCenterModal isOpen={callCenterOpen} onClose={() => setCallCenterOpen(false)} />
       <RequestDetailModal
