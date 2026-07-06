@@ -3,6 +3,44 @@
 **Дата обновления**: 21.10.2025  
 **Версия**: 2.0.0 (Phase 2B Production)
 
+> 🧭 **Актуальность доков проверена 2026-07-06** — см. **[DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md)**
+> (матрица «есть/актуально» по всем подсистемам; какие доки 🟢/🔴/⚫). Новое:
+> **[MATERIALS_MODULE.md](MATERIALS_MODULE.md)** (модуль «Склад материалов»). Многие файлы
+> ниже помечены как исторические — ориентируйтесь на статус-отчёт.
+
+---
+
+## 🗺️ Карта документации (актуально, 2026-07-06)
+
+Канонический комплект. Файлы вне этих разделов — легаси/исторические (см. статус-отчёт).
+
+**Продукт**
+- [product/OVERVIEW.md](product/OVERVIEW.md) — продуктовое описание (роли, каналы, домены, границы)
+
+**Технические документы** (`tech/`)
+- [tech/ARCHITECTURE.md](tech/ARCHITECTURE.md) — архитектура, контейнеры, потоки данных, auth
+- [tech/DATA_MODEL.md](tech/DATA_MODEL.md) — модель данных, ERD (+ [DATABASE_SCHEMA_ACTUAL.md](DATABASE_SCHEMA_ACTUAL.md))
+- [tech/API_REFERENCE.md](tech/API_REFERENCE.md) — `/api/v2/*`, RBAC-матрица, web-auth
+- [tech/REQUESTS.md](tech/REQUESTS.md) — домен «Заявки» (статусы, назначение, приёмка)
+- [tech/SHIFTS_AND_ASSIGNMENT.md](tech/SHIFTS_AND_ASSIGNMENT.md) — смены + движок назначения (5 классов)
+- [tech/ROLES_AND_ACCESS.md](tech/ROLES_AND_ACCESS.md) — роли (RBAC), матрица доступа, `admin` vs `system_admin`
+- [MATERIALS_MODULE.md](MATERIALS_MODULE.md) — модуль «Склад материалов» (FIFO)
+- [access-control/TECHNICAL_SPEC.md](access-control/TECHNICAL_SPEC.md) — контроль доступа (ANPR/пропуска)
+
+**Инструкции по ролям** (`guides/`)
+- [guides/USER_GUIDE_APPLICANT.md](guides/USER_GUIDE_APPLICANT.md) — житель
+- [guides/USER_GUIDE_EXECUTOR.md](guides/USER_GUIDE_EXECUTOR.md) — исполнитель
+- [guides/USER_GUIDE_MANAGER.md](guides/USER_GUIDE_MANAGER.md) — менеджер
+- [guides/USER_GUIDE_INSPECTOR.md](guides/USER_GUIDE_INSPECTOR.md) — обходчик
+- [guides/ADMIN_GUIDE.md](guides/ADMIN_GUIDE.md) — system_admin
+
+**Эксплуатация и разработка**
+- [ops/RUNBOOK.md](ops/RUNBOOK.md) — деплой, откат, порты, свежие грабли
+- [DEVELOPMENT.md](DEVELOPMENT.md) — dev-окружение бота+фронта, «как добавить страницу»
+- [LOCALIZATION_GUIDE.md](LOCALIZATION_GUIDE.md) — локализация (бот + фронт i18next)
+
+**Статус документации:** [DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md)
+
 ---
 
 ## 🎯 Быстрый старт

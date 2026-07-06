@@ -28,7 +28,7 @@ docker-compose.yml       — dev-окружение (bot, api, frontend, postgre
 - **Тесты фронта**: `cd frontend && npm test` (или `npx vitest`).
 - **Rebuild бота**: `docker compose build uk-management-bot && docker compose up -d uk-management-bot`.
 - **Локализация бота**: файлы `config/locales/ru.json`, `config/locales/uz.json`. Функция `get_text(key, language=lang)`. Статусы через `utils/status_display.py`. Адреса через `utils/address_helpers.py:localize_address()`.
-- **Локализация фронта**: `frontend/src/i18n/locales/{ru,uz,en}.json`, библиотека i18next.
+- **Локализация фронта**: `frontend/src/i18n/locales/{ru,uz}.json`, библиотека i18next.
 - **Роли в БД**: `user.roles` — JSON-массив строк, `user.active_role` — текущая активная роль. Не использовать устаревшее поле `user.role`.
 - **Номера заявок**: формат `YYMMDD-NNN` (строка, не int). Сервис: `RequestNumberService`.
 - **Не коммитить** без явной просьбы.

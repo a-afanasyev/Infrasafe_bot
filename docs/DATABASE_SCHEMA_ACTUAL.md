@@ -1,985 +1,264 @@
-# 🗄️ UK Management Bot - Actual Database Schema
+# База данных UK Management — фактическая схема (ACTUAL)
 
-**Generated from**: SQLAlchemy ORM Models
-**Date**: 2025-10-15
-**Status**: ✅ Verified Against Source Code
+**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции Alembic `alembic/versions/` (head = `036_materials_inventory`).
+**Дата ревизии:** 2026-07-06.
+**СУБД:** PostgreSQL (прод/dev через Docker, контейнер `uk-postgres`).
 
----
-
-## ⚠️ Important Notes
-
-### PostgreSQL ENUM Types
-
-This schema uses **3 PostgreSQL ENUM types** defined in [database_schema_actual.sql](database_schema_actual.sql):
-
-1. **`accesslevel`** - Values: `apartment`, `house`, `yard`
-   - Used in: `access_rights.access_level`
-
-2. **`documenttype`** - Values: `passport`, `property_deed`, `rental_agreement`, `utility_bill`, `other`
-   - Used in: `user_documents.document_type`
-
-3. **`verificationstatus`** - Values: `pending`, `approved`, `rejected`, `requested`
-   - Used in: `user_documents.verification_status`, `user_verifications.status`
-
-**Note**: In this documentation, ENUM columns may appear as VARCHAR types. Refer to the actual models in [uk_management_bot/database/models/user_verification.py](uk_management_bot/database/models/user_verification.py) for enum definitions.
+> ⚠️ **Автогенерация недоступна в этой среде.** Скрипт `scripts/export_schema.py` не запускался: в среде документирования нет Python-окружения бота (SQLAlchemy/зависимости) и подключаемого PostgreSQL-диалекта. Кроме того, сам скрипт устарел и **не отражает актуальную схему**, поэтому его вывод нельзя использовать как есть:
+> - хардкод `Date: 2025-10-15` и только 3 ENUM-типа (`accesslevel`, `documenttype`, `verificationstatus`);
+> - импортирует только `uk_management_bot.database.models` → **не видит домен access_control** (его таблицы создаются raw-миграциями 025–035, ORM-моделей в этом пакете нет);
+> - в прошлом дампе присутствовала уже удалённая колонка `users.role` (удалена миграцией `022_drop_legacy_role`).
+>
+> Данный файл собран **вручную из кода** (file:line указаны) и заменяет дамп от 2025-10 (23 таблицы).
 
 ---
 
-## 📊 Tables Overview
+## 1. Сводка по таблицам
 
-**Total tables**: 23
+Всего в системе **>50 прикладных таблиц** (+ служебная `alembic_version`). Они делятся на два контура:
 
-- `access_rights`
-- `apartments`
-- `audit_logs`
-- `buildings`
-- `notifications`
-- `planning_conflicts`
-- `quarterly_plans`
-- `quarterly_shift_schedules`
-- `ratings`
-- `request_assignments`
-- `request_comments`
-- `requests`
-- `shift_assignments`
-- `shift_schedules`
-- `shift_templates`
-- `shift_transfers`
-- `shifts`
-- `user_apartments`
-- `user_documents`
-- `user_verifications`
-- `user_yards`
-- `users`
-- `yards`
+| Контур | Кол-во таблиц | Владелец схемы | Источник DDL |
+|--------|---------------|----------------|--------------|
+| **Бот/API (основной домен)** | 34 | SQLAlchemy `Base` (`database/models/*`) | миграции 001–024, 036 |
+| **access_control (СКУД/ANPR/шлагбаумы)** | 22 | отдельный сервис, raw-миграции | миграции 025–035 |
+| **materials (склад)** | 4 (входят в 34) | SQLAlchemy `Base` (`database/models/material.py`) | миграция 036 |
+| **Итого** | **~56** | | head = 036 |
 
----
+### 1.1. Таблицы основного домена (SQLAlchemy Base)
 
-## Table: `access_rights`
+Регистрируются импортом в `uk_management_bot/database/models/__init__.py:1`.
 
-### Columns
+| Таблица | Модель (файл) | Назначение |
+|---------|---------------|-----------|
+| `users` | `user.py:6` | Пользователи (жители, исполнители, менеджеры, обходчики). Роли — JSON `roles` + `active_role` |
+| `user_documents` | `user_verification.py:37` | Документы пользователя (верификация) |
+| `user_verifications` | `user_verification.py:68` | Процесс верификации пользователя |
+| `access_rights` | `user_verification.py:100` | Права подачи заявок по уровню (apartment/house/yard). **НЕ путать с доменом access_control** |
+| `requests` | `request.py:7` | Заявки жителей (PK = `request_number`, формат `YYMMDD-NNN`) |
+| `request_comments` | `request_comment.py:12` | Комментарии/переходы статусов заявки |
+| `request_assignments` | `request_assignment.py:12` | Назначения заявок (групповые/индивидуальные) |
+| `request_number_counters` | `request_number_counter.py:19` | Gap-safe счётчик суффикса номера заявки по дням |
+| `ratings` | `rating.py:6` | Оценки жителя по завершённой заявке (1 на заявку) |
+| `shifts` | `shift.py:6` | Смены исполнителей |
+| `shift_templates` | `shift_template.py` | Шаблоны смен |
+| `shift_schedules` | `shift_schedule.py` | Дневные расписания/аналитика покрытия |
+| `shift_assignments` | `shift_assignment.py` | Привязка заявок к сменам (AI-скоринг) |
+| `shift_transfers` | `shift_transfer.py:12` | Передача смен между исполнителями |
+| `quarterly_plans` | `quarterly_plan.py` | Квартальные планы покрытия сменами |
+| `quarterly_shift_schedules` | `quarterly_plan.py` | Плановые смены внутри квартального плана |
+| `planning_conflicts` | `quarterly_plan.py` | Конфликты планирования |
+| `yards` | `yard.py:10` | Двор (территория УК) |
+| `buildings` | `building.py:10` | Здание (дом) в дворе |
+| `apartments` | `apartment.py:10` | Квартира в здании |
+| `user_apartments` | `user_apartment.py:25` | Связь житель↔квартира с модерацией |
+| `user_yards` | `user_yard.py:13` | Доп. дворы пользователя |
+| `notifications` | `notification.py:15` | Уведомления пользователей (бот) |
+| `audit_logs` | `audit.py:6` | Аудит действий |
+| `refresh_tokens` | `refresh_token.py:6` | Refresh-токены web-сессий |
+| `invite_nonces` | `invite_nonce.py:6` | Одноразовые nonce приглашений |
+| `board_config` | `board_config.py:7` | Singleton-конфиг публичной витрины (id=1) |
+| `feedback` | `feedback.py:16` | Обратная связь (жалобы/пожелания) |
+| `webhook_outbox` | `webhook_outbox.py:7` | Исходящие вебхуки (transactional outbox) |
+| `webhook_inbox` | `webhook_inbox.py:11` | Входящие вебхуки InfraSafe→UK (дедуп) |
+| `materials` | `material.py:53` | Номенклатура материалов |
+| `material_receipts` | `material.py:85` | Приход = партия (FIFO-лот) |
+| `material_issues` | `material.py:157` | Расход материала |
+| `material_issue_allocations` | `material.py:211` | FIFO-связка расход↔партия |
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `access_level` | VARCHAR(9) | NOT NULL | - |  |
-| `apartment_number` | VARCHAR(20) | NULL | - |  |
-| `house_number` | VARCHAR(20) | NULL | - |  |
-| `yard_name` | VARCHAR(100) | NULL | - |  |
-| `is_active` | BOOLEAN | NULL | True |  |
-| `expires_at` | DATETIME | NULL | - |  |
-| `granted_by` | INTEGER | NOT NULL | - | 🔗 FK |
-| `granted_at` | DATETIME | NULL | - |  |
-| `notes` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
+### 1.2. Таблицы домена access_control (22)
 
-### Foreign Keys
+Создаются raw-миграциями (ORM-моделей в `uk_management_bot/database/models/` нет; домен обслуживается отдельным сервисом, образ `Dockerfile.access`). DDL — в `alembic/versions/025..035`.
 
-- `user_id` → `users.id`
-- `granted_by` → `users.id`
+| Миграция | Таблицы |
+|----------|---------|
+| `025_access_control_territory_equipment` | `parking_zones`, `edge_controllers`, `parking_zone_yards`, `access_gates`, `access_cameras`, `access_barriers` |
+| `026_access_control_vehicles_passes` | `vehicles`, `vehicle_apartments`, `access_rules`, `access_passes`, `resident_access_requests` |
+| `027_access_control_events_decisions` | `camera_events`, `access_decisions`, `access_events`, `controller_sync_events` |
+| `028_access_control_commands_audit_append_only` | `barrier_commands`, `manual_openings`, `access_audit_logs` |
+| `033_access_control_parking_types` | `parking_spots`, `parking_spot_assignments` |
+| `034_access_control_entry_confirmations` | `access_entry_confirmations` |
+| `035_access_control_presence_sessions` | `vehicle_presence_sessions` |
 
-### Indexes
-
-- `ix_access_rights_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (granted_by)
-- `None`: ForeignKeyConstraint on (user_id)
-
----
-
-## Table: `apartments`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `building_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `apartment_number` | VARCHAR(20) | NOT NULL | - |  |
-| `entrance` | INTEGER | NULL | - |  |
-| `floor` | INTEGER | NULL | - |  |
-| `rooms_count` | INTEGER | NULL | - |  |
-| `area` | FLOAT | NULL | - |  |
-| `description` | TEXT | NULL | - |  |
-| `is_active` | BOOLEAN | NOT NULL | True |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `created_by` | INTEGER | NULL | - | 🔗 FK |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `created_by` → `users.id`
-- `building_id` → `buildings.id`
-
-### Indexes
-
-- `ix_apartments_id` on (id) 
-- `ix_apartments_apartment_number` on (apartment_number) 
-- `ix_apartments_building_id` on (building_id) 
-- `ix_apartments_is_active` on (is_active) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (building_id)
-- `None`: ForeignKeyConstraint on (created_by)
-- `None`: PrimaryKeyConstraint on (id)
-- `uix_building_apartment`: UniqueConstraint on (building_id, apartment_number)
+> Миграции `029`–`032` добавляют индексы/CHECK-и/колонки к уже созданным таблицам access_control (новых таблиц не создают).
 
 ---
 
-## Table: `audit_logs`
+## 2. ENUM-типы
 
-### Columns
+В основном домене PostgreSQL-ENUM используются в модуле верификации (`user_verification.py:16`):
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NULL | - | 🔗 FK |
-| `telegram_user_id` | INTEGER | NULL | - |  |
-| `action` | VARCHAR(100) | NOT NULL | - |  |
-| `details` | JSON | NULL | - |  |
-| `ip_address` | VARCHAR(45) | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
+| Тип | Значения | Где применяется |
+|-----|----------|-----------------|
+| `documenttype` | `passport`, `property_deed`, `rental_agreement`, `utility_bill`, `other` | `user_documents.document_type` |
+| `verificationstatus` | `pending`, `approved`, `rejected`, `requested` | `user_documents.verification_status`, `user_verifications.status` |
+| `accesslevel` | `apartment`, `house`, `yard` | `access_rights.access_level` |
 
-### Foreign Keys
-
-- `user_id` → `users.id`
-
-### Indexes
-
-- `ix_audit_logs_telegram_user_id` on (telegram_user_id) 
-- `ix_audit_logs_id` on (id) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: PrimaryKeyConstraint on (id)
+Остальные «статусные» поля (`requests.status`, `shifts.status`, `user_apartments.status`, `feedback.status`, `material_*.doc_type` и т.п.) реализованы как `VARCHAR` + канон-ключи/`CheckConstraint`, а не как PG-ENUM. Локализация значений — через `get_text`/i18n (паттерн `urgency`).
 
 ---
 
-## Table: `buildings`
+## 3. Основной домен — колонки по таблицам
 
-### Columns
+### 3.1. `users` (`user.py:6`)
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `address` | VARCHAR(300) | NOT NULL | - |  |
-| `yard_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `gps_latitude` | FLOAT | NULL | - |  |
-| `gps_longitude` | FLOAT | NULL | - |  |
-| `entrance_count` | INTEGER | NOT NULL | 1 |  |
-| `floor_count` | INTEGER | NOT NULL | 1 |  |
-| `description` | TEXT | NULL | - |  |
-| `is_active` | BOOLEAN | NOT NULL | True |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `created_by` | INTEGER | NULL | - | 🔗 FK |
-| `updated_at` | DATETIME | NULL | - |  |
+⚠️ Колонка `role` **удалена** (миграция `022_drop_legacy_role`). Роль пользователя = JSON-массив `roles` + текущая `active_role`.
 
-### Foreign Keys
+| Колонка | Тип | Null | Примечание |
+|---------|-----|------|-----------|
+| `id` | INTEGER | NOT NULL | PK |
+| `telegram_id` | BIGINT | NOT NULL | UNIQUE, index |
+| `username` | VARCHAR(255) | NULL | |
+| `first_name` | VARCHAR(255) | NULL | |
+| `last_name` | VARCHAR(255) | NULL | |
+| `roles` | TEXT | NULL | JSON-массив: `["applicant","executor"]` |
+| `active_role` | VARCHAR(50) | NULL | applicant / executor / manager / inspector |
+| `status` | VARCHAR(50) | NOT NULL | `pending` / `approved` / `blocked` |
+| `language` | VARCHAR(10) | NOT NULL | default `ru` |
+| `phone` | VARCHAR(20) | NULL | |
+| `specialization` | TEXT | NULL | JSON-массив специализаций |
+| `verification_status` | VARCHAR(50) | NOT NULL | default `pending` |
+| `verification_notes` | TEXT | NULL | |
+| `verification_date` | TIMESTAMPTZ | NULL | |
+| `verified_by` | INTEGER | NULL | id администратора (без FK) |
+| `passport_series` | VARCHAR(10) | NULL | |
+| `passport_number` | VARCHAR(10) | NULL | |
+| `birth_date` | TIMESTAMPTZ | NULL | |
+| `password_hash` | VARCHAR(255) | NULL | web-auth |
+| `email` | VARCHAR(255) | NULL | UNIQUE, index |
+| `password_reset_token` | VARCHAR(64) | NULL | |
+| `password_reset_expires_at` | TIMESTAMPTZ | NULL | |
+| `deleted_at` | TIMESTAMPTZ | NULL | soft-delete |
+| `deleted_by` | INTEGER | NULL | FK → `users.id` |
+| `deletion_reason` | TEXT | NULL | |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NULL | |
 
-- `yard_id` → `yards.id`
-- `created_by` → `users.id`
+### 3.2. `requests` (`request.py:7`)
 
-### Indexes
+PK = `request_number` VARCHAR(15), формат `YYMMDD-NNN` (сервис `RequestNumberService`).
 
-- `ix_buildings_is_active` on (is_active) 
-- `ix_buildings_id` on (id) 
-- `ix_buildings_address` on (address) 
-- `ix_buildings_yard_id` on (yard_id) 
+Ключевые колонки (полный список — в модели):
 
-### Constraints
+| Колонка | Тип | Null | Примечание |
+|---------|-----|------|-----------|
+| `request_number` | VARCHAR(15) | NOT NULL | PK |
+| `user_id` | INTEGER | NOT NULL | FK → `users.id`, index (заявитель) |
+| `category` | VARCHAR(100) | NOT NULL | |
+| `status` | VARCHAR(50) | NOT NULL | default `Новая`, index |
+| `description` | TEXT | NOT NULL | |
+| `urgency` | VARCHAR(20) | NOT NULL | канон-ключ `low/medium/high/critical` (TASK 17) |
+| `source` | VARCHAR(20) | NULL | `bot` / `twa` / вебхук и т.п. (default `bot`) |
+| `address` | TEXT | NULL | legacy-адрес |
+| `apartment` | VARCHAR(20) | NULL | legacy |
+| `apartment_id` | INTEGER | NULL | FK → `apartments.id`, index |
+| `building_id` | INTEGER | NULL | FK → `buildings.id` (ON DELETE RESTRICT), index |
+| `yard_id` | INTEGER | NULL | FK → `yards.id` (ON DELETE RESTRICT), index |
+| `address_type` | VARCHAR(20) | NULL | дискриминатор: `legacy/yard/building/apartment` |
+| `media_files` | JSON | NULL | default `[]` |
+| `executor_id` | INTEGER | NULL | FK → `users.id`, index |
+| `assignment_type` | VARCHAR(20) | NULL | `group`/`individual` |
+| `assigned_group` | VARCHAR(100) | NULL | |
+| `assigned_at`/`assigned_by` | TIMESTAMPTZ / INTEGER | NULL | `assigned_by` FK → `users.id` |
+| `completion_report` | TEXT | NULL | |
+| `completion_media` | JSON | NULL | |
+| материалы: `purchase_materials`, `requested_materials`, `manager_materials_comment`, `purchase_history` | TEXT | NULL | |
+| возврат: `is_returned`(BOOL), `return_reason`, `return_media`(JSON), `returned_at`, `returned_by`(FK users) | | | |
+| подтверждение: `manager_confirmed`(BOOL), `manager_confirmed_by`(FK users), `manager_confirmed_at`, `manager_confirmation_notes` | | | |
+| `created_at`(index), `updated_at`, `completed_at` | TIMESTAMPTZ | NULL | |
 
-- `None`: ForeignKeyConstraint on (yard_id)
-- `None`: ForeignKeyConstraint on (created_by)
-- `None`: PrimaryKeyConstraint on (id)
+**Инвариант (CHECK `ck_requests_address_type_fk`, `request.py:14`):** `address_type IS NULL` ИЛИ ровно один из `apartment_id`/`building_id`/`yard_id` заполнен согласно дискриминатору (`legacy` → все три NULL).
 
----
+### 3.3. `request_comments` (`request_comment.py:12`)
 
-## Table: `notifications`
+`id` PK; `request_number` FK → `requests.request_number`; `user_id` FK → `users.id`; `comment_text` TEXT; `comment_type` VARCHAR(50) (`status_change`/`clarification`/`purchase`/`report`); `previous_status`/`new_status` VARCHAR(50); `is_internal` BOOL default false; `media_files` JSON; `created_at`.
 
-### Columns
+### 3.4. `request_assignments` (`request_assignment.py:12`)
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `notification_type` | VARCHAR(50) | NOT NULL | - |  |
-| `title` | VARCHAR(255) | NULL | - |  |
-| `content` | TEXT | NOT NULL | - |  |
-| `is_read` | BOOLEAN | NULL | False |  |
-| `is_sent` | BOOLEAN | NULL | False |  |
-| `meta_data` | JSON | NULL | <function dict at 0xffffb39da980> |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
+`id` PK; `request_number` FK → `requests.request_number`; `assignment_type` VARCHAR(20) (`group`/`individual`); `group_specialization` VARCHAR(100); `executor_id` FK → `users.id`; `status` VARCHAR(20) default `active`; `created_at`; `created_by` FK → `users.id`.
+**Инвариант:** partial-unique `uq_request_assignments_active` по `request_number` WHERE `status='active'` (не более одного активного назначения; история cancelled/completed сохраняется).
 
-### Foreign Keys
+### 3.5. `request_number_counters` (`request_number_counter.py:19`)
 
-- `user_id` → `users.id`
+`day_prefix` VARCHAR(6) PK (YYMMDD, бизнес-дата Asia/Tashkent); `last_seq` INTEGER NOT NULL. Монотонный gap-safe счётчик суффикса.
 
-### Indexes
+### 3.6. `ratings` (`rating.py:6`)
 
-- `ix_notifications_id` on (id) 
+`id` PK; `request_number` VARCHAR(15) FK → `requests.request_number`; `user_id` FK → `users.id`; `rating` INTEGER (1–5); `review` TEXT; `created_at`.
+**Инвариант:** UNIQUE `uq_ratings_request_number` (одна оценка на заявку — идемпотентность приёмки).
 
-### Constraints
+### 3.7. `shifts` (`shift.py:6`)
 
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: PrimaryKeyConstraint on (id)
+`id` PK; `user_id` FK → `users.id` (nullable); `start_time` NOT NULL / `end_time`; `status` (`active/completed/cancelled/planned/paused`); `planned_start_time`/`planned_end_time`; `shift_template_id` FK → `shift_templates.id`; `shift_type`; `specialization_focus`/`coverage_areas` JSON; `geographic_zone`; лимиты `max_requests`/`current_request_count`/`priority_level`; аналитика `completed_requests`, `average_completion_time`, `average_response_time`, `efficiency_score`, `quality_rating`; `created_at`/`updated_at`.
 
----
+### 3.8. `shift_transfers` (`shift_transfer.py:12`)
 
-## Table: `planning_conflicts`
+`id` PK; `shift_id` FK → `shifts.id` (index); `from_executor_id` FK → `users.id` (index); `to_executor_id` FK → `users.id` (nullable, index); `assigned_by` FK → `users.id` (nullable, index, REG-02); `status` (`pending/assigned/accepted/rejected/cancelled/completed/expired`); `reason` (`illness/emergency/workload/vacation/other`); `comment`; `urgency_level` (`low/normal/high/critical`); `created_at`(tz-aware, index)/`assigned_at`/`responded_at`/`completed_at`; `auto_assigned` BOOL; `retry_count`/`max_retries`.
 
-### Columns
+### 3.9. `shift_templates`, `shift_schedules`, `shift_assignments`, `quarterly_plans`, `quarterly_shift_schedules`, `planning_conflicts`
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `quarterly_plan_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `conflict_type` | VARCHAR(100) | NOT NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | pending |  |
-| `involved_schedule_ids` | JSON | NULL | - |  |
-| `involved_user_ids` | JSON | NULL | - |  |
-| `conflict_time` | DATETIME | NULL | - |  |
-| `conflict_date` | DATE | NULL | - |  |
-| `conflict_details` | JSON | NULL | - |  |
-| `description` | TEXT | NULL | - |  |
-| `suggested_resolutions` | JSON | NULL | - |  |
-| `applied_resolution` | JSON | NULL | - |  |
-| `resolved_at` | DATETIME | NULL | - |  |
-| `resolved_by` | INTEGER | NULL | - | 🔗 FK |
-| `priority` | INTEGER | NOT NULL | 1 |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
+Домен планирования смен (AI-скоринг, квартальные планы). Структура развёрнута в моделях `shift_template.py`, `shift_schedule.py`, `shift_assignment.py`, `quarterly_plan.py`. Ключевое:
+- `shift_schedules.date` — UNIQUE (одно расписание на дату).
+- `shift_assignments`: FK `shift_id`→`shifts.id`, `request_number`→`requests.request_number`; поля AI-скоринга (`ai_score`, `confidence_level`, `specialization_match_score`, `geographic_score`, `workload_score`).
+- `quarterly_shift_schedules`: FK на `quarterly_plans.id`, `users.id` (assigned_user_id), `shifts.id` (actual_shift_id).
+- `planning_conflicts`: FK на `quarterly_plans.id`, `users.id` (resolved_by).
 
-### Foreign Keys
+### 3.10. Справочник адресов: `yards` / `buildings` / `apartments`
 
-- `resolved_by` → `users.id`
-- `quarterly_plan_id` → `quarterly_plans.id`
+- **`yards`** (`yard.py:10`): `id` PK; `name` VARCHAR(200) UNIQUE index; `description`; `gps_latitude`/`gps_longitude` FLOAT; `is_active` BOOL index; `created_at`/`created_by`(FK users)/`updated_at`.
+- **`buildings`** (`building.py:10`): `id` PK; `address` VARCHAR(300) index; `yard_id` FK → `yards.id` (ON DELETE CASCADE, index); GPS; `entrance_count`/`floor_count` (default 1); `is_active` index; аудит-поля.
+- **`apartments`** (`apartment.py:10`): `id` PK; `building_id` FK → `buildings.id` (ON DELETE CASCADE, index); `apartment_number` VARCHAR(20) index; `entrance`/`floor`/`rooms_count` INTEGER; `area` NUMERIC(8,2); `is_active`; аудит. UNIQUE `uix_building_apartment` (`building_id`,`apartment_number`).
 
-### Indexes
+### 3.11. Связи пользователь↔адрес
 
-- `ix_planning_conflicts_id` on (id) 
+- **`user_apartments`** (`user_apartment.py:25`): `id` PK; `user_id` FK→users (CASCADE, index); `apartment_id` FK→apartments (CASCADE, index); `status` (`pending/approved/rejected`, index); `requested_at`/`reviewed_at`/`reviewed_by`(FK users); `admin_comment`; `is_owner`/`is_primary` BOOL; UNIQUE `uix_user_apartment` (`user_id`,`apartment_id`).
+- **`user_yards`** (`user_yard.py:13`): `id` PK; `user_id` FK→users (CASCADE, index); `yard_id` FK→yards (CASCADE, index); `granted_at`/`granted_by`(FK users)/`comment`; UNIQUE `uix_user_yard`.
 
-### Constraints
+### 3.12. Верификация: `user_documents` / `user_verifications` / `access_rights`
 
-- `None`: ForeignKeyConstraint on (quarterly_plan_id)
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (resolved_by)
+- **`user_documents`** (`user_verification.py:37`): `id` PK; `user_id` FK→users; `document_type` ENUM `documenttype`; `file_id`(Telegram) VARCHAR(255); `file_name`/`file_size`; `verification_status` ENUM `verificationstatus` (default PENDING); `verification_notes`; `verified_by`(FK users)/`verified_at`; аудит.
+- **`user_verifications`** (`user_verification.py:68`): `id` PK; `user_id` FK→users; `status` ENUM `verificationstatus`; `requested_info` JSON; `requested_at`/`requested_by`(FK users); `admin_notes`; `verified_by`(FK users)/`verified_at`; аудит.
+- **`access_rights`** (`user_verification.py:100`): `id` PK; `user_id` FK→users; `access_level` ENUM `accesslevel`; `apartment_number`/`house_number`/`yard_name`; `is_active` BOOL; `expires_at`; `granted_by`(FK users, NOT NULL)/`granted_at`; `notes`; аудит.
 
----
+### 3.13. Инфраструктурные таблицы
 
-## Table: `quarterly_plans`
+- **`notifications`** (`notification.py:15`): `id` PK; `user_id` FK→users (index); `notification_type`; `title`/`content`; `is_read`/`is_sent` BOOL; `meta_data` JSON; `request_number_fk` FK→requests (nullable, index); аудит. Partial-index `ix_notifications_user_unread` (`user_id` WHERE `is_read=false`).
+- **`audit_logs`** (`audit.py:6`): `id` PK; `user_id` FK→users (nullable); `telegram_user_id` BIGINT (index, переживает удаление пользователя); `action` VARCHAR(100); `details` JSON; `ip_address` VARCHAR(45); `created_at`.
+- **`refresh_tokens`** (`refresh_token.py:6`): `id` PK; `user_id` FK→users (ON DELETE CASCADE, index); `token_hash` VARCHAR(64) UNIQUE index; `expires_at`; `created_at`; `revoked_at`; `device_info`.
+- **`invite_nonces`** (`invite_nonce.py:6`): `id` PK; `nonce` VARCHAR(64) UNIQUE index; `used_by` BIGINT; `used_at`; `invite_payload` JSON.
+- **`board_config`** (`board_config.py:7`): `id` PK (singleton=1); `data` JSON; `updated_at`; `updated_by` FK→users (ON DELETE SET NULL, index).
+- **`feedback`** (`feedback.py:16`): `id` PK; `user_id` FK→users; `type` (`complaint`/`wish`); `text` TEXT; `media_files` JSON (list media_id); `source` (`bot`/`twa`); `status` (`new`/`in_review`/`resolved`); `reply`/`replied_at`/`replied_by`(FK users); `created_at`.
 
-### Columns
+### 3.14. Вебхуки (интеграция InfraSafe)
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `year` | INTEGER | NOT NULL | - |  |
-| `quarter` | INTEGER | NOT NULL | - |  |
-| `start_date` | DATE | NOT NULL | - |  |
-| `end_date` | DATE | NOT NULL | - |  |
-| `created_by` | INTEGER | NOT NULL | - | 🔗 FK |
-| `status` | VARCHAR(50) | NOT NULL | draft |  |
-| `specializations` | JSON | NULL | - |  |
-| `coverage_24_7` | BOOLEAN | NOT NULL | False |  |
-| `load_balancing_enabled` | BOOLEAN | NOT NULL | True |  |
-| `auto_transfers_enabled` | BOOLEAN | NOT NULL | True |  |
-| `notifications_enabled` | BOOLEAN | NOT NULL | True |  |
-| `total_shifts_planned` | INTEGER | NOT NULL | 0 |  |
-| `total_hours_planned` | FLOAT | NOT NULL | 0.0 |  |
-| `coverage_percentage` | FLOAT | NOT NULL | 0.0 |  |
-| `total_conflicts` | INTEGER | NOT NULL | 0 |  |
-| `resolved_conflicts` | INTEGER | NOT NULL | 0 |  |
-| `pending_conflicts` | INTEGER | NOT NULL | 0 |  |
-| `settings` | JSON | NULL | - |  |
-| `notes` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-| `activated_at` | DATETIME | NULL | - |  |
-| `archived_at` | DATETIME | NULL | - |  |
+- **`webhook_outbox`** (`webhook_outbox.py:7`): `id` PK; `event_id` VARCHAR(36) UNIQUE; `event`/`endpoint`; `payload` JSON; `status` (`pending/in_flight/sent/failed`, CHECK); `attempts`; `last_error`; `retry_after`; `claim_token`/`claimed_at`/`claim_count` (lease-доставка, CODE-01); `created_at`/`sent_at`. Индексы: `ix_webhook_outbox_status_created`, partial `ix_webhook_outbox_pending`, partial `ix_webhook_outbox_in_flight`.
+- **`webhook_inbox`** (`webhook_inbox.py:11`): `id` PK; `event_id` VARCHAR(64) UNIQUE; `event`; `source_ip`; `payload` JSON; `outcome` (`accepted`/`ignored`/`rejected`); `request_number`; `error`; `received_at`.
 
-### Foreign Keys
+### 3.15. Склад материалов (4 таблицы)
 
-- `created_by` → `users.id`
-
-### Indexes
-
-- `ix_quarterly_plans_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (created_by)
+`materials`, `material_receipts`, `material_issues`, `material_issue_allocations` — FIFO-учёт с себестоимостью, append-only + сторно. Полное описание модели, инвариантов (`qty_remaining = qty − SUM(allocations)`), CHECK-ов и API — в **[docs/MATERIALS_MODULE.md](MATERIALS_MODULE.md)** и модели `database/models/material.py:1`. Кратко:
+- `materials`: `name` UNIQUE (глобально, включая is_active=false), `unit` (CHECK: pcs/m/m2/l/kg/pack/set), `min_stock` NUMERIC.
+- `material_receipts`: партия (FIFO-лот), immutable кроме `qty_remaining`; `reversal_of_issue_id` (циклический FK через `use_alter`).
+- `material_issues`: расход, immutable; `request_number` — **plain-строка без FK** (журнал переживает удаление заявки); CHECK `ck_issues_target`.
+- `material_issue_allocations`: связка расход↔партия (аудит себестоимости), immutable.
 
 ---
 
-## Table: `quarterly_shift_schedules`
+## 4. Alembic / миграции
 
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `quarterly_plan_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `planned_date` | DATE | NOT NULL | - |  |
-| `planned_start_time` | DATETIME | NOT NULL | - |  |
-| `planned_end_time` | DATETIME | NOT NULL | - |  |
-| `assigned_user_id` | INTEGER | NULL | - | 🔗 FK |
-| `specialization` | VARCHAR(100) | NOT NULL | - |  |
-| `schedule_type` | VARCHAR(50) | NOT NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | planned |  |
-| `actual_shift_id` | INTEGER | NULL | - | 🔗 FK |
-| `shift_config` | JSON | NULL | - |  |
-| `coverage_areas` | JSON | NULL | - |  |
-| `priority` | INTEGER | NOT NULL | 1 |  |
-| `notes` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `actual_shift_id` → `shifts.id`
-- `quarterly_plan_id` → `quarterly_plans.id`
-- `assigned_user_id` → `users.id`
-
-### Indexes
-
-- `ix_quarterly_shift_schedules_id` on (id) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (quarterly_plan_id)
-- `None`: ForeignKeyConstraint on (actual_shift_id)
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (assigned_user_id)
+- **Head:** `036_materials_inventory` (`alembic/versions/`).
+- **Кто прогоняет:** миграции применяет **только контейнер `uk-management-api`** на старте — у образа бота (`uk-management-bot`) нет `alembic`. Форсировать: `docker exec uk-management-api alembic upgrade head`.
+- **Дрейф:** `alembic_version` может опережать реальную схему при частичном апгрейде — проверять через `information_schema`, не по номеру в `alembic_version`.
+- **Идемпотентность:** миграции model-backed объектов пишутся идемпотентными (CI = `create_all` + `upgrade head`).
+- Домены 025–035 (access_control) обёрнуты в feature-guard: таблицы создаются только при включённом домене (см. тело миграций).
 
 ---
 
-## Table: `ratings`
+## 5. Как перегенерировать этот файл
 
-### Columns
+При наличии рабочего окружения бота (PostgreSQL + зависимости):
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `request_number` | VARCHAR(10) | NOT NULL | - | 🔗 FK |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `rating` | INTEGER | NOT NULL | - |  |
-| `review` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
+```bash
+cd /Users/andreyafanasyev/Code/UK
+python scripts/export_schema.py   # выведет database_schema_actual.sql + DATABASE_SCHEMA_ACTUAL.md
+```
 
-### Foreign Keys
-
-- `request_number` → `requests.request_number`
-- `user_id` → `users.id`
-
-### Indexes
-
-- `ix_ratings_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: ForeignKeyConstraint on (request_number)
-
----
-
-## Table: `request_assignments`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `request_number` | VARCHAR(10) | NOT NULL | - | 🔗 FK |
-| `assignment_type` | VARCHAR(20) | NOT NULL | - |  |
-| `group_specialization` | VARCHAR(100) | NULL | - |  |
-| `executor_id` | INTEGER | NULL | - | 🔗 FK |
-| `status` | VARCHAR(20) | NULL | active |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `created_by` | INTEGER | NOT NULL | - | 🔗 FK |
-
-### Foreign Keys
-
-- `executor_id` → `users.id`
-- `created_by` → `users.id`
-- `request_number` → `requests.request_number`
-
-### Indexes
-
-- `ix_request_assignments_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (request_number)
-- `None`: ForeignKeyConstraint on (executor_id)
-- `None`: ForeignKeyConstraint on (created_by)
-
----
-
-## Table: `request_comments`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `request_number` | VARCHAR(10) | NOT NULL | - | 🔗 FK |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `comment_text` | TEXT | NOT NULL | - |  |
-| `comment_type` | VARCHAR(50) | NOT NULL | - |  |
-| `previous_status` | VARCHAR(50) | NULL | - |  |
-| `new_status` | VARCHAR(50) | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `request_number` → `requests.request_number`
-- `user_id` → `users.id`
-
-### Indexes
-
-- `ix_request_comments_id` on (id) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (request_number)
-
----
-
-## Table: `requests`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `request_number` | VARCHAR(10) | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `category` | VARCHAR(100) | NOT NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | Новая |  |
-| `address` | TEXT | NULL | - |  |
-| `description` | TEXT | NOT NULL | - |  |
-| `apartment` | VARCHAR(20) | NULL | - |  |
-| `urgency` | VARCHAR(20) | NOT NULL | Обычная |  |
-| `apartment_id` | INTEGER | NULL | - | 🔗 FK |
-| `media_files` | JSON | NULL | <function list at 0xffffb3920720> |  |
-| `executor_id` | INTEGER | NULL | - | 🔗 FK |
-| `notes` | TEXT | NULL | - |  |
-| `completion_report` | TEXT | NULL | - |  |
-| `completion_media` | JSON | NULL | <function list at 0xffffb39209a0> |  |
-| `assignment_type` | VARCHAR(20) | NULL | - |  |
-| `assigned_group` | VARCHAR(100) | NULL | - |  |
-| `assigned_at` | DATETIME | NULL | - |  |
-| `assigned_by` | INTEGER | NULL | - | 🔗 FK |
-| `purchase_materials` | TEXT | NULL | - |  |
-| `requested_materials` | TEXT | NULL | - |  |
-| `manager_materials_comment` | TEXT | NULL | - |  |
-| `purchase_history` | TEXT | NULL | - |  |
-| `is_returned` | BOOLEAN | NOT NULL | False |  |
-| `return_reason` | TEXT | NULL | - |  |
-| `return_media` | JSON | NULL | <function list at 0xffffb3920d60> |  |
-| `returned_at` | DATETIME | NULL | - |  |
-| `returned_by` | INTEGER | NULL | - | 🔗 FK |
-| `manager_confirmed` | BOOLEAN | NOT NULL | False |  |
-| `manager_confirmed_by` | INTEGER | NULL | - | 🔗 FK |
-| `manager_confirmed_at` | DATETIME | NULL | - |  |
-| `manager_confirmation_notes` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-| `completed_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `assigned_by` → `users.id`
-- `user_id` → `users.id`
-- `executor_id` → `users.id`
-- `manager_confirmed_by` → `users.id`
-- `apartment_id` → `apartments.id`
-- `returned_by` → `users.id`
-
-### Indexes
-
-- `ix_requests_apartment_id` on (apartment_id) 
-- `ix_requests_request_number` on (request_number) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: PrimaryKeyConstraint on (request_number)
-- `None`: ForeignKeyConstraint on (manager_confirmed_by)
-- `None`: ForeignKeyConstraint on (apartment_id)
-- `None`: ForeignKeyConstraint on (executor_id)
-- `None`: ForeignKeyConstraint on (returned_by)
-- `None`: ForeignKeyConstraint on (assigned_by)
-
----
-
-## Table: `shift_assignments`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `shift_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `request_number` | VARCHAR(10) | NOT NULL | - | 🔗 FK |
-| `assignment_priority` | INTEGER | NOT NULL | 1 |  |
-| `estimated_duration` | INTEGER | NULL | - |  |
-| `assignment_order` | INTEGER | NULL | - |  |
-| `ai_score` | FLOAT | NULL | - |  |
-| `confidence_level` | FLOAT | NULL | - |  |
-| `specialization_match_score` | FLOAT | NULL | - |  |
-| `geographic_score` | FLOAT | NULL | - |  |
-| `workload_score` | FLOAT | NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | assigned |  |
-| `auto_assigned` | BOOLEAN | NOT NULL | False |  |
-| `confirmed_by_executor` | BOOLEAN | NOT NULL | False |  |
-| `assigned_at` | DATETIME | NULL | - |  |
-| `started_at` | DATETIME | NULL | - |  |
-| `completed_at` | DATETIME | NULL | - |  |
-| `planned_start_at` | DATETIME | NULL | - |  |
-| `planned_completion_at` | DATETIME | NULL | - |  |
-| `assignment_reason` | VARCHAR(200) | NULL | - |  |
-| `notes` | TEXT | NULL | - |  |
-| `executor_instructions` | TEXT | NULL | - |  |
-| `actual_duration` | INTEGER | NULL | - |  |
-| `execution_quality_rating` | FLOAT | NULL | - |  |
-| `had_issues` | BOOLEAN | NOT NULL | False |  |
-| `issues_description` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `shift_id` → `shifts.id`
-- `request_number` → `requests.request_number`
-
-### Indexes
-
-- `ix_shift_assignments_id` on (id) 
-- `ix_shift_assignments_assigned_at` on (assigned_at) 
-- `ix_shift_assignments_shift_id` on (shift_id) 
-- `ix_shift_assignments_request_number` on (request_number) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (shift_id)
-- `None`: ForeignKeyConstraint on (request_number)
-- `None`: PrimaryKeyConstraint on (id)
-
----
-
-## Table: `shift_schedules`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `date` | DATE | NOT NULL | - | ⭐ UNIQUE |
-| `planned_coverage` | JSON | NULL | - |  |
-| `actual_coverage` | JSON | NULL | - |  |
-| `planned_specialization_coverage` | JSON | NULL | - |  |
-| `actual_specialization_coverage` | JSON | NULL | - |  |
-| `predicted_requests` | INTEGER | NULL | - |  |
-| `actual_requests` | INTEGER | NOT NULL | 0 |  |
-| `prediction_accuracy` | FLOAT | NULL | - |  |
-| `recommended_shifts` | INTEGER | NULL | - |  |
-| `actual_shifts` | INTEGER | NOT NULL | 0 |  |
-| `optimization_score` | FLOAT | NULL | - |  |
-| `coverage_percentage` | FLOAT | NULL | - |  |
-| `load_balance_score` | FLOAT | NULL | - |  |
-| `special_conditions` | JSON | NULL | - |  |
-| `manual_adjustments` | JSON | NULL | - |  |
-| `notes` | VARCHAR(500) | NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | draft |  |
-| `created_by` | INTEGER | NULL | - | 🔗 FK |
-| `auto_generated` | BOOLEAN | NOT NULL | False |  |
-| `version` | INTEGER | NOT NULL | 1 |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `created_by` → `users.id`
-
-### Indexes
-
-- `ix_shift_schedules_date` on (date) UNIQUE
-- `ix_shift_schedules_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (created_by)
-
----
-
-## Table: `shift_templates`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `name` | VARCHAR(100) | NOT NULL | - |  |
-| `description` | TEXT | NULL | - |  |
-| `start_hour` | INTEGER | NOT NULL | - |  |
-| `start_minute` | INTEGER | NOT NULL | 0 |  |
-| `duration_hours` | INTEGER | NOT NULL | 8 |  |
-| `required_specializations` | JSON | NULL | - |  |
-| `min_executors` | INTEGER | NOT NULL | 1 |  |
-| `max_executors` | INTEGER | NOT NULL | 3 |  |
-| `default_max_requests` | INTEGER | NOT NULL | 10 |  |
-| `coverage_areas` | JSON | NULL | - |  |
-| `geographic_zone` | VARCHAR(100) | NULL | - |  |
-| `priority_level` | INTEGER | NOT NULL | 1 |  |
-| `auto_create` | BOOLEAN | NOT NULL | False |  |
-| `days_of_week` | JSON | NULL | - |  |
-| `advance_days` | INTEGER | NOT NULL | 7 |  |
-| `is_active` | BOOLEAN | NOT NULL | True |  |
-| `default_shift_type` | VARCHAR(50) | NOT NULL | regular |  |
-| `settings` | JSON | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Indexes
-
-- `ix_shift_templates_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-
----
-
-## Table: `shift_transfers`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `shift_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `from_executor_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `to_executor_id` | INTEGER | NULL | - | 🔗 FK |
-| `status` | VARCHAR(50) | NOT NULL | pending |  |
-| `reason` | VARCHAR(100) | NOT NULL | - |  |
-| `comment` | TEXT | NULL | - |  |
-| `urgency_level` | VARCHAR(20) | NOT NULL | normal |  |
-| `created_at` | DATETIME | NOT NULL | <function datetime.utcnow at 0xffffb39b9940> |  |
-| `assigned_at` | DATETIME | NULL | - |  |
-| `responded_at` | DATETIME | NULL | - |  |
-| `completed_at` | DATETIME | NULL | - |  |
-| `auto_assigned` | BOOLEAN | NOT NULL | False |  |
-| `retry_count` | INTEGER | NOT NULL | 0 |  |
-| `max_retries` | INTEGER | NOT NULL | 3 |  |
-
-### Foreign Keys
-
-- `from_executor_id` → `users.id`
-- `shift_id` → `shifts.id`
-- `to_executor_id` → `users.id`
-
-### Indexes
-
-- `ix_shift_transfers_to_executor_id` on (to_executor_id) 
-- `ix_shift_transfers_shift_id` on (shift_id) 
-- `ix_shift_transfers_created_at` on (created_at) 
-- `ix_shift_transfers_status` on (status) 
-- `ix_shift_transfers_from_executor_id` on (from_executor_id) 
-- `ix_shift_transfers_id` on (id) 
-- `ix_shift_transfers_reason` on (reason) 
-- `ix_shift_transfers_assigned_at` on (assigned_at) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (from_executor_id)
-- `None`: ForeignKeyConstraint on (to_executor_id)
-- `None`: ForeignKeyConstraint on (shift_id)
-
----
-
-## Table: `shifts`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NULL | - | 🔗 FK |
-| `start_time` | DATETIME | NOT NULL | - |  |
-| `end_time` | DATETIME | NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | active |  |
-| `notes` | TEXT | NULL | - |  |
-| `planned_start_time` | DATETIME | NULL | - |  |
-| `planned_end_time` | DATETIME | NULL | - |  |
-| `shift_template_id` | INTEGER | NULL | - | 🔗 FK |
-| `shift_type` | VARCHAR(50) | NULL | regular |  |
-| `specialization_focus` | JSON | NULL | - |  |
-| `coverage_areas` | JSON | NULL | - |  |
-| `geographic_zone` | VARCHAR(100) | NULL | - |  |
-| `max_requests` | INTEGER | NOT NULL | 10 |  |
-| `current_request_count` | INTEGER | NOT NULL | 0 |  |
-| `priority_level` | INTEGER | NOT NULL | 1 |  |
-| `completed_requests` | INTEGER | NOT NULL | 0 |  |
-| `average_completion_time` | FLOAT | NULL | - |  |
-| `average_response_time` | FLOAT | NULL | - |  |
-| `efficiency_score` | FLOAT | NULL | - |  |
-| `quality_rating` | FLOAT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `user_id` → `users.id`
-- `shift_template_id` → `shift_templates.id`
-
-### Indexes
-
-- `ix_shifts_id` on (id) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: ForeignKeyConstraint on (shift_template_id)
-- `None`: PrimaryKeyConstraint on (id)
-
----
-
-## Table: `user_apartments`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `apartment_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `status` | VARCHAR(20) | NOT NULL | pending |  |
-| `requested_at` | DATETIME | NOT NULL | - |  |
-| `reviewed_at` | DATETIME | NULL | - |  |
-| `reviewed_by` | INTEGER | NULL | - | 🔗 FK |
-| `admin_comment` | TEXT | NULL | - |  |
-| `is_owner` | BOOLEAN | NOT NULL | False |  |
-| `is_primary` | BOOLEAN | NOT NULL | True |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `user_id` → `users.id`
-- `reviewed_by` → `users.id`
-- `apartment_id` → `apartments.id`
-
-### Indexes
-
-- `ix_user_apartments_apartment_id` on (apartment_id) 
-- `ix_user_apartments_user_id` on (user_id) 
-- `ix_user_apartments_id` on (id) 
-- `ix_user_apartments_status` on (status) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: PrimaryKeyConstraint on (id)
-- `uix_user_apartment`: UniqueConstraint on (user_id, apartment_id)
-- `None`: ForeignKeyConstraint on (reviewed_by)
-- `None`: ForeignKeyConstraint on (apartment_id)
-
----
-
-## Table: `user_documents`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `document_type` | VARCHAR(16) | NOT NULL | - |  |
-| `file_id` | VARCHAR(255) | NOT NULL | - |  |
-| `file_name` | VARCHAR(255) | NULL | - |  |
-| `file_size` | INTEGER | NULL | - |  |
-| `verification_status` | VARCHAR(9) | NULL | VerificationStatus.PENDING |  |
-| `verification_notes` | TEXT | NULL | - |  |
-| `verified_by` | INTEGER | NULL | - | 🔗 FK |
-| `verified_at` | DATETIME | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `verified_by` → `users.id`
-- `user_id` → `users.id`
-
-### Indexes
-
-- `ix_user_documents_id` on (id) 
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (verified_by)
-- `None`: ForeignKeyConstraint on (user_id)
-
----
-
-## Table: `user_verifications`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `status` | VARCHAR(9) | NULL | VerificationStatus.PENDING |  |
-| `requested_info` | JSON | NULL | <function dict at 0xffffb380a160> |  |
-| `requested_at` | DATETIME | NULL | - |  |
-| `requested_by` | INTEGER | NULL | - | 🔗 FK |
-| `admin_notes` | TEXT | NULL | - |  |
-| `verified_by` | INTEGER | NULL | - | 🔗 FK |
-| `verified_at` | DATETIME | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `user_id` → `users.id`
-- `verified_by` → `users.id`
-- `requested_by` → `users.id`
-
-### Indexes
-
-- `ix_user_verifications_id` on (id) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: ForeignKeyConstraint on (verified_by)
-- `None`: ForeignKeyConstraint on (requested_by)
-- `None`: PrimaryKeyConstraint on (id)
-
----
-
-## Table: `user_yards`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `user_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `yard_id` | INTEGER | NOT NULL | - | 🔗 FK |
-| `granted_at` | DATETIME | NOT NULL | - |  |
-| `granted_by` | INTEGER | NULL | - | 🔗 FK |
-| `comment` | TEXT | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `granted_by` → `users.id`
-- `user_id` → `users.id`
-- `yard_id` → `yards.id`
-
-### Indexes
-
-- `ix_user_yards_id` on (id) 
-- `ix_user_yards_user_id` on (user_id) 
-- `ix_user_yards_yard_id` on (yard_id) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (user_id)
-- `None`: ForeignKeyConstraint on (granted_by)
-- `None`: PrimaryKeyConstraint on (id)
-- `None`: ForeignKeyConstraint on (yard_id)
-- `uix_user_yard`: UniqueConstraint on (user_id, yard_id)
-
----
-
-## Table: `users`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `telegram_id` | BIGINT | NOT NULL | - | ⭐ UNIQUE |
-| `username` | VARCHAR(255) | NULL | - |  |
-| `first_name` | VARCHAR(255) | NULL | - |  |
-| `last_name` | VARCHAR(255) | NULL | - |  |
-| `role` | VARCHAR(50) | NOT NULL | applicant |  |
-| `roles` | TEXT | NULL | - |  |
-| `active_role` | VARCHAR(50) | NULL | - |  |
-| `status` | VARCHAR(50) | NOT NULL | pending |  |
-| `language` | VARCHAR(10) | NOT NULL | ru |  |
-| `phone` | VARCHAR(20) | NULL | - |  |
-| `specialization` | TEXT | NULL | - |  |
-| `verification_status` | VARCHAR(50) | NOT NULL | pending |  |
-| `verification_notes` | TEXT | NULL | - |  |
-| `verification_date` | DATETIME | NULL | - |  |
-| `verified_by` | INTEGER | NULL | - |  |
-| `passport_series` | VARCHAR(10) | NULL | - |  |
-| `passport_number` | VARCHAR(10) | NULL | - |  |
-| `birth_date` | DATETIME | NULL | - |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Indexes
-
-- `ix_users_id` on (id) 
-- `ix_users_telegram_id` on (telegram_id) UNIQUE
-
-### Constraints
-
-- `None`: PrimaryKeyConstraint on (id)
-
----
-
-## Table: `yards`
-
-### Columns
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | INTEGER | NOT NULL | - | 🔑 PRIMARY KEY |
-| `name` | VARCHAR(200) | NOT NULL | - | ⭐ UNIQUE |
-| `description` | TEXT | NULL | - |  |
-| `gps_latitude` | FLOAT | NULL | - |  |
-| `gps_longitude` | FLOAT | NULL | - |  |
-| `is_active` | BOOLEAN | NOT NULL | True |  |
-| `created_at` | DATETIME | NULL | - |  |
-| `created_by` | INTEGER | NULL | - | 🔗 FK |
-| `updated_at` | DATETIME | NULL | - |  |
-
-### Foreign Keys
-
-- `created_by` → `users.id`
-
-### Indexes
-
-- `ix_yards_name` on (name) UNIQUE
-- `ix_yards_id` on (id) 
-- `ix_yards_is_active` on (is_active) 
-
-### Constraints
-
-- `None`: ForeignKeyConstraint on (created_by)
-- `None`: PrimaryKeyConstraint on (id)
-
----
-
+⚠️ Перед использованием вывода скрипт нужно поправить: убрать хардкод даты, добавить недостающие ENUM/домен access_control (он читается только из миграций), убедиться что колонка `users.role` отсутствует. До этого момента настоящий файл — авторитетный ручной срез.
