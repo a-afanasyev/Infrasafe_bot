@@ -1,5 +1,7 @@
 # Employees Filters & View Toggle — Implementation Plan
 
+> _Последнее редактирование: 2026-03-12_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a specialization filter (single-select chips) and a tile/table view toggle (persisted in localStorage) to the employees page, with a new `StaffTable` component for the table view.

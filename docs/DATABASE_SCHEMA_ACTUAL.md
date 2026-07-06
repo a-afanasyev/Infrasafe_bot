@@ -1,5 +1,7 @@
 # База данных UK Management — фактическая схема (ACTUAL)
 
+> _Последнее редактирование: 2026-07-06_
+
 **Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции Alembic `alembic/versions/` (head = `036_materials_inventory`).
 **Дата ревизии:** 2026-07-06.
 **СУБД:** PostgreSQL (прод/dev через Docker, контейнер `uk-postgres`).

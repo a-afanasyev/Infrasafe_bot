@@ -1,5 +1,7 @@
 # Runbook — BUG-BOT-001: BOT_USERNAME mismatch
 
+> _Последнее редактирование: 2026-05-21_
+
 ## Problem
 
 `BOT_USERNAME` previously defaulted to `"infrasafebot"` in

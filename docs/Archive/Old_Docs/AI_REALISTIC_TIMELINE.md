@@ -1,4 +1,7 @@
 # ⚡ РЕАЛИСТИЧНЫЕ СРОКИ ДЛЯ AI МИГРАЦИИ
+
+> _Последнее редактирование: 2025-10-29_
+
 ## UK Management Bot - AI-Optimized Microservices Timeline
 
 **Дата**: 23 сентября 2025

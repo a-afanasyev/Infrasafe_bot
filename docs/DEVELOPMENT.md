@@ -1,5 +1,7 @@
 # DEVELOPMENT — разработка UK Management
 
+> _Последнее редактирование: 2026-07-06_
+
 Гайд по локальной разработке: Telegram-бот (aiogram 3 / Python 3.11), REST API (FastAPI) и React-дашборд (Vite + TypeScript). Прод-эксплуатация — в `docs/ops/RUNBOOK.md`.
 
 ---

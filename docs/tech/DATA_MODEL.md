@@ -1,5 +1,7 @@
 # UK Management — модель данных
 
+> _Последнее редактирование: 2026-07-06_
+
 **Назначение:** обзор доменов данных, ERD по доменам, ключевые связи и инварианты.
 **Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (head = `036`).
 **Полный дамп колонок:** см. [DATABASE_SCHEMA_ACTUAL.md](../DATABASE_SCHEMA_ACTUAL.md).

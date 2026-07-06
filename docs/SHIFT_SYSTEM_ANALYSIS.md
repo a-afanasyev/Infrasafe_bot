@@ -1,5 +1,7 @@
 # 📊 Анализ реализованной системы смен - ЭТАП 1
 
+> _Последнее редактирование: 2026-07-06_
+
 > ⚫ **ИСТОРИЧЕСКИЙ ОТЧЁТ (04.09.2025) — не отражает текущую структуру.**
 > `ShiftAssignmentService` с тех пор декомпозирован (ARC-03) на 5 классов
 > (ScoringEngine / WorkloadBalancer / ConflictDetector / RequestAssignmentEngine + фасад),

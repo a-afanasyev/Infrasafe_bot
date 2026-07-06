@@ -1,4 +1,7 @@
 # 📊 АРХИТЕКТУРНЫЕ ДИАГРАММЫ
+
+> _Последнее редактирование: 2025-09-26_
+
 ## UK Management Bot - Microservices Architecture Diagrams
 
 ---

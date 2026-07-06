@@ -1,5 +1,7 @@
 # Runbook: webhook_outbox failures & retention
 
+> _Последнее редактирование: 2026-06-13_
+
 **Scope:** транзакционный outbox для исходящих вебхуков UK → InfraSafe
 (`webhook_outbox`). Закрывает DOCS-095 (документирование by-design rollback +
 alerting) и OPS-105 (retention + Prometheus-метрики).

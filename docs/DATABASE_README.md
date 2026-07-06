@@ -1,5 +1,7 @@
 # 📚 UK Management Bot - Database Documentation Index
 
+> _Последнее редактирование: 2026-06-13_
+
 **Last Updated**: 16 октября 2025
 **Status**: ✅ Verified & Corrected
 **Version**: 2.2

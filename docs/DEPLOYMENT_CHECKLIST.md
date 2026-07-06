@@ -1,5 +1,7 @@
 # Production Deployment Checklist
 
+> _Последнее редактирование: 2026-07-06_
+
 > 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`.**
 > Реальный прод-стек (хост `~/uk`, 7 контейнеров) — **`docker compose -f docker-compose.yml
 > -f docker-compose.media.yml`**. Каноничная выкатка:

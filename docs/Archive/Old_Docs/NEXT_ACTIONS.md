@@ -1,5 +1,7 @@
 # Next Actions - UK Management Bot
 
+> _Последнее редактирование: 2025-10-29_
+
 **Date**: 20.10.2025  
 **Status**: Phase 2B Deployed, Planning Next Steps  
 **Priority**: HIGH

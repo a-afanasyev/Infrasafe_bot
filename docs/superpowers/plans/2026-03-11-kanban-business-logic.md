@@ -1,5 +1,7 @@
 # Kanban Business Logic Implementation Plan
 
+> _Последнее редактирование: 2026-03-29_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement full business logic for request lifecycle — status transition modals with mandatory fields, working action buttons in RequestDetailModal, TWA accept/return flow, CallCenter fixes, and employee block/assign.

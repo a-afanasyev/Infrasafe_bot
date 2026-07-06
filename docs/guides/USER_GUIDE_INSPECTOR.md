@@ -1,5 +1,7 @@
 # Руководство обходчика (inspector) — UK Management
 
+> _Последнее редактирование: 2026-07-06_
+
 > Роль: `inspector` (обходчик). Хранится в `user.roles` (JSON-массив), активная роль —
 > `user.active_role`. Обходчик работает **только в Telegram-боте**. В веб-дашборд роль
 > не допускается: она отсутствует в `ACCESS_MODULE_ROLES`/`ACCESS_MANAGER_ROLES`

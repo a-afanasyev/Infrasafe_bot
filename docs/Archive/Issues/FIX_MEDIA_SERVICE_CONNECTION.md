@@ -1,5 +1,7 @@
 # 🔧 Исправление подключения к Media Service
 
+> _Последнее редактирование: 2025-10-29_
+
 **Проблема**: Бот не может подключиться к Media Service
 **Ошибка**: `Health check failed: [Errno -2] Name or service not known`
 

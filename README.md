@@ -1,5 +1,7 @@
 # UK Management System
 
+> _Последнее редактирование: 2026-07-06_
+
 Система управления заявками жилого комплекса: жители подают заявки, исполнители выполняют, менеджеры контролируют. Три роли — **applicant**, **executor**, **manager** (+ **inspector**/обходчик); два языка — **RU** и **UZ**.
 
 Монорепо: Telegram-бот (aiogram 3 / Python 3.11), REST + WebSocket API (FastAPI) и React-дашборд с Telegram Mini App (Vite + TypeScript + shadcn/ui).

@@ -1,5 +1,7 @@
 # Audit Remediation Plan — UK Management System
 
+> _Последнее редактирование: 2026-05-21_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Устранить критические и высокоприоритетные findings из аудита code-quality-audit-2026-04-13.md. Из 117 findings план покрывает **24 из 30 CRITICAL** и **27 из 35 HIGH** (remediation). Оставшиеся 6 CRITICAL и 8 HIGH вынесены в раздел «Accepted Risks» с обоснованием.

@@ -1,5 +1,7 @@
 # TASK 16: Request Acceptance Workflow (Приёмка заявок)
 
+> _Последнее редактирование: 2026-07-06_
+
 > ⚫ **ИСТОРИЧЕСКИЙ ПЛАН/ОТЧЁТ (13.10.2025).** Ссылки на монолиты `handlers/admin.py`/
 > `handlers/requests.py` устарели — файлы разбиты на пакеты `handlers/admin/*`,
 > `handlers/requests/*`; живая реализация — `handlers/request_acceptance.py`. Читать как историю.

@@ -1,5 +1,7 @@
 # Роли и модель доступа (RBAC)
 
+> _Последнее редактирование: 2026-07-06_
+
 > Источник истины: бот — `uk_management_bot/utils/constants.py` (`USER_ROLES`),
 > `config/settings.py`, `utils/enums.py` (`UserRole`), parity-тест
 > `tests/test_roles_parity.py`; фронт — `frontend/src/constants/roles.ts`;

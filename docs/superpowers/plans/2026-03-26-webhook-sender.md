@@ -1,5 +1,7 @@
 # Webhook Sender — Implementation Plan
 
+> _Последнее редактирование: 2026-03-29_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Отправлять подписанные HMAC-SHA256 webhook-уведомления о building событиях из UK в InfraSafe.

@@ -1,5 +1,7 @@
 # Employees Page: Filters & View Toggle — Design Spec
 
+> _Последнее редактирование: 2026-03-19_
+
 **Goal:** Add specialization filter chips and a tile/table view toggle to the employees page.
 
 **Architecture:** Pure frontend change. No backend modifications needed — the `/api/v2/shifts/employees?specialization=` param already exists. State lives in `EmployeesPage` component; the new `StaffTable` component is extracted to `frontend/src/components/employees/StaffTable.tsx`.

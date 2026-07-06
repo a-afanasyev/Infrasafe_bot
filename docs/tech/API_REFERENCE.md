@@ -1,5 +1,7 @@
 # UK Management — справочник REST/WS API
 
+> _Последнее редактирование: 2026-07-06_
+
 **Приложение:** FastAPI `UK Management API` v2.0.0 (`uk_management_bot/api/main.py:64`), контейнер `uk-management-api`.
 **Префиксы:** `/api/v2/*` (REST), `/ws/v2/*` (WebSocket); часть служебных путей смонтирована по абсолютным путям.
 **Источник истины:** роутеры `uk_management_bot/api/**/router.py` + `api/main.py` + `api/dependencies.py`.

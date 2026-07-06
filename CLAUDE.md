@@ -1,5 +1,7 @@
 # CLAUDE.md — UK Management System
 
+> _Последнее редактирование: 2026-07-06_
+
 ## Scope
 
 Монорепо: Telegram-бот управления ЖК (aiogram 3 + Python 3.11), REST API (FastAPI), и React-дашборд (Vite + TypeScript + shadcn/ui).

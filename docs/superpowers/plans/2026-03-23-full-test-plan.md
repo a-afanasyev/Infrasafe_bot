@@ -1,5 +1,7 @@
 # Полный план тестирования UK Management Bot + Web Dashboard
 
+> _Последнее редактирование: 2026-03-29_
+
 > **Цель:** Полноценное функциональное тестирование Telegram-бота и веб-панели, сверка данных между ними.
 > **Бот:** @infrasafebot
 > **Web:** Dashboard (admin/manager), Resident Board, TWA Mini App

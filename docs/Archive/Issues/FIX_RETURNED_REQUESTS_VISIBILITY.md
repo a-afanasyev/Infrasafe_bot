@@ -1,5 +1,7 @@
 # Fix: Returned Requests Not Visible to Manager
 
+> _Последнее редактирование: 2025-10-29_
+
 **Date**: 16 October 2025
 **Issue**: Returned requests not appearing in manager's "🔄 Возвращённые" section
 **Status**: ✅ RESOLVED

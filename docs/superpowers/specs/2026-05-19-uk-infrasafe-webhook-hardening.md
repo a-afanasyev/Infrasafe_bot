@@ -1,5 +1,7 @@
 # UK ↔ InfraSafe Webhook Hardening — план для двух сессий
 
+> _Последнее редактирование: 2026-05-31_
+
 ## ✅ STATUS (verified against code + prod 2026-05-30)
 
 **Все 4 UK-PR реализованы, смержены в `main` и задеплоены на prod. InfraSafe CR-1/CR-2 выполнены. CR-3 — сознательно пропущен.**
