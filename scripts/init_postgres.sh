@@ -11,7 +11,12 @@ set -e
 
 echo "Starting PostgreSQL post-init verification..."
 
-until pg_isready -U "$POSTGRES_USER" -h localhost; do
+# -h НЕ указываем: во время initdb-фазы (когда этот скрипт исполняется из
+# /docker-entrypoint-initdb.d/) сервер слушает ТОЛЬКО unix-сокет, а не TCP
+# localhost. `pg_isready -h localhost` в этой фазе висит вечно → дедлок инициализации
+# (сервер не завершит старт, пока скрипт не отработает). Без -h pg_isready идёт
+# по сокету и корректно дожидается готовности.
+until pg_isready -U "$POSTGRES_USER"; do
     echo "Waiting for PostgreSQL..."
     sleep 2
 done
