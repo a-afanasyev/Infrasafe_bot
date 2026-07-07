@@ -10,7 +10,11 @@ import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 import { safeNextPath } from '../utils/safeNextPath'
 import { usePageTitle } from '../hooks/usePageTitle'
 
-const BOT_USERNAME = 'infrasafebot'
+// Telegram login-widget привязан к конкретному боту (data-telegram-login) и
+// работает только на домене, зарегистрированном у этого бота в BotFather.
+// Параметризуем через VITE_BOT_USERNAME (build-time), фолбэк — прод infrasafe.uz.
+// Напр. profk.uz собирается с VITE_BOT_USERNAME=profkbot.
+const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'infrasafebot'
 
 export default function LoginPage() {
   const { t } = useTranslation()

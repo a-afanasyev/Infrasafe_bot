@@ -1,0 +1,188 @@
+# docker-compose.profk.yml — деплой UK-стека на хост profk.uz (отдельный прод-инстанс).
+#
+# Запуск:  docker compose -f docker-compose.profk.yml up -d
+# Отличия от боевого docker-compose.yml (infrasafe.uz / 105) — ТОЛЬКО инфраструктура:
+#   1. uk-network = external (её создаёт InfraSafe вне compose; мы подключаемся).
+#   2. Приватная сеть uk-internal — алиасы postgres/redis живут только в ней, чтобы
+#      не коллизиться с infrasafe-postgres-1 в общей uk-network
+#      (контракт InfraSafe: «alias postgres держите внутри своей сети»).
+#   3. api/access-api — в ОБЕИХ сетях (edge→них по uk-network, они→БД по uk-internal);
+#      postgres/redis/bot — только uk-internal; frontend — только uk-network.
+#   4. DATABASE_URL/REDIS_URL ссылаются на uk-postgres/uk-redis (уникальные
+#      container_name) — детерминированный DNS, без риска попасть в чужую БД.
+#   5. frontend собирается с VITE_BOT_USERNAME=profkbot (Telegram login-widget).
+#   6. init_postgres.sh НЕ монтируется: profk_bot — суперюзер-владелец БД, его гранты
+#      избыточны; расширения ставит init_postgres.sql. (Баг дедлока в .sh пофикшен
+#      отдельно, но здесь скрипт всё равно не нужен.)
+# Контракт имён/портов InfraSafe соблюдён: uk-management-api:8080, uk-access-api:8080,
+# uk-frontend:80, uk-postgres.
+
+services:
+  app:
+    build: .
+    container_name: uk-management-bot
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    command: python -m uk_management_bot.main
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@uk-postgres:5432/${POSTGRES_DB:-uk_management}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-internal
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: uk-management-api
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@uk-postgres:5432/${POSTGRES_DB:-uk_management}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - FRONTEND_URL=https://profk.uz/uk
+      - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
+      - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
+      - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
+    ports:
+      - "127.0.0.1:8085:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+      - uk-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  access-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.access
+    container_name: uk-access-api
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@uk-postgres:5432/${POSTGRES_DB:-uk_management}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - ACCESS_NONCE_BACKEND=redis
+      - ACCESS_EVENT_BROKER=redis
+      - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
+    ports:
+      - "127.0.0.1:${ACCESS_API_HOST_PORT:-8087}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
+      - uk-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: uk-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-uk_management}
+      - POSTGRES_USER=${POSTGRES_USER:-uk_bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
+    networks:
+      - uk-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: uk-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - redis_data:/data
+    networks:
+      - uk-internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_BOT_USERNAME: profkbot
+    container_name: uk-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:80"
+    depends_on:
+      - api
+    networks:
+      - uk-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  # Создаёт InfraSafe — мы только подключаемся.
+  uk-network:
+    external: true
+    name: uk-network
+  # Наша приватная сеть: postgres/redis/bot + внутренний доступ api/access-api.
+  uk-internal:
+    driver: bridge
