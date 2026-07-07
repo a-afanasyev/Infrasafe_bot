@@ -6161,6 +6161,8 @@
     "executor": "Ijrochi",
     "manager": "Menejer",
     "inspector": "Nazoratchi",
+    "system_admin": "Tizim administratori",
+    "security_operator": "Xavfsizlik operatori",
     "none": "Rollar tayinlanmagan"
   },
   "search": {
