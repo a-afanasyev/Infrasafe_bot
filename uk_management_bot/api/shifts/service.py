@@ -72,12 +72,17 @@ async def list_employees(
     limit: int,
     offset: int,
 ) -> tuple[list[User], dict[int, int]]:
-    """Return (users, {user_id: active_shift_id}) for the employees list."""
+    """Return (users, {user_id: active_shift_id}) for the employees list.
+
+    По умолчанию список executor-scoped — им кормятся дропдауны назначения на
+    смену/заявку (там допустимы только исполнители). Явный ``role`` ЗАМЕНЯЕТ этот
+    scope (страница «Сотрудники» так показывает менеджеров/обходчиков по фильтру),
+    а НЕ добавляется поверх executor — иначе ``role='manager'`` давал бы «executor
+    И manager» и чистые менеджеры (без роли executor) никогда бы не находились.
+    """
+    scoped_role = role or "executor"
     query = select(User).where(
-        or_(
-            legacy_role_filter("executor"),
-            User.roles.like('%"executor"%'),
-        ),
+        User.roles.like(f'%"{_escape_like(scoped_role)}"%'),
         User.deleted_at.is_(None),
     )
 
@@ -95,8 +100,6 @@ async def list_employees(
         )
     if verification_status:
         query = query.where(User.verification_status == verification_status)
-    if role:
-        query = query.where(User.roles.like(f'%"{_escape_like(role)}"%'))
 
     if has_active_shift is True:
         active_shift_subq = (

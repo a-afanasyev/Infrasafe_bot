@@ -8048,6 +8048,7 @@
     "handlers": {
       "admin_password_prompt": "<b>Administrator tayinlash</b>\n\nMenejer huquqlarini olish uchun administrator parolini kiriting:",
       "bot_restarted": "Bot qayta ishga tushirildi!",
+      "btn_register_webapp": "📝 Ro'yxatdan o'tish (forma)",
       "btn_select_apartment": "🏠 Kvartira tanlash",
       "btn_specify_phone": "📱 Telefon ko'rsatish",
       "error_restart": "Qayta ishga tushirishda xatolik",
