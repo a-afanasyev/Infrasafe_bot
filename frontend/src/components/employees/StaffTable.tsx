@@ -64,6 +64,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
             const isVerified = emp.verification_status === 'verified'
             const isBlocked = emp.status === 'blocked'
             const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName')
+            const staffRole = (['manager', 'inspector'] as const).find(r => emp.roles?.includes(r))
             const isLast = idx === employees.length - 1
             const isHovered = hoveredId === emp.id
 
@@ -98,8 +99,15 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                       />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-[var(--font-display)] font-semibold text-xs text-text-primary truncate">
-                        {name}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-[var(--font-display)] font-semibold text-xs text-text-primary truncate">
+                          {name}
+                        </span>
+                        {staffRole && (
+                          <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">
+                            {t(`role.${staffRole}`)}
+                          </span>
+                        )}
                       </div>
                       {emp.phone && (
                         <div className="text-[10px] text-text-muted font-[var(--font-mono)]">

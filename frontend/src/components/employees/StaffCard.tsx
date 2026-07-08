@@ -27,6 +27,9 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
   const isVerified = employee.verification_status === 'verified'
   const isBlocked = employee.status === 'blocked'
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
+  // Бейдж роли для не-исполнителей (менеджер/обходчик) — список executor-центричен
+  // по умолчанию, поэтому помечаем только тех, кто выделяется при фильтре по роли.
+  const staffRole = (['manager', 'inspector'] as const).find(r => employee.roles?.includes(r))
 
   return (
     <div
@@ -58,8 +61,15 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
 
         {/* Name + phone */}
         <div className="flex-1 min-w-0">
-          <div className="font-[var(--font-display)] font-semibold text-[15px] text-text-primary truncate">
-            {name}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="font-[var(--font-display)] font-semibold text-[15px] text-text-primary truncate">
+              {name}
+            </div>
+            {staffRole && (
+              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">
+                {t(`role.${staffRole}`)}
+              </span>
+            )}
           </div>
           {employee.phone && (
             <div className="text-xs text-text-muted mt-0.5 font-[var(--font-mono)]">
