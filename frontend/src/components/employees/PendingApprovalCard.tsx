@@ -16,6 +16,8 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
   const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
+  // Бейдж роли: приоритет manager > inspector > executor (у приглашённого есть и applicant).
+  const staffRole = ['manager', 'inspector', 'executor'].find(r => employee.roles?.includes(r))
 
   return (
     <div className="flex flex-row items-center gap-3.5 bg-bg-card border border-border-default rounded-default p-4">
@@ -29,8 +31,15 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
 
       {/* Info column */}
       <div className="flex-1 min-w-0">
-        <div className="font-[var(--font-display)] font-semibold text-sm text-text-primary truncate">
-          {name}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary truncate">
+            {name}
+          </span>
+          {staffRole && (
+            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-accent/15 text-accent">
+              {t(`role.${staffRole}`)}
+            </span>
+          )}
         </div>
         {employee.phone && (
           <div className="text-xs text-text-muted mt-0.5">

@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/topbar'
 import {
   useEmployees,
-  useApproveEmployee,
-  useRejectEmployee,
+  usePendingStaff,
+  useActivateEmployee,
+  useDeclineEmployee,
   useBlockEmployee,
   useUnblockEmployee,
 } from '../hooks/useEmployees'
@@ -62,8 +63,11 @@ export default function EmployeesPage() {
     onConfirm: () => void
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
-  const approveEmployee = useApproveEmployee()
-  const rejectEmployee = useRejectEmployee()
+  // Очередь активации: pending-стафф (менеджеры + исполнители) по status,
+  // отдельным фидом — основной список /employees остаётся executor-scoped.
+  const { data: pendingStaff = [] } = usePendingStaff()
+  const activateEmployee = useActivateEmployee()
+  const declineEmployee = useDeclineEmployee()
   const blockEmployee = useBlockEmployee()
   const unblockEmployee = useUnblockEmployee()
 
@@ -89,9 +93,7 @@ export default function EmployeesPage() {
 
   const total = employees.length
   const onShift = employees.filter(e => e.active_shift_id !== null).length
-  const pending = employees.filter(
-    e => e.verification_status !== 'verified' && e.verification_status !== 'rejected'
-  ).length
+  const pending = pendingStaff.length
   const verified = employees.filter(e => e.verification_status === 'verified').length
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; deps=[search] сохранены во избежание пересоздания узла topbar-действий
@@ -121,9 +123,7 @@ export default function EmployeesPage() {
     { label: t('employees.statsVerified'), value: verified, iconBg: 'var(--violet)', icon: '✓' },
   ]
 
-  const pendingEmployees = employees.filter(
-    e => e.verification_status !== 'verified' && e.verification_status !== 'rejected'
-  )
+  const pendingEmployees = pendingStaff
 
   if (isLoading) return <LoadingSpinner />
 
@@ -176,9 +176,9 @@ export default function EmployeesPage() {
               <PendingApprovalCard
                 key={e.id}
                 employee={e}
-                onApprove={(id) => approveEmployee.mutate(id)}
-                onReject={(id) => rejectEmployee.mutate(id)}
-                isPending={approveEmployee.isPending || rejectEmployee.isPending}
+                onApprove={(id) => activateEmployee.mutate(id)}
+                onReject={(id) => declineEmployee.mutate(id)}
+                isPending={activateEmployee.isPending || declineEmployee.isPending}
               />
             ))}
           </div>

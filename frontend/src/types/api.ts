@@ -15,6 +15,7 @@ export interface EmployeeBrief {
   active_shift_id: number | null
   verification_status: VerificationStatus
   status: string
+  roles: string[]
 }
 
 export interface ShiftBrief {
