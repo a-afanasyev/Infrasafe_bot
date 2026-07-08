@@ -28,6 +28,7 @@ from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles_safe
 from uk_management_bot.utils.specializations import has_required_specs
+from uk_management_bot.api.dependencies import _parse_user_roles
 
 # Роли, считающиеся «сотрудником» (в отличие от жителя-applicant). Используются
 # в фиде pending-стаффа и guard'ах активации/отклонения.
@@ -39,7 +40,6 @@ _STAFF_ROLE_PRIORITY = ("manager", "executor", "inspector")
 def _is_staff(user: User) -> bool:
     """True, если у пользователя есть хоть одна стафф-роль (manager/executor/inspector)."""
     return bool(_STAFF_ROLES & set(parse_roles_safe(user.roles)))
-from uk_management_bot.api.dependencies import _parse_user_roles
 
 # REG-02: статусы заявок, переносимых вместе со сменой при переназначении
 # (status-preserving). Совпадает с бот-ядром ShiftTransferService.

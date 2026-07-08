@@ -7,6 +7,8 @@
 менеджеров) + активация `PATCH /employees/{id}/activate` (status→approved,
 допускает менеджеров) + `decline` (status→blocked), с guard'ами staff-only.
 """
+import datetime
+
 import pytest
 
 from uk_management_bot.database.models.user import User
@@ -31,12 +33,12 @@ async def _user(db, tg, *, roles, status="pending", verification="pending",
 
 @pytest.mark.asyncio
 async def test_list_pending_staff_scope(db_session):
-    mgr = await _user(db_session, 2001, roles='["applicant", "manager"]', verification="verified")
-    exe = await _user(db_session, 2002, roles='["applicant", "executor"]')
+    await _user(db_session, 2001, roles='["applicant", "manager"]', verification="verified")
+    await _user(db_session, 2002, roles='["applicant", "executor"]')
     await _user(db_session, 2003, roles='["applicant"]')                       # чистый житель — нет
     await _user(db_session, 2004, roles='["manager"]', status="approved")      # approved — нет
     await _user(db_session, 2005, roles='["executor"]', verification="rejected")  # rejected — нет (Medium-1)
-    await _user(db_session, 2006, roles='["manager"]', deleted_at=__import__("datetime").datetime(2026, 7, 8))
+    await _user(db_session, 2006, roles='["manager"]', deleted_at=datetime.datetime(2026, 7, 8))
 
     rows = await service.list_pending_staff(db_session)
     ids = {u.telegram_id for u in rows}
