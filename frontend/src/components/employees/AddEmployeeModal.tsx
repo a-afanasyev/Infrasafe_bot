@@ -8,9 +8,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCreateEmployee, useCreateInvite } from '@/hooks/useEmployees'
+import { Input } from '@/components/ui/input'
+import { useCreateInvite } from '@/hooks/useEmployees'
 import { getSpecDisplay } from '@/utils/employeeUtils'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -30,32 +30,24 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
     { value: 24, label: t('employeeModal.expiry24h', '24 часа') },
     { value: 168, label: t('employeeModal.expiry7d', '7 дней') },
   ]
-  // Form state
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [phone, setPhone] = useState('')
+  // Form state — только то, что несёт инвайт-токен (роль/спец/срок). ФИО и
+  // телефон кандидат вводит сам при регистрации в боте.
   const [role, setRole] = useState<'executor' | 'manager'>('executor')
   const [specs, setSpecs] = useState<string[]>([])
-  const [empStatus, setEmpStatus] = useState<'approved' | 'pending'>('approved')
   const [invHours, setInvHours] = useState(24)
 
-  // Result state — after creation
+  // Result state — after invite generation
   const [inviteResult, setInviteResult] = useState<{
     token: string
     bot_link: string
     expires_at: string
   } | null>(null)
 
-  const createEmployee = useCreateEmployee()
   const createInvite = useCreateInvite()
 
   function reset() {
-    setFirstName('')
-    setLastName('')
-    setPhone('')
     setRole('executor')
     setSpecs([])
-    setEmpStatus('approved')
     setInvHours(24)
     setInviteResult(null)
   }
@@ -70,41 +62,12 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
   }
 
   function handleCreate() {
-    if (!firstName.trim() || !lastName.trim() || !phone.trim()) return
-
     const specsList = role === 'executor' ? specs : []
-
-    // Step 1: create employee
-    createEmployee.mutate(
-      {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone: phone.trim(),
-        role,
-        specializations: specsList,
-        status: empStatus,
-      },
-      {
-        onSuccess: () => {
-          // Step 2: generate invite link
-          createInvite.mutate(
-            {
-              role,
-              specializations: specsList,
-              hours: invHours,
-            },
-            {
-              onSuccess: (data) => {
-                setInviteResult(data)
-              },
-              onError: () => {
-                // Employee created but invite failed — still show success, just no link
-                toast.info(t('employeeModal.createdNoInvite'))
-              },
-            },
-          )
-        },
-      },
+    // Только инвайт: реальная запись сотрудника создаётся при входе по боту
+    // (реальный telegram_id + applicant + роль), без плейсхолдеров-дублей.
+    createInvite.mutate(
+      { role, specializations: specsList, hours: invHours },
+      { onSuccess: (data) => setInviteResult(data) },
     )
   }
 
@@ -117,41 +80,23 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
     }
   }
 
-  const isPending = createEmployee.isPending || createInvite.isPending
-  const isCreateDisabled =
-    !firstName.trim() || !lastName.trim() || !phone.trim() || isPending
+  const isPending = createInvite.isPending
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('employeeModal.titleCreate')}</DialogTitle>
+          <DialogTitle>{t('employeeModal.titleInvite', 'Пригласить сотрудника')}</DialogTitle>
           <DialogDescription>
             {inviteResult
               ? t('employeeModal.createdDesc')
-              : t('employeeModal.formDesc')}
+              : t('employeeModal.inviteFormDesc', 'Выберите роль и срок действия — бот выдаст ссылку-приглашение.')}
           </DialogDescription>
         </DialogHeader>
 
         {/* ===== Form ===== */}
         {!inviteResult && (
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>{t('employeeModal.firstName')}</Label>
-                <Input value={firstName} onChange={e => setFirstName(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>{t('employeeModal.lastName')}</Label>
-                <Input value={lastName} onChange={e => setLastName(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('employeeModal.phone')}</Label>
-              <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+998901234567" />
-            </div>
-
             <div className="flex flex-col gap-1.5">
               <Label>{t('employeeModal.role')}</Label>
               <div className="flex gap-2">
@@ -198,29 +143,6 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
             )}
 
             <div className="flex flex-col gap-1.5">
-              <Label>{t('employees.statusLabel')}</Label>
-              <div className="flex gap-2">
-                {([
-                  { value: 'approved' as const, label: t('approvalStatus.approved') },
-                  { value: 'pending' as const, label: t('approvalStatus.pending') },
-                ]).map(s => (
-                  <button
-                    key={s.value}
-                    onClick={() => setEmpStatus(s.value)}
-                    className={cn(
-                      'px-3 py-1.5 rounded-full text-xs border cursor-pointer transition-all',
-                      empStatus === s.value
-                        ? 'bg-accent border-accent text-white font-semibold'
-                        : 'bg-bg-card border-border-default text-text-secondary',
-                    )}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
               <Label>{t('employeeModal.inviteHours')}</Label>
               <div className="flex gap-2">
                 {EXPIRY_OPTIONS.map(o => (
@@ -240,17 +162,17 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
               </div>
             </div>
 
-            <Button onClick={handleCreate} disabled={isCreateDisabled} className="mt-1">
-              {isPending ? t('common.creating') : t('employeeModal.createAction')}
+            <Button onClick={handleCreate} disabled={isPending} className="mt-1">
+              {isPending ? t('common.creating') : t('employeeModal.inviteAction', 'Создать приглашение')}
             </Button>
           </div>
         )}
 
-        {/* ===== Result after creation ===== */}
+        {/* ===== Result after invite generation ===== */}
         {inviteResult && (
           <div className="flex flex-col gap-3">
             <div className="bg-emerald/10 border border-emerald/20 rounded-default p-3 text-sm text-emerald">
-              {t('employeeModal.createdSuccess', { name: `${firstName} ${lastName}` })}
+              {t('employeeModal.inviteCreated', 'Приглашение создано — отправьте ссылку кандидату. Сотрудник появится в «Ожидающих одобрения» после входа через бота.')}
             </div>
 
             <div className="flex flex-col gap-1.5">

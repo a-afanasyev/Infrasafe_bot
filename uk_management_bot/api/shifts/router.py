@@ -158,6 +158,24 @@ async def list_employees(
     return briefs
 
 
+@router.get("/employees/pending", response_model=list[EmployeeBrief])
+async def list_pending_staff(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("manager")),
+):
+    """Сотрудники (manager/executor/inspector), ожидающие активации аккаунта.
+
+    Объявлен ВЫШЕ динамического `GET /employees/{user_id}`, иначе `pending`
+    захватился бы как `{user_id}` и упал на парсинге int.
+    """
+    users = await service.list_pending_staff(db)
+    briefs = []
+    for u in users:
+        u.__dict__['active_shift_id'] = None
+        briefs.append(EmployeeBrief.model_validate(u))
+    return briefs
+
+
 @router.post("/employees", response_model=EmployeeBrief, status_code=201)
 async def create_employee(
     body: CreateEmployeeRequest,
@@ -279,6 +297,40 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="User is not blocked")
     await service.set_user_status(db, user, "approved")
     return {"message": "unblocked"}
+
+
+@router.patch("/employees/{user_id}/activate", dependencies=[Depends(require_roles("manager"))])
+async def activate_staff(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Активировать pending-СТАФФ аккаунт (status='approved'). Допускает менеджеров.
+
+    Отличается от `/approve` (тот ставит verification_status и запрещает
+    менеджеров): здесь активируется account-гейт, который проверяет бот.
+    Ограничено стафф-ролями в статусе pending — жителей и уже активных
+    менеджеров не трогает (НЕ применяем `_ensure_not_privileged` намеренно).
+    """
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not service._is_staff(user):
+        raise HTTPException(status_code=422, detail="Not a staff account (manager/executor/inspector)")
+    if user.status != "pending":
+        raise HTTPException(status_code=409, detail="User is not pending activation")
+    await service.activate_employee(db, user)
+    return {"id": user.id, "status": user.status, "active_role": user.active_role}
+
+
+@router.patch("/employees/{user_id}/decline", dependencies=[Depends(require_roles("manager"))])
+async def decline_staff(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Отклонить pending-СТАФФ заявку (status='blocked'). Те же guard'ы, что activate."""
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not service._is_staff(user):
+        raise HTTPException(status_code=422, detail="Not a staff account (manager/executor/inspector)")
+    if user.status != "pending":
+        raise HTTPException(status_code=409, detail="User is not pending")
+    await service.decline_employee(db, user)
+    return {"id": user.id, "status": user.status}
 
 
 @router.get("/employees/{user_id}/active-requests-count", response_model=ActiveRequestsCount)

@@ -26,9 +26,20 @@ from uk_management_bot.database.models.shift_assignment import ShiftAssignment
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles_safe
 from uk_management_bot.utils.specializations import has_required_specs
 from uk_management_bot.api.dependencies import _parse_user_roles
+
+# Роли, считающиеся «сотрудником» (в отличие от жителя-applicant). Используются
+# в фиде pending-стаффа и guard'ах активации/отклонения.
+_STAFF_ROLES = frozenset({"manager", "executor", "inspector"})
+# Приоритет при выборе active_role после активации (см. activate_employee).
+_STAFF_ROLE_PRIORITY = ("manager", "executor", "inspector")
+
+
+def _is_staff(user: User) -> bool:
+    """True, если у пользователя есть хоть одна стафф-роль (manager/executor/inspector)."""
+    return bool(_STAFF_ROLES & set(parse_roles_safe(user.roles)))
 
 # REG-02: статусы заявок, переносимых вместе со сменой при переназначении
 # (status-preserving). Совпадает с бот-ядром ShiftTransferService.
@@ -170,6 +181,62 @@ async def set_user_status(db: AsyncSession, user: User, value: str) -> None:
     """Persist a status change (blocked/approved) — no refresh needed."""
     user.status = value
     await db.commit()
+
+
+async def list_pending_staff(db: AsyncSession) -> list[User]:
+    """Сотрудники (manager/executor/inspector) со `status='pending'` — очередь
+    активации аккаунта в дашборде.
+
+    Ключ — `status` (гейт доступа бота), НЕ `verification_status`. Отклонённые
+    по верификации исключаются: reject-эндпоинт меняет только
+    `verification_status`, оставляя `status='pending'`, иначе они бы висели в
+    очереди вечно. Чистые applicant-жители (без стафф-роли) сюда не попадают.
+    """
+    result = await db.execute(
+        select(User)
+        .where(
+            User.status == "pending",
+            User.deleted_at.is_(None),
+            User.verification_status != "rejected",
+            or_(
+                User.roles.like('%"manager"%'),
+                User.roles.like('%"executor"%'),
+                User.roles.like('%"inspector"%'),
+            ),
+        )
+        .order_by(User.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def activate_employee(db: AsyncSession, user: User) -> User:
+    """Одобрить pending-стафф: `status`→approved (+verified, если была pending).
+
+    Также поднимает `active_role` до стафф-роли, если она всё ещё `applicant`:
+    приглашённый через бота сотрудник после `/join` остаётся с
+    `active_role='applicant'` (auth_service не меняет валидную active_role), из-за
+    чего меню менеджера в боте не появилось бы без ручного переключения.
+    """
+    user.status = "approved"
+    if user.verification_status == "pending":
+        user.verification_status = "verified"
+    if user.active_role not in _STAFF_ROLES:
+        user_roles = set(parse_roles_safe(user.roles))
+        for role in _STAFF_ROLE_PRIORITY:
+            if role in user_roles:
+                user.active_role = role
+                break
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def decline_employee(db: AsyncSession, user: User) -> User:
+    """Отклонить pending-стафф: `status`→blocked."""
+    user.status = "blocked"
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def count_active_requests(db: AsyncSession, user_id: int) -> int:

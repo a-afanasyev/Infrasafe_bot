@@ -41,6 +41,15 @@ export function useEmployee(id: number | null) {
   })
 }
 
+/** Сотрудники (менеджеры/исполнители) со status='pending' — очередь активации. */
+export function usePendingStaff() {
+  return useQuery<EmployeeBrief[]>({
+    queryKey: ['pending-staff'],
+    queryFn: () => apiClient.get('/api/v2/shifts/employees/pending').then(r => r.data),
+    staleTime: 30_000,
+  })
+}
+
 export function useApproveEmployee() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -116,25 +125,38 @@ export function useActiveRequestsCount(userId: number | null) {
   })
 }
 
-export function useCreateEmployee() {
+/** Активировать pending-стафф аккаунт (status→approved). Допускает менеджеров. */
+export function useActivateEmployee() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: {
-      first_name: string
-      last_name: string
-      phone: string
-      role: string
-      specializations: string[]
-      status: string
-    }) =>
-      apiClient.post('/api/v2/shifts/employees', data).then(r => r.data),
+    mutationFn: (id: number) =>
+      apiClient.patch(`/api/v2/shifts/employees/${id}/activate`).then(r => r.data),
     onSuccess: () => {
-      toast.success(i18n.t('toast.employeeCreated'))
+      toast.success(i18n.t('toast.employeeApproved'))
       queryClient.invalidateQueries({ queryKey: ['employees'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-staff'] })
     },
     onError: (error: unknown) => {
-      console.error('Create employee failed:', error)
-      toast.error(i18n.t('toast.employeeCreateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+      console.error('Activate employee failed:', error)
+      toast.error(i18n.t('toast.employeeApproveFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
+/** Отклонить pending-стафф заявку (status→blocked). */
+export function useDeclineEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.patch(`/api/v2/shifts/employees/${id}/decline`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.employeeRejected'))
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-staff'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Decline employee failed:', error)
+      toast.error(i18n.t('toast.employeeRejectFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 }

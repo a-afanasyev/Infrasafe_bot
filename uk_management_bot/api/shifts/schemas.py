@@ -3,9 +3,39 @@ from typing import Optional, Literal
 from datetime import datetime, date as date_type
 import json
 
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
+
 ShiftStatus = Literal["active", "completed", "cancelled", "planned", "paused"]
 ShiftType = Literal["regular", "emergency", "overtime", "maintenance"]
 TransferAction = Literal["approve", "reject", "cancel"]
+
+
+def _parse_spec_field(raw) -> list[str]:
+    """Разбор ``User.specialization`` в список С СОХРАНЕНИЕМ порядка.
+
+    Хранилище разнородно: JSON-массив (``'["plumber","electric"]'``), CSV из
+    инвайта (``'electrician,plumber'``) либо скаляр. Сохраняем текущее поведение
+    (JSON-массив как есть; невалидный JSON и JSON-объект → ``[]``), но добавляем
+    CSV/скаляр. Вокабуляр спецификаций в проекте фрагментирован (backend-конста
+    ``electric/plumbing`` vs фронт/бот ``electrician/plumber``), поэтому канон-
+    список не годится для фильтра — распознаём «чистые» словарные токены через
+    ``isalpha()`` (отсекает JSON-мусор со скобками/кавычками, пропускает специ).
+    """
+    if isinstance(raw, (list, tuple)):
+        return [str(s).strip() for s in raw if str(s).strip()]
+    if not isinstance(raw, str):
+        return []
+    text = raw.strip()
+    if not text:
+        return []
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return [str(s).strip() for s in parsed if str(s).strip()] if isinstance(parsed, list) else []
+    # CSV / скаляр (напр. из инвайта): как спец берём только словарные токены.
+    return [t for t in (p.strip() for p in text.split(",")) if t.isalpha()]
 
 
 class EmployeeBrief(BaseModel):
@@ -13,10 +43,11 @@ class EmployeeBrief(BaseModel):
     first_name: Optional[str]
     last_name: Optional[str]
     phone: Optional[str]
-    specialization: list[str]  # parsed from User.specialization (Text JSON like '["electrician"]')
+    specialization: list[str]  # parsed from User.specialization (JSON '["electrician"]' или CSV)
     active_shift_id: Optional[int]
     verification_status: str
     status: str = "approved"
+    roles: list[str] = []  # parsed from User.roles (JSON) — нужен для бейджа роли в очереди
 
     model_config = {"from_attributes": True}
 
@@ -25,7 +56,6 @@ class EmployeeBrief(BaseModel):
     def _coerce_from_orm(cls, values):
         """Convert ORM object to dict before field validation, parsing JSON fields."""
         if hasattr(values, '__dict__') and not isinstance(values, dict):
-            raw_spec = getattr(values, "specialization", None)
             values = {
                 "id": getattr(values, "id", None),
                 "first_name": getattr(values, "first_name", None),
@@ -34,19 +64,18 @@ class EmployeeBrief(BaseModel):
                 "verification_status": getattr(values, "verification_status", ""),
                 "active_shift_id": getattr(values, "active_shift_id", None),
                 "status": getattr(values, "status", "approved"),
-                "specialization": raw_spec,
+                "specialization": getattr(values, "specialization", None),
+                "roles": getattr(values, "roles", None),
             }
-        # Parse specialization JSON string → list (works for both ORM and dict paths)
-        raw_spec = values.get("specialization") if isinstance(values, dict) else None
-        if isinstance(raw_spec, str):
-            try:
-                parsed = json.loads(raw_spec)
-                values["specialization"] = parsed if isinstance(parsed, list) else []
-            except (json.JSONDecodeError, TypeError):
-                values["specialization"] = []
-        elif raw_spec is None:
-            if isinstance(values, dict):
-                values["specialization"] = []
+        if isinstance(values, dict):
+            # Спецификации: JSON-массив / CSV / скаляр → список (порядок сохранён).
+            values["specialization"] = _parse_spec_field(values.get("specialization"))
+            # Роли: JSON-строка → список; уже-список принимаем как есть.
+            raw_roles = values.get("roles")
+            if isinstance(raw_roles, (list, tuple)):
+                values["roles"] = [str(r).strip() for r in raw_roles if str(r).strip()]
+            else:
+                values["roles"] = parse_roles_safe(raw_roles)
         return values
 
 

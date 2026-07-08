@@ -94,6 +94,40 @@ class TestEmployeeBrief:
         brief = EmployeeBrief(**data)
         assert brief.specialization == []
 
+    def test_csv_specialization_from_invite_parsed(self):
+        """CSV из инвайта (`electrician,plumber`) → список (порядок сохранён)."""
+        brief = EmployeeBrief(
+            id=6, first_name="Inv", last_name=None, phone=None,
+            specialization="electrician,plumber",
+            active_shift_id=None, verification_status="pending",
+        )
+        assert brief.specialization == ["electrician", "plumber"]
+
+    def test_json_object_specialization_defaults_to_empty(self):
+        """JSON-объект (не список) остаётся `[]` — поведение не сломано."""
+        brief = EmployeeBrief(
+            id=7, first_name="X", last_name=None, phone=None,
+            specialization='{"key":"val"}',
+            active_shift_id=None, verification_status="verified",
+        )
+        assert brief.specialization == []
+
+    def test_roles_parsed_from_json_string(self):
+        """`roles` (JSON-строка User.roles) → список для бейджа роли."""
+        brief = EmployeeBrief(
+            id=8, first_name="M", last_name=None, phone=None,
+            specialization=None, active_shift_id=None,
+            verification_status="verified", roles='["applicant", "manager"]',
+        )
+        assert brief.roles == ["applicant", "manager"]
+
+    def test_roles_default_empty_when_absent(self):
+        brief = EmployeeBrief(
+            id=9, first_name="M", last_name=None, phone=None,
+            specialization=None, active_shift_id=None, verification_status="verified",
+        )
+        assert brief.roles == []
+
 
 # ---------------------------------------------------------------------------
 # CreateShiftBody
