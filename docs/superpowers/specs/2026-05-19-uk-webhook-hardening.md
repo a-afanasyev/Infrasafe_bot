@@ -1,4 +1,7 @@
 ---
+
+> _Последнее редактирование: 2026-05-21_
+
  Context (зачем это нужно)
 
  Production-инцидент 2026-05-19: Manager создал здание в UK Dashboard
@@ -31,6 +34,7 @@
  changes без recreate контейнера (закрывается PR-B + PR-D safety-net).
 
  ---
+
  Scope (что делаем)
 
  4 PR в UK-репо, все must для production. Идут в порядке зависимостей.

@@ -1,4 +1,7 @@
 # UK Management Bot — Migration Task Breakdown (AI-Optimized)
+
+> _Последнее редактирование: 2025-10-29_
+
 **Updated for AI Agent Execution | Timeline: 22 weeks**
 
 ## Sprint 0: Infrastructure Foundation (NEW - Critical Infrastructure Setup)

@@ -1,5 +1,7 @@
 # 🗺️ UK Management Bot - Entity Relationship Diagram
 
+> _Последнее редактирование: 2025-10-29_
+
 > ⚠️ **WARNING: THIS ER DIAGRAM CONTAINS INACCURACIES!**
 >
 > **Incorrect relationships shown**:

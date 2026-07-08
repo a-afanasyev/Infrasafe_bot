@@ -1,5 +1,7 @@
 # Universal Project Audit — Code Quality & Architecture
 
+> _Последнее редактирование: 2026-05-21_
+
 Полный аудит проекта. Код НЕ менять. Только анализ.
 
 Перед началом: прочитай README, package.json, docker-compose,

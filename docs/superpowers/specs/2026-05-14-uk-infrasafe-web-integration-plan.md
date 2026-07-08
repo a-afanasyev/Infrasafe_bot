@@ -1,5 +1,7 @@
 # UK ↔ InfraSafe Web Integration
 
+> _Последнее редактирование: 2026-05-21_
+
 **Дата:** 2026-05-14
 **Основной домен:** `https://infrasafe.uz` (alias `infrasafe.aisolutions.uz`).
 

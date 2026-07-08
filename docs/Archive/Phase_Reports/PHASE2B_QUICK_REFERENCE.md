@@ -1,4 +1,7 @@
 # PHASE 2B - QUICK REFERENCE GUIDE
+
+> _Последнее редактирование: 2025-10-29_
+
 ## Async AI Services - Developer Reference
 
 **Version**: 1.0

@@ -1,5 +1,7 @@
 # Applicant Registration — WebApp + Bot Implementation Plan
 
+> _Последнее редактирование: 2026-06-14_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an open applicant self-registration form as a Telegram Mini App (React `/register`) backed by a new async API, keep the existing bot onboarding as the parallel scheme, and retire the dead `uk-web-registration` service.

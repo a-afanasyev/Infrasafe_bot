@@ -1,5 +1,7 @@
 # 🤖 Phase 2: AI Services Migration Strategy
 
+> _Последнее редактирование: 2025-10-29_
+
 **Date**: 19.10.2025
 **Status**: STRATEGY DOCUMENT
 **Complexity**: **VERY HIGH** ⚠️

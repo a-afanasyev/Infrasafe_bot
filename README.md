@@ -1,5 +1,7 @@
 # UK Management System
 
+> _Последнее редактирование: 2026-07-06_
+
 Система управления заявками жилого комплекса: жители подают заявки, исполнители выполняют, менеджеры контролируют. Три роли — **applicant**, **executor**, **manager** (+ **inspector**/обходчик); два языка — **RU** и **UZ**.
 
 Монорепо: Telegram-бот (aiogram 3 / Python 3.11), REST + WebSocket API (FastAPI) и React-дашборд с Telegram Mini App (Vite + TypeScript + shadcn/ui).
@@ -50,7 +52,9 @@ docker exec uk-management-api alembic upgrade head
 docker compose build uk-management-bot && docker compose up -d uk-management-bot
 ```
 
-Фронтенд — hot-reload, достаточно сохранить файл.
+Фронтенд dev с hot-reload: `cd frontend && npm run dev` → `http://localhost:5173/uk/`
+(base-path `/uk/` обязателен — прямой заход на `/` ломает SPA). Контейнер `uk-frontend`
+(`127.0.0.1:3002→80`) — это статическая nginx-сборка (`npm run build`), не hot-reload.
 
 ## Тесты
 
@@ -79,7 +83,7 @@ docker exec uk-management-bot ruff check .
 - **Роли в БД** — `user.roles` (JSON-массив строк) + `user.active_role`; устаревшее `user.role` не использовать.
 - **Номера заявок** — формат `YYMMDD-NNN` (строка), сервис `RequestNumberService`.
 - **Локализация бота** — `config/locales/{ru,uz}.json`, `get_text(key, language=lang)`; статусы — `utils/status_display.py`, адреса — `utils/address_helpers.localize_address()`.
-- **Локализация фронта** — `frontend/src/i18n/locales/{ru,uz,en}.json` (i18next; в TWA только ru/uz).
+- **Локализация фронта** — `frontend/src/i18n/locales/{ru,uz}.json` (i18next).
 - **Секреты** (`.env`, ключи) — никогда не коммитить.
 
 Подробные инструкции для агентов и разработки — в [CLAUDE.md](CLAUDE.md) и [AGENTS.md](AGENTS.md).

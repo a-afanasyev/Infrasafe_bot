@@ -1,5 +1,7 @@
 # Security Audit — UK Management System (bot + API + frontend + infra)
 
+> _Последнее редактирование: 2026-05-30_
+
 **Дата:** 2026-05-29
 **Охват:** Telegram-бот (`uk_management_bot/`), REST/WebSocket API (`uk_management_api/` + `uk_management_bot/api/`), медиа-сервис (`media_service/`), React-дашборд и TWA (`frontend/`), а также инфраструктурные артефакты (docker-compose, requirements, env-файлы).
 

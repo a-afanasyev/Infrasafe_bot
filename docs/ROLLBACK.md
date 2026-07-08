@@ -1,5 +1,19 @@
 # Rollback Procedure
 
+> _Последнее редактирование: 2026-07-06_
+
+> 🔴 **Команды ниже используют несуществующий `docker-compose.production.yml`.**
+> Реальный откат на хосте `~/uk`:
+> ```bash
+> cd ~/uk && git checkout <prev-tag-or-sha>
+> docker compose -f docker-compose.yml -f docker-compose.media.yml build frontend api app
+> docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate frontend api app
+> # откат схемы (если нужно): docker exec uk-management-api alembic downgrade <rev>
+> #  НИКОГДА не --remove-orphans
+> ```
+> Имена контейнеров/структура шагов ниже корректны, но compose-файл в каждой команде
+> заменить на `-f docker-compose.yml -f docker-compose.media.yml`.
+
 ## Release Tagging Convention
 
 Every production deploy must be tagged:

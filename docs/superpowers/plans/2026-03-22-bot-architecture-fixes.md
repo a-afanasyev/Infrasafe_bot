@@ -1,5 +1,7 @@
 # Bot Architecture Fixes — Implementation Plan
 
+> _Последнее редактирование: 2026-03-23_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix 8 architectural issues discovered during E2E Layer 2 audit and navigation map analysis — from duplicated mappings and missing FSM resets to dead callback handlers.

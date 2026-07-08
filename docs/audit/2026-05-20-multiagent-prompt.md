@@ -1,5 +1,7 @@
 # Prompt: Multi-agent execution of UK audit backlog via claude-flow / ruv-FANN
 
+> _Последнее редактирование: 2026-05-21_
+
 Вставить весь блок ниже в координирующую сессию (claude-flow MCP активен, доступны `mcp__claude-flow__*` tools).
 
 ---

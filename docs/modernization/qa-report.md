@@ -1,5 +1,7 @@
 # QA Report: Frontend Modernization
 
+> _Последнее редактирование: 2026-03-20_
+
 **Дата:** 2026-03-19
 **Проект:** UK Management Frontend
 **Путь:** `/Users/andreyafanasyev/Code/UK/frontend/`

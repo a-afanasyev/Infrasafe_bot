@@ -1,5 +1,12 @@
 # Архитектурный план модернизации фронтенда UK Management
 
+> _Последнее редактирование: 2026-07-06_
+
+> ⚫ **ИСТОРИЧЕСКИЙ ПЛАН (2026-03-19) — ВЫПОЛНЕН, не AS-IS.** Описанные проблемы
+> (inline-стили, отсутствие shared-компонентов/error boundaries/role-guard/i18n) уже
+> устранены в коде: shadcn/ui `components/ui/*`, `GlobalErrorBoundary`/`PageErrorBoundary`,
+> `ProtectedRoute allowedRoles`, i18n ru/uz. Читать как историю решений, не как текущее состояние.
+
 **Дата**: 19 марта 2026
 **Автор**: Senior Fullstack Architect
 **Версия**: 1.0

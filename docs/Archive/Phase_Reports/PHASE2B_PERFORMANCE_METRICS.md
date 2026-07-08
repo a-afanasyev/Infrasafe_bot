@@ -1,5 +1,7 @@
 # Phase 2B Performance Metrics Report
 
+> _Последнее редактирование: 2025-10-29_
+
 **Date**: 20 October 2025
 **Version**: 1.0
 **Status**: Production

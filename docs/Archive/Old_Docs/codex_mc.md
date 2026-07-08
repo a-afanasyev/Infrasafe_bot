@@ -1,4 +1,7 @@
 # 🏗️ UK Management Bot — Microservices Architecture & Migration Plan
+
+> _Последнее редактирование: 2025-10-29_
+
 ## 1. Executive Summary
 - 📦 **Initial State**: Pre-production monolith with rich modular services (Telegram bot, business services, ORM models).  
 - 🎯 **Objective**: Deliver a production-ready microservice ecosystem in a single 18-week program owned by Codex (architecture/devops) and Opus (QA/automation).

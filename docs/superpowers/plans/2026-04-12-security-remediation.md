@@ -1,5 +1,7 @@
 # Security Remediation & Deployment Readiness — Implementation Plan
 
+> _Последнее редактирование: 2026-04-12_
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Устранить все CRITICAL/HIGH/MEDIUM уязвимости и довести проект до production-ready состояния.

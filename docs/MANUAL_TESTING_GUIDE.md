@@ -1,5 +1,7 @@
 # Manual Testing Guide - UK Management Bot
 
+> _Последнее редактирование: 2025-10-29_
+
 **Version**: 1.0
 **Last Updated**: 20 October 2025
 **Bot**: @infrasafebot

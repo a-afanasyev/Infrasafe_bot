@@ -1,5 +1,7 @@
 # UK Audit Execution Report — P0 Phase
 
+> _Последнее редактирование: 2026-05-21_
+
 > **⚠️ Read order:** This document opens with the early-session P0 attempt. For the FULL session state (including BUG-BOT-001..033 work AND FIX-001/003/005/006 merge via PRs #17–#20), see the `## Post-P0 update (2026-05-21 late session)` section at the bottom. The "done" status of FIX-001/003/005/006 in the table below was originally a session-internal label; the items were eventually merged to main on 2026-05-21 via PRs #17–#20 with merge commits `164b2ad`/`dd3ea52`/`080d824`/`f45f5aa`.
 
 **Date:** 2026-05-21

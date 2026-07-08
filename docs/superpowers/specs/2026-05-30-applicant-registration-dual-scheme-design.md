@@ -1,5 +1,7 @@
 # Applicant Registration — Dual Scheme (WebApp + Bot)
 
+> _Последнее редактирование: 2026-06-14_
+
 **Date:** 2026-05-30
 **Status:** Design approved (user); spec revised after code-grounded second review
 **Scope:** UK Management System — applicant (заявитель/resident) self-registration

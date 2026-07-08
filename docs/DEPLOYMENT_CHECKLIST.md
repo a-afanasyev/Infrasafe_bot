@@ -1,5 +1,22 @@
 # Production Deployment Checklist
 
+> _Последнее редактирование: 2026-07-06_
+
+> 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`.**
+> Реальный прод-стек (хост `~/uk`, 7 контейнеров) — **`docker compose -f docker-compose.yml
+> -f docker-compose.media.yml`**. Каноничная выкатка:
+> ```bash
+> cd ~/uk && git pull --ff-only
+> docker compose -f docker-compose.yml -f docker-compose.media.yml build frontend api app
+> docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate frontend api app
+> #  НИКОГДА не добавлять --remove-orphans (снесёт uk-caddy/uk-media-service)
+> ```
+> Миграции применяет сам `api` на старте (`entrypoint-api.sh` → `alembic upgrade head`);
+> проверка: `docker logs uk-management-api | grep "Migrations complete"`, `alembic current` = head.
+> Новый SPA-эндпоинт `/api/v2/*` требует добавления в InfraSafe edge-allowlist (SEC-22),
+> иначе 404 на публичном edge (`nginx.production.conf`, `map $uri $uk_api_allowed`).
+> Полный runbook: [DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md). Разделы ниже — устаревают.
+
 ## Pre-Deploy
 
 - [ ] All tests pass: `docker exec uk-management-bot pytest`

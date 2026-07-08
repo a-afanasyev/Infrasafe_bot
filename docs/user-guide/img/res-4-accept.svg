@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="500" viewBox="0 0 300 500" font-family="'Segoe UI',Roboto,Arial,sans-serif">
+  <rect x="6" y="6" width="288" height="488" rx="26" fill="#ffffff" stroke="#c7ced6" stroke-width="2"/>
+  <clipPath id="scr4"><rect x="8" y="8" width="284" height="484" rx="24"/></clipPath>
+  <g clip-path="url(#scr4)">
+    <rect x="8" y="8" width="284" height="484" fill="#e7ebf0"/>
+    <rect x="8" y="8" width="284" height="52" fill="#5288c1"/>
+    <circle cx="34" cy="34" r="15" fill="#ffffff"/>
+    <text x="34" y="39" text-anchor="middle" font-size="15" fill="#5288c1" font-weight="bold">УК</text>
+    <text x="58" y="30" font-size="14" fill="#ffffff" font-weight="bold">УК — бот</text>
+    <text x="58" y="46" font-size="11" fill="#dbe7f5">заявка 260706-042</text>
+    <!-- notification bubble -->
+    <rect x="20" y="76" width="250" height="76" rx="12" fill="#ffffff"/>
+    <text x="34" y="100" font-size="12.5" fill="#222" font-weight="bold">Заявка выполнена ✅</text>
+    <text x="34" y="120" font-size="12" fill="#333">Исполнитель закрыл заявку</text>
+    <text x="34" y="136" font-size="12" fill="#333">260706-042. Примите работу.</text>
+    <!-- accept buttons -->
+    <rect x="20" y="164" width="122" height="36" rx="8" fill="#4aa15a"/>
+    <text x="81" y="187" text-anchor="middle" font-size="13" fill="#ffffff" font-weight="bold">✅ Принять</text>
+    <rect x="148" y="164" width="122" height="36" rx="8" fill="#ffffff" stroke="#e0a03a"/>
+    <text x="209" y="187" text-anchor="middle" font-size="13" fill="#d98a1f">↩️ Вернуть</text>
+    <!-- rating bubble -->
+    <rect x="20" y="216" width="250" height="52" rx="12" fill="#ffffff"/>
+    <text x="34" y="240" font-size="12.5" fill="#222">Оцените работу:</text>
+    <text x="150" y="258" font-size="20" fill="#f2b01e">★ ★ ★ ★ ☆</text>
+    <g font-size="16" fill="#f2b01e" text-anchor="middle">
+      <rect x="20" y="278" width="46" height="34" rx="8" fill="#ffffff" stroke="#dbe3ea"/>
+      <text x="43" y="301">1★</text>
+      <rect x="71" y="278" width="46" height="34" rx="8" fill="#ffffff" stroke="#dbe3ea"/>
+      <text x="94" y="301">2★</text>
+      <rect x="122" y="278" width="46" height="34" rx="8" fill="#ffffff" stroke="#dbe3ea"/>
+      <text x="145" y="301">3★</text>
+      <rect x="173" y="278" width="46" height="34" rx="8" fill="#ffffff" stroke="#dbe3ea"/>
+      <text x="196" y="301">4★</text>
+      <rect x="224" y="278" width="46" height="34" rx="8" fill="#fff6df" stroke="#f2b01e"/>
+      <text x="247" y="301">5★</text>
+    </g>
+  </g>
+</svg>

@@ -1,5 +1,7 @@
 # InfraSafe public edge — prefix-allowlist contract for `/uk/api/*` (SEC-22)
 
+> _Последнее редактирование: 2026-06-07_
+
 **Date:** 2026-06-07
 **Status:** ✅ live on prod (deployed by InfraSafe edge side, verified)
 **InfraSafe ref:** SEC-22 (pentest round 2) · **UK ref:** SEC-22 coordination

@@ -1,5 +1,7 @@
 # Code Review: UK Management Frontend Modernization
 
+> _Последнее редактирование: 2026-03-20_
+
 **Date**: 2026-03-19
 **Reviewer**: Claude Opus 4.6 (Senior Code Reviewer)
 **Scope**: 8 commits `89320d4..c9994f7` -- full diff against `a658ade`

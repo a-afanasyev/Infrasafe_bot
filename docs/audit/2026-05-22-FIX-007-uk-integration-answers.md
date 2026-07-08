@@ -1,5 +1,7 @@
 # FIX-007 — Ответы UK на вопросы интеграции InfraSafe
 
+> _Последнее редактирование: 2026-05-22_
+
 > Ответ на `Infrasafe/docs/audit/2026-05-22-FIX-007-uk-integration-questions.md`.
 > Источник: фактический код UK Фазы 1 (`uk_management_bot/api/webhooks/`,
 > коммит-кандидат 2026-05-22) + дизайн Фазы 2.

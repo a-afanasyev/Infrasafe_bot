@@ -1,4 +1,7 @@
 # PHASE 2B - PRODUCTION DEPLOYMENT CHECKLIST
+
+> _Последнее редактирование: 2025-10-29_
+
 ## Async AI Services Deployment Guide
 
 **Date**: 20.10.2025

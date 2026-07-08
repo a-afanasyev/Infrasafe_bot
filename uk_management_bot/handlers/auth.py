@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from ..states.registration import RegistrationStates
 
 from uk_management_bot.services.auth_service import AuthService
-from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter
+from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter, TokenAlreadyUsedError
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import sync_legacy_role
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.keyboards.base import get_cancel_keyboard, get_main_keyboard_for_role
 import logging
 
@@ -123,13 +123,22 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
                     get_text("invites.already_registered", language=lang)
                 )
                 return
-            # Если пользователь в статусе pending, запрещаем повторную регистрацию
+            # Пользователь в статусе pending:
+            # само-онбординговый кандидат (roles ровно ["applicant"], создан
+            # обычным /start) ещё НЕ проходил инвайт — разрешаем апгрейд роли по
+            # инвайту. Иначе инструкция «нажмите Начать, затем /join <token>»
+            # ведёт в тупик: /start создаёт pending-applicant, а /join его же
+            # отвергает. Кандидатов, уже поднявших роль по инвайту и ждущих
+            # одобрения (в roles есть роль сверх applicant), не пускаем повторно.
             elif existing_user.status == "pending":
-                logger.info(f"Пользователь {telegram_id} уже зарегистрирован со статусом pending, регистрация запрещена")
-                await message.answer(
-                    get_text("auth.registration_pending", language=lang)
-                )
-                return
+                existing_roles = parse_roles_safe(existing_user.roles)
+                if existing_roles != ["applicant"]:
+                    logger.info(f"Пользователь {telegram_id} уже зарегистрирован со статусом pending, регистрация запрещена")
+                    await message.answer(
+                        get_text("auth.registration_pending", language=lang)
+                    )
+                    return
+                logger.info(f"Pending-applicant {telegram_id} проходит апгрейд роли по инвайту")
             # Для других статусов (blocked и т.д.) разрешаем повторную регистрацию
             else:
                 logger.info(f"Пользователь {telegram_id} имеет статус {existing_user.status}, разрешаем повторную регистрацию")
@@ -328,29 +337,47 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         role = data.get("invite_role")
         specialization = data.get("invite_specialization", "")
         
-        # Создаем пользователя
         auth_service = AuthService(db)
-        user = await auth_service.get_or_create_user(
+        token = data.get("invite_token")
+
+        # Атомарно гасим nonce и получаем свежие данные инвайта (single-use):
+        # раньше завершение звало no-op sync_legacy_role — роль не добавлялась и
+        # nonce не гасился (токен переиспользуем). Валидация тут же ловит
+        # истёкший/погашенный токен, если он «протух» за время анкеты.
+        invite_service = InviteService(db)
+        try:
+            invite_data = invite_service.validate_invite(
+                token, mark_used_by=callback.from_user.id
+            )
+        except TokenAlreadyUsedError:
+            await callback.answer(get_text("invites.used_token", language=lang), show_alert=True)
+            await state.clear()
+            return
+        except ValueError as e:
+            msg_key = "invites.expired_token" if "expired" in str(e).lower() else "invites.invalid_token"
+            await callback.answer(get_text(msg_key, language=lang), show_alert=True)
+            await state.clear()
+            return
+
+        # Свежие роль/специализация из подписанного токена — источник истины.
+        role = invite_data["role"]
+        specialization = invite_data.get("specialization", "")
+
+        # Присоединяем по инвайту: добавляет роль в user.roles, ставит active_role,
+        # специализацию, статус pending (та же логика, что и deep-link /start).
+        user = await auth_service.process_invite_join(
             telegram_id=callback.from_user.id,
+            invite_data=invite_data,
             username=callback.from_user.username,
             first_name=callback.from_user.first_name,
             last_name=callback.from_user.last_name,
         )
-        
-        # Обновляем данные пользователя
-        # Разбиваем full_name на first_name и last_name
-        name_parts = full_name.split()
+
+        # Перезаписываем ФИО/телефон из данных анкеты (точнее телеграмных).
+        name_parts = (full_name or "").split()
         user.first_name = name_parts[0] if name_parts else ""
         user.last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
         user.phone = phone
-        sync_legacy_role(user, role)
-        user.status = "pending"
-        
-        # Если это исполнитель, добавляем специализацию
-        if role == "executor" and specialization:
-            user.specialization = specialization
-        
-        # Сохраняем в базу
         db.commit()
         
         # Отправляем заявку администратору

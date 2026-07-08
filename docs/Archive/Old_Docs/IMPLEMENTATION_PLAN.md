@@ -1,4 +1,7 @@
 # 🚀 UK Management Bot — Сводный план реализации микросервисов
+
+> _Последнее редактирование: 2025-10-29_
+
 **Comprehensive Implementation Plan | Timeline: 22-30 weeks**
 
 ---

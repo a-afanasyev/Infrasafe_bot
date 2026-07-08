@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="500" viewBox="0 0 300 500" font-family="'Segoe UI',Roboto,Arial,sans-serif">
+  <rect x="6" y="6" width="288" height="488" rx="26" fill="#ffffff" stroke="#c7ced6" stroke-width="2"/>
+  <clipPath id="e2"><rect x="8" y="8" width="284" height="484" rx="24"/></clipPath>
+  <g clip-path="url(#e2)">
+    <rect x="8" y="8" width="284" height="484" fill="#e7ebf0"/>
+    <rect x="8" y="8" width="284" height="52" fill="#5288c1"/>
+    <circle cx="34" cy="34" r="15" fill="#ffffff"/>
+    <text x="34" y="39" text-anchor="middle" font-size="15" fill="#5288c1" font-weight="bold">УК</text>
+    <text x="58" y="30" font-size="14" fill="#ffffff" font-weight="bold">УК — бот</text>
+    <text x="58" y="46" font-size="11" fill="#dbe7f5">смена открыта • 🟢</text>
+    <!-- request card bubble -->
+    <rect x="20" y="76" width="252" height="150" rx="12" fill="#ffffff"/>
+    <text x="34" y="100" font-size="12.5" fill="#222" font-weight="bold">Заявка 260706-042 · В работе</text>
+    <text x="34" y="122" font-size="12" fill="#333">🚿 Сантехника</text>
+    <text x="34" y="140" font-size="12" fill="#333">Двор 1 · Дом 14В · кв. 42</text>
+    <text x="34" y="158" font-size="12" fill="#333">Течёт кран на кухне, капает</text>
+    <text x="34" y="174" font-size="12" fill="#333">под мойку.</text>
+    <text x="34" y="196" font-size="12" fill="#333">📎 2 фото от заявителя</text>
+    <text x="34" y="214" font-size="11" fill="#8a8f96">Срочность: обычная</text>
+    <!-- action buttons -->
+    <rect x="20" y="240" width="123" height="36" rx="8" fill="#4aa15a"/>
+    <text x="81" y="263" text-anchor="middle" font-size="13" fill="#ffffff" font-weight="bold">✅ Выполнить</text>
+    <rect x="149" y="240" width="123" height="36" rx="8" fill="#ffffff" stroke="#5288c1"/>
+    <text x="210" y="263" text-anchor="middle" font-size="13" fill="#2f7bc4">📦 Материалы</text>
+    <rect x="20" y="282" width="123" height="34" rx="8" fill="#ffffff" stroke="#dbe3ea"/>
+    <text x="81" y="304" text-anchor="middle" font-size="12.5" fill="#2f7bc4">💬 Комментарий</text>
+    <rect x="149" y="282" width="123" height="34" rx="8" fill="#ffffff" stroke="#dbe3ea"/>
+    <text x="210" y="304" text-anchor="middle" font-size="12.5" fill="#2f7bc4">🛒 В закуп</text>
+    <rect x="20" y="322" width="252" height="34" rx="8" fill="#ffffff" stroke="#e0a03a"/>
+    <text x="146" y="344" text-anchor="middle" font-size="12.5" fill="#d98a1f">↩️ Вернуть заявку</text>
+  </g>
+</svg>

@@ -1,5 +1,7 @@
 # Phase 3 Planning Document
 
+> _Последнее редактирование: 2025-10-29_
+
 **Project**: UK Management Bot
 **Phase**: 3 - Advanced Features & Optimization
 **Start Date**: TBD (Post Phase 2B monitoring)

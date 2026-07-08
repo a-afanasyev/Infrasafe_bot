@@ -1,5 +1,7 @@
 # 🗄️ UK Management Bot - Database Schema Documentation
 
+> _Последнее редактирование: 2025-10-29_
+
 > ⚠️ **WARNING: THIS DOCUMENTATION CONTAINS INACCURACIES!**
 >
 > **Use [DATABASE_SCHEMA_ACTUAL.md](DATABASE_SCHEMA_ACTUAL.md) instead.**

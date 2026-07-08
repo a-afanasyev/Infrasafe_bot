@@ -1,5 +1,7 @@
 # Аудит Best Practices — UK Management Bot
 
+> _Последнее редактирование: 2025-10-29_
+
 ## 📊 Статус аудита
 
 **Дата проверки**: 22 октября 2025 (Context7 Full Verification)

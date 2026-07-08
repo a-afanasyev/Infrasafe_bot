@@ -1,5 +1,7 @@
 # Phase 2B Deployment Report
 
+> _Последнее редактирование: 2025-10-29_
+
 **Date**: 20 October 2025, 19:41-19:45 MSK
 **Duration**: 4 minutes
 **Status**: ✅ **SUCCESS**

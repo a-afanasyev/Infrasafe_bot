@@ -1,5 +1,7 @@
 # ✅ Database ENUM Types Fix - Completed
 
+> _Последнее редактирование: 2025-10-29_
+
 **Date**: 15 октября 2025
 **Issue**: Missing CREATE TYPE statements for PostgreSQL enums in SQL DDL file
 **Status**: ✅ RESOLVED

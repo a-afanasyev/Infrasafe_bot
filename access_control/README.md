@@ -1,5 +1,7 @@
 # Access Control — пилот (uk-access-api)
 
+> _Последнее редактирование: 2026-07-02_
+
 Доменный сервис контроля въезда, парковочного доступа и гостевых пропусков
 (ТЗ: [`docs/access-control/TECHNICAL_SPEC.md`](../docs/access-control/TECHNICAL_SPEC.md), v1.4).
 Отдельный Docker-сервис `uk-access-api`, общая инфраструктура с основным API:
