@@ -46,7 +46,7 @@ const EVENT_COLORS: Record<string, string> = {
 }
 
 const PIE_PALETTE = [
-  '#00d4aa',
+  '#00d4aa', // brand-allow (categorical chart palette)
   '#3b82f6',
   '#8b5cf6',
   '#f59e0b',

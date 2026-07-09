@@ -346,6 +346,11 @@ jobs:
 
       - run: npm ci
 
+      # Brand-hardcode guard: сырой бренд-цвет/лого в компонентах (вместо токенов)
+      # разъезжает PROFK/InfraSafe. Падает на неразрешённом совпадении.
+      - name: Brand-hardcode guard
+        run: npm run guard:brand
+
       # PRC-03 (audit #4): eslint теперь BLOCKING. Все 60 legacy-ошибок устранены
       # (no-explicit-any→unknown/типы, вынос не-компонентных экспортов, обоснованный
       # eslint-disable для намеренных react-hooks-паттернов); `npm run lint`
@@ -353,8 +358,14 @@ jobs:
       - name: Lint (blocking)
         run: npm run lint
 
-      # `npm run build` = `tsc -b && vite build` — the real typecheck + build gate.
+      # `npm run build` = `tsc -b && vite build` — the real typecheck + build gate
+      # (дефолтный бренд InfraSafe).
       - run: npm run build
+
+      # Вторая бренд-сборка — ловит поломки PROFK-ветки (компиляция, HTML-трансформ
+      # transformIndexHtml) до прода. Тесты/линт бренд-агностичны → один раз.
+      - name: Build PROFK brand variant
+        run: npm run build:profk
 
       # TEST-068: vitest + coverage. The threshold is a ratchet floor (see
       # frontend/vitest.config.ts) raised per phase toward 80% — blocking, but

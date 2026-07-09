@@ -23,6 +23,11 @@ function brandHtmlPlugin(): Plugin {
           .replace(/<!--BRAND_FONTS_START-->[\s\S]*?<!--BRAND_FONTS_END-->/, PROFK_FONTS)
           .replace('href="/favicon.svg"', 'href="/profk-favicon.svg"')
           .replace('href="/manifest.json"', 'href="/manifest.profk.json"')
+          // Впечатываем бренд в статический HTML → светлая тема на первом кадре,
+          // до загрузки JS (main.tsx делает то же в рантайме как fallback). Без
+          // этого — короткая тёмная вспышка (FOUC) на светлом PROFK.
+          .replace('<html lang="ru">', '<html lang="ru" data-brand="profk">')
+          .replace('<body>', '<body class="light">')
       },
     },
   }

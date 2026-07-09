@@ -3,7 +3,7 @@ export const AVATAR_GRADIENTS = [
   'linear-gradient(135deg, #8b5cf6, #7c3aed)',
   'linear-gradient(135deg, #10b981, #059669)',
   'linear-gradient(135deg, #f59e0b, #d97706)',
-  'linear-gradient(135deg, #00d4aa, #0099aa)',
+  'linear-gradient(135deg, #00d4aa, #0099aa)', // brand-allow (categorical avatar palette)
 ]
 
 export const SPEC_COLORS: Record<string, string> = {
