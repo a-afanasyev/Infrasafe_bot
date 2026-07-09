@@ -21,6 +21,10 @@ MIGRATED_FILES = [
     ROOT / "uk_management_bot" / "handlers" / "address_moderation.py",
     ROOT / "uk_management_bot" / "handlers" / "user_yards_management.py",
     ROOT / "uk_management_bot" / "keyboards" / "requests.py",
+    # ARC-05 Batch 3 (seam-E _db_scope + nested-D/inline session_scope)
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts.py",
+    ROOT / "uk_management_bot" / "handlers" / "shifts.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_yards.py",
 ]
 
 _NEXT_GET_DB = re.compile(r"next\(\s*get_db\(\)\s*\)")

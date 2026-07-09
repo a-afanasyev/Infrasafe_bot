@@ -6,6 +6,7 @@ Related: my_shifts.py handles the detailed shift interface ("📋 Мои сме�
 """
 
 import logging
+from contextlib import contextmanager
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -18,7 +19,7 @@ from uk_management_bot.keyboards.shifts import (
     get_pagination_inline,
 )
 from uk_management_bot.keyboards.base import get_executor_suggestion_inline
-from uk_management_bot.database.session import get_db, session_scope
+from uk_management_bot.database.session import session_scope
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.button_texts import (
     get_accept_shift_texts,
@@ -40,18 +41,28 @@ SHIFT_HISTORY_TEXTS = get_shift_history_texts()
 ACTIVE_SHIFTS_BUTTON_TEXTS = get_active_shifts_button_texts()
 
 
+@contextmanager
+def _db_scope(db):
+    """Сессия для хендлера: инъецированная (владелец — вызывающий, НЕ закрываем
+    здесь) либо свежая через ``session_scope()`` (закроется на выходе).
+
+    ARC-05: заменяет legacy-идиому получения синхронной сессии + ручной
+    ``finally: db.close()``. Сохраняет seam внедрения ``db`` в тестах:
+    переданный db не трогаем, а если db нет — берём и гарантированно закрываем.
+    """
+    if db is not None:
+        yield db
+    else:
+        with session_scope() as scoped:
+            yield scoped
+
+
 @router.message(F.text.in_(ACCEPT_SHIFT_TEXTS))
 async def start_shift(message: Message, db=None, roles: list[str] = None, active_role: str = None, user_status: str | None = None):
     """Начать смену"""
-    if not db:
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
-    
-    try:
+    with _db_scope(db) as db:
         lang = get_user_language(message.from_user.id, db)
-        
+
         # Ранняя проверка статуса pending
         if user_status == "pending":
             try:
@@ -60,15 +71,15 @@ async def start_shift(message: Message, db=None, roles: list[str] = None, active
                 from uk_management_bot.utils.safe_localization import safe_get_text
                 await message.answer(safe_get_text("shifts.awaiting_admin_approval", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
             return
-        
+
         service = ShiftService(db)
         result = service.start_shift(message.from_user.id)
         if not result.get("success"):
             await message.answer(result.get("message", get_text("shifts.error", language=lang)), reply_markup=get_shifts_main_keyboard(language=lang))
             return
-        
+
         await message.answer(get_text("shifts.started", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
-        
+
         # async notifications
         try:
             from aiogram import Bot
@@ -92,103 +103,92 @@ async def start_shift(message: Message, db=None, roles: list[str] = None, active
         except Exception:
             # Предложение — вспомогательная функция; не должна ломать основной поток
             pass
-    finally:
-        if need_close and db:
-            db.close()
 
 
 @router.message(F.text.in_(END_SHIFT_TEXTS))
 async def end_shift_confirm(message: Message, db=None):
     """Показать список активных смен для выбора"""
-    if not db:
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
-    
-    try:
-        lang = get_user_language(message.from_user.id, db)
+    with _db_scope(db) as db:
+        try:
+            lang = get_user_language(message.from_user.id, db)
 
-        # Получаем пользователя
-        from uk_management_bot.database.models.user import User
-        from uk_management_bot.database.models.shift import Shift
-        from sqlalchemy import and_
+            # Получаем пользователя
+            from uk_management_bot.database.models.user import User
+            from uk_management_bot.database.models.shift import Shift
+            from sqlalchemy import and_
 
-        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if not user:
-            await message.answer(get_text("shifts.user_not_found", language=lang))
-            return
+            user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
+            if not user:
+                await message.answer(get_text("shifts.user_not_found", language=lang))
+                return
 
-        # Получаем ВСЕ активные смены пользователя
-        active_shifts = db.query(Shift).filter(
-            and_(
-                Shift.user_id == user.id,
-                Shift.status == "active"
-            )
-        ).order_by(Shift.start_time).all()
+            # Получаем ВСЕ активные смены пользователя
+            active_shifts = db.query(Shift).filter(
+                and_(
+                    Shift.user_id == user.id,
+                    Shift.status == "active"
+                )
+            ).order_by(Shift.start_time).all()
 
-        if not active_shifts:
-            await message.answer(get_text("shifts.no_active", language=lang))
-            return
+            if not active_shifts:
+                await message.answer(get_text("shifts.no_active", language=lang))
+                return
 
-        # Если смена одна - показываем детали сразу
-        if len(active_shifts) == 1:
-            await show_shift_end_details(message, active_shifts[0].id, db, lang)
-            return
+            # Если смена одна - показываем детали сразу
+            if len(active_shifts) == 1:
+                await show_shift_end_details(message, active_shifts[0].id, db, lang)
+                return
 
-        # Если смен несколько - показываем список для выбора
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        from datetime import datetime
+            # Если смен несколько - показываем список для выбора
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            from datetime import datetime
 
-        text = get_text("shifts.select_shift_to_end", language=lang) + "\n\n"
+            text = get_text("shifts.select_shift_to_end", language=lang) + "\n\n"
 
-        keyboard_rows = []
-        for idx, shift in enumerate(active_shifts, 1):
-            # Рассчитываем длительность
-            duration = datetime.now() - shift.start_time.replace(tzinfo=None).replace(tzinfo=None)
-            hours = int(duration.total_seconds() // 3600)
-            minutes = int((duration.total_seconds() % 3600) // 60)
+            keyboard_rows = []
+            for idx, shift in enumerate(active_shifts, 1):
+                # Рассчитываем длительность
+                duration = datetime.now() - shift.start_time.replace(tzinfo=None).replace(tzinfo=None)
+                hours = int(duration.total_seconds() // 3600)
+                minutes = int((duration.total_seconds() % 3600) // 60)
 
-            # Получаем специализации смены
-            specializations = shift.specialization_focus or []
-            if isinstance(specializations, str):
-                import json
-                try:
-                    specializations = json.loads(specializations)
-                except Exception:
-                    specializations = [specializations] if specializations else []
+                # Получаем специализации смены
+                specializations = shift.specialization_focus or []
+                if isinstance(specializations, str):
+                    import json
+                    try:
+                        specializations = json.loads(specializations)
+                    except Exception:
+                        specializations = [specializations] if specializations else []
 
-            spec_text = ", ".join(specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
+                spec_text = ", ".join(specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
 
-            text += f"{idx}. 🔵 <b>{get_text('shifts.shift', language=lang)} #{shift.id}</b>\n"
-            text += f"   📅 {get_text('shifts.start_time', language=lang)}: {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
-            text += f"   ⏱️ {get_text('shifts.duration', language=lang).replace('{duration}', '')}: {hours}{get_text('shifts.hours', language=lang) or 'ч'} {minutes}{get_text('shifts.minutes', language=lang) or 'м'}\n"
-            text += f"   🔧 {get_text('shifts.specialization', language=lang) or 'Специализация'}: {spec_text}\n\n"
+                text += f"{idx}. 🔵 <b>{get_text('shifts.shift', language=lang)} #{shift.id}</b>\n"
+                text += f"   📅 {get_text('shifts.start_time', language=lang)}: {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
+                text += f"   ⏱️ {get_text('shifts.duration', language=lang).replace('{duration}', '')}: {hours}{get_text('shifts.hours', language=lang) or 'ч'} {minutes}{get_text('shifts.minutes', language=lang) or 'м'}\n"
+                text += f"   🔧 {get_text('shifts.specialization', language=lang) or 'Специализация'}: {spec_text}\n\n"
+
+                keyboard_rows.append([
+                    InlineKeyboardButton(
+                        text=f"🔚 {get_text('shifts.complete_shift', language=lang)} {shift.id}",
+                        callback_data=f"end_shift_select:{shift.id}"
+                    )
+                ])
 
             keyboard_rows.append([
-                InlineKeyboardButton(
-                    text=f"🔚 {get_text('shifts.complete_shift', language=lang)} {shift.id}",
-                    callback_data=f"end_shift_select:{shift.id}"
-                )
+                InlineKeyboardButton(text=get_text("buttons.cancel", language=lang), callback_data="end_shift_cancel")
             ])
 
-        keyboard_rows.append([
-            InlineKeyboardButton(text=get_text("buttons.cancel", language=lang), callback_data="end_shift_cancel")
-        ])
+            await message.answer(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+                parse_mode="HTML"
+            )
 
-        await message.answer(
-            text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-            parse_mode="HTML"
-        )
-
-    except Exception as e:
-        logger.error(f"Ошибка показа списка смен: {e}")
-        lang = get_user_language(message.from_user.id, db) if db else "ru"
-        await message.answer(get_text("shifts.error_showing_list", language=lang))
-    finally:
-        if need_close and db:
-            db.close()
+        except Exception as e:
+            logger.error(f"Ошибка показа списка смен: {e}")
+            lang = get_user_language(message.from_user.id, db) if db else "ru"
+            await message.answer(get_text("shifts.error_showing_list", language=lang))
 
 
 async def show_shift_end_details(message: Message, shift_id: int, db, lang: str = "ru"):
@@ -317,24 +317,16 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
 @router.callback_query(F.data.startswith("end_shift_select:"))
 async def handle_shift_selection(callback: CallbackQuery, db=None, language: str = "ru"):
     """Обработка выбора конкретной смены для завершения"""
-    if not db:
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
-    
-    try:
-        shift_id = int(callback.data.split(":")[1])
-        lang = get_user_language(callback.from_user.id, db)
-        await show_shift_end_details(callback.message, shift_id, db, lang)
-        await callback.answer()
-    except Exception as e:
-        logger.error(f"Ошибка выбора смены: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
-        await callback.answer(get_text("shifts.error_selecting_shift", language=lang), show_alert=True)
-    finally:
-        if need_close and db:
-            db.close()
+    with _db_scope(db) as db:
+        try:
+            shift_id = int(callback.data.split(":")[1])
+            lang = get_user_language(callback.from_user.id, db)
+            await show_shift_end_details(callback.message, shift_id, db, lang)
+            await callback.answer()
+        except Exception as e:
+            logger.error(f"Ошибка выбора смены: {e}")
+            lang = get_user_language(callback.from_user.id, db) if db else "ru"
+            await callback.answer(get_text("shifts.error_selecting_shift", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "end_shift_cancel")
@@ -359,74 +351,70 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
             await callback.answer(get_text("shifts.handlers.awaiting_approval", language=language), show_alert=True)
         return
 
-    db = None  # ARCH-013: гарантируем close в finally
     try:
-        shift_id = int(callback.data.split(":")[1])
-        db = next(get_db())
-        lang = get_user_language(callback.from_user.id, db)
+        with session_scope() as db:
+            shift_id = int(callback.data.split(":")[1])
+            lang = get_user_language(callback.from_user.id, db)
 
-        # Завершаем конкретную смену
-        from uk_management_bot.database.models.shift import Shift
-        from uk_management_bot.database.models.user import User
-        from datetime import datetime
+            # Завершаем конкретную смену
+            from uk_management_bot.database.models.shift import Shift
+            from uk_management_bot.database.models.user import User
+            from datetime import datetime
 
-        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not user:
-            await callback.answer(get_text("shifts.handlers.user_not_found", language=lang), show_alert=True)
-            return
+            user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+            if not user:
+                await callback.answer(get_text("shifts.handlers.user_not_found", language=lang), show_alert=True)
+                return
 
-        shift = db.query(Shift).filter(
-            Shift.id == shift_id,
-            Shift.user_id == user.id,
-            Shift.status == "active"
-        ).first()
+            shift = db.query(Shift).filter(
+                Shift.id == shift_id,
+                Shift.user_id == user.id,
+                Shift.status == "active"
+            ).first()
 
-        if not shift:
-            await callback.answer(get_text("shifts.handlers.shift_not_found_or_ended", language=lang), show_alert=True)
-            return
+            if not shift:
+                await callback.answer(get_text("shifts.handlers.shift_not_found_or_ended", language=lang), show_alert=True)
+                return
 
-        # Завершаем смену
-        shift.end_time = datetime.now()
-        shift.status = "completed"
+            # Завершаем смену
+            shift.end_time = datetime.now()
+            shift.status = "completed"
 
-        # Создаем audit log
-        from uk_management_bot.database.models.audit import AuditLog
-        audit = AuditLog(
-            user_id=user.id,
-            telegram_user_id=user.telegram_id,
-            action="SHIFT_ENDED",
-            details={"shift_id": shift.id, "specializations": shift.specialization_focus}
-        )
-        db.add(audit)
-        db.commit()
+            # Создаем audit log
+            from uk_management_bot.database.models.audit import AuditLog
+            audit = AuditLog(
+                user_id=user.id,
+                telegram_user_id=user.telegram_id,
+                action="SHIFT_ENDED",
+                details={"shift_id": shift.id, "specializations": shift.specialization_focus}
+            )
+            db.add(audit)
+            db.commit()
 
-        await callback.message.edit_text(
-            get_text("shifts.handlers.shift_ended_details", language=lang).format(
-                shift_id=shift.id,
-                hours=f"{((shift.end_time - shift.start_time).total_seconds() // 3600):.0f}",
-                minutes=f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}",
-                end_time=shift.end_time.strftime('%d.%m.%Y %H:%M')
-            ),
-            parse_mode="HTML"
-        )
+            await callback.message.edit_text(
+                get_text("shifts.handlers.shift_ended_details", language=lang).format(
+                    shift_id=shift.id,
+                    hours=f"{((shift.end_time - shift.start_time).total_seconds() // 3600):.0f}",
+                    minutes=f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}",
+                    end_time=shift.end_time.strftime('%d.%m.%Y %H:%M')
+                ),
+                parse_mode="HTML"
+            )
 
-        # Отправляем уведомления
-        try:
-            from aiogram import Bot
-            bot: Bot = callback.message.bot
-            await async_notify_shift_ended(bot, db, user, shift)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомлений: {e}")
+            # Отправляем уведомления
+            try:
+                from aiogram import Bot
+                bot: Bot = callback.message.bot
+                await async_notify_shift_ended(bot, db, user, shift)
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомлений: {e}")
 
-        await callback.answer(get_text("shifts.handlers.shift_ended_toast", language=lang))
+            await callback.answer(get_text("shifts.handlers.shift_ended_toast", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
         lang = language
         await callback.answer(get_text("shifts.handlers.error_ending_shift", language=lang), show_alert=True)
-    finally:
-        if db:
-            db.close()
 
 
 @router.callback_query(F.data == "shift_end_confirm_yes")
@@ -484,13 +472,7 @@ async def end_shift_no(callback: CallbackQuery, language: str = "ru"):
 @router.message(F.text.in_(MY_SHIFT_TEXTS))
 async def my_shift(message: Message, db=None):
     """Показать текущую активную смену"""
-    if not db:
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
-    
-    try:
+    with _db_scope(db) as db:
         lang = get_user_language(message.from_user.id, db)
         service = ShiftService(db)
         active = service.get_active_shift(message.from_user.id)
@@ -501,9 +483,6 @@ async def my_shift(message: Message, db=None):
             get_text("shifts.active_shift_since", language=lang).format(start_time=active.start_time.strftime('%H:%M')),
             reply_markup=get_shifts_main_keyboard(language=lang),
         )
-    finally:
-        if need_close and db:
-            db.close()
 
 
 @router.message(F.text.in_(SHIFT_HISTORY_TEXTS))
@@ -515,15 +494,9 @@ async def shifts_history(message: Message, state: FSMContext, db=None, from_user
     присваивание бросает ValidationError → «непредвиденная ошибка»). Callback'и
     передают `callback.from_user.id` сюда явно.
     """
-    if not db:
-        db = next(get_db())
-        need_close = True
-    else:
-        need_close = False
+    with _db_scope(db) as db:
+        user_id = from_user_id or message.from_user.id
 
-    user_id = from_user_id or message.from_user.id
-
-    try:
         lang = get_user_language(user_id, db)
         data = await state.get_data()
         period = data.get("my_shifts_period", "all")
@@ -555,9 +528,6 @@ async def shifts_history(message: Message, state: FSMContext, db=None, from_user
 
         await state.update_data(my_shifts_page=page)
         await message.answer(text, reply_markup=combined)
-    finally:
-        if need_close and db:
-            db.close()
 
 
 @router.callback_query(F.data.startswith("shifts_page_"))

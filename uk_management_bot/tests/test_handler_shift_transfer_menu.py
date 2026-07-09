@@ -6,6 +6,10 @@ The original bug was caused by ``with get_db() as db:`` — ``get_db`` is a plai
 generator, so the context-manager protocol raised ``TypeError`` and the handler
 fell through to the ``except`` branch with "Ошибка загрузки меню".
 
+ARC-05 Batch 3: handler мигрирован на ``with session_scope() as db:`` — тесты
+патчат ``my_shifts.session_scope`` заглушкой-контекстменеджером (``get_db`` в
+модуле больше нет), закрывающей сессию на выходе (как реальный session_scope).
+
 These tests prove:
   1. The handler runs to completion without raising / falling into the error
      branch when the DB returns a valid user.
@@ -13,10 +17,23 @@ These tests prove:
      path.
 """
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiogram.types import CallbackQuery, Message, User as TgUser
+
+
+def _scope_yielding(session):
+    """ARC-05: фабрика session_scope-заглушки — yield-ит переданную сессию и
+    закрывает её на выходе (зеркалит close-only семантику session_scope())."""
+    @contextmanager
+    def _cm():
+        try:
+            yield session
+        finally:
+            session.close()
+    return _cm
 
 
 def _make_callback(user_id=42):
@@ -79,10 +96,10 @@ class TestShiftTransferMenuHandler:
 
         db = _make_db(user=user)
 
-        # next(get_db()) returns our mock session.
+        # session_scope() yields our mock session and closes it on exit.
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_db",
-            return_value=iter([db]),
+            "uk_management_bot.handlers.my_shifts.session_scope",
+            _scope_yielding(db),
         ), patch(
             "uk_management_bot.handlers.my_shifts.get_text",
             side_effect=lambda key, language="ru", **kw: key,
@@ -105,8 +122,8 @@ class TestShiftTransferMenuHandler:
         db = _make_db(user=None)
 
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_db",
-            return_value=iter([db]),
+            "uk_management_bot.handlers.my_shifts.session_scope",
+            _scope_yielding(db),
         ), patch(
             "uk_management_bot.handlers.my_shifts.get_text",
             side_effect=lambda key, language="ru", **kw: key,
