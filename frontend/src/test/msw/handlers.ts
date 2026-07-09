@@ -9,4 +9,16 @@ export const handlers = [
     HttpResponse.json({ active: 0, completed_month: 0, specialists_on_shift: 0, avg_resolution_hours: null }),
   ),
   http.get('*/api/v2/public/board-config', () => HttpResponse.json({})),
+  http.get('*/api/v2/announcements', ({ request }) => {
+    const lang = new URL(request.url).searchParams.get('lang') ?? 'ru'
+    const isUz = lang.startsWith('uz')
+    return HttpResponse.json({
+      announcements: [
+        { id: 'n1', type: 'info', title: isUz ? 'Yangilik' : 'Новость', body: isUz ? 'Matn' : 'Текст' },
+        { id: 'contacts', type: 'contact', title: isUz ? 'Aloqa' : 'Контакты', body: 'Диспетчерская: +998783331971' },
+      ],
+      working_hours: isUz ? 'Du–Ju: 08:00–20:00' : 'Пн–Пт: 08:00–20:00\nСб: Выходной',
+      emergency_phones: ['+998783331971'],
+    })
+  }),
 ]

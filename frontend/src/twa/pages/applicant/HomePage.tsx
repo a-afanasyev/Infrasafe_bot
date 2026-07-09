@@ -6,15 +6,16 @@ import { Bell, Phone, Clock } from 'lucide-react'
 import PullToRefresh from '../../components/PullToRefresh'
 
 export default function HomePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = i18n.language.startsWith('uz') ? 'uz' : 'ru'
   const { data } = useQuery({
-    queryKey: ['twa', 'announcements'],
-    queryFn: () => twaClient.get('/api/v2/announcements').then(r => r.data),
+    queryKey: ['twa', 'announcements', lang],
+    queryFn: () => twaClient.get('/api/v2/announcements', { params: { lang } }).then(r => r.data),
     staleTime: 60_000,
   })
 
   return (
-    <PullToRefresh queryKeys={[['twa', 'announcements']]}>
+    <PullToRefresh queryKeys={[['twa', 'announcements', lang]]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.home.title')}</h1>
 
@@ -34,7 +35,7 @@ export default function HomePage() {
             <Clock size={16} className="text-emerald-600" />
             <span className="font-semibold text-[13px] text-emerald-800 dark:text-emerald-300">{t('twa.home.workingHours')}</span>
           </div>
-          <span className="text-[13px] text-emerald-700 dark:text-emerald-400">{data.working_hours}</span>
+          <span className="text-[13px] text-emerald-700 dark:text-emerald-400 whitespace-pre-line">{data.working_hours}</span>
         </div>
       )}
     </div>
