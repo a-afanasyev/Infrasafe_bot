@@ -42,7 +42,7 @@ class Request(Base):
     source = Column(String(20), default='bot', nullable=True)
 
     # Новая система адресов: связь с квартирой из справочника
-    apartment_id = Column(Integer, ForeignKey("apartments.id"), nullable=True, index=True)
+    apartment_id = Column(Integer, ForeignKey("apartments.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # 3-уровневый структурированный адрес (план «Обходчик», 2026-06):
     # заявка может быть привязана к двору / дому / квартире. Ровно один из
@@ -73,7 +73,7 @@ class Request(Base):
     assignment_type = Column(String(20), nullable=True)  # 'group' или 'individual'
     assigned_group = Column(String(100), nullable=True)  # специализация группы
     assigned_at = Column(DateTime(timezone=True), nullable=True)
-    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Новые поля для материалов и отчетов
     purchase_materials = Column(Text, nullable=True)  # материалы для закупки (старое поле)

@@ -29,7 +29,7 @@ class RequestAssignment(Base):
 
     # Основные поля
     id = Column(Integer, primary_key=True)
-    request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
+    request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False, index=True)
     
     # Тип назначения
     assignment_type = Column(String(20), nullable=False)  # 'group' или 'individual'
@@ -38,14 +38,14 @@ class RequestAssignment(Base):
     group_specialization = Column(String(100), nullable=True)
     
     # Для индивидуального назначения
-    executor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    executor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Статус назначения
     status = Column(String(20), default="active")  # 'active', 'cancelled', 'completed'
     
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     
     # Связи с другими моделями
     request = relationship("Request", back_populates="assignments")

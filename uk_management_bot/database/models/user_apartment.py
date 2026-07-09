@@ -41,7 +41,7 @@ class UserApartment(Base):
     status = Column(String(20), default=UserApartmentStatus.PENDING.value, nullable=False, index=True)  # pending, approved, rejected
     requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Комментарий от администратора
     admin_comment = Column(Text, nullable=True)

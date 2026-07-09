@@ -51,7 +51,7 @@ class User(Base):
 
     # Soft-delete
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     deletion_reason = Column(Text, nullable=True)
 
     # Системные поля

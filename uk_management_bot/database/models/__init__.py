@@ -23,6 +23,7 @@ from .user_yard import UserYard
 
 # Webhook integration
 from .webhook_outbox import WebhookOutbox
+from .webhook_inbox import WebhookInbox
 
 # Счётчик номеров заявок (PR5: gap-safe генерация YYMMDD-NNN)
 from .request_number_counter import RequestNumberCounter
@@ -74,6 +75,7 @@ __all__ = [
     'UserApartment',
     'UserYard',
     'WebhookOutbox',
+    'WebhookInbox',
     'InviteNonce',
     'BoardConfig',
     'Feedback',
