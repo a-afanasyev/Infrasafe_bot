@@ -162,8 +162,9 @@ jobs:
       # builds the current model schema (the historical base), then migrations
       # 007..010 apply the deltas create_all can't express: 007 fixes the
       # requests.apartment_id FK to ON DELETE SET NULL, 008 creates webhook_inbox
-      # (no ORM model in models/__init__.py, so create_all skips it), 009 seeds
-      # the system user, 010 re-applies the audit_logs bigint change.
+      # (PRC-05: WebhookInbox теперь в models/__init__ → create_all создаёт её,
+      # миграция 008 идемпотентна и no-op'ит), 009 seeds the system user, 010
+      # re-applies the audit_logs bigint change.
       - name: Bootstrap DB schema + apply migrations
         run: |
           python -c "import uk_management_bot.database.models; from uk_management_bot.database.session import engine, Base; Base.metadata.create_all(bind=engine)"
