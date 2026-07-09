@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label'
 import { Select } from '../components/ui/select'
 import { useRegistration, type RegistrationApartment } from '../hooks/useRegistration'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { brand } from '../brand/brand'
 
 type Phase = 'loading' | 'no_telegram' | 'form' | 'pending' | 'already_registered'
 
@@ -128,16 +129,16 @@ export default function RegisterPage() {
       <div className="w-full max-w-[400px]">
         <div className="flex flex-col items-center mb-7">
           <img
-            src={`${import.meta.env.BASE_URL}infrasafe-logo.svg`}
-            alt="InfraSafe"
-            className="w-[52px] h-[52px] mb-3 rounded-full shadow-[0_0_32px_rgba(0,212,170,0.3)]"
+            src={`${import.meta.env.BASE_URL}${brand.logoMark}`}
+            alt={brand.displayName}
+            className="w-[52px] h-[52px] mb-3 rounded-full shadow-[var(--auth-logo-shadow)]"
           />
           <div className="font-[family-name:var(--font-display)] font-bold text-[22px] text-text-primary tracking-tight">
             {t('register.title')}
           </div>
         </div>
 
-        <div className="bg-bg-card border border-white/[.08] rounded-2xl p-8 px-7 shadow-[0_32px_80px_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,212,170,0.05)]">
+        <div className="bg-bg-card border border-[color:var(--auth-card-border)] rounded-2xl p-8 px-7 shadow-[var(--auth-card-shadow)]">
           {phase === 'loading' && (
             <div className="text-center text-sm text-text-secondary font-[family-name:var(--font-body)]">
               {t('common.loading')}
@@ -218,7 +219,7 @@ export default function RegisterPage() {
               </div>
 
               {error && (
-                <div className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">
+                <div className="text-[13px] text-red font-[family-name:var(--font-body)]">
                   {error}
                 </div>
               )}

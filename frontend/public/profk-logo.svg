@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 88" width="320" height="88" role="img" aria-label="PROFK — Pro Facility Kommunal">
+  <!-- icon -->
+  <g transform="translate(0,10)">
+    <g fill="none" stroke="#333333" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M33 30 L45 20 L57 30"/>
+      <path d="M38 30 L38 47 L52 47 L52 30"/>
+      <path d="M9 38 L24 25 L39 38"/>
+      <path d="M14 38 L14 47 L34 47 L34 38"/>
+      <path d="M21 47 L21 41 L28 41 L28 47"/>
+    </g>
+    <path d="M6 47.6 L57 47.6" stroke="#333333" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M45 11 C53 11 59 14 59 14 C59 14 57 24 49 25 C44 25.5 41.5 21.5 42 17.5 C42.4 14 43.5 11.6 45 11 Z" fill="#44c24a"/>
+  </g>
+  <!-- wordmark -->
+  <text x="82" y="46" font-family="Montserrat, Arial, sans-serif" font-weight="800" font-size="42" letter-spacing="1" fill="#333333">PROFK</text>
+  <text x="83" y="66" font-family="Montserrat, Arial, sans-serif" font-weight="600" font-size="12.5" letter-spacing="3.2" fill="#5b6660">PRO FACILITY KOMMUNAL</text>
+</svg>

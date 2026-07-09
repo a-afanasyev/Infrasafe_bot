@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { brand } from '../brand/brand'
 
 // WR-07: `enabled` lets a component opt out of owning the document title when it
 // is rendered as an embedded preview (e.g. ResidentBoardPage inside the board
@@ -6,6 +7,6 @@ import { useEffect } from 'react'
 export function usePageTitle(title: string, enabled = true) {
   useEffect(() => {
     if (!enabled) return
-    document.title = title ? `${title} — UK Management` : 'UK Management'
+    document.title = title ? `${title} — ${brand.productTitle}` : brand.productTitle
   }, [title, enabled])
 }

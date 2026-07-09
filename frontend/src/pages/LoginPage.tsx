@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 import { safeNextPath } from '../utils/safeNextPath'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { brand } from '../brand/brand'
 
 // Telegram login-widget привязан к конкретному боту (data-telegram-login) и
 // работает только на домене, зарегистрированном у этого бота в BotFather.
@@ -172,8 +173,8 @@ export default function LoginPage() {
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px)
+            linear-gradient(rgba(var(--accent-rgb),0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(var(--accent-rgb),0.03) 1px, transparent 1px)
           `,
           backgroundSize: '48px 48px',
         }}
@@ -188,7 +189,7 @@ export default function LoginPage() {
           transform: 'translateX(-50%)',
           width: 600,
           height: 300,
-          background: 'radial-gradient(ellipse, rgba(0,212,170,0.07) 0%, transparent 70%)',
+          background: 'radial-gradient(ellipse, rgba(var(--accent-rgb),0.07) 0%, transparent 70%)',
         }}
       />
 
@@ -196,9 +197,9 @@ export default function LoginPage() {
         {/* Logo mark */}
         <div className="flex flex-col items-center mb-7">
           <img
-            src={`${import.meta.env.BASE_URL}infrasafe-logo.svg`}
-            alt="InfraSafe"
-            className="w-[52px] h-[52px] mb-3 rounded-full shadow-[0_0_32px_rgba(0,212,170,0.3)]"
+            src={`${import.meta.env.BASE_URL}${brand.logoMark}`}
+            alt={brand.displayName}
+            className="w-[52px] h-[52px] mb-3 rounded-full shadow-[var(--auth-logo-shadow)]"
           />
           <div className="font-[family-name:var(--font-display)] font-bold text-[22px] text-text-primary tracking-tight">
             Сервисная панель
@@ -209,7 +210,7 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-bg-card border border-white/[.08] rounded-2xl p-8 px-7 shadow-[0_32px_80px_rgba(0,0,0,0.5),0_0_0_1px_rgba(0,212,170,0.05)]">
+        <div className="bg-bg-card border border-[color:var(--auth-card-border)] rounded-2xl p-8 px-7 shadow-[var(--auth-card-shadow)]">
 
           {/* Telegram widget */}
           <div id="telegram-section">
@@ -218,9 +219,9 @@ export default function LoginPage() {
               className="flex justify-center mb-5 min-h-[48px]"
             />
             <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-white/[.07]" />
+              <div className="flex-1 h-px bg-border-default" />
               <span className="text-[11px] text-text-muted font-[family-name:var(--font-body)] tracking-wider uppercase">{t('login.or')}</span>
-              <div className="flex-1 h-px bg-white/[.07]" />
+              <div className="flex-1 h-px bg-border-default" />
             </div>
           </div>
 
@@ -257,7 +258,7 @@ export default function LoginPage() {
                     'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border text-center tracking-[0.3em] text-lg',
                     focusedField === 'otp'
                       ? 'bg-accent/[.04] border-[1.5px] border-accent'
-                      : 'bg-bg-root border-[1.5px] border-white/10'
+                      : 'bg-bg-root border-[1.5px] border-border-default'
                   )}
                 />
               </div>
@@ -265,7 +266,7 @@ export default function LoginPage() {
               {error && (
                 <div className="flex items-center gap-2 p-2.5 px-3 bg-red/10 border border-red/20 rounded-lg">
                   <span className="text-[13px]">!</span>
-                  <span className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">{error}</span>
+                  <span className="text-[13px] text-red font-[family-name:var(--font-body)]">{error}</span>
                 </div>
               )}
 
@@ -273,10 +274,10 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading || otpCode.length < 6}
                 className={cn(
-                  'rounded-[10px] p-3 text-sm font-bold text-[#001a14] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
+                  'rounded-[10px] p-3 text-sm font-bold text-[color:var(--accent-contrast)] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
                   loading || otpCode.length < 6
                     ? 'bg-accent/50 cursor-not-allowed'
-                    : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
+                    : 'bg-accent cursor-pointer hover:bg-[var(--accent-hover)]'
                 )}
               >
                 {loading ? t('login.submitting') : 'Подтвердить'}
@@ -297,7 +298,7 @@ export default function LoginPage() {
                   className={cn(
                     'bg-transparent border-none p-0 transition-colors',
                     canResend
-                      ? 'text-accent hover:text-[#00f0c0] cursor-pointer'
+                      ? 'text-accent hover:text-[var(--accent-hover)] cursor-pointer'
                       : 'text-text-muted cursor-not-allowed'
                   )}
                 >
@@ -323,7 +324,7 @@ export default function LoginPage() {
                     'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
                     focusedField === 'email'
                       ? 'bg-accent/[.04] border-[1.5px] border-accent'
-                      : 'bg-bg-root border-[1.5px] border-white/10'
+                      : 'bg-bg-root border-[1.5px] border-border-default'
                   )}
                   autoComplete="email"
                 />
@@ -344,7 +345,7 @@ export default function LoginPage() {
                     'w-full rounded-[10px] py-[11px] px-3.5 text-sm text-text-primary font-[family-name:var(--font-body)] outline-none transition-all box-border',
                     focusedField === 'password'
                       ? 'bg-accent/[.04] border-[1.5px] border-accent'
-                      : 'bg-bg-root border-[1.5px] border-white/10'
+                      : 'bg-bg-root border-[1.5px] border-border-default'
                   )}
                   autoComplete="current-password"
                 />
@@ -353,7 +354,7 @@ export default function LoginPage() {
               {error && (
                 <div className="flex items-center gap-2 p-2.5 px-3 bg-red/10 border border-red/20 rounded-lg">
                   <span className="text-[13px]">!</span>
-                  <span className="text-[13px] text-[#f87171] font-[family-name:var(--font-body)]">{error}</span>
+                  <span className="text-[13px] text-red font-[family-name:var(--font-body)]">{error}</span>
                 </div>
               )}
 
@@ -361,10 +362,10 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading}
                 className={cn(
-                  'rounded-[10px] p-3 text-sm font-bold text-[#001a14] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
+                  'rounded-[10px] p-3 text-sm font-bold text-[color:var(--accent-contrast)] font-[family-name:var(--font-display)] tracking-wide transition-all mt-1 border-none',
                   loading
                     ? 'bg-accent/50 cursor-not-allowed'
-                    : 'bg-accent cursor-pointer hover:bg-[#00f0c0]'
+                    : 'bg-accent cursor-pointer hover:bg-[var(--accent-hover)]'
                 )}
               >
                 {loading ? t('login.submitting') : t('login.submit')}

@@ -90,7 +90,7 @@ function getInitials(name: string | null): string {
 }
 
 const NAME_GRADIENTS = [
-  'linear-gradient(135deg,#00d4aa,#0099ff)',
+  'linear-gradient(135deg,#00d4aa,#0099ff)', // brand-allow (categorical resource palette)
   'linear-gradient(135deg,#8b5cf6,#06b6d4)',
   'linear-gradient(135deg,#f59e0b,#ef4444)',
   'linear-gradient(135deg,#10b981,#3b82f6)',

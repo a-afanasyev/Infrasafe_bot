@@ -31,7 +31,7 @@ const SHIFT_TYPE_COLORS: Record<string, string> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  active: '#00d4aa',
+  active: 'var(--accent)',
   completed: '#6b7280',
   cancelled: '#ef4444',
   pending: '#f59e0b',
@@ -77,7 +77,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   }
 
   const typeColor = SHIFT_TYPE_COLORS[shift?.shift_type ?? 'regular'] ?? '#3b82f6'
-  const statusColor = STATUS_COLORS[shift?.status ?? 'active'] ?? '#00d4aa'
+  const statusColor = STATUS_COLORS[shift?.status ?? 'active'] ?? 'var(--accent)'
 
   return (
     <>

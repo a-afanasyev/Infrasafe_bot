@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:profk": "VITE_BRAND=profk vite",
     "build": "tsc -b && vite build",
+    "build:profk": "VITE_BRAND=profk npm run build",
     "lint": "eslint .",
+    "guard:brand": "node scripts/check-brand-hardcodes.mjs",
     "preview": "vite preview",
+    "preview:profk": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage"

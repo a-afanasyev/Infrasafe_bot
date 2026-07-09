@@ -6,6 +6,7 @@ import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES } fro
 import { TopbarProvider } from '../contexts/TopbarContext'
 import { useTopbar } from '../contexts/topbar'
 import { useTheme } from '../hooks/useTheme'
+import { brand } from '../brand/brand'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -245,7 +246,7 @@ function TopbarInner({
   onToggleMobile: () => void
 }) {
   const { actions } = useTopbar()
-  const { isDark, toggle } = useTheme()
+  const { isDark, toggle, canToggle } = useTheme()
   const { t } = useTranslation()
 
   return (
@@ -273,15 +274,17 @@ function TopbarInner({
       <div className="flex items-center gap-2">
         {actions}
         <LanguageSwitcher />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggle}
-          aria-label={isDark ? t('theme.light') : t('theme.dark')}
-          title={isDark ? t('theme.light') : t('theme.dark')}
-        >
-          {isDark ? <Sun size={16} /> : <Moon size={16} />}
-        </Button>
+        {canToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggle}
+            aria-label={isDark ? t('theme.light') : t('theme.dark')}
+            title={isDark ? t('theme.light') : t('theme.dark')}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </Button>
+        )}
       </div>
     </header>
   )
@@ -457,8 +460,8 @@ function SidebarContent({
       <div className={cn('px-5 pt-5 pb-4', collapsed && 'flex justify-center px-3')}>
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
           <img
-            src={`${import.meta.env.BASE_URL}infrasafe-logo.svg`}
-            alt="InfraSafe"
+            src={`${import.meta.env.BASE_URL}${brand.logoMark}`}
+            alt={brand.displayName}
             className="h-10 w-10 shrink-0"
           />
           {!collapsed && (

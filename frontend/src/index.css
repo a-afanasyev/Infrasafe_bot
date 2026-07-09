@@ -51,6 +51,15 @@
   --accent: #00d4aa;
   --accent-dim: rgba(0,212,170,0.12);
   --accent-glow: rgba(0,212,170,0.25);
+  /* Канал акцента (для rgba(var(--accent-rgb),α) в декоре/тепловых картах),
+     hover и контрастный текст на акценте — переопределяются per-brand. */
+  --accent-rgb: 0,212,170;
+  --accent-hover: #00f0c0;
+  --accent-contrast: #001a14;
+  /* Декор auth-экранов (тёмный вид InfraSafe по умолчанию). */
+  --auth-card-border: rgba(255,255,255,0.08);
+  --auth-card-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(var(--accent-rgb),0.05);
+  --auth-logo-shadow: 0 0 32px rgba(var(--accent-rgb),0.3);
   --blue: #3b82f6;
   --red: #ef4444;
   --amber: #f59e0b;
@@ -84,6 +93,64 @@ body.light {
   --color-text-muted: #64748b;
   --color-border-default: rgba(0,0,0,0.12);
   --color-border-active: rgba(0,212,170,0.4);
+}
+
+/* ── PROFK бренд (build-time VITE_BRAND=profk) — светлая «инженерная» тема ──
+   body.light задаёт переменные НА body, и потомки берут их с ближайшего предка
+   (body), а не с html — независимо от порядка в файле. Поэтому селектор
+   покрывает и html, и body: (0,1,2) и (0,1,2 через потомка) > body.light (0,1,1)
+   → выигрывает всегда. */
+html[data-brand="profk"],
+html[data-brand="profk"] body {
+  color-scheme: light;
+  --color-accent: #44c24a;
+  --accent: #44c24a;
+  --accent-hover: #3aa540;
+  --accent-rgb: 68,194,74;
+  --accent-contrast: #ffffff;
+  --color-accent-dim: rgba(68,194,74,0.12);
+  --accent-dim: rgba(68,194,74,0.12);
+  --color-accent-glow: rgba(68,194,74,0.22);
+  --accent-glow: rgba(68,194,74,0.22);
+  --color-border-active: rgba(68,194,74,0.4);
+
+  --color-bg-root: #f5f5f5;
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f5f5f5;
+  --color-bg-card: #ffffff;
+  --color-bg-card-hover: #f0f2f4;
+  --color-bg-surface: #ffffff;
+  --color-bg-sidebar: #ffffff;
+
+  --color-text-primary: #333333;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #8a929c;
+  --text-primary: #333333;
+  --text-secondary: #6b7280;
+  --text-muted: #8a929c;
+
+  --color-border-default: #dcdcdc;
+
+  --color-red: #d9534f;
+  --color-amber: #f0ad4e;
+  --color-blue: #5bc0de;
+  --color-green: #44c24a;
+  --red: #d9534f;
+  --amber: #f0ad4e;
+  --blue: #5bc0de;
+  --green: #44c24a;
+
+  --radius-default: 8px;
+  --radius-sm: 6px;
+  --radius: 8px;
+
+  --font-display: 'Montserrat', sans-serif;
+  --font-body: 'Open Sans', sans-serif;
+
+  /* Светлый auth-декор — без чёрных теней/бирюзового свечения. */
+  --auth-card-border: #dcdcdc;
+  --auth-card-shadow: 0 8px 32px rgba(51,51,51,0.08), 0 0 0 1px #ececec;
+  --auth-logo-shadow: none;
 }
 
 /* Focus styles */

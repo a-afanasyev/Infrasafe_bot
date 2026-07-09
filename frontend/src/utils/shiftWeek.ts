@@ -105,7 +105,7 @@ export function shiftTypeColor(shiftType: string | null | undefined): string {
  * always gets the same color across renders/sessions.
  */
 const SPEC_PALETTE = [
-  '#00d4aa', // accent
+  '#00d4aa', // accent — brand-allow (categorical spec palette)
   '#3b82f6', // blue
   '#8b5cf6', // violet
   '#f59e0b', // amber

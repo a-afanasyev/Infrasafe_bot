@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react'
+import { brand } from '../brand/brand'
 
 export function useTheme() {
-  const [isDark, setIsDark] = useState(() => {
-    return localStorage.getItem('theme') !== 'light'
-  })
+  // Light-only бренд (PROFK) держит светлую тему принудительно, игнорируя
+  // localStorage и toggle; тумблер темы скрывается (canToggle=false).
+  const forced = brand.lightOnly
+
+  const [isDark, setIsDark] = useState(() =>
+    forced ? false : localStorage.getItem('theme') !== 'light',
+  )
 
   const toggle = () => {
+    if (forced) return
     const next = !isDark
     setIsDark(next)
     localStorage.setItem('theme', next ? 'dark' : 'light')
@@ -18,5 +24,5 @@ export function useTheme() {
     document.body.classList.toggle('light', !isDark)
   }, [isDark])
 
-  return { isDark, toggle }
+  return { isDark, toggle, canToggle: !forced }
 }
