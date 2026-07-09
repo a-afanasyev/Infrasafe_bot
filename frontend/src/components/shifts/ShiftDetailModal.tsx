@@ -37,6 +37,14 @@ const STATUS_COLORS: Record<string, string> = {
   pending: '#f59e0b',
 }
 
+// Полупрозрачный фон/рамка для цвета бейджа. Литеральный hex → 8-значный
+// hex-alpha (#rrggbb + 22/66). Токен акцента `var(--accent)` не поддерживает
+// суффикс-трюк (даёт невалидный CSS), поэтому для него — rgba(var(--accent-rgb),α).
+// 0x22≈0.13, 0x66≈0.4.
+const ACCENT_TOKEN = 'var(--accent)'
+const bgTint = (c: string) => (c === ACCENT_TOKEN ? 'rgba(var(--accent-rgb),0.13)' : `${c}22`)
+const borderTint = (c: string) => (c === ACCENT_TOKEN ? 'rgba(var(--accent-rgb),0.4)' : `${c}66`)
+
 export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
   const { data: shift, isLoading } = useShift(shiftId)
@@ -100,9 +108,9 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                   <span
                     className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
                     style={{
-                      background: `${typeColor}22`,
+                      background: bgTint(typeColor),
                       color: typeColor,
-                      border: `1px solid ${typeColor}66`,
+                      border: `1px solid ${borderTint(typeColor)}`,
                     }}
                   >
                     {t(`shiftType.${shift.shift_type ?? 'regular'}`)}
@@ -110,9 +118,9 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                   <span
                     className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
                     style={{
-                      background: `${statusColor}22`,
+                      background: bgTint(statusColor),
                       color: statusColor,
-                      border: `1px solid ${statusColor}66`,
+                      border: `1px solid ${borderTint(statusColor)}`,
                     }}
                   >
                     {t(`shiftStatus.${shift.status}`, shift.status)}
