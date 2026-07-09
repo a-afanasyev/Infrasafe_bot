@@ -205,12 +205,14 @@ async def test_pattern_c_user_yards_opens_no_extra_session():
     def _boom():
         raise AssertionError("handler must not open its own session (Pattern C)")
 
-    with patch.object(mod, "get_db", side_effect=_boom), \
+    # ARC-05 Batch 2: user_yards_management мигрирован на session_scope() —
+    # патчим его (get_db в модуле больше нет), _boom ловит любую попытку открыть сессию.
+    with patch.object(mod, "session_scope", side_effect=_boom), \
          patch.object(mod, "get_user_language", return_value="ru"), \
          patch.object(mod, "has_admin_access", return_value=True), \
          patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key), \
          patch.object(mod, "get_user_yards_keyboard", return_value=None):
         await mod.handle_manage_user_yards(cb, db=injected, roles=["manager"], user=MagicMock(id=1))
 
-    # get_db never called (asserted via _boom); injected session used, not closed by handler.
+    # session_scope never called (asserted via _boom); injected session used, not closed by handler.
     injected.close.assert_not_called()
