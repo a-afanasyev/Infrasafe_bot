@@ -16,7 +16,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import session_scope
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
@@ -52,88 +52,86 @@ async def show_apartments_list(callback: CallbackQuery, state: FSMContext | None
         await state.clear()
     lang = language
 
-    db = next(get_db())
     try:
-        from uk_management_bot.database.models import Building
-        from sqlalchemy import select, func
-        from sqlalchemy.orm import joinedload
+        with session_scope() as db:
+            from uk_management_bot.database.models import Building
+            from sqlalchemy import select, func
+            from sqlalchemy.orm import joinedload
 
-        # Получаем все здания с количеством квартир
-        result = db.execute(
-            select(Building)
-            .options(joinedload(Building.yard))
-            .where(Building.is_active.is_(True))
-            .order_by(Building.address)
-        )
-        buildings = result.unique().scalars().all()
-
-        if not buildings:
-            await callback.message.edit_text(
-                get_text("address_apartments.handlers.no_buildings", language=lang),
-                reply_markup=get_apartments_menu(language=lang)
+            # Получаем все здания с количеством квартир
+            result = db.execute(
+                select(Building)
+                .options(joinedload(Building.yard))
+                .where(Building.is_active.is_(True))
+                .order_by(Building.address)
             )
-            return
+            buildings = result.unique().scalars().all()
 
-        # Считаем количество квартир для каждого здания
-        from uk_management_bot.database.models import Apartment
-        apartments_counts = {}
-        for building in buildings:
-            apartments_count = db.execute(
-                select(func.count(Apartment.id))
-                .where(Apartment.building_id == building.id)
-                .where(Apartment.is_active.is_(True))
-            ).scalar()
-            apartments_counts[building.id] = apartments_count
-
-        text = get_text("address_apartments.handlers.select_building", language=lang).format(
-            total=len(buildings)
-        )
-
-        # Используем клавиатуру со списком зданий
-        from aiogram.utils.keyboard import InlineKeyboardBuilder
-        from aiogram.types import InlineKeyboardButton
-
-        builder = InlineKeyboardBuilder()
-
-        apt_suffix = get_text("address_apartments.handlers.apt_suffix", language=lang)
-
-        # Добавляем кнопки для каждого здания
-        for building in buildings:
-            yard_info = f" ({building.yard.name})" if building.yard else ""
-            apt_count = apartments_counts.get(building.id, 0)
-            apartments_info = f" - {apt_count} {apt_suffix}" if apt_count > 0 else ""
-
-            # Обрезаем длинный адрес
-            address_short = building.address[:50] + "..." if len(building.address) > 50 else building.address
-
-            builder.row(
-                InlineKeyboardButton(
-                    text=f"{address_short}{yard_info}{apartments_info}",
-                    callback_data=f"addr_apartments_by_building:{building.id}"
+            if not buildings:
+                await callback.message.edit_text(
+                    get_text("address_apartments.handlers.no_buildings", language=lang),
+                    reply_markup=get_apartments_menu(language=lang)
                 )
+                return
+
+            # Считаем количество квартир для каждого здания
+            from uk_management_bot.database.models import Apartment
+            apartments_counts = {}
+            for building in buildings:
+                apartments_count = db.execute(
+                    select(func.count(Apartment.id))
+                    .where(Apartment.building_id == building.id)
+                    .where(Apartment.is_active.is_(True))
+                ).scalar()
+                apartments_counts[building.id] = apartments_count
+
+            text = get_text("address_apartments.handlers.select_building", language=lang).format(
+                total=len(buildings)
             )
 
-        # Добавляем кнопки управления
-        builder.row(
-            InlineKeyboardButton(text=get_text("address_apartments.handlers.btn_add_apartment", language=lang), callback_data="addr_apartment_create")
-        )
-        builder.row(
-            InlineKeyboardButton(text=get_text("address_apartments.handlers.btn_search_apartment", language=lang), callback_data="addr_apartment_search")
-        )
-        builder.row(
-            InlineKeyboardButton(text=get_text("address_apartments.handlers.btn_back", language=lang), callback_data="addr_menu")
-        )
+            # Используем клавиатуру со списком зданий
+            from aiogram.utils.keyboard import InlineKeyboardBuilder
+            from aiogram.types import InlineKeyboardButton
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=builder.as_markup()
-        )
+            builder = InlineKeyboardBuilder()
+
+            apt_suffix = get_text("address_apartments.handlers.apt_suffix", language=lang)
+
+            # Добавляем кнопки для каждого здания
+            for building in buildings:
+                yard_info = f" ({building.yard.name})" if building.yard else ""
+                apt_count = apartments_counts.get(building.id, 0)
+                apartments_info = f" - {apt_count} {apt_suffix}" if apt_count > 0 else ""
+
+                # Обрезаем длинный адрес
+                address_short = building.address[:50] + "..." if len(building.address) > 50 else building.address
+
+                builder.row(
+                    InlineKeyboardButton(
+                        text=f"{address_short}{yard_info}{apartments_info}",
+                        callback_data=f"addr_apartments_by_building:{building.id}"
+                    )
+                )
+
+            # Добавляем кнопки управления
+            builder.row(
+                InlineKeyboardButton(text=get_text("address_apartments.handlers.btn_add_apartment", language=lang), callback_data="addr_apartment_create")
+            )
+            builder.row(
+                InlineKeyboardButton(text=get_text("address_apartments.handlers.btn_search_apartment", language=lang), callback_data="addr_apartment_search")
+            )
+            builder.row(
+                InlineKeyboardButton(text=get_text("address_apartments.handlers.btn_back", language=lang), callback_data="addr_menu")
+            )
+
+            await callback.message.edit_text(
+                text,
+                reply_markup=builder.as_markup()
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка зданий для квартир: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_loading_data", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 @router.callback_query(F.data.startswith("addr_apartments_by_building:"))
@@ -142,33 +140,31 @@ async def show_apartments_by_building(callback: CallbackQuery, language: str = "
     building_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
-        if not building:
-            await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
-            return
+        with session_scope() as db:
+            building = AddressService.get_building_by_id(db, building_id, include_yard=True)
+            if not building:
+                await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
+                return
 
-        apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
+            apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
 
-        text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
-            address=building.address,
-            total=len(apartments)
-        )
+            text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
+                address=building.address,
+                total=len(apartments)
+            )
 
-        if not apartments:
-            text += "\n" + get_text("address_apartments.handlers.apartments_list_empty", language=lang)
+            if not apartments:
+                text += "\n" + get_text("address_apartments.handlers.apartments_list_empty", language=lang)
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_apartments_list_keyboard(apartments, page=0, building_id=building_id)
-        )
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_apartments_list_keyboard(apartments, page=0, building_id=building_id)
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке квартир здания {building_id}: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_loading_data", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 @router.callback_query(F.data.startswith("addr_apartments_by_building_page:"))
@@ -179,33 +175,31 @@ async def paginate_apartments_by_building(callback: CallbackQuery, language: str
     page = int(parts[2])
     lang = language
 
-    db = next(get_db())
     try:
-        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
-        if not building:
-            await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
-            return
+        with session_scope() as db:
+            building = AddressService.get_building_by_id(db, building_id, include_yard=True)
+            if not building:
+                await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
+                return
 
-        apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
+            apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
 
-        text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
-            address=building.address,
-            total=len(apartments)
-        )
+            text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
+                address=building.address,
+                total=len(apartments)
+            )
 
-        if not apartments:
-            text += "\n" + get_text("address_apartments.handlers.apartments_list_empty", language=lang)
+            if not apartments:
+                text += "\n" + get_text("address_apartments.handlers.apartments_list_empty", language=lang)
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_apartments_list_keyboard(apartments, page=page, building_id=building_id)
-        )
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_apartments_list_keyboard(apartments, page=page, building_id=building_id)
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при пагинации квартир здания {building_id}: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_loading_data", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -245,42 +239,40 @@ async def process_apartment_search(message: Message, state: FSMContext, language
         )
         return
 
-    db = next(get_db())
     try:
-        apartments = AddressService.search_apartments(db, query, only_active=True)
+        with session_scope() as db:
+            apartments = AddressService.search_apartments(db, query, only_active=True)
 
-        if not apartments:
-            no_results_text = (
+            if not apartments:
+                no_results_text = (
+                    f"{get_text('requests.search_results_title', language=lang)}\n\n"
+                    f"{get_text('requests.search_no_results', language=lang, query=query)}\n\n"
+                    f"{get_text('requests.search_no_results_action', language=lang)}"
+                )
+                await message.answer(
+                    no_results_text,
+                    reply_markup=get_apartments_list_keyboard([], page=0)
+                )
+                await state.clear()
+                return
+
+            text = (
                 f"{get_text('requests.search_results_title', language=lang)}\n\n"
-                f"{get_text('requests.search_no_results', language=lang, query=query)}\n\n"
-                f"{get_text('requests.search_no_results_action', language=lang)}"
+                f"{get_text('requests.search_query_label', language=lang, query=query)}\n"
+                f"{get_text('requests.search_found_count', language=lang, count=len(apartments))}\n\n"
+                f"{get_text('requests.search_select_apartment', language=lang)}"
             )
+
             await message.answer(
-                no_results_text,
-                reply_markup=get_apartments_list_keyboard([], page=0)
+                text,
+                reply_markup=get_apartments_list_keyboard(apartments, page=0)
             )
+
             await state.clear()
-            return
-
-        text = (
-            f"{get_text('requests.search_results_title', language=lang)}\n\n"
-            f"{get_text('requests.search_query_label', language=lang, query=query)}\n"
-            f"{get_text('requests.search_found_count', language=lang, count=len(apartments))}\n\n"
-            f"{get_text('requests.search_select_apartment', language=lang)}"
-        )
-
-        await message.answer(
-            text,
-            reply_markup=get_apartments_list_keyboard(apartments, page=0)
-        )
-
-        await state.clear()
 
     except Exception as e:
         logger.error(f"Ошибка при поиске квартир: {e}")
         await message.answer(get_text("errors.search_error", language=lang))
-    finally:
-        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -293,58 +285,56 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru"):
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+        with session_scope() as db:
+            apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
 
-        if not apartment:
-            await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
-            return
+            if not apartment:
+                await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
+                return
 
-        status_text = get_text("apartment.active_status", language=lang) if apartment.is_active else get_text("apartment.inactive_status", language=lang)
-        residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
-        pending_count = apartment.pending_requests_count if hasattr(apartment, 'pending_requests_count') else 0
+            status_text = get_text("apartment.active_status", language=lang) if apartment.is_active else get_text("apartment.inactive_status", language=lang)
+            residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
+            pending_count = apartment.pending_requests_count if hasattr(apartment, 'pending_requests_count') else 0
 
-        # MGR-08: локаль `apartment.details_title` уже содержит 🏠 — не дублируем эмодзи в шаблоне.
-        text = f"<b>{get_text('apartment.details_title', language=lang).format(number=apartment.apartment_number)}</b>\n\n"
+            # MGR-08: локаль `apartment.details_title` уже содержит 🏠 — не дублируем эмодзи в шаблоне.
+            text = f"<b>{get_text('apartment.details_title', language=lang).format(number=apartment.apartment_number)}</b>\n\n"
 
-        if apartment.building:
-            text += f"<b>{get_text('apartment.address_label', language=lang)}</b> {apartment.building.address}\n"
-            if apartment.building.yard:
-                text += f"<b>{get_text('apartment.yard_label', language=lang)}</b> {apartment.building.yard.name}\n"
+            if apartment.building:
+                text += f"<b>{get_text('apartment.address_label', language=lang)}</b> {apartment.building.address}\n"
+                if apartment.building.yard:
+                    text += f"<b>{get_text('apartment.yard_label', language=lang)}</b> {apartment.building.yard.name}\n"
 
-        text += f"<b>{get_text('apartment.status_label', language=lang)}</b> {status_text}\n\n"
+            text += f"<b>{get_text('apartment.status_label', language=lang)}</b> {status_text}\n\n"
 
-        if apartment.entrance:
-            text += f"<b>{get_text('apartment.entrance_label', language=lang)}</b> {apartment.entrance}\n"
-        if apartment.floor:
-            text += f"<b>{get_text('apartment.floor_label', language=lang)}</b> {apartment.floor}\n"
-        if apartment.rooms_count:
-            text += f"<b>{get_text('apartment.rooms_label', language=lang)}</b> {apartment.rooms_count}\n"
-        if apartment.area:
-            text += f"<b>{get_text('apartment.area_label', language=lang)}</b> {apartment.area} {get_text('address_apartments.handlers.sqm', language=lang)}\n"
+            if apartment.entrance:
+                text += f"<b>{get_text('apartment.entrance_label', language=lang)}</b> {apartment.entrance}\n"
+            if apartment.floor:
+                text += f"<b>{get_text('apartment.floor_label', language=lang)}</b> {apartment.floor}\n"
+            if apartment.rooms_count:
+                text += f"<b>{get_text('apartment.rooms_label', language=lang)}</b> {apartment.rooms_count}\n"
+            if apartment.area:
+                text += f"<b>{get_text('apartment.area_label', language=lang)}</b> {apartment.area} {get_text('address_apartments.handlers.sqm', language=lang)}\n"
 
-        text += f"\n<b>{get_text('apartment.residents_label', language=lang)}</b> {residents_count}\n"
+            text += f"\n<b>{get_text('apartment.residents_label', language=lang)}</b> {residents_count}\n"
 
-        if pending_count > 0:
-            text += f"<b>{get_text('apartment.pending_requests_label', language=lang)}</b> {pending_count}\n"
+            if pending_count > 0:
+                text += f"<b>{get_text('apartment.pending_requests_label', language=lang)}</b> {pending_count}\n"
 
-        if apartment.description:
-            text += f"\n<b>{get_text('apartment.description_label', language=lang)}</b>\n{apartment.description}\n"
+            if apartment.description:
+                text += f"\n<b>{get_text('apartment.description_label', language=lang)}</b>\n{apartment.description}\n"
 
-        if apartment.created_at:
-            text += f"\n<b>{get_text('apartment.created_label', language=lang)}</b> {apartment.created_at.strftime('%d.%m.%Y %H:%M')}"
+            if apartment.created_at:
+                text += f"\n<b>{get_text('apartment.created_label', language=lang)}</b> {apartment.created_at.strftime('%d.%m.%Y %H:%M')}"
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_apartment_details_keyboard(apartment_id)
-        )
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_apartment_details_keyboard(apartment_id)
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке информации о квартире {apartment_id}: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_loading_data", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -357,63 +347,61 @@ async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
-        if not apartment:
-            await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
-            return
+        with session_scope() as db:
+            apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+            if not apartment:
+                await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
+                return
 
-        residents = AddressService.get_apartment_residents(db, apartment_id, only_approved=False)
+            residents = AddressService.get_apartment_residents(db, apartment_id, only_approved=False)
 
-        text = get_text("address_apartments.handlers.residents_title", language=lang).format(
-            number=apartment.apartment_number
-        ) + "\n\n"
+            text = get_text("address_apartments.handlers.residents_title", language=lang).format(
+                number=apartment.apartment_number
+            ) + "\n\n"
 
-        if apartment.building:
-            text += f"<b>{get_text('address_apartments.handlers.address_label', language=lang)}</b> {apartment.building.address}\n\n"
+            if apartment.building:
+                text += f"<b>{get_text('address_apartments.handlers.address_label', language=lang)}</b> {apartment.building.address}\n\n"
 
-        if not residents:
-            text += get_text("address_apartments.handlers.residents_list_empty", language=lang)
-        else:
-            approved = [r for r in residents if r.status == 'approved']
-            pending = [r for r in residents if r.status == 'pending']
-            rejected = [r for r in residents if r.status == 'rejected']
+            if not residents:
+                text += get_text("address_apartments.handlers.residents_list_empty", language=lang)
+            else:
+                approved = [r for r in residents if r.status == 'approved']
+                pending = [r for r in residents if r.status == 'pending']
+                rejected = [r for r in residents if r.status == 'rejected']
 
-            if approved:
-                text += get_text("address_apartments.handlers.residents_approved", language=lang) + "\n"
-                for r in approved:
-                    user_name = f"{r.user.first_name or ''} {r.user.last_name or ''}".strip() or f"ID: {r.user.telegram_id}"
-                    owner_mark = " 👑" if r.is_owner else ""
-                    primary_mark = " ⭐" if r.is_primary else ""
-                    text += f"• {user_name}{owner_mark}{primary_mark}\n"
-                text += "\n"
+                if approved:
+                    text += get_text("address_apartments.handlers.residents_approved", language=lang) + "\n"
+                    for r in approved:
+                        user_name = f"{r.user.first_name or ''} {r.user.last_name or ''}".strip() or f"ID: {r.user.telegram_id}"
+                        owner_mark = " 👑" if r.is_owner else ""
+                        primary_mark = " ⭐" if r.is_primary else ""
+                        text += f"• {user_name}{owner_mark}{primary_mark}\n"
+                    text += "\n"
 
-            if pending:
-                text += get_text("address_apartments.handlers.residents_pending", language=lang).format(count=len(pending)) + "\n"
-                for r in pending:
-                    user_name = f"{r.user.first_name or ''} {r.user.last_name or ''}".strip() or f"ID: {r.user.telegram_id}"
-                    text += f"• {user_name}\n"
-                text += "\n"
+                if pending:
+                    text += get_text("address_apartments.handlers.residents_pending", language=lang).format(count=len(pending)) + "\n"
+                    for r in pending:
+                        user_name = f"{r.user.first_name or ''} {r.user.last_name or ''}".strip() or f"ID: {r.user.telegram_id}"
+                        text += f"• {user_name}\n"
+                    text += "\n"
 
-            if rejected:
-                text += get_text("address_apartments.handlers.residents_rejected", language=lang).format(count=len(rejected)) + "\n"
+                if rejected:
+                    text += get_text("address_apartments.handlers.residents_rejected", language=lang).format(count=len(rejected)) + "\n"
 
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text=get_text("address_apartments.handlers.back_to_apartment", language=lang),
-                callback_data=f"addr_apartment_view:{apartment_id}"
-            )
-        ]])
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=get_text("address_apartments.handlers.back_to_apartment", language=lang),
+                    callback_data=f"addr_apartment_view:{apartment_id}"
+                )
+            ]])
 
-        await callback.message.edit_text(text, reply_markup=keyboard)
+            await callback.message.edit_text(text, reply_markup=keyboard)
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке жителей квартиры {apartment_id}: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_loading_data", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -426,38 +414,36 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, l
     await state.clear()
     lang = language
 
-    db = next(get_db())
     try:
-        from uk_management_bot.database.models import Building
-        from sqlalchemy import select
+        with session_scope() as db:
+            from uk_management_bot.database.models import Building
+            from sqlalchemy import select
 
-        result = db.execute(
-            select(Building)
-            .where(Building.is_active.is_(True))
-            .order_by(Building.address)
-            .limit(50)
-        )
-        buildings = result.scalars().all()
-
-        if not buildings:
-            await callback.message.edit_text(
-                get_text("address_apartments.handlers.create_no_buildings", language=lang),
-                reply_markup=get_cancel_keyboard_inline()
+            result = db.execute(
+                select(Building)
+                .where(Building.is_active.is_(True))
+                .order_by(Building.address)
+                .limit(50)
             )
-            return
+            buildings = result.scalars().all()
 
-        await state.set_state(ApartmentManagementStates.waiting_for_building_selection)
+            if not buildings:
+                await callback.message.edit_text(
+                    get_text("address_apartments.handlers.create_no_buildings", language=lang),
+                    reply_markup=get_cancel_keyboard_inline()
+                )
+                return
 
-        await callback.message.edit_text(
-            get_text("address_apartments.handlers.create_step1_select_building", language=lang),
-            reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building")
-        )
+            await state.set_state(ApartmentManagementStates.waiting_for_building_selection)
+
+            await callback.message.edit_text(
+                get_text("address_apartments.handlers.create_step1_select_building", language=lang),
+                reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building")
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при начале создания квартиры: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_generic", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 @router.callback_query(F.data.startswith("apartment_create_building:"))
@@ -469,8 +455,7 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
     await state.update_data(building_id=building_id)
     await state.set_state(ApartmentManagementStates.waiting_for_apartment_number)
 
-    db = next(get_db())
-    try:
+    with session_scope() as db:
         building = AddressService.get_building_by_id(db, building_id)
         building_addr = building.address if building else get_text("address_apartments.handlers.unknown_building", language=lang)
 
@@ -478,8 +463,6 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
             get_text("address_apartments.handlers.create_step2_enter_number", language=lang).format(address=building_addr),
             reply_markup=get_cancel_keyboard_inline()
         )
-    finally:
-        db.close()
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_apartment_number))
@@ -639,60 +622,60 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
 
     # Сохраняем квартиру в базу
     data = await state.get_data()
-    db = next(get_db())
 
     try:
-        # Получаем user.id из базы данных (не telegram_id!)
-        from uk_management_bot.database.models.user import User
-        user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if not user:
-            await message.answer(
-                get_text("address_apartments.handlers.user_not_found", language=lang),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+        with session_scope() as db:
+            # Получаем user.id из базы данных (не telegram_id!)
+            from uk_management_bot.database.models.user import User
+            user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
+            if not user:
+                await message.answer(
+                    get_text("address_apartments.handlers.user_not_found", language=lang),
+                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                )
+                await state.clear()
+                return
+
+            apartment, error = await AddressService.create_apartment(
+                session=db,
+                building_id=data['building_id'],
+                apartment_number=data['apartment_number'],
+                created_by=user.id,  # ИСПРАВЛЕНО: используем user.id из БД, а не telegram_id
+                entrance=data.get('entrance'),
+                floor=data.get('floor'),
+                rooms_count=data.get('rooms_count'),
+                area=area  # ДОБАВЛЕНО: передаём площадь
             )
-            await state.clear()
-            return
 
-        apartment, error = await AddressService.create_apartment(
-            session=db,
-            building_id=data['building_id'],
-            apartment_number=data['apartment_number'],
-            created_by=user.id,  # ИСПРАВЛЕНО: используем user.id из БД, а не telegram_id
-            entrance=data.get('entrance'),
-            floor=data.get('floor'),
-            rooms_count=data.get('rooms_count'),
-            area=area  # ДОБАВЛЕНО: передаём площадь
-        )
+            if error:
+                await message.answer(
+                    get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
+                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                )
+                await state.clear()
+                return
 
-        if error:
-            await message.answer(
-                get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            text = get_text("address_apartments.handlers.creation_success", language=lang).format(
+                number=apartment.apartment_number
             )
-            await state.clear()
-            return
 
-        text = get_text("address_apartments.handlers.creation_success", language=lang).format(
-            number=apartment.apartment_number
-        )
+            if apartment.entrance:
+                text += get_text("address_apartments.handlers.detail_entrance", language=lang).format(value=apartment.entrance)
+            if apartment.floor:
+                text += get_text("address_apartments.handlers.detail_floor", language=lang).format(value=apartment.floor)
+            if apartment.rooms_count:
+                text += get_text("address_apartments.handlers.detail_rooms", language=lang).format(value=apartment.rooms_count)
+            if apartment.area:
+                text += get_text("address_apartments.handlers.detail_area", language=lang).format(value=apartment.area)
 
-        if apartment.entrance:
-            text += get_text("address_apartments.handlers.detail_entrance", language=lang).format(value=apartment.entrance)
-        if apartment.floor:
-            text += get_text("address_apartments.handlers.detail_floor", language=lang).format(value=apartment.floor)
-        if apartment.rooms_count:
-            text += get_text("address_apartments.handlers.detail_rooms", language=lang).format(value=apartment.rooms_count)
-        if apartment.area:
-            text += get_text("address_apartments.handlers.detail_area", language=lang).format(value=apartment.area)
+            text += "\n" + get_text("address_apartments.handlers.select_action", language=lang)
 
-        text += "\n" + get_text("address_apartments.handlers.select_action", language=lang)
+            await message.answer(
+                text,
+                reply_markup=get_address_management_menu()
+            )
 
-        await message.answer(
-            text,
-            reply_markup=get_address_management_menu()
-        )
-
-        logger.info(f"Создана новая квартира: {apartment.apartment_number} (ID: {apartment.id}) пользователем {message.from_user.id}")
+            logger.info(f"Создана новая квартира: {apartment.apartment_number} (ID: {apartment.id}) пользователем {message.from_user.id}")
 
     except Exception:
         logger.exception("create apartment handler failed")
@@ -701,7 +684,6 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
-        db.close()
         await state.clear()
 
 
@@ -727,35 +709,33 @@ async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru")
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        apartment = AddressService.get_apartment_by_id(db, apartment_id)
-        if not apartment:
-            await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
-            return
+        with session_scope() as db:
+            apartment = AddressService.get_apartment_by_id(db, apartment_id)
+            if not apartment:
+                await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
+                return
 
-        new_status = not apartment.is_active
-        apartment, error = await AddressService.update_apartment(
-            session=db,
-            apartment_id=apartment_id,
-            is_active=new_status
-        )
+            new_status = not apartment.is_active
+            apartment, error = await AddressService.update_apartment(
+                session=db,
+                apartment_id=apartment_id,
+                is_active=new_status
+            )
 
-        if error:
-            await callback.answer(get_text("address_apartments.handlers.error_with_details", language=lang).format(error=error), show_alert=True)
-            return
+            if error:
+                await callback.answer(get_text("address_apartments.handlers.error_with_details", language=lang).format(error=error), show_alert=True)
+                return
 
-        status_text = get_text("address_apartments.handlers.status_activated", language=lang) if new_status else get_text("address_apartments.handlers.status_deactivated", language=lang)
-        await callback.answer(get_text("address_apartments.handlers.apartment_status_changed", language=lang).format(status=status_text))
+            status_text = get_text("address_apartments.handlers.status_activated", language=lang) if new_status else get_text("address_apartments.handlers.status_deactivated", language=lang)
+            await callback.answer(get_text("address_apartments.handlers.apartment_status_changed", language=lang).format(status=status_text))
 
-        # Обновляем отображение
-        await show_apartment_details(callback)
+            # Обновляем отображение
+            await show_apartment_details(callback)
 
     except Exception as e:
         logger.error(f"Ошибка при переключении статуса квартиры: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_status_change", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -768,36 +748,34 @@ async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "r
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
-        if not apartment:
-            await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
-            return
+        with session_scope() as db:
+            apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+            if not apartment:
+                await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
+                return
 
-        residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
+            residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
 
-        warning = ""
-        if residents_count > 0:
-            warning = "\n\n" + get_text("address_apartments.handlers.delete_warning_residents", language=lang).format(count=residents_count)
+            warning = ""
+            if residents_count > 0:
+                warning = "\n\n" + get_text("address_apartments.handlers.delete_warning_residents", language=lang).format(count=residents_count)
 
-        full_address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("address_apartments.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
+            full_address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("address_apartments.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
 
-        await callback.message.edit_text(
-            get_text("address_apartments.handlers.delete_confirm", language=lang).format(
-                address=full_address
-            ) + warning,
-            reply_markup=get_confirmation_keyboard(
-                confirm_callback=f"addr_apartment_delete_confirm:{apartment_id}",
-                cancel_callback=f"addr_apartment_view:{apartment_id}"
+            await callback.message.edit_text(
+                get_text("address_apartments.handlers.delete_confirm", language=lang).format(
+                    address=full_address
+                ) + warning,
+                reply_markup=get_confirmation_keyboard(
+                    confirm_callback=f"addr_apartment_delete_confirm:{apartment_id}",
+                    cancel_callback=f"addr_apartment_view:{apartment_id}"
+                )
             )
-        )
 
     except Exception as e:
         logger.error(f"Ошибка при подготовке удаления квартиры: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_generic", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 @router.callback_query(F.data.startswith("addr_apartment_delete_confirm:"))
@@ -806,28 +784,26 @@ async def delete_apartment(callback: CallbackQuery, language: str = "ru"):
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        success, error = await AddressService.delete_apartment(db, apartment_id)
+        with session_scope() as db:
+            success, error = await AddressService.delete_apartment(db, apartment_id)
 
-        if not success:
-            await callback.answer(get_text("address_apartments.handlers.delete_error", language=lang).format(error=error), show_alert=True)
-            return
+            if not success:
+                await callback.answer(get_text("address_apartments.handlers.delete_error", language=lang).format(error=error), show_alert=True)
+                return
 
-        await callback.message.edit_text(
-            get_text("address_apartments.handlers.delete_success", language=lang)
-        )
+            await callback.message.edit_text(
+                get_text("address_apartments.handlers.delete_success", language=lang)
+            )
 
-        logger.info(f"Квартира {apartment_id} удалена пользователем {callback.from_user.id}")
+            logger.info(f"Квартира {apartment_id} удалена пользователем {callback.from_user.id}")
 
-        # Показываем список квартир
-        await show_apartments_list(callback, None)
+            # Показываем список квартир
+            await show_apartments_list(callback, None)
 
     except Exception as e:
         logger.error(f"Ошибка при удалении квартиры: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_deletion", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -887,28 +863,28 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
         await state.clear()
         return
 
-    db = next(get_db())
     try:
-        apartment, error = await AddressService.update_apartment(
-            session=db,
-            apartment_id=apartment_id,
-            area=area
-        )
+        with session_scope() as db:
+            apartment, error = await AddressService.update_apartment(
+                session=db,
+                apartment_id=apartment_id,
+                area=area
+            )
 
-        if error:
+            if error:
+                await message.answer(
+                    get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
+                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                )
+                await state.clear()
+                return
+
             await message.answer(
-                get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
+                get_text("address_apartments.handlers.area_update_success", language=lang).format(area=area),
                 reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
-            await state.clear()
-            return
 
-        await message.answer(
-            get_text("address_apartments.handlers.area_update_success", language=lang).format(area=area),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
-        )
-
-        logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
+            logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
 
     except Exception:
         logger.exception("update apartment area handler failed")
@@ -917,7 +893,6 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
     finally:
-        db.close()
         await state.clear()
 
 
@@ -931,34 +906,32 @@ async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, 
     building_id = int(callback.data.split(":")[1])
     lang = language
 
-    db = next(get_db())
     try:
-        building = AddressService.get_building_by_id(db, building_id, include_yard=True)
-        if not building:
-            await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
-            return
+        with session_scope() as db:
+            building = AddressService.get_building_by_id(db, building_id, include_yard=True)
+            if not building:
+                await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
+                return
 
-        # Сохраняем ID здания в state
-        await state.update_data(autofill_building_id=building_id)
-        await state.set_state(ApartmentManagementStates.waiting_for_autofill_range)
+            # Сохраняем ID здания в state
+            await state.update_data(autofill_building_id=building_id)
+            await state.set_state(ApartmentManagementStates.waiting_for_autofill_range)
 
-        yard_line = f"<b>{get_text('address_apartments.handlers.yard_label', language=lang)}</b> {building.yard.name}" if building.yard else ""
+            yard_line = f"<b>{get_text('address_apartments.handlers.yard_label', language=lang)}</b> {building.yard.name}" if building.yard else ""
 
-        text = get_text("address_apartments.handlers.autofill_prompt", language=lang).format(
-            address=building.address,
-            yard_line=yard_line
-        )
+            text = get_text("address_apartments.handlers.autofill_prompt", language=lang).format(
+                address=building.address,
+                yard_line=yard_line
+            )
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_cancel_keyboard_inline()
-        )
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_cancel_keyboard_inline()
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при начале автозаполнения: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_generic", language=lang), show_alert=True)
-    finally:
-        db.close()
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_autofill_range))
@@ -1036,64 +1009,62 @@ async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext
         await state.clear()
         return
 
-    db = next(get_db())
     try:
-        # Получаем user.id из базы данных по telegram_id
-        from uk_management_bot.database.models import User
-        from sqlalchemy import select
+        with session_scope() as db:
+            # Получаем user.id из базы данных по telegram_id
+            from uk_management_bot.database.models import User
+            from sqlalchemy import select
 
-        user = db.execute(
-            select(User).where(User.telegram_id == callback.from_user.id)
-        ).scalar_one_or_none()
+            user = db.execute(
+                select(User).where(User.telegram_id == callback.from_user.id)
+            ).scalar_one_or_none()
 
-        if not user:
-            await callback.answer(get_text("address_apartments.handlers.autofill_user_not_found", language=lang), show_alert=True)
-            await state.clear()
-            db.close()
-            return
+            if not user:
+                await callback.answer(get_text("address_apartments.handlers.autofill_user_not_found", language=lang), show_alert=True)
+                await state.clear()
+                return
 
-        # Выполняем массовое создание квартир
-        created_count, skipped_count, errors = await AddressService.bulk_create_apartments(
-            db,
-            building_id=building_id,
-            apartment_numbers=apartment_numbers,
-            created_by=user.id  # Используем user.id вместо telegram_id
-        )
-
-        db.commit()
-
-        # Формируем результат
-        text = get_text("address_apartments.handlers.autofill_success", language=lang).format(
-            created_count=created_count
-        )
-
-        if skipped_count > 0:
-            text += get_text("address_apartments.handlers.autofill_skipped", language=lang).format(
-                skipped_count=skipped_count
+            # Выполняем массовое создание квартир
+            created_count, skipped_count, errors = await AddressService.bulk_create_apartments(
+                db,
+                building_id=building_id,
+                apartment_numbers=apartment_numbers,
+                created_by=user.id  # Используем user.id вместо telegram_id
             )
 
-        if errors:
-            text += get_text("address_apartments.handlers.autofill_errors_header", language=lang)
-            for error in errors[:5]:  # Показываем только первые 5 ошибок
-                text += f"• {localize_address_error(error, lang)}\n"
-            if len(errors) > 5:
-                text += get_text("address_apartments.handlers.autofill_more_errors", language=lang).format(
-                    count=len(errors) - 5
+            db.commit()
+
+            # Формируем результат
+            text = get_text("address_apartments.handlers.autofill_success", language=lang).format(
+                created_count=created_count
+            )
+
+            if skipped_count > 0:
+                text += get_text("address_apartments.handlers.autofill_skipped", language=lang).format(
+                    skipped_count=skipped_count
                 )
 
-        text += get_text("address_apartments.handlers.autofill_select_action", language=lang)
+            if errors:
+                text += get_text("address_apartments.handlers.autofill_errors_header", language=lang)
+                for error in errors[:5]:  # Показываем только первые 5 ошибок
+                    text += f"• {localize_address_error(error, lang)}\n"
+                if len(errors) > 5:
+                    text += get_text("address_apartments.handlers.autofill_more_errors", language=lang).format(
+                        count=len(errors) - 5
+                    )
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_address_management_menu()
-        )
+            text += get_text("address_apartments.handlers.autofill_select_action", language=lang)
+
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_address_management_menu()
+            )
 
     except Exception as e:
         logger.error(f"Ошибка при автозаполнении квартир: {e}")
         await callback.answer(get_text("address_apartments.handlers.autofill_creation_error", language=lang), show_alert=True)
         db.rollback()
     finally:
-        db.close()
         await state.clear()
 
 

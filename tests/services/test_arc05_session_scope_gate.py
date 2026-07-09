@@ -12,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 MIGRATED_FILES = [
     ROOT / "uk_management_bot" / "handlers" / "inspector_requests.py",
     ROOT / "uk_management_bot" / "handlers" / "request_acceptance.py",
+    # ARC-05 Batch 1 (inline Pattern 1)
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_buildings.py",
+    ROOT / "uk_management_bot" / "handlers" / "user_apartments.py",
+    ROOT / "uk_management_bot" / "handlers" / "user_apartment_selection.py",
 ]
 
 _NEXT_GET_DB = re.compile(r"next\(\s*get_db\(\)\s*\)")
