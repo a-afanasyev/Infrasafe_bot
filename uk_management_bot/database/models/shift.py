@@ -9,7 +9,7 @@ class Shift(Base):
     id = Column(Integer, primary_key=True)
     
     # Исполнитель
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     user = relationship("User", back_populates="shifts")
     
     # ========== СУЩЕСТВУЮЩИЕ ПОЛЯ ==========
@@ -29,7 +29,7 @@ class Shift(Base):
     planned_end_time = Column(DateTime(timezone=True), nullable=True)
     
     # Связь с шаблоном смены
-    shift_template_id = Column(Integer, ForeignKey("shift_templates.id"), nullable=True)
+    shift_template_id = Column(Integer, ForeignKey("shift_templates.id"), nullable=True, index=True)
     
     # Тип смены
     shift_type = Column(String(50), default="regular", nullable=True)  # regular, emergency, overtime, maintenance

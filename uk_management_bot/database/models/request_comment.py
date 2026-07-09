@@ -16,8 +16,8 @@ class RequestComment(Base):
     
     # Основные поля
     id = Column(Integer, primary_key=True)
-    request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    request_number = Column(String(15), ForeignKey("requests.request_number"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     
     # Содержимое комментария
     comment_text = Column(Text, nullable=False)

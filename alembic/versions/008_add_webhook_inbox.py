@@ -18,6 +18,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # PRC-05: WebhookInbox теперь в models/__init__ → create_all создаёт таблицу
+    # в CI/fresh-init бутстрапе (create_all + stamp 006 + upgrade head). Делаем
+    # миграцию идемпотентной: если таблица уже есть — no-op (как в 016).
+    insp = sa.inspect(op.get_bind())
+    if 'webhook_inbox' in insp.get_table_names():
+        return
     op.create_table(
         'webhook_inbox',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),

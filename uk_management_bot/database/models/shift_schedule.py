@@ -72,7 +72,7 @@ class ShiftSchedule(Base):
     status = Column(String(50), default="draft", nullable=False)
     
     # Кто создал расписание (ID пользователя)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Автоматически ли создано расписание
     auto_generated = Column(Boolean, default=False, nullable=False)

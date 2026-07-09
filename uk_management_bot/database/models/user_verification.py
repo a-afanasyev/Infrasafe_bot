@@ -41,7 +41,7 @@ class UserDocument(Base):
     id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     user = relationship("User", back_populates="documents", foreign_keys=[user_id])
     
     # Информация о документе
@@ -55,7 +55,7 @@ class UserDocument(Base):
     verification_notes = Column(Text, nullable=True)
     
     # Кто проверил документ
-    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     
     # Системные поля
@@ -72,7 +72,7 @@ class UserVerification(Base):
     id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     user = relationship("User", back_populates="verifications", foreign_keys=[user_id])
     
     # Статус верификации
@@ -81,13 +81,13 @@ class UserVerification(Base):
     # Запросы дополнительной информации
     requested_info = Column(JSON, default=dict)  # {"address": True, "documents": ["passport"]}
     requested_at = Column(DateTime(timezone=True), nullable=True)
-    requested_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    requested_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Комментарии администратора
     admin_notes = Column(Text, nullable=True)
     
     # Кто проверил
-    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     
     # Системные поля
@@ -104,7 +104,7 @@ class AccessRights(Base):
     id = Column(Integer, primary_key=True)
     
     # Связь с пользователем
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     user = relationship("User", back_populates="access_rights", foreign_keys=[user_id])
     
     # Уровень доступа
@@ -120,7 +120,7 @@ class AccessRights(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)
     
     # Кто назначил права
-    granted_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    granted_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     granted_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Комментарии

@@ -64,16 +64,17 @@ class ParkingSpotAssignment(Base):
     __tablename__ = "parking_spot_assignments"
 
     id = pk_column()
+    # Индексы на spot_id/apartment_id намеренно НЕ single-column: ведущий столбец
+    # покрыт композитными ix_..._spot_status / ix_..._apartment_status ниже
+    # (прод их не создаёт — контракт ORM==БД, PRC-05).
     spot_id = Column(
         ForeignKey("parking_spots.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     apartment_id = Column(
         Integer,
         ForeignKey("apartments.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     ownership_type = Column(String(16), nullable=False)
     valid_from = Column(DateTime(timezone=True), nullable=True)
