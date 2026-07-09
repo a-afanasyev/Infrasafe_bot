@@ -1,6 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List, Optional
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import session_scope
 import logging
 from uk_management_bot.utils.constants import (
     CALLBACK_PREFIX_CATEGORY,
@@ -598,8 +598,7 @@ def get_yard_selection_keyboard(user_id: int, language: str = "ru") -> ReplyKeyb
     try:
         from uk_management_bot.services.address_service import AddressService
 
-        db_session = next(get_db())
-        try:
+        with session_scope() as db_session:
             # Получаем дворы, в которых у пользователя есть одобренные квартиры
             yards = AddressService.get_user_available_yards(db_session, user_id)
             logger.info(f"Найдено {len(yards)} доступных дворов для пользователя {user_id}")
@@ -613,9 +612,6 @@ def get_yard_selection_keyboard(user_id: int, language: str = "ru") -> ReplyKeyb
             yard_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             return ReplyKeyboardMarkup(keyboard=yard_buttons, resize_keyboard=True)
-
-        finally:
-            db_session.close()
 
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры дворов для пользователя {user_id}: {e}")
@@ -640,8 +636,7 @@ def get_building_selection_keyboard(user_id: int, yard_id: int, language: str = 
     try:
         from uk_management_bot.services.address_service import AddressService
 
-        db_session = next(get_db())
-        try:
+        with session_scope() as db_session:
             # Получаем здания в дворе, где у пользователя есть одобренные квартиры
             buildings = AddressService.get_user_available_buildings(db_session, user_id, yard_id)
             logger.info(f"Найдено {len(buildings)} доступных зданий для пользователя {user_id} в дворе {yard_id}")
@@ -656,9 +651,6 @@ def get_building_selection_keyboard(user_id: int, yard_id: int, language: str = 
             building_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             return ReplyKeyboardMarkup(keyboard=building_buttons, resize_keyboard=True)
-
-        finally:
-            db_session.close()
 
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры зданий для пользователя {user_id}: {e}")
@@ -683,8 +675,7 @@ def get_apartment_selection_keyboard(user_id: int, building_id: int, language: s
     try:
         from uk_management_bot.services.address_service import AddressService
 
-        db_session = next(get_db())
-        try:
+        with session_scope() as db_session:
             # Получаем квартиры пользователя в здании
             apartments = AddressService.get_user_available_apartments(db_session, user_id, building_id)
             logger.info(f"Найдено {len(apartments)} доступных квартир для пользователя {user_id} в здании {building_id}")
@@ -700,9 +691,6 @@ def get_apartment_selection_keyboard(user_id: int, building_id: int, language: s
             apartment_buttons.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
 
             return ReplyKeyboardMarkup(keyboard=apartment_buttons, resize_keyboard=True)
-
-        finally:
-            db_session.close()
 
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры квартир для пользователя {user_id}: {e}")
@@ -740,8 +728,7 @@ def get_address_selection_keyboard(user_id: int, language: str = "ru") -> ReplyK
 
         from uk_management_bot.services.address_service import AddressService
 
-        db_session = next(get_db())
-        try:
+        with session_scope() as db_session:
             # Получаем все доступные адреса пользователя
             apartments = AddressService.get_user_approved_apartments_sync(db_session, user_id)
             yards = AddressService.get_user_available_yards(db_session, user_id)
@@ -781,9 +768,6 @@ def get_address_selection_keyboard(user_id: int, language: str = "ru") -> ReplyK
             logger.info(f"Создано {len(all_buttons)} кнопок адресов для пользователя {user_id}")
 
             return ReplyKeyboardMarkup(keyboard=all_buttons, resize_keyboard=True)
-
-        finally:
-            db_session.close()
 
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры выбора адреса для пользователя {user_id}: {e}")

@@ -17,6 +17,10 @@ MIGRATED_FILES = [
     ROOT / "uk_management_bot" / "handlers" / "address_buildings.py",
     ROOT / "uk_management_bot" / "handlers" / "user_apartments.py",
     ROOT / "uk_management_bot" / "handlers" / "user_apartment_selection.py",
+    # ARC-05 Batch 2 (nested-D, session_scope inside outer try)
+    ROOT / "uk_management_bot" / "handlers" / "address_moderation.py",
+    ROOT / "uk_management_bot" / "handlers" / "user_yards_management.py",
+    ROOT / "uk_management_bot" / "keyboards" / "requests.py",
 ]
 
 _NEXT_GET_DB = re.compile(r"next\(\s*get_db\(\)\s*\)")

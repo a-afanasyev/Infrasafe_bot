@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardBut
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import get_db
+from uk_management_bot.database.session import session_scope
 from uk_management_bot.database.models import User, Yard
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -38,8 +38,7 @@ def get_user_yards_keyboard(user_telegram_id: int, lang: str = 'ru') -> InlineKe
         InlineKeyboardMarkup: Клавиатура с дворами и кнопками управления
     """
     try:
-        db = next(get_db())
-        try:
+        with session_scope() as db:
             # Получаем основные дворы (через квартиры)
             user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
             if not user:
@@ -93,9 +92,6 @@ def get_user_yards_keyboard(user_telegram_id: int, lang: str = 'ru') -> InlineKe
 
             return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-        finally:
-            db.close()
-
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры дворов пользователя {user_telegram_id}: {e}")
         return InlineKeyboardMarkup(inline_keyboard=[
@@ -115,8 +111,7 @@ def get_yard_selection_keyboard(user_telegram_id: int, lang: str = 'ru') -> Inli
         InlineKeyboardMarkup: Список доступных дворов
     """
     try:
-        db = next(get_db())
-        try:
+        with session_scope() as db:
             # Получаем все активные дворы
             all_yards = db.query(Yard).filter(Yard.is_active.is_(True)).order_by(Yard.name).all()
 
@@ -153,9 +148,6 @@ def get_yard_selection_keyboard(user_telegram_id: int, lang: str = 'ru') -> Inli
             )])
 
             return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-        finally:
-            db.close()
 
     except Exception as e:
         logger.error(f"Ошибка создания клавиатуры выбора двора: {e}")
