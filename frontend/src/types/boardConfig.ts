@@ -42,9 +42,14 @@ export type ModuleId = 'stats' | 'requests' | 'announcements' | 'rating' | 'hour
 
 export const MODULE_IDS: ModuleId[] = ['stats', 'requests', 'announcements', 'rating', 'hours']
 
+export type ModuleWidth = 'full' | 'half'
+
 export interface LayoutItem {
   id: ModuleId
   visible: boolean
+  // Ширина блока на табло. Два соседних видимых 'half' встают в один ряд.
+  // Отсутствие поля трактуется как 'full' (обратная совместимость).
+  width?: ModuleWidth
 }
 
 export interface BoardConfigData {
@@ -108,10 +113,10 @@ export const defaultBoardConfig: BoardConfigData = {
     { day: 'sun', open: '10:00', close: '16:00', closed: false },
   ],
   layout: [
-    { id: 'stats', visible: true },
-    { id: 'requests', visible: true },
-    { id: 'announcements', visible: true },
-    { id: 'rating', visible: true },
-    { id: 'hours', visible: true },
+    { id: 'stats', visible: true, width: 'full' },
+    { id: 'requests', visible: true, width: 'full' },
+    { id: 'announcements', visible: true, width: 'full' },
+    { id: 'rating', visible: true, width: 'half' },
+    { id: 'hours', visible: true, width: 'half' },
   ],
 }
