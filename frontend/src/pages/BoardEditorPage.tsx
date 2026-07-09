@@ -17,7 +17,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import { Columns2, GripVertical, Plus, RectangleHorizontal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -90,13 +90,17 @@ function SortableModuleRow({
   item,
   label,
   onToggle,
+  onWidthToggle,
 }: {
   item: LayoutItem
   label: string
   onToggle: () => void
+  onWidthToggle: () => void
 }) {
+  const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id })
+  const isHalf = item.width === 'half'
   return (
     <div
       ref={setNodeRef}
@@ -113,6 +117,15 @@ function SortableModuleRow({
         <GripVertical size={16} />
       </button>
       <span className="flex-1 text-sm font-medium text-text-primary">{label}</span>
+      <button
+        type="button"
+        onClick={onWidthToggle}
+        title={isHalf ? t('boardEditor.widthHalf') : t('boardEditor.widthFull')}
+        aria-label={isHalf ? t('boardEditor.widthHalf') : t('boardEditor.widthFull')}
+        className={isHalf ? 'text-accent' : 'text-text-muted hover:text-text-primary'}
+      >
+        {isHalf ? <Columns2 size={16} /> : <RectangleHorizontal size={16} />}
+      </button>
       <label className="flex items-center gap-1.5 text-xs text-text-muted">
         <input type="checkbox" checked={item.visible} onChange={onToggle} />
       </label>
@@ -242,6 +255,12 @@ export default function BoardEditorPage() {
                         patch((d) => {
                           const l = d.layout.find((x) => x.id === item.id)
                           if (l) l.visible = !l.visible
+                        })
+                      }
+                      onWidthToggle={() =>
+                        patch((d) => {
+                          const l = d.layout.find((x) => x.id === item.id)
+                          if (l) l.width = l.width === 'half' ? 'full' : 'half'
                         })
                       }
                     />

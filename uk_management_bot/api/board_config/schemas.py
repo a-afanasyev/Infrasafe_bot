@@ -2,6 +2,8 @@
 
 `BoardConfigData` — и тело PUT, и payload публичного GET.
 """
+from typing import Literal
+
 from pydantic import BaseModel, field_validator
 
 from uk_management_bot.api.board_config.defaults import MODULE_IDS
@@ -56,6 +58,10 @@ class WorkingHourCfg(BaseModel):
 class LayoutItem(BaseModel):
     id: str
     visible: bool = True
+    # Ширина блока на табло: 'full' — на всю ширину; 'half' — половина. Два
+    # соседних видимых 'half' встают в один ряд (см. ResidentBoardPage). Дефолт
+    # 'full' → старые строки без поля остаются как раньше.
+    width: Literal["full", "half"] = "full"
 
     @field_validator("id")
     @classmethod

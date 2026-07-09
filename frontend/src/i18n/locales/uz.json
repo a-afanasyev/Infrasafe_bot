@@ -582,7 +582,9 @@
     "saved": "Tablo saqlandi",
     "saveFailed": "Tabloni saqlab bo'lmadi",
     "modulesOrder": "Sahifa bloklari",
-    "modulesHint": "Tartibni o'zgartirish uchun bloklarni torting. Yashirish uchun belgini olib tashlang.",
+    "modulesHint": "Tartibni o'zgartirish uchun bloklarni torting. Yashirish uchun belgini olib tashlang. Yonma-yon turgan ikkita ½ kenglikdagi blok bir qatorga joylashadi.",
+    "widthFull": "To'liq kenglik",
+    "widthHalf": "Yarim kenglik (yondagi bilan bir qatorda)",
     "modules": {
       "stats": "Umumiy ma'lumot",
       "requests": "Joriy arizalar",

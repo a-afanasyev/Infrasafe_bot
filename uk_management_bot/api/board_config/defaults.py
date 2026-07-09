@@ -76,10 +76,10 @@ DEFAULT_BOARD_CONFIG = {
         {"day": "sun", "open": "10:00", "close": "16:00", "closed": False},
     ],
     "layout": [
-        {"id": "stats", "visible": True},
-        {"id": "requests", "visible": True},
-        {"id": "announcements", "visible": True},
-        {"id": "rating", "visible": True},
-        {"id": "hours", "visible": True},
+        {"id": "stats", "visible": True, "width": "full"},
+        {"id": "requests", "visible": True, "width": "full"},
+        {"id": "announcements", "visible": True, "width": "full"},
+        {"id": "rating", "visible": True, "width": "half"},
+        {"id": "hours", "visible": True, "width": "half"},
     ],
 }

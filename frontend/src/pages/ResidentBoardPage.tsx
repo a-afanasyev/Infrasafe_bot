@@ -7,6 +7,7 @@ import { defaultBoardConfig } from '../types/boardConfig'
 import type { BoardConfigData, LocalizedText } from '../types/boardConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { brand } from '../brand/brand'
+import { groupBoardRows } from '../utils/boardRows'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -289,6 +290,10 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
         .rb-req-row:hover { background: #f0ede6 !important; }
         .rb-ann:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.08) !important; }
         .rb-stat-tile:hover { transform: translateY(-2px); box-shadow: 0 4px 24px rgba(0,0,0,0.08) !important; }
+        /* Пара блоков (два соседних 'half') — 2 колонки, на узком экране в 1. */
+        .rb-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+        .rb-pair > * { min-width: 0; }
+        @media (max-width: 900px) { .rb-pair { grid-template-columns: 1fr; } }
       `}</style>
 
       {/* Ticker */}
@@ -328,11 +333,13 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
         </div>
       </header>
 
-      {/* Modules — rendered in the order defined by board config layout */}
+      {/* Modules — rendered in layout order; two adjacent 'half' blocks pair
+          into one 2-column row (groupBoardRows), everything else full-width. */}
       <div style={{ padding: '32px 48px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1600, margin: '0 auto' }}>
-        {config.layout
-          .filter(item => item.visible && MODULES[item.id])
-          .map(item => MODULES[item.id])}
+        {groupBoardRows(config.layout.filter(item => item.visible && MODULES[item.id]))
+          .map(row => row.length === 2
+            ? <div key={row[0].id} className="rb-pair">{row.map(item => MODULES[item.id])}</div>
+            : MODULES[row[0].id])}
       </div>
 
       {/* Footer */}
