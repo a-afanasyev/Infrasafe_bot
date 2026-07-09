@@ -1009,8 +1009,10 @@ async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext
         await state.clear()
         return
 
-    try:
-        with session_scope() as db:
+    # ARC-05: with оборачивает весь try/except, чтобы db оставался открыт для
+    # db.rollback() в except (session_scope закрывает сессию только на выходе из with).
+    with session_scope() as db:
+        try:
             # Получаем user.id из базы данных по telegram_id
             from uk_management_bot.database.models import User
             from sqlalchemy import select
@@ -1060,12 +1062,12 @@ async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext
                 reply_markup=get_address_management_menu()
             )
 
-    except Exception as e:
-        logger.error(f"Ошибка при автозаполнении квартир: {e}")
-        await callback.answer(get_text("address_apartments.handlers.autofill_creation_error", language=lang), show_alert=True)
-        db.rollback()
-    finally:
-        await state.clear()
+        except Exception as e:
+            logger.error(f"Ошибка при автозаполнении квартир: {e}")
+            await callback.answer(get_text("address_apartments.handlers.autofill_creation_error", language=lang), show_alert=True)
+            db.rollback()
+        finally:
+            await state.clear()
 
 
 @router.callback_query(F.data == "addr_autofill_cancel")
