@@ -11,11 +11,10 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
-from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.api.board_config.schemas import BoardConfigData
+from uk_management_bot.api.board_config.service import CONFIG_ROW_ID, load_board_config
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.board_config import BoardConfig
@@ -24,8 +23,6 @@ from uk_management_bot.database.models.user import User
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-CONFIG_ROW_ID = 1
 
 
 @router.get("/public/board-config", response_model=BoardConfigData)
@@ -39,16 +36,7 @@ async def get_board_config(
     Если строки ещё нет (миграция не накатана) — отдаём дефолт, страница
     не должна белеть.
     """
-    data = DEFAULT_BOARD_CONFIG
-    try:
-        result = await db.execute(select(BoardConfig).where(BoardConfig.id == CONFIG_ROW_ID))
-        row = result.scalar_one_or_none()
-        if row is not None and row.data:
-            data = row.data
-    except (OperationalError, ProgrammingError) as e:
-        logger.warning("board_config недоступен, отдаю дефолт: %s", e)
-
-    return BoardConfigData.model_validate(data)
+    return await load_board_config(db)
 
 
 @router.put("/board-config", response_model=BoardConfigData)
