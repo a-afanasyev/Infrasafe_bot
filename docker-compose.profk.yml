@@ -163,6 +163,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_BOT_USERNAME: profkbot
+        VITE_BRAND: profk
     container_name: uk-frontend
     restart: unless-stopped
     ports:

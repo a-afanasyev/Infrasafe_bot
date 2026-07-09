@@ -6,6 +6,7 @@ import { useBoardConfig } from '../hooks/useBoardConfig'
 import { defaultBoardConfig } from '../types/boardConfig'
 import type { BoardConfigData, LocalizedText } from '../types/boardConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { brand } from '../brand/brand'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -308,7 +309,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
 
       {/* Header */}
       <header style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '24px 48px', display: 'flex', alignItems: 'center', gap: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ width: 52, height: 52, background: '#1a6b52', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>{'УК'}</div>
+        <div style={{ width: 52, height: 52, background: '#1a6b52', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>{brand.boardBadge}</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.4rem', color: '#1a1a1a', letterSpacing: '-0.02em' }}>{loc(config.org.name)}</div>
           <div style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: 2 }}>{loc(config.org.subtitle)}</div>

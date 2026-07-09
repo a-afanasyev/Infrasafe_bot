@@ -33,7 +33,7 @@ const STATUS_GLOW: Record<string, string> = {
   'Закуп':     'shadow-[inset_0_0_32px_rgba(167,139,250,0.1)]',
   'Уточнение': 'shadow-[inset_0_0_32px_rgba(34,211,238,0.1)]',
   'Выполнена': 'shadow-[inset_0_0_32px_rgba(52,211,153,0.1)]',
-  'Исполнено': 'shadow-[inset_0_0_32px_rgba(0,212,170,0.1)]',
+  'Исполнено': 'shadow-[inset_0_0_32px_rgba(var(--accent-rgb),0.1)]',
   'Возвращена': 'shadow-[inset_0_0_32px_rgba(251,146,60,0.1)]',
   'Принято':   'shadow-[inset_0_0_32px_rgba(74,222,128,0.1)]',
   'Отменена':  'shadow-[inset_0_0_32px_rgba(248,113,113,0.1)]',

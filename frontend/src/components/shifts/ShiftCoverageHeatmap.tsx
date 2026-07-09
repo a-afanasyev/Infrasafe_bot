@@ -32,15 +32,15 @@ function isShiftActiveInHour(shift: ShiftBrief, hour: number): boolean {
 function getCellColor(count: number): string {
   if (count === 0) return 'rgba(239,68,68,0.3)'
   if (count <= 2) return 'rgba(245,158,11,0.4)'
-  if (count <= 4) return 'rgba(0,212,170,0.35)'
-  return 'rgba(0,212,170,0.65)'
+  if (count <= 4) return 'rgba(var(--accent-rgb),0.35)'
+  return 'rgba(var(--accent-rgb),0.65)'
 }
 
 const LEGEND = [
   { label: '0', color: 'rgba(239,68,68,0.3)' },
   { label: '1-2', color: 'rgba(245,158,11,0.4)' },
-  { label: '3-4', color: 'rgba(0,212,170,0.35)' },
-  { label: '5+', color: 'rgba(0,212,170,0.65)' },
+  { label: '3-4', color: 'rgba(var(--accent-rgb),0.35)' },
+  { label: '5+', color: 'rgba(var(--accent-rgb),0.65)' },
 ]
 
 export default function ShiftCoverageHeatmap({ shifts }: Props) {

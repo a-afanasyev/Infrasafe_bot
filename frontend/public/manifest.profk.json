@@ -1,0 +1,11 @@
+{
+  "name": "Сервисная панель · PROFK",
+  "short_name": "PROFK",
+  "start_url": "/uk/twa/app",
+  "scope": "/uk/",
+  "display": "standalone",
+  "theme_color": "#44c24a",
+  "icons": [
+    { "src": "/uk/profk-favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

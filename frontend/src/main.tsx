@@ -1,8 +1,14 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BRAND, brand } from './brand/brand'
 import './i18n'
 import './index.css'
 import App from './App'
+
+// Применяем бренд синхронно до рендера — иначе тёмная вспышка (FOUC) на светлом
+// PROFK. data-brand активирует CSS-блок токенов; light-only бренд сразу светлый.
+document.documentElement.dataset.brand = BRAND
+if (brand.lightOnly) document.body.classList.add('light')
 
 // Авто-восстановление после деплоя фронта: lazy-страницы грузятся отдельными
 // чанками с хэшем в имени; новый билд удаляет старые файлы. Если открытая сессия

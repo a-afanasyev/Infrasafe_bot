@@ -257,7 +257,7 @@ export default function AnalyticsPage() {
           label={t('analytics.totalRequests')}
           value={requestStats?.total_requests ?? '—'}
           valueColor="var(--accent)"
-          topGradient="linear-gradient(90deg, #00d4aa, #3b82f6)"
+          topGradient="linear-gradient(90deg, var(--accent), #3b82f6)"
           change="—"
           changeColor="var(--text-muted)"
         />

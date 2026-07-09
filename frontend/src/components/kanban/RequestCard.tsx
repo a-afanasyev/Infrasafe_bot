@@ -43,7 +43,7 @@ export default function RequestCard({ card, onClick, isOverlay }: Props) {
   // Overlay card (floating under cursor)
   if (isOverlay) {
     return (
-      <div className="bg-bg-card border border-accent/30 rounded-[10px] px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.3),0_0_0_1px_rgba(0,212,170,0.15)]">
+      <div className="bg-bg-card border border-accent/30 rounded-[10px] px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.3),0_0_0_1px_rgba(var(--accent-rgb),0.15)]">
         <CardContent card={card} urgency={urgency} />
       </div>
     )

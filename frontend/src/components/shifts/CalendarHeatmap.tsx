@@ -74,7 +74,7 @@ function coverageBucket(pct: number): 'low' | 'mid' | 'high' | 'over' {
 const BUCKET_BG: Record<'low' | 'mid' | 'high' | 'over', string> = {
   low: 'rgba(239,68,68,0.30)',
   mid: 'rgba(245,158,11,0.35)',
-  high: 'rgba(0,212,170,0.40)',
+  high: 'rgba(var(--accent-rgb),0.40)',
   over: 'rgba(59,130,246,0.50)',
 }
 
