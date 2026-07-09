@@ -225,11 +225,11 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
         <div style={titleStyle}>{t('board.sections.residentRating')}</div>
       </div>
       <div style={{ padding: '20px 28px', textAlign: 'center' }}>
-        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 800, fontSize: '3.5rem', color: '#1a6b52', letterSpacing: '-0.04em', lineHeight: 1 }}>{satisfactionVal}</div>
+        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 800, fontSize: '3.5rem', color: 'var(--board-green)', letterSpacing: '-0.04em', lineHeight: 1 }}>{satisfactionVal}</div>
         <div style={{ fontSize: '1.5rem', margin: '8px 0', letterSpacing: 4 }}>{'★'.repeat(starFill)}{'☆'.repeat(5 - starFill)}</div>
         <div style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: 600 }}>{t('board.sections.efficiencyPeriod')}</div>
         <div style={{ width: '80%', margin: '16px auto 0', height: 8, background: '#f0ede6', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: 4, background: 'linear-gradient(90deg,#1a6b52,#059669)', width: `${satisfactionPct}%` }} />
+          <div style={{ height: '100%', borderRadius: 4, background: 'linear-gradient(90deg,var(--board-green),#059669)', width: `${satisfactionPct}%` }} />
         </div>
       </div>
     </div>
@@ -250,8 +250,8 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 8, textAlign: 'center' }}>
             {config.working_hours.map((d, i) => (
               <div key={d.day}>
-                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.78rem', color: i === todayDow ? '#1a6b52' : '#6b7280', marginBottom: 6 }}>{t(`days.short.${d.day}`)}</div>
-                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 600, padding: '8px 4px', borderRadius: 8, background: i === todayDow ? '#e8f5ef' : '#f0ede6', color: i === todayDow ? '#1a6b52' : '#1a1a1a', border: `2px solid ${i === todayDow ? '#1a6b52' : 'transparent'}` }}>
+                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.78rem', color: i === todayDow ? 'var(--board-green)' : '#6b7280', marginBottom: 6 }}>{t(`days.short.${d.day}`)}</div>
+                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 600, padding: '8px 4px', borderRadius: 8, background: i === todayDow ? '#e8f5ef' : '#f0ede6', color: i === todayDow ? 'var(--board-green)' : '#1a1a1a', border: `2px solid ${i === todayDow ? 'var(--board-green)' : 'transparent'}` }}>
                   {d.closed ? '—' : `${hm(d.open)}–${hm(d.close)}`}
                 </div>
               </div>
@@ -292,7 +292,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       `}</style>
 
       {/* Ticker */}
-      <div style={{ background: '#1a6b52', color: '#fff', padding: '10px 0', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+      <div style={{ background: 'var(--board-green)', color: '#fff', padding: '10px 0', overflow: 'hidden', whiteSpace: 'nowrap' }}>
         <span style={{ display: 'inline-block', animation: 'ticker 34s linear infinite', fontWeight: 600, fontSize: '0.9rem', letterSpacing: '0.02em' }}>
           {'\u{1F4CB}'} {t('board.ticker.newRequests')}
           <span style={DOT} />
@@ -309,7 +309,15 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
 
       {/* Header */}
       <header style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '24px 48px', display: 'flex', alignItems: 'center', gap: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ width: 52, height: 52, background: '#1a6b52', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>{brand.boardBadge}</div>
+        {brand.id === 'profk' ? (
+          <img
+            src={`${import.meta.env.BASE_URL}${brand.logoMark}`}
+            alt={brand.displayName}
+            style={{ width: 52, height: 52, flexShrink: 0 }}
+          />
+        ) : (
+          <div style={{ width: 52, height: 52, background: 'var(--board-green)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>{brand.boardBadge}</div>
+        )}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.4rem', color: '#1a1a1a', letterSpacing: '-0.02em' }}>{loc(config.org.name)}</div>
           <div style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: 2 }}>{loc(config.org.subtitle)}</div>
