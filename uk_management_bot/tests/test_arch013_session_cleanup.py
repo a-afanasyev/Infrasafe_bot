@@ -155,6 +155,8 @@ class TestPatternB_CmdMyShifts:
         injected.close.assert_not_called()  # middleware owns the injected session
 
     async def test_fallback_session_is_closed(self):
+        from contextlib import contextmanager
+
         from uk_management_bot.handlers import my_shifts as mod
 
         msg = _message()
@@ -162,7 +164,16 @@ class TestPatternB_CmdMyShifts:
         state = MagicMock()
         state.set_state = AsyncMock()
 
-        with patch.object(mod, "get_db", side_effect=lambda: iter([own])), \
+        # ARC-05 Batch 3: cmd_my_shifts(db=None) идёт через _db_scope → session_scope();
+        # заглушка session_scope отдаёт `own` и закрывает её на выходе.
+        @contextmanager
+        def fake_scope():
+            try:
+                yield own
+            finally:
+                own.close()
+
+        with patch.object(mod, "session_scope", fake_scope), \
              patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key), \
              patch.object(mod, "get_my_shifts_menu", return_value=None):
             await mod.cmd_my_shifts(msg, state=state, language="ru", db=None)

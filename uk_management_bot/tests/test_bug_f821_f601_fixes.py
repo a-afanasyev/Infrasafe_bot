@@ -49,7 +49,7 @@ async def test_delete_building_error_branch_no_crash(monkeypatch):
 # --- #2 delete_yard: same pattern --------------------------------------------
 @pytest.mark.asyncio
 async def test_delete_yard_error_branch_no_crash(monkeypatch):
-    monkeypatch.setattr(addr_yards, "get_db", lambda: iter([MagicMock()]))
+    monkeypatch.setattr(addr_yards, "session_scope", _fake_session_scope)
     monkeypatch.setattr(addr_yards.AddressService, "delete_yard",
                         AsyncMock(return_value=(False, "in_use")))
     monkeypatch.setattr(addr_yards, "localize_address_error", lambda e, lng: "msg")
