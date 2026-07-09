@@ -5,6 +5,7 @@ Each handler bug lived on an error/edge branch that referenced a name before it
 was defined (NameError / UnboundLocalError). These tests drive exactly those
 branches and assert the handler completes without raising.
 """
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -25,10 +26,16 @@ def _callback(data: str):
     return cb
 
 
+@contextmanager
+def _fake_session_scope():
+    """ARC-05: заглушка `session_scope()` — заменяет прежний `get_db`-патч."""
+    yield MagicMock()
+
+
 # --- #1 delete_building: error branch used `lang` before assignment -----------
 @pytest.mark.asyncio
 async def test_delete_building_error_branch_no_crash(monkeypatch):
-    monkeypatch.setattr(addr_buildings, "get_db", lambda: iter([MagicMock()]))
+    monkeypatch.setattr(addr_buildings, "session_scope", _fake_session_scope)
     monkeypatch.setattr(addr_buildings.AddressService, "delete_building",
                         AsyncMock(return_value=(False, "in_use")))
     monkeypatch.setattr(addr_buildings, "localize_address_error", lambda e, lng: "msg")
