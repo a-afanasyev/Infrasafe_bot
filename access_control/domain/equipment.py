@@ -47,8 +47,19 @@ class EdgeController(Base):
     api_key_hash = Column(String(255), nullable=False)
     ip_allowlist = Column(JSONB_PORTABLE, nullable=True)
     # Опц. привязка к конкретной точке проезда (§6.1, admin-реестр оборудования).
+    # use_alter+имя: edge_controllers↔access_gates — циклическая пара FK; помечаем
+    # мягкую сторону (nullable SET NULL) use_alter, чтобы SQLAlchemy/autogenerate
+    # разрывали цикл (создавали этот FK через ALTER после обеих таблиц). Имя = как
+    # в проде (default), чтобы create_all/baseline не расходились со схемой (PRC-05).
     gate_id = Column(
-        ForeignKey("access_gates.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey(
+            "access_gates.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="edge_controllers_gate_id_fkey",
+        ),
+        nullable=True,
+        index=True,
     )
     # Ссылка на закреплённый публичный ключ устройства (mTLS post-pilot, §9.1) —
     # в пилоте свободный слот, секрет НЕ хранится в БД.
