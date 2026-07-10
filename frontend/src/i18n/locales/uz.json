@@ -46,6 +46,16 @@
     "currentInvalid": "Joriy parol noto'g'ri",
     "genericError": "Parolni o'zgartirib bo'lmadi"
   },
+  "changeEmail": {
+    "menuItem": "Email o'zgartirish",
+    "title": "Emailni o'zgartirish",
+    "description": "Kirish va bildirishnomalar uchun email kiriting.",
+    "email": "Email",
+    "submit": "Emailni saqlash",
+    "submitting": "Saqlanmoqda...",
+    "success": "Email yangilandi",
+    "invalid": "To'g'ri email kiriting"
+  },
   "nav": {
     "analytics": "Analitika",
     "requests": "Arizalar",
