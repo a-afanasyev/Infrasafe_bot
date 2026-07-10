@@ -151,6 +151,15 @@ def test_media_allowlist_does_not_hide_new_uk_table():
     assert include_object(None, "media_files", "index", True, None) is True
 
 
+def test_seed_system_user_constant_matches_settings():
+    """PRC-05: константа system-user в seed-миграции 002 == settings-дефолту.
+
+    Ловит расхождение fresh-install (сид пишет telegram_id=0) vs рантайм-резолвер
+    (settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID). На обоих продах = 0 (env unset)."""
+    from uk_management_bot.config.settings import settings
+    assert settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID == 0  # см. 0002_seed_system_user.SYSTEM_TELEGRAM_ID
+
+
 def test_functional_index_allowlist_excludes_exactly_date_prefix():
     """include_object исключает РОВНО функциональный idx_requests_date_prefix
     (expr-индекс, postgres-only, не полицуется drift-гейтом; PRC-05 037)."""

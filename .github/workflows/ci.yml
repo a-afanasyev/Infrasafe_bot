@@ -157,19 +157,15 @@ jobs:
       - name: Install dev deps
         run: pip install -r requirements-dev.txt
 
-      # No baseline migration exists (001 does add_column on a pre-existing
-      # users table), so `alembic upgrade head` on an empty DB fails. create_all
-      # builds the current model schema (the historical base), then migrations
-      # 007..010 apply the deltas create_all can't express: 007 fixes the
-      # requests.apartment_id FK to ON DELETE SET NULL, 008 creates webhook_inbox
-      # (PRC-05: WebhookInbox теперь в models/__init__ → create_all создаёт её,
-      # миграция 008 идемпотентна и no-op'ит), 009 seeds the system user, 010
-      # re-applies the audit_logs bigint change.
-      - name: Bootstrap DB schema + apply migrations
+      # PRC-05: цепочка 001..037 схлопнута в squashed baseline 001 + seed 002,
+      # воспроизводящий фактическую прод-схему. Прежний костыль create_all+stamp
+      # 006+upgrade head больше не нужен (и невозможен — revision 006 удалён):
+      # baseline применяется на пустую БД напрямую. `alembic check` = дрейф-гейт
+      # (модели == миграции; 0 операций autogenerate, media/date_prefix исключены).
+      - name: Apply migrations + drift-gate
         run: |
-          python -c "import uk_management_bot.database.models; from uk_management_bot.database.session import engine, Base; Base.metadata.create_all(bind=engine)"
-          python -m alembic stamp 006
           python -m alembic upgrade head
+          python -m alembic check
 
       # pyproject.toml drives the run: testpaths=[uk_management_bot] (colocated
       # unit/handlers/service suite), asyncio_mode=auto, --import-mode=importlib.
@@ -270,17 +266,14 @@ jobs:
       - name: Install dev deps
         run: pip install -r requirements-dev.txt
 
-      # Та же раскрутка схемы, что и в backend-tests: create_all строит
-      # историческую базу, затем миграции 007..031 накатывают дельты, которые
-      # create_all выразить не может — в т.ч. таблицы домена access_control
-      # (025..029), append-only триггеры (028) и DB-grant роль access_app_rw
-      # (031). Под суперпользователем postgres (POSTGRES_USER) миграция 031
-      # имеет CREATEROLE, поэтому grant-тест проверяется реально, а не skip.
-      - name: Bootstrap DB schema + apply migrations
+      # PRC-05: squashed baseline 001 (+ seed 002) применяется напрямую на пустую
+      # БД — включает таблицы access_control, append-only триггеры (§9.7) и DB-grant
+      # роль access_app_rw. Под суперпользователем postgres (POSTGRES_USER) DO-блок
+      # роли имеет CREATEROLE → grant-тест проверяется реально, а не skip.
+      - name: Apply migrations + drift-gate
         run: |
-          python -c "import uk_management_bot.database.models; from uk_management_bot.database.session import engine, Base; Base.metadata.create_all(bind=engine)"
-          python -m alembic stamp 006
           python -m alembic upgrade head
+          python -m alembic check
 
       # Набор access_control. Покрытие — информативное (--cov-report=term-missing),
       # без жёсткого порога (--cov-fail-under не задан), чтобы не блокировать на
