@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -21,6 +21,13 @@ class Request(Base):
             ")",
             name="ck_requests_address_type_fk",
         ),
+        # PRC-05: idx_requests_category уже был на infrasafe-проде (ручной), решение
+        # владельца — закрепить в модели, чтобы получили ОБА прода + baseline.
+        # Имя idx_* (не ix_*) сохранено, чтобы infrasafe не пере-создавал индекс.
+        # Парный функциональный idx_requests_date_prefix (expr substring) — НЕ в
+        # модели (postgres-only, ломает sqlite create_all): создаётся миграцией 037
+        # и исключён из alembic check в migration_include.py.
+        Index("idx_requests_category", "category"),
     )
 
     # НОВЫЙ PRIMARY KEY - номер заявки в формате YYMMDD-NNN
