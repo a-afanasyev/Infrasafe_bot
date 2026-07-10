@@ -1,6 +1,6 @@
 # CLAUDE.md — UK Management System
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-07-10_
 
 ## Scope
 
@@ -33,6 +33,7 @@ docker-compose.yml       — dev-окружение (bot, api, frontend, postgre
 - **Локализация фронта**: `frontend/src/i18n/locales/{ru,uz}.json`, библиотека i18next.
 - **Роли в БД**: `user.roles` — JSON-массив строк, `user.active_role` — текущая активная роль. Не использовать устаревшее поле `user.role`.
 - **Номера заявок**: формат `YYMMDD-NNN` (строка, не int). Сервис: `RequestNumberService`.
+- **Миграции/деплой**: история Alembic сжата в baseline `001` + seed `002` (PRC-05, 2026-07-10); оба прода на `alembic @002`. Рутинный деплой БЕЗ изменений — `git pull && docker compose build api && up -d api`; entrypoint (`scripts/entrypoint-api.sh`) гоняет `alembic upgrade head`, новые миграции `003+` стакаются на baseline как обычно. CI-дрейф-гейт: `alembic upgrade head` + `alembic check`. ⚠️ `alembic stamp --purge` — ТОЛЬКО для разового пере-baseline (следующий squash), НЕ рутинный деплой.
 - **Не коммитить** без явной просьбы.
 - **Не пушить** без явной просьбы.
 - **Секреты** (`.env`, ключи) — никогда не коммитить, не выводить.
