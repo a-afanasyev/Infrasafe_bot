@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import LanguageSwitcher from '@/components/shared/LanguageSwitcher'
 import ChangePasswordModal from '@/components/shared/ChangePasswordModal'
+import ChangeEmailModal from '@/components/shared/ChangeEmailModal'
 import {
   LayoutGrid,
   ListChecks,
@@ -34,6 +35,7 @@ import {
   User,
   LogOut,
   KeyRound,
+  Mail,
   ChevronUp,
   ChevronDown,
   Package,
@@ -298,6 +300,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [pwdOpen, setPwdOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
 
@@ -389,6 +392,17 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
             <KeyRound size={14} />
             {t('changePassword.menuItem')}
           </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              setEmailOpen(true)
+            }}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-primary font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
+          >
+            <Mail size={14} />
+            {t('changeEmail.menuItem')}
+          </button>
           <div className="mx-3 h-px bg-border-default" />
           <button
             role="menuitem"
@@ -406,6 +420,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
       )}
 
       <ChangePasswordModal open={pwdOpen} onClose={() => setPwdOpen(false)} />
+      <ChangeEmailModal open={emailOpen} onClose={() => setEmailOpen(false)} />
     </div>
   )
 }

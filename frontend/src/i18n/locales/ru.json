@@ -46,6 +46,16 @@
     "currentInvalid": "Неверный текущий пароль",
     "genericError": "Не удалось сменить пароль"
   },
+  "changeEmail": {
+    "menuItem": "Изменить email",
+    "title": "Изменение email",
+    "description": "Укажите email для входа и уведомлений.",
+    "email": "Email",
+    "submit": "Сохранить email",
+    "submitting": "Сохраняю...",
+    "success": "Email обновлён",
+    "invalid": "Введите корректный email"
+  },
   "nav": {
     "analytics": "Аналитика",
     "requests": "Заявки",
