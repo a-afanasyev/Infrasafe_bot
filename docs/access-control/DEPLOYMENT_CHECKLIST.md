@@ -1,6 +1,30 @@
 # Чек-лист деплоя модуля контроля доступа (access_control)
 
-> _Последнее редактирование: 2026-06-30_
+> _Последнее редактирование: 2026-07-10_
+
+---
+
+## ⚠️ PRC-05 (2026-07-10): цепочка миграций СЖАТА — читать ПЕРЕД разделом A2
+
+Вся цепочка `001…037` (включая access-control `024→035`) **схлопнута в один baseline `001` + seed `002`**.
+Ревизий `024`/`035` в коде **больше нет**. Все упоминания «`024→035`», «head `035`», «прогнать `025…035`» ниже — **историческая справка**, НЕ текущая процедура. Актуальный head = **`002`**.
+
+**Fresh-install (пустая БД) — обычный `alembic upgrade head` применяет baseline `001`+`002`.** B0-предусловия (то, что делает АДМИН `uk_admin`, НЕ мигратор):
+- рантайм-мигратор (`uk_bot`/`profk_bot`) = `NOSUPERUSER NOCREATEDB NOCREATEROLE`, но **владелец БД и схемы `public`** (иначе не создаст даже `alembic_version` — нужен `CREATE ON SCHEMA public`);
+- роль `access_app_rw` создать **ЗАРАНЕЕ** под `uk_admin` (мигратор `NOCREATEROLE` её не создаст — DO-блок baseline тогда самоскипнет гранты). Если роль есть до `upgrade` — baseline навесит least-privilege гранты (append-only-таблицы: `SELECT,INSERT` без `UPDATE/DELETE`);
+- append-only функция+4 триггера (§9.7) и `idx_requests_date_prefix` идут внутри baseline `001`.
+- Гейт в CI: job **`b0-least-privilege`** воспроизводит именно этот сценарий (restricted-мигратор + pre-provision роли).
+
+**Существующая БД, уже мигрированная на старый head (напр. прод @`037`) — НЕ `upgrade`, а прямой re-stamp на `002`** (процедура B6, выполнена на обоих продах 2026-07-10):
+1. бэкап; 2. `git pull` (baseline-код) + `docker compose build api`;
+3. **штамп в обход entrypoint:** `docker compose run --rm --no-deps --entrypoint "" api python -m alembic stamp 002 --purge` (`--purge` обязателен: старый head удалён из кода, обычный `stamp` упадёт на его резолве; **НЕ `up` первым** — entrypoint `upgrade head` от старого head рухнет);
+4. `DROP FUNCTION IF EXISTS public.update_updated_at_column()` (мёртвый орфан, если есть);
+5. `docker compose up -d api` → entrypoint `upgrade head` = no-op на `002`;
+6. смоук: `alembic current`=`002`, api/bot healthy, `alembic check` = «No new upgrade operations detected».
+
+Откат re-stamp: `UPDATE alembic_version SET version_num='<old_head>'` + образ со старой цепочкой.
+
+---
 
 **Статус:** разработка в `main` (PR #163–#167). **Прод частично задеплоен 2026-06-29** — см. блок ниже. Остаётся внешнее/конфиг: B (InfraSafe allowlist), D (TG-канал), A3 (точки въезда в UI), E (smoke).
 **Дата составления:** 29 июня 2026
@@ -28,7 +52,7 @@
   Без `ACCESS_SNAPSHOT_SIGNING_SEED` / `ACCESS_DEVICE_HMAC_SEED` сервис падает `RuntimeError` на старте; без `ACCESS_PHOTO_URL_SECRET` / `ACCESS_CODE_SECRET` — падает при работе с фото/кодами (дефолтов в коде намеренно нет, §9.1/§11).
   Не-секретный конфиг уже зашит в compose: `ACCESS_NONCE_BACKEND=redis`, `ACCESS_EVENT_BROKER=redis`, `MEDIA_SERVICE_URL=http://media-service:8000`.
 
-- [ ] **A2. Прогнать миграции 025–035 рабочей ролью `uk_bot`** (НЕ привилегированной). ⚠️ Контринтуитивный, но проверенный на dev нюанс.
+- [ ] **A2. Прогнать миграции 025–035 рабочей ролью `uk_bot`** (НЕ привилегированной). ⚠️ Контринтуитивный, но проверенный на dev нюанс. **[ИСТОРИЧЕСКОЕ после PRC-05 — миграций 025–035 больше нет, см. baseline `001`+`002` и B0-предусловия в блоке PRC-05 вверху.]**
   Это **11 ревизий** `025`…`035` (включая `030 = barrier_commands_lease_columns`), цепочка от `024`, head `035`. `028` ставит **append-only триггеры (`CREATE TRIGGER`)** на 4 журнальные таблицы; `031` создаёт роль `access_app_rw` + DB-гранты.
   - Гнать **под `uk_bot`** (дефолт контейнера `uk-management-api`; `access-api` миграции не применяет). Почему именно `uk_bot`: миграции `030/032/034/035` создают таблицы/колонки — кто создал, тот владелец. Под `uk_admin` новые объекты достались бы `uk_admin`, и рантайм-роль `uk_bot` **потеряла бы к ним доступ** → сервисы падают. Миграции спроектированы под запуск рабочей ролью.
   - **028 (триггеры)** ставятся нормально — `uk_bot` владеет таблицами. Это и есть реальная защита append-only в пилоте (триггер бьёт даже владельца — проверено: `DELETE`/`UPDATE` → `ERROR: append-only violation … §9.7`).
@@ -113,6 +137,9 @@
 
 > Контейнеры на проде: `uk-management-api` (alembic), `uk-postgres`. БД `uk_management`, рабочая роль `uk_bot`.
 > Проверено на dev-стеке: цепочка `024→035` применяется чисто, 4 триггера встают, append-only реально блокирует `DELETE`/`UPDATE`.
+
+> ⚠️ **ИСТОРИЧЕСКИЙ блок (до PRC-05).** Ревизий `024`/`035` в коде больше нет — head теперь `002`.
+> Для fresh-install/re-stamp сегодня используй блок **PRC-05** в начале файла, а не команды ниже.
 
 ```bash
 # 0. Бэкап БД

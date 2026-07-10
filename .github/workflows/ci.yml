@@ -282,6 +282,122 @@ jobs:
       - name: Run access_control suite (postgres)
         run: pytest access_control/tests -q --cov=access_control --cov-report=term-missing
 
+  b0-least-privilege:
+    name: b0-least-privilege (restricted migrator)
+    runs-on: ubuntu-latest
+    # PRC-05 B0: доказать fresh-install baseline под НАСТОЯЩЕЙ least-privilege ролью.
+    # В backend/access-control джобах POSTGRES_USER=uk_bot создаётся СУПЕРПОЛЬЗОВАТЕЛЕМ
+    # (дефолт образа postgres) — поэтому там НЕ ловятся два реальных провала fresh-
+    # install: (а) мигратор без CREATE-на-schema public не создаёт даже alembic_version;
+    # (б) DO-блок роли под NOCREATEROLE. Здесь суперпользователь — postgres, а мигратор
+    # uk_bot = NOSUPERUSER/NOCREATEDB/NOCREATEROLE + владелец БД/схемы; access_app_rw
+    # провизионит АДМИН ДО upgrade (мигратор её создать не может — и не должен).
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: uk_management
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d uk_management"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PYTHONPATH: "${{ github.workspace }}"
+      BOT_TOKEN: "ci:dummy-token"
+      JWT_SECRET: "ci-dummy-secret"
+      INVITE_SECRET: "ci-dummy-secret"
+      UK_WEBHOOK_SECRET: "ci-dummy-secret"
+      INFRASAFE_WEBHOOK_SECRET: "ci-dummy-secret"
+      ADMIN_PASSWORD: "ci-dummy-admin-pw-0123456"
+      DEBUG: "true"
+      ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install runtime deps (hash-pinned)
+        run: pip install -r requirements.txt
+
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      # B0-предусловия — ровно то, что на fresh-install делает АДМИН через uk_admin
+      # (НЕ мигратор): (1) restricted-мигратор uk_bot LOGIN, но NOSUPERUSER/NOCREATEDB/
+      # NOCREATEROLE; (2) владение БД+схемой → uk_bot может CREATE объекты и GRANT'ить
+      # на свои таблицы и на схему, но НЕ создавать роли и НЕ быть суперпользователем;
+      # (3) роль access_app_rw создаётся ЗАРАНЕЕ — DO-блок baseline тогда пропускает
+      # CREATE ROLE (мигратор NOCREATEROLE) и просто вешает гранты.
+      - name: Provision B0 preconditions (as admin/superuser)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE uk_bot LOGIN PASSWORD 'ci_uk_bot_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE access_app_rw NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+          ALTER DATABASE uk_management OWNER TO uk_bot;
+          ALTER SCHEMA public OWNER TO uk_bot;
+          SQL
+
+      # Часовой: если кто-то случайно сделает мигратора суперпользователем/CREATEROLE,
+      # этот шаг ПАДАЕТ — иначе B0-джоба бесшумно ослабнет до фиктивной.
+      - name: Assert migrator is genuinely least-privilege
+        env:
+          PGPASSWORD: postgres
+        run: |
+          caps=$(psql -h localhost -U postgres -d uk_management -tAc \
+            "SELECT rolsuper||'/'||rolcreatedb||'/'||rolcreaterole FROM pg_roles WHERE rolname='uk_bot'")
+          echo "uk_bot super/createdb/createrole = $caps"
+          test "$caps" = "false/false/false" || { echo "::error::migrator uk_bot is NOT least-privilege ($caps)"; exit 1; }
+
+      # Собственно B0: baseline применяется САМИМ restricted-мигратором. Ловит оба
+      # провала fresh-install (нет CREATE-на-public → нет alembic_version; DO-блок роли
+      # падает вместо skip) + дрейф-гейт. `check` под NOCREATEROLE тоже обязан работать.
+      - name: Apply migrations as restricted migrator + drift-gate
+        env:
+          DATABASE_URL: "postgresql://uk_bot:ci_uk_bot_pw@localhost:5432/uk_management"
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+
+      # Least-privilege реально ВНЕДРЁН, а не заскипан: append-only таблица выдала
+      # access_app_rw SELECT+INSERT и НЕ выдала UPDATE/DELETE (иначе append-only обходим).
+      - name: Assert access_app_rw grants (least-privilege wired, not skipped)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          g=$(psql -h localhost -U postgres -d uk_management -tAc \
+            "SELECT string_agg(privilege_type, ',' ORDER BY privilege_type) FROM information_schema.role_table_grants WHERE grantee='access_app_rw' AND table_name='access_events'")
+          echo "access_app_rw on access_events = [$g]"
+          test "$g" = "INSERT,SELECT" || { echo "::error::append-only grants wrong (want INSERT,SELECT, got [$g])"; exit 1; }
+
+      # PRC-05 review-P1: baseline downgrade обязан быть ОБРАТИМЫМ. autogen не дропает
+      # use_alter FK'ы (циклы), append-only функцию и 3 native enum-типа → без ручных
+      # drop_constraint/DROP FUNCTION/DROP TYPE `downgrade base` падал, а re-upgrade —
+      # `type already exists`. Гоняем на ЭТОЙ одноразовой B0-БД (pytest её не трогает):
+      # upgrade→downgrade base (0 остатка)→re-upgrade→drift-check. Мигратор uk_bot
+      # владеет объектами → дропает их сам, без superuser.
+      - name: Downgrade roundtrip (upgrade → downgrade base → upgrade)
+        env:
+          DATABASE_URL: "postgresql://uk_bot:ci_uk_bot_pw@localhost:5432/uk_management"
+        run: |
+          python -m alembic downgrade base
+          left=$(PGPASSWORD=postgres psql -h localhost -U postgres -d uk_management -tAc \
+            "SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name<>'alembic_version')||'/'||(SELECT count(*) FROM pg_type WHERE typtype='e')||'/'||(SELECT count(*) FROM pg_proc WHERE proname='access_control_append_only_guard')")
+          echo "residual tables/enum-types/guard-fn after downgrade base = $left"
+          test "$left" = "0/0/0" || { echo "::error::downgrade base left residue ($left) — use_alter FK / enum type / guard fn not dropped"; exit 1; }
+          python -m alembic upgrade head
+          python -m alembic check
+
   images-build:
     name: images-build (docker)
     runs-on: ubuntu-latest
