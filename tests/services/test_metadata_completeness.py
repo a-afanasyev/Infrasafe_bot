@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 from uk_management_bot.database.migration_include import (
+    FUNCTIONAL_INDEXES_EXCLUDED,
     MEDIA_TABLES_EXCLUDED,
     include_object,
 )
@@ -148,3 +149,14 @@ def test_media_allowlist_does_not_hide_new_uk_table():
     assert include_object(None, "some_new_uk_table", "table", True, None) is True
     # Не-таблица (индекс/констрейнт) с media-подобным именем тоже не трогается.
     assert include_object(None, "media_files", "index", True, None) is True
+
+
+def test_functional_index_allowlist_excludes_exactly_date_prefix():
+    """include_object исключает РОВНО функциональный idx_requests_date_prefix
+    (expr-индекс, postgres-only, не полицуется drift-гейтом; PRC-05 037)."""
+    assert FUNCTIONAL_INDEXES_EXCLUDED == frozenset({"idx_requests_date_prefix"})
+    assert include_object(None, "idx_requests_date_prefix", "index", True, None) is False
+    # Обычный индекс НЕ исключается (allowlist не расширяется молча).
+    assert include_object(None, "ix_requests_status", "index", True, None) is True
+    # Таблица с таким именем (гипотетически) не трогается фильтром индексов.
+    assert include_object(None, "idx_requests_date_prefix", "table", True, None) is True
