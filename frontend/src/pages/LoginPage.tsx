@@ -36,7 +36,7 @@ export default function LoginPage() {
   const next = safeNextPath(searchParams.get('next'))
 
   useEffect(() => {
-    ;(window as unknown as { onTelegramAuth?: (u: unknown) => void }).onTelegramAuth = async (tgUser: unknown) => {
+    const handleTelegramAuth = async (tgUser: unknown) => {
       // FE-04: внешний payload от Telegram-виджета — валидируем до POST.
       if (!isValidTelegramAuth(tgUser)) {
         setError(t('login.telegramError'))
@@ -58,36 +58,47 @@ export default function LoginPage() {
     }
 
     const container = document.getElementById('telegram-login-widget')
-    if (container) {
-      while (container.firstChild) container.removeChild(container.firstChild)
-      const script = document.createElement('script')
-      script.src = 'https://telegram.org/js/telegram-widget.js?22'
-      script.async = true
-      script.setAttribute('data-telegram-login', BOT_USERNAME)
-      script.setAttribute('data-size', 'large')
-      script.setAttribute('data-onauth', 'onTelegramAuth(user)')
-      script.setAttribute('data-request-access', 'write')
+    if (!container) return
+    container.replaceChildren()
 
-      script.onerror = () => {
-        const wrapper = document.getElementById('telegram-section')
-        if (wrapper) wrapper.style.display = 'none'
+    // Рендерим embed-iframe виджета НАПРЯМУЮ вместо подключения
+    // telegram-widget.js: тот ищет свой <script> через document.currentScript,
+    // который у динамически вставленного async-скрипта === null → iframe не
+    // создаётся (и секция молча пряталась). Протокол postMessage взят из
+    // самого telegram-widget.js: origin oauth.telegram.org, source ===
+    // iframe.contentWindow, JSON-события 'resize' и 'auth_user'.
+    const WIDGET_ORIGIN = 'https://oauth.telegram.org'
+    const iframe = document.createElement('iframe')
+    iframe.src =
+      `${WIDGET_ORIGIN}/embed/${BOT_USERNAME}` +
+      `?origin=${encodeURIComponent(window.location.origin)}` +
+      `&return_to=${encodeURIComponent(window.location.href)}` +
+      '&size=large&request_access=write'
+    iframe.width = '238'
+    iframe.height = '40'
+    iframe.setAttribute('frameborder', '0')
+    iframe.scrolling = 'no'
+    iframe.style.border = 'none'
+    iframe.style.colorScheme = 'light'
+    container.appendChild(iframe)
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== WIDGET_ORIGIN || event.source !== iframe.contentWindow) return
+      let data: { event?: string; auth_data?: unknown; height?: number; width?: number }
+      try {
+        data = JSON.parse(event.data)
+      } catch {
+        return
       }
-      script.onload = () => {
-        setTimeout(() => {
-          const iframe = container.querySelector('iframe')
-          if (!iframe || iframe.offsetHeight > 80) {
-            const wrapper = document.getElementById('telegram-section')
-            if (wrapper) wrapper.style.display = 'none'
-          }
-        }, 1500)
+      if (data.event === 'resize') {
+        if (data.height) iframe.style.height = `${data.height}px`
+        if (data.width) iframe.style.width = `${data.width}px`
+      } else if (data.event === 'auth_user' && data.auth_data) {
+        handleTelegramAuth(data.auth_data)
       }
-
-      container.appendChild(script)
     }
-
-    return () => {
-      delete (window as unknown as { onTelegramAuth?: (u: unknown) => void }).onTelegramAuth
-    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
   }, [login, navigate, t, next])
 
   const handleLogin = async (e: React.FormEvent) => {
