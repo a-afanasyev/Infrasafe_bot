@@ -311,10 +311,18 @@ async def get_employee_with_stats(
     if not emp:
         return None
 
+    # APIFE-1: an executor may hold several active shifts (multi-specialization,
+    # bot-core intentionally allows it). Pick the most recent deterministically;
+    # scalar_one_or_none() would raise MultipleResultsFound → 500 on the card.
+    # The card reflects only this freshest active shift; the aggregate counters
+    # below already tolerate multiplicity.
     shift_result = await db.execute(
-        select(Shift).where(Shift.user_id == user_id, Shift.status == "active")
+        select(Shift)
+        .where(Shift.user_id == user_id, Shift.status == "active")
+        .order_by(Shift.start_time.desc(), Shift.id.desc())
+        .limit(1)
     )
-    active_shift_obj = shift_result.scalar_one_or_none()
+    active_shift_obj = shift_result.scalars().first()
 
     total_result = await db.execute(
         select(func.count(Shift.id)).where(Shift.user_id == user_id)
@@ -689,10 +697,13 @@ async def find_overlapping_shift_for_update(
     )
     if exclude_shift_id is not None:
         query = query.where(Shift.id != exclude_shift_id)
+    query = query.limit(1)
     if lock:
         query = query.with_for_update()
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    # APIFE-1: caller only needs the fact of an overlap; with several overlapping
+    # shifts scalar_one_or_none() would raise MultipleResultsFound → 500.
+    return result.scalars().first()
 
 
 async def create_shift(db: AsyncSession, *, body) -> Shift:

@@ -103,11 +103,21 @@ async def get_current_shift(
     user: User = Depends(require_roles("executor")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns the current active shift for the authenticated executor, or null."""
+    """Returns the current active shift for the authenticated executor, or null.
+
+    APIFE-1: an executor may legitimately hold several active shifts at once
+    (bot-core allows one employee to cover multiple specializations — see
+    services/shift_service.py). "Current" is therefore the most recent active
+    shift, selected deterministically; scalar_one_or_none() here would raise
+    MultipleResultsFound → 500.
+    """
     result = await db.execute(
-        select(Shift).where(Shift.user_id == user.id, Shift.status == "active")
+        select(Shift)
+        .where(Shift.user_id == user.id, Shift.status == "active")
+        .order_by(Shift.start_time.desc(), Shift.id.desc())
+        .limit(1)
     )
-    shift = result.scalar_one_or_none()
+    shift = result.scalars().first()
     if shift is None:
         return None
     return _shift_out(shift)
