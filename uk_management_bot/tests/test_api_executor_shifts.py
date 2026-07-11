@@ -244,7 +244,7 @@ class TestGetCurrentShift:
 
         mock_db = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = shift
+        mock_result.scalars.return_value.first.return_value = shift
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         result = await get_current_shift(user=user, db=mock_db)
@@ -261,7 +261,7 @@ class TestGetCurrentShift:
 
         mock_db = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
+        mock_result.scalars.return_value.first.return_value = None
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         result = await get_current_shift(user=user, db=mock_db)
@@ -277,7 +277,7 @@ class TestGetCurrentShift:
 
         mock_db = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = shift
+        mock_result.scalars.return_value.first.return_value = shift
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         result = await get_current_shift(user=user, db=mock_db)

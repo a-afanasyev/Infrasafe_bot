@@ -23,6 +23,7 @@ from uk_management_bot.keyboards.employee_management import (
     get_employee_management_main_keyboard,
     get_employee_list_keyboard,
     get_employee_actions_keyboard,
+    get_employee_deleted_keyboard,
     get_cancel_keyboard,
     get_employee_edit_keyboard,
 )
@@ -388,15 +389,21 @@ async def approve_employee(callback: CallbackQuery, db: Session, roles: list = N
                 get_text('employee_management.employee_approved', language=lang),
                 show_alert=True
             )
-            
-            # Возвращаемся к списку
-            await show_employee_list(callback, db, roles, active_role, user)
+
+            # CODE-1 (как MGR-05 block/unblock): ре-рендер карточки на месте
+            # (виден новый статус) вместо show_employee_list(callback), который
+            # парсил `approve_employee_<id>` как список и падал IndexError.
+            # callback уже отвечен — ошибка рендера только логируется.
+            try:
+                await _return_to_employee_info(callback, db, employee_id, lang)
+            except Exception as render_err:
+                logger.error(f"Ошибка ре-рендера карточки после одобрения {employee_id}: {render_err}")
         else:
             await callback.answer(
                 get_text('errors.unknown_error', language=lang),
                 show_alert=True
             )
-        
+
     except Exception as e:
         logger.error(f"Ошибка одобрения сотрудника: {e}")
         await callback.answer(
@@ -440,15 +447,20 @@ async def reject_employee(callback: CallbackQuery, db: Session, roles: list = No
                 get_text('employee_management.employee_rejected', language=lang),
                 show_alert=True
             )
-            
-            # Возвращаемся к списку
-            await show_employee_list(callback, db, roles, active_role, user)
+
+            # CODE-1 (как MGR-05 block/unblock): ре-рендер карточки на месте
+            # вместо show_employee_list(callback) (IndexError на разборе callback).
+            # callback уже отвечен — ошибка рендера только логируется.
+            try:
+                await _return_to_employee_info(callback, db, employee_id, lang)
+            except Exception as render_err:
+                logger.error(f"Ошибка ре-рендера карточки после отклонения {employee_id}: {render_err}")
         else:
             await callback.answer(
                 get_text('errors.unknown_error', language=lang),
                 show_alert=True
             )
-        
+
     except Exception as e:
         logger.error(f"Ошибка отклонения сотрудника: {e}")
         await callback.answer(
@@ -909,15 +921,24 @@ async def delete_employee(callback: CallbackQuery, db: Session, roles: list = No
                 get_text('employee_management.employee_deleted', language=lang),
                 show_alert=True
             )
-            
-            # Возвращаемся к списку
-            await show_employee_list(callback, db, roles, active_role, user)
+
+            # CODE-1: карточку удалённого сотрудника рендерить нельзя (объекта нет),
+            # а show_employee_list(callback) падал IndexError на разборе callback.
+            # Показываем нейтральный экран с кнопкой возврата в список pending.
+            # callback уже отвечен — ошибка рендера только логируется.
+            try:
+                await callback.message.edit_text(
+                    get_text('employee_management.employee_deleted', language=lang),
+                    reply_markup=get_employee_deleted_keyboard(lang),
+                )
+            except Exception as render_err:
+                logger.error(f"Ошибка рендера экрана после удаления {employee_id}: {render_err}")
         else:
             await callback.answer(
                 get_text('errors.unknown_error', language=lang),
                 show_alert=True
             )
-        
+
     except Exception as e:
         logger.error(f"Ошибка удаления сотрудника: {e}")
         await callback.answer(

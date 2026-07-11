@@ -46,7 +46,9 @@ def _mock_db(shift, overlap=None):
     fetch_result = MagicMock()
     fetch_result.scalar_one_or_none.return_value = shift
     overlap_result = MagicMock()
-    overlap_result.scalar_one_or_none.return_value = overlap
+    # APIFE-1: find_overlapping_shift_for_update now reads via .scalars().first()
+    # (tolerant of multiple overlaps) instead of scalar_one_or_none().
+    overlap_result.scalars.return_value.first.return_value = overlap
     pending = [fetch_result]
 
     async def execute(*_a, **_k):
