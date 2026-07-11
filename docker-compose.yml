@@ -70,6 +70,19 @@ services:
       dockerfile: Dockerfile.api
     container_name: uk-management-api
     restart: unless-stopped
+    # [F-03] За edge nginx /uk/api/ рерайтится в /api/ (префикс срезан) и терминирует
+    # TLS, поэтому uvicorn без trusted-proxy строит redirect-Location как http://.../api
+    # (теряет https и /uk). Прод задаёт в .env FORWARDED_ALLOW_IPS (CIDR edge-сети —
+    # uvicorn доверяет X-Forwarded-Proto) и API_ROOT_PATH=/uk (возвращает префикс).
+    # Dev: обе переменные пусты → --forwarded-allow-ips 127.0.0.1, без --root-path.
+    # $$ экранирует интерполяцию compose — раскрывает shell из env_file (.env).
+    command:
+      - sh
+      - -c
+      - >-
+        exec uvicorn uk_management_bot.api.main:app --host 0.0.0.0 --port 8080 --workers 2
+        --proxy-headers --forwarded-allow-ips "$${FORWARDED_ALLOW_IPS:-127.0.0.1}"
+        $${API_ROOT_PATH:+--root-path "$$API_ROOT_PATH"}
     # IPv4-only (см. комментарий у app): UZ без IPv6-egress; InfraSafe-вебхуки и
     # любой внешний HTTP из API должны идти по IPv4.
     sysctls:
@@ -116,6 +129,15 @@ services:
       dockerfile: Dockerfile.access
     container_name: uk-access-api
     restart: unless-stopped
+    # [F-03] Тот же edge /uk/api/v1/access/ rewrite → те же redirect-флаги, что у api.
+    # Access-api без entrypoint-миграций (Dockerfile.access), CMD --factory --workers 1.
+    command:
+      - sh
+      - -c
+      - >-
+        exec uvicorn access_control.app.main:create_app --factory --host 0.0.0.0 --port 8080 --workers 1
+        --proxy-headers --forwarded-allow-ips "$${FORWARDED_ALLOW_IPS:-127.0.0.1}"
+        $${API_ROOT_PATH:+--root-path "$$API_ROOT_PATH"}
     # IPv4-only (см. комментарий у app): UZ без IPv6-egress.
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
