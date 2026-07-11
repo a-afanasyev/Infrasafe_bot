@@ -213,6 +213,38 @@ async def test_workflow_exception_maps_to_http(
 
 
 @pytest.mark.asyncio
+async def test_workflow_concurrent_delete_returns_404_not_500(
+    client, db_session, applicant_user, _capture, monkeypatch
+):
+    """APIFE-9: заявку удалили между коммитом команды и повторным SELECT свежей
+    карточки → распаковка None давала TypeError/500. Ожидаем чистый 404."""
+    from sqlalchemy import delete
+
+    await _seed(db_session, owner_id=applicant_user.id, status="В работе")
+
+    async def _delete_then_outcome(*_a, **_k):
+        # эмулируем конкурентное удаление: команда «прошла», но строки уже нет
+        await db_session.execute(delete(Request).where(Request.request_number == "260101-001"))
+        await db_session.commit()
+        return _outcome("В работе", "Выполнена", "Выполнена")
+
+    monkeypatch.setattr(req_router, "run_command_async", AsyncMock(side_effect=_delete_then_outcome))
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"status": "Выполнена", "completion_report": "готово"})
+    assert r.status_code == 404, r.text
+
+
+@pytest.mark.asyncio
+async def test_list_requests_rejects_negative_offset(client):
+    """APIFE-10: offset<0 (и limit<1) раньше уходили в Postgres → 500; теперь 422."""
+    r = await client.get("/api/v2/requests?offset=-1")
+    assert r.status_code == 422
+    r = await client.get("/api/v2/requests?limit=0")
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_combine_status_and_urgency_rejected(client, db_session, applicant_user, monkeypatch):
     # combine не должен даже доходить до run_command
     mock = AsyncMock()

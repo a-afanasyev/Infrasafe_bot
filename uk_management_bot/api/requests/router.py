@@ -182,8 +182,8 @@ async def list_requests(
     executor_id: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
     scope: Optional[str] = Query(None),
-    limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -598,6 +598,10 @@ async def update_request(
             .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
             .where(RequestModel.request_number == request_number)
         )).first()
+        # APIFE-9: заявку могли конкурентно удалить между коммитом команды и этим
+        # SELECT — распаковка None дала бы TypeError → 500. Отдаём честный 404.
+        if row is None:
+            raise HTTPException(status_code=404, detail="Request not found")
         req, exec_user = row
         return _make_request_card(req, exec_user)
 
