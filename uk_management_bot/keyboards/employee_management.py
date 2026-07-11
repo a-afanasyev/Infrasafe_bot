@@ -74,6 +74,22 @@ def get_employee_management_main_keyboard(stats: Dict[str, int], language: str =
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def get_employee_deleted_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
+    """CODE-1: клавиатура на экране «сотрудник удалён».
+
+    Карточку удалённого сотрудника рендерить нельзя (объекта больше нет), поэтому
+    после delete показываем нейтральный экран с единственной кнопкой возврата в
+    список pending — самый частый источник удаления. Callback статический
+    (``employee_mgmt_list_pending_1``), без синтеза/мутации callback.data.
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text=get_text('buttons.back_to_list', language),
+            callback_data="employee_mgmt_list_pending_1"
+        )
+    ]])
+
+
 def get_employee_list_keyboard(employees_data: Dict, list_type: str, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура списка сотрудников с пагинацией
