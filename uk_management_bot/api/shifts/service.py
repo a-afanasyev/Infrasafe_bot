@@ -16,7 +16,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -575,12 +575,42 @@ async def load_users_map(db: AsyncSession, user_ids: list[int]) -> dict[int, Use
     return users_map
 
 
+class ShiftOverlapError(Exception):
+    """One or more users already have a shift overlapping the requested window.
+
+    Carries the conflicting user_ids so the router can surface them in a 409.
+    """
+
+    def __init__(self, conflicts: list[int]):
+        self.conflicts = conflicts
+        super().__init__(f"overlapping shifts for users: {conflicts}")
+
+
 async def create_shifts_from_template(
     db: AsyncSession, *, tmpl: ShiftTemplate, user_ids: list[int],
     start_dt: datetime, end_dt: datetime,
 ) -> list[Shift]:
+    # APIFE-5: from-template previously inserted without any overlap check →
+    # mass double-booking. Lock each user's shift scope, then reject the whole
+    # batch (all-or-nothing) if any user already overlaps the window.
+    #
+    # sorted(set(...)): (1) dedup — a duplicated uid ([5, 5]) would otherwise
+    # self-overlap (siblings aren't checked against each other) → double-book;
+    # (2) canonical lock order — advisory locks acquired in a globally consistent
+    # order so two concurrent batches over intersecting users can't AB-BA deadlock.
+    unique_ids = sorted(set(user_ids))
+    conflicts: list[int] = []
+    for uid in unique_ids:
+        await lock_user_shift_scope(db, uid)
+        if await find_overlapping_shift_for_update(
+            db, user_id=uid, start_time=start_dt, end_time=end_dt, lock=False
+        ):
+            conflicts.append(uid)
+    if conflicts:
+        raise ShiftOverlapError(conflicts)
+
     created_shifts = []
-    for uid in user_ids:
+    for uid in unique_ids:
         shift = Shift(
             user_id=uid,
             start_time=start_dt,
@@ -684,16 +714,45 @@ async def get_shift(db: AsyncSession, shift_id: int) -> Optional[Shift]:
     return result.scalar_one_or_none()
 
 
+# APIFE-11: namespace for the per-user shift advisory lock. Postgres FOR UPDATE
+# locks only existing overlapping rows — it has no gap/predicate lock, so two
+# concurrent inserts into an empty slot both pass the overlap check and commit
+# (double-booking, reproduced with lock=True too). A per-user transaction-level
+# advisory lock serializes the check-then-write across ALL manager-side shift
+# mutations, making it atomic. Executor POST /start intentionally skips this so
+# multi-specialization multi-active shifts stay allowed (APIFE-1).
+_SHIFT_LOCK_NS = 0x5348  # "SH"
+
+
+async def lock_user_shift_scope(db: AsyncSession, user_id: int) -> None:
+    """Serialize all shift mutations for one user within this transaction.
+
+    No-op off PostgreSQL (SQLite tests) — the advisory lock exists only to close
+    the concurrent double-booking race, which SQLite can't exhibit anyway.
+    """
+    if db.bind.dialect.name != "postgresql":
+        return
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :uid)"),
+        {"ns": _SHIFT_LOCK_NS, "uid": int(user_id)},
+    )
+
+
 async def find_overlapping_shift_for_update(
     db: AsyncSession, *, user_id: int, start_time: datetime, end_time: datetime,
     exclude_shift_id: Optional[int] = None, lock: bool = True,
 ) -> Optional[Shift]:
-    """Return an active/planned shift overlapping [start_time, end_time), or None."""
+    """Return an active/planned shift overlapping [start_time, end_time), or None.
+
+    APIFE-5: an open-ended shift (end_time IS NULL, created by executor POST /start)
+    models [start, +inf) and overlaps the window iff it started before it ends —
+    the plain ``end_time > start_time`` predicate silently misses it (NULL > x = NULL).
+    """
     query = select(Shift).where(
         Shift.user_id == user_id,
         Shift.status.in_(["active", "planned"]),
         Shift.start_time < end_time,
-        Shift.end_time > start_time,
+        or_(Shift.end_time.is_(None), Shift.end_time > start_time),
     )
     if exclude_shift_id is not None:
         query = query.where(Shift.id != exclude_shift_id)
@@ -834,7 +893,10 @@ async def reassign_shift_web(
         return {"success": False, "error": "same_executor"}
     if not has_required_specs(new_executor, shift):
         return {"success": False, "error": "spec_mismatch"}
+    # Open-ended (end_time IS NULL) shift reassignment intentionally skips the
+    # overlap guard: an executor may hold several open multi-spec shifts (APIFE-1).
     if shift.start_time is not None and shift.end_time is not None:
+        await lock_user_shift_scope(db, new_executor_id)
         overlap = await find_overlapping_shift_for_update(
             db, user_id=new_executor_id, start_time=shift.start_time,
             end_time=shift.end_time, exclude_shift_id=shift.id, lock=True,
@@ -982,7 +1044,9 @@ async def accept_transfer_web(
         return {"success": False, "error": "not_executor"}
     if not has_required_specs(recipient, shift):
         return {"success": False, "error": "spec_mismatch"}
+    # Open-ended shift accept intentionally skips the overlap guard (APIFE-1).
     if shift.start_time is not None and shift.end_time is not None:
+        await lock_user_shift_scope(db, executor_id)
         overlap = await find_overlapping_shift_for_update(
             db, user_id=executor_id, start_time=shift.start_time,
             end_time=shift.end_time, exclude_shift_id=shift.id, lock=True,

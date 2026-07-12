@@ -620,9 +620,16 @@ async def create_from_template(
     if missing:
         raise HTTPException(status_code=404, detail=f"Users not found: {missing}")
 
-    created_shifts = await service.create_shifts_from_template(
-        db, tmpl=tmpl, user_ids=user_ids, start_dt=start_dt, end_dt=end_dt
-    )
+    try:
+        created_shifts = await service.create_shifts_from_template(
+            db, tmpl=tmpl, user_ids=user_ids, start_dt=start_dt, end_dt=end_dt
+        )
+    except service.ShiftOverlapError as exc:
+        # APIFE-5: all-or-nothing — any overlapping user aborts the whole batch.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Overlapping shifts for users: {exc.conflicts}",
+        )
 
     return [_shift_detail(s, users_map.get(s.user_id) if s.user_id else None) for s in created_shifts]
 
@@ -776,6 +783,10 @@ async def create_shift(
             detail="User does not have executor role",
         )
 
+    # APIFE-11: serialize this user's shift mutations so the overlap check and the
+    # insert are atomic against concurrent writers (FOR UPDATE alone can't lock an
+    # empty slot). Held until the transaction commits.
+    await service.lock_user_shift_scope(db, body.user_id)
     # Check for overlapping active or planned shifts
     overlap = await service.find_overlapping_shift_for_update(
         db, user_id=body.user_id, start_time=body.start_time, end_time=body.end_time,
@@ -857,9 +868,12 @@ async def update_shift(
     if ("start_time" in data or "end_time" in data or "user_id" in data) \
             and new_start is not None and new_end is not None:
         target_user_id = data.get("user_id", shift.user_id)
+        # APIFE-11: advisory lock makes check-then-update atomic; lock=True also
+        # row-locks any existing overlap (was lock=False — the odd one out).
+        await service.lock_user_shift_scope(db, target_user_id)
         overlap = await service.find_overlapping_shift_for_update(
             db, user_id=target_user_id, start_time=new_start, end_time=new_end,
-            exclude_shift_id=shift_id, lock=False,
+            exclude_shift_id=shift_id, lock=True,
         )
         if overlap:
             raise HTTPException(
