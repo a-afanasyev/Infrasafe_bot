@@ -38,6 +38,8 @@ const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'
 const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
 // Складской учёт материалов (приход/расход по заявкам). Гард — MATERIALS_MODULE_ROLES.
 const MaterialsPage = lazy(() => import('./pages/materials/MaterialsPage'))
+// «Учёт ресурсов УК» — внешний сервис в iframe (наследует гейт /dashboard admin/manager).
+const ResourceAccountingPage = lazy(() => import('./pages/ResourceAccountingPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,6 +111,7 @@ export default function App() {
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
                 <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
                 <Route path="feedback" element={<PageErrorBoundary><FeedbackPage /></PageErrorBoundary>} />
+                <Route path="resource-accounting" element={<PageErrorBoundary><ResourceAccountingPage /></PageErrorBoundary>} />
               </Route>
 
               {/* access_control §9.6: контроль доступа — отдельный route group с
