@@ -227,6 +227,13 @@ class Settings:
     # (shared with the bot side) — both deployments use one key per env.
     MEDIA_SERVICE_API_KEY = os.getenv("MEDIA_SERVICE_API_KEY") or os.getenv("MEDIA_API_KEY", "")
 
+    # Resource Accounting (external «Учёт ресурсов УК» — iframe launch-ticket).
+    # Backend выпускает одноразовый ticket, дёргая партнёрский API server-to-
+    # server; RESOURCE_SERVICE_TOKEN живёт только на бэкенде и НЕ уходит в браузер.
+    # Пусто = интеграция выключена (эндпоинт ticket отвечает 503 fail-closed).
+    RESOURCE_SERVICE_URL = os.getenv("RESOURCE_SERVICE_URL", "https://resources-api.infrasafe.uz/v1")
+    RESOURCE_SERVICE_TOKEN = os.getenv("RESOURCE_SERVICE_TOKEN", "")
+
     @property
     def REDIS_PUBSUB_URL_RESOLVED(self) -> str:
         """REDIS_PUBSUB_URL with auth derived from REDIS_URL if not explicitly set.
@@ -269,6 +276,7 @@ class Settings:
         # plaintext http only for local/internal targets.
         _require_safe_outbound_url("INFRASAFE_WEBHOOK_URL", INFRASAFE_WEBHOOK_URL)
         _require_safe_outbound_url("INFRASAFE_REQUESTS_INVENTORY_URL", INFRASAFE_REQUESTS_INVENTORY_URL)
+        _require_safe_outbound_url("RESOURCE_SERVICE_URL", RESOURCE_SERVICE_URL)
 
 # Создаем экземпляр настроек
 settings = Settings()

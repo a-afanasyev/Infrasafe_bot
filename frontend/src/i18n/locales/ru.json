@@ -74,7 +74,13 @@
     "accessHistory": "История проездов",
     "accessDatabase": "База доступа",
     "accessEquipment": "Оборудование",
-    "materials": "Склад"
+    "materials": "Склад",
+    "resourceAccounting": "Учёт ресурсов"
+  },
+  "resourceAccounting": {
+    "title": "Учёт ресурсов УК",
+    "openInNewTab": "Открыть в отдельной вкладке",
+    "notConfigured": "Раздел не настроен для этого инстанса."
   },
   "accessControl": {
     "title": "Контроль доступа",

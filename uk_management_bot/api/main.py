@@ -45,6 +45,7 @@ from uk_management_bot.api.webhooks.router import router as webhooks_router
 from uk_management_bot.api.registration.router import router as registration_router
 from uk_management_bot.api.feedback.router import router as feedback_router
 from uk_management_bot.api.materials.router import router as materials_router
+from uk_management_bot.api.resource_accounting.router import router as resource_accounting_router
 from uk_management_bot.api.routes.health import router as health_router
 from uk_management_bot.api.routes.announcements import router as announcements_router
 from uk_management_bot.api.routes.media_proxy import router as media_router
@@ -132,6 +133,7 @@ app.include_router(webhooks_router, prefix="/api/v2/webhooks", tags=["webhooks"]
 app.include_router(registration_router, prefix="/api/v2/registration", tags=["registration"])
 app.include_router(feedback_router, prefix="/api/v2/feedback", tags=["feedback"])
 app.include_router(materials_router, prefix="/api/v2/materials", tags=["materials"])
+app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])
 # ARCH-012: extracted inline endpoints (absolute paths, no prefix).
 app.include_router(health_router)
 app.include_router(announcements_router)
