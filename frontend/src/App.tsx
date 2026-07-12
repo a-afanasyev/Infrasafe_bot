@@ -155,6 +155,11 @@ export default function App() {
                   DARK за VITE_RESOURCES_ENABLED (edge resource-api пока 404). */}
               {RESOURCES_ENABLED && (
                 <Route path="/dashboard/resource-accounting" element={<ProtectedRoute allowedRoles={[...RESOURCE_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                  {/* index — точный путь (куда ведёт пункт меню): splat `*` не
+                      матчит пустой остаток, поэтому нужен отдельный index-роут.
+                      `*` — все под-пути (worksheet/meters/...) для вложенных
+                      <ResourceAccountingRoutes>. Оба рендерят одну секцию. */}
+                  <Route index element={<PageErrorBoundary><ResourceAccountingSection /></PageErrorBoundary>} />
                   <Route path="*" element={<PageErrorBoundary><ResourceAccountingSection /></PageErrorBoundary>} />
                 </Route>
               )}
