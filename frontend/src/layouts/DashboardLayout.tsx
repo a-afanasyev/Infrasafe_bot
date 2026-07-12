@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES } from '../constants/roles'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from '../constants/roles'
 import { TopbarProvider } from '../contexts/TopbarContext'
 import { useTopbar } from '../contexts/topbar'
 import { useTheme } from '../hooks/useTheme'
@@ -39,6 +39,7 @@ import {
   ChevronUp,
   ChevronDown,
   Package,
+  Gauge,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -106,6 +107,11 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   // Складской учёт материалов (manager/system_admin)
   { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, allowedRoles: MATERIALS_MODULE_ROLES },
+  // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
+  // пункт появляется только когда партнёрский edge проксирует resource-api.
+  ...(import.meta.env.VITE_RESOURCES_ENABLED === 'true'
+    ? [{ to: '/dashboard/resource-accounting', labelKey: 'nav.resourceAccounting', Icon: Gauge, allowedRoles: RESOURCE_MODULE_ROLES }]
+    : []),
 ]
 
 // Пункт «внешнего» блока (табло жителей) — вынесен отдельным листом.

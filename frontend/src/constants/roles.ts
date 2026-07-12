@@ -70,3 +70,14 @@ export const MATERIALS_MODULE_ROLES: readonly UserRole[] = [
   'manager',
   'system_admin',
 ] as const
+
+/**
+ * Роли нативного раздела «Учёт ресурсов УК» (resource-accounting). Зеркалит
+ * роль-гейт backend-минтинга ticket (require_roles manager/system_admin/admin);
+ * `admin` не входит в канонический UserRole, поэтому здесь только реальные роли.
+ * Ресурс-роль (resource_*) выводится на бэке при выпуске ticket, не тут.
+ */
+export const RESOURCE_MODULE_ROLES: readonly UserRole[] = [
+  'manager',
+  'system_admin',
+] as const

@@ -277,6 +277,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # DARK-гейт раздела «Учёт ресурсов»: пусто = OFF (dev/CI), прод .env ставит true.
+        VITE_RESOURCES_ENABLED: "${VITE_RESOURCES_ENABLED:-}"
     container_name: uk-frontend
     restart: unless-stopped
     ports:

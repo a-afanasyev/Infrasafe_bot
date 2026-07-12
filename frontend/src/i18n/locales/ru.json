@@ -74,7 +74,11 @@
     "accessHistory": "История проездов",
     "accessDatabase": "База доступа",
     "accessEquipment": "Оборудование",
-    "materials": "Склад"
+    "materials": "Склад",
+    "resourceAccounting": "Учёт ресурсов"
+  },
+  "resourceAccounting": {
+    "unavailable": "Раздел учёта ресурсов временно недоступен. Попробуйте позже или обратитесь к администратору."
   },
   "accessControl": {
     "title": "Контроль доступа",
