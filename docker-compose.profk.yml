@@ -190,10 +190,45 @@ services:
     networks:
       - uk-network
 
+  # Медиа-сервис: хранит фото/видео заявок в приватных Telegram-каналах через
+  # ВЫДЕЛЕННЫЙ бот (media_service/.env: TELEGRAM_BOT_TOKEN + CHANNEL_* — числовые
+  # id). Основной api проксирует /uk/api/v2/media/* сюда (MEDIA_SERVICE_URL=
+  # http://uk-media-service:8000). Только uk-internal — наружу его не публикуем,
+  # edge ходит через основной api. БД uk_media на общем uk-postgres.
+  media-service:
+    build:
+      context: ./media_service
+      dockerfile: Dockerfile
+    image: uk-media-service
+    container_name: uk-media-service
+    restart: unless-stopped
+    env_file:
+      - media_service/.env
+    volumes:
+      - media_uploads:/app/data/uploads
+      - ./media_service/channels.json:/app/data/channels.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-internal
+    ports:
+      - "127.0.0.1:8009:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  media_uploads:
     driver: local
 
 networks:
