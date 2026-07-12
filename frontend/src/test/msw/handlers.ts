@@ -21,7 +21,4 @@ export const handlers = [
       emergency_phones: ['+998783331971'],
     })
   }),
-  http.post('*/api/v2/resource-accounting/ticket', () =>
-    HttpResponse.json({ ticket: 'opaque-test-ticket', expires_in: 60 }),
-  ),
 ]
