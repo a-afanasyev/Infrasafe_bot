@@ -1914,6 +1914,7 @@
       "name": "Nomi",
       "unit": "O'lchov birligi",
       "category": "Kategoriya",
+      "categoryNone": "— kategoriyasiz —",
       "minStock": "Minimal qoldiq",
       "isActive": "Faol",
       "material": "Material",

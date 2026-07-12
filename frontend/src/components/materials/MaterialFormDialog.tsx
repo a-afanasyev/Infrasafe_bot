@@ -13,7 +13,12 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useCreateMaterial, useUpdateMaterial } from '../../hooks/useMaterials'
 import { useUnitLabel } from '../../hooks/useUnitLabel'
-import { MATERIAL_UNITS, type MaterialCard, type MaterialUnit } from '../../types/materials'
+import {
+  MATERIAL_CATEGORIES,
+  MATERIAL_UNITS,
+  type MaterialCard,
+  type MaterialUnit,
+} from '../../types/materials'
 
 /**
  * Создание/правка карточки материала. name UNIQUE навсегда (дубль → 409 с
@@ -102,7 +107,15 @@ export default function MaterialFormDialog({ open, material, onClose }: Props) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>{t('materials.form.category')}</Label>
-            <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">{t('materials.form.categoryNone')}</option>
+              {category && !MATERIAL_CATEGORIES.includes(category) && (
+                <option value={category}>{category}</option>
+              )}
+              {MATERIAL_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </Select>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>{t('materials.form.minStock')}</Label>
