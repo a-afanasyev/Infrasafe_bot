@@ -169,6 +169,12 @@ class Settings:
     # flip to true after InfraSafe deploys the endpoint.
     INFRASAFE_REQUESTS_INVENTORY_URL = os.getenv("INFRASAFE_REQUESTS_INVENTORY_URL", "")
     RECONCILE_REQUESTS_ENABLED = os.getenv("RECONCILE_REQUESTS_ENABLED", "false").lower() == "true"
+    # ARCH-114 (H-4): shared secret for the inventory endpoint's service-token gate.
+    # Sent as `x-service-token` on the GET when set. Dormant by default — empty
+    # means no header, endpoint stays public (matches InfraSafe's UK_INVENTORY_TOKEN
+    # being unset). Activate on both sides in lockstep: we send it first, InfraSafe
+    # flips their gate second.
+    INFRASAFE_INVENTORY_TOKEN = os.getenv("INFRASAFE_INVENTORY_TOKEN", "")
 
     # Request Categories
     # DEPRECATED (FS-04): источник истины категорий — канон EN-ключи в

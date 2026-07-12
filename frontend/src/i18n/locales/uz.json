@@ -74,13 +74,7 @@
     "accessHistory": "O'tishlar tarixi",
     "accessDatabase": "Kirish bazasi",
     "accessEquipment": "Jihozlar",
-    "materials": "Ombor",
-    "resourceAccounting": "Resurslar hisobi"
-  },
-  "resourceAccounting": {
-    "title": "UK resurslar hisobi",
-    "openInNewTab": "Alohida oynada ochish",
-    "notConfigured": "Bo'lim ushbu instans uchun sozlanmagan."
+    "materials": "Ombor"
   },
   "accessControl": {
     "title": "Kirish nazorati",

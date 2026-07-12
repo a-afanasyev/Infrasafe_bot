@@ -39,7 +39,6 @@ import {
   ChevronUp,
   ChevronDown,
   Package,
-  Boxes,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -107,12 +106,6 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   // Складской учёт материалов (manager/system_admin)
   { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, allowedRoles: MATERIALS_MODULE_ROLES },
-  // «Учёт ресурсов» — внешний сервис в iframe. Пункт есть только когда задан
-  // VITE_RESOURCES_URL (infrasafe вкл.; profk тёмный, пока партнёр не поддержит
-  // его origin в своём frame-ancestors/parent-origin).
-  ...(import.meta.env.VITE_RESOURCES_URL
-    ? [{ to: '/dashboard/resource-accounting', labelKey: 'nav.resourceAccounting', Icon: Boxes, allowedRoles: ['admin', 'manager'] as const }]
-    : []),
 ]
 
 // Пункт «внешнего» блока (табло жителей) — вынесен отдельным листом.
