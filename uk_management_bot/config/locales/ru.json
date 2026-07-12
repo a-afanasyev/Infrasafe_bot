@@ -6161,6 +6161,8 @@
     "executor": "Исполнитель",
     "manager": "Менеджер",
     "inspector": "Обходчик",
+    "system_admin": "Системный администратор",
+    "security_operator": "Оператор охраны",
     "none": "Роли не назначены"
   },
   "search": {
