@@ -49,8 +49,16 @@ async def fetch_infrasafe_uk_request_numbers() -> set[str]:
     if not base:
         raise RuntimeError("INFRASAFE_REQUESTS_INVENTORY_URL not configured")
     url = f"{base}?limit=5000"
+    # ARCH-114 (H-4): send the service-token when configured. Dormant until the
+    # shared secret is set on both sides — empty → no header, endpoint stays
+    # public exactly as today.
+    headers = (
+        {"x-service-token": settings.INFRASAFE_INVENTORY_TOKEN}
+        if settings.INFRASAFE_INVENTORY_TOKEN
+        else {}
+    )
     async with httpx.AsyncClient(timeout=INFRASAFE_API_TIMEOUT) as client:
-        resp = await client.get(url)
+        resp = await client.get(url, headers=headers)
         resp.raise_for_status()
         data = resp.json()
     items = data.get("data", data) if isinstance(data, dict) else data
