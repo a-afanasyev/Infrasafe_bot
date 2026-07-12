@@ -13,6 +13,11 @@ ENV VITE_BOT_USERNAME=$VITE_BOT_USERNAME
 # Дефолт = infrasafe (тёмная тема). profk.uz передаёт profk через compose.
 ARG VITE_BRAND=infrasafe
 ENV VITE_BRAND=$VITE_BRAND
+# DARK-гейт нативного раздела «Учёт ресурсов» — build-time. Пусто = OFF (пункт
+# меню и роут не монтируются). Включение: --build-arg VITE_RESOURCES_ENABLED=true
+# ПОСЛЕ того как партнёрский edge начнёт проксировать /uk/api/resource/* + минтинг.
+ARG VITE_RESOURCES_ENABLED=
+ENV VITE_RESOURCES_ENABLED=$VITE_RESOURCES_ENABLED
 RUN npm run build
 
 FROM nginx:1.27-alpine

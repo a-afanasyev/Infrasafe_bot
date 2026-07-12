@@ -4,7 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import { isTWA } from './utils/isTWA'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES } from './constants/roles'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from './constants/roles'
 import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
@@ -38,6 +38,13 @@ const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'
 const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
 // Складской учёт материалов (приход/расход по заявкам). Гард — MATERIALS_MODULE_ROLES.
 const MaterialsPage = lazy(() => import('./pages/materials/MaterialsPage'))
+// Нативный раздел «Учёт ресурсов УК» (портируемый модуль). DARK за build-флагом
+// VITE_RESOURCES_ENABLED — пока партнёрский edge не проксирует resource-api.
+const ResourceAccountingSection = lazy(() => import('./pages/ResourceAccountingSection'))
+
+// DARK-гейт нативного раздела ресурсоучёта: раздел монтируется и показывается в
+// меню только при VITE_RESOURCES_ENABLED=true (билд-арг). По умолчанию OFF.
+const RESOURCES_ENABLED = import.meta.env.VITE_RESOURCES_ENABLED === 'true'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -141,6 +148,16 @@ export default function App() {
               <Route path="/dashboard/materials" element={<ProtectedRoute allowedRoles={[...MATERIALS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><MaterialsPage /></PageErrorBoundary>} />
               </Route>
+
+              {/* Учёт ресурсов УК — нативный портируемый модуль (не iframe).
+                  Splat-роут: внутренний <ResourceAccountingRoutes/> резолвит
+                  подпути относительно basePath. Гард — RESOURCE_MODULE_ROLES.
+                  DARK за VITE_RESOURCES_ENABLED (edge resource-api пока 404). */}
+              {RESOURCES_ENABLED && (
+                <Route path="/dashboard/resource-accounting" element={<ProtectedRoute allowedRoles={[...RESOURCE_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                  <Route path="*" element={<PageErrorBoundary><ResourceAccountingSection /></PageErrorBoundary>} />
+                </Route>
+              )}
 
               {/* Resident board - public standalone page (УК landing) */}
               <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />

@@ -74,7 +74,11 @@
     "accessHistory": "O'tishlar tarixi",
     "accessDatabase": "Kirish bazasi",
     "accessEquipment": "Jihozlar",
-    "materials": "Ombor"
+    "materials": "Ombor",
+    "resourceAccounting": "Resurs hisobi"
+  },
+  "resourceAccounting": {
+    "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling."
   },
   "accessControl": {
     "title": "Kirish nazorati",

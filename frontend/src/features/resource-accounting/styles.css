@@ -1,0 +1,567 @@
+/*
+ * Стили модуля «Учёт ресурсов УК», заскоуплены под .ra-root, чтобы не конфликтовать
+ * со стилями хоста (УК на Tailwind/shadcn). Токены на .ra-root подхватывают токены хоста
+ * (var(--color-*, fallback)) — модуль адаптирует бренд УК автоматически; в standalone
+ * используются fallback-значения. Семантические статус-цвета — собственные.
+ */
+.ra-root {
+  --accent: var(--color-accent, #2563eb);
+  --accent-hover: #1d4ed8;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, #ffffff);
+  --bg: var(--color-bg-root, #f8fafc);
+  --surface: var(--color-bg-card, #ffffff);
+  --border: var(--color-border-default, #e2e8f0);
+  --text: var(--color-text-primary, #0f172a);
+  --text-muted: var(--color-text-secondary, #64748b);
+  --ok: #16a34a;
+  --ok-soft: #dcfce7;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --error: #dc2626;
+  --error-soft: #fee2e2;
+  --missing: #6b7280;
+  --missing-soft: #f1f5f9;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.ra-root h1 {
+  font-size: 20px;
+  margin: 0;
+}
+.ra-root h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.ra-root h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.ra-root .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95em;
+}
+.ra-root .muted {
+  color: var(--text-muted);
+}
+.ra-root .small {
+  font-size: 12px;
+}
+.ra-root .link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.ra-root .link:hover {
+  text-decoration: underline;
+}
+.ra-root .text-warning {
+  color: var(--warning);
+}
+.ra-root .text-error {
+  color: var(--error);
+}
+.ra-root .subheading {
+  margin: 16px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.ra-root .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.ra-root .page-header-side {
+  color: var(--text-muted);
+}
+.ra-root .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.ra-root .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.ra-root .panel-header h2 {
+  margin: 0;
+}
+
+.ra-root .cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ra-root .card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+.ra-root .card-label {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.ra-root .card-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+.ra-root .card-value-warn {
+  color: var(--warning);
+}
+
+.ra-root .table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.ra-root .table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: 13.5px;
+}
+.ra-root .table th,
+.ra-root .table td {
+  border: 1px solid var(--border);
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.ra-root .table thead th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ra-root .table .num {
+  text-align: right;
+}
+.ra-root .table-clickable tbody tr {
+  cursor: pointer;
+}
+.ra-root .table-clickable tbody tr:hover {
+  background: var(--accent-soft);
+}
+.ra-root .cell-actions {
+  white-space: nowrap;
+}
+.ra-root .cell-json {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ra-root .badge {
+  display: inline-block;
+  border-radius: 99px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ra-root .badge-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.ra-root .badge-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.ra-root .badge-error {
+  background: var(--error-soft);
+  color: var(--error);
+}
+.ra-root .badge-missing {
+  background: var(--missing-soft);
+  color: var(--missing);
+}
+.ra-root .badge-period-open {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ra-root .badge-period-review {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.ra-root .badge-period-submitted {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.ra-root .badge-period-closed {
+  background: var(--missing-soft);
+  color: var(--missing);
+}
+.ra-root .chip {
+  display: inline-block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  margin-left: 4px;
+  color: var(--text-muted);
+}
+
+.ra-root .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ra-root .btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ra-root .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ra-root .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ra-root .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: #fff;
+}
+.ra-root .btn-danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+.ra-root .btn-danger:hover:not(:disabled) {
+  background: var(--error-soft);
+  border-color: var(--error);
+  color: var(--error);
+}
+.ra-root .btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.ra-root .btn-sm {
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+.ra-root .btn-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ra-root input,
+.ra-root select,
+.ra-root textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+}
+.ra-root input:focus,
+.ra-root select:focus,
+.ra-root textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+.ra-root .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  flex: 1;
+}
+.ra-root .field > span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.ra-root .field-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ra-root .field-inline > span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.ra-root .form-row {
+  display: flex;
+  gap: 12px;
+}
+.ra-root .form-error {
+  background: var(--error-soft);
+  color: var(--error);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.ra-root .checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.ra-root .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ra-root .search-input {
+  min-width: 220px;
+}
+
+.ra-root .period-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.ra-root .period-panel-validation {
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.ra-root .period-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+.ra-root .input-reading {
+  width: 110px;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.ra-root .input-comment {
+  width: 160px;
+}
+
+.ra-root .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.ra-root .tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.ra-root .tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.ra-root .detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .ra-root .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.ra-root .props {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+.ra-root .props dt {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.ra-root .props dd {
+  margin: 0;
+}
+.ra-root .stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.ra-root .stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  min-width: 140px;
+}
+.ra-root .stat-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.ra-root .stat-value {
+  font-weight: 700;
+}
+.ra-root .chart-box {
+  width: 100%;
+}
+
+.ra-root .tree-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.ra-root .tree-row:hover {
+  background: var(--bg);
+}
+.ra-root .tree-name {
+  font-weight: 500;
+}
+.ra-root .tree-actions {
+  display: flex;
+  gap: 2px;
+  white-space: nowrap;
+}
+.ra-root .consumers-fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+.ra-root .consumers-fieldset legend {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0 4px;
+}
+.ra-root .consumer-row {
+  margin-bottom: 8px;
+  align-items: center;
+}
+.ra-root .consumer-row select {
+  flex: 1;
+}
+.ra-root .consumer-row input {
+  flex: 1;
+}
+
+/* Modal — оверлей рендерится инлайн (не через портал), поэтому остаётся внутри .ra-root */
+.ra-root .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  z-index: 50;
+  overflow-y: auto;
+}
+.ra-root .modal {
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.24);
+  width: 100%;
+}
+.ra-root .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.ra-root .modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.ra-root .modal-body {
+  padding: 16px 18px;
+}
+.ra-root .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ra-root .state {
+  padding: 28px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+.ra-root .state-error {
+  color: var(--error);
+  border-color: var(--error);
+  background: var(--error-soft);
+}
+.ra-root .page-loading {
+  padding: 60px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.ra-root .error-boundary {
+  max-width: 480px;
+  margin: 80px auto;
+  text-align: center;
+}
+.ra-root .pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 12px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
