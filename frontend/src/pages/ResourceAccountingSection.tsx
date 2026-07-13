@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '@/api/client'
+import { cn } from '@/lib/utils'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import {
   ResourceAccountingProvider,
   ResourceAccountingRoutes,
   configureResourceApi,
   ensureResourceSession,
+  useResourceAuth,
+  canEnterReadings,
+  isAdmin,
+  isMeterEntry,
 } from '@/features/resource-accounting'
 
 /**
@@ -49,6 +55,49 @@ configureResourceApi({
   },
 })
 
+/**
+ * Под-навигация раздела (перенесена из standalone-обёртки ресурса, которую по
+ * INTEGRATION.md не копировали). Ссылки абсолютные (basePath + суффикс), чтобы
+ * не зависеть от текущего вложенного пути. Роль-гейтинг: журнал — только админу,
+ * контролёр (meter_entry) видит единственную страницу → навигация скрыта.
+ */
+function ResourceSubNav() {
+  const { role } = useResourceAuth()
+  if (isMeterEntry(role)) return null
+
+  const items = [
+    { to: '', label: 'Сводка', end: true },
+    { to: '/worksheet', label: canEnterReadings(role) ? 'Ввод показаний' : 'Ведомость' },
+    { to: '/meters', label: 'Счётчики' },
+    { to: '/objects', label: 'Объекты' },
+    { to: '/exports', label: 'Акты сверки' },
+    { to: '/providers', label: 'Поставщики' },
+    ...(isAdmin(role) ? [{ to: '/audit', label: 'Журнал' }] : []),
+  ]
+
+  return (
+    <nav className="mb-3 flex gap-1 overflow-x-auto border-b border-border-default px-4 pt-2">
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={`${RESOURCE_BASE_PATH}${item.to}`}
+          end={item.end}
+          className={({ isActive }) =>
+            cn(
+              'whitespace-nowrap border-b-2 px-3 py-2 text-sm no-underline transition-colors',
+              isActive
+                ? 'border-accent font-semibold text-accent'
+                : 'border-transparent text-text-secondary hover:text-text-primary',
+            )
+          }
+        >
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
 export default function ResourceAccountingSection() {
   const { t } = useTranslation()
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -82,6 +131,7 @@ export default function ResourceAccountingSection() {
         },
       }}
     >
+      <ResourceSubNav />
       <ResourceAccountingRoutes />
     </ResourceAccountingProvider>
   )
