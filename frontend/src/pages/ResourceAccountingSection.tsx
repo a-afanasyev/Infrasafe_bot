@@ -26,7 +26,19 @@ const RESOURCE_BASE_PATH = '/dashboard/resource-accounting'
 const mint = async (): Promise<string> =>
   (await apiClient.post('/api/v2/resource-accounting/ticket')).data.ticket
 
-const ensureSession = (): Promise<void> => ensureResourceSession(mint)
+// Single-flight: модульный api-клиент дёргает onUnauthorized на КАЖДЫЙ 401, а
+// на старте раздела их несколько (ensureSession's own /v1/auth/me + self-bootstrap
+// ResourceAuthProvider + запросы страниц). Без гарда каждый 401 запускал новый
+// mint→exchange — рекурсивный шторм из лишних одноразовых тикетов. Гард склеивает
+// все параллельные вызовы в ОДИН mint→exchange; после сессии — сбрасывается.
+let inflightSession: Promise<void> | null = null
+const ensureSession = (): Promise<void> => {
+  if (inflightSession) return inflightSession
+  inflightSession = ensureResourceSession(mint).finally(() => {
+    inflightSession = null
+  })
+  return inflightSession
+}
 
 // Конфигурируем api модуля ДО первого запроса (ensureSession дергает
 // /v1/auth/me ещё до монтирования Provider — без baseUrl он ушёл бы не туда).
