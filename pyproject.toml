@@ -45,7 +45,7 @@ target-version = "py311"
 # PRAC-01-FU scope decision (owner, 2026-06-14): enforce E/F on bot/API only.
 # media_service/scripts/docs carry ~169 E/F deferred to PRAC-01-FU2.
 # force-exclude makes these apply even when paths are passed explicitly (CI / pre-commit).
-extend-exclude = ["media_service", "scripts", "docs"]
+extend-exclude = ["media_service", "scripts", "docs", "resource-accounting"]
 force-exclude = true
 
 [tool.ruff.lint]
