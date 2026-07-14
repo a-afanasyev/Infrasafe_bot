@@ -233,3 +233,13 @@ export interface AuditEntry {
   correlation_id: string | null;
   created_at: string;
 }
+
+export interface SparklinePoint {
+  month: string;
+  consumption: number;
+}
+
+export interface MetersSparklines {
+  months: number;
+  series: Record<string, SparklinePoint[]>;
+}

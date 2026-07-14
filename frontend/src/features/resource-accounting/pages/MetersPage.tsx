@@ -2,11 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiPaged, api, ApiError } from '../api/client';
-import type { Meter, MeterCreatePayload, Provider, ResourceType } from '../api/types';
+import type {
+  Meter,
+  MeterCreatePayload,
+  MetersSparklines,
+  Provider,
+  ResourceType,
+} from '../api/types';
 import { METER_STATUS_LABELS, RESOURCE_TYPE_LABELS } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { Modal } from '../components/Modal';
 import { MeterForm } from '../components/MeterForm';
+import { Sparkline } from '../components/Sparkline';
 import { canEnterReadings } from '../auth/roles';
 import { useResourceAuth } from '../auth/ResourceAuthContext';
 import { useResourceLink } from '../paths';
@@ -55,6 +62,16 @@ export function MetersPage() {
         },
       }),
   });
+
+  // Мини-график за 6 мес — одним запросом на все счётчики (не по строке), маппим по id.
+  const sparklinesQuery = useQuery({
+    queryKey: ['meters-sparklines', resourceType],
+    queryFn: () =>
+      api<MetersSparklines>('/v1/analytics/meters-sparklines', {
+        params: { months: 6, resource_type: resourceType },
+      }),
+  });
+  const seriesMap = sparklinesQuery.data?.series ?? {};
 
   const createMeter = useMutation({
     mutationFn: (payload: MeterCreatePayload) =>
@@ -157,6 +174,7 @@ export function MetersPage() {
                   <th>Ресурс</th>
                   <th>Объект</th>
                   <th>Место установки</th>
+                  <th>Расход, 6 мес</th>
                   <th>Поставщик / лиц. счёт</th>
                   <th>Статус</th>
                 </tr>
@@ -169,6 +187,12 @@ export function MetersPage() {
                     <td>{RESOURCE_TYPE_LABELS[m.resource_type]}</td>
                     <td>{m.primary_object_name ?? '—'}</td>
                     <td className="small">{m.install_location}</td>
+                    <td>
+                      <Sparkline
+                        values={(seriesMap[m.id] ?? []).map((p) => p.consumption)}
+                        unit={m.unit}
+                      />
+                    </td>
                     <td className="small">
                       {m.provider_id
                         ? `${providersQuery.data?.find((p) => p.id === m.provider_id)?.name ?? ''} ${
