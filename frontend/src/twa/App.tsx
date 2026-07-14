@@ -1,6 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import MeterEntryScreen from './pages/meter-entry/MeterEntryScreen'
 import { useTWAAuth } from './hooks/useTWAAuth'
 import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
@@ -45,6 +46,7 @@ const queryClient = new QueryClient({
 
 function TWAContent() {
   const { accessToken, isLoading, isAuthenticated } = useTWAAuth()
+  const location = useLocation()
 
   // Set auth header for TWA-specific client (not shared apiClient)
   useEffect(() => {
@@ -52,6 +54,13 @@ function TWAContent() {
       twaClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
     }
   }, [accessToken])
+
+  // Экран контролёра «Ввод показаний» авторизуется НАПРЯМУЮ в ресурс-сервис по
+  // initData (UK-JWT не требуется) — рендерим ДО общего UK-auth-гейта, чтобы
+  // контролёр без UK-role-landing не упирался в 🔒.
+  if (location.pathname.endsWith('/meter-entry')) {
+    return <MeterEntryScreen />
+  }
 
   if (isLoading) {
     return (

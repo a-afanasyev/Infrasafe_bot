@@ -78,7 +78,8 @@
     "resourceAccounting": "Resurs hisobi"
   },
   "resourceAccounting": {
-    "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling."
+    "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
+    "openViaBot": "Avtorizatsiya uchun bu ekranni bot orqali oching."
   },
   "accessControl": {
     "title": "Kirish nazorati",
@@ -973,7 +974,13 @@
     "currentShift": "Joriy smena",
     "type": "Turi",
     "requests": "Arizalar",
-    "load": "Yuklama"
+    "load": "Yuklama",
+    "meterEntry": {
+      "title": "Ko'rsatkich nazoratchisi",
+      "hint": "Hisoblagich ko'rsatkichlarini kiritish huquqi (Mini App «Ko'rsatkich kiritish»)",
+      "grant": "Huquq berish",
+      "revoke": "Huquqni olib tashlash"
+    }
   },
   "employeeModal": {
     "titleCreate": "Xodim qo'shish",
@@ -1754,6 +1761,8 @@
     "noteAddFailed": "Eslatma qo'shib bo'lmadi",
     "employeeApproved": "Xodim tasdiqlandi",
     "employeeApproveFailed": "Xodimni tasdiqlab bo'lmadi",
+    "meterEntryUpdated": "Ko'rsatkich kiritish huquqi yangilandi",
+    "meterEntryFailed": "Ko'rsatkich kiritish huquqini o'zgartirib bo'lmadi",
     "employeeRejected": "Xodim rad etildi",
     "employeeRejectFailed": "Xodimni rad etib bo'lmadi",
     "employeeBlocked": "Xodim bloklandi",

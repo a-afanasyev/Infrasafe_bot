@@ -276,6 +276,11 @@ class CreateEmployeeRequest(BaseModel):
     status: Literal["approved", "pending"] = "approved"
 
 
+class MeterEntryToggleRequest(BaseModel):
+    """Выдать/снять роль-капабилити контролёра показаний (resource_meter_entry)."""
+    enabled: bool
+
+
 class UpdateTemplateBody(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
