@@ -6163,6 +6163,7 @@
     "inspector": "Обходчик",
     "system_admin": "Системный администратор",
     "security_operator": "Оператор охраны",
+    "resource_meter_entry": "Контролёр (показания)",
     "none": "Роли не назначены"
   },
   "search": {
@@ -8004,6 +8005,7 @@
     "handlers": {
       "admin_password_prompt": "<b>Назначение администратора</b>\n\nВведите пароль администратора для получения прав менеджера:",
       "bot_restarted": "Бот перезапущен!",
+      "btn_meter_entry": "📊 Ввод показаний",
       "btn_register_webapp": "📝 Регистрация (форма)",
       "btn_select_apartment": "🏠 Выбрать квартиру",
       "btn_specify_phone": "📱 Указать телефон",

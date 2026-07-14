@@ -186,6 +186,27 @@ async def set_user_status(db: AsyncSession, user: User, value: str) -> None:
     await db.commit()
 
 
+async def set_meter_entry_role(db: AsyncSession, user: User, enabled: bool) -> User:
+    """Выдать/снять роль-капабилити `resource_meter_entry` (контролёр показаний).
+
+    Хранится строкой в user.roles (JSON). НЕ трогает active_role — это
+    капабилити, а не переключаемая роль. Идемпотентна.
+    """
+    import json as _json
+
+    roles = parse_roles_safe(user.roles)
+    if enabled and "resource_meter_entry" not in roles:
+        roles.append("resource_meter_entry")
+    elif not enabled and "resource_meter_entry" in roles:
+        roles.remove("resource_meter_entry")
+    else:
+        return user  # no-op — состояние уже соответствует
+    user.roles = _json.dumps(roles)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 async def list_pending_staff(db: AsyncSession) -> list[User]:
     """Сотрудники (manager/executor/inspector) со `status='pending'` — очередь
     активации аккаунта в дашборде.

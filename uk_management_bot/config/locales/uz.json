@@ -6163,6 +6163,7 @@
     "inspector": "Nazoratchi",
     "system_admin": "Tizim administratori",
     "security_operator": "Xavfsizlik operatori",
+    "resource_meter_entry": "Ko'rsatkich kirituvchi",
     "none": "Rollar tayinlanmagan"
   },
   "search": {
@@ -8050,6 +8051,7 @@
     "handlers": {
       "admin_password_prompt": "<b>Administrator tayinlash</b>\n\nMenejer huquqlarini olish uchun administrator parolini kiriting:",
       "bot_restarted": "Bot qayta ishga tushirildi!",
+      "btn_meter_entry": "📊 Ko'rsatkich kiritish",
       "btn_register_webapp": "📝 Ro'yxatdan o'tish (forma)",
       "btn_select_apartment": "🏠 Kvartira tanlash",
       "btn_specify_phone": "📱 Telefon ko'rsatish",

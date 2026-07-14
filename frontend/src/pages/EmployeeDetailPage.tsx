@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useEmployee } from '../hooks/useEmployees'
+import { useEmployee, useToggleMeterEntry } from '../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../utils/employeeUtils'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { usePageTitle } from '../hooks/usePageTitle'
@@ -11,6 +11,7 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: emp, isLoading, isError } = useEmployee(id ? Number(id) : null)
+  const toggleMeterEntry = useToggleMeterEntry(id ? Number(id) : null)
   const empName = emp ? [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName') : t('employees.noName')
   usePageTitle(empName)
 
@@ -114,6 +115,33 @@ export default function EmployeeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Капабилити: контролёр показаний (resource_meter_entry) — доступ к
+          Mini App «Ввод показаний» в «Учёте ресурсов». */}
+      {(() => {
+        const hasMeterEntry = emp.roles?.includes('resource_meter_entry') ?? false
+        return (
+          <div className="bg-bg-card border border-border-default rounded-default p-5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold text-text-primary">
+                {t('employeeDetail.meterEntry.title')}
+              </div>
+              <div className="text-[11px] text-text-muted mt-0.5">
+                {t('employeeDetail.meterEntry.hint')}
+              </div>
+            </div>
+            <Button
+              variant={hasMeterEntry ? 'outline' : 'default'}
+              size="sm"
+              disabled={toggleMeterEntry.isPending}
+              onClick={() => toggleMeterEntry.mutate(!hasMeterEntry)}
+              className="shrink-0"
+            >
+              {hasMeterEntry ? t('employeeDetail.meterEntry.revoke') : t('employeeDetail.meterEntry.grant')}
+            </Button>
+          </div>
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

@@ -16,6 +16,7 @@ from uk_management_bot.api.shifts.schemas import (
     TemplateBrief, CreateTemplateBody, UpdateTemplateBody,
     DeleteEmployeeRequest, ActiveRequestsCount,
     CreateInviteRequest, CreateInviteResponse, CreateEmployeeRequest,
+    MeterEntryToggleRequest,
 )
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
@@ -331,6 +332,24 @@ async def decline_staff(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="User is not pending")
     await service.decline_employee(db, user)
     return {"id": user.id, "status": user.status}
+
+
+@router.patch("/employees/{user_id}/meter-entry", dependencies=[Depends(require_roles("manager"))])
+async def toggle_meter_entry(
+    user_id: int,
+    body: MeterEntryToggleRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Выдать/снять роль контролёра показаний (resource_meter_entry) сотруднику.
+
+    Капабилити для Mini App «Ввод показаний» — даёт доступ к вводу показаний в
+    «Учёт ресурсов». Идемпотентна; НЕ трогает active_role.
+    """
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await service.set_meter_entry_role(db, user, body.enabled)
+    return {"id": user.id, "meter_entry": body.enabled}
 
 
 @router.get("/employees/{user_id}/active-requests-count", response_model=ActiveRequestsCount)

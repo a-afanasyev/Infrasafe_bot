@@ -338,7 +338,7 @@ class AuthService:
                 return False
             
             # Валидируем роль
-            valid_roles = ['applicant', 'executor', 'manager', 'inspector']
+            valid_roles = ['applicant', 'executor', 'manager', 'inspector', 'resource_meter_entry']
             if role not in valid_roles:
                 logger.warning(f"Недопустимая роль: {role}")
                 return False

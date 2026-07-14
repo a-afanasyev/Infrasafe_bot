@@ -66,6 +66,27 @@ export function useApproveEmployee() {
   })
 }
 
+/** Выдать/снять роль контролёра показаний (resource_meter_entry) — капабилити
+ *  для Mini App «Ввод показаний» в «Учёте ресурсов». */
+export function useToggleMeterEntry(employeeId: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiClient
+        .patch(`/api/v2/shifts/employees/${employeeId}/meter-entry`, { enabled })
+        .then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.meterEntryUpdated'))
+      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Toggle meter-entry failed:', error)
+      toast.error(i18n.t('toast.meterEntryFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 export function useRejectEmployee() {
   const queryClient = useQueryClient()
   return useMutation({

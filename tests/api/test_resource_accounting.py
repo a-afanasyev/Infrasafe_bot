@@ -185,3 +185,93 @@ async def test_partner_response_without_ticket_maps_to_502(ticket_client):
     _StubClient.response = _StubResp(200, {"data": {"expires_in": 60}})
     resp = await ticket_client(_user(5, ["manager"])).post(TICKET_PATH)
     assert resp.status_code == 502
+
+
+# ── TWA meter-entry ticket (initData-authed, mints resource_meter_entry) ──
+
+TWA_PATH = "/api/v2/resource-accounting/twa-ticket"
+_INIT = {"init_data": "tg-init-data"}
+
+
+def _stub_twa(monkeypatch, *, user_data, user):
+    """Подменяет initData-верификацию и user-lookup для twa-ticket-эндпоинта."""
+    monkeypatch.setattr(ra_router, "verify_twa_init_data", lambda init_data, token: user_data)
+
+    async def _get_user(db, tid):
+        return user
+
+    monkeypatch.setattr(ra_router, "get_user_by_telegram_id", _get_user)
+
+
+@pytest.mark.asyncio
+async def test_twa_controller_mints_meter_entry(ticket_client, monkeypatch):
+    user = _user(6, ["applicant", "resource_meter_entry"], first_name="Petr", last_name="K")
+    _stub_twa(monkeypatch, user_data={"id": 6055402868}, user=user)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 200
+    assert resp.json() == {"ticket": "opaque-xyz", "expires_in": 60}
+    sent = _StubClient.captured
+    assert sent["url"] == "https://partner.example/v1/auth/tickets"
+    assert sent["headers"]["X-Service-Token"] == _TOKEN
+    assert sent["json"] == {
+        "external_user_id": "6",
+        "display_name": "Petr K",
+        "role": "resource_meter_entry",
+    }
+    assert _TOKEN not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_twa_invalid_init_data_401(ticket_client, monkeypatch):
+    _stub_twa(monkeypatch, user_data=None, user=None)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 401
+    assert _StubClient.captured == {}  # партнёра не звали
+
+
+@pytest.mark.asyncio
+async def test_twa_without_role_403(ticket_client, monkeypatch):
+    user = _user(6, ["applicant"])  # нет resource_meter_entry
+    _stub_twa(monkeypatch, user_data={"id": 6055402868}, user=user)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 403
+    assert _StubClient.captured == {}
+
+
+@pytest.mark.asyncio
+async def test_twa_not_approved_403(ticket_client, monkeypatch):
+    user = User(
+        id=6, telegram_id=6, roles=json.dumps(["resource_meter_entry"]),
+        active_role="applicant", status="pending",
+    )
+    _stub_twa(monkeypatch, user_data={"id": 6055402868}, user=user)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 403
+    assert _StubClient.captured == {}
+
+
+@pytest.mark.asyncio
+async def test_twa_unknown_user_403(ticket_client, monkeypatch):
+    _stub_twa(monkeypatch, user_data={"id": 6055402868}, user=None)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 403
+    assert _StubClient.captured == {}
+
+
+@pytest.mark.asyncio
+async def test_twa_missing_token_503(ticket_client, monkeypatch):
+    monkeypatch.setattr(ra_router.settings, "RESOURCE_SERVICE_TOKEN", "")
+    user = _user(6, ["resource_meter_entry"])
+    _stub_twa(monkeypatch, user_data={"id": 6055402868}, user=user)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 503
+    assert _StubClient.captured == {}
+
+
+@pytest.mark.asyncio
+async def test_twa_partner_5xx_maps_to_502(ticket_client, monkeypatch):
+    _StubClient.response = _StubResp(500, {})
+    user = _user(6, ["resource_meter_entry"])
+    _stub_twa(monkeypatch, user_data={"id": 6055402868}, user=user)
+    resp = await ticket_client(None).post(TWA_PATH, json=_INIT)
+    assert resp.status_code == 502

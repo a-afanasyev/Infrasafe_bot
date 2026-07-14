@@ -1,7 +1,12 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.callback_factories import RoleSwitchCB, RatingCB
+from uk_management_bot.config.settings import settings
+
+# Роль-капабилити «полевой контролёр» (ввод показаний в «Учёт ресурсов»). Даёт
+# web_app-кнопку Mini App, но НЕ участвует в переключении active_role.
+METER_ENTRY_ROLE = "resource_meter_entry"
 
 def get_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Главная клавиатура (вариант по умолчанию для обратной совместимости).
@@ -143,11 +148,21 @@ def get_main_keyboard_for_role(
         builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
 
+    # Ввод показаний (Mini App «Учёт ресурсов») — капабилити-роль контролёра,
+    # показываем по факту наличия роли, независимо от active_role.
+    if METER_ENTRY_ROLE in unique_roles and settings.FRONTEND_URL:
+        builder.add(KeyboardButton(
+            text=get_text("base.handlers.btn_meter_entry", language=language),
+            web_app=WebAppInfo(url=f"{settings.FRONTEND_URL}/uk/twa/meter-entry"),
+        ))
+
     # Обратная связь — доступна всем авторизованным ролям
     builder.add(KeyboardButton(text=get_text("main_menu.feedback", language=language)))
 
-    # Кнопка выбор роли при наличии ≥2 ролей
-    if len(unique_roles) > 1:
+    # Кнопка выбор роли при наличии ≥2 переключаемых ролей (капабилити
+    # resource_meter_entry не переключается — не считаем её).
+    switchable_roles = [r for r in unique_roles if r != METER_ENTRY_ROLE]
+    if len(switchable_roles) > 1:
         builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))
 
     # Кнопки менеджера (только для активных ролей admin/manager)
@@ -167,6 +182,8 @@ def get_role_switch_inline(roles: list[str], active_role: str, language: str = "
     builder = InlineKeyboardBuilder()
 
     for role in roles or []:
+        if role == METER_ENTRY_ROLE:
+            continue  # капабилити, не переключаемая роль
         name = get_text(f"roles.{role}", language=language)
         mark = " ✓" if role == active_role else ""
         builder.add(InlineKeyboardButton(
