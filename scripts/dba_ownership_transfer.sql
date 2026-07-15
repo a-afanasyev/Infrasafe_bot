@@ -22,10 +22,20 @@ END
 $$;
 ALTER SCHEMA public OWNER TO uk_migration_owner;
 
--- Все существующие таблицы/sequences/views/materialized views/функции в
--- public — независимо от того, кто был владельцем (uk_bot и т.п.). Ownership
--- transfer НЕ меняет уже выданные GRANT/REVOKE (access_app_rw ACL на
--- immut/other/shared остаётся как есть, см. миграцию 0001_prc05_initial_baseline).
+-- Все существующие таблицы/views/materialized views/функции в public —
+-- независимо от того, кто был владельцем (uk_bot и т.п.). Ownership transfer
+-- НЕ меняет уже выданные GRANT/REVOKE (access_app_rw ACL на immut/other/shared
+-- остаётся как есть, см. миграцию 0001_prc05_initial_baseline).
+--
+-- Sequences (relkind='S') НЕ включены в этот цикл и не должны быть: emпирически
+-- подтверждено на проде (profk, 2026-07-15) — PostgreSQL запрещает прямой
+-- `ALTER SEQUENCE ... OWNER TO` для sequence, связанной с таблицей через
+-- serial/identity-колонку (`ERROR: cannot change owner of sequence "X" —
+-- Sequence "X" is linked to table "Y"`), и в этой схеме ВСЕ 53 sequences
+-- линкованы (проверено запросом к pg_depend, deptype IN ('a','i') — 0
+-- standalone). Владение linked-sequence меняется АВТОМАТИЧЕСКИ как побочный
+-- эффект `ALTER TABLE ... OWNER TO` на владеющей таблице — отдельный шаг не
+-- нужен и físически невозможен для этого набора объектов.
 DO $$
 DECLARE
   r RECORD;
@@ -34,11 +44,10 @@ BEGIN
     SELECT c.relkind, c.relname
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'S', 'v', 'm')
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v', 'm')
   LOOP
     CASE r.relkind
       WHEN 'r' THEN EXECUTE format('ALTER TABLE public.%I OWNER TO uk_migration_owner', r.relname);
-      WHEN 'S' THEN EXECUTE format('ALTER SEQUENCE public.%I OWNER TO uk_migration_owner', r.relname);
       WHEN 'v' THEN EXECUTE format('ALTER VIEW public.%I OWNER TO uk_migration_owner', r.relname);
       WHEN 'm' THEN EXECUTE format('ALTER MATERIALIZED VIEW public.%I OWNER TO uk_migration_owner', r.relname);
     END CASE;
