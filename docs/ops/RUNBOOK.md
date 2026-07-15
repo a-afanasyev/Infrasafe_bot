@@ -86,11 +86,13 @@ docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-r
 
 ## 4. Проверка миграций
 
-⚠️ **PR-7 (F-01) закодирован, но ещё НЕ раскатан на прод** (см. план `zesty-hugging-wozniak.md`) — на прод-хостах на момент чтения этого файла всё ещё верно старое поведение ниже. После DBA-окна (Шаг 0 → `provision-roles` → ownership transfer → `migrate` → smoke) поведение меняется: `scripts/entrypoint-api.sh` больше НЕ гоняет `alembic upgrade head` (только read-only preflight, сравнивающий `alembic_version` с зашитым в образ `EXPECTED_ALEMBIC_HEAD`), миграции переезжают в отдельный one-shot `docker compose run --rm --name uk-migrate migrate` (`scripts/entrypoint-migrate.sh`), который нужно гонять перед каждым `up -d api access-api app`.
+**PR-7 (F-01) раскатан на оба прода 2026-07-15.** `scripts/entrypoint-api.sh`/`entrypoint-access.sh` больше НЕ гоняют `alembic upgrade head` — только read-only preflight (`uk_management_bot/dbops/db_preflight.py`), сравнивающий `alembic_version` с зашитым в образ на этапе сборки `EXPECTED_ALEMBIC_HEAD`; при рассинхроне контейнер падает `exit 1` ДО старта Uvicorn. Миграции — отдельный one-shot `docker compose run --rm --name uk-migrate migrate` (`scripts/entrypoint-migrate.sh`: `alembic upgrade head` → `uk_management_bot/dbops/acl_reconcile.py` → `alembic check`), **обязателен перед каждым `up -d api access-api app`** — забытый шаг не «тихо не сломается», а уронит preflight на первом же старте контейнера.
 
-Текущее (до DBA-окна) поведение: миграции применяет **только контейнер `uk-management-api`** на старте: `scripts/entrypoint-api.sh:4` → `python -m alembic upgrade head`. В образе бота (`uk-management-bot`) alembic отсутствует, `scripts/entrypoint-bot.sh` просто запускает процесс. `access-api` миграции НЕ гоняет — работает на той же БД (`docker-compose.yml:126-127`).
+В образе бота (`uk-management-bot`) alembic по-прежнему отсутствует, `scripts/entrypoint-bot.sh` просто запускает процесс.
 
-Текущий head: `036` (проверить `alembic/versions/`, если сомнение).
+Владелец схемы (`public`) и всех объектов — `uk_migration_owner` (`NOLOGIN`); миграции выполняются под `uk_migrator` (`LOGIN NOINHERIT`) через `SET SESSION ROLE uk_migration_owner` в `alembic/env.py`. Runtime-контейнеры (`app`/`api`/`access-api`) подключаются под `uk_bot_runtime`/`uk_api_runtime`/`uk_access_runtime` — только DML через `uk_app_rw`/`access_app_rw`, без DDL/ownership. Credentials — `.secrets/roles/.env.<role>` (не в общем `.env`), генерируются `docker compose run --rm --name uk-provision-roles provision-roles`. Полный verifier-log обоих rollout'ов: `docs/audit/2026-07-15-pr7-rollout.md`.
+
+Текущий head: `003` (проверить `alembic/versions/`, если сомнение).
 
 ```bash
 # Успех миграций в логах api
