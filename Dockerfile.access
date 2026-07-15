@@ -40,6 +40,20 @@ COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user --require-hashes --no-warn-script-location -r requirements.txt
 
+# PR-7 (F-01): EXPECTED_ALEMBIC_HEAD — вычисляется здесь (builder, root,
+# $HOME=/root совпадает с --user-пакетами) исключительно для read-only
+# preflight'а на старте; полный alembic/ в runtime access-api по-прежнему НЕ
+# копируется (см. комментарий выше — миграции гоняет uk-management-api).
+COPY alembic.ini ./
+COPY alembic/versions ./alembic/versions/
+RUN python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; \
+    head = ScriptDirectory.from_config(Config('alembic.ini')).get_current_head(); \
+    assert head, 'EXPECTED_ALEMBIC_HEAD: get_current_head() returned empty — versions/ empty or not copied'; \
+    print(head)" \
+    > /app/EXPECTED_ALEMBIC_HEAD \
+ && test -s /app/EXPECTED_ALEMBIC_HEAD \
+ && test $(wc -w < /app/EXPECTED_ALEMBIC_HEAD) -eq 1
+
 
 FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5 AS runtime
 
@@ -60,12 +74,19 @@ WORKDIR /app
 # --user install из builder; владелец appuser — non-root рантайм.
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
+# PR-7 (F-01): готовый EXPECTED_ALEMBIC_HEAD из builder-стадии — обычный COPY,
+# не требует прав на запись от appuser.
+COPY --from=builder --chown=appuser:appuser /app/EXPECTED_ALEMBIC_HEAD ./EXPECTED_ALEMBIC_HEAD
+
 # Прикладной код. Нужны ОБА пакета: access_control импортирует общий SQLAlchemy
 # Base, settings, auth-зависимости и utils из uk_management_bot (config/locales
 # едут внутри uk_management_bot/config). alembic НЕ копируется — миграции гоняет
-# uk-management-api на общей БД (§3.1).
+# uk-management-api на общей БД (§3.1); access-api получает только read-only
+# preflight через uk_management_bot.dbops.db_preflight.
 COPY --chown=appuser:appuser uk_management_bot ./uk_management_bot
 COPY --chown=appuser:appuser access_control ./access_control
+COPY --chown=appuser:appuser scripts/entrypoint-access.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 USER appuser
 
@@ -74,4 +95,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # create_app — фабрика, поэтому --factory. Один воркер: пилотный каркас.
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uvicorn", "access_control.app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

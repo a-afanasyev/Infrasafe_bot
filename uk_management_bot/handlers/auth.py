@@ -158,9 +158,11 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
             spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
             invite_info += "\n\n🛠️ " + get_text("auth.handlers.specialization_label", language=lang) + ": " + ", ".join(spec_names)
         
-        # Создаем короткий хеш токена для идентификации
+        # Создаем короткий хеш токена для идентификации (не криптография —
+        # усечённый идентификатор для логов/состояния, usedforsecurity=False
+        # отражает это явно и убирает bandit B324/FIPS-предупреждение).
         import hashlib
-        token_hash = hashlib.md5(token.encode()).hexdigest()[:16]
+        token_hash = hashlib.md5(token.encode(), usedforsecurity=False).hexdigest()[:16]
         
         # Сохраняем данные в состоянии
         await state.update_data(

@@ -28,8 +28,12 @@ services:
     command: python -m uk_management_bot.main
     env_file:
       - .env
+      - ./.secrets/roles/.env.bot
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@uk-postgres:5432/${POSTGRES_DB:-uk_management}
+      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
+      # ./.secrets/roles/.env.bot (env_file выше), под ролью uk_bot_runtime —
+      # не дублировать здесь: environment: имеет приоритет над env_file и
+      # молча перезаписал бы role-специфичный URL.
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
@@ -67,8 +71,10 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
+      - ./.secrets/roles/.env.api
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@uk-postgres:5432/${POSTGRES_DB:-uk_management}
+      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
+      # ./.secrets/roles/.env.api (env_file выше), под ролью uk_api_runtime.
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
@@ -112,8 +118,10 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
+      - ./.secrets/roles/.env.access
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@uk-postgres:5432/${POSTGRES_DB:-uk_management}
+      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
+      # ./.secrets/roles/.env.access (env_file выше), под ролью uk_access_runtime.
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
@@ -141,11 +149,10 @@ services:
     image: postgres:15-alpine
     container_name: uk-postgres
     restart: unless-stopped
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-uk_management}
-      - POSTGRES_USER=${POSTGRES_USER:-uk_bot}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    # PR-7 (F-01): admin/superuser credentials — отдельный файл, НЕ общий .env
+    # (см. комментарий в docker-compose.yml — тот же паттерн здесь).
+    env_file:
+      - .env.postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
@@ -157,6 +164,48 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # PR-7 (F-01): см. docker-compose.yml для полного описания. Единственное
+  # отличие здесь — RUNTIME_DB_HOST=uk-postgres (не postgres, см. верхний
+  # комментарий файла про уникальные container_name на profk) и сеть
+  # uk-internal (там же живёт сам сервис postgres на этом хосте).
+  provision-roles:
+    image: postgres:15-alpine
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - uk-internal
+    env_file:
+      - .env.postgres
+    environment:
+      RUNTIME_DB_HOST: uk-postgres
+      DEPLOY_UID: ${DEPLOY_UID:?DEPLOY_UID is required — export DEPLOY_UID=$(id -u) before running provision-roles}
+      DEPLOY_GID: ${DEPLOY_GID:?DEPLOY_GID is required — export DEPLOY_GID=$(id -g) before running provision-roles}
+    user: "${DEPLOY_UID:?DEPLOY_UID is required}:${DEPLOY_GID:?DEPLOY_GID is required}"
+    volumes:
+      - ./scripts/provision_roles.sh:/provision_roles.sh:ro
+      - ./scripts/provision_roles.sql:/provision_roles.sql:ro
+      - ./.secrets/roles:/output
+    entrypoint: ["/bin/sh", "/provision_roles.sh"]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    profiles: ["tools"]
+    entrypoint: ["/app/entrypoint-migrate.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - uk-internal
+    env_file:
+      - .env
+      - ./.secrets/roles/.env.migrate
+    environment:
+      - REQUIRE_MIGRATION_OWNER=1
 
   redis:
     image: redis:7-alpine

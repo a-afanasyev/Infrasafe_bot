@@ -68,6 +68,20 @@ COPY tests/ ./tests/
 # `docker exec uk-management-bot pytest` игнорирует config и собирает не тот скоуп
 COPY pyproject.toml ./
 
+# PR-7 (F-01): EXPECTED_ALEMBIC_HEAD — бот не гоняет alembic, но сравнивает
+# схему на старте (read-only preflight) с тем же зашитым в образ head, что и
+# api/access-api. Однослойная сборка (без builder/runtime split) — этот RUN
+# идёт ДО chown -R app:app ниже и наследует владение вместе со всем /app.
+COPY alembic.ini ./
+COPY alembic/versions ./alembic/versions/
+RUN python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; \
+    head = ScriptDirectory.from_config(Config('alembic.ini')).get_current_head(); \
+    assert head, 'EXPECTED_ALEMBIC_HEAD: get_current_head() returned empty — versions/ empty or not copied'; \
+    print(head)" \
+    > /app/EXPECTED_ALEMBIC_HEAD \
+ && test -s /app/EXPECTED_ALEMBIC_HEAD \
+ && test $(wc -w < /app/EXPECTED_ALEMBIC_HEAD) -eq 1
+
 # Создаем пользователя для безопасности
 # Запуск приложения от имени непривилегированного пользователя
 RUN useradd --create-home --shell /bin/bash app && \

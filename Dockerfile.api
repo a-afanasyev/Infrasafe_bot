@@ -39,6 +39,22 @@ COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user --require-hashes --no-warn-script-location -r requirements.txt
 
+# PR-7 (F-01): EXPECTED_ALEMBIC_HEAD computed here (builder stage — still root,
+# $HOME=/root matches where --user packages actually landed) and copied as a
+# ready file into runtime below. Computing it in runtime instead breaks the
+# build two independent ways: before `USER appuser` the import fails (alembic
+# lives under /home/appuser/.local, not /root/.local); after it, WORKDIR /app
+# is root:root and the write fails Permission denied.
+COPY alembic.ini ./
+COPY alembic/versions ./alembic/versions/
+RUN python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; \
+    head = ScriptDirectory.from_config(Config('alembic.ini')).get_current_head(); \
+    assert head, 'EXPECTED_ALEMBIC_HEAD: get_current_head() returned empty — versions/ empty or not copied'; \
+    print(head)" \
+    > /app/EXPECTED_ALEMBIC_HEAD \
+ && test -s /app/EXPECTED_ALEMBIC_HEAD \
+ && test $(wc -w < /app/EXPECTED_ALEMBIC_HEAD) -eq 1
+
 
 FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5 AS runtime
 
@@ -61,17 +77,23 @@ WORKDIR /app
 # doesn't need write access to its own site-packages.
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
+# PR-7 (F-01): EXPECTED_ALEMBIC_HEAD, computed in the builder stage above —
+# plain COPY, no write from appuser needed.
+COPY --from=builder --chown=appuser:appuser /app/EXPECTED_ALEMBIC_HEAD ./EXPECTED_ALEMBIC_HEAD
+
 # Application + migrations + scripts. Migrations are required because the
-# entrypoint runs `alembic upgrade head` before launching uvicorn.
+# `migrate` one-shot job (entrypoint-migrate.sh) runs `alembic upgrade head`
+# from this same image; the runtime entrypoint only does a read-only preflight.
 COPY --chown=appuser:appuser uk_management_bot ./uk_management_bot
 # access_control: пилотный домен контроля доступа. Нужен в API-образе, т.к.
 # alembic env.py импортирует access_control.domain (регистрация 18 пилотных
-# таблиц в target_metadata), а entrypoint выполняет `alembic upgrade head`.
+# таблиц в target_metadata), а `migrate`-job выполняет `alembic upgrade head`.
 COPY --chown=appuser:appuser access_control ./access_control
 COPY --chown=appuser:appuser alembic ./alembic
 COPY --chown=appuser:appuser alembic.ini ./
 COPY --chown=appuser:appuser scripts/entrypoint-api.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY --chown=appuser:appuser scripts/entrypoint-migrate.sh /app/entrypoint-migrate.sh
+RUN chmod +x /app/entrypoint.sh /app/entrypoint-migrate.sh
 
 USER appuser
 

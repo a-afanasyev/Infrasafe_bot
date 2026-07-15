@@ -104,11 +104,18 @@ celerybeat.pid
 # Environments & Secrets — never track
 .env
 **/.env
+# PR-7 (F-01): per-role/per-service env files (.env.postgres, .env.bot,
+# .env.api, .env.access, .env.migrate) — .env/**/.env above only matched the
+# bare filename, not this family.
+.env.*
+**/.env.*
 !.env.example
 !.env.*.template
 !.env.*.example
 *.pem
 *.key
+# PR-7 (F-01): provision-roles output — generated DATABASE_URL per role.
+.secrets/
 .venv
 env/
 venv/

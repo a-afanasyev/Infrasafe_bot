@@ -27,22 +27,26 @@ services:
     command: python -m uk_management_bot.main
     
     # Переменные окружения
-    # Используем файл .env для конфиденциальных данных
+    # .env — общие несекретные-для-роли значения; .env.bot — DATABASE_URL под
+    # ролью uk_bot_runtime (PR-7/F-01, генерируется provision-roles). Порядок
+    # важен: более поздний файл дополняет/переопределяет более ранний.
     env_file:
       - .env
-    
+      - ./.secrets/roles/.env.bot
+
     # Переменные окружения для подключения к сервисам
     environment:
-      # Подключение к PostgreSQL
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
-      
+      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
+      # ./.secrets/roles/.env.bot (env_file выше) — не дублировать здесь:
+      # environment: имеет более высокий приоритет, чем env_file, и молча
+      # перезаписал бы role-специфичный DATABASE_URL общим POSTGRES_USER/PASSWORD.
       # Подключение к Redis
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      
+
       # Настройки логирования
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
-    
+
     # Зависимости от других сервисов
     # Приложение запустится только после готовности БД и Redis
     depends_on:
@@ -50,11 +54,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    
+
     # Сетевые настройки
     networks:
       - uk-network
-    
+
     # Health check для проверки состояния приложения
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -90,8 +94,11 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
+      - ./.secrets/roles/.env.api
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
+      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
+      # ./.secrets/roles/.env.api (env_file выше), под ролью uk_api_runtime —
+      # не дублировать здесь (см. комментарий у сервиса app).
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       # REDIS_PUBSUB_URL intentionally NOT set here — settings.REDIS_PUBSUB_URL_RESOLVED
       # derives it from REDIS_URL (preserving auth). Hardcoding here without password
@@ -144,10 +151,13 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
+      - ./.secrets/roles/.env.access
     environment:
       # Общая БД и Redis с основным API (ТЗ §3.1). Миграции применяет
       # uk-management-api на той же БД — access-api их НЕ гоняет.
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-uk_bot}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-uk_management}
+      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
+      # ./.secrets/roles/.env.access (env_file выше), под ролью
+      # uk_access_runtime — не дублировать здесь.
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
@@ -202,30 +212,32 @@ services:
     # Перезапуск при сбоях
     restart: unless-stopped
     
-    # Переменные окружения для настройки БД
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-uk_management}
-      - POSTGRES_USER=${POSTGRES_USER:-uk_bot}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      
-      # Настройки производительности
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
-    
+    # PR-7 (F-01): admin/superuser credentials — отдельный файл, НЕ общий .env,
+    # чтобы app/api/access-api (у которых свой env_file: [.env, .env.<role>])
+    # физически не могли увидеть суперюзер-пароль. Official postgres:15-alpine
+    # image читает POSTGRES_USER/PASSWORD/DB/INITDB_ARGS как обычные env-переменные
+    # контейнера (docker-entrypoint.sh) — Compose-level ${...}-интерполяция здесь
+    # не нужна. См. .env.postgres.example для набора переменных этого файла.
+    env_file:
+      - .env.postgres
+
     # Тома для хранения данных БД
     # Данные сохраняются между перезапусками контейнеров
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      
-      # Инициализация БД - SQL скрипт
+
+      # Инициализация БД - SQL скрипт (только extensions + trigger function).
+      # init_postgres.sh (bash-companion) убран: его единственная функция —
+      # явный GRANT $POSTGRES_USER — избыточна (официальный образ и так делает
+      # $POSTGRES_USER суперпользователем при bootstrap) и после PR-7
+      # концептуально неверна ($POSTGRES_USER больше не app-facing DML-роль).
+      # Весь role-wiring теперь идёт через сервис provision-roles ниже.
       - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
-      
-      # Инициализация БД - Bash скрипт
-      - ./scripts/init_postgres.sh:/docker-entrypoint-initdb.d/02-init_postgres.sh:ro
-    
+
     # Сетевые настройки
     networks:
       - uk-network
-    
+
     # Health check для проверки готовности БД
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -233,10 +245,73 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    
+
     # Открываем порт для подключения (только для разработки)
     ports:
       - "127.0.0.1:5432:5432"
+
+  # PR-7 (F-01): one-shot provisioning ролей/паролей (uk_migration_owner,
+  # uk_app_rw, access_app_rw, uk_migrator, uk_bot_runtime, uk_api_runtime,
+  # uk_access_runtime). НЕ docker-entrypoint-initdb.d — подключается по сети
+  # ПОСЛЕ того, как postgres уже healthy, одинаково для fresh-install и DBA
+  # rollout. profiles: ["tools"] — не создаётся bare `docker compose up -d`
+  # (без явного списка сервисов/--profile), только `docker compose run`.
+  # Пароли генерирует сам provision_roles.sh ВНУТРИ контейнера (openssl) — не
+  # передаются через -e/host shell, чтобы не светиться в `ps aux`/`docker
+  # inspect` на время инвокации.
+  # DEPLOY_UID/DEPLOY_GID — ОБЯЗАТЕЛЬНЫЕ, тот же host-аккаунт, что выполняет
+  # остальной деплой (`export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)` перед
+  # вызовом) — без них Compose (не будучи `:?`-guarded) молча подставил бы
+  # пустую строку, и `user: ":"` резолвится в root:root, а сгенерированные
+  # `.secrets/roles/.env.*` окажутся root-owned вместо владения deploy-аккаунтом.
+  # Инвокация — ОБЯЗАТЕЛЬНО с --name (docker compose run игнорирует
+  # container_name: сервиса, генерирует случайное имя):
+  #   docker compose run --rm --name uk-provision-roles provision-roles
+  provision-roles:
+    image: postgres:15-alpine
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - uk-network
+    env_file:
+      - .env.postgres
+    environment:
+      RUNTIME_DB_HOST: postgres
+      DEPLOY_UID: ${DEPLOY_UID:?DEPLOY_UID is required — export DEPLOY_UID=$(id -u) before running provision-roles}
+      DEPLOY_GID: ${DEPLOY_GID:?DEPLOY_GID is required — export DEPLOY_GID=$(id -g) before running provision-roles}
+    user: "${DEPLOY_UID:?DEPLOY_UID is required}:${DEPLOY_GID:?DEPLOY_GID is required}"
+    volumes:
+      - ./scripts/provision_roles.sh:/provision_roles.sh:ro
+      - ./scripts/provision_roles.sql:/provision_roles.sql:ro
+      - ./.secrets/roles:/output
+    entrypoint: ["/bin/sh", "/provision_roles.sh"]
+
+  # PR-7 (F-01): one-shot Alembic migration job — собирается из Dockerfile.api,
+  # но с ОТДЕЛЬНЫМ entrypoint (entrypoint-migrate.sh — реально гоняет
+  # `alembic upgrade head`; entrypoint.sh api-сервиса теперь read-only preflight
+  # и убил бы этот job на устаревшей схеме до того, как он успеет её обновить).
+  # profiles: ["tools"] — не запускается bare `up -d`. Инвокация:
+  #   docker compose run --rm --name uk-migrate migrate
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    profiles: ["tools"]
+    entrypoint: ["/app/entrypoint-migrate.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - uk-network
+    env_file:
+      - .env
+      - ./.secrets/roles/.env.migrate
+    environment:
+      # Только migrate и этот job обязаны требовать fail-closed переключение
+      # роли — api/app/access-api эту переменную не используют (не гоняют Alembic).
+      - REQUIRE_MIGRATION_OWNER=1
 
   # Redis для кэширования и rate limiting
   redis:

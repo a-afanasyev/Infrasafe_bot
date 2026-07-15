@@ -86,7 +86,9 @@ docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-r
 
 ## 4. Проверка миграций
 
-Миграции применяет **только контейнер `uk-management-api`** на старте: `scripts/entrypoint-api.sh:4` → `python -m alembic upgrade head`. В образе бота (`uk-management-bot`) alembic отсутствует, `scripts/entrypoint-bot.sh` просто запускает процесс. `access-api` миграции НЕ гоняет — работает на той же БД (`docker-compose.yml:126-127`).
+⚠️ **PR-7 (F-01) закодирован, но ещё НЕ раскатан на прод** (см. план `zesty-hugging-wozniak.md`) — на прод-хостах на момент чтения этого файла всё ещё верно старое поведение ниже. После DBA-окна (Шаг 0 → `provision-roles` → ownership transfer → `migrate` → smoke) поведение меняется: `scripts/entrypoint-api.sh` больше НЕ гоняет `alembic upgrade head` (только read-only preflight, сравнивающий `alembic_version` с зашитым в образ `EXPECTED_ALEMBIC_HEAD`), миграции переезжают в отдельный one-shot `docker compose run --rm --name uk-migrate migrate` (`scripts/entrypoint-migrate.sh`), который нужно гонять перед каждым `up -d api access-api app`.
+
+Текущее (до DBA-окна) поведение: миграции применяет **только контейнер `uk-management-api`** на старте: `scripts/entrypoint-api.sh:4` → `python -m alembic upgrade head`. В образе бота (`uk-management-bot`) alembic отсутствует, `scripts/entrypoint-bot.sh` просто запускает процесс. `access-api` миграции НЕ гоняет — работает на той же БД (`docker-compose.yml:126-127`).
 
 Текущий head: `036` (проверить `alembic/versions/`, если сомнение).
 

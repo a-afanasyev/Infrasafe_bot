@@ -61,6 +61,78 @@ jobs:
         continue-on-error: true
         run: mypy --ignore-missing-imports --explicit-package-bases --exclude '(/tests/|/venv/)' uk_management_bot
 
+  bandit:
+    name: bandit (SAST, uk_management_bot + access_control)
+    runs-on: ubuntu-latest
+    # AUD3-02: baseline (2026-07-15, Step 0) — 0 High/High до фикса B324
+    # (MD5 без usedforsecurity=False в handlers/auth.py:165, исправлено в этом
+    # же PR); после фикса узкий порог -iii -lll реально чист (empirically
+    # verified: `bandit -iii -lll` → "No issues identified", exit 0) — сразу
+    # blocking, не advisory-заглушка. Полный скан (Low/Medium — 63 находки,
+    # типичный SAST-шум) — отдельный always-advisory шаг, НЕ blocking.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install bandit
+        run: pip install bandit==1.9.4
+
+      # Exclude: uk_management_bot содержит co-located test-файлы ВНЕ tests/
+      # (например api/test_dependencies.py, database/test_init_admin.py,
+      # middlewares/test_auth.py) — */tests/* сам по себе их не ловит,
+      # */test_*.py нужен отдельно. access_control/tests/ покрывается */tests/*.
+      - name: Bandit — High confidence + High severity (blocking)
+        run: |
+          bandit -r uk_management_bot access_control \
+            -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*' \
+            -iii -lll
+
+      # Отдельный шаг — Medium/Low видимость. if: always() обязателен, НЕ
+      # только continue-on-error: без него шаг выше (без continue-on-error)
+      # проваливает job, и GitHub Actions по умолчанию (implicit if: success())
+      # пропускает ВСЕ последующие шаги — в момент будущей High/High-регрессии
+      # именно этот "always-advisory" шаг молча не выполнился бы, хотя его
+      # Medium/Low-контекст нужнее всего для триажа.
+      - name: Bandit — full scan (advisory, Low/Medium visibility)
+        if: always()
+        continue-on-error: true
+        run: |
+          bandit -r uk_management_bot access_control \
+            -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*'
+
+  npm-audit:
+    name: npm-audit (frontend dependency CVE gate)
+    runs-on: ubuntu-latest
+    # AUD3-02: отдельная top-level job, НЕ шаг внутри `frontend` (та имеет
+    # guard:brand → Lint(blocking) → build → build:profk → test:cov без единого
+    # if: always() — blocking npm-audit-шаг там пропустил бы ВСЕ остальные
+    # проверки frontend job'ы для КАЖДОГО PR при будущей high/critical-находке
+    # на транзитивную зависимость, даже для PR, не трогающих зависимости).
+    # Baseline (2026-07-15, Step 0): 0 уязвимостей на всех уровнях —
+    # --audit-level=high сразу blocking, единственный шаг (--audit-level меняет
+    # только exit-code threshold, не фильтрует вывод — второй "полный" прогон
+    # был бы тем же самым выводом второй раз).
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Audit frontend dependencies (blocking on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
   pip-audit:
     name: pip-audit (dependency CVE gate)
     runs-on: ubuntu-latest
@@ -397,6 +469,363 @@ jobs:
           test "$left" = "0/0/0" || { echo "::error::downgrade base left residue ($left) — use_alter FK / enum type / guard fn not dropped"; exit 1; }
           python -m alembic upgrade head
           python -m alembic check
+
+  pg-role-separation:
+    name: pg-role-separation (PR-7 / F-01)
+    runs-on: ubuntu-latest
+    # PR-7 (F-01): доказывает саму модель разделения ролей поверх B0 (которая
+    # проверяет только restricted-мигратор uk_bot, всё ещё владеющий схемой).
+    # Здесь — полный целевой граф: uk_migration_owner (owner, NOLOGIN) →
+    # uk_migrator (LOGIN NOINHERIT, SET SESSION ROLE) создаёт объекты; three
+    # runtime-роли (uk_bot_runtime/uk_api_runtime/uk_access_runtime) получают
+    # DML только через group-роли (uk_app_rw/access_app_rw), без ownership.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: uk_management
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d uk_management"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PYTHONPATH: "${{ github.workspace }}"
+      BOT_TOKEN: "ci:dummy-token"
+      JWT_SECRET: "ci-dummy-secret"
+      INVITE_SECRET: "ci-dummy-secret"
+      UK_WEBHOOK_SECRET: "ci-dummy-secret"
+      INFRASAFE_WEBHOOK_SECRET: "ci-dummy-secret"
+      ADMIN_PASSWORD: "ci-dummy-admin-pw-0123456"
+      DEBUG: "true"
+      ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install runtime deps (hash-pinned)
+        run: pip install -r requirements.txt
+
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      # Сценарий (б) из плана: REQUIRE_MIGRATION_OWNER=1 на fresh DB БЕЗ
+      # provisioning обязан остановить миграцию явной ошибкой, а не тихо
+      # продолжить от имени того, кем реально подключились.
+      - name: Fail-closed guard — REQUIRE_MIGRATION_OWNER without provisioning
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/uk_management"
+          REQUIRE_MIGRATION_OWNER: "1"
+        run: |
+          if python -m alembic upgrade head > /tmp/fail-closed.log 2>&1; then
+            echo "::error::expected alembic upgrade head to fail (uk_migration_owner not provisioned) but it succeeded"
+            cat /tmp/fail-closed.log
+            exit 1
+          fi
+          cat /tmp/fail-closed.log
+          grep -q "REQUIRE_MIGRATION_OWNER=1, но роль uk_migration_owner не найдена" /tmp/fail-closed.log \
+            || { echo "::error::migration failed, but not for the expected reason"; exit 1; }
+
+      - name: Provision roles (scripts/provision_roles.sql, as superuser)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 \
+            -v migrator_pw=ci_migrator_pw -v bot_pw=ci_bot_pw \
+            -v api_pw=ci_api_pw -v access_pw=ci_access_pw \
+            -f scripts/provision_roles.sql
+
+      # Инъекция эскалации МЕЖДУ первым и вторым прогоном — без неё "Assert
+      # provisioned memberships" ниже проверяет только терминальное состояние
+      # неадверсариального прогона и НЕ является реальным regression-тестом
+      # для 3-й (эскалационной) ветки реконсиляции в provision_roles.sql:
+      # без инъекции эта ветка никогда не находит что revoke'ить, и assertion
+      # прошёл бы зелёным даже если саму 3-ю ветку случайно удалить в будущем.
+      - name: Inject a privilege-escalation attempt (adversarial, before 2nd provision run)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 -c "
+            CREATE ROLE ci_pr7_intruder LOGIN PASSWORD 'x';
+            GRANT uk_migrator TO ci_pr7_intruder;
+          "
+          injected=$(psql -h localhost -U postgres -d uk_management -tAc \
+            "SELECT count(*) FROM pg_auth_members m JOIN pg_roles mr ON mr.oid = m.member WHERE mr.rolname = 'ci_pr7_intruder'")
+          test "$injected" = "1" || { echo "::error::escalation injection itself failed — test fixture is broken"; exit 1; }
+
+      # Второй прогон — конвергентная реконсиляция, не только "создать при
+      # отсутствии": идемпотентность — hard requirement плана, не опция. Это
+      # ЖЕ прогон обязан отозвать инъекцию выше (3-я ветка реконсиляции).
+      - name: Provision roles is idempotent AND revokes the injected escalation (second run)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 \
+            -v migrator_pw=ci_migrator_pw2 -v bot_pw=ci_bot_pw2 \
+            -v api_pw=ci_api_pw2 -v access_pw=ci_access_pw2 \
+            -f scripts/provision_roles.sql
+          remaining=$(psql -h localhost -U postgres -d uk_management -tAc \
+            "SELECT count(*) FROM pg_auth_members m JOIN pg_roles mr ON mr.oid = m.member WHERE mr.rolname = 'ci_pr7_intruder'")
+          test "$remaining" = "0" || { echo "::error::injected escalation membership survived provision_roles.sql re-run — 3rd reconciliation loop regressed"; exit 1; }
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 -c "DROP ROLE ci_pr7_intruder;"
+
+      - name: Assert provisioned memberships (exact set, no ADMIN OPTION, no strangers)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            bad_count int;
+          BEGIN
+            SELECT count(*) INTO bad_count
+            FROM pg_auth_members m
+            JOIN pg_roles gr ON gr.oid = m.roleid
+            JOIN pg_roles mr ON mr.oid = m.member
+            WHERE (mr.rolname IN ('uk_migrator','uk_bot_runtime','uk_api_runtime','uk_access_runtime')
+                   OR gr.rolname IN ('uk_migration_owner','uk_app_rw','access_app_rw'))
+              AND m.admin_option = true;
+            IF bad_count <> 0 THEN
+              RAISE EXCEPTION 'found % membership(s) with ADMIN OPTION still granted', bad_count;
+            END IF;
+
+            SELECT count(*) INTO bad_count
+            FROM pg_auth_members m
+            JOIN pg_roles gr ON gr.oid = m.roleid
+            JOIN pg_roles mr ON mr.oid = m.member
+            WHERE mr.rolname IN ('uk_migrator','uk_bot_runtime','uk_api_runtime','uk_access_runtime')
+              AND NOT (
+                (mr.rolname = 'uk_migrator'       AND gr.rolname = 'uk_migration_owner') OR
+                (mr.rolname = 'uk_bot_runtime'    AND gr.rolname = 'uk_app_rw') OR
+                (mr.rolname = 'uk_api_runtime'    AND gr.rolname = 'uk_app_rw') OR
+                (mr.rolname = 'uk_access_runtime' AND gr.rolname = 'access_app_rw')
+              );
+            IF bad_count <> 0 THEN
+              RAISE EXCEPTION 'found % unexpected membership(s) for runtime/migrator roles', bad_count;
+            END IF;
+
+            SELECT count(*) INTO bad_count
+            FROM pg_auth_members m
+            JOIN pg_roles gr ON gr.oid = m.roleid
+            JOIN pg_roles mr ON mr.oid = m.member
+            WHERE gr.rolname IN ('uk_migration_owner','uk_app_rw','access_app_rw')
+              AND NOT (
+                (gr.rolname = 'uk_migration_owner' AND mr.rolname = 'uk_migrator') OR
+                (gr.rolname = 'uk_app_rw'          AND mr.rolname IN ('uk_bot_runtime','uk_api_runtime')) OR
+                (gr.rolname = 'access_app_rw'      AND mr.rolname = 'uk_access_runtime')
+              );
+            IF bad_count <> 0 THEN
+              RAISE EXCEPTION 'found % stranger member(s) of owner/group roles', bad_count;
+            END IF;
+
+            -- 3-е направление: НИКТО не должен быть членом ни одной из 4
+            -- LOGIN-ролей (иначе `GRANT uk_migrator TO x` дало бы x транзитивный
+            -- SET ROLE до uk_migration_owner — эскалация в обход всей модели,
+            -- которую первые два запроса выше не ловят: они смотрят либо "куда
+            -- входят login-роли", либо "кто входит в owner/group-роли", но не
+            -- "кто входит в сами login-роли").
+            SELECT count(*) INTO bad_count
+            FROM pg_auth_members m
+            JOIN pg_roles gr ON gr.oid = m.roleid
+            WHERE gr.rolname IN ('uk_migrator','uk_bot_runtime','uk_api_runtime','uk_access_runtime');
+            IF bad_count <> 0 THEN
+              RAISE EXCEPTION 'found % member(s) granted INTO a LOGIN role — escalation path', bad_count;
+            END IF;
+          END
+          $$;
+          SQL
+
+      - name: Ownership transfer (scripts/dba_ownership_transfer.sql)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 \
+            -f scripts/dba_ownership_transfer.sql
+
+      # Собственно PR-7: мигратор без DDL-владения (uk_migrator) применяет
+      # baseline через SET SESSION ROLE uk_migration_owner. REQUIRE_MIGRATION_OWNER=1
+      # — сценарий (а) из плана: роль реально провижинена, миграция обязана пройти.
+      - name: Apply migrations as uk_migrator + ACL-reconcile + drift-gate
+        env:
+          DATABASE_URL: "postgresql://uk_migrator:ci_migrator_pw2@localhost:5432/uk_management"
+          REQUIRE_MIGRATION_OWNER: "1"
+        run: |
+          python -m alembic upgrade head
+          python -m uk_management_bot.dbops.acl_reconcile
+          python -m alembic check
+
+      - name: Assert object ownership (SET SESSION ROLE actually took effect)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          owner=$(psql -h localhost -U postgres -d uk_management -tAc \
+            "SELECT string_agg(DISTINCT tableowner, ',') FROM pg_tables WHERE tablename IN ('users','access_events','alembic_version')")
+          echo "owner(s) = [$owner]"
+          test "$owner" = "uk_migration_owner" || { echo "::error::expected sole owner uk_migration_owner, got [$owner]"; exit 1; }
+
+      # ACL-матрица — три группы с тремя разными уровнями привилегий
+      # (0001_prc05_initial_baseline.py:1298-1337), не одна append-only группа.
+      # has_table_privilege учитывает членство/наследование (uk_access_runtime
+      # сама грантов не имеет — они у access_app_rw, INHERIT-роль их наследует).
+      - name: Assert ACL matrix (immut / other / shared / alembic_version)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            -- immut (access_events): SELECT+INSERT, без UPDATE/DELETE
+            IF NOT (has_table_privilege('uk_access_runtime','access_events','SELECT')
+                AND has_table_privilege('uk_access_runtime','access_events','INSERT')
+                AND NOT has_table_privilege('uk_access_runtime','access_events','UPDATE')
+                AND NOT has_table_privilege('uk_access_runtime','access_events','DELETE')) THEN
+              RAISE EXCEPTION 'uk_access_runtime/access_events (immut) ACL mismatch';
+            END IF;
+            -- other (access_gates): полный CRUD
+            IF NOT (has_table_privilege('uk_access_runtime','access_gates','SELECT')
+                AND has_table_privilege('uk_access_runtime','access_gates','INSERT')
+                AND has_table_privilege('uk_access_runtime','access_gates','UPDATE')
+                AND has_table_privilege('uk_access_runtime','access_gates','DELETE')) THEN
+              RAISE EXCEPTION 'uk_access_runtime/access_gates (other) ACL mismatch';
+            END IF;
+            -- shared (users): только SELECT для access_runtime
+            IF NOT (has_table_privilege('uk_access_runtime','users','SELECT')
+                AND NOT has_table_privilege('uk_access_runtime','users','INSERT')) THEN
+              RAISE EXCEPTION 'uk_access_runtime/users (shared) ACL mismatch';
+            END IF;
+            -- shared (users): полный DML для bot/api через uk_app_rw
+            IF NOT (has_table_privilege('uk_bot_runtime','users','UPDATE')
+                AND has_table_privilege('uk_api_runtime','users','UPDATE')) THEN
+              RAISE EXCEPTION 'uk_bot_runtime/uk_api_runtime on users (shared) ACL mismatch';
+            END IF;
+            -- bot/api НЕ имеют доступа к access-домену (immut/other)
+            IF has_table_privilege('uk_bot_runtime','access_events','SELECT')
+                OR has_table_privilege('uk_api_runtime','access_gates','SELECT') THEN
+              RAISE EXCEPTION 'uk_bot_runtime/uk_api_runtime unexpectedly has access-domain privileges';
+            END IF;
+            -- alembic_version carve-out: только SELECT для всех трёх runtime
+            IF has_table_privilege('uk_bot_runtime','alembic_version','INSERT')
+                OR has_table_privilege('uk_api_runtime','alembic_version','UPDATE')
+                OR has_table_privilege('uk_access_runtime','alembic_version','DELETE')
+                OR NOT has_table_privilege('uk_bot_runtime','alembic_version','SELECT') THEN
+              RAISE EXCEPTION 'alembic_version carve-out mismatch';
+            END IF;
+          END
+          $$;
+          SQL
+
+      # Sequences не совпадают по имени с таблицей (identity/serial PK backing
+      # sequence), поэтому не ловятся table-level has_table_privilege выше —
+      # отдельная проверка. Динамически находит sequences access-domain таблиц
+      # через pg_depend (та же логика, что в dba_ownership_transfer.sql и
+      # acl_reconcile.py), не полагаясь на угаданное имя "<table>_id_seq".
+      - name: Assert access-domain sequences are NOT exposed to uk_app_rw
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            excluded_tables text[] := ARRAY[
+              'access_events','access_decisions','manual_openings','access_audit_logs',
+              'parking_zones','parking_zone_yards','access_gates','access_cameras',
+              'access_barriers','edge_controllers','vehicles','vehicle_apartments','access_rules',
+              'access_passes','resident_access_requests','camera_events','controller_sync_events',
+              'barrier_commands','access_entry_confirmations','vehicle_presence_sessions'
+            ];
+            r RECORD;
+            leak_count int := 0;
+            seq_count int := 0;
+          BEGIN
+            -- deptype IN ('a', 'i'): 'a' = classic SERIAL (2 из 20 таблиц
+            -- здесь), 'i' = нативная identity-колонка GENERATED ... AS
+            -- IDENTITY (17 из 20 таблиц здесь). Фильтр только по 'a' — уже
+            -- эмпирически подтверждённая, реально произошедшая регрессия:
+            -- находил лишь 2 sequences и MOLча пропускал остальные 17
+            -- (включая access_events_id_seq), при этом сам "seq_count = 0"
+            -- guard ниже это не ловил (2 <> 0). Порог ужесточён до "< 15" —
+            -- заведомо выше сломанного случая (2), заведомо ниже реального (19).
+            FOR r IN
+              SELECT s.relname
+              FROM pg_class t
+              JOIN pg_depend d ON d.refobjid = t.oid AND d.deptype IN ('a', 'i')
+              JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
+              WHERE t.relname = ANY(excluded_tables)
+            LOOP
+              seq_count := seq_count + 1;
+              IF has_sequence_privilege('uk_bot_runtime', r.relname, 'SELECT')
+                  OR has_sequence_privilege('uk_api_runtime', r.relname, 'SELECT')
+                  OR has_sequence_privilege('uk_access_runtime', r.relname, 'USAGE') THEN
+                RAISE WARNING 'access-domain sequence % leaked to uk_app_rw', r.relname;
+                leak_count := leak_count + 1;
+              END IF;
+            END LOOP;
+            IF seq_count < 15 THEN
+              RAISE EXCEPTION 'found only % access-domain sequence(s) via pg_depend (expected ~19) — discovery mechanism is broken, not a real pass', seq_count;
+            END IF;
+            IF leak_count <> 0 THEN
+              RAISE EXCEPTION '% of % access-domain sequence(s) leaked to uk_app_rw', leak_count, seq_count;
+            END IF;
+          END
+          $$;
+          SQL
+
+      - name: Assert schema USAGE granted, CREATE not granted
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT (has_schema_privilege('uk_bot_runtime','public','USAGE')
+                AND has_schema_privilege('uk_api_runtime','public','USAGE')
+                AND has_schema_privilege('uk_access_runtime','public','USAGE')) THEN
+              RAISE EXCEPTION 'runtime role missing schema USAGE';
+            END IF;
+            IF has_schema_privilege('uk_bot_runtime','public','CREATE')
+                OR has_schema_privilege('uk_api_runtime','public','CREATE')
+                OR has_schema_privilege('uk_access_runtime','public','CREATE') THEN
+              RAISE EXCEPTION 'runtime role unexpectedly has CREATE on schema public';
+            END IF;
+          END
+          $$;
+          SQL
+
+      # Часовой: runtime-роли не могут ни создавать объекты, ни эскалировать
+      # до owner'а — если хотя бы одна команда пройдёт, шаг обязан упасть.
+      - name: Assert runtime roles cannot create/escalate
+        env:
+          PGPASSWORD: ci_bot_pw2
+        run: |
+          set +e
+          out=$(psql -h localhost -U uk_bot_runtime -d uk_management -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE pr7_escalation_probe (id int)" 2>&1)
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            echo "::error::uk_bot_runtime was able to CREATE TABLE — least-privilege broken"
+            exit 1
+          fi
+          echo "$out" | grep -qi "permission denied" || { echo "::error::unexpected failure: $out"; exit 1; }
+
+          set +e
+          out=$(psql -h localhost -U uk_bot_runtime -d uk_management -v ON_ERROR_STOP=1 \
+            -c "SET ROLE uk_migration_owner" 2>&1)
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            echo "::error::uk_bot_runtime was able to SET ROLE uk_migration_owner — escalation possible"
+            exit 1
+          fi
 
   images-build:
     name: images-build (docker)

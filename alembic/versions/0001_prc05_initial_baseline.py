@@ -1294,7 +1294,19 @@ def upgrade() -> None:
     # --- PRC-05: роль access_app_rw + GRANT'ы (консолидировано из 031/034/035,
     # сверено с фактическими грантами прода). Идемпотентно, устойчиво к NO-CREATEROLE
     # (uk_bot): если роль не создать — гранты пропускаются (fresh-install провизионит
-    # роль через uk_admin ДО upgrade, см. B0). downgrade REVOKE'ит, но НЕ дропает роль. ---
+    # роль через uk_admin ДО upgrade, см. B0). downgrade REVOKE'ит, но НЕ дропает роль.
+    #
+    # SSOT-предупреждение (PR-7 / F-01, добавлено 2026-07-15, comment-only —
+    # эта миграция уже применена на обоих продах, исполняемый SQL не менялся):
+    # массивы `immut`/`other` ниже — единственный источник истины для списка
+    # access-domain таблиц. Он ПРОДУБЛИРОВАН (по имени, руками) в
+    # `scripts/dba_ownership_transfer.sql` (bulk-грант ownership-transfer,
+    # исключает эти таблицы + их sequences через pg_depend) и в
+    # `uk_management_bot/dbops/acl_reconcile.py` (`ACCESS_DOMAIN_TABLES`,
+    # пост-миграционный revoke). Добавляешь новую access-domain таблицу сюда
+    # (или в будущую миграцию 004+ с тем же паттерном) — обнови ОБА файла,
+    # иначе новая таблица тихо получит блáнкет-грант `uk_app_rw` (полный CRUD
+    # боту/API на то, что должно быть видно только через `access_app_rw`). ---
     op.execute("""
     DO $$
     DECLARE
