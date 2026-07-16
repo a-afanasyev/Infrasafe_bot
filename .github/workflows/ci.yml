@@ -644,6 +644,58 @@ jobs:
           $$;
           SQL
 
+      - name: Assert role attributes (rolsuper/createdb/createrole/replication/bypassrls, all 7 roles)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Раньше только старый uk_bot (B0-джоба, :430) проверялся на эти
+          # атрибуты — ни одна из 7 ролей PR-7 не проверялась напрямую здесь,
+          # только через поведенческие пробы (has_*_privilege, CREATE
+          # TABLE/SET ROLE probe для одного uk_bot_runtime). Регрессия вида
+          # "скопипастили ALTER ROLE и забыли снять SUPERUSER/CREATEROLE на
+          # uk_api_runtime" прошла бы мимо всего остального гейта — эта
+          # проверка ловит её напрямую по каталогу, не поведенчески.
+          psql -h localhost -U postgres -d uk_management -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            r RECORD;
+            bad_count int := 0;
+          BEGIN
+            FOR r IN
+              SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication,
+                     rolbypassrls, rolcanlogin, rolinherit
+              FROM pg_roles
+              WHERE rolname IN (
+                'uk_migration_owner', 'uk_app_rw', 'access_app_rw',
+                'uk_migrator', 'uk_bot_runtime', 'uk_api_runtime', 'uk_access_runtime'
+              )
+            LOOP
+              IF r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls THEN
+                RAISE WARNING 'role % has an unexpected elevated attribute (super=%,createdb=%,createrole=%,replication=%,bypassrls=%)',
+                  r.rolname, r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolreplication, r.rolbypassrls;
+                bad_count := bad_count + 1;
+              END IF;
+              IF r.rolname = 'uk_migrator' AND NOT (r.rolcanlogin AND NOT r.rolinherit) THEN
+                RAISE WARNING 'uk_migrator must be LOGIN NOINHERIT (canlogin=%,inherit=%)', r.rolcanlogin, r.rolinherit;
+                bad_count := bad_count + 1;
+              END IF;
+              IF r.rolname IN ('uk_bot_runtime', 'uk_api_runtime', 'uk_access_runtime')
+                 AND NOT (r.rolcanlogin AND r.rolinherit) THEN
+                RAISE WARNING '% must be LOGIN INHERIT (canlogin=%,inherit=%)', r.rolname, r.rolcanlogin, r.rolinherit;
+                bad_count := bad_count + 1;
+              END IF;
+              IF r.rolname IN ('uk_migration_owner', 'uk_app_rw', 'access_app_rw') AND r.rolcanlogin THEN
+                RAISE WARNING '% must be NOLOGIN (canlogin=%)', r.rolname, r.rolcanlogin;
+                bad_count := bad_count + 1;
+              END IF;
+            END LOOP;
+            IF bad_count <> 0 THEN
+              RAISE EXCEPTION 'role-attribute assertion failed for % role(s), see warnings above', bad_count;
+            END IF;
+          END
+          $$;
+          SQL
+
       - name: Ownership transfer (scripts/dba_ownership_transfer.sql)
         env:
           PGPASSWORD: postgres
@@ -802,30 +854,42 @@ jobs:
 
       # Часовой: runtime-роли не могут ни создавать объекты, ни эскалировать
       # до owner'а — если хотя бы одна команда пройдёт, шаг обязан упасть.
+      # Раньше проба гоняла ТОЛЬКО uk_bot_runtime — regressие вида "забыли
+      # NOINHERIT на uk_api_runtime" не поймала бы себя ни этим шагом, ни
+      # has_*_privilege-проверками выше (те проверяют CREATE на схему, не сам
+      # факт SET ROLE). Теперь проба реально исполняется под всеми тремя.
       - name: Assert runtime roles cannot create/escalate
-        env:
-          PGPASSWORD: ci_bot_pw2
         run: |
-          set +e
-          out=$(psql -h localhost -U uk_bot_runtime -d uk_management -v ON_ERROR_STOP=1 \
-            -c "CREATE TABLE pr7_escalation_probe (id int)" 2>&1)
-          rc=$?
-          set -e
-          if [ $rc -eq 0 ]; then
-            echo "::error::uk_bot_runtime was able to CREATE TABLE — least-privilege broken"
-            exit 1
-          fi
-          echo "$out" | grep -qi "permission denied" || { echo "::error::unexpected failure: $out"; exit 1; }
+          declare -A role_pw=(
+            [uk_bot_runtime]=ci_bot_pw2
+            [uk_api_runtime]=ci_api_pw2
+            [uk_access_runtime]=ci_access_pw2
+          )
+          for role in uk_bot_runtime uk_api_runtime uk_access_runtime; do
+            export PGPASSWORD="${role_pw[$role]}"
 
-          set +e
-          out=$(psql -h localhost -U uk_bot_runtime -d uk_management -v ON_ERROR_STOP=1 \
-            -c "SET ROLE uk_migration_owner" 2>&1)
-          rc=$?
-          set -e
-          if [ $rc -eq 0 ]; then
-            echo "::error::uk_bot_runtime was able to SET ROLE uk_migration_owner — escalation possible"
-            exit 1
-          fi
+            set +e
+            out=$(psql -h localhost -U "$role" -d uk_management -v ON_ERROR_STOP=1 \
+              -c "CREATE TABLE pr7_escalation_probe_${role} (id int)" 2>&1)
+            rc=$?
+            set -e
+            if [ $rc -eq 0 ]; then
+              echo "::error::$role was able to CREATE TABLE — least-privilege broken"
+              exit 1
+            fi
+            echo "$out" | grep -qi "permission denied" || { echo "::error::unexpected failure ($role): $out"; exit 1; }
+
+            set +e
+            out=$(psql -h localhost -U "$role" -d uk_management -v ON_ERROR_STOP=1 \
+              -c "SET ROLE uk_migration_owner" 2>&1)
+            rc=$?
+            set -e
+            if [ $rc -eq 0 ]; then
+              echo "::error::$role was able to SET ROLE uk_migration_owner — escalation possible"
+              exit 1
+            fi
+            echo "$out" | grep -qi "permission denied" || { echo "::error::unexpected failure ($role): $out"; exit 1; }
+          done
 
   images-build:
     name: images-build (docker)

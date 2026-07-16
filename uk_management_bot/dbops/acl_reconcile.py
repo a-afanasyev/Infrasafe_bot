@@ -34,9 +34,25 @@ default-privilege, а не до него):
 (`uk_migrator` — NOINHERIT, не пользуется привилегиями owner'а автоматически).
 """
 import os
+import re
 import sys
 
 from sqlalchemy import create_engine, pool, text
+
+# Валидация идентификаторов перед f-string интерполяцией в REVOKE ниже (не
+# параметризуемых через bind — DDL не принимает :param на именах объектов).
+# `table` берётся из ACCESS_DOMAIN_TABLES (хардкод-константа), `seq_name` — из
+# живого pg_class-запроса; оба уже гарантированно валидные identifiers на
+# практике, но explicit-проверка закрывает теоретическую дыру (identifier с
+# embedded-кавычками не заэкранирован) без convoluted DO $$ EXECUTE format()
+# с параметрами (DO-блоки не принимают bind-параметры напрямую).
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_identifier(name: str) -> str:
+    if not _SAFE_IDENTIFIER_RE.match(name):
+        raise ValueError(f"acl_reconcile: unsafe identifier rejected: {name!r}")
+    return name
 
 # Гейт идентичен alembic/env.py: там, где uk_migration_owner ещё не
 # провижинена (dev/CI без provision-roles), helper — no-op, не ошибка.
@@ -123,7 +139,8 @@ def main() -> None:
                     text("SELECT to_regclass('public.' || :t) IS NOT NULL"), {"t": table}
                 ).scalar()
                 if exists:
-                    conn.execute(text(f'REVOKE ALL ON "{table}" FROM uk_app_rw'))
+                    safe_table = _validate_identifier(table)
+                    conn.execute(text(f'REVOKE ALL ON "{safe_table}" FROM uk_app_rw'))
 
             # Их sequences — тот же default-privilege leak, что и таблицы (см.
             # docstring п.2), но sequences не совпадают по имени с таблицей, их
@@ -132,7 +149,8 @@ def main() -> None:
                 text(_SEQUENCES_FOR_TABLES_SQL), {"tables": ACCESS_DOMAIN_TABLES}
             ).fetchall()
             for (seq_name,) in seq_rows:
-                conn.execute(text(f'REVOKE ALL ON "{seq_name}" FROM uk_app_rw'))
+                safe_seq = _validate_identifier(seq_name)
+                conn.execute(text(f'REVOKE ALL ON "{safe_seq}" FROM uk_app_rw'))
 
             conn.commit()
             print(

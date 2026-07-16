@@ -11,9 +11,13 @@
 #   4. DATABASE_URL/REDIS_URL ссылаются на uk-postgres/uk-redis (уникальные
 #      container_name) — детерминированный DNS, без риска попасть в чужую БД.
 #   5. frontend собирается с VITE_BOT_USERNAME=profkbot (Telegram login-widget).
-#   6. init_postgres.sh НЕ монтируется: profk_bot — суперюзер-владелец БД, его гранты
-#      избыточны; расширения ставит init_postgres.sql. (Баг дедлока в .sh пофикшен
-#      отдельно, но здесь скрипт всё равно не нужен.)
+#   6. init_postgres.sh НЕ монтируется — расширения ставит init_postgres.sql.
+#      (PR-7/F-01, раскатан 2026-07-15: profk_bot БОЛЬШЕ НЕ владелец БД — owner
+#      теперь uk_migration_owner, profk_bot и CREATEROLE лишился ещё раньше.
+#      Этот пункт исторически объяснял избыточность через "profk_bot — суперюзер-
+#      владелец", что с 2026-07-15 неверно; сам вывод — не монтировать .sh —
+#      остаётся в силе по другой причине: весь role-wiring теперь идёт через
+#      provision-roles/acl_reconcile, не через init-скрипт.)
 # Контракт имён/портов InfraSafe соблюдён: uk-management-api:8080, uk-access-api:8080,
 # uk-frontend:80, uk-postgres.
 
