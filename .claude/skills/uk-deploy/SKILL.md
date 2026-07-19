@@ -15,7 +15,7 @@ description: Use when deploying UK Management System to prod, running Alembic mi
 
 ## ARCH-106 Phase 1 — Doppler cutover (секреты production core stack)
 
-`app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` получают секреты (`BOT_TOKEN`, `ADMIN_PASSWORD`, `JWT_SECRET`, `INVITE_SECRET`, `ACCESS_*`, `MEDIA_*`, `REDIS_PASSWORD`, `RESOURCE_*` и т.п.) из Doppler через `doppler run --`, не из `.env`. Полный план (секрет × сервис × host матрица, bootstrap, guard'ы, rollback) — `/Users/andreyafanasyev/.claude/plans/zesty-hugging-wozniak.md`.
+`app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` получают секреты (`BOT_TOKEN`, `ADMIN_PASSWORD`, `JWT_SECRET`, `INVITE_SECRET`, `ACCESS_*`, `MEDIA_*`, `REDIS_PASSWORD`, `RESOURCE_*` и т.п.) из Doppler через `doppler run --`, не из `.env`. Статус, охват и verifier-итог — `docs/audit/2026-05-20-backlog.md`, запись ARCH-106 (Phase 1 закрыт 2026-07-19, Phase 2 открыт).
 
 **Вне Phase 1** (остаются в `.env`/media_service/.env): `INFRASAFE_WEBHOOK_URL`/`ENABLED` (не секреты), `*_NEXT`/`*_USE_NEXT_SECRET` (webhook dual-secret rotation), динамические `ACCESS_DEVICE_SECRET__<ref>`, весь `media_service/.env` (`MEDIA_BOT_TOKEN` и т.п.).
 
@@ -49,7 +49,29 @@ doppler run --project uk-management --config profk -- docker compose -f docker-c
 doppler run --project uk-management --config profk -- docker compose -f docker-compose.profk.yml up -d --no-deps --wait --wait-timeout 120 app
 ```
 
-`migrate`-шаг ОБЯЗАТЕЛЕН перед каждым `up` — иначе preflight уронит контейнер `exit 1` при малейшем schema drift. `--no-deps` — обязателен на каждой команде: без него Compose вправе (пере)создать `postgres`/`redis`/`resource-postgres` (stateful, не в routine-деплое — см. план). `redis`/`resource-postgres` в этот routine НЕ входят никогда — их ротация отдельная координированная процедура.
+`migrate`-шаг ОБЯЗАТЕЛЕН перед каждым `up` — иначе preflight уронит контейнер `exit 1` при малейшем schema drift. `--no-deps` — обязателен на каждой команде: без него Compose вправе (пере)создать `postgres`/`redis`/`resource-postgres` (stateful, не в routine-деплое). `redis`/`resource-postgres` в этот routine НЕ входят никогда — их ротация отдельная координированная процедура. ⚠️ После очистки `.env` ЛЮБАЯ compose-команда на прод-хосте без `doppler run --` падает на `:?`-интерполяции — это желаемый fail-fast, не чинить возвратом секретов в `.env`.
+
+### resource-api / resource-worker — отдельный осознанный шаг (не в общей пачке)
+
+Обновлять только когда менялся их код/конфиг, отдельной командой после core-сервисов:
+
+```bash
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose [-f docker-compose.profk.yml] build resource-api resource-worker
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose [-f docker-compose.profk.yml] up -d --no-deps --wait --wait-timeout 120 resource-api resource-worker
+```
+
+`--no-deps` здесь критичен вдвойне: `resource-postgres` — stateful, Postgres игнорирует новый `POSTGRES_PASSWORD` при существующем volume, поэтому расхождение Doppler ↔ реальный пароль БД тихо ломает клиентов. Если `RESOURCE_*`-значения в Doppler менялись — перед `up` сверить равенство с работающим контейнером (printenv-паттерн, наружу только OK/FAIL):
+
+```bash
+doppler run --project uk-management --config <cfg> -- sh -c '
+  for v in RESOURCE_SESSION_SECRET RESOURCE_SERVICE_TOKEN; do
+    [ "$(docker exec uk-resource-api printenv "$v" 2>/dev/null)" = "$(printenv "$v")" ] \
+      && echo "$v OK" || echo "$v FAIL — не деплоить, сначала выяснить какая сторона права"
+  done
+'
+```
 
 **Ротация секрета в Doppler не применяется сама** — только следующий `doppler run -- docker compose up -d <service>` подхватит новое значение (config-hash изменится, Compose пересоздаст контейнер).
 

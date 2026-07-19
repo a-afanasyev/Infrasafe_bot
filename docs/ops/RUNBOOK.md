@@ -36,33 +36,50 @@
 
 ## 2. Каноничная выкатка на прод
 
-Выполнять из корня репозитория на прод-хосте. Оба compose-файла указываются в каждой команде.
+Выполнять из корня репозитория на прод-хосте. Оба compose-файла указываются в каждой команде. **ARCH-106 Phase 1: `.env` на прод-хостах очищен от секретов — ЛЮБАЯ compose-команда без обёртки `doppler run --` упадёт на `:?`-интерполяции** (это желаемый fail-fast). `<cfg>` = `profk` или `infrasafe` — по хосту.
 
 ```bash
+# 0. Обязательное окружение (PR-7 provision-roles интерполируется на уровне файла)
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+
 # 1. Забрать код
 git pull --ff-only
 
-# 2. Пересобрать образы (bot/api/access-api/frontend/media-service)
-docker compose -f docker-compose.yml -f docker-compose.media.yml build
+# 2. Пересобрать образы (bot/api/access-api/migrate/frontend/media-service)
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml build
 
-# 3. Поднять с пересозданием контейнеров, чтобы подхватить .env и новые образы
-docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate
+# 3. Миграции — ОБЯЗАТЕЛЬНЫЙ шаг перед up (см. §4)
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm --no-deps --name uk-migrate migrate
 
-# 4. Убедиться, что миграции применились (см. §4)
+# 4. Поднять core-сервисы (--no-deps: не трогать stateful postgres/redis/resource-postgres)
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --wait --wait-timeout 120 api access-api app
+
+# 5. Остальное по необходимости (frontend/media-service — если менялись)
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps frontend media-service
+
+# 6. Убедиться, что миграции применились (см. §4)
 docker logs uk-management-api 2>&1 | grep "Migrations complete"
 ```
 
 Критично:
 - **НИКОГДА не использовать `--remove-orphans`.** На прод-хосте живут контейнеры вне этого compose-набора (`uk-caddy`, и при рассинхроне — `uk-media-service`); `--remove-orphans` их снесёт.
-- **`--force-recreate` обязателен**, чтобы контейнер перечитал `.env` (иначе изменённые переменные не подхватятся при `up -d` без пересоздания).
-- **ARCH-106 Phase 1 (Doppler):** `app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` получают секреты из Doppler, не из `.env` — каждая команда `build`/`run`/`up` из этого раздела для этих сервисов должна идти через `doppler run --project uk-management --config <profk|infrasafe> -- ...` и с `--no-deps` (не трогать `postgres`/`redis`/`resource-postgres` — они вне routine-Doppler-деплоя). Точные wrapped-команды и bootstrap Doppler на хосте → `.claude/skills/uk-deploy/SKILL.md`.
+- **`--no-deps` обязателен на каждом `run`/`up`** — без него Compose вправе (пере)создать stateful `postgres`/`redis`/`resource-postgres`; они вне routine-деплоя, их ротация — отдельная координированная процедура (см. `.claude/skills/uk-deploy/SKILL.md`).
+- **Секреты подхватываются обычным `up -d`**: Doppler-значения входят в `environment:` и меняют config-hash — Compose пересоздаёт контейнер сам. `--force-recreate` нужен только если изменились НЕсекретные значения в `.env` (env_file не входит в config-hash) — тогда добавить его к шагу 4/5 точечно.
+- **`resource-api`/`resource-worker` — не в общей пачке**: отдельный осознанный шаг, процедура и pre-check → `.claude/skills/uk-deploy/SKILL.md`.
+- Bootstrap Doppler CLI на новом хосте (service-token, scoped на deploy-каталог) → `.claude/skills/uk-deploy/SKILL.md`.
 - Сборка/деплой по SSH — запускать в detached/`nohup`-режиме, чтобы обрыв сессии не прервал `build` (см. память по detached-build).
 - Точечная пересборка одного сервиса (например, только фронт):
   ```bash
-  docker compose -f docker-compose.yml -f docker-compose.media.yml build uk-frontend  # имя сервиса: frontend
-  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate frontend
+  doppler run --project uk-management --config <cfg> -- \
+    docker compose -f docker-compose.yml -f docker-compose.media.yml build frontend
+  doppler run --project uk-management --config <cfg> -- \
+    docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --force-recreate frontend
   ```
-  Проверить имя сервиса (`frontend`, не `uk-frontend`) — команды compose оперируют именами сервисов, а не `container_name`.
+  Проверить имя сервиса (`frontend`, не `uk-frontend`) — команды compose оперируют именами сервисов, а не `container_name`. Doppler-обёртка нужна даже фронту: `:?`-гарды интерполируются на уровне всего файла.
 
 ---
 
@@ -73,9 +90,12 @@ docker logs uk-management-api 2>&1 | grep "Migrations complete"
 git log --oneline -n 10          # найти предыдущий рабочий SHA
 git checkout <good-sha>          # или git reset --hard <good-sha> — ТОЛЬКО с подтверждением владельца
 
-# 2. Пересобрать и пересоздать
-docker compose -f docker-compose.yml -f docker-compose.media.yml build
-docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate
+# 2. Пересобрать и пересоздать (doppler-обёртка обязательна — .env без секретов, ARCH-106)
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml build
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --force-recreate api access-api app
 ```
 
 Важно про откат миграций:
