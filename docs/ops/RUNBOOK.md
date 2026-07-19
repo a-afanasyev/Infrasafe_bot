@@ -55,6 +55,7 @@ docker logs uk-management-api 2>&1 | grep "Migrations complete"
 Критично:
 - **НИКОГДА не использовать `--remove-orphans`.** На прод-хосте живут контейнеры вне этого compose-набора (`uk-caddy`, и при рассинхроне — `uk-media-service`); `--remove-orphans` их снесёт.
 - **`--force-recreate` обязателен**, чтобы контейнер перечитал `.env` (иначе изменённые переменные не подхватятся при `up -d` без пересоздания).
+- **ARCH-106 Phase 1 (Doppler):** `app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` получают секреты из Doppler, не из `.env` — каждая команда `build`/`run`/`up` из этого раздела для этих сервисов должна идти через `doppler run --project uk-management --config <profk|infrasafe> -- ...` и с `--no-deps` (не трогать `postgres`/`redis`/`resource-postgres` — они вне routine-Doppler-деплоя). Точные wrapped-команды и bootstrap Doppler на хосте → `.claude/skills/uk-deploy/SKILL.md`.
 - Сборка/деплой по SSH — запускать в detached/`nohup`-режиме, чтобы обрыв сессии не прервал `build` (см. память по detached-build).
 - Точечная пересборка одного сервиса (например, только фронт):
   ```bash

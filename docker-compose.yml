@@ -40,12 +40,25 @@ services:
       # ./.secrets/roles/.env.bot (env_file выше) — не дублировать здесь:
       # environment: имеет более высокий приоритет, чем env_file, и молча
       # перезаписал бы role-специфичный DATABASE_URL общим POSTGRES_USER/PASSWORD.
-      # Подключение к Redis
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      # Подключение к Redis (ARCH-106: REDIS_URL строится из REDIS_PASSWORD, не берётся
+      # целиком из .env — иначе Doppler-cutover REDIS_PASSWORD не давал бы эффекта здесь)
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
 
       # Настройки логирования
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+
+      # ARCH-106 (Doppler cutover, Phase 1): секреты приходят из Doppler через
+      # `doppler run -- docker compose ...` (см. .claude/skills/uk-deploy/SKILL.md), не из
+      # env_file(.env) — :? делает отсутствие явной ошибкой вместо тихого пустого значения.
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
+      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # Медиа-клиент бота (uk_management_bot/integrations/__init__.py) — опционален по коду
+      # (settings.py: os.getenv(..., "")), fallback MEDIA_SERVICE_API_KEY || MEDIA_API_KEY:
+      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
+      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
 
     # Зависимости от других сервисов
     # Приложение запустится только после готовности БД и Redis
@@ -99,7 +112,8 @@ services:
       # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
       # ./.secrets/roles/.env.api (env_file выше), под ролью uk_api_runtime —
       # не дублировать здесь (см. комментарий у сервиса app).
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      # ARCH-106: REDIS_URL строится из REDIS_PASSWORD (Doppler), не берётся целиком из .env.
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       # REDIS_PUBSUB_URL intentionally NOT set here — settings.REDIS_PUBSUB_URL_RESOLVED
       # derives it from REDIS_URL (preserving auth). Hardcoding here without password
       # broke pubsub when REDIS_PASSWORD was enabled. See PR-B in spec
@@ -111,6 +125,18 @@ services:
       - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
       - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
       - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
+      # ARCH-106 (Doppler cutover, Phase 1) — обязательные (см. app для объяснения :?):
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
+      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # Опциональные (settings.py default ""), функционально нужны только api:
+      - HEALTH_METRICS_TOKEN=${HEALTH_METRICS_TOKEN:-}
+      - INFRASAFE_INVENTORY_TOKEN=${INFRASAFE_INVENTORY_TOKEN:-}
+      - UK_WEBHOOK_SECRET=${UK_WEBHOOK_SECRET:-}
+      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:-}
+      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
+      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
     ports:
       - "127.0.0.1:8085:8080"
     depends_on:
@@ -158,7 +184,8 @@ services:
       # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
       # ./.secrets/roles/.env.access (env_file выше), под ролью
       # uk_access_runtime — не дублировать здесь.
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      # ARCH-106: REDIS_URL строится из REDIS_PASSWORD (Doppler), не берётся целиком из .env.
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       # Multi-worker-безопасные backend'ы (§9.1 anti-replay, §9.6 live-события):
@@ -167,21 +194,31 @@ services:
       # видит событие чужого воркера. Значения не секретны — заданы прямо здесь.
       - ACCESS_NONCE_BACKEND=redis
       - ACCESS_EVENT_BROKER=redis
-      # Обязательные секреты домена (код падает RuntimeError при их отсутствии):
+      # Обязательные секреты домена (код падает RuntimeError при их отсутствии) — ARCH-106
+      # (Doppler cutover, Phase 1): значение приходит из Doppler через `doppler run --`,
+      # :? делает отсутствие явной ошибкой при деплое, а не рантайм-RuntimeError позже:
       #   ACCESS_SNAPSHOT_SIGNING_SEED — приватный сид Ed25519 подписи offline-snapshot (§8.2);
       #   ACCESS_DEVICE_HMAC_SEED      — сид пер-устройственного HMAC device-auth (§9.1);
       #   ACCESS_PHOTO_URL_SECRET      — секрет HMAC-подписи signed-URL фото (§11);
       #   ACCESS_CODE_SECRET           — секрет HMAC одноразовых гостевых кодов (§9.3).
-      # Берутся из .env через env_file выше (общий дефолт в коде запрещён §9.1/§11);
-      # как сгенерировать — см. env.example. Здесь НЕ дублируем интерполяцией, чтобы
-      # пустой shell-var не перетёр значение из .env.
+      - ACCESS_SNAPSHOT_SIGNING_SEED=${ACCESS_SNAPSHOT_SIGNING_SEED:?ACCESS_SNAPSHOT_SIGNING_SEED is required — set it in Doppler (project uk-management)}
+      - ACCESS_DEVICE_HMAC_SEED=${ACCESS_DEVICE_HMAC_SEED:?ACCESS_DEVICE_HMAC_SEED is required — set it in Doppler (project uk-management)}
+      - ACCESS_PHOTO_URL_SECRET=${ACCESS_PHOTO_URL_SECRET:?ACCESS_PHOTO_URL_SECRET is required — set it in Doppler (project uk-management)}
+      - ACCESS_CODE_SECRET=${ACCESS_CODE_SECRET:?ACCESS_CODE_SECRET is required — set it in Doppler (project uk-management)}
+      # Общие обязательные секреты (settings.py, см. app/api) — access-api их транзитивно
+      # импортирует через _docs_enabled() (ARCH-106 план, «Ключевая находка»):
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
+      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
       #
       # Интеграция с медиа-сервисом (§11, §10.2): фото проезда грузятся в отдельный
       # канал ВНЕ пути решения и отдаются по media://-ссылке. Клиент ленивый —
       # access-api стартует и без этих переменных (ошибка только при работе с фото).
       #   MEDIA_SERVICE_URL — базовый URL медиа-сервиса (compose-DNS, порт 8000);
-      #   MEDIA_API_KEY     — X-API-Key медиа-сервиса (секрет → из .env, не хардкод).
+      #   MEDIA_API_KEY     — X-API-Key медиа-сервиса (Doppler, опционален по коду).
       - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
+      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
     # Отдельный host-порт (uk-management-api занимает 8085); контейнерный порт 8080.
     # Дефолт 8087: на shared-деплое с InfraSafe порт 8086 занят influxdb. Edge
     # ходит в access-api:8080 по docker-сети, host-порт нужен лишь для localhost.
@@ -312,6 +349,14 @@ services:
       # Только migrate и этот job обязаны требовать fail-closed переключение
       # роли — api/app/access-api эту переменную не используют (не гоняют Alembic).
       - REQUIRE_MIGRATION_OWNER=1
+      # ARCH-106 (Doppler cutover, Phase 1): migrate транзитивно импортирует
+      # uk_management_bot.config.settings через alembic/env.py → database/session.py —
+      # эта эагерная production-валидация требует те же 4 переменные, что app/api/access-api
+      # (см. ARCH-106 план, «Ключевая находка» — полная развязка вне охвата Phase 1):
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
+      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
 
   # Redis для кэширования и rate limiting
   redis:
@@ -374,7 +419,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${RESOURCE_POSTGRES_USER:-resource}
-      - POSTGRES_PASSWORD=${RESOURCE_POSTGRES_PASSWORD:?set RESOURCE_POSTGRES_PASSWORD in .env}
+      - POSTGRES_PASSWORD=${RESOURCE_POSTGRES_PASSWORD:?RESOURCE_POSTGRES_PASSWORD is required — set it in Doppler (project uk-management)}
       - POSTGRES_DB=${RESOURCE_POSTGRES_DB:-resource_accounting}
     volumes:
       - resource_pg_data:/var/lib/postgresql/data
@@ -393,8 +438,8 @@ services:
     environment:
       - RESOURCE_DATABASE_URL=postgresql+psycopg2://${RESOURCE_POSTGRES_USER:-resource}:${RESOURCE_POSTGRES_PASSWORD}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
       - RESOURCE_ENVIRONMENT=production
-      - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET:?set RESOURCE_SESSION_SECRET in .env}
-      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:?shared with UK backend}
+      - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET:?RESOURCE_SESSION_SECRET is required — set it in Doppler (project uk-management)}
+      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:?RESOURCE_SERVICE_TOKEN is required (shared with UK backend) — set it in Doppler (project uk-management)}
       - RESOURCE_COOKIE_SECURE=true
       - RESOURCE_DEV_AUTH_ENABLED=false
       - RESOURCE_RATE_LIMIT_ENABLED=true
@@ -425,8 +470,10 @@ services:
     environment:
       - RESOURCE_DATABASE_URL=postgresql+psycopg2://${RESOURCE_POSTGRES_USER:-resource}:${RESOURCE_POSTGRES_PASSWORD}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
       - RESOURCE_ENVIRONMENT=production
-      - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET}
-      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN}
+      # ARCH-106: resource-worker раньше не имел :?-гарда на эти два — тихая пустая
+      # подстановка вместо явной ошибки при отсутствующем секрете (см. план, категория A).
+      - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET:?RESOURCE_SESSION_SECRET is required — set it in Doppler (project uk-management)}
+      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:?RESOURCE_SERVICE_TOKEN is required (shared with UK backend) — set it in Doppler (project uk-management)}
       - RESOURCE_COOKIE_SECURE=true
       - RESOURCE_DEV_AUTH_ENABLED=false
     depends_on:
