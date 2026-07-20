@@ -92,6 +92,37 @@ doppler run --project uk-management --config <cfg> -- sh -c '
 
 **Ротация секрета в Doppler не применяется сама** — только следующий `doppler run -- docker compose up -d <service>` подхватит новое значение (config-hash изменится, Compose пересоздаст контейнер).
 
+### ⚠️ Одноразово перед Phase 2 rollout: выделенная DB-роль `uk_media_owner`
+
+Шаг 0 (2026-07-21) показал: media на ОБОИХ хостах подключается к `uk_media` под ролью
+основной БД (`profk_bot` на profk, `uk_bot` на infrasafe), и эти роли владеют 4 таблицами +
+4 sequences в `uk_media`. Пароль этих ролей — в `.env.postgres` (PR-7 carve-out). Если
+положить `MEDIA_DATABASE_URL` в Doppler под тем же паролем — источников истины станет два, и
+ротация роли через `provision-roles` тихо сломает media. Поэтому перед cutover media
+переводится на выделенную least-privilege роль, чей пароль живёт ТОЛЬКО в Doppler.
+
+Выполнять на КАЖДОМ хосте под суперюзером (`docker exec -it uk-postgres psql -U uk_admin -d uk_media`).
+`REASSIGN OWNED` НЕ использовать — он заденет глобальные объекты (основную БД роли); только
+точечные `ALTER`:
+
+```sql
+-- проверить, не создана ли уже
+SELECT rolname FROM pg_roles WHERE rolname='uk_media_owner';
+CREATE ROLE uk_media_owner LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+\password uk_media_owner   -- пароль: openssl rand -hex 24; сгенерировать, вставить, СРАЗУ в Doppler как часть MEDIA_DATABASE_URL
+ALTER DATABASE uk_media OWNER TO uk_media_owner;
+GRANT ALL ON SCHEMA public TO uk_media_owner;   -- для create_all будущих таблиц
+-- 4 таблицы + 4 sequences (индексы следуют за таблицей автоматически);
+-- имена подставить из шага 0, здесь текущий набор media:
+ALTER TABLE media_files, media_tags, media_channels, media_upload_sessions OWNER TO uk_media_owner;
+ALTER SEQUENCE media_files_id_seq, media_tags_id_seq, media_channels_id_seq, media_upload_sessions_id_seq OWNER TO uk_media_owner;
+```
+
+Верификация под новой ролью:
+`SELECT current_user;` → `uk_media_owner`; `CREATE TABLE _p(x int); DROP TABLE _p;` → успех;
+`SELECT count(*) FROM media_files;` → работает. `MEDIA_DATABASE_URL` в Doppler указывает на
+`uk_media_owner`, старая роль основной БД к `uk_media` больше не привязана.
+
 ### media-service — отдельный шаг (Phase 2)
 
 Обновлять при изменении его кода/секретов. Migrate-шаг UK не нужен (у media свой lifecycle БД).
