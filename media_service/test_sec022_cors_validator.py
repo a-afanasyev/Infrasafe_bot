@@ -30,6 +30,8 @@ _CONFIG_PATH = Path(__file__).parent / "app" / "core" / "config.py"
 _BASE_ENV = {
     "TELEGRAM_BOT_TOKEN": "x",
     "SECRET_KEY": "a" * 48,
+    # ARCH-106 Phase 2: database_url лишился дефолта (содержал пароль) — теперь обязателен.
+    "DATABASE_URL": "postgresql://u:p@h/db",
     "CHANNEL_REQUESTS": "@r",
     "CHANNEL_REPORTS": "@rep",
     "CHANNEL_ARCHIVE": "@a",

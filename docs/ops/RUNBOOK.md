@@ -36,7 +36,7 @@
 
 ## 2. Каноничная выкатка на прод
 
-Выполнять из корня репозитория на прод-хосте. Оба compose-файла указываются в каждой команде. **ARCH-106 Phase 1: `.env` на прод-хостах очищен от секретов — ЛЮБАЯ compose-команда без обёртки `doppler run --` упадёт на `:?`-интерполяции** (это желаемый fail-fast). `<cfg>` = `profk` или `infrasafe` — по хосту.
+Выполнять из корня репозитория на прод-хосте. Оба compose-файла указываются в каждой команде. **ARCH-106: `.env` и `media_service/.env` на прод-хостах очищены от секретов — ЛЮБАЯ compose-команда без обёртки `doppler run --` упадёт на `:?`-интерполяции** (это желаемый fail-fast). `<cfg>` = `profk` или `infrasafe` — по хосту. Mapping имён media (`MEDIA_*` в Doppler → `TELEGRAM_BOT_TOKEN`/`SECRET_KEY`/`DATABASE_URL` в контейнере) и ротация webhook-секретов → `.claude/skills/uk-deploy/SKILL.md`.
 
 ```bash
 # 0. Обязательное окружение (PR-7 provision-roles интерполируется на уровне файла)
@@ -60,6 +60,9 @@ doppler run --project uk-management --config <cfg> -- \
 # 5. Остальное по необходимости (frontend/media-service — если менялись)
 doppler run --project uk-management --config <cfg> -- \
   docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps frontend media-service
+#    media-service: секреты тоже из Doppler (ARCH-106 Phase 2). Меняли несекретную часть
+#    media_service/.env (каналы, ALLOWED_ORIGINS) — добавить --force-recreate: env_file
+#    не входит в config-hash, а docker restart файл вообще не перечитывает.
 
 # 6. Убедиться, что миграции применились (см. §4)
 docker logs uk-management-api 2>&1 | grep "Migrations complete"

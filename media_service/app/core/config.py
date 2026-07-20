@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
 
     # === DATABASE ===
-    database_url: str = "postgresql://media_user:media_pass@localhost:5432/media_db"
+    # ARCH-106 Phase 2 (AC «no hardcoded defaults for secrets»): дефолта нет — URI
+    # содержит пароль. На проде приходит из Doppler как MEDIA_DATABASE_URL (см.
+    # docker-compose.media.yml / docker-compose.profk.yml), локально — из .env.
+    database_url: str
     database_echo: bool = False
 
     # === TELEGRAM ===

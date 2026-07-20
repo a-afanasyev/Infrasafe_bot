@@ -107,6 +107,13 @@ services:
       - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:-}
       - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
       - MEDIA_API_KEY=${MEDIA_API_KEY:-}
+      # ARCH-106 Phase 2: dual-secret ротация webhook-секретов (settings.py §4.4/R-18).
+      # Подписант (process_outbox) и inbound-верификатор живут оба в api — другим сервисам
+      # эти переменные не нужны. NEXT-значения появляются в Doppler только на ротационное
+      # окно; USE_NEXT — флаг, не секрет. Процедура → .claude/skills/uk-deploy/SKILL.md.
+      - INFRASAFE_WEBHOOK_SECRET_NEXT=${INFRASAFE_WEBHOOK_SECRET_NEXT:-}
+      - INFRASAFE_USE_NEXT_SECRET=${INFRASAFE_USE_NEXT_SECRET:-false}
+      - UK_WEBHOOK_SECRET_NEXT=${UK_WEBHOOK_SECRET_NEXT:-}
     ports:
       - "127.0.0.1:8085:8080"
     depends_on:
@@ -304,6 +311,17 @@ services:
     restart: unless-stopped
     env_file:
       - media_service/.env
+    environment:
+      # ARCH-106 Phase 2: секреты media приходят из Doppler через `doppler run --`,
+      # не из media_service/.env — там остаются только CHANNEL_*, ALLOWED_ORIGINS,
+      # DEBUG и лимиты. Имена в Doppler отличаются от имён внутри контейнера
+      # (MEDIA_-префикс), чтобы не конфликтовать с общим плоским конфигом.
+      - TELEGRAM_BOT_TOKEN=${MEDIA_BOT_TOKEN:?MEDIA_BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - SECRET_KEY=${MEDIA_SECRET_KEY:?MEDIA_SECRET_KEY is required — set it in Doppler (project uk-management)}
+      - MEDIA_API_KEYS=${MEDIA_API_KEYS:?MEDIA_API_KEYS is required — set it in Doppler (project uk-management)}
+      # Полный URI целиком (не собирается из компонента-пароля: реконструкция теряет
+      # порт/query и корректное кодирование спецсимволов).
+      - DATABASE_URL=${MEDIA_DATABASE_URL:?MEDIA_DATABASE_URL is required — set it in Doppler (project uk-management)}
     volumes:
       - media_uploads:/app/data/uploads
       - ./media_service/channels.json:/app/data/channels.json:ro

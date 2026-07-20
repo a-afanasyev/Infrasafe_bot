@@ -3,8 +3,9 @@
 #   docker compose -f docker-compose.yml -f docker-compose.media.yml up -d
 #
 # Shares uk-network, postgres (own logical DB uk_media), redis with the
-# main stack. Configured by media_service/.env (TG bot token, channels,
-# SECRET_KEY, MEDIA_API_KEYS, DATABASE_URL=postgresql://...@postgres/uk_media).
+# main stack. ARCH-106 Phase 2: секреты (bot token, SECRET_KEY, MEDIA_API_KEYS,
+# DATABASE_URL) приходят из Doppler через `doppler run --`; media_service/.env
+# держит только несекретную конфигурацию (CHANNEL_*, ALLOWED_ORIGINS, DEBUG, лимиты).
 services:
   media-service:
     build:
@@ -15,6 +16,15 @@ services:
     restart: unless-stopped
     env_file:
       - media_service/.env
+    environment:
+      # Строгие :?-гарды: media поддерживается на обоих хостах (решение владельца).
+      # Пустые :--заглушки здесь ЗАПРЕЩЕНЫ — environment: приоритетнее env_file и
+      # молча затёр бы значения из media_service/.env.
+      - TELEGRAM_BOT_TOKEN=${MEDIA_BOT_TOKEN:?MEDIA_BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - SECRET_KEY=${MEDIA_SECRET_KEY:?MEDIA_SECRET_KEY is required — set it in Doppler (project uk-management)}
+      - MEDIA_API_KEYS=${MEDIA_API_KEYS:?MEDIA_API_KEYS is required — set it in Doppler (project uk-management)}
+      # Полный URI целиком (не собирается из компонента-пароля).
+      - DATABASE_URL=${MEDIA_DATABASE_URL:?MEDIA_DATABASE_URL is required — set it in Doppler (project uk-management)}
     volumes:
       - media_uploads:/app/data/uploads
       - ./media_service/channels.json:/app/data/channels.json:ro

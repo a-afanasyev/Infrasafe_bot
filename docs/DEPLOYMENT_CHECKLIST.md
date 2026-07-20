@@ -2,17 +2,27 @@
 
 > _Последнее редактирование: 2026-07-06_
 
-> 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`.**
-> Реальный прод-стек (хост `~/uk`, 7 контейнеров) — **`docker compose -f docker-compose.yml
-> -f docker-compose.media.yml`**. Каноничная выкатка:
+> 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`
+> и устарели.** Реальный прод-стек infrasafe (хост `~/uk`) — **`docker compose -f
+> docker-compose.yml -f docker-compose.media.yml`** (оба `-f` в каждой команде: media
+> подключается overlay-файлом); profk — `-f docker-compose.profk.yml`. Каноничная выкатка
+> (ARCH-106: секреты приходят из Doppler, `.env` от них очищен → без `doppler run --`
+> команда упадёт на `:?`; PR-7: `migrate`-шаг обязателен перед каждым `up`):
 > ```bash
 > cd ~/uk && git pull --ff-only
-> docker compose -f docker-compose.yml -f docker-compose.media.yml build frontend api app
-> docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate frontend api app
+> export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+> D="doppler run --project uk-management --config infrasafe --"
+> C="docker compose -f docker-compose.yml -f docker-compose.media.yml"
+> $D $C build api access-api app migrate
+> $D $C run --rm --no-deps --name uk-migrate migrate     # ОБЯЗАТЕЛЕН перед up
+> $D $C up -d --no-deps --wait --wait-timeout 120 api access-api app
 > #  НИКОГДА не добавлять --remove-orphans (снесёт uk-caddy/uk-media-service)
 > ```
-> Миграции применяет сам `api` на старте (`entrypoint-api.sh` → `alembic upgrade head`);
-> проверка: `docker logs uk-management-api | grep "Migrations complete"`, `alembic current` = head.
+> ⚠️ Устаревшее утверждение «миграции применяет сам `api` на старте» больше НЕ верно:
+> после PR-7 entrypoint делает только read-only preflight и падает `exit 1` при schema
+> drift — миграции гоняет отдельный one-shot `migrate`.
+> **Единственный актуальный источник процедуры — `.claude/skills/uk-deploy/SKILL.md`**
+> (bootstrap Doppler, mapping имён media, ротация ролей и webhook-секретов).
 > Новый SPA-эндпоинт `/api/v2/*` требует добавления в InfraSafe edge-allowlist (SEC-22),
 > иначе 404 на публичном edge (`nginx.production.conf`, `map $uri $uk_api_allowed`).
 > Полный runbook: [DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md). Разделы ниже — устаревают.

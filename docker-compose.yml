@@ -137,6 +137,13 @@ services:
       - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:-}
       - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
       - MEDIA_API_KEY=${MEDIA_API_KEY:-}
+      # ARCH-106 Phase 2: dual-secret ротация webhook-секретов (settings.py §4.4/R-18).
+      # Подписант (process_outbox) и inbound-верификатор живут оба в api — другим сервисам
+      # эти переменные не нужны. NEXT-значения появляются в Doppler только на ротационное
+      # окно; USE_NEXT — флаг, не секрет. Процедура → .claude/skills/uk-deploy/SKILL.md.
+      - INFRASAFE_WEBHOOK_SECRET_NEXT=${INFRASAFE_WEBHOOK_SECRET_NEXT:-}
+      - INFRASAFE_USE_NEXT_SECRET=${INFRASAFE_USE_NEXT_SECRET:-false}
+      - UK_WEBHOOK_SECRET_NEXT=${UK_WEBHOOK_SECRET_NEXT:-}
     ports:
       - "127.0.0.1:8085:8080"
     depends_on:
