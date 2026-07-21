@@ -35,6 +35,9 @@ starlette>=1.3.1
 python-jose[cryptography]>=3.3.0
 # REG-03: cryptography>=48.0.1 закрывает CVE (прямой пин — приходит транзитивно)
 cryptography>=48.0.1
+# SEC-125: pyasn1>=0.6.4 закрывает GHSA-8ppf-4f7h-5ppj + GHSA-hm4w-wwcw-mr6r
+# (прямой пин — приходит транзитивно via python-jose / rsa)
+pyasn1>=0.6.4
 bcrypt>=4.0.0  # DEAD-11: код использует `import bcrypt` напрямую, passlib не нужен
 
 # Rate limiting
