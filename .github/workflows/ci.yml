@@ -264,13 +264,18 @@ jobs:
           INFRASAFE_WEBHOOK_ENABLED: "true"
         run: coverage run -a -m pytest -q tests/api tests/services
 
-      # PRC-01 (audit #4): ratchet-floor on combined backend coverage. Regression
-      # guard set just below the current measured 66.0% — RAISE as coverage grows,
-      # never lower. Not the aspirational 80%: this only prevents backsliding.
+      # PRC-01 / AUD3-04: два раздельных ratchet-floor на одном прогоне. Core-код
+      # и handlers/ гейтятся отдельными --omit/--include-порогами, чтобы ~28k
+      # слабопокрытых строк хендлеров не размывали сигнал по ядру. Оба floor —
+      # regression-guard чуть ниже измеренного; ПОДНИМАТЬ по мере роста, не опускать.
+      # Измерено 2026-07-22: core 69.3%, handlers 27.1% (см. AUD3-04 в бэклоге).
       - name: Coverage floor (ratchet)
         run: |
-          coverage report
-          coverage report --fail-under=65
+          coverage report   # полный, информативный (теперь включает handlers/)
+          # Core-код (без handlers) — исторический ratchet:
+          coverage report --omit="uk_management_bot/handlers/*" --fail-under=65
+          # AUD3-04: handlers измеряются отдельным floor (ratchet: только вверх):
+          coverage report --include="uk_management_bot/handlers/*" --fail-under=27.1
 
   access-control-tests:
     name: access-control-tests (postgres)

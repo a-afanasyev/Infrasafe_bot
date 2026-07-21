@@ -23,9 +23,12 @@ markers = [
 
 [tool.coverage.run]
 source = ["uk_management_bot"]
+# AUD3-04: handlers/* НЕ исключаются — они измеряются и защищаются отдельным
+# ratchet-floor в CI (`.github/workflows/ci.yml`, шаг «Coverage floor»: core-код
+# и handlers/ гейтятся раздельными `--omit`/`--include`-порогами на одном прогоне).
+# Внутренний `handlers/test_shift_end_label.py` всё равно вне данных — покрыт `*/test_*.py`.
 omit = [
     "uk_management_bot/tests/*",
-    "uk_management_bot/handlers/*",
     "uk_management_bot/venv/*",
     "*/__pycache__/*",
     "*/test_*.py",
