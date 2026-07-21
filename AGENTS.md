@@ -32,7 +32,7 @@ docker-compose.yml       — dev-окружение (bot, api, frontend, postgre
 - **Роли в БД**: `user.roles` — JSON-массив строк, `user.active_role` — текущая активная роль. Не использовать устаревшее поле `user.role`.
 - **Номера заявок**: формат `YYMMDD-NNN` (строка, не int). Сервис: `RequestNumberService`.
 - **Миграции/деплой**: `alembic upgrade head` + `alembic check` — CI-дрейф-гейт. ⚠️ Рутинный деплой ОБЯЗАТЕЛЬНО через `migrate`-шаг перед `up` (иначе preflight уронит контейнер), и через `doppler run --` (ARCH-106 Phase 1 — секреты приходят из Doppler, не из `.env`); `alembic stamp --purge` — ТОЛЬКО для разового пере-baseline, НЕ рутина. Детали (роли post-PR-7, provisioning, Doppler-деплой) → `.claude/skills/uk-deploy/SKILL.md`.
-- **Секреты (ARCH-106 Phase 1)**: `app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` получают секреты из Doppler (`doppler run --project uk-management --config <profk|infrasafe> -- docker compose ...`), НЕ из `.env`. Media-service и dynamic/rotation-секреты (`*_NEXT`, `ACCESS_DEVICE_SECRET__<ref>`) — вне Phase 1, всё ещё в `.env`.
+- **Секреты (ARCH-106 закрыт целиком 2026-07-21)**: `app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` **и `media-service`** получают секреты из Doppler (`doppler run --project uk-management --config <profk|infrasafe> -- docker compose ...`), НЕ из `.env`. media подключается к БД `uk_media` под выделенной ролью `uk_media_owner` (пароль в Doppler). Carve-out (осознанно вне Doppler): PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`), несекретная конфигурация. Детали → `.claude/skills/uk-deploy/SKILL.md`.
 - **Не коммитить** без явной просьбы.
 - **Не пушить** без явной просьбы.
 - **Секреты** (`.env`, ключи, Doppler-токены) — никогда не коммитить, не выводить.
