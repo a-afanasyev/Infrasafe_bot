@@ -261,23 +261,23 @@
 - [x] **8.2** Оба тест-набора зелёные; `alembic check` в api-контейнере без дрейфа.
 - [x] **8.3** Обновить спеку (статус → «реализовано, ждёт раскатки») и `docs/audit/2026-05-20-backlog.md` (запись ARCH-010 + шапка P1). **Согласование с Task 0.1:** посторонний WIP (`ProFK/`, `.agents/`, `.codex/` и чужие правки backlog) в staging НЕ попадает; ARCH-010-части backlog/спеки стейджатся выборочно через `git add -p`, итог проверяется `git diff --cached` перед каждым коммитом.
 - [x] **8.4** Скилл superpowers:requesting-code-review / агент code-reviewer по диффу ветки.
-- [ ] **8.5** **Owner-gate:** запросить у владельца ОК на серию коммитов (по одному на Task 1–7, conventional формат `feat(arch-010): ...`, selective staging — только файлы этого плана) и на push + `gh pr create` в `main`. Без ОК — стоп.
+- [x] **8.5** **Owner-gate:** запросить у владельца ОК на серию коммитов (по одному на Task 1–7, conventional формат `feat(arch-010): ...`, selective staging — только файлы этого плана) и на push + `gh pr create` в `main`. Без ОК — стоп.
 
 ### Task 9: Раскатка (отдельный gate — только по явной команде владельца)
 
 По скиллу `uk-deploy` (обязательно загрузить перед деплоем). Последовательность на КАЖДЫЙ хост (profk, затем infrasafe/105):
 
-- [ ] **9.1 ⚠️ Действие владельца ДО деплоя:** добавить в Doppler `uk-management` **оба** конфига значение `OUTBOX_SOURCE_INSTANCE` (`profk` / `infrasafe`) через dashboard — host-токены read-only (грабля ARCH-106 Phase 2). Без него app/api/access-api/migrate упадут на preflight fail-loud. **Обязательный preflight (закрывает дыру «dev на проде»):** на каждом хосте перед деплоем сверить, что конфиг содержит СТРОГО своё значение — `doppler run --project uk-management --config <cfg> -- printenv OUTBOX_SOURCE_INSTANCE` → `profk` на profk, `infrasafe` на infrasafe (значение не секретно, вывод безопасен).
-- [ ] **9.2 Синтетик-прогон с InfraSafe (до cutover, договорено):** запросить у InfraSafe искусственную 500 на одной инсталляции → наш worker ретраит тем же `event_id` → убедиться, что событие атомарно переоткрывается и обрабатывается (вариант A вживую).
-- [ ] **9.3** Деплой — строго последовательность из скилла `uk-deploy` (SKILL.md:55); **ВСЕ три шага через `doppler run`** (после Doppler-cutover compose-интерполяция `:?`-переменных упадёт ещё на build без него):
+- [x] **9.1 ⚠️ Действие владельца ДО деплоя:** добавить в Doppler `uk-management` **оба** конфига значение `OUTBOX_SOURCE_INSTANCE` (`profk` / `infrasafe`) через dashboard — host-токены read-only (грабля ARCH-106 Phase 2). Без него app/api/access-api/migrate упадут на preflight fail-loud. **Обязательный preflight (закрывает дыру «dev на проде»):** на каждом хосте перед деплоем сверить, что конфиг содержит СТРОГО своё значение — `doppler run --project uk-management --config <cfg> -- printenv OUTBOX_SOURCE_INSTANCE` → `profk` на profk, `infrasafe` на infrasafe (значение не секретно, вывод безопасен).
+- [x] **9.2 Синтетик-прогон с InfraSafe (до cutover, договорено):** ⚠️ ПРОПУЩЕН по решению владельца («начинай раскатку»); компенсировано фактической прод-верификацией доставки (sent/200 на обоих хостах). запросить у InfraSafe искусственную 500 на одной инсталляции → наш worker ретраит тем же `event_id` → убедиться, что событие атомарно переоткрывается и обрабатывается (вариант A вживую).
+- [x] **9.3** Деплой — строго последовательность из скилла `uk-deploy` (SKILL.md:55); **ВСЕ три шага через `doppler run`** (после Doppler-cutover compose-интерполяция `:?`-переменных упадёт ещё на build без него):
   ```bash
   doppler run --project uk-management --config <cfg> -- docker compose <files> build api access-api app migrate
   doppler run --project uk-management --config <cfg> -- docker compose <files> run --rm --no-deps --name uk-migrate migrate
   doppler run --project uk-management --config <cfg> -- docker compose <files> up -d api access-api app
   ```
   Build строго ДО run migrate (иначе migrate выполнится в СТАРОМ образе без 0004 и «успешно» ничего не применит, а новые app/api упадут на preflight). **`access-api` пересобрать обязательно** — его образ несёт `EXPECTED_ALEMBIC_HEAD` (`Dockerfile.access:43`): старый ожидает 003 и не пройдёт preflight против БД на 004. Затем логи всех поднятых сервисов.
-- [ ] **9.4** Прод-верификация: тестовый PATCH здания теми же значениями → нет нового outbox-row; реальное изменение → outbox-строка с UUIDv5 (сверить повторяемость), InfraSafe принял (200); повторный ручной enqueue → `ON CONFLICT` no-op.
-- [ ] **9.5** Закрыть ARCH-010 в бэклоге, финализировать спеку, обновить memory (`project_arch010_deferred.md` → реализовано/раскатано).
+- [x] **9.4** Прод-верификация: тестовый PATCH здания теми же значениями → нет нового outbox-row; реальное изменение → outbox-строка с UUIDv5 (сверить повторяемость), InfraSafe принял (200); повторный ручной enqueue → `ON CONFLICT` no-op.
+- [x] **9.5** Закрыть ARCH-010 в бэклоге, финализировать спеку, обновить memory (`project_arch010_deferred.md` → реализовано/раскатано).
 
 ## Verification (сводно)
 

@@ -1,13 +1,13 @@
 # ARCH-010 — детерминированный outbox `event_id`: координационный спек с InfraSafe
 
-> **Статус:** ✅ **координация закрыта 2026-07-22; реализация выполнена 2026-07-23** в ветке
-> `arch-010-deterministic-event-id` по плану
-> `docs/superpowers/plans/2026-07-22-arch-010-deterministic-event-id.md` (тест-план §7 покрыт,
-> оба набора зелёные). **Ждёт раскатки на оба прода** (Doppler `OUTBOX_SOURCE_INSTANCE` — действие
-> владельца; синтетик-прогон InfraSafe до cutover). Ответы InfraSafe по 4 вопросам получены и
-> сверены по коду (§6, A1–A5 — всё совместимо); retry-семантика решена (вариант A) и **InfraSafe
-> задеплоил правку `isDuplicateEvent` на ОБЕ инсталляции 22.07 — внешний гейт снят** (§6a).
-> **Тип:** design / coordination spec. **Backlog:** `docs/audit/2026-05-20-backlog.md` → ARCH-010 (P1).
+> **Статус:** ✅ **ЗАКРЫТ ЦЕЛИКОМ 2026-07-23.** Координация закрыта 2026-07-22; реализация —
+> PR #247 (squash `1b5af6a`) по плану `docs/superpowers/plans/2026-07-22-arch-010-deterministic-event-id.md`
+> (тест-план §7 покрыт, CI зелёный); **раскатан на ОБА прода 2026-07-23** (миграция 0004,
+> `OUTBOX_SOURCE_INSTANCE` per-host из Doppler, прод-верификация: change-gate/UUIDv5/доставка 200).
+> Ответы InfraSafe по 4 вопросам получены и сверены по коду (§6, A1–A5 — всё совместимо);
+> retry-семантика решена (вариант A) и **InfraSafe задеплоил правку `isDuplicateEvent` на ОБЕ
+> инсталляции 22.07** (§6a).
+> **Тип:** design / coordination spec. **Backlog:** `docs/audit/2026-05-20-backlog.md` → ARCH-010 (закрыт).
 
 ## 0. TL;DR
 
