@@ -113,6 +113,27 @@ class Settings:
             "JWT_SECRET must be set in production environment "
             "(separate from INVITE_SECRET — no fallback)"
         )
+
+    # ARCH-010: неизменяемый идентификатор инсталляции — левая часть UUIDv5-name
+    # исходящих вебхуков (services/webhook_sender.py). Менять НЕЛЬЗЯ: смена
+    # значения меняет все будущие event_id и ломает дедуп InfraSafe.
+    # "dev" — только локалка/CI (в прод-Doppler всегда profk|infrasafe;
+    # deploy-preflight сверяет значение конфига со своим хостом).
+    _ALLOWED_SOURCE_INSTANCES = {"profk", "infrasafe", "dev"}
+    OUTBOX_SOURCE_INSTANCE = os.getenv("OUTBOX_SOURCE_INSTANCE")
+    if OUTBOX_SOURCE_INSTANCE:
+        # Непустое значение проверяется по allowlist всегда — и при DEBUG тоже.
+        if OUTBOX_SOURCE_INSTANCE not in _ALLOWED_SOURCE_INSTANCES:
+            raise ValueError(
+                "OUTBOX_SOURCE_INSTANCE must be one of profk|infrasafe|dev"
+            )
+    elif DEBUG:
+        OUTBOX_SOURCE_INSTANCE = "dev"
+    else:
+        raise ValueError(
+            "OUTBOX_SOURCE_INSTANCE must be set in production environment "
+            "(profk|infrasafe)"
+        )
     
     # Rate limiting для /join команды
     JOIN_RATE_LIMIT_WINDOW = int(os.getenv("JOIN_RATE_LIMIT_WINDOW", "600"))  # 10 минут
