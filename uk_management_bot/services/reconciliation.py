@@ -6,6 +6,7 @@ inventory and re-enqueue anything that appears to be missing in InfraSafe.
 """
 import hashlib
 import logging
+import uuid
 
 from sqlalchemy import select, text
 
@@ -19,7 +20,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.webhook_payloads import emit_request_status_changed
-from uk_management_bot.services.webhook_sender import queue_webhook
+from uk_management_bot.services.webhook_sender import EventIdentity, queue_webhook
 from uk_management_bot.utils.request_workflow import project_infrasafe_status
 
 logger = logging.getLogger(__name__)
@@ -125,8 +126,12 @@ async def reconcile_buildings() -> dict:
 
             # 4. Re-enqueue exactly the buildings InfraSafe is missing.
             #    queue_webhook adds rows in the same transaction; outbox processor
-            #    picks them up within 10s. Receiver is idempotent (event_id UUID4
-            #    + isDuplicateEvent check on InfraSafe side).
+            #    picks them up within 10s.
+            # ARCH-010: repair_run_id — ОДИН на весь запуск reconcile (не на
+            # entity): свежий nonce в UUIDv5-name обходит и наш ON CONFLICT, и
+            # бессрочный дедуп InfraSafe — иначе ремонт потерянной сущности был
+            # бы отброшен как «Already processed».
+            repair_run_id = uuid.uuid4().hex
             enqueued = 0
             # ARCH-011 (PR-5): oldest-first по UK id (порядок создания) вместо
             # сортировки по hash-производному external_id — при дрейфе больше
@@ -146,6 +151,7 @@ async def reconcile_buildings() -> dict:
                         "latitude": row.gps_latitude,
                         "longitude": row.gps_longitude,
                     },
+                    EventIdentity(repair_run_id=repair_run_id),
                 )
                 enqueued += 1
 
@@ -250,12 +256,15 @@ async def reconcile_requests() -> dict:
             #    if ARM exists, updates status; if ARM missing, success no-op.
             #    Safer than request.created (which only matches alert-originated
             #    requests via source_event_id).
+            # ARCH-010: repair-nonce — один на запуск (см. reconcile_buildings).
+            repair_run_id = uuid.uuid4().hex
             enqueued = 0
             for rn in sorted(missing_in_is)[:REPLAY_CAP]:
                 row = uk_by_number[rn]
                 projected = project_infrasafe_status(row)
                 await emit_request_status_changed(
                     db, rn, projected, projected, source="reconcile",
+                    identity=EventIdentity(repair_run_id=repair_run_id),
                 )
                 enqueued += 1
 

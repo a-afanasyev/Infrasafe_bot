@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.services.webhook_sender import queue_webhook, queue_webhook_sync
+from uk_management_bot.services.webhook_sender import (
+    EventIdentity,
+    queue_webhook,
+    queue_webhook_sync,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,19 +66,27 @@ def emit_request_created_sync(db: Session, req: Request, source: str) -> None:
 
 async def emit_request_status_changed(
     db: AsyncSession, request_number: str, old_status: str, new_status: str, source: str,
+    identity: EventIdentity | None = None,
 ) -> None:
-    """Enqueue request.status_changed in caller's async transaction."""
+    """Enqueue request.status_changed in caller's async transaction.
+
+    identity (ARCH-010): EventIdentity(version=req.status_version) в обычном
+    пути, EventIdentity(repair_run_id=...) в reconcile-ремонте — funnel
+    fail-loud'ится, если не передать ни того ни другого."""
     await queue_webhook(db, "request.status_changed", REQUEST_WEBHOOK_ENDPOINT,
-                        build_request_status_changed_payload(request_number, old_status, new_status))
+                        build_request_status_changed_payload(request_number, old_status, new_status),
+                        identity)
     logger.info("webhook_emitted event=request.status_changed request_number=%s old=%s new=%s source=%s",
                 request_number, old_status, new_status, source)
 
 
 def emit_request_status_changed_sync(
     db: Session, request_number: str, old_status: str, new_status: str, source: str,
+    identity: EventIdentity | None = None,
 ) -> None:
     """Sync variant of emit_request_status_changed."""
     queue_webhook_sync(db, "request.status_changed", REQUEST_WEBHOOK_ENDPOINT,
-                       build_request_status_changed_payload(request_number, old_status, new_status))
+                       build_request_status_changed_payload(request_number, old_status, new_status),
+                       identity)
     logger.info("webhook_emitted event=request.status_changed request_number=%s old=%s new=%s source=%s",
                 request_number, old_status, new_status, source)

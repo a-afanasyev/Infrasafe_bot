@@ -166,6 +166,73 @@ async def test_delete_building(address_async_db, building):
     assert refreshed.is_active is False
 
 
+# ───────── ARCH-010: change-gate / delete-no-op / building_version ─────────
+
+async def _outbox_rows_for(db, event: str, building_id: int) -> list[WebhookOutbox]:
+    rows = (await db.execute(
+        select(WebhookOutbox).where(WebhookOutbox.event == event)
+    )).scalars().all()
+    return [r for r in rows if r.payload.get("building", {}).get("id") == building_id]
+
+
+async def test_update_building_same_values_no_bump_no_emit(
+    address_async_db, building, monkeypatch
+):
+    """PATCH теми же значениями — no-op: без bump версии, emit и Redis-publish."""
+    published = []
+
+    async def _spy(event, data):  # noqa: ANN001
+        published.append(event)
+
+    monkeypatch.setattr(core, "publish_realtime_after_commit", _spy)
+    updated = await core.update_building(
+        address_async_db, building.id,
+        {"address": building.address, "yard_id": building.yard_id},
+    )
+    assert updated.building_version == 0
+    assert await _outbox_rows_for(address_async_db, "building.updated", building.id) == []
+    assert published == []
+
+
+async def test_update_building_real_change_bumps_and_emits(
+    address_async_db, building, monkeypatch
+):
+    published = []
+
+    async def _spy(event, data):  # noqa: ANN001
+        published.append(event)
+
+    monkeypatch.setattr(core, "publish_realtime_after_commit", _spy)
+    updated = await core.update_building(
+        address_async_db, building.id, {"address": f"bld-{_suffix()}"}
+    )
+    assert updated.building_version == 1
+    assert len(await _outbox_rows_for(address_async_db, "building.updated", building.id)) == 1
+    assert published == ["building.updated"]
+
+
+async def test_delete_building_already_inactive_is_noop(address_async_db, building):
+    await core.delete_building(address_async_db, building.id)
+    assert len(await _outbox_rows_for(address_async_db, "building.deleted", building.id)) == 1
+    # Повторный delete уже-неактивного — no-op: без второй строки и bump'а.
+    await core.delete_building(address_async_db, building.id)
+    refreshed = await address_async_db.get(Building, building.id)
+    assert refreshed.building_version == 1
+    assert len(await _outbox_rows_for(address_async_db, "building.deleted", building.id)) == 1
+
+
+async def test_delete_reactivate_delete_two_distinct_deletes(address_async_db, building):
+    """Цикл delete→reactivate→delete: два реальных удаления с разными версиями."""
+    await core.delete_building(address_async_db, building.id)
+    await core.update_building(address_async_db, building.id, {"is_active": True})
+    await core.delete_building(address_async_db, building.id)
+    refreshed = await address_async_db.get(Building, building.id)
+    assert refreshed.building_version == 3
+    deletes = await _outbox_rows_for(address_async_db, "building.deleted", building.id)
+    assert len(deletes) == 2
+    assert len({d.event_id for d in deletes}) == 2  # версии дают разные id
+
+
 # ───────────────────────── Apartments ─────────────────────────
 
 async def test_create_apartment(address_async_db, building, uid):

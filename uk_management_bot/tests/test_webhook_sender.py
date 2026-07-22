@@ -4,6 +4,7 @@ import hmac
 import time
 
 from uk_management_bot.services.webhook_sender import (
+    EventIdentity,
     sign_payload,
     build_building_payload,
 )
@@ -58,11 +59,12 @@ class TestBuildBuildingPayload:
 
     def test_building_deleted_payload(self):
         """building.deleted includes the same structure."""
+        # ARCH-010: versioned-событие требует identity (fail-loud в funnel'е).
         result = build_building_payload("building.deleted", {
             "id": 5,
             "address": "Test",
             "yard_name": "Yard",
-        })
+        }, identity=EventIdentity(version=1))
         assert result["event"] == "building.deleted"
         assert result["building"]["id"] == 5
 
@@ -90,11 +92,12 @@ class TestBuildRequestPayload:
 
     def test_request_status_changed_payload(self):
         from uk_management_bot.services.webhook_sender import build_request_payload
+        # ARCH-010: versioned-событие требует identity (fail-loud в funnel'е).
         result = build_request_payload("request.status_changed", {
             "request_number": "260329-001",
             "old_status": "Новая",
             "new_status": "В работе",
-        })
+        }, identity=EventIdentity(version=1))
         assert result["event"] == "request.status_changed"
         assert result["request"]["request_number"] == "260329-001"
         assert result["request"]["old_status"] == "Новая"

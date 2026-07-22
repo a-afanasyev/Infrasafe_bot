@@ -120,6 +120,33 @@ async def test_drift_replays_only_missing_buildings(_wired):
     replayed_ids = sorted(call.args[3]["id"] for call in mock_queue.call_args_list)
     assert replayed_ids == [2, 3]
 
+    # ARCH-010: каждый replay обязан несёт repair-identity — без него one-shot
+    # building.created пере-минтит ОРИГИНАЛЬНЫЙ детерминированный id, и
+    # бессрочный дедуп InfraSafe молча глушит ремонт навсегда (fail-loud
+    # funnel'а one-shot путь НЕ прикрывает). Nonce общий на весь запуск.
+    identities = [call.args[4] for call in mock_queue.call_args_list]
+    assert all(ident.repair_run_id for ident in identities)
+    assert all(ident.version is None for ident in identities)
+    assert len({ident.repair_run_id for ident in identities}) == 1
+
+
+@pytest.mark.asyncio
+async def test_drift_replay_repair_nonce_differs_between_runs(_wired):
+    """ARCH-010: разные запуски reconcile дают разные repair_run_id →
+    повторный ремонт не дедупится ни нашим unique, ни InfraSafe."""
+    monkeypatch, mock_fetch, mock_queue = _wired
+    rows = [_building_row(1), _building_row(2)]
+    mock_fetch.return_value = {_expected_eid(1)}
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+    )
+
+    await reconciliation.reconcile_buildings()
+    first_run = mock_queue.call_args.args[4].repair_run_id
+    await reconciliation.reconcile_buildings()
+    second_run = mock_queue.call_args.args[4].repair_run_id
+    assert first_run != second_run
+
 
 @pytest.mark.asyncio
 async def test_skips_when_advisory_lock_held(_wired):
@@ -277,6 +304,13 @@ async def test_requests_drift_replays_missing_with_current_status(_wired_request
     assert by_rn["260524-002"].kwargs["source"] == "reconcile"
     assert by_rn["260524-003"].args[2] == "В работе"
     assert by_rn["260524-003"].args[3] == "В работе"
+    # ARCH-010: repair-identity обязателен и общий на весь запуск (см.
+    # building-аналог) — request-путь прикрыт fail-loud'ом, но регресс-сетка
+    # симметрична для обоих reconcile-путей.
+    identities = [c.kwargs["identity"] for c in mock_emit.call_args_list]
+    assert all(ident.repair_run_id for ident in identities)
+    assert all(ident.version is None for ident in identities)
+    assert len({ident.repair_run_id for ident in identities}) == 1
 
 
 @pytest.mark.asyncio
