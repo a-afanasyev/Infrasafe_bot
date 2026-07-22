@@ -26,6 +26,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
 from uk_management_bot.services import webhook_sender
 
+# ARCH-010 (доменная фикстура pg_domain_factory ниже):
+from uk_management_bot.database.session import Base
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.models.yard import Yard
+from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.apartment import Apartment
+from uk_management_bot.database.models.user_apartment import UserApartment
+from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.models.request_assignment import RequestAssignment
+from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.database.models.shift_template import ShiftTemplate
+from uk_management_bot.database.models.rating import Rating
+
 SCHEMA = "pr5_outbox_test"
 
 # ЛОВУШКА import-order: tests/services/conftest.py при старте сессии
@@ -208,19 +222,6 @@ async def test_reclaim_after_lease_under_postgres(pg_factory, monkeypatch):
 # requests/assignments/audit/shifts) в той же temp-схеме — update_building и
 # workflow на голом webhook_outbox-харнессе не запускаются.
 # ===========================================================================
-
-from uk_management_bot.database.session import Base
-from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.yard import Yard
-from uk_management_bot.database.models.building import Building
-from uk_management_bot.database.models.apartment import Apartment
-from uk_management_bot.database.models.user_apartment import UserApartment
-from uk_management_bot.database.models.request import Request
-from uk_management_bot.database.models.request_assignment import RequestAssignment
-from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.database.models.shift import Shift
-from uk_management_bot.database.models.shift_template import ShiftTemplate
-from uk_management_bot.database.models.rating import Rating
 
 _DOMAIN_TABLES = [
     User.__table__, Yard.__table__, Building.__table__, Apartment.__table__,
