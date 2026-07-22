@@ -124,6 +124,10 @@ def collect_read_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 
 BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/api/dependencies_access.py', 'cmp:request', 'status'),
+    # ARCH-010 (2026-07-23): change-детектор версионирования в _apply_sync/_apply_async
+    # (`req.status != old_status` → bump status_version) — НЕ transition-guard,
+    # решение о переходе уже принято чистым _decide; предикат здесь неуместен.
+    ('uk_management_bot/services/workflow_runner.py', 'cmp:req', 'status'),
     ('uk_management_bot/api/public/router.py', 'cmp:RequestModel', 'status'),
     ('uk_management_bot/api/public/router.py', 'in_:RequestModel', 'status'),
     # FALSE-POSITIVE (подтверждено PR2-pre/2): existing = User, status "blocked"/

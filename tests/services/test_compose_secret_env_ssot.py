@@ -22,8 +22,12 @@ MEDIA = ROOT / "docker-compose.media.yml"
 
 # Секрет -> сервисы, которым он обязан быть проброшен, в базовом и profk-файлах.
 # app/api/access-api/migrate импортируют общий settings.py — его эагерная prod-валидация
-# требует эти 4 во всех четырёх (ARCH-106 план, «Ключевая находка»).
-CORE_REQUIRED = ("BOT_TOKEN", "ADMIN_PASSWORD", "JWT_SECRET", "INVITE_SECRET")
+# требует всё это во всех четырёх (ARCH-106 план, «Ключевая находка»).
+# OUTBOX_SOURCE_INSTANCE (ARCH-010) — не секрет, но так же обязателен eager-валидацией.
+CORE_REQUIRED = (
+    "BOT_TOKEN", "ADMIN_PASSWORD", "JWT_SECRET", "INVITE_SECRET",
+    "OUTBOX_SOURCE_INSTANCE",
+)
 
 EXPECTED = {
     "app": CORE_REQUIRED,

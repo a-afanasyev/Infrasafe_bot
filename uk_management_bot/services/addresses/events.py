@@ -14,7 +14,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.services.webhook_sender import queue_webhook
+from uk_management_bot.services.webhook_sender import EventIdentity, queue_webhook
 from uk_management_bot.services.redis_pubsub import (
     publish_building_event,
     publish_yard_event,
@@ -44,11 +44,16 @@ _ROUTING: dict[str, tuple[str | None, object]] = {
 }
 
 
-async def enqueue_outbox(db: AsyncSession, *, event: str, data: dict) -> None:
+async def enqueue_outbox(
+    db: AsyncSession, *, event: str, data: dict,
+    identity: EventIdentity | None = None,
+) -> None:
     """Pre-commit: write a webhook_outbox row in the caller's transaction.
 
     `data` is RAW entity data — queue_webhook builds the webhook envelope.
-    No-op when the event has no webhook endpoint (endpoint=None).
+    `identity` (ARCH-010) — версия/repair-nonce для детерминированного
+    event_id; прокидывается отдельным аргументом, НЕ в data (data уходит и в
+    Redis). No-op when the event has no webhook endpoint (endpoint=None).
 
     Raises ValueError for an unknown event — a programming error that must
     fail loud pre-commit, never silently drop the outbox row.
@@ -61,7 +66,7 @@ async def enqueue_outbox(db: AsyncSession, *, event: str, data: dict) -> None:
     endpoint, _ = route
     if endpoint is None:
         return
-    await queue_webhook(db, event, endpoint, data)
+    await queue_webhook(db, event, endpoint, data, identity)
 
 
 async def publish_realtime_after_commit(event: str, data: dict) -> None:

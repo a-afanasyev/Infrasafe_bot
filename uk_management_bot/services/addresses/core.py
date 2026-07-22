@@ -31,6 +31,7 @@ from uk_management_bot.services.addresses.events import (
 from uk_management_bot.services.addresses.payloads import (
     build_yard_event_data, build_building_event_data, build_apartment_event_data,
 )
+from uk_management_bot.services.webhook_sender import EventIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,19 @@ async def _get_yard_or_raise(db: AsyncSession, yard_id: int) -> Yard:
     return yard
 
 
-async def _get_building_or_raise(db: AsyncSession, building_id: int) -> Building:
-    building = await db.get(Building, building_id)
+async def _get_building_or_raise(
+    db: AsyncSession, building_id: int, *, for_update: bool = False
+) -> Building:
+    # ARCH-010 (P1-B): for_update=True сериализует всю мутацию здания (dirty-check
+    # → изменение полей → bump building_version → payload) под row-lock'ом —
+    # атомарного инкремента недостаточно, второй конкурентный апдейт унёс бы
+    # stale-поля первого в payload.
+    if for_update:
+        building = (await db.execute(
+            select(Building).where(Building.id == building_id).with_for_update()
+        )).scalar_one_or_none()
+    else:
+        building = await db.get(Building, building_id)
     if building is None:
         raise AddressNotFound("Здание не найдено", code="building_not_found")
     return building
@@ -221,7 +233,7 @@ async def create_building(
 
 
 async def update_building(db: AsyncSession, building_id: int, updates: dict) -> Building:
-    building = await _get_building_or_raise(db, building_id)
+    building = await _get_building_or_raise(db, building_id, for_update=True)
 
     # Canonical guard: block deactivation while active apartments exist.
     if updates.get("is_active") is False and building.is_active:
@@ -237,13 +249,29 @@ async def update_building(db: AsyncSession, building_id: int, updates: dict) -> 
         if not target_yard.is_active:
             raise AddressConflict("Двор неактивен", code="yard_inactive")
 
-    for field, value in updates.items():
+    # ARCH-010 (P1-A) change-gate: same-value PATCH — no-op, без bump/emit.
+    # commit обязателен — FOR UPDATE выше уже взял row-lock, ранний return без
+    # commit держал бы блокировку до закрытия сессии.
+    changed = {
+        field: value for field, value in updates.items()
+        if getattr(building, field) != value
+    }
+    if not changed:
+        await db.commit()
+        return building
+
+    for field, value in changed.items():
         setattr(building, field, value)
+    building.building_version = (building.building_version or 0) + 1
     await db.flush()
 
     yard = await db.get(Yard, building.yard_id)
     data = build_building_event_data(building, yard_name=yard.name if yard else "")
-    await enqueue_outbox(db, event="building.updated", data=data)
+    # ARCH-010: версия — отдельным аргументом, НЕ в data (data уходит в Redis).
+    await enqueue_outbox(
+        db, event="building.updated", data=data,
+        identity=EventIdentity(version=building.building_version),
+    )
     await db.commit()
     await db.refresh(building)
     await publish_realtime_after_commit("building.updated", data)
@@ -253,19 +281,29 @@ async def update_building(db: AsyncSession, building_id: int, updates: dict) -> 
 
 async def delete_building(db: AsyncSession, building_id: int) -> None:
     """Soft-delete (deactivate). Blocked while active apartments exist."""
-    building = await _get_building_or_raise(db, building_id)
+    building = await _get_building_or_raise(db, building_id, for_update=True)
     active = await _count_active_apartments(db, building_id)
     if active > 0:
         raise AddressConflict(
             f"Невозможно удалить здание: есть {active} активных квартир"
         )
 
+    # ARCH-010 (P1-C): повторный delete уже-неактивного — no-op (без bump/emit);
+    # commit снимает row-lock от FOR UPDATE выше.
+    if not building.is_active:
+        await db.commit()
+        return
+
     building.is_active = False
+    building.building_version = (building.building_version or 0) + 1
     await db.flush()
 
     yard = await db.get(Yard, building.yard_id)
     data = build_building_event_data(building, yard_name=yard.name if yard else "")
-    await enqueue_outbox(db, event="building.deleted", data=data)
+    await enqueue_outbox(
+        db, event="building.deleted", data=data,
+        identity=EventIdentity(version=building.building_version),
+    )
     await db.commit()
     await publish_realtime_after_commit("building.deleted", data)
     logger.info("Деактивировано здание: %s (ID: %s)", building.address, building.id)

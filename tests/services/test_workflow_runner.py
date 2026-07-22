@@ -744,3 +744,94 @@ def _claim_sync_factory(factory):
     s.commit()
     s.close()
     return SF
+
+
+# ---------------------------------------------------------------------------
+# ARCH-010: status_version — бамп строго по фактической смене DB-статуса.
+# Webhook НЕ прокси смены статуса: возврат меняет статус без webhook
+# (public-проекция та же), same-status re-entry — webhook-путь без смены.
+# ---------------------------------------------------------------------------
+
+class TestStatusVersionArch010:
+    def _version(self, SF) -> int:
+        s = SF()
+        v = s.query(Request).filter_by(request_number="260610-001").first().status_version
+        s.close()
+        return v
+
+    def test_status_change_bumps_version(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED)
+        run_command_sync(SF, "260610-001", _mgr(),
+                         ActionCommand("c1", Action.MANAGER_CONFIRM, {}))
+        assert self._version(SF) == 1
+
+    def test_no_op_repeat_no_bump(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED)
+        run_command_sync(SF, "260610-001", _mgr(),
+                         ActionCommand("c1", Action.MANAGER_CONFIRM, {}))
+        out2 = run_command_sync(SF, "260610-001", _mgr(),
+                                ActionCommand("c2", Action.MANAGER_CONFIRM, {}))
+        assert out2.no_op is True
+        assert self._version(SF) == 1  # повтор не бампает
+
+    def test_return_bumps_version_without_webhook(self, factory):
+        """Исключение (а): Исполнено→Возвращена — DB-статус меняется, webhook нет."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED)
+        run_command_sync(SF, "260610-001", _owner(),
+                         ActionCommand("c1", Action.APPLICANT_RETURN,
+                                       {"return_reason": "x"}))
+        assert self._version(SF) == 1
+        s = SF()
+        assert s.query(WebhookOutbox).count() == 0
+        s.close()
+
+    def test_same_status_reassign_no_bump(self, factory):
+        """Исключение (б): MANAGER_ASSIGN В работе→В работе (re-entry, не no_op) —
+        статус не меняется → версия не бампается."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        out = run_command_sync(SF, "260610-001", _mgr(),
+                               ActionCommand("c1", Action.MANAGER_ASSIGN,
+                                             {"executor_id": 4}))
+        assert out.no_op is False
+        assert self._version(SF) == 0
+
+    def test_async_parity_bump(self, factory):
+        """sync/async ветви инкрементят одинаково (тот же MANAGER_CONFIRM)."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED)
+        run_command_sync(SF, "260610-001", _mgr(),
+                         ActionCommand("c", Action.MANAGER_CONFIRM, {}))
+        sync_version = self._version(SF)
+
+        async def _async_version():
+            from sqlalchemy.ext.asyncio import (
+                create_async_engine, async_sessionmaker, AsyncSession,
+            )
+            engine = create_async_engine(
+                "sqlite+aiosqlite://",
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with AF() as s:
+                s.add(User(id=3, telegram_id=3, first_name="Mgr", roles='["manager"]',
+                           active_role="manager", status="approved", language="ru"))
+                s.add(Request(request_number="260610-001", user_id=2, category="c",
+                              description="d", urgency="low",
+                              status=C.REQUEST_STATUS_EXECUTED))
+                await s.commit()
+            try:
+                await run_command_async(
+                    AF, "260610-001", _mgr(),
+                    ActionCommand("c", Action.MANAGER_CONFIRM, {}))
+                async with AF() as s:
+                    from sqlalchemy import select as sa_select
+                    req = (await s.execute(
+                        sa_select(Request).filter_by(request_number="260610-001")
+                    )).scalar_one()
+                    return req.status_version
+            finally:
+                await engine.dispose()
+
+        assert asyncio.run(_async_version()) == sync_version == 1

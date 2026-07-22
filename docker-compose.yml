@@ -55,6 +55,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
+      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
       # Медиа-клиент бота (uk_management_bot/integrations/__init__.py) — опционален по коду
       # (settings.py: os.getenv(..., "")), fallback MEDIA_SERVICE_API_KEY || MEDIA_API_KEY:
       - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
@@ -130,6 +132,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
+      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
       # Опциональные (settings.py default ""), функционально нужны только api:
       - HEALTH_METRICS_TOKEN=${HEALTH_METRICS_TOKEN:-}
       - INFRASAFE_INVENTORY_TOKEN=${INFRASAFE_INVENTORY_TOKEN:-}
@@ -218,6 +222,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
+      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
       #
       # Интеграция с медиа-сервисом (§11, §10.2): фото проезда грузятся в отдельный
       # канал ВНЕ пути решения и отдаются по media://-ссылке. Клиент ленивый —
@@ -364,6 +370,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
+      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
 
   # Redis для кэширования и rate limiting
   redis:

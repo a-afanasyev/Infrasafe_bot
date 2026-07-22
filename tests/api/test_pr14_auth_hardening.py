@@ -34,6 +34,7 @@ def _prod_env(*, jwt_secret):
         "REDIS_URL": "redis://redis:6379/0",
         "INVITE_SECRET": "invite-secret-aaaaaaaaaaaaaaaa",
         "ADMIN_PASSWORD": "Abc123Xyz789Qwer",  # strong, 16 chars
+        "OUTBOX_SOURCE_INSTANCE": "profk",  # ARCH-010: обязателен при DEBUG=False
     }
     if jwt_secret is None:
         env.pop("JWT_SECRET", None)

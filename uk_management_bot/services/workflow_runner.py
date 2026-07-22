@@ -41,6 +41,7 @@ from uk_management_bot.services.webhook_payloads import (
     emit_request_status_changed,
     emit_request_status_changed_sync,
 )
+from uk_management_bot.services.webhook_sender import EventIdentity
 from uk_management_bot.utils.auth_helpers import get_active_role, get_user_roles
 from uk_management_bot.utils.constants import ROLE_EXECUTOR
 from uk_management_bot.utils.shifts import (
@@ -228,8 +229,14 @@ def _apply_sync(db: Session, req: Request, result: TransitionResult,
                 now: datetime) -> None:
     if result.no_op:
         return
+    old_status = req.status
     for fld, op, value in result.patch:
         setattr(req, fld, _op_value(op, value, actor, now, getattr(req, fld, None)))
+    # ARCH-010: bump строго по фактической смене DB-статуса. Webhook-событие —
+    # НЕ прокси: возврат меняет статус без webhook (проекция та же), а
+    # same-status re-entry идёт без смены статуса. req уже под FOR UPDATE.
+    if req.status != old_status:
+        req.status_version = (req.status_version or 0) + 1
     for dop in result.domain_ops:
         _apply_domain_op_sync(db, req, dop, actor)
     for ev in result.events:
@@ -238,7 +245,8 @@ def _apply_sync(db: Session, req: Request, result: TransitionResult,
         elif ev.kind == "webhook":
             emit_request_status_changed_sync(
                 db, ev.data["request_number"],
-                ev.data["old_status"], ev.data["new_status"], principal.source)
+                ev.data["old_status"], ev.data["new_status"], principal.source,
+                identity=EventIdentity(version=req.status_version))
 
 
 def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -> None:
@@ -377,8 +385,12 @@ async def _apply_async(db: AsyncSession, req: Request, result: TransitionResult,
                        now: datetime) -> None:
     if result.no_op:
         return
+    old_status = req.status
     for fld, op, value in result.patch:
         setattr(req, fld, _op_value(op, value, actor, now, getattr(req, fld, None)))
+    # ARCH-010: bump по фактической смене DB-статуса — зеркало _apply_sync.
+    if req.status != old_status:
+        req.status_version = (req.status_version or 0) + 1
     for dop in result.domain_ops:
         await _apply_domain_op_async(db, req, dop, actor)
     for ev in result.events:
@@ -387,7 +399,8 @@ async def _apply_async(db: AsyncSession, req: Request, result: TransitionResult,
         elif ev.kind == "webhook":
             await emit_request_status_changed(
                 db, ev.data["request_number"],
-                ev.data["old_status"], ev.data["new_status"], principal.source)
+                ev.data["old_status"], ev.data["new_status"], principal.source,
+                identity=EventIdentity(version=req.status_version))
 
 
 async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,

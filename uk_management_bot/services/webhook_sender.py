@@ -5,10 +5,13 @@ import json
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 
 import httpx
 from sqlalchemy import select, update, or_, and_
+from sqlalchemy.dialects import postgresql as pg_dialect
+from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -18,6 +21,65 @@ from uk_management_bot.database.models.webhook_outbox import WebhookOutbox
 logger = logging.getLogger(__name__)
 
 _BACKOFF_DELAYS = [2, 4, 8]  # seconds
+
+# ARCH-010: namespace UUIDv5 заморожен НАВСЕГДА и одинаков на всех окружениях
+# (profk/infrasafe/dev/тесты) — ротация сменила бы все будущие event_id и
+# сломала бессрочный дедуп InfraSafe. СВОЙ namespace (не выведенный из значений
+# InfraSafe) — чтобы наши детерминированные id структурно не пересеклись с их
+# исходящими в общем UNIQUE-пространстве integration_log (§2.1 спеки).
+NS_ARCH010 = uuid.UUID("a7f3c1e2-4b6d-4e8a-9c0f-1d2e3f4a5b6c")
+
+_VERSIONED_EVENTS = frozenset(
+    {"building.updated", "building.deleted", "request.status_changed"}
+)
+_ONE_SHOT_EVENTS = frozenset({"building.created", "request.created"})
+
+
+@dataclass(frozen=True)
+class EventIdentity:
+    """Identity-метаданные события — отдельный носитель, НЕ data-dict (тот
+    уходит и в Redis publish_*; сырой нескаляр там тихо ломает фронт-путь).
+
+    Ровно одно из полей для versioned-событий; repair_run_id — nonce
+    reconcile-ремонта (осознанный opt-out дедупа, §4 спеки)."""
+    version: int | None = None
+    repair_run_id: str | None = None
+
+
+def _deterministic_event_id(
+    event: str, entity_key: object, identity: "EventIdentity | None"
+) -> str:
+    """UUIDv5 от логической идентичности события (§2 спеки).
+
+    Fail-loud «единая точка» валидации identity: достижима ТОЛЬКО через funnel
+    _build_outbox_record → payload-билдеры; generic-ветка funnel'а (события вне
+    building.*/request.*) сюда намеренно не заходит — она вне контракта
+    InfraSafe и остаётся на uuid4."""
+    ident = identity or EventIdentity()
+    if ident.version is not None and ident.repair_run_id is not None:
+        raise ValueError(f"{event}: version и repair_run_id взаимоисключающи")
+    if event not in _VERSIONED_EVENTS and event not in _ONE_SHOT_EVENTS:
+        raise ValueError(
+            f"{event}: неизвестное контрактное событие — добавь в "
+            "_VERSIONED_EVENTS/_ONE_SHOT_EVENTS (webhook_sender.py)"
+        )
+    source = settings.OUTBOX_SOURCE_INSTANCE
+    if ident.repair_run_id is not None:
+        # Repair-nonce: свежий id на каждый запуск reconcile — ремонт обязан
+        # обойти и наш ON CONFLICT, и бессрочный дедуп InfraSafe.
+        name = f"{source}:{event}:{entity_key}:repair:{ident.repair_run_id}"
+    elif event in _VERSIONED_EVENTS:
+        if ident.version is None:
+            raise ValueError(
+                f"{event}: требуется EventIdentity.version или repair_run_id "
+                "(тихий uuid4-фолбэк запрещён)"
+            )
+        name = f"{source}:{event}:{entity_key}:{ident.version}"
+    else:  # one-shot: building.created / request.created
+        if ident.version is not None:
+            raise ValueError(f"{event}: one-shot событие не принимает version")
+        name = f"{source}:{event}:{entity_key}"
+    return str(uuid.uuid5(NS_ARCH010, name))
 
 
 def sign_payload(body: str, secret: str) -> str:
@@ -29,7 +91,9 @@ def sign_payload(body: str, secret: str) -> str:
     return f"t={timestamp},v1={sig}"
 
 
-def build_building_payload(event: str, data: dict) -> dict:
+def build_building_payload(
+    event: str, data: dict, identity: EventIdentity | None = None
+) -> dict:
     """Build webhook payload for building.* events with canonical field mapping.
 
     Coordinates use the non-prefixed `latitude`/`longitude` keys (API-level
@@ -38,8 +102,8 @@ def build_building_payload(event: str, data: dict) -> dict:
     InfraSafe's `trig_buildings_geom` trigger auto-derives the PostGIS geom
     column from these on insert/update.
     """
-    return {
-        "event_id": str(uuid.uuid4()),
+    payload = {
+        "event_id": _deterministic_event_id(event, data["id"], identity),
         "event": event,
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "building": {
@@ -51,18 +115,27 @@ def build_building_payload(event: str, data: dict) -> dict:
             "longitude": data.get("longitude"),
         },
     }
+    if identity is not None and identity.repair_run_id is not None:
+        # Фиксированно top-level (не внутри building) — семантический сигнал
+        # «это ремонт» для аудита InfraSafe; механику bypass делает nonce в id.
+        payload["repair"] = True
+    return payload
 
 
-def build_request_payload(event: str, data: dict) -> dict:
+def build_request_payload(
+    event: str, data: dict, identity: EventIdentity | None = None
+) -> dict:
     """Build webhook payload for request.* events."""
     payload = {
-        "event_id": str(uuid.uuid4()),
+        "event_id": _deterministic_event_id(event, data["request_number"], identity),
         "event": event,
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "request": {
             "request_number": data["request_number"],
         },
     }
+    if identity is not None and identity.repair_run_id is not None:
+        payload["repair"] = True  # top-level, единообразно с building.* (§4)
     if event == "request.created":
         payload["request"].update({
             "category": data.get("category", ""),
@@ -98,7 +171,9 @@ def _skip_if_disabled(caller: str, event: str, endpoint: str) -> bool:
     return True
 
 
-def _build_outbox_record(event: str, endpoint: str, data: dict) -> WebhookOutbox:
+def _build_outbox_record(
+    event: str, endpoint: str, data: dict, identity: EventIdentity | None = None
+) -> WebhookOutbox:
     """Единый builder outbox-записи (PR6, SSOT-кластер #1).
 
     Единственное место, где payload-диспетчеризация (building.*/request.*/
@@ -106,9 +181,9 @@ def _build_outbox_record(event: str, endpoint: str, data: dict) -> WebhookOutbox
     оба делегируют сюда, копий «keep in sync» больше нет.
     """
     if event.startswith("building."):
-        payload = build_building_payload(event, data)
+        payload = build_building_payload(event, data, identity)
     elif event.startswith("request."):
-        payload = build_request_payload(event, data)
+        payload = build_request_payload(event, data, identity)
     else:
         payload = {
             "event_id": str(uuid.uuid4()),
@@ -126,14 +201,44 @@ def _build_outbox_record(event: str, endpoint: str, data: dict) -> WebhookOutbox
     )
 
 
-async def queue_webhook(db: AsyncSession, event: str, endpoint: str, data: dict) -> None:
+def _outbox_insert_stmt(dialect_name: str, record: WebhookOutbox):
+    """ARCH-010: INSERT ... ON CONFLICT (event_id) DO NOTHING.
+
+    Детерминированный id делает дубль-emit (double-click, дубль-хендлер)
+    безопасным no-op'ом вместо IntegrityError. Dialect-aware: Postgres в
+    проде, SQLite в тестах (у обоих одинаковый on_conflict_do_nothing API).
+    Колонки с default/server_default (attempts, created_at и т.д.) не
+    перечисляются — их проставляет Core-insert/БД."""
+    values = {
+        "event_id": record.event_id,
+        "event": record.event,
+        "endpoint": record.endpoint,
+        "payload": record.payload,
+        "status": record.status,
+    }
+    insert_fn = (
+        pg_dialect.insert if dialect_name == "postgresql" else sqlite_dialect.insert
+    )
+    return insert_fn(WebhookOutbox).values(**values).on_conflict_do_nothing(
+        index_elements=["event_id"]
+    )
+
+
+async def queue_webhook(
+    db: AsyncSession, event: str, endpoint: str, data: dict,
+    identity: EventIdentity | None = None,
+) -> None:
     """Write a webhook outbox record within the caller's transaction (no commit)."""
     if _skip_if_disabled("queue_webhook", event, endpoint):
         return
-    db.add(_build_outbox_record(event, endpoint, data))
+    record = _build_outbox_record(event, endpoint, data, identity)
+    await db.execute(_outbox_insert_stmt(db.get_bind().dialect.name, record))
 
 
-def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) -> None:
+def queue_webhook_sync(
+    session: Session, event: str, endpoint: str, data: dict,
+    identity: EventIdentity | None = None,
+) -> None:
     """Sync variant of queue_webhook — for legacy sync-Session paths.
 
     Accepted callers:
@@ -151,7 +256,8 @@ def queue_webhook_sync(session: Session, event: str, endpoint: str, data: dict) 
     """
     if _skip_if_disabled("queue_webhook_sync", event, endpoint):
         return
-    session.add(_build_outbox_record(event, endpoint, data))
+    record = _build_outbox_record(event, endpoint, data, identity)
+    session.execute(_outbox_insert_stmt(session.get_bind().dialect.name, record))
 
 
 async def send_webhook(

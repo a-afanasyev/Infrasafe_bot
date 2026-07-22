@@ -61,6 +61,7 @@ def _reload_prod(monkeypatch: pytest.MonkeyPatch, admin_password: str):
     monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
     monkeypatch.setenv("INVITE_SECRET", "invite-secret-aaaaaaaaaaaaaaaa")
     monkeypatch.setenv("JWT_SECRET", "jwt-secret-bbbbbbbbbbbbbbbbbbbb")
+    monkeypatch.setenv("OUTBOX_SOURCE_INSTANCE", "profk")  # ARCH-010: обязателен в prod
     monkeypatch.setenv("ADMIN_PASSWORD", admin_password)
     mod_name = "uk_management_bot.config.settings"
     if mod_name in sys.modules:
@@ -87,3 +88,61 @@ def test_admin_password_low_entropy_rejected(monkeypatch: pytest.MonkeyPatch) ->
     """SEC-083: a long but low-entropy password (few distinct chars) is rejected."""
     with pytest.raises(ValueError, match="ADMIN_PASSWORD"):
         _reload_prod(monkeypatch, "aaaaaaaaaaaaaaaa")  # 16 chars, 1 distinct
+
+
+# ---------------------------------------------------------------------------
+# ARCH-010: OUTBOX_SOURCE_INSTANCE — идентификатор инсталляции для UUIDv5
+# event_id. Allowlist работает всегда; фолбэк "dev" — только в DEBUG.
+# ---------------------------------------------------------------------------
+
+def _reload_prod_outbox(monkeypatch: pytest.MonkeyPatch, source_instance: str | None):
+    """Полный валидный prod-env (DEBUG=False), варьируется только
+    OUTBOX_SOURCE_INSTANCE (None = переменная отсутствует)."""
+    monkeypatch.setenv("DEBUG", "False")
+    monkeypatch.setenv("BOT_TOKEN", "123:test-bot-token")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@postgres:5432/db")
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    monkeypatch.setenv("INVITE_SECRET", "invite-secret-aaaaaaaaaaaaaaaa")
+    monkeypatch.setenv("JWT_SECRET", "jwt-secret-bbbbbbbbbbbbbbbbbbbb")
+    monkeypatch.setenv("ADMIN_PASSWORD", "Abc123Xyz789Qwer")
+    if source_instance is None:
+        monkeypatch.delenv("OUTBOX_SOURCE_INSTANCE", raising=False)
+    else:
+        monkeypatch.setenv("OUTBOX_SOURCE_INSTANCE", source_instance)
+    mod_name = "uk_management_bot.config.settings"
+    if mod_name in sys.modules:
+        del sys.modules[mod_name]
+    return importlib.import_module(mod_name)
+
+
+@pytest.mark.unit
+def test_outbox_source_instance_valid_prod_value_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    mod = _reload_prod_outbox(monkeypatch, "infrasafe")
+    assert mod.settings.OUTBOX_SOURCE_INSTANCE == "infrasafe"
+
+
+@pytest.mark.unit
+def test_outbox_source_instance_required_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-DEBUG без переменной → ValueError (fail-loud, без тихого фолбэка)."""
+    with pytest.raises(ValueError, match="OUTBOX_SOURCE_INSTANCE"):
+        _reload_prod_outbox(monkeypatch, None)
+
+
+@pytest.mark.unit
+def test_outbox_source_instance_garbage_rejected_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="OUTBOX_SOURCE_INSTANCE"):
+        _reload_prod_outbox(monkeypatch, "staging")
+
+
+@pytest.mark.unit
+def test_outbox_source_instance_garbage_rejected_in_debug(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allowlist работает и при DEBUG=True — мусор не проходит нигде."""
+    with pytest.raises(ValueError, match="OUTBOX_SOURCE_INSTANCE"):
+        _reload_settings(monkeypatch, OUTBOX_SOURCE_INSTANCE="garbage")
+
+
+@pytest.mark.unit
+def test_outbox_source_instance_debug_fallback_dev(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DEBUG=True без переменной → стабильный фолбэк "dev"."""
+    mod = _reload_settings(monkeypatch, OUTBOX_SOURCE_INSTANCE=None)
+    assert mod.settings.OUTBOX_SOURCE_INSTANCE == "dev"
