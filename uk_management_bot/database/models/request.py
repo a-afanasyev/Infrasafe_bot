@@ -106,6 +106,9 @@ class Request(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    # ARCH-010: версия статуса для детерминированного event_id
+    # (request.status_changed); бампается только при фактической смене статуса.
+    status_version = Column(Integer, nullable=False, server_default="0", default=0)
     
     # Обратные связи
     ratings = relationship("Rating", back_populates="request")

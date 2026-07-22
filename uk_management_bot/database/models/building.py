@@ -31,6 +31,9 @@ class Building(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # ARCH-010: версия сущности для детерминированного event_id (building.updated/
+    # building.deleted); бампается только при реальном изменении полей.
+    building_version = Column(Integer, nullable=False, server_default="0", default=0)
 
     # Связи
     yard = relationship("Yard", back_populates="buildings")
