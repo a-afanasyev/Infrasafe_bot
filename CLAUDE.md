@@ -20,7 +20,7 @@
 - **Контейнеры**: бот = `uk-management-bot`, API = `uk-management-api`, фронт = `uk-frontend`, БД = `uk-postgres`, кэш = `uk-redis`.
 - **Тесты бота**: только внутри контейнера: `docker exec uk-management-bot pytest`. Два набора (оба в CI): unit/handlers/services — `pytest -q` (testpaths=`uk_management_bot/`); API + интеграция/SSOT-гейты — `pytest -q tests/api tests/services` (sqlite-conftest'ы). Корневой top-level `tests/*.py` удалён (был заброшенный legacy).
 - **Тесты фронта**: `cd frontend && npm test` (или `npx vitest`).
-- **Rebuild бота**: `docker compose build uk-management-bot && docker compose up -d uk-management-bot`.
+- **Rebuild бота**: `docker compose build app && docker compose up -d app` (сервис называется `app`; `uk-management-bot` — имя контейнера, build/up по нему не работают).
 - **Локализация бота**: файлы `config/locales/ru.json`, `config/locales/uz.json`. Функция `get_text(key, language=lang)`. Статусы через `utils/status_display.py`. Адреса через `utils/address_helpers.py:localize_address()`.
 - **Локализация фронта**: `frontend/src/i18n/locales/{ru,uz}.json`, библиотека i18next.
 - **Роли в БД**: `user.roles` — JSON-массив строк, `user.active_role` — текущая активная роль. Не использовать устаревшее поле `user.role`.
