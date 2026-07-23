@@ -21,6 +21,7 @@ from uk_management_bot.keyboards.shifts import (
 from uk_management_bot.keyboards.base import get_executor_suggestion_inline
 from uk_management_bot.database.session import session_scope
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.datetime_utils import utc_now
 from uk_management_bot.utils.button_texts import (
     get_accept_shift_texts,
     get_end_shift_texts,
@@ -141,14 +142,13 @@ async def end_shift_confirm(message: Message, db=None):
 
             # Если смен несколько - показываем список для выбора
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            from datetime import datetime
 
             text = get_text("shifts.select_shift_to_end", language=lang) + "\n\n"
 
             keyboard_rows = []
             for idx, shift in enumerate(active_shifts, 1):
-                # Рассчитываем длительность
-                duration = datetime.now() - shift.start_time.replace(tzinfo=None).replace(tzinfo=None)
+                # Рассчитываем длительность (AUD5-CODE-3: start_time timestamptz — aware)
+                duration = utc_now() - shift.start_time
                 hours = int(duration.total_seconds() // 3600)
                 minutes = int((duration.total_seconds() % 3600) // 60)
 
@@ -198,7 +198,6 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
         from uk_management_bot.database.models.request import Request
         from uk_management_bot.database.models.request_assignment import RequestAssignment
         from sqlalchemy import and_
-        from datetime import datetime
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
         shift = db.query(Shift).filter(Shift.id == shift_id).first()
@@ -206,8 +205,8 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
             await message.answer(get_text("shifts.shift_not_found", language=lang))
             return
 
-        # Рассчитываем длительность
-        duration = datetime.now() - shift.start_time.replace(tzinfo=None)
+        # Рассчитываем длительность (AUD5-CODE-3: start_time timestamptz — aware)
+        duration = utc_now() - shift.start_time
         hours = int(duration.total_seconds() // 3600)
         minutes = int((duration.total_seconds() % 3600) // 60)
 
@@ -359,7 +358,6 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
             # Завершаем конкретную смену
             from uk_management_bot.database.models.shift import Shift
             from uk_management_bot.database.models.user import User
-            from datetime import datetime
 
             user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
             if not user:
@@ -377,7 +375,7 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
                 return
 
             # Завершаем смену
-            shift.end_time = datetime.now()
+            shift.end_time = utc_now()
             shift.status = "completed"
 
             # Создаем audit log

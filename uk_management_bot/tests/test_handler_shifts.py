@@ -7,7 +7,7 @@ shifts_history, handle_end_shift_cancel, end_shift_no, suggest_executor_skip.
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aiogram.types import Message, CallbackQuery, User as TgUser
 
@@ -67,7 +67,8 @@ def _make_shift(shift_id=1, user_id=10, status="active"):
     shift.id = shift_id
     shift.user_id = user_id
     shift.status = status
-    shift.start_time = datetime(2025, 1, 15, 9, 0, 0)
+    # AUD5-CODE-3: Shift-колонки timestamptz — прод-значения всегда aware.
+    shift.start_time = datetime(2025, 1, 15, 9, 0, 0, tzinfo=timezone.utc)
     shift.end_time = None
     shift.specialization_focus = []
     return shift
