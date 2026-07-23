@@ -3,7 +3,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta, date, timezone
+from datetime import timedelta, date
 from typing import Optional, Dict, Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,6 +15,7 @@ from uk_management_bot.services.shift_planning_service import ShiftPlanningServi
 from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
 from uk_management_bot.services.shift_transfer_service import ShiftTransferService
 from uk_management_bot.services.notification_service import NotificationService
+from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +232,7 @@ class ShiftScheduler:
                 result = planning_service.auto_create_shifts(days_ahead=7)
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 logger.info(f"Автосоздание смен завершено: {result['total_created']} смен создано")
 
@@ -246,7 +247,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка автосоздания смен: {e}")
 
     async def _rebalance_daily_assignments(self):
@@ -269,7 +270,7 @@ class ShiftScheduler:
                     results.append(result)
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 total_rebalanced = sum(r.get('rebalanced_shifts', 0) for r in results)
                 logger.info(f"Перебалансировка завершена: {total_rebalanced} назначений изменено")
@@ -278,7 +279,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка перебалансировки назначений: {e}")
 
     async def _process_expired_transfers(self):
@@ -295,7 +296,7 @@ class ShiftScheduler:
                 result = await transfer_service.process_expired_transfers(hours_threshold=24)
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 if result['processed_count'] > 0:
                     logger.info(f"Обработано {result['processed_count']} истекших передач")
@@ -311,7 +312,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка обработки истекших передач: {e}")
 
     async def _cleanup_expired_data(self):
@@ -323,7 +324,7 @@ class ShiftScheduler:
             db = SessionLocal()
             try:
                 # Удаляем завершенные передачи старше 30 дней
-                cutoff_date = datetime.now() - timedelta(days=30)
+                cutoff_date = utc_now() - timedelta(days=30)
 
                 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
                 expired_transfers = db.query(ShiftTransfer).filter(
@@ -340,7 +341,7 @@ class ShiftScheduler:
                 db.commit()
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 logger.info(f"Очистка завершена: удалено {expired_transfers} записей передач")
             finally:
@@ -348,7 +349,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка очистки данных: {e}")
 
     async def _notify_upcoming_shifts(self):
@@ -365,9 +366,9 @@ class ShiftScheduler:
 
                 # Ищем смены, которые начинаются в течение следующих 2 часов
                 # QA-04: tz-aware now — Shift.start_time это timestamptz; naive
-                # datetime.now() ронял `shift.start_time - now` ("can't subtract
-                # offset-naive and offset-aware datetimes") → уведомления не уходили.
-                now = datetime.now(timezone.utc)
+                # now ронял `shift.start_time - now` ("can't subtract offset-naive
+                # and offset-aware datetimes") → уведомления не уходили.
+                now = utc_now()
                 upcoming_threshold = now + timedelta(hours=2)
 
                 upcoming_shifts = db.query(Shift).join(User).filter(
@@ -394,7 +395,7 @@ class ShiftScheduler:
                         logger.error(f"Ошибка отправки уведомления для смены {shift.id}: {e}")
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 if notifications_sent > 0:
                     logger.info(f"Отправлено {notifications_sent} уведомлений о предстоящих сменах")
@@ -403,7 +404,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка отправки уведомлений: {e}")
 
     async def _auto_assign_empty_shifts(self):
@@ -414,7 +415,8 @@ class ShiftScheduler:
                 from uk_management_bot.database.models.shift import Shift
 
                 # Ищем смены без исполнителей, которые начинаются в течение 48 часов
-                now = datetime.now()
+                # AUD5-CODE-3: Shift.start_time — timestamptz; naive now мис-сравнивался.
+                now = utc_now()
                 assignment_threshold = now + timedelta(hours=48)
 
                 empty_shifts = db.query(Shift).filter(
@@ -487,7 +489,7 @@ class ShiftScheduler:
                         total_assigned += result.get('assigned_requests', 0)
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 if total_assigned > 0:
                     logger.info(f"Автоназначение заявок завершено: {total_assigned} заявок назначено")
@@ -503,7 +505,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка автоназначения заявок: {e}")
 
     async def _sync_request_assignments(self):
@@ -528,7 +530,7 @@ class ShiftScheduler:
                         total_reassigned += result.get('reassigned', 0)
 
                 self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = datetime.now()
+                self.task_stats[task_name]['last_run'] = utc_now()
 
                 if total_reassigned > 0:
                     logger.info(f"Синхронизация завершена: {total_reassigned} переназначений")
@@ -544,7 +546,7 @@ class ShiftScheduler:
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = datetime.now()
+            self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка синхронизации назначений: {e}")
 
     async def _auto_manager_tick(self):
