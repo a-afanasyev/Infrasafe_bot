@@ -1,6 +1,6 @@
 """Tests for shift Pydantic schemas (uk_management_bot/api/shifts/schemas.py)."""
 import pytest
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from pydantic import ValidationError
 
 from uk_management_bot.api.shifts.schemas import (
@@ -245,6 +245,35 @@ class TestCreateShiftBody:
                 user_id=1, start_time=start, end_time=end, shift_type="invalid"
             )
 
+    def test_naive_datetimes_coerced_to_utc(self):
+        """AUD5-APIFE-4: naive ISO input считается UTC (семантика прежнего PATCH)."""
+        start = datetime(2026, 8, 1, 10, 0, 0)
+        end = datetime(2026, 8, 1, 15, 0, 0)
+        body = CreateShiftBody(user_id=1, start_time=start, end_time=end)
+        assert body.start_time == datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
+        assert body.end_time == datetime(2026, 8, 1, 15, 0, 0, tzinfo=timezone.utc)
+
+    def test_aware_datetimes_preserved(self):
+        """Aware-вход не трогаем — тот же offset остаётся."""
+        tashkent = timezone(timedelta(hours=5))
+        start = datetime(2026, 8, 1, 10, 0, 0, tzinfo=tashkent)
+        end = datetime(2026, 8, 1, 15, 0, 0, tzinfo=tashkent)
+        body = CreateShiftBody(user_id=1, start_time=start, end_time=end)
+        assert body.start_time == start
+        assert body.start_time.tzinfo == tashkent
+
+    def test_mixed_naive_aware_succeeds(self):
+        """Честный RED: сейчас check_time_order падает TypeError на naive<aware.
+
+        naive start (UTC after coercion) + aware end (UTC-эквивалент) →
+        должно успешно создаться, end > start.
+        """
+        start = datetime(2026, 8, 1, 10, 0, 0)  # naive → coerced to UTC
+        end = datetime(2026, 8, 1, 15, 0, 0, tzinfo=timezone.utc)
+        body = CreateShiftBody(user_id=1, start_time=start, end_time=end)
+        assert body.start_time == datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
+        assert body.end_time == end
+
 
 # ═══════════════════════ UpdateShiftBody ═══════════════════════
 
@@ -269,6 +298,15 @@ class TestUpdateShiftBody:
     def test_max_requests_zero_raises(self):
         with pytest.raises(ValidationError):
             UpdateShiftBody(max_requests=0)
+
+    def test_naive_datetimes_coerced_to_utc(self):
+        body = UpdateShiftBody(start_time=datetime(2026, 8, 1, 10, 0, 0))
+        assert body.start_time == datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
+
+    def test_none_datetimes_stay_none(self):
+        body = UpdateShiftBody()
+        assert body.start_time is None
+        assert body.end_time is None
 
 
 # ═══════════════════════ CreateFromTemplateBody ═══════════════════════

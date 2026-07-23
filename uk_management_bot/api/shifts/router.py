@@ -870,15 +870,17 @@ async def update_shift(
             detail=f"Cannot edit a '{shift.status}' shift",
         )
 
-    # Normalise incoming times to tz-aware UTC so they compare/store consistently
-    # with the DB columns (DateTime(timezone=True)); a client may omit the offset.
-    for key in ("start_time", "end_time"):
-        if data.get(key) is not None and data[key].tzinfo is None:
-            data[key] = data[key].replace(tzinfo=timezone.utc)
-
-    # Validate time order against effective values (incoming or existing).
+    # AUD5-APIFE-4: incoming times are already UTC-coerced by CreateShiftBody/
+    # UpdateShiftBody field_validator. The existing shift.start_time/end_time
+    # fallback values, however, come straight from the DB — coerce those too
+    # in case a naive value slipped through (e.g. sqlite doesn't round-trip
+    # tzinfo), so this comparison never mixes naive and aware.
     new_start = data.get("start_time", shift.start_time)
     new_end = data.get("end_time", shift.end_time)
+    if new_start is not None and new_start.tzinfo is None:
+        new_start = new_start.replace(tzinfo=timezone.utc)
+    if new_end is not None and new_end.tzinfo is None:
+        new_end = new_end.replace(tzinfo=timezone.utc)
     if new_start is not None and new_end is not None and new_end <= new_start:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
 

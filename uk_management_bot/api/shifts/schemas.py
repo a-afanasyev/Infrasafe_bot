@@ -1,6 +1,6 @@
-from pydantic import BaseModel, model_validator, Field
+from pydantic import BaseModel, model_validator, field_validator, Field
 from typing import Optional, Literal
-from datetime import datetime, date as date_type
+from datetime import datetime, date as date_type, timezone
 import json
 
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
@@ -141,6 +141,15 @@ class ShiftStatsOut(BaseModel):
     pending_transfers: int
 
 
+def _ensure_utc(v: Optional[datetime]) -> Optional[datetime]:
+    # AUD5-APIFE-4: a client may send an ISO datetime without an offset. Shift
+    # columns are timestamptz — treat naive input as UTC (matches the previous
+    # PATCH-only coercion in router.py). Aware input is left untouched.
+    if v is not None and v.tzinfo is None:
+        return v.replace(tzinfo=timezone.utc)
+    return v
+
+
 # Request bodies
 class CreateShiftBody(BaseModel):
     user_id: int
@@ -151,6 +160,11 @@ class CreateShiftBody(BaseModel):
     max_requests: int = Field(default=10, ge=1)
     priority_level: int = Field(default=1, ge=1, le=5)
     notes: Optional[str] = None
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def _coerce_utc(cls, v):
+        return _ensure_utc(v)
 
     @model_validator(mode='after')
     def check_time_order(self):
@@ -169,6 +183,11 @@ class UpdateShiftBody(BaseModel):
     max_requests: Optional[int] = Field(default=None, ge=1)
     priority_level: Optional[int] = Field(default=None, ge=1, le=5)
     specialization_focus: Optional[list[str]] = None
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def _coerce_utc(cls, v):
+        return _ensure_utc(v)
 
 
 class CreateFromTemplateBody(BaseModel):

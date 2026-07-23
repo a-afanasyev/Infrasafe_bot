@@ -184,6 +184,43 @@ async def test_from_template_endpoint_returns_409(client, db_session):
 
 
 @pytest.mark.asyncio
+async def test_post_naive_iso_normalized_to_utc(client, db_session, monkeypatch):
+    """AUD5-APIFE-4: naive-ISO POST body должен нормализоваться к UTC — как
+    сейчас делает только PATCH (router.py, до чистки Task 5). Честный RED:
+    сейчас `find_overlapping_shift_for_update` получает naive start_time/
+    end_time из необработанного body.
+
+    Спай на find_overlapping_shift_for_update, а не JSON-ответ: sqlite (тестовый
+    движок) не хранит tzinfo на DateTime(timezone=True) — после `db.refresh()`
+    любое значение возвращается naive независимо от того, что было записано,
+    так что офсет в ответе ничего не доказывает в этом окружении (PostgreSQL
+    в проде — доказывает; здесь недостижимо).
+    """
+    import uk_management_bot.api.shifts.service as svc_module
+
+    user = await _executor(db_session, tg=90022)
+    await db_session.commit()
+
+    received = {}
+    original = svc_module.find_overlapping_shift_for_update
+
+    async def _spy(db, *, user_id, start_time, end_time, **kw):
+        received["start_time"] = start_time
+        received["end_time"] = end_time
+        return await original(db, user_id=user_id, start_time=start_time, end_time=end_time, **kw)
+
+    monkeypatch.setattr(svc_module, "find_overlapping_shift_for_update", _spy)
+
+    naive_start = "2026-08-02T10:00:00"
+    naive_end = "2026-08-02T15:00:00"
+    resp = await client.post("/api/v2/shifts", json={
+        "user_id": user.id, "start_time": naive_start, "end_time": naive_end})
+    assert resp.status_code == 201, resp.text
+    assert received["start_time"].tzinfo is not None
+    assert received["end_time"].tzinfo is not None
+
+
+@pytest.mark.asyncio
 async def test_patch_endpoint_returns_409_on_overlap(client, db_session):
     """PATCH /shifts/{id} через HTTP: сдвиг окна в пересечение → 409 (проводка lock+check)."""
     user = await _executor(db_session, tg=90021)
@@ -199,6 +236,24 @@ async def test_patch_endpoint_returns_409_on_overlap(client, db_session):
         "start_time": (BASE + timedelta(hours=1)).isoformat(),   # 11–13 → пересекает 10–12
         "end_time": (BASE + timedelta(hours=3)).isoformat()})
     assert resp.status_code == 409, resp.text
+
+
+@pytest.mark.asyncio
+async def test_patch_naive_iso_still_ok(client, db_session):
+    """Regression-GREEN (не RED): PATCH уже сегодня коэрсит naive→UTC (был
+    router-блок, теперь field_validator схемы) — 200, без TypeError на
+    order-check (shift.start_time из БД падал naive на sqlite-refresh,
+    ср. Task 5 router-фикс fallback-коэрса)."""
+    user = await _executor(db_session, tg=90023)
+    shift = Shift(user_id=user.id, status="planned",
+                  start_time=BASE, end_time=BASE + timedelta(hours=2))
+    db_session.add(shift)
+    await db_session.commit()
+    await db_session.refresh(shift)
+
+    resp = await client.patch(f"/api/v2/shifts/{shift.id}", json={
+        "end_time": "2026-08-01T13:00:00"})  # naive, no offset
+    assert resp.status_code == 200, resp.text
 
 
 # ── APIFE-11 — advisory-lock сериализует конкурентные вставки (PG) ─────────
