@@ -281,7 +281,7 @@ async def test_notifies_manager_in_their_own_language_no_duty(env, monkeypatch):
     _always_active_config(db)
     monkeypatch.setattr(orch_mod, "_now_utc", lambda: FIXED_NOW)
 
-    mgr = _manager(db, 2, 2002, language="uz")
+    _manager(db, 2, 2002, language="uz")
     _group_request(db, "260723-107")
     # Нет ни одного исполнителя вовсе.
 
@@ -635,7 +635,7 @@ async def test_run_once_splits_slots_between_main_and_residual_same_tick(env, mo
     _always_active_config(db, max_requests_per_run=8)
     monkeypatch.setattr(orch_mod, "_now_utc", lambda: FIXED_NOW)
 
-    mgr = _manager(db, 2, 2002)
+    _manager(db, 2, 2002)
     # Ни одного исполнителя вовсе — обе очереди гарантированно «no duty»,
     # что делает подсчёт обработанных заявок детерминированным (никакого
     # реального назначения, только cooldown-запись + уведомление).
