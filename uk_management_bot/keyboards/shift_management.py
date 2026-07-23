@@ -16,7 +16,8 @@ def get_main_shift_menu(language: str = "ru") -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.shift_planning", language=language), callback_data="shift_planning")],
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.analytics_reports", language=language), callback_data="shift_analytics")],
         [InlineKeyboardButton(text=get_text("shift_management.keyboards.template_management", language=language), callback_data="template_management")],
-        [InlineKeyboardButton(text=get_text("shift_management.keyboards.assign_executors", language=language), callback_data="shift_executor_assignment")]
+        [InlineKeyboardButton(text=get_text("shift_management.keyboards.assign_executors", language=language), callback_data="shift_executor_assignment")],
+        [InlineKeyboardButton(text=get_text("auto_manager.keyboards.menu_button", language=language), callback_data="auto_manager_menu")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

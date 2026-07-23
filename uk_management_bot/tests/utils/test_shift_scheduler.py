@@ -39,6 +39,20 @@ class TestShiftSchedulerInit:
         sched = _make_scheduler(notification_service=mock_notif)
         assert sched.notification_service is mock_notif
 
+    def test_auto_manager_orchestrator_created(self):
+        from uk_management_bot.services.auto_manager.orchestrator import AutoManagerOrchestrator
+        sched = _make_scheduler()
+        assert isinstance(sched._auto_manager, AutoManagerOrchestrator)
+
+    def test_auto_manager_orchestrator_single_instance_per_scheduler(self):
+        # Same ShiftScheduler instance must keep the SAME orchestrator across
+        # accesses (cross-tick cooldown/dedup state lives on it) — not
+        # recreated per-tick.
+        sched = _make_scheduler()
+        first = sched._auto_manager
+        second = sched._auto_manager
+        assert first is second
+
     def test_task_stats_initialized(self):
         sched = _make_scheduler()
         expected_tasks = {
@@ -72,6 +86,28 @@ class TestSetupJobs:
         sched._mock_apscheduler.add_job.side_effect = Exception("scheduler error")
         # Should not raise — exception is caught internally
         sched.setup_jobs()
+
+    def test_auto_manager_tick_job_registered(self):
+        from datetime import timedelta
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        sched = _make_scheduler()
+        mock_apscheduler = sched._mock_apscheduler
+        sched.setup_jobs()
+
+        auto_manager_calls = [
+            call for call in mock_apscheduler.add_job.call_args_list
+            if call.kwargs.get("id") == "auto_manager_tick"
+        ]
+        assert len(auto_manager_calls) == 1
+
+        call = auto_manager_calls[0]
+        assert call.args[0] == sched._auto_manager_tick
+        trigger = call.args[1]
+        assert isinstance(trigger, IntervalTrigger)
+        assert trigger.interval == timedelta(minutes=2)
+        assert call.kwargs.get("max_instances") == 1
+        assert call.kwargs.get("coalesce") is True
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +440,42 @@ class TestNotifyUpcomingShifts:
 
         mock_notif.send_shift_reminder.assert_awaited_once()
         assert sched.task_stats["notify_upcoming"]["success"] == 1
+
+
+class TestAutoManagerTick:
+    """Wiring test for _auto_manager_tick — the orchestrator itself already
+    has its own dedicated test suite (test_auto_manager_orchestrator.py);
+    this only verifies the scheduler delegates correctly and isolates
+    failures."""
+
+    def test_calls_orchestrator_run_once(self):
+        sched = _make_scheduler()
+        sched._auto_manager = MagicMock()
+        sched._auto_manager.run_once = AsyncMock()
+
+        asyncio.get_event_loop().run_until_complete(sched._auto_manager_tick())
+
+        sched._auto_manager.run_once.assert_awaited_once_with()
+
+    def test_does_not_open_own_db_session(self):
+        # run_once() manages its own SessionLocal() internally — the tick
+        # wrapper must not touch SessionLocal at all.
+        sched = _make_scheduler()
+        sched._auto_manager = MagicMock()
+        sched._auto_manager.run_once = AsyncMock()
+
+        with patch(SESSION_LOCAL_PATH) as mock_session_local:
+            asyncio.get_event_loop().run_until_complete(sched._auto_manager_tick())
+
+        mock_session_local.assert_not_called()
+
+    def test_exception_from_run_once_is_caught_and_logged(self):
+        sched = _make_scheduler()
+        sched._auto_manager = MagicMock()
+        sched._auto_manager.run_once = AsyncMock(side_effect=Exception("boom"))
+
+        # Should not raise — scheduler must survive a bad tick.
+        asyncio.get_event_loop().run_until_complete(sched._auto_manager_tick())
 
 
 # ---------------------------------------------------------------------------

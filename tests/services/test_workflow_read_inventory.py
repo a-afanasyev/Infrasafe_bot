@@ -196,6 +196,17 @@ BASELINE: set[tuple[str, str, str]] = {
     # статусов сохраняются по обе стороны cutover.
     ('uk_management_bot/services/admin_handler_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/admin_handler_service.py', 'in_:Request', 'status'),
+    # Task 5 (auto-manager): main/residual queue-фильтры оркестратора —
+    # набор-фильтр по конкретным статусам («В работе»/«Новая») для выборки
+    # кандидатов на авто-назначение, НЕ workflow-переход (переход делает
+    # canonical run_command_sync/workflow_runner). Значения статусов не
+    # затрагиваются канон-нормализацией A.
+    ('uk_management_bot/services/auto_manager/orchestrator.py', 'cmp:Request', 'status'),
+    # Ранее одобренная задача (rule_engine.select_executor): load-ranking
+    # least-loaded исполнителя считает «открытые» заявки исполнителя по
+    # локальному OPEN_LOAD_STATUSES (см. докстринг модуля) — набор-фильтр для
+    # балансировки нагрузки, не workflow-переход.
+    ('uk_management_bot/services/auto_manager/rule_engine.py', 'in_:Request', 'status'),
     # Складской учёт: вкладка «На закуп» показывает открытые заявки в статусе
     # «Закуп» (точечный SQL-фильтр `Request.status == REQUEST_STATUS_PURCHASE`
     # в material_service), а guard_executor_issue (request_handler_service,

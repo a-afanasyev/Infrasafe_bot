@@ -10,6 +10,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from uk_management_bot.database.session import SessionLocal
+from uk_management_bot.services.auto_manager.orchestrator import AutoManagerOrchestrator
 from uk_management_bot.services.shift_planning_service import ShiftPlanningService
 from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
 from uk_management_bot.services.shift_transfer_service import ShiftTransferService
@@ -28,6 +29,10 @@ class ShiftScheduler:
         self.notification_service = notification_service
         self._bot = bot
         self.is_running = False
+
+        # Единственный экземпляр на процесс — держит между tick-ами
+        # анти-starvation курсоры/cooldown/дедуп уведомлений (Task 6).
+        self._auto_manager = AutoManagerOrchestrator(bot=bot, notification_service=notification_service)
 
         # Статистика выполнения задач
         self.task_stats = {
@@ -131,6 +136,16 @@ class ShiftScheduler:
                 IntervalTrigger(minutes=30),
                 id='sync_assignments',
                 name='Синхронизация назначений со сменами',
+                max_instances=1,
+                coalesce=True
+            )
+
+            # 10. Автоматический менеджер — назначение дежурных на ночные заявки (каждые 2 минуты)
+            self.scheduler.add_job(
+                self._auto_manager_tick,
+                IntervalTrigger(minutes=2),
+                id='auto_manager_tick',
+                name='Автоматический менеджер — назначение дежурных',
                 max_instances=1,
                 coalesce=True
             )
@@ -531,6 +546,17 @@ class ShiftScheduler:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = datetime.now()
             logger.error(f"Ошибка синхронизации назначений: {e}")
+
+    async def _auto_manager_tick(self):
+        """Тик автоматического менеджера — назначение дежурных на ночные заявки.
+
+        `AutoManagerOrchestrator.run_once()` управляет собственной сессией
+        (`SessionLocal()`) внутри себя, поэтому здесь own db-сессия не нужна.
+        """
+        try:
+            await self._auto_manager.run_once()
+        except Exception as e:
+            logger.error(f"Ошибка тика автоматического менеджера: {e}")
 
 
 # Глобальный экземпляр планировщика

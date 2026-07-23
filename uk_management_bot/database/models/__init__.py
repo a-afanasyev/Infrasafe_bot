@@ -34,6 +34,9 @@ from .invite_nonce import InviteNonce
 # Resident-board public page config
 from .board_config import BoardConfig
 
+# Singleton-конфиг автоматического менеджера (авто-назначение заявок)
+from .auto_manager_config import AutoManagerConfig
+
 # Обратная связь (жалобы/пожелания)
 from .feedback import Feedback
 
@@ -78,6 +81,7 @@ __all__ = [
     'WebhookInbox',
     'InviteNonce',
     'BoardConfig',
+    'AutoManagerConfig',
     'Feedback',
     'RequestNumberCounter',
     'Material',

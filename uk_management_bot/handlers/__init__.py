@@ -26,6 +26,9 @@ from .user_yards_management import router as user_yards_router
 # Обработчик обратной связи (жалобы / пожелания)
 from .feedback import router as feedback_router
 
+# Бот-UI автоматического менеджера (авто-назначение ночных заявок)
+from .auto_manager import router as auto_manager_router
+
 # Список всех роутеров для регистрации
 __all__ = [
     "auth_router",
@@ -45,5 +48,7 @@ __all__ = [
     # Роутер управления дворами
     "user_yards_router",
     # Роутер обратной связи
-    "feedback_router"
+    "feedback_router",
+    # Роутер автоматического менеджера
+    "auto_manager_router",
 ]

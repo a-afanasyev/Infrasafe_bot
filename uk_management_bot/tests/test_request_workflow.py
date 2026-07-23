@@ -580,6 +580,94 @@ class TestExecutorClaim:
 
 
 # ===========================================================================
+# SYSTEM_AUTO_PROMOTE — авто-менеджер повышает group→individual (auto-manager
+# phase1, task 2). Race-guard: authorize=_system_can_promote должен ловить
+# ситуацию «менеджер успел переназначить между read планировщика и его write».
+# ===========================================================================
+
+AUTO_MANAGER = ActorContext(kind="system", user_id=None, system_actor="auto_manager")
+AUTO_MANAGER_PRINCIPAL = PrincipalRef(kind="system", user_id=None,
+                                      source="scheduler",
+                                      system_actor="auto_manager")
+
+
+class TestSystemAutoPromote:
+    def test_capability_includes_promote_and_dispatch(self):
+        """auto_manager видит SYSTEM_AUTO_PROMOTE на group-заявке «В работе»
+        и SYSTEM_DISPATCH_ASSIGN на «Новая» (резидуальный случай, wiring-only
+        в этой задаче — использование за пределами объёма)."""
+        assert allowed_actions(_group_snap(), AUTO_MANAGER) == \
+            {Action.SYSTEM_AUTO_PROMOTE}
+        assert allowed_actions(_snap(REQUEST_STATUS_NEW), AUTO_MANAGER) == \
+            {Action.SYSTEM_DISPATCH_ASSIGN}
+
+    def test_dispatcher_cannot_auto_promote(self):
+        """capability-разделение: dispatcher НЕ имеет SYSTEM_AUTO_PROMOTE."""
+        assert Action.SYSTEM_AUTO_PROMOTE not in \
+            allowed_actions(_group_snap(), DISPATCHER)
+
+    def test_happy_path_promotes_group_to_individual(self):
+        res = plan_transition(
+            _group_snap(), ActionCommand(
+                "c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": EXECUTOR_ID}),
+            AUTO_MANAGER, AUTO_MANAGER_PRINCIPAL, NOW)
+        f = _patch_fields(res)
+        assert res.new_canon_status == REQUEST_STATUS_IN_PROGRESS
+        assert f["executor_id"] == (Op.SET, EXECUTOR_ID)   # Op.SET, НЕ SET_ACTOR
+        assert f["assignment_type"] == (Op.SET, "individual")
+        assert f["assigned_group"] == (Op.CLEAR, None)
+        assert f["assigned_at"][0] == Op.SET_NOW
+        assert any(d.kind == "promote_group_assignment"
+                   and d.data["executor_id"] == EXECUTOR_ID
+                   for d in res.domain_ops)
+
+    def test_race_rejected_when_assignment_already_claimed(self):
+        """Регрессия race-condition: между read авто-менеджера и его write
+        group-назначение уже забрано (unclaimed=False, executor_id=99 на
+        assignment) — SYSTEM_AUTO_PROMOTE отклоняется как NotAuthorized."""
+        snap = _group_snap(unclaimed=False, executor=99)
+        with pytest.raises(NotAuthorized):
+            plan_transition(
+                snap, ActionCommand(
+                    "c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": EXECUTOR_ID}),
+                AUTO_MANAGER, AUTO_MANAGER_PRINCIPAL, NOW)
+
+    def test_race_rejected_when_manager_already_assigned_individual(self):
+        """Та же гонка с другой стороны: менеджер успел переназначить заявку
+        на конкретного исполнителя (request.executor_id уже не None,
+        assignment_type=individual) — авто-менеджер не должен перезаписать
+        менеджерское назначение."""
+        snap = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID,
+                     assignment_type="individual", unclaimed=False)
+        with pytest.raises(NotAuthorized):
+            plan_transition(
+                snap, ActionCommand(
+                    "c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": 77}),
+                AUTO_MANAGER, AUTO_MANAGER_PRINCIPAL, NOW)
+
+    def test_not_authorized_for_user_actor(self):
+        with pytest.raises(NotAuthorized):
+            plan_transition(
+                _group_snap(), ActionCommand(
+                    "c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": EXECUTOR_ID}),
+                MANAGER, USER_PRINCIPAL, NOW)
+
+    def test_missing_executor_id_payload_invalid(self):
+        with pytest.raises(PayloadInvalid):
+            plan_transition(
+                _group_snap(), ActionCommand("c", Action.SYSTEM_AUTO_PROMOTE, {}),
+                AUTO_MANAGER, AUTO_MANAGER_PRINCIPAL, NOW)
+
+    def test_legacy_in_progress_intent_does_not_resolve_to_auto_promote(self):
+        """_STATUS_RESOLVE_EXCLUDE: same-canon В работе→В работе status-based
+        вход не должен резолвиться в system-only действие."""
+        with pytest.raises(InvalidTransition):
+            resolve_command(
+                _group_snap(), AUTO_MANAGER,
+                LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+
+
+# ===========================================================================
 # MANAGER_ASSIGN — переназначение из «В работе» + симметрия legacy-полей (PR-1)
 # ===========================================================================
 

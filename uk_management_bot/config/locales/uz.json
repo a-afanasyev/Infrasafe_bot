@@ -8309,5 +8309,34 @@
       "material_unavailable": "Material hisobdan chiqarish uchun mavjud emas.",
       "error": "Hisobdan chiqarishda xatolik. Qayta urinib ko'ring."
     }
+  },
+  "auto_manager": {
+    "assigned_notification": "🌙 <b>Sizga ariza tayinlandi (avto-menejer)</b>\n\n№ {request_number}\nKategoriya: {category}\nManzil: {address}",
+    "no_duty_executor": "⚠️ <b>Navbatchi ijrochi topilmadi</b>\n\n№{request_number} arizasi (mutaxassislik: {specialization}) individual ijrochisiz qoldi — avto-menejer navbatchini topolmadi.",
+    "menu_load_error": "Avto-menejer ekranini yuklab bo'lmadi",
+    "ai_mode_hint": "AI-rejim keyinroq qo'shiladi, hozircha profil bo'yicha rejim ishlaydi.",
+    "toggle_enabled_toast": "Avto-menejer yoqildi",
+    "toggle_disabled_toast": "Avto-menejer o'chirildi",
+    "keyboards": {
+      "menu_button": "🤖 Avto-menejer",
+      "toggle_on": "▶️ Yoqish",
+      "toggle_off": "⏸ O'chirish",
+      "mode_ai_blocked": "🤖 AI (tez orada)",
+      "change_window": "🕐 Oynani o'zgartirish",
+      "back": "◀️ Orqaga"
+    },
+    "status": {
+      "title": "🤖 <b>Avtomatik menejer</b>",
+      "enabled_on": "🟢 Yoqilgan",
+      "enabled_off": "🔴 O'chirilgan",
+      "mode_rule": "📐 Qoida bo'yicha (mutaxassislik bo'yicha navbatchi)",
+      "body": "Holat: {enabled}\nRejim: {mode}\nIsh oynasi: {window_start}–{window_end}\nVaqt zonasi: {timezone}\nBir marta bajarishdagi arizalar chegarasi: {max_requests}\n\nAI-rejim keyinroq qo'shiladi, hozircha profil bo'yicha rejim ishlaydi."
+    },
+    "window_input": {
+      "prompt": "Yangi ish oynasini <code>SS:DD-SS:DD</code> formatida kiriting (masalan, 20:00-08:00):",
+      "invalid_format": "⚠️ Format noto'g'ri. Vaqtni <code>SS:DD-SS:DD</code> formatida kiriting, masalan 20:00-08:00.",
+      "validation_error": "⚠️ Saqlab bo'lmadi: {error}\n\nSS:DD-SS:DD formatida qayta urinib ko'ring.",
+      "success": "✅ Oyna yangilandi: {window_start}–{window_end}"
+    }
   }
 }

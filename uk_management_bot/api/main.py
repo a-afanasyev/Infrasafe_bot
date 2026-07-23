@@ -41,6 +41,7 @@ from uk_management_bot.api.requests.stats_router import router as requests_stats
 from uk_management_bot.api.addresses.router import router as addresses_router
 from uk_management_bot.api.public.router import router as public_router
 from uk_management_bot.api.board_config.router import router as board_config_router
+from uk_management_bot.api.auto_manager.router import router as auto_manager_router
 from uk_management_bot.api.webhooks.router import router as webhooks_router
 from uk_management_bot.api.registration.router import router as registration_router
 from uk_management_bot.api.feedback.router import router as feedback_router
@@ -129,6 +130,7 @@ app.include_router(addresses_router, prefix="/api/v2/addresses", tags=["addresse
 app.include_router(executor_shifts_router, prefix="/api/v2/executor/shifts", tags=["executor-shifts"])
 app.include_router(public_router, prefix="/api/v2/public", tags=["public"])
 app.include_router(board_config_router, prefix="/api/v2", tags=["board-config"])
+app.include_router(auto_manager_router, prefix="/api/v2", tags=["auto-manager"])
 app.include_router(webhooks_router, prefix="/api/v2/webhooks", tags=["webhooks"])
 app.include_router(registration_router, prefix="/api/v2/registration", tags=["registration"])
 app.include_router(feedback_router, prefix="/api/v2/feedback", tags=["feedback"])

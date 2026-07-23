@@ -1305,6 +1305,26 @@
     "transferReject": "Rad etish",
     "transferCancel": "Bekor qilish"
   },
+  "autoManager": {
+    "title": "🤖 Avtomatik menejer",
+    "enabledOn": "🟢 Yoqilgan",
+    "enabledOff": "🔴 O'chirilgan",
+    "toggleLabel": "Avtomenejerni yoqish/o'chirish",
+    "mode": "Rejim",
+    "modeRule": "📐 Qoida bo'yicha",
+    "modeAi": "🤖 AI (tez orada)",
+    "modeAiHint": "AI rejimi keyinroq paydo bo'ladi, hozircha qoida bo'yicha rejim ishlaydi",
+    "window": "Ish oynasi",
+    "windowFrom": "Dan",
+    "windowTo": "Gacha",
+    "saveWindow": "Oynani saqlash",
+    "windowInvalid": "Vaqt formati noto'g'ri (SS:DD)",
+    "timezone": "Vaqt mintaqasi",
+    "maxRequests": "Bir marta uchun so'rovlar limiti",
+    "saved": "Avtomenejer konfiguratsiyasi saqlandi",
+    "saveFailed": "Avtomenejer konfiguratsiyasini saqlab bo'lmadi",
+    "loadFailed": "Avtomenejer konfiguratsiyasini yuklab bo'lmadi"
+  },
   "templates": {
     "title": "Shablonlar",
     "createTemplate": "+ Shablon yaratish",

@@ -31,6 +31,7 @@ from uk_management_bot.handlers.health import router as health_router
 # Новые обработчики системы смен
 from uk_management_bot.handlers.shift_management import router as shift_management_router_new
 from uk_management_bot.handlers.my_shifts import router as my_shifts_router
+from uk_management_bot.handlers.auto_manager import router as auto_manager_router  # Бот-UI автоменеджера
 
 # Обработчики назначения заявок
 from uk_management_bot.handlers.request_assignment import router as request_assignment_router
@@ -353,6 +354,7 @@ async def main():
 
     # Система управления сменами
     dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
+    dp.include_router(auto_manager_router)  # Бот-UI автоменеджера (вкл/выкл, окно) для менеджеров
     dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
     dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
     dp.include_router(shifts_router)  # старый роутер смен

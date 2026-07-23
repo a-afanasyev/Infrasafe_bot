@@ -93,9 +93,15 @@ class AssignmentService:
             
             self.db.add(assignment)
             
-            # Обновляем заявку
+            # Обновляем заявку. executor_id обнуляется явно (симметрично
+            # assign_to_executor, который его устанавливает) — активная
+            # групповая заявка не должна нести устаревший individual
+            # executor_id от предыдущего назначения; иначе денормализованные
+            # Request-фильтры (напр. auto_manager, ожидающий executor_id IS
+            # NULL для «непривязанного group») ложно пропускают такую заявку.
             request.assignment_type = ASSIGNMENT_TYPE_GROUP
             request.assigned_group = specialization
+            request.executor_id = None
             request.assigned_at = datetime.now(timezone.utc)
             request.assigned_by = assigned_by
             

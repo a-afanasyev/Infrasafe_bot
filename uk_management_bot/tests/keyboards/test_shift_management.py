@@ -68,11 +68,12 @@ class TestGetMainShiftMenu:
             result = get_main_shift_menu()
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_four_buttons(self):
+    def test_has_five_buttons(self):
+        # +1 for "🤖 Автоменеджер" (auto_manager_menu) — bot-UI entry point.
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.shift_management import get_main_shift_menu
             result = get_main_shift_menu()
-        assert len(_all_buttons(result)) == 4
+        assert len(_all_buttons(result)) == 5
 
     def test_callback_data_present(self):
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
@@ -83,6 +84,7 @@ class TestGetMainShiftMenu:
         assert "shift_analytics" in cbs
         assert "template_management" in cbs
         assert "shift_executor_assignment" in cbs
+        assert "auto_manager_menu" in cbs
 
     @pytest.mark.parametrize("language", ["ru", "uz"])
     def test_language_accepted(self, language):

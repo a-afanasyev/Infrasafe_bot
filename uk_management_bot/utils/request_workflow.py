@@ -120,6 +120,12 @@ class Action(str, Enum):
     # активное group-назначение в individual (executor_id := взявший) in-place.
     # Достижимо ТОЛЬКО явным ActionCommand (исключено из resolve_command).
     EXECUTOR_CLAIM = "executor_claim"
+    # Авто-менеджер (планировщик, system-актор) повышает активное групповое
+    # назначение до individual на выбранного исполнителя (В работе → В работе,
+    # аналог EXECUTOR_CLAIM, но системный — executor_id приходит в payload, а
+    # не из actor.user_id). Достижимо ТОЛЬКО явным ActionCommand system-актора
+    # "auto_manager" (см. SYSTEM_CAPABILITIES, _STATUS_RESOLVE_EXCLUDE).
+    SYSTEM_AUTO_PROMOTE = "system_auto_promote"
     EXECUTOR_COMPLETE = "executor_complete"
     # Менеджер завершает работу за исполнителя (В работе/Закуп/Уточнение →
     # Выполнена). Продуктовое решение 2026-06-10: менеджерский shortcut-аналог
@@ -236,7 +242,8 @@ class LegacyStatusIntent:
 class DomainOp:
     """Операция по связанной таблице — применяется адаптером в той же tx."""
     kind: Literal["create_rating", "cancel_active_assignments",
-                  "create_assignment", "claim_group_assignment"]
+                  "create_assignment", "claim_group_assignment",
+                  "promote_group_assignment"]
     data: Mapping[str, object] = field(default_factory=dict)
 
 
@@ -336,6 +343,7 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
     Action.CLARIFY_RESOLVED: PayloadSchema(),
     Action.EXECUTOR_RESUME: PayloadSchema(),
     Action.EXECUTOR_CLAIM: PayloadSchema(),
+    Action.SYSTEM_AUTO_PROMOTE: PayloadSchema(required={"executor_id": int}),
     Action.EXECUTOR_COMPLETE: PayloadSchema(
         optional={"completion_report": str, "completion_media": list}),
     Action.MANAGER_COMPLETE: PayloadSchema(
@@ -365,6 +373,11 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
 # SYSTEM-capabilities: какой системный процесс какие действия может.
 SYSTEM_CAPABILITIES: Mapping[str, frozenset[Action]] = {
     "dispatcher": frozenset({Action.SYSTEM_DISPATCH_ASSIGN}),
+    # auto_manager: авто-менеджер (планировщик ночных заявок) — повышение
+    # group→individual своим действием + резидуальный случай «Новая» через
+    # уже существующий dispatch-assign (используется отдельной задачей).
+    "auto_manager": frozenset({Action.SYSTEM_AUTO_PROMOTE,
+                               Action.SYSTEM_DISPATCH_ASSIGN}),
     # "reconcile": frozenset(),  # появится при необходимости
 }
 
@@ -399,6 +412,19 @@ def _executor_can_claim(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
         return False
     group = snap.active_assignment_group
     return group is not None and group in actor.specializations
+
+
+def _system_can_promote(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
+    """Авто-менеджер может повысить group→individual только пока назначение
+    ещё unclaimed И заявка ещё без индивидуального исполнителя.
+
+    Race-защита: если менеджер между read планировщика и его write уже
+    заменил group-назначение на individual (или другой исполнитель успел
+    claim), snapshot, загруженный ПОД FOR UPDATE в run_command, это отразит —
+    authorize провалится, patch не применится. rowcount-guard в
+    workflow_runner._apply_domain_op_* — вторая линия защиты той же гонки.
+    """
+    return snap.active_assignment_unclaimed and snap.request.executor_id is None
 
 
 def _is_owner(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
@@ -479,6 +505,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.EXECUTOR_CLAIM: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
         _executor_can_claim, RepeatPolicy.REJECT),
+    # from==to==«В работе», как EXECUTOR_CLAIM выше: тот же формальный REJECT-
+    # дефолт, недостижимый (check_repeat отдаёт None для same-canon re-entry,
+    # реальный гейт — _system_can_promote в plan_transition).
+    Action.SYSTEM_AUTO_PROMOTE: ActionSpec(
+        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        _system_can_promote, RepeatPolicy.REJECT, system_only=True),
     Action.EXECUTOR_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_EXECUTED,
         _executor_can_work, RepeatPolicy.REPEATABLE),
@@ -524,7 +556,12 @@ def allowed_actions(snap: WorkflowSnapshot, actor: ActorContext) -> frozenset[Ac
             continue
         if actor.kind == "system":
             caps = SYSTEM_CAPABILITIES.get(actor.system_actor or "", frozenset())
-            if action in caps:
+            # Capability-членство И authorize-предикат: для большинства
+            # system-действий (SYSTEM_DISPATCH_ASSIGN) authorize — константный
+            # `a.kind == "system"`, всегда True для system-актора (no-op для
+            # существующего поведения). SYSTEM_AUTO_PROMOTE — первое system-
+            # действие с содержательным snapshot-предикатом (race-guard).
+            if action in caps and spec.authorize(snap, actor):
                 result.add(action)
             continue
         if spec.system_only:
@@ -582,6 +619,16 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
                 ("assignment_type", Op.SET, "individual"),
                 ("assigned_at", Op.SET_NOW, None),
                 ("assigned_group", Op.CLEAR, None)]
+    elif action == Action.SYSTEM_AUTO_PROMOTE:
+        # Авто-менеджер повышает group→individual на выбранного исполнителя.
+        # Op.SET (не Op.SET_ACTOR!): actor.user_id is None для system-актора —
+        # SET_ACTOR записал бы NULL. executor_id — конкретный человек из
+        # payload планировщика. group_specialization в RequestAssignment НЕ
+        # трогаем (история), как и claim_group_assignment.
+        ops += [("executor_id", Op.SET, payload["executor_id"]),
+                ("assignment_type", Op.SET, "individual"),
+                ("assigned_group", Op.CLEAR, None),
+                ("assigned_at", Op.SET_NOW, None)]
     elif action == Action.EXECUTOR_PURCHASE:
         ops += [("requested_materials", Op.SET, payload["requested_materials"])]
     elif action == Action.MANAGER_PURCHASE:
@@ -647,6 +694,9 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
         return (DomainOp("cancel_active_assignments"),)
     if action == Action.EXECUTOR_CLAIM:
         return (DomainOp("claim_group_assignment"),)
+    if action == Action.SYSTEM_AUTO_PROMOTE:
+        return (DomainOp("promote_group_assignment",
+                         {"executor_id": payload["executor_id"]}),)
     if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
         # PR2c: строку RequestAssignment создаём только при фактическом
         # назначении исполнителя/группы (см. _build_patch). FEAT-группы:
@@ -791,7 +841,11 @@ def check_repeat(snap: WorkflowSnapshot, command: ActionCommand,
 # ActionCommand. Status-based вход target=«В работе» НЕ должен случайно
 # резолвиться во взятие из пула — иначе legacy-клиент «возобновить работу»
 # мог бы перехватить чужую/групповую заявку.
-_STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM})
+# SYSTEM_AUTO_PROMOTE — тот же принцип: system-акторы не вызывают
+# resolve_command на практике, но исключение держит инвариант явным (same-
+# canon В работе→В работе не должен резолвиться в system-only действие).
+_STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM,
+                                     Action.SYSTEM_AUTO_PROMOTE})
 
 
 def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,

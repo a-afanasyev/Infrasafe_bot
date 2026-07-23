@@ -747,6 +747,204 @@ def _claim_sync_factory(factory):
 
 
 # ---------------------------------------------------------------------------
+# SYSTEM_AUTO_PROMOTE — авто-менеджер повышает group→individual (auto-manager
+# phase1, task 2). Аналог TestGroupClaim, но actor=system/auto_manager и
+# executor_id приходит из payload планировщика (НЕ actor.user_id).
+# ---------------------------------------------------------------------------
+
+def _auto_mgr_principal():
+    return PrincipalRef(kind="system", user_id=None, source="scheduler",
+                        system_actor="auto_manager")
+
+
+class TestSystemAutoPromote:
+    def _setup_pool(self, SF, *, spec="plumber"):
+        """Заявка «В работе» (из _seed) + активное group-назначение unclaimed."""
+        s = SF()
+        s.add(RequestAssignment(
+            request_number="260610-001", assignment_type="group",
+            group_specialization=spec, executor_id=None,
+            created_by=3, status="active"))
+        s.commit()
+        s.close()
+
+    def test_promotes_group_to_individual(self, factory):
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF)
+        out = run_command_sync(
+            SF, "260610-001", _auto_mgr_principal(),
+            ActionCommand("c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": 4}))
+        assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.executor_id == 4
+        assert req.assignment_type == "individual"
+        assert req.assigned_group is None
+        ra = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").first()
+        assert ra is not None
+        assert ra.assignment_type == "individual"
+        assert ra.executor_id == 4
+        assert ra.group_specialization == "plumber"  # история сохранена
+        s.close()
+
+    def test_race_manager_already_reassigned_individual_rejected(self, factory):
+        """Ключевой race-тест: между read авто-менеджера (снимок с group-
+        назначением, которого больше нет) и его write менеджер уже заменил
+        назначение на individual для другого исполнителя. SYSTEM_AUTO_PROMOTE
+        должен получить NotAuthorized, а менеджерское назначение — остаться
+        нетронутым (ни request.executor_id, ни RequestAssignment-строка не
+        меняются)."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS, executor_id=5)
+        s = SF()
+        s.add(User(id=5, telegram_id=5, first_name="Exec2",
+                   roles='["executor"]', active_role="executor",
+                   status="approved", language="ru"))
+        s.add(RequestAssignment(
+            request_number="260610-001", assignment_type="individual",
+            group_specialization="plumber", executor_id=5,
+            created_by=3, status="active"))
+        s.commit()
+        s.close()
+        with pytest.raises(NotAuthorized):
+            run_command_sync(
+                SF, "260610-001", _auto_mgr_principal(),
+                ActionCommand("c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": 4}))
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.executor_id == 5  # менеджерское назначение нетронуто
+        ra = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").first()
+        assert ra.executor_id == 5
+        assert ra.assignment_type == "individual"
+        s.close()
+
+    def test_dispatcher_cannot_auto_promote(self, factory):
+        """capability-разделение на уровне раннера: system_actor='dispatcher'
+        не имеет SYSTEM_AUTO_PROMOTE."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        self._setup_pool(SF)
+        dispatcher = PrincipalRef(kind="system", user_id=None,
+                                  source="dispatcher", system_actor="dispatcher")
+        with pytest.raises(NotAuthorized):
+            run_command_sync(
+                SF, "260610-001", dispatcher,
+                ActionCommand("c", Action.SYSTEM_AUTO_PROMOTE, {"executor_id": 4}))
+
+
+async def _async_promote_domain_op(*, assignment_type="group",
+                                    assignment_executor=None):
+    """Прямой вызов _apply_domain_op_async (изолированный aiosqlite-движок) —
+    domain-op-level rowcount-guard тест, зеркало sync-варианта ниже. Полный
+    пайплайн run_command_* не может воспроизвести гонку в один поток (snapshot
+    внутри одной локальной FOR UPDATE-транзакции всегда согласован с БД —
+    ровно то же ограничение, что и у существующего claim_group_assignment
+    guard-теста), поэтому rowcount-guard проверяется прямым вызовом адаптера
+    с намеренно рассогласованной строкой RequestAssignment."""
+    from sqlalchemy import select as sa_select
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine, async_sessionmaker, AsyncSession)
+    from uk_management_bot.services.workflow_runner import _apply_domain_op_async
+    from uk_management_bot.utils.request_workflow import ActorContext, DomainOp
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with AF() as s:
+            s.add(Request(request_number="260610-001", user_id=2, category="c",
+                          description="d", urgency="low",
+                          status=C.REQUEST_STATUS_IN_PROGRESS))
+            s.add(RequestAssignment(
+                request_number="260610-001", assignment_type=assignment_type,
+                group_specialization="plumber", executor_id=assignment_executor,
+                created_by=3, status="active"))
+            await s.commit()
+            req = (await s.execute(
+                sa_select(Request).filter_by(request_number="260610-001")
+            )).scalar_one()
+            actor = ActorContext(kind="system", user_id=None,
+                                 system_actor="auto_manager")
+            dop = DomainOp("promote_group_assignment", {"executor_id": 4})
+            await _apply_domain_op_async(s, req, dop, actor)
+            await s.commit()
+            ra = (await s.execute(
+                sa_select(RequestAssignment).filter_by(
+                    request_number="260610-001", status="active")
+            )).scalar_one()
+            return ra.assignment_type, ra.executor_id
+    finally:
+        await engine.dispose()
+
+
+class TestPromoteGroupAssignmentDomainOpRowcountGuard:
+    """rowcount-guard для promote_group_assignment — прямой вызов ORM-адаптера
+    (аналог claim_group_assignment), sync И async, happy path + guard path."""
+
+    def test_sync_happy_path_updates_exactly_one_row(self, factory):
+        from uk_management_bot.services.workflow_runner import _apply_domain_op_sync
+        from uk_management_bot.utils.request_workflow import ActorContext, DomainOp
+
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        s = SF()
+        s.add(RequestAssignment(
+            request_number="260610-001", assignment_type="group",
+            group_specialization="plumber", executor_id=None,
+            created_by=3, status="active"))
+        s.commit()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        actor = ActorContext(kind="system", user_id=None,
+                             system_actor="auto_manager")
+        _apply_domain_op_sync(
+            s, req, DomainOp("promote_group_assignment", {"executor_id": 4}), actor)
+        s.commit()
+        ra = s.query(RequestAssignment).filter_by(
+            request_number="260610-001", status="active").first()
+        assert ra.assignment_type == "individual"
+        assert ra.executor_id == 4
+        s.close()
+
+    def test_sync_guard_raises_when_zero_rows_match(self, factory):
+        from uk_management_bot.services.workflow_runner import _apply_domain_op_sync
+        from uk_management_bot.utils.request_workflow import (
+            ActorContext, DomainOp, WorkflowError,
+        )
+
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+        s = SF()
+        # уже individual (менеджер успел назначить конкретного исполнителя) —
+        # WHERE assignment_type=='group' AND executor_id IS NULL ничего не найдёт
+        s.add(RequestAssignment(
+            request_number="260610-001", assignment_type="individual",
+            group_specialization="plumber", executor_id=5,
+            created_by=3, status="active"))
+        s.commit()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        actor = ActorContext(kind="system", user_id=None,
+                             system_actor="auto_manager")
+        with pytest.raises(WorkflowError):
+            _apply_domain_op_sync(
+                s, req, DomainOp("promote_group_assignment", {"executor_id": 4}),
+                actor)
+        s.close()
+
+    def test_async_happy_path_updates_exactly_one_row(self):
+        assignment_type, executor_id = asyncio.run(_async_promote_domain_op())
+        assert assignment_type == "individual"
+        assert executor_id == 4
+
+    def test_async_guard_raises_when_zero_rows_match(self):
+        from uk_management_bot.utils.request_workflow import WorkflowError
+
+        with pytest.raises(WorkflowError):
+            asyncio.run(_async_promote_domain_op(
+                assignment_type="individual", assignment_executor=5))
+
+
+# ---------------------------------------------------------------------------
 # ARCH-010: status_version — бамп строго по фактической смене DB-статуса.
 # Webhook НЕ прокси смены статуса: возврат меняет статус без webhook
 # (public-проекция та же), same-status re-entry — webhook-путь без смены.

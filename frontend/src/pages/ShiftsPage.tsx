@@ -22,6 +22,7 @@ import ShiftViewToggle, { type ShiftViewMode } from '../components/shifts/ShiftV
 import CreateShiftModal from '../components/shifts/CreateShiftModal'
 import ShiftDetailModal from '../components/shifts/ShiftDetailModal'
 import TransferRequestCard from '../components/shifts/TransferRequestCard'
+import AutoManagerCard from '../components/shifts/AutoManagerCard'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
@@ -238,6 +239,10 @@ export default function ShiftsPage() {
           </div>
         ))}
       </div>
+
+      {/* Auto-manager (авто-назначение ночных заявок) — управление enabled/окном,
+          не требует своей страницы: домен дежурств, роут уже admin|manager. */}
+      <AutoManagerCard />
 
       {/* View body */}
       {viewMode === 'day' ? (

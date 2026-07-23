@@ -273,6 +273,24 @@ def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -
         if updated != 1:
             raise WorkflowError(
                 f"claim_group_assignment: ожидалась 1 строка, обновлено {updated}")
+    elif dop.kind == "promote_group_assignment":
+        # Авто-менеджер повышает group→individual на выбранного исполнителя
+        # (аналог claim_group_assignment, но executor из payload планировщика,
+        # НЕ actor.user_id — актор системный, у него user_id всегда None).
+        # rowcount-guard — вторая линия защиты гонки поверх FOR UPDATE-лока
+        # (и единственная защита в SQLite-тестах без него): если менеджер
+        # успел заменить/забрать group-назначение между read планировщика и
+        # этим write, WHERE не найдёт строку → updated=0 → WorkflowError.
+        updated = db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == req.request_number,
+            RequestAssignment.status == "active",
+            RequestAssignment.assignment_type == "group",
+            RequestAssignment.executor_id.is_(None),
+        ).update({"assignment_type": "individual",
+                  "executor_id": dop.data["executor_id"]}, synchronize_session=False)
+        if updated != 1:
+            raise WorkflowError(
+                f"promote_group_assignment: ожидалась 1 строка, обновлено {updated}")
     elif dop.kind == "create_assignment":
         # SYSTEM-актор (created_by NOT NULL): переиспользуем seeded system-user
         # (PR2d) — у авто-диспетчера нет человека, но «кто» фиксируется
@@ -425,6 +443,17 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
         if res.rowcount != 1:
             raise WorkflowError(
                 f"claim_group_assignment: ожидалась 1 строка, обновлено {res.rowcount}")
+    elif dop.kind == "promote_group_assignment":
+        # Async-зеркало sync-ветки выше — та же race-защита (rowcount-guard).
+        res = await db.execute(sa_update(RequestAssignment).where(
+            RequestAssignment.request_number == req.request_number,
+            RequestAssignment.status == "active",
+            RequestAssignment.assignment_type == "group",
+            RequestAssignment.executor_id.is_(None),
+        ).values(assignment_type="individual", executor_id=dop.data["executor_id"]))
+        if res.rowcount != 1:
+            raise WorkflowError(
+                f"promote_group_assignment: ожидалась 1 строка, обновлено {res.rowcount}")
     elif dop.kind == "create_assignment":
         if actor.kind == "user":
             created_by = actor.user_id
