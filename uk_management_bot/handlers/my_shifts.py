@@ -6,7 +6,7 @@ Related: shifts.py handles the operational menu ("🔄 Смена")
 """
 
 from contextlib import contextmanager
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -29,6 +29,7 @@ from uk_management_bot.keyboards.shift_transfer import (
 from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.datetime_utils import utc_now
 from sqlalchemy import and_, func, or_
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import get_my_shifts_texts
@@ -467,7 +468,7 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
 
             # Начинаем смену
             shift.status = 'active'
-            shift.start_time = datetime.now()
+            shift.start_time = utc_now()
             db.commit()
 
             await callback.message.edit_text(
@@ -520,15 +521,14 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
                 return
 
             # Завершаем смену
-            end_time = datetime.now()
+            end_time = utc_now()
             shift.status = 'completed'
             shift.end_time = end_time
 
-            # Рассчитываем фактическую длительность. Shift.start_time у ad-hoc смен
-            # tz-aware, а end_time = datetime.now() naive → нормализуем к naive перед
-            # вычитанием (как в handlers/shifts.py), иначе TypeError naive vs aware.
+            # Рассчитываем фактическую длительность. Shift.start_time — timestamptz,
+            # end_time теперь тоже aware UTC — вычитание напрямую (AUD5-CODE-3).
             if shift.start_time:
-                actual_duration = (end_time - shift.start_time.replace(tzinfo=None)).total_seconds() / 3600
+                actual_duration = (end_time - shift.start_time).total_seconds() / 3600
             else:
                 actual_duration = 0
 

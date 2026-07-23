@@ -253,21 +253,36 @@ async def test_shift_details_resolves_internal_user_id(db):
 
 
 @pytest.mark.asyncio
-async def test_end_shift_handles_tz_aware_start_time(db):
-    """handle_end_shift: ad-hoc смена имеет tz-aware start_time, а end_time =
-    datetime.now() (naive). Вычитание naive-aware раньше падало
-    «can't subtract offset-naive and offset-aware datetimes» → generic ошибка,
-    хотя смена завершалась. Длительность считается без исключения."""
+async def test_end_shift_handles_tz_aware_start_time():
+    """handle_end_shift: ad-hoc смена имеет tz-aware start_time; end_time теперь
+    тоже aware UTC (AUD5-CODE-3, utc_now()) — вычитание напрямую, без исключения.
+
+    Mock-shift, НЕ реальная sqlite-сессия: `DateTime(timezone=True)` на sqlite
+    не хранит offset — после `expire_on_commit` перечитанное значение вернётся
+    naive, что замаскировало бы обе стороны бага (naive-vs-aware в любую
+    сторону). Прод-значение (PostgreSQL timestamptz) всегда aware.
+    """
     from datetime import timezone
+    from unittest.mock import MagicMock as _MM
     from uk_management_bot.handlers import my_shifts as ms
 
-    user = User(id=8, telegram_id=80808, username="ex", first_name="E", last_name="X",
-                roles='["executor"]', active_role="executor", status="approved", language="ru")
-    db.add(user)
-    shift = Shift(user_id=user.id, status="active",
-                  start_time=datetime.now(timezone.utc) - timedelta(hours=1))  # tz-aware
-    db.add(shift)
-    db.commit()
+    user = _MM()
+    user.id = 8
+    user.telegram_id = 80808
+
+    shift = _MM()
+    shift.id = 1
+    shift.user_id = user.id
+    shift.status = "active"
+    shift.start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+    shift.current_request_count = 0
+
+    query = MagicMock()
+    query.filter.return_value = query
+    query.first.return_value = shift
+    db = MagicMock()
+    db.query.return_value = query
+    db.commit = MagicMock()
 
     cb = MagicMock()
     cb.from_user = MagicMock(id=80808)
@@ -286,8 +301,8 @@ async def test_end_shift_handles_tz_aware_start_time(db):
     cb.message.edit_text.assert_awaited_once()
     answers = [c.args[0] for c in cb.answer.await_args_list if c.args]
     assert "my_shifts.handlers.error_occurred" not in answers
-    db.refresh(shift)
     assert shift.status == "completed"
+    assert shift.end_time.tzinfo is not None
 
 
 def test_fs03_redistribute_uses_balance_method_not_missing_one():
