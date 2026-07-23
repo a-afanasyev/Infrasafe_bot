@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta, timezone
 
 from aiogram import F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -15,6 +15,7 @@ from uk_management_bot.states.shift_management import ExecutorAssignmentStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, translate_specializations
@@ -34,7 +35,7 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
             assignment_service = ShiftAssignmentService(db)
 
             # Получаем все неназначенные смены на месяц вперед
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
             month_end = today + timedelta(days=30)
 
             unassigned_shifts = ShiftManagementService(db).list_unassigned_shifts_window(today, month_end)
@@ -102,7 +103,7 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
             assignment_service = ShiftAssignmentService(db)
 
             # Получаем все неназначенные смены
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
             unassigned_shifts = ShiftManagementService(db).list_unassigned_shifts_from(today)
 
             if not unassigned_shifts:
@@ -178,7 +179,7 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
             assignment_service = ShiftAssignmentService(db)
 
             # Получаем смены на следующие 7 дней
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
             week_end = today + timedelta(days=7)
 
             unassigned_shifts = ShiftManagementService(db).list_unassigned_shifts_window(today, week_end)
@@ -246,7 +247,7 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
             assignment_service = ShiftAssignmentService(db)
 
             # Получаем все неназначенные смены
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
             unassigned_shifts = ShiftManagementService(db).list_unassigned_shifts_from_ordered(today)  # Сортируем по времени (раньше = важнее)
 
             if not unassigned_shifts:
@@ -370,9 +371,11 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
                 keyboard = []
                 for executor in available_executors[:10]:  # Показываем первых 10
                     # Проверяем загруженность исполнителя в этот день
-                    from datetime import datetime, timedelta
+                    from datetime import datetime
                     shift_date = shift.start_time.date()
-                    day_start = datetime.combine(shift_date, datetime.min.time())
+                    # AUD5-CODE-3: naive combine() уходил в запрос по Shift.start_time
+                    # (timestamptz) через count_shifts_for_user_on_day — aware UTC.
+                    day_start = datetime.combine(shift_date, datetime.min.time(), tzinfo=timezone.utc)
                     day_end = day_start + timedelta(days=1)
 
                     day_shifts = service.count_shifts_for_user_on_day(executor.id, day_start, day_end)

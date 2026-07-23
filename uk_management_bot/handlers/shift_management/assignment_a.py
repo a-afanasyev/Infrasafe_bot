@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
 
 from aiogram import F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -13,6 +13,7 @@ from uk_management_bot.keyboards.shift_management import (
 )
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
+from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, _format_end_label, translate_specializations
@@ -29,8 +30,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
             lang = get_user_language(callback.from_user.id, db)
 
             # Получаем неназначенные смены
-            from datetime import datetime, timedelta
-            now = datetime.now()
+            now = utc_now()
             week_ahead = now + timedelta(days=7)
 
             unassigned_shifts = ShiftManagementService(db).list_unassigned_planned_shifts_range(now, week_ahead)
@@ -109,9 +109,9 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
             # FS-03: auto_assign_executors_to_shifts — синхронный и принимает
             # СПИСОК смен (не target_date/days_ahead), и не должен await'иться.
             # Сами неназначенные смены тянем из ShiftManagementService.
-            end_dt = datetime.now() + timedelta(days=7)
+            end_dt = utc_now() + timedelta(days=7)
             unassigned_shifts = ShiftManagementService(db).list_unassigned_shifts_window(
-                datetime.now(), end_dt
+                utc_now(), end_dt
             )
             result = assignment_service.auto_assign_executors_to_shifts(
                 unassigned_shifts, force_reassign=False
@@ -183,8 +183,7 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db:
             lang = get_user_language(callback.from_user.id, db)
 
             # Получаем статистику для массового назначения
-            from datetime import datetime
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
 
             service = ShiftManagementService(db)
             total_unassigned = service.count_unassigned_shifts_from(today)
@@ -234,7 +233,7 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
 
             service = ShiftManagementService(db)
             # Получаем статистику по исполнителям
-            executor_stats = service.get_executor_workload_stats(datetime.now(), end_date)
+            executor_stats = service.get_executor_workload_stats(utc_now(), end_date)
 
             # Получаем исполнителей без смен
             assigned_executor_ids = [stat.id for stat in executor_stats]
@@ -381,7 +380,7 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
             # Находим пересекающиеся смены у одного исполнителя
             conflicts = []
 
-            shifts = ShiftManagementService(db).list_assigned_shifts_between(datetime.now(), end_date)
+            shifts = ShiftManagementService(db).list_assigned_shifts_between(utc_now(), end_date)
 
             # FS-03: модель Shift хранит start_time/end_time как полные DateTime
             # и не имеет полей `date`/`executor`/`executor_id` (исполнитель —

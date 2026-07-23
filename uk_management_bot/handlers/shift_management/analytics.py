@@ -16,6 +16,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.states.shift_management import ShiftManagementStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
+from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, translate_specializations
@@ -55,8 +56,7 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
             lang = get_user_language(callback.from_user.id, db)
 
             # Получаем смены без назначенных исполнителей
-            from datetime import datetime, timedelta
-            now = datetime.now()
+            now = utc_now()
             week_ahead = now + timedelta(days=7)
 
             unassigned_shifts = ShiftManagementService(db).list_unassigned_planned_shifts_between(now, week_ahead)
