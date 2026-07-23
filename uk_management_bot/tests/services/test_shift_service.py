@@ -1,6 +1,8 @@
 """Unit tests for ShiftService."""
 from unittest.mock import MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.utils.constants import (
@@ -26,7 +28,8 @@ def _make_shift(shift_id=10, user_id=1, status=SHIFT_STATUS_ACTIVE):
     shift.id = shift_id
     shift.user_id = user_id
     shift.status = status
-    shift.start_time = datetime(2026, 4, 2, 9, 0, 0)
+    # AUD5-CODE-3: Shift-колонки timestamptz — прод-значения всегда aware.
+    shift.start_time = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
     shift.end_time = None
     shift.notes = None
     return shift
@@ -620,13 +623,14 @@ class TestGetShiftStats:
         assert result["total_hours"] == 0.0
 
     def test_counts_active_shifts(self):
+        # AUD5-CODE-3: aware fixtures (Shift-колонки timestamptz — прод всегда aware).
         active_shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
-        active_shift.start_time = datetime(2026, 4, 2, 9, 0, 0)
+        active_shift.start_time = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
         active_shift.end_time = None
 
         completed = _make_shift(shift_id=2, status=SHIFT_STATUS_COMPLETED)
-        completed.start_time = datetime(2026, 4, 2, 9, 0, 0)
-        completed.end_time = datetime(2026, 4, 2, 10, 0, 0)
+        completed.start_time = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
+        completed.end_time = datetime(2026, 4, 2, 10, 0, 0, tzinfo=timezone.utc)
 
         db = MagicMock()
         q = MagicMock()
@@ -653,3 +657,49 @@ class TestGetShiftStats:
         assert result["total_shifts"] == 0
         assert result["active_count"] == 0
         assert result["total_hours"] == 0.0
+
+    def test_stats_nonzero_for_open_aware_shift(self):
+        """AUD5-CODE-2: aware start_time (open shift) не должен глушить TypeError'ом.
+
+        Прод-значение start_time всегда aware (timestamptz); `now = datetime.now()`
+        naive ломал `end - s.start_time` → TypeError → swallowed except → нули.
+        """
+        open_shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
+        open_shift.start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        open_shift.end_time = None
+
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.offset.return_value = q
+        q.limit.return_value = q
+        q.all.return_value = [open_shift]
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.get_shift_stats()
+
+        assert result["active_count"] == 1
+        assert result["total_hours"] == pytest.approx(2.0, abs=0.1)
+
+    def test_stats_closed_shift_uses_end_time(self):
+        start = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
+        end = start + timedelta(hours=3)
+        closed_shift = _make_shift(status=SHIFT_STATUS_COMPLETED)
+        closed_shift.start_time = start
+        closed_shift.end_time = end
+
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.offset.return_value = q
+        q.limit.return_value = q
+        q.all.return_value = [closed_shift]
+        db.query.return_value = q
+
+        service = ShiftService(db)
+        result = service.get_shift_stats()
+
+        assert result["total_hours"] == pytest.approx(3.0, abs=0.01)

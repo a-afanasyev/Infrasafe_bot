@@ -16,6 +16,7 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.services.notification_service import notify_shift_started, notify_shift_ended
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.datetime_utils import utc_now
 import logging
 
 
@@ -224,9 +225,9 @@ class ShiftService:
             if status:
                 query = query.filter(Shift.status == status)
             if period and period != "all":
-                now = datetime.now()
+                now = utc_now()
                 if period == "today":
-                    start = datetime(now.year, now.month, now.day)
+                    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
                 elif period == "7d":
                     start = now - timedelta(days=7)
                 elif period == "30d":
@@ -248,7 +249,7 @@ class ShiftService:
             total_shifts = len(shifts)
             active_count = len([s for s in shifts if s.status == SHIFT_STATUS_ACTIVE])
             total_seconds = 0
-            now = datetime.now()
+            now = utc_now()
             for s in shifts:
                 end = s.end_time or now
                 total_seconds += max(0, int((end - s.start_time).total_seconds()))
