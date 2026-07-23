@@ -23,11 +23,22 @@ def _expected_eid(uk_id: int) -> str:
 
 
 class _FakeSession:
-    """Minimal async-context session: controllable lock result and query rows."""
+    """Minimal async-context session: controllable lock result and query rows.
 
-    def __init__(self, lock_result: bool, rows: list):
+    `extra_rows`: what the SECOND (and later) `execute()` call returns, by
+    call count — not SQL inspection. `reconcile_requests()` issues exactly
+    two execute().all()-consuming statements (uk_stmt, then the
+    building-resolve join); the advisory-unlock execute() in `finally`
+    never reads `.all()`. Defaults to `_rows` when omitted — harmless for
+    `reconcile_buildings()` callers, which never issue a second
+    read-consuming query.
+    """
+
+    def __init__(self, lock_result: bool, rows: list, extra_rows: list | None = None):
         self._lock_result = lock_result
         self._rows = rows
+        self._extra_rows = rows if extra_rows is None else extra_rows
+        self._execute_count = 0
         self.commit = AsyncMock()
 
     async def __aenter__(self):
@@ -41,9 +52,11 @@ class _FakeSession:
         return self._lock_result
 
     async def execute(self, *args, **kwargs):
-        # Serves both the buildings SELECT and the advisory-unlock statement.
+        self._execute_count += 1
         result = MagicMock()
-        result.all.return_value = self._rows
+        result.all.return_value = (
+            self._rows if self._execute_count == 1 else self._extra_rows
+        )
         return result
 
 
@@ -247,6 +260,11 @@ def _request_row(rn: str, status: str = "Новая"):
     return SimpleNamespace(request_number=rn, status=status)
 
 
+def _bld_row(rn: str, building_id):
+    """Row shape of the building-resolve join (request_number, coalesced building_id)."""
+    return SimpleNamespace(request_number=rn, building_id=building_id)
+
+
 @pytest.fixture
 def _wired_requests(monkeypatch):
     """Enable webhooks + ARCH-114 flag + URL, return monkeypatch + mocks for fetch/emit."""
@@ -259,7 +277,7 @@ def _wired_requests(monkeypatch):
     mock_fetch = AsyncMock()
     mock_emit = AsyncMock()
     monkeypatch.setattr(reconciliation, "fetch_infrasafe_uk_request_numbers", mock_fetch)
-    monkeypatch.setattr(reconciliation, "emit_request_status_changed", mock_emit)
+    monkeypatch.setattr(reconciliation, "emit_request_reconcile", mock_emit)
     return monkeypatch, mock_fetch, mock_emit
 
 
@@ -280,7 +298,7 @@ async def test_requests_in_sync_when_inventory_matches(_wired_requests):
 
 @pytest.mark.asyncio
 async def test_requests_drift_replays_missing_with_current_status(_wired_requests):
-    """Missing on InfraSafe → emit request.status_changed with old=new=current status."""
+    """Missing on InfraSafe → emit request.reconcile with the current projected status."""
     monkeypatch, mock_fetch, mock_emit = _wired_requests
     rows = [
         _request_row("260524-001", status="Новая"),
@@ -289,7 +307,8 @@ async def test_requests_drift_replays_missing_with_current_status(_wired_request
     ]
     mock_fetch.return_value = {"260524-001"}
     monkeypatch.setattr(
-        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+        reconciliation, "AsyncSessionLocal",
+        lambda: _FakeSession(True, rows, extra_rows=[]),
     )
 
     result = await reconciliation.reconcile_requests()
@@ -297,20 +316,89 @@ async def test_requests_drift_replays_missing_with_current_status(_wired_request
     assert result["missing"] == 2
     assert result["enqueued"] == 2
     assert mock_emit.call_count == 2
-    # Each call must pass (db, request_number, old_status, new_status, source="reconcile").
+    # Each call must pass (db, request_number, status, source="reconcile", ...).
     by_rn = {c.args[1]: c for c in mock_emit.call_args_list}
-    assert by_rn["260524-002"].args[2] == "Принято"   # old_status
-    assert by_rn["260524-002"].args[3] == "Принято"   # new_status — current state per spec
+    assert by_rn["260524-002"].args[2] == "Принято"
     assert by_rn["260524-002"].kwargs["source"] == "reconcile"
+    assert by_rn["260524-002"].kwargs["building_external_id"] is None
     assert by_rn["260524-003"].args[2] == "В работе"
-    assert by_rn["260524-003"].args[3] == "В работе"
-    # ARCH-010: repair-identity обязателен и общий на весь запуск (см.
-    # building-аналог) — request-путь прикрыт fail-loud'ом, но регресс-сетка
-    # симметрична для обоих reconcile-путей.
-    identities = [c.kwargs["identity"] for c in mock_emit.call_args_list]
-    assert all(ident.repair_run_id for ident in identities)
-    assert all(ident.version is None for ident in identities)
-    assert len({ident.repair_run_id for ident in identities}) == 1
+    # ARCH-010: repair-identity (nonce) обязателен и общий на весь запуск.
+    run_ids = [c.kwargs["repair_run_id"] for c in mock_emit.call_args_list]
+    assert all(run_ids)
+    assert len(set(run_ids)) == 1
+
+
+@pytest.mark.asyncio
+async def test_requests_repair_building_external_id_from_building_type(_wired_requests):
+    """address_type='building': Request.building_id напрямую → external_id посчитан."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row("260524-001", status="Новая")]
+    mock_fetch.return_value = set()
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal",
+        lambda: _FakeSession(True, rows, extra_rows=[_bld_row("260524-001", 5)]),
+    )
+
+    await reconciliation.reconcile_requests()
+
+    assert mock_emit.call_count == 1
+    assert mock_emit.call_args.kwargs["building_external_id"] == _expected_eid(5)
+
+
+@pytest.mark.asyncio
+async def test_requests_repair_building_external_id_from_apartment_type(_wired_requests):
+    """address_type='apartment': building_id резолвится через Apartment.building_id
+    (outerjoin-путь). Fake-сессия отдаёт результат по счётчику вызова, не по SQL —
+    не отличает «резолв через join» от «прямой столбец» на уровне механики (см. план);
+    тест пинует бизнес-ожидание: заявка квартирного типа получает external_id так же,
+    как заявка типа building, если резолв успешен. Сам JOIN проверяется на деплое."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row("260524-002", status="Принято")]
+    mock_fetch.return_value = set()
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal",
+        lambda: _FakeSession(True, rows, extra_rows=[_bld_row("260524-002", 7)]),
+    )
+
+    await reconciliation.reconcile_requests()
+
+    assert mock_emit.call_count == 1
+    assert mock_emit.call_args.kwargs["building_external_id"] == _expected_eid(7)
+
+
+@pytest.mark.asyncio
+async def test_requests_repair_building_external_id_absent_for_yard_or_legacy(_wired_requests):
+    """address_type в (yard, legacy): building_id не резолвится ни одним путём → None."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row("260524-003", status="Новая")]
+    mock_fetch.return_value = set()
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal",
+        lambda: _FakeSession(True, rows, extra_rows=[_bld_row("260524-003", None)]),
+    )
+
+    await reconciliation.reconcile_requests()
+
+    assert mock_emit.call_count == 1
+    assert mock_emit.call_args.kwargs["building_external_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_requests_repair_nonce_differs_between_runs(_wired_requests):
+    """ARCH-010: разные запуски reconcile_requests дают разные repair_run_id."""
+    monkeypatch, mock_fetch, mock_emit = _wired_requests
+    rows = [_request_row("260524-001"), _request_row("260524-002")]
+    mock_fetch.return_value = {"260524-001"}
+    monkeypatch.setattr(
+        reconciliation, "AsyncSessionLocal",
+        lambda: _FakeSession(True, rows, extra_rows=[]),
+    )
+
+    await reconciliation.reconcile_requests()
+    first_run = mock_emit.call_args.kwargs["repair_run_id"]
+    await reconciliation.reconcile_requests()
+    second_run = mock_emit.call_args.kwargs["repair_run_id"]
+    assert first_run != second_run
 
 
 @pytest.mark.asyncio
@@ -389,7 +477,8 @@ async def test_requests_replay_capped_at_replay_cap(_wired_requests):
     rows = [_request_row(f"260524-{i:03d}") for i in range(1, 61)]
     mock_fetch.return_value = set()
     monkeypatch.setattr(
-        reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
+        reconciliation, "AsyncSessionLocal",
+        lambda: _FakeSession(True, rows, extra_rows=[]),
     )
 
     result = await reconciliation.reconcile_requests()

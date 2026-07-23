@@ -13,21 +13,29 @@ INFRASAFE_API_TIMEOUT = 30.0
 async def fetch_infrasafe_external_buildings() -> set[str]:
     """Return the set of building external_id values (UUID strings) known to InfraSafe.
 
-    Uses the /api/buildings-metrics endpoint (reachable over the internal docker
-    network, no auth required for GET in current InfraSafe). Records without an
-    external_id are skipped — those are not UK-synced.
+    Uses the authenticated /api/uk-buildings-metrics endpoint (same host as
+    INFRASAFE_WEBHOOK_URL). The older anonymous /api/buildings-metrics stopped
+    returning external_id from 2026-06-01 (post-pentest hardening) — that
+    silently broke building reconciliation until root-caused (Re[6]/Re[7]).
+    Records without an external_id, or with uk_deleted_at set (InfraSafe's own
+    record of a UK-side deletion), are skipped — neither counts as "present".
     """
     base = settings.INFRASAFE_WEBHOOK_URL.rstrip("/")
-    url = f"{base}/api/buildings-metrics?limit=5000"
+    url = f"{base}/api/uk-buildings-metrics?limit=5000"
+    headers = (
+        {"x-service-token": settings.INFRASAFE_INVENTORY_TOKEN}
+        if settings.INFRASAFE_INVENTORY_TOKEN
+        else {}
+    )
     async with httpx.AsyncClient(timeout=INFRASAFE_API_TIMEOUT) as client:
-        resp = await client.get(url)
+        resp = await client.get(url, headers=headers)
         resp.raise_for_status()
         data = resp.json()
     items = data.get("data", data) if isinstance(data, dict) else data
     return {
         str(item["external_id"])
         for item in items
-        if item.get("external_id")
+        if item.get("external_id") and not item.get("uk_deleted_at")
     }
 
 

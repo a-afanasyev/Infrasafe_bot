@@ -69,3 +69,70 @@ async def test_no_header_when_token_empty(monkeypatch):
     await ic.fetch_infrasafe_uk_request_numbers()
 
     assert "x-service-token" not in _StubClient.captured["headers"]
+
+
+# ===== fetch_infrasafe_external_buildings — GET /api/uk-buildings-metrics =====
+#
+# 2026-06-01 hardening stripped external_id from the anonymous /api/buildings-metrics
+# response (security fix post-pentest); InfraSafe added an authenticated sibling
+# endpoint on the SAME host (INFRASAFE_WEBHOOK_URL) instead. Root-caused via the
+# eternal building-reconcile loop (Re[6]).
+
+async def test_buildings_sends_service_token_and_hits_new_endpoint(monkeypatch):
+    monkeypatch.setattr(ic.settings, "INFRASAFE_INVENTORY_TOKEN", "shhh-secret")
+    monkeypatch.setattr(ic.settings, "INFRASAFE_WEBHOOK_URL", "https://infrasafe.example")
+    _StubClient.payload = {
+        "data": [
+            {"external_id": "3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c"},
+            {"external_id": "aaaa1111-2222-3333-4444-555566667777", "uk_deleted_at": None},
+        ],
+    }
+
+    result = await ic.fetch_infrasafe_external_buildings()
+
+    assert result == {
+        "3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c",
+        "aaaa1111-2222-3333-4444-555566667777",
+    }
+    assert _StubClient.captured["headers"].get("x-service-token") == "shhh-secret"
+    assert _StubClient.captured["url"] == (
+        "https://infrasafe.example/api/uk-buildings-metrics?limit=5000"
+    )
+
+
+async def test_buildings_excludes_soft_deleted_via_uk_deleted_at(monkeypatch):
+    """uk_deleted_at set → InfraSafe knows this row is deleted; must not count
+    as 'present' or our diff would mask a legitimate re-sync need."""
+    monkeypatch.setattr(ic.settings, "INFRASAFE_INVENTORY_TOKEN", "shhh-secret")
+    monkeypatch.setattr(ic.settings, "INFRASAFE_WEBHOOK_URL", "https://infrasafe.example")
+    _StubClient.payload = {
+        "data": [
+            {"external_id": "3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c"},
+            {"external_id": "aaaa1111-2222-3333-4444-555566667777",
+             "uk_deleted_at": "2026-07-20T10:00:00Z"},
+        ],
+    }
+
+    result = await ic.fetch_infrasafe_external_buildings()
+
+    assert result == {"3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c"}
+
+
+async def test_buildings_no_header_when_token_empty(monkeypatch):
+    monkeypatch.setattr(ic.settings, "INFRASAFE_INVENTORY_TOKEN", "")
+    monkeypatch.setattr(ic.settings, "INFRASAFE_WEBHOOK_URL", "https://infrasafe.example")
+    _StubClient.payload = {"data": [{"external_id": "3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c"}]}
+
+    await ic.fetch_infrasafe_external_buildings()
+
+    assert "x-service-token" not in _StubClient.captured["headers"]
+
+
+async def test_buildings_skips_records_without_external_id(monkeypatch):
+    monkeypatch.setattr(ic.settings, "INFRASAFE_INVENTORY_TOKEN", "shhh-secret")
+    monkeypatch.setattr(ic.settings, "INFRASAFE_WEBHOOK_URL", "https://infrasafe.example")
+    _StubClient.payload = {"data": [{"external_id": None}, {}]}
+
+    result = await ic.fetch_infrasafe_external_buildings()
+
+    assert result == set()

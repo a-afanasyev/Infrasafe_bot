@@ -30,9 +30,14 @@ _BACKOFF_DELAYS = [2, 4, 8]  # seconds
 NS_ARCH010 = uuid.UUID("a7f3c1e2-4b6d-4e8a-9c0f-1d2e3f4a5b6c")
 
 _VERSIONED_EVENTS = frozenset(
-    {"building.updated", "building.deleted", "request.status_changed"}
+    {"building.updated", "building.deleted", "request.status_changed", "request.reconcile"}
 )
 _ONE_SHOT_EVENTS = frozenset({"building.created", "request.created"})
+# ARCH-114: события-ремонты, которые НИКОГДА не идут обычным (versioned) путём —
+# только через repair_run_id nonce. request.reconcile попадает в
+# _VERSIONED_EVENTS ради общей проверки «известное событие», но обязана
+# отдельно запретить version (см. guard в _deterministic_event_id).
+_REPAIR_ONLY_EVENTS = frozenset({"request.reconcile"})
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,17 @@ def _deterministic_event_id(
             f"{event}: неизвестное контрактное событие — добавь в "
             "_VERSIONED_EVENTS/_ONE_SHOT_EVENTS (webhook_sender.py)"
         )
+    if event in _REPAIR_ONLY_EVENTS:
+        # Порядок проверок важен: EventIdentity(version=1) не задаёт
+        # repair_run_id, поэтому если сначала проверять «пустой
+        # repair_run_id», именно эта ветка выстрелит первой и специфичная
+        # ошибка про version окажется недостижимой.
+        if ident.version is not None:
+            raise ValueError(f"{event}: repair-only событие не принимает version")
+        if not ident.repair_run_id:
+            raise ValueError(
+                f"{event}: repair-only событие, требуется непустой repair_run_id"
+            )
     source = settings.OUTBOX_SOURCE_INSTANCE
     if ident.repair_run_id is not None:
         # Repair-nonce: свежий id на каждый запуск reconcile — ремонт обязан
@@ -150,6 +166,11 @@ def build_request_payload(
         payload["request"].update({
             "old_status": data.get("old_status", ""),
             "new_status": data.get("new_status", ""),
+        })
+    elif event == "request.reconcile":
+        payload["request"].update({
+            "status": data.get("status", ""),
+            "building_external_id": data.get("building_external_id"),
         })
     # FIX-007 Phase 2: for requests born from an inbound InfraSafe alert, echo the
     # originating event_id so InfraSafe can link alert ↔ request_number.

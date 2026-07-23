@@ -8,18 +8,19 @@ import hashlib
 import logging
 import uuid
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from uk_management_bot.clients.infrasafe_client import (
     fetch_infrasafe_external_buildings,
     fetch_infrasafe_uk_request_numbers,
 )
 from uk_management_bot.config.settings import settings
+from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.session import AsyncSessionLocal
-from uk_management_bot.services.webhook_payloads import emit_request_status_changed
+from uk_management_bot.services.webhook_payloads import emit_request_reconcile
 from uk_management_bot.services.webhook_sender import EventIdentity, queue_webhook
 from uk_management_bot.utils.request_workflow import project_infrasafe_status
 
@@ -183,10 +184,13 @@ async def reconcile_requests() -> dict:
 
     Safety-net for silent webhook losses on the request channel — mirrors
     reconcile_buildings but for `requests`. Set-diffs UK request_numbers
-    against InfraSafe inventory and replays missing ones as
-    `request.status_changed` with the current UK status (per InfraSafe's
-    spec 2026-05-24: their receiver is idempotent on this event, works for
-    both ARM-mapped and orphan/stale-ARM requests).
+    against InfraSafe inventory and replays missing ones as `request.reconcile`
+    with the current UK status + resolved building_external_id. Replaying
+    `request.status_changed` doesn't converge here: InfraSafe's
+    alert_request_map only UPDATEs an existing row, never CREATEs one, and
+    UK-originated requests have no ARM row to begin with (sign-off
+    2026-07-23) — InfraSafe added a separate `uk_requests` table with an
+    atomic upsert on `uk_request_number` specifically to handle this event.
     """
     if not settings.INFRASAFE_WEBHOOK_ENABLED:
         return {"skipped": "disabled"}
@@ -251,20 +255,42 @@ async def reconcile_requests() -> dict:
                     len(extra_in_is), sorted(extra_in_is)[:5],
                 )
 
-            # 3. Replay missing as request.status_changed with current state.
-            #    Per InfraSafe spec Q8: this event is idempotent on their side —
-            #    if ARM exists, updates status; if ARM missing, success no-op.
-            #    Safer than request.created (which only matches alert-originated
-            #    requests via source_event_id).
+            # 3. Replay missing as request.reconcile with current state + building.
+            #    ARCH-114 sign-off 2026-07-23: their new handler does an atomic
+            #    upsert on uk_request_number (separate uk_requests table), so
+            #    this actually converges — request.status_changed doesn't (see
+            #    docstring).
             # ARCH-010: repair-nonce — один на запуск (см. reconcile_buildings).
             repair_run_id = uuid.uuid4().hex
+            capped = sorted(missing_in_is)[:REPLAY_CAP]
+            building_id_by_number: dict[str, int] = {}
+            if capped:
+                # Set-based резолв здания одним запросом на весь repair-батч
+                # (≤REPLAY_CAP строк), не по одному на заявку. outerjoin —
+                # чтобы заявки без apartment_id (building/yard/legacy) не
+                # выпадали из результата.
+                bld_stmt = (
+                    select(
+                        Request.request_number,
+                        func.coalesce(Request.building_id, Apartment.building_id)
+                        .label("building_id"),
+                    )
+                    .outerjoin(Apartment, Apartment.id == Request.apartment_id)
+                    .where(Request.request_number.in_(capped))
+                )
+                building_id_by_number = {
+                    r.request_number: r.building_id
+                    for r in (await db.execute(bld_stmt)).all()
+                }
             enqueued = 0
-            for rn in sorted(missing_in_is)[:REPLAY_CAP]:
+            for rn in capped:
                 row = uk_by_number[rn]
                 projected = project_infrasafe_status(row)
-                await emit_request_status_changed(
-                    db, rn, projected, projected, source="reconcile",
-                    identity=EventIdentity(repair_run_id=repair_run_id),
+                building_id = building_id_by_number.get(rn)
+                external_id = _expected_external_id(building_id) if building_id else None
+                await emit_request_reconcile(
+                    db, rn, projected, source="reconcile",
+                    repair_run_id=repair_run_id, building_external_id=external_id,
                 )
                 enqueued += 1
 

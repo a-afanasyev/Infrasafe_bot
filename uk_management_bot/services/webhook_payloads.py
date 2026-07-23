@@ -80,6 +80,30 @@ async def emit_request_status_changed(
                 request_number, old_status, new_status, source)
 
 
+def build_request_reconcile_payload(
+    request_number: str, status: str, building_external_id: str | None,
+) -> dict:
+    """Payload shape for request.reconcile (ARCH-114)."""
+    return {
+        "request_number": request_number,
+        "status": status,
+        "building_external_id": building_external_id,
+    }
+
+
+async def emit_request_reconcile(
+    db: AsyncSession, request_number: str, status: str, source: str,
+    *, repair_run_id: str, building_external_id: str | None = None,
+) -> None:
+    """Enqueue request.reconcile — repair-only, always carries a repair_run_id
+    nonce (see EventIdentity/_REPAIR_ONLY_EVENTS in webhook_sender.py)."""
+    await queue_webhook(db, "request.reconcile", REQUEST_WEBHOOK_ENDPOINT,
+                        build_request_reconcile_payload(request_number, status, building_external_id),
+                        EventIdentity(repair_run_id=repair_run_id))
+    logger.info("webhook_emitted event=request.reconcile request_number=%s status=%s source=%s",
+                request_number, status, source)
+
+
 def emit_request_status_changed_sync(
     db: Session, request_number: str, old_status: str, new_status: str, source: str,
     identity: EventIdentity | None = None,

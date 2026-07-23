@@ -224,6 +224,10 @@ async def _capture_async_record(event, endpoint, data, identity=None) -> Webhook
         ("request.status_changed", "/api/webhooks/uk/request",
          {"request_number": "260610-001", "old_status": "В работе",
           "new_status": "Выполнена"}, EventIdentity(version=1)),
+        # ARCH-114: repair-only событие — требует repair_run_id, не version.
+        ("request.reconcile", "/api/webhooks/uk/request",
+         {"request_number": "260610-002", "status": "В работе",
+          "building_external_id": None}, EventIdentity(repair_run_id="run-1")),
         # generic-ветка (не building.*/request.*)
         ("shift.opened", "/api/webhooks/uk/shift", {"shift_id": 7}, None),
     ],
@@ -283,6 +287,89 @@ def test_double_enqueue_different_versions_two_rows(sync_session, webhook_enable
             "/api/webhooks/uk/building",
             {"id": 3, "address": "C", "yard_name": "Y"},
             EventIdentity(version=v),
+        )
+    sync_session.commit()
+    assert sync_session.query(WebhookOutbox).count() == 2
+
+
+# ===== ARCH-114: request.reconcile — repair-only инвариант =====
+
+def test_request_reconcile_with_repair_run_id_succeeds(sync_session, webhook_enabled):
+    """Штатный путь: repair_run_id задан → outbox-запись создаётся."""
+    queue_webhook_sync(
+        sync_session,
+        "request.reconcile",
+        "/api/webhooks/uk/request",
+        {"request_number": "260523-042", "status": "В работе", "building_external_id": None},
+        EventIdentity(repair_run_id="run-1"),
+    )
+    sync_session.commit()
+
+    row = sync_session.query(WebhookOutbox).first()
+    assert row is not None
+    assert row.payload["event"] == "request.reconcile"
+    assert row.payload["request"]["status"] == "В работе"
+
+
+def test_request_reconcile_without_identity_fails_loud(sync_session, webhook_enabled):
+    """Repair-only событие без identity вовсе — ValueError, не тихий uuid4."""
+    with pytest.raises(ValueError, match="repair_run_id"):
+        queue_webhook_sync(
+            sync_session,
+            "request.reconcile",
+            "/api/webhooks/uk/request",
+            {"request_number": "260523-042", "status": "В работе", "building_external_id": None},
+        )
+
+
+def test_request_reconcile_with_version_fails_loud(sync_session, webhook_enabled):
+    """Repair-only событие не принимает version — даже если оно в _VERSIONED_EVENTS."""
+    with pytest.raises(ValueError, match="version"):
+        queue_webhook_sync(
+            sync_session,
+            "request.reconcile",
+            "/api/webhooks/uk/request",
+            {"request_number": "260523-042", "status": "В работе", "building_external_id": None},
+            EventIdentity(version=1),
+        )
+
+
+def test_request_reconcile_with_empty_repair_run_id_fails_loud(sync_session, webhook_enabled):
+    """Пустая строка repair_run_id — falsy, но не None; должна падать так же, как None."""
+    with pytest.raises(ValueError, match="repair_run_id"):
+        queue_webhook_sync(
+            sync_session,
+            "request.reconcile",
+            "/api/webhooks/uk/request",
+            {"request_number": "260523-042", "status": "В работе", "building_external_id": None},
+            EventIdentity(repair_run_id=""),
+        )
+
+
+def test_request_reconcile_double_enqueue_same_repair_run_id_single_row(sync_session, webhook_enabled):
+    """Тот же repair_run_id на ту же заявку → один и тот же детерминированный
+    event_id → ON CONFLICT DO NOTHING держит ровно одну строку."""
+    for _ in range(2):
+        queue_webhook_sync(
+            sync_session,
+            "request.reconcile",
+            "/api/webhooks/uk/request",
+            {"request_number": "260523-042", "status": "В работе", "building_external_id": None},
+            EventIdentity(repair_run_id="run-1"),
+        )
+    sync_session.commit()
+    assert sync_session.query(WebhookOutbox).count() == 1
+
+
+def test_request_reconcile_double_enqueue_different_repair_run_id_two_rows(sync_session, webhook_enabled):
+    """Разные repair_run_id (разные циклы ремонта) — разные event_id, обе строки живы."""
+    for run_id in ("run-1", "run-2"):
+        queue_webhook_sync(
+            sync_session,
+            "request.reconcile",
+            "/api/webhooks/uk/request",
+            {"request_number": "260523-042", "status": "В работе", "building_external_id": None},
+            EventIdentity(repair_run_id=run_id),
         )
     sync_session.commit()
     assert sync_session.query(WebhookOutbox).count() == 2

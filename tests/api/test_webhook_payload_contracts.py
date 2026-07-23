@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 from uk_management_bot.services.webhook_payloads import (
     build_request_created_payload,
+    build_request_reconcile_payload,
     build_request_status_changed_payload,
 )
 
@@ -72,3 +73,24 @@ def test_request_status_changed_payload_full_shape():
 def test_request_status_changed_payload_keys_are_exactly_three():
     payload = build_request_status_changed_payload("260523-042", "Новая", "В работе")
     assert set(payload.keys()) == {"request_number", "old_status", "new_status"}
+
+
+def test_request_reconcile_payload_full_shape():
+    payload = build_request_reconcile_payload(
+        "260523-042", "В работе", "3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c",
+    )
+    assert payload == {
+        "request_number": "260523-042",
+        "status": "В работе",
+        "building_external_id": "3f2a9c1e-4b6d-4e8a-9c0f-1d2e3f4a5b6c",
+    }
+
+
+def test_request_reconcile_payload_building_external_id_none_for_yard_or_legacy():
+    payload = build_request_reconcile_payload("260523-042", "Новая", None)
+    assert payload["building_external_id"] is None
+
+
+def test_request_reconcile_payload_keys_are_exactly_three():
+    payload = build_request_reconcile_payload("260523-042", "Новая", None)
+    assert set(payload.keys()) == {"request_number", "status", "building_external_id"}
