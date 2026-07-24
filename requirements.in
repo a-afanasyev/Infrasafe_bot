@@ -1,5 +1,9 @@
 # Telegram Bot Framework
 aiogram>=3.0.0
+# F-06 (аудит 2026-07-11): floor против уязвимой 3.13.5 — aiohttp транзитивен
+# через aiogram, но advisories (multipart CRLF, HTTP parser, WS memory limits)
+# требуют явной нижней границы.
+aiohttp>=3.14.1
 
 # Database
 sqlalchemy>=2.0.0
