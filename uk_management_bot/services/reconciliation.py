@@ -104,8 +104,12 @@ async def reconcile_buildings() -> dict:
             extra_in_is = is_externals - expected_set
 
             if not missing_in_is and not extra_in_is:
-                logger.info(
-                    "reconcile_buildings: in sync (uk=%d is=%d)",
+                # WARNING, not INFO: prod LOG_LEVEL=WARNING silently drops INFO,
+                # which made "converged" indistinguishable from "loop died"
+                # (caught 2026-07-24 — InfraSafe cross-checked their edge logs
+                # after we misread profk's silence as a dead reconcile task).
+                logger.warning(
+                    "reconcile_buildings: cycle complete, in sync (uk=%d is=%d)",
                     len(uk_rows), len(is_externals),
                 )
                 return {
@@ -235,8 +239,9 @@ async def reconcile_requests() -> dict:
             extra_in_is = is_set - uk_set
 
             if not missing_in_is and not extra_in_is:
-                logger.info(
-                    "reconcile_requests: in sync (uk=%d is=%d)",
+                # WARNING, not INFO — see matching comment in reconcile_buildings().
+                logger.warning(
+                    "reconcile_requests: cycle complete, in sync (uk=%d is=%d)",
                     len(uk_set), len(is_set),
                 )
                 return {

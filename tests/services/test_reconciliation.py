@@ -94,7 +94,7 @@ def test_expected_external_id_matches_infrasafe_algorithm():
 
 
 @pytest.mark.asyncio
-async def test_in_sync_when_expected_set_matches(_wired):
+async def test_in_sync_when_expected_set_matches(_wired, caplog):
     """InfraSafe has exactly the expected external_ids → in_sync, no replay."""
     monkeypatch, mock_fetch, mock_queue = _wired
     rows = [_building_row(1), _building_row(2), _building_row(3)]
@@ -103,10 +103,14 @@ async def test_in_sync_when_expected_set_matches(_wired):
         reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
     )
 
-    result = await reconciliation.reconcile_buildings()
+    with caplog.at_level("WARNING", logger="uk_management_bot.services.reconciliation"):
+        result = await reconciliation.reconcile_buildings()
 
     assert result == {"in_sync": True, "uk": 3, "infrasafe": 3}
     mock_queue.assert_not_called()
+    # 2026-07-24: WARNING (not INFO) so "converged" survives prod's
+    # LOG_LEVEL=WARNING — otherwise indistinguishable from a dead loop.
+    assert any("cycle complete, in sync" in rec.message for rec in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -282,7 +286,7 @@ def _wired_requests(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_requests_in_sync_when_inventory_matches(_wired_requests):
+async def test_requests_in_sync_when_inventory_matches(_wired_requests, caplog):
     monkeypatch, mock_fetch, mock_emit = _wired_requests
     rows = [_request_row("260524-001"), _request_row("260524-002")]
     mock_fetch.return_value = {"260524-001", "260524-002"}
@@ -290,10 +294,13 @@ async def test_requests_in_sync_when_inventory_matches(_wired_requests):
         reconciliation, "AsyncSessionLocal", lambda: _FakeSession(True, rows)
     )
 
-    result = await reconciliation.reconcile_requests()
+    with caplog.at_level("WARNING", logger="uk_management_bot.services.reconciliation"):
+        result = await reconciliation.reconcile_requests()
 
     assert result == {"in_sync": True, "uk": 2, "infrasafe": 2}
     mock_emit.assert_not_called()
+    # 2026-07-24: same fix as reconcile_buildings — WARNING survives prod filter.
+    assert any("cycle complete, in sync" in rec.message for rec in caplog.records)
 
 
 @pytest.mark.asyncio
