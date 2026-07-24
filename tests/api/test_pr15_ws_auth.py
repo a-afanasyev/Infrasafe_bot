@@ -3,8 +3,12 @@
 `authenticate_ws_manager` поддерживает 4 источника токена с приоритетом
 cookie → ?token= (DEPRECATED + warning) → первое WS-сообщение (secure-путь
 для cookieless-клиентов). Проверяем каждый путь + role-gate + accept/close.
+
+F-04 (аудит 2026-07-11): токен обязан нести числовой exp, стрим живёт не дольше
+exp и закрывается выделенным кодом 4001 (клиент обновляет сессию и возвращается).
 """
 import asyncio
+import time
 
 import pytest
 from fastapi import WebSocketDisconnect
@@ -38,10 +42,11 @@ class FakeWS:
 def manager_token(monkeypatch):
     """verify_access_token("good") → manager payload; иначе None."""
     def _verify(tok):
+        # exp обязателен с F-04 — payload без него отклоняется (см. TestExpClaim).
         if tok == "good":
-            return {"sub": "1", "roles": ["manager"]}
+            return {"sub": "1", "roles": ["manager"], "exp": time.time() + 3600}
         if tok == "applicant":
-            return {"sub": "2", "roles": ["applicant"]}
+            return {"sub": "2", "roles": ["applicant"], "exp": time.time() + 3600}
         return None
     monkeypatch.setattr(ws, "verify_access_token", _verify)
 
@@ -163,3 +168,59 @@ class TestFirstMessagePath:
         assert payload is None
         assert wsk.accepted is True
         assert wsk.closed_code == 1008
+
+
+# ---------------------------------------------------------------------------
+# F-04: обязательный числовой exp + закрытие стрима по истечению (код 4001)
+# ---------------------------------------------------------------------------
+
+class _SilentPubSub:
+    """PubSub без сообщений: стрим ждёт вечно, закрыть его может только exp."""
+
+    async def listen(self):
+        while True:
+            await asyncio.sleep(5)
+            yield {"type": "ping"}  # недостижимо в тесте
+
+
+class TestExpClaim:
+    @pytest.mark.asyncio
+    async def test_token_without_exp_rejected(self, monkeypatch):
+        """Подписанный JWT без exp — отказ 1008: стрим нечем ограничить."""
+        monkeypatch.setattr(
+            ws, "verify_access_token", lambda tok: {"sub": "1", "roles": ["manager"]}
+        )
+        wsk = FakeWS(cookies={"uk_access": "noexp"})
+        payload = await ws.authenticate_ws_manager(wsk, None)
+        assert payload is None
+        assert wsk.accepted is False  # cookie-путь отклоняет ДО accept
+        assert wsk.closed_code == 1008
+
+    @pytest.mark.asyncio
+    async def test_token_with_non_numeric_exp_rejected(self, monkeypatch):
+        monkeypatch.setattr(
+            ws,
+            "verify_access_token",
+            lambda tok: {"sub": "1", "roles": ["manager"], "exp": "tomorrow"},
+        )
+        wsk = FakeWS(cookies={"uk_access": "badexp"})
+        payload = await ws.authenticate_ws_manager(wsk, None)
+        assert payload is None
+        assert wsk.closed_code == 1008
+
+    @pytest.mark.asyncio
+    async def test_valid_exp_payload_returned(self, manager_token):
+        wsk = FakeWS(cookies={"uk_access": "good"})
+        payload = await ws.authenticate_ws_manager(wsk, None)
+        assert payload is not None and payload["exp"] > time.time()
+
+
+class TestStreamExpiry:
+    @pytest.mark.asyncio
+    async def test_relay_closes_4001_on_token_expiry(self):
+        """Истечение exp во время стрима → close выделенным кодом 4001."""
+        wsk = FakeWS()
+        payload = {"sub": "1", "roles": ["manager"], "exp": time.time() + 0.05}
+        await ws._relay_until_exp(wsk, payload, _SilentPubSub())
+        assert ws.WS_TOKEN_EXPIRED == 4001
+        assert wsk.closed_code == ws.WS_TOKEN_EXPIRED

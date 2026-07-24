@@ -1,6 +1,7 @@
 import asyncio
 import json as _json
 import logging
+import time
 from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
@@ -20,6 +21,24 @@ router = APIRouter()
 # below, then will be removed.
 _WS_QUERY_TOKEN_DEPRECATED_UNTIL = "2026-09-01"
 _WS_AUTH_MESSAGE_TIMEOUT = 10  # seconds to wait for the first-message token
+
+# F-04: app close code (RFC 6455 range 4000-4999) "JWT expired" — the client
+# refreshes the session and reconnects. Mirrored in access_control ws_security
+# (which deliberately does not import from api routers).
+WS_TOKEN_EXPIRED = 4001
+
+
+def _token_exp(payload: dict) -> Optional[float]:
+    """Numeric ``exp`` claim or None.
+
+    F-04: verify_access_token accepts a correctly signed JWT WITHOUT exp — such
+    a token cannot bound the stream lifetime, so it is rejected at auth instead
+    of raising KeyError mid-stream.
+    """
+    exp = payload.get("exp")
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return None
+    return float(exp)
 
 
 def _extract_roles(payload: dict) -> list:
@@ -95,7 +114,11 @@ async def authenticate_ws_manager(
         )
 
     payload = verify_access_token(token) if token else None
-    if not payload or "manager" not in _extract_roles(payload):
+    if (
+        not payload
+        or "manager" not in _extract_roles(payload)
+        or _token_exp(payload) is None
+    ):
         if accepted:
             await _safe_close(websocket)
         else:
@@ -107,18 +130,37 @@ async def authenticate_ws_manager(
     return payload
 
 
+async def _relay_until_exp(websocket: WebSocket, payload: dict, pubsub) -> None:
+    """Forward pubsub messages to the client until the JWT expires (F-04).
+
+    On expiry the socket is closed with WS_TOKEN_EXPIRED (4001) — a normal,
+    expected event (never logged as an error): the client refreshes the session
+    cookie and reconnects.
+    """
+    exp = _token_exp(payload) or 0.0  # auth guarantees numeric exp; 0.0 fails closed
+    try:
+        async with asyncio.timeout(max(0.0, exp - time.time())):
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    await websocket.send_text(message["data"])
+    except TimeoutError:
+        try:
+            await websocket.close(code=WS_TOKEN_EXPIRED)
+        except RuntimeError:
+            pass  # peer already gone
+
+
 @router.websocket("/kanban")
 async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
-    if await authenticate_ws_manager(websocket, token) is None:
+    payload = await authenticate_ws_manager(websocket, token)
+    if payload is None:
         return
 
     pubsub = None
     redis_client = None
     try:
         pubsub, redis_client = await subscribe_to_requests()
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                await websocket.send_text(message["data"])
+        await _relay_until_exp(websocket, payload, pubsub)
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -138,16 +180,15 @@ async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
 
 @router.websocket("/shifts")
 async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
-    if await authenticate_ws_manager(websocket, token) is None:
+    payload = await authenticate_ws_manager(websocket, token)
+    if payload is None:
         return
 
     pubsub = None
     redis_client = None
     try:
         pubsub, redis_client = await subscribe_to_shifts()
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                await websocket.send_text(message["data"])
+        await _relay_until_exp(websocket, payload, pubsub)
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -167,16 +208,15 @@ async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
 
 @router.websocket("/buildings")
 async def buildings_ws(websocket: WebSocket, token: str = Query(default=None)):
-    if await authenticate_ws_manager(websocket, token) is None:
+    payload = await authenticate_ws_manager(websocket, token)
+    if payload is None:
         return
 
     pubsub = None
     redis_client = None
     try:
         pubsub, redis_client = await subscribe_to_buildings()
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                await websocket.send_text(message["data"])
+        await _relay_until_exp(websocket, payload, pubsub)
     except WebSocketDisconnect:
         pass
     except Exception:

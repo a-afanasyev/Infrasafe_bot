@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { refreshSession } from '../api/client'
+
 /**
  * Live-лента событий охраны модуля контроля доступа (ТЗ access_control §9.6, §15.13).
  *
@@ -47,6 +49,11 @@ export type AccessFeedStatus = 'connecting' | 'open' | 'closed' | 'error'
 const MAX_EVENTS = 100
 // WS close code «policy violation» (RFC 6455): отказ авторизации — НЕ реконнектим.
 const WS_POLICY_VIOLATION = 1008
+// F-04: сервер закрывает стрим по истечению JWT кодом 4001 — обновляем сессию
+// (httpOnly cookie) и переподключаемся. Второй 4001 раньше 30 с после refresh
+// означает, что refresh не даёт живущий токен — стоп, иначе цикл.
+const WS_TOKEN_EXPIRED = 4001
+const EXPIRED_REFRESH_MIN_INTERVAL_MS = 30_000
 const MAX_RECONNECT_ATTEMPTS = 6
 const BASE_BACKOFF_MS = 1000
 const MAX_BACKOFF_MS = 15000
@@ -84,6 +91,7 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const attemptsRef = useRef(0)
+  const lastExpiredRefreshAt = useRef(0)
   const closedByCaller = useRef(false)
   // Реконнект вызывает connect рекурсивно из onclose. Маршрутизируем через ref,
   // чтобы не ссылаться на binding connect до его объявления (TDZ-смелл).
@@ -152,6 +160,22 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
 
     ws.onclose = (event) => {
       if (closedByCaller.current) return
+      // F-04: истёк JWT — обновляем cookie-сессию и переподключаемся один раз.
+      if (event.code === WS_TOKEN_EXPIRED) {
+        const now = Date.now()
+        if (now - lastExpiredRefreshAt.current < EXPIRED_REFRESH_MIN_INTERVAL_MS) {
+          setStatus('error') // refresh не даёт живущий токен — не зацикливаемся
+          return
+        }
+        lastExpiredRefreshAt.current = now
+        setStatus('connecting')
+        refreshSession()
+          .then(() => {
+            if (!closedByCaller.current) connectRef.current()
+          })
+          .catch(() => setStatus('error')) // редирект на /login уже внутри refreshSession
+        return
+      }
       // 1008 (policy violation) = отказ авторизации: реконнект не поможет.
       if (event.code === WS_POLICY_VIOLATION) {
         setStatus('error')

@@ -18,6 +18,9 @@ WS-аутентификация переиспользует ``create_access_tok
 """
 from __future__ import annotations
 
+import asyncio
+import time
+
 import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -256,6 +259,97 @@ async def test_safe_close_swallows_runtime_error() -> None:
     # Не должно поднять исключение наружу (иначе трейсбек в лог при auth-reject).
     await _safe_close(ws, code=1008)
     assert ws.close_calls == 1
+
+
+# ───────────────────── F-05: silent-клиент не держит соединение вечно ─────────
+
+
+class _SilentAuthWS:
+    """Stub: cookieless-клиент, молчащий после handshake (F-05, аудит 2026-07-11)."""
+
+    def __init__(self) -> None:
+        from starlette.websockets import WebSocketState
+
+        self.query_params: dict = {}
+        self.cookies: dict = {}
+        self.client_state = WebSocketState.CONNECTING
+        self.accepted = False
+        self.closed_code: int | None = None
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def close(self, code: int = 1000) -> None:
+        self.closed_code = code
+
+    async def receive_json(self):
+        await asyncio.sleep(5)  # дольше таймаута — соединение обязано закрыться
+
+
+@pytest.mark.asyncio
+async def test_silent_cookieless_client_closed_by_timeout(monkeypatch) -> None:
+    """F-05: первый auth-message не пришёл за таймаут → close 1008, не вечный idle.
+
+    Замер времени обязателен: без таймаута fake-клиент «молчит» 5 секунд и
+    соединение всё равно закрылось бы 1008 — но медленно, что и есть баг.
+    """
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(ws_mod, "_WS_AUTH_MESSAGE_TIMEOUT", 0.05)
+    wsk = _SilentAuthWS()
+    started = time.monotonic()
+    await ws_mod.ws_security(wsk)
+    elapsed = time.monotonic() - started
+    assert wsk.accepted is True
+    assert wsk.closed_code == 1008
+    assert elapsed < 1.0, f"соединение закрылось за {elapsed:.2f}s — таймаут не работает"
+
+
+# ───────────────────── F-04: обязательный exp + закрытие стрима (4001) ─────────
+
+
+def test_cookie_token_without_exp_rejected(monkeypatch) -> None:
+    """Подписанный JWT без числового exp → отказ: стрим нечем ограничить."""
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(
+        ws_mod, "verify_access_token", lambda tok: {"sub": "1", "roles": ["manager"]}
+    )
+    client = _client_with_cookie("noexp")
+    _expect_rejected(client)
+
+
+def test_first_message_token_without_exp_rejected(monkeypatch) -> None:
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(
+        ws_mod,
+        "verify_access_token",
+        lambda tok: {"sub": "1", "roles": ["security_operator"], "exp": "tomorrow"},
+    )
+    client = TestClient(create_app())
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(WS_URL) as ws:
+            ws.send_json({"token": "badexp"})
+            ws.receive_json()
+
+
+def test_stream_closes_with_token_expired_code(monkeypatch) -> None:
+    """F-04: истечение exp во время стрима → close выделенным кодом 4001."""
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(
+        ws_mod,
+        "verify_access_token",
+        lambda tok: {"sub": "1", "roles": ["manager"], "exp": time.time() + 0.25},
+    )
+    client = _client_with_cookie("short-lived")
+    with client.websocket_connect(WS_URL) as ws:
+        assert ws.receive_json()["type"] == "ready"
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()  # ждём закрытия по exp
+    assert ws_mod.WS_TOKEN_EXPIRED == 4001
+    assert exc.value.code == ws_mod.WS_TOKEN_EXPIRED
 
 
 # ───────────────────── Ф6: router подключён ───────────────────────────────────

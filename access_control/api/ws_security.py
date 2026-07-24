@@ -22,7 +22,9 @@ Known-limitation (пилот): аутентификация доверяет р�
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
@@ -40,6 +42,15 @@ WS_ROLES = ("security_operator", "manager", "system_admin")
 
 # WS close code «policy violation» (RFC 6455): отказ авторизации.
 WS_POLICY_VIOLATION = 1008
+
+# F-04: app-код (RFC 6455 диапазон 4000-4999) «JWT истёк» — клиент обновляет
+# сессию и переподключается. Дублируется в uk_management_bot/api/ws/router.py
+# (как и 1008/таймаут — access_control не импортирует из api-роутеров UK).
+WS_TOKEN_EXPIRED = 4001
+
+# F-05: сколько ждать первый auth-message cookieless-клиента. Без лимита
+# неаутентифицированные idle-соединения копятся до исчерпания worker'а.
+_WS_AUTH_MESSAGE_TIMEOUT = 10
 
 # Имена query-параметров, в которых JWT запрещён (§9.6).
 _FORBIDDEN_QUERY_TOKEN_KEYS = ("token", "access_token", "jwt")
@@ -64,6 +75,19 @@ def _authorized_roles(payload: dict | None) -> bool:
 def _has_query_token(websocket: WebSocket) -> bool:
     """JWT в query string (§9.6: запрещён)."""
     return any(key in websocket.query_params for key in _FORBIDDEN_QUERY_TOKEN_KEYS)
+
+
+def _token_exp(payload: dict | None) -> float | None:
+    """Числовой claim ``exp`` или None.
+
+    F-04: verify_access_token принимает корректно подписанный JWT и БЕЗ exp —
+    такой токен нечем ограничить по времени, поэтому отвергается как отказ
+    авторизации (None), а не падает KeyError'ом в стриме.
+    """
+    exp = (payload or {}).get("exp")
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return None
+    return float(exp)
 
 
 async def _safe_close(websocket: WebSocket, code: int = 1000) -> None:
@@ -94,42 +118,55 @@ async def ws_security(websocket: WebSocket) -> None:
     )
 
     if cookie_token:
-        # Путь cookie: проверяем роли ДО accept, отказ — close без accept.
-        if not _authorized_roles(verify_access_token(cookie_token)):
+        # Путь cookie: проверяем роли и exp ДО accept, отказ — close без accept.
+        payload = verify_access_token(cookie_token)
+        exp = _token_exp(payload)
+        if not _authorized_roles(payload) or exp is None:
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
         await websocket.accept()
     # TODO(accepted-risk L3, post-pilot): роли проверяются один раз при коннекте; при
-    # отзыве роли в течение долгоживущей WS-сессии поток не разрывается. Принятый риск
-    # пилота; после пилота — периодическая ре-проверка роли (короткий TTL/heartbeat).
+    # отзыве роли в течение WS-сессии поток живёт до exp токена (≤60 мин, F-04).
+    # После пилота — периодическая ре-проверка роли (короткий TTL/heartbeat).
     else:
         # Cookieless: принимаем, ждём JWT в первом сообщении, затем проверяем роли.
         await websocket.accept()
         try:
-            first = await websocket.receive_json()
-        except (WebSocketDisconnect, ValueError, KeyError):
+            first = await asyncio.wait_for(
+                websocket.receive_json(), timeout=_WS_AUTH_MESSAGE_TIMEOUT
+            )
+        except (TimeoutError, WebSocketDisconnect, ValueError, KeyError):
+            # TimeoutError (=asyncio.TimeoutError в 3.11+) — F-05: молчащий клиент.
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
         token = first.get("token") if isinstance(first, dict) else None
-        if not token or not _authorized_roles(verify_access_token(token)):
+        payload = verify_access_token(token) if token else None
+        exp = _token_exp(payload)
+        if not _authorized_roles(payload) or exp is None:
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
 
-    await _stream_events(websocket)
+    await _stream_events(websocket, exp)
 
 
-async def _stream_events(websocket: WebSocket) -> None:
+async def _stream_events(websocket: WebSocket, exp: float) -> None:
     """Подписаться на брокер и слать клиенту PD-safe события (§11) до отключения.
 
     Подписка создаётся ДО ready-фрейма: к моменту, когда клиент видит ``ready``,
-    он уже подключён к брокеру и не пропустит последующие события.
+    он уже подключён к брокеру и не пропустит последующие события. Стрим живёт
+    не дольше exp токена (F-04): по истечению — close 4001, клиент обновляет
+    сессию и переподключается.
     """
     subscription = get_broker().subscribe()
     try:
         await websocket.send_json({"type": "ready"})
-        while True:
-            message = await subscription.get()
-            await websocket.send_json(message.to_payload())
+        async with asyncio.timeout(max(0.0, exp - time.time())):
+            while True:
+                message = await subscription.get()
+                await websocket.send_json(message.to_payload())
+    except TimeoutError:
+        # F-04: истечение JWT — штатное закрытие, НЕ ошибка (не logger.exception).
+        await _safe_close(websocket, code=WS_TOKEN_EXPIRED)
     except WebSocketDisconnect:
         pass
     except Exception:  # noqa: BLE001 — поток не должен ронять воркер
