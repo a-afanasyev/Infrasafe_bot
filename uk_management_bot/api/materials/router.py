@@ -38,6 +38,7 @@ from uk_management_bot.api.materials.schemas import (
 )
 from uk_management_bot.database.models.material import Material
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.csv_escape import escape_csv_cell
 from uk_management_bot.services import material_service
 from uk_management_bot.services.material_service import (
     MaterialConflictError,
@@ -240,18 +241,19 @@ async def export_operations(
     writer = csv.writer(buf, delimiter=";")
     writer.writerow(_OPS_CSV_HEADER)
     for op in page["items"]:
+        # F-07: пользовательские строки экранируются от Excel formula injection.
         writer.writerow([
             _OP_TYPE_LABELS.get(op["op_type"], op["op_type"]),
             op["id"],
             op["created_at"].isoformat() if op["created_at"] else "",
-            op["material_name"],
-            op["unit"],
-            op["doc_type"],
+            escape_csv_cell(op["material_name"]),
+            escape_csv_cell(op["unit"]),
+            escape_csv_cell(op["doc_type"]),
             op["qty"],
             op["amount"],
-            op["request_number"] or "",
-            op["supplier"] or "",
-            op["reason"] or "",
+            escape_csv_cell(op["request_number"] or ""),
+            escape_csv_cell(op["supplier"] or ""),
+            escape_csv_cell(op["reason"] or ""),
         ])
     # utf-8-sig BOM — чтобы Excel открывал кириллицу без танцев
     payload = "\ufeff" + buf.getvalue()
@@ -292,9 +294,12 @@ async def export_procurement(
     writer = csv.writer(buf, delimiter=";")
     writer.writerow(_PROC_CSV_HEADER)
     for row in data["deficit"]:
-        writer.writerow(
-            [row["name"], row["unit"], row["stock"], row["min_stock"], row["to_buy"]]
-        )
+        # F-07: название/ед. — пользовательский ввод, экранируем от формул.
+        writer.writerow([
+            escape_csv_cell(row["name"]),
+            escape_csv_cell(row["unit"]),
+            row["stock"], row["min_stock"], row["to_buy"],
+        ])
     payload = "\ufeff" + buf.getvalue()
     return StreamingResponse(
         iter([payload]),

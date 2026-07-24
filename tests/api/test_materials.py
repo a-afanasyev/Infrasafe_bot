@@ -506,6 +506,38 @@ async def test_operations_csv_export(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_operations_export_escapes_formula_injection(client: AsyncClient):
+    """F-07: управляемые значения (название, supplier, reason), начинающиеся с
+    =/+/-/@, экранируются апострофом — Excel не исполнит их как формулу."""
+    m = await _mk_material(client, name="+SUM(A1:A9)")
+    await _mk_receipt(client, m["id"], "2", "10.00",
+                      supplier='=HYPERLINK("http://evil";"click")')
+    resp = await client.post(f"{BASE}/adjustments", json={
+        "material_id": m["id"], "direction": "shortage", "qty": "1",
+        "reason": "@evil|'/C calc'!A0",
+    })
+    assert resp.status_code == 201
+
+    body = (await client.get(f"{BASE}/operations/export")).text
+    assert "'+SUM(A1:A9)" in body
+    assert ";+SUM(A1:A9)" not in body           # неэкранированного вхождения нет
+    assert "'=HYPERLINK" in body
+    assert '"=HYPERLINK' not in body            # и в quoted-виде тоже
+    assert "'@evil" in body
+    assert ";@evil" not in body
+
+
+@pytest.mark.asyncio
+async def test_procurement_export_escapes_formula_injection(client: AsyncClient):
+    """F-07: procurement-export экранирует название материала."""
+    m = await _mk_material(client, name="=2+5", min_stock="10")
+    await _mk_receipt(client, m["id"], "3", "10.00")
+    body = (await client.get(f"{BASE}/procurement/export")).text
+    assert "'=2+5" in body
+    assert "\n=2+5" not in body  # название — первая колонка строки
+
+
+@pytest.mark.asyncio
 async def test_by_request_report(client: AsyncClient, db_session: AsyncSession,
                                  manager_user: User):
     await _mk_request(db_session, manager_user)
