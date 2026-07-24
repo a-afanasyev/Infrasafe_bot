@@ -73,7 +73,6 @@ def upgrade() -> None:
         sa.CheckConstraint("source IN ('auto','manual')", name="ck_work_reports_source"),
         sa.ForeignKeyConstraint(["moderated_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("request_number", name="uq_work_reports_request_number"),
     )
     op.create_index(
         op.f("ix_work_reports_request_number"), "work_reports", ["request_number"], unique=True
