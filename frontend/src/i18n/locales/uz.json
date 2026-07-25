@@ -605,7 +605,8 @@
       "requests": "Joriy arizalar",
       "announcements": "E'lonlar",
       "rating": "Aholilar bahosi",
-      "hours": "Ish vaqti"
+      "hours": "Ish vaqti",
+      "workreports": "Ishlar hisobotlari"
     },
     "org": "Boshqaruv kompaniyasi",
     "orgName": "Nomi",

@@ -38,9 +38,16 @@ export interface WorkingHourCfg {
   closed: boolean
 }
 
-export type ModuleId = 'stats' | 'requests' | 'announcements' | 'rating' | 'hours'
+export type ModuleId = 'stats' | 'requests' | 'announcements' | 'rating' | 'hours' | 'workreports'
 
-export const MODULE_IDS: ModuleId[] = ['stats', 'requests', 'announcements', 'rating', 'hours']
+export const MODULE_IDS: ModuleId[] = [
+  'stats',
+  'requests',
+  'announcements',
+  'rating',
+  'hours',
+  'workreports',
+]
 
 export type ModuleWidth = 'full' | 'half'
 
@@ -52,6 +59,15 @@ export interface LayoutItem {
   width?: ModuleWidth
 }
 
+// Настройки будущего модуля отчётов о выполненных работах (НЕ layout-запись —
+// та лежит в LayoutItem с id='workreports').
+export interface WorkReportsCfg {
+  autopost: boolean
+  autopost_since: string | null // ISO datetime string over the wire, or null
+  limit: number
+  title: LocalizedText
+}
+
 export interface BoardConfigData {
   org: OrgCfg
   contacts: ContactsCfg
@@ -59,6 +75,7 @@ export interface BoardConfigData {
   announcements: AnnouncementCfg[]
   working_hours: WorkingHourCfg[]
   layout: LayoutItem[]
+  work_reports: WorkReportsCfg
 }
 
 // Fallback, если конфиг ещё не загрузился — страница не должна белеть.
@@ -119,4 +136,10 @@ export const defaultBoardConfig: BoardConfigData = {
     { id: 'rating', visible: true, width: 'half' },
     { id: 'hours', visible: true, width: 'half' },
   ],
+  work_reports: {
+    autopost: false,
+    autopost_since: null,
+    limit: 6,
+    title: { ru: 'Отчёты о выполненных работах', uz: 'Bajarilgan ishlar hisobotlari' },
+  },
 }
