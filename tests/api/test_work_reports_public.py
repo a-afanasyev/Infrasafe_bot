@@ -111,8 +111,12 @@ class _FakeAsyncClient:
         self._response = response
         self._raise = raise_transport_error
         self.aclose_called = False
+        # Запоминаем URL'ы: превью и оригинал различаются только маршрутом
+        # апстрима, и проверять это можно лишь здесь.
+        self.requests: list[str] = []
 
     def build_request(self, method, url, headers=None):
+        self.requests.append(url)
         return {"method": method, "url": url, "headers": headers}
 
     async def send(self, request, stream=True):
@@ -246,6 +250,57 @@ async def test_media_200_has_cache_headers(client, db_session, monkeypatch):
     assert resp.headers["cache-control"] == "public, max-age=3600"
     assert resp.headers["content-type"] == "image/jpeg"
     assert resp.content == b"abcdef"
+
+
+@pytest.mark.asyncio
+async def test_media_serves_preview_by_default(client, db_session, monkeypatch):
+    """Витрина обязана получать ПРЕВЬЮ, а не оригинал.
+
+    Оригиналы — скачивание из Telegram на каждый промах кэша media-service; на
+    30 карточках (60 изображений) это выедало его пул соединений и роняло
+    выдачу в 504, включая приватные фото заявок (инцидент 2026-07-25).
+    """
+    _enable(monkeypatch)
+    report = await _mk_report(
+        db_session, "260725-prev", status="published", published_at=datetime.now(timezone.utc),
+        before_media_ids=[1], after_media_ids=[2],
+        media_meta=[{"id": 1, "mime": "image/png"}],
+    )
+    fake = _FakeAsyncClient(response=_FakeUpstreamResponse(chunks=[b"jpeg"]))
+    _patch_httpx_client(monkeypatch, fake)
+
+    resp = await client.get(f"{BASE}/{report.id}/media/1")
+
+    assert resp.status_code == 200
+    assert fake.requests == ["http://stub-media/api/v1/media/1/preview"]
+    # Превью всегда JPEG, каким бы ни был оригинал — снапшотный mime (image/png)
+    # здесь неверен по определению.
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["etag"] == '"wr-1"'
+
+
+@pytest.mark.asyncio
+async def test_media_original_only_on_explicit_request(client, db_session, monkeypatch):
+    """`?original=1` — адресный клик по фото: только тогда идём за оригиналом.
+
+    ETag отличается от превью: это разные байты по одному id, и общий ETag
+    отдал бы одно вместо другого.
+    """
+    _enable(monkeypatch)
+    report = await _mk_report(
+        db_session, "260725-orig", status="published", published_at=datetime.now(timezone.utc),
+        before_media_ids=[1], after_media_ids=[2],
+        media_meta=[{"id": 1, "mime": "image/png"}],
+    )
+    fake = _FakeAsyncClient(response=_FakeUpstreamResponse(chunks=[b"png"]))
+    _patch_httpx_client(monkeypatch, fake)
+
+    resp = await client.get(f"{BASE}/{report.id}/media/1?original=1")
+
+    assert resp.status_code == 200
+    assert fake.requests == ["http://stub-media/api/v1/media/1/file"]
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.headers["etag"] == '"wr-1-orig"'
 
 
 @pytest.mark.asyncio

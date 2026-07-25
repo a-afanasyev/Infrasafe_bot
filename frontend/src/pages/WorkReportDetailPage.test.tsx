@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '../test/test-utils'
 import WorkReportDetailPage from './WorkReportDetailPage'
-import { publicWorkReportMediaUrl } from '../hooks/usePublicWorkReports'
+import {
+  publicWorkReportMediaUrl,
+  publicWorkReportOriginalUrl,
+} from '../hooks/usePublicWorkReports'
 import type { PublicWorkReport } from '../types/workReports'
 
 // Страница одного отчёта — цель нажатия по миниатюре на табло. Хук мокаем тем
@@ -94,6 +97,22 @@ describe('WorkReportDetailPage', () => {
     // должно (publish требует обе), но «ничего» читалось бы как поломка вёрстки.
     expect(screen.getAllByRole('img')).toHaveLength(2)
     expect(screen.getAllByText('После').length).toBeGreaterThan(0)
+  })
+
+it('фото ведёт на оригинал, а показывает превью', () => {
+    // Превью лежат в дисковом кэше media-service; оригинал — скачивание из
+    // Telegram, поэтому он только по адресному клику (инцидент 2026-07-25:
+    // 60 оригиналов на одну загрузку витрины выели пул соединений).
+    mockQuery.data = makeReport({ before: [101], after: [201] })
+    renderAt('42')
+
+    const images = screen.getAllByRole('img')
+    expect(images[0].getAttribute('src')).toBe(publicWorkReportMediaUrl(42, 101))
+    expect(images[0].getAttribute('src')).not.toContain('original')
+
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(hrefs).toContain(publicWorkReportOriginalUrl(42, 101))
+    expect(hrefs).toContain(publicWorkReportOriginalUrl(42, 201))
   })
 
   it('links back to the board and to the full archive', () => {

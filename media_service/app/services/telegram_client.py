@@ -147,15 +147,22 @@ class TelegramClientService:
         Returns (file_bytes, content_type).
         Token stays server-side — never exposed to clients.
         """
-        file_info = await self.get_file(file_id)
-        url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
+        # Семафор на весь путь скачивания (get_file + GET файла): без него одна
+        # загрузка публичной витрины давала десятки одновременных обращений к
+        # Telegram, а очередь из них выедала воркеры и пул соединений
+        # (инцидент 2026-07-25, см. app/services/preview_cache.py).
+        from app.services.preview_cache import download_semaphore
 
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
+        async with download_semaphore():
+            file_info = await self.get_file(file_id)
+            url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
 
-        content_type = resp.headers.get("content-type", "application/octet-stream")
-        return resp.content, content_type
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+
+            content_type = resp.headers.get("content-type", "application/octet-stream")
+            return resp.content, content_type
 
     async def delete_message(
         self,
