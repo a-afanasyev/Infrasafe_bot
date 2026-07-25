@@ -19,7 +19,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from uk_management_bot.api.board_config.defaults import ALL_MODULE_IDS, MODULE_DEFAULTS
 
@@ -199,9 +199,80 @@ class BoardConfigResponse(_BoardConfigFields):
     """
 
 
-class BoardConfigUpdateIn(_BoardConfigFields):
+class _StrictIn(BaseModel):
+    """Примесь для моделей ВХОДА: неизвестный ключ — 422, а не тихая потеря.
+
+    Зачем строгость только на входе (AUD5-APIFE-6). Неизвестный ключ значит
+    разное с разных сторон:
+
+    - в теле запроса это почти всегда опечатка или клиент новее бэкенда; ответ
+      200 с молча выброшенным полем читается вызывающим как «сохранено».
+      Грабля уже стреляла дважды — `width` у layout-элемента и блок
+      `work_reports`, оба раза искали в UI;
+    - в строке БД это штатное состояние ОТКАТА: релиз добавил поле, образ
+      вернули назад. `load_board_config` на ValidationError отдаёт
+      `DEFAULT_BOARD_CONFIG` целиком, поэтому строгость на чтении превратила бы
+      один незнакомый ключ в обнуление всей витрины — название организации,
+      контакты, телефон, объявления.
+
+    Поэтому строгие варианты вложенных моделей отдельные, а `StoredBoardConfigData`
+    и `BoardConfigResponse` продолжают использовать толерантные.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LocalizedTextIn(LocalizedText, _StrictIn):
+    pass
+
+
+class OrgCfgIn(OrgCfg, _StrictIn):
+    name: LocalizedTextIn
+    subtitle: LocalizedTextIn
+
+
+class ContactsCfgIn(ContactsCfg, _StrictIn):
+    dispatch_label: LocalizedTextIn
+    emergency: LocalizedTextIn
+
+
+class BotCfgIn(BotCfg, _StrictIn):
+    label: LocalizedTextIn
+
+
+class AnnouncementCfgIn(AnnouncementCfg, _StrictIn):
+    title: LocalizedTextIn
+    text: LocalizedTextIn
+
+
+class WorkingHourCfgIn(WorkingHourCfg, _StrictIn):
+    pass
+
+
+class LayoutItemIn(LayoutItem, _StrictIn):
+    pass
+
+
+class WorkReportsCfgIn(WorkReportsCfg, _StrictIn):
+    title: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+
+
+class BoardConfigUpdateIn(_BoardConfigFields, _StrictIn):
     """Тело PUT /board-config. Без нормализации — мёрж и нормализация делаются
-    сервис-слоем (`service.merge_and_save_board_config`)."""
+    сервис-слоем (`service.merge_and_save_board_config`).
+
+    Поля переобъявлены строгими вариантами: `extra="forbid"` действует только на
+    той модели, где объявлен, а терялись как раз вложенные поля (`width` внутри
+    layout-элемента), не top-level.
+    """
+
+    org: OrgCfgIn
+    contacts: ContactsCfgIn
+    bot: BotCfgIn
+    announcements: list[AnnouncementCfgIn]
+    working_hours: list[WorkingHourCfgIn]
+    layout: list[LayoutItemIn]
+    work_reports: WorkReportsCfgIn = Field(default_factory=WorkReportsCfgIn)
 
 
 # Alias для обратной совместимости: tests/api/test_board_config_layout_width.py
