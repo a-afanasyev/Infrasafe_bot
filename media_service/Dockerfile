@@ -19,6 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копирование кода приложения
 COPY app/ ./app/
 COPY client/ ./client/
+COPY migrations/ ./migrations/
+COPY run_migrations.py .
 
 # Изменение владельца файлов
 RUN chown -R media_user:media_user /app

@@ -127,6 +127,11 @@ services:
       - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
       - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
       - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
+      # DARK-гейт визуального модуля «Отчёты о работах»: гейтит manager+public API
+      # (/api/v2/work-reports/, /api/v2/public/work-reports) и модуль board_config
+      # `workreports`. Зеркалит фронтовый VITE_WORK_REPORTS_ENABLED — синхронизация
+      # ручная (автосвязи нет), для рабочей фичи должны быть выставлены оба.
+      - WORK_REPORTS_ENABLED=${WORK_REPORTS_ENABLED:-false}
       # ARCH-106 (Doppler cutover, Phase 1) — обязательные (см. app для объяснения :?):
       - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
@@ -415,6 +420,8 @@ services:
       args:
         # DARK-гейт раздела «Учёт ресурсов»: пусто = OFF (dev/CI), прод .env ставит true.
         VITE_RESOURCES_ENABLED: "${VITE_RESOURCES_ENABLED:-}"
+        # DARK-гейт модуля «Отчёты о работах»: пусто = OFF (dev/CI), прод .env ставит true.
+        VITE_WORK_REPORTS_ENABLED: "${VITE_WORK_REPORTS_ENABLED:-}"
     container_name: uk-frontend
     restart: unless-stopped
     ports:

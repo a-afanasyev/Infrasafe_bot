@@ -44,6 +44,36 @@ services:
       retries: 3
       start_period: 30s
 
+  # One-shot runner for media_service/migrations/*.sql (run_migrations.py) —
+  # applies column/index migrations that Base.metadata.create_all() does NOT
+  # cover (create_all only creates missing tables, never alters existing
+  # ones). Same shape as the bot-side `migrate` service in docker-compose.yml:
+  # profiles: ["tools"] keeps it out of `up -d`; invoke explicitly:
+  #   docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm media-migrate
+  media-migrate:
+    build:
+      context: ./media_service
+      dockerfile: Dockerfile
+    image: uk-media-service
+    profiles: ["tools"]
+    command: ["python", "run_migrations.py"]
+    env_file:
+      - media_service/.env
+    environment:
+      # Same full env duplication as media-service itself (not just DATABASE_URL) —
+      # mirrors the bot-side `migrate` service's own reasoning: Settings eagerly
+      # validates several vars at import time even though this job only touches
+      # the DB, so a partial env here would crash on import before reaching main().
+      - TELEGRAM_BOT_TOKEN=${MEDIA_BOT_TOKEN:?MEDIA_BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - SECRET_KEY=${MEDIA_SECRET_KEY:?MEDIA_SECRET_KEY is required — set it in Doppler (project uk-management)}
+      - MEDIA_API_KEYS=${MEDIA_API_KEYS:?MEDIA_API_KEYS is required — set it in Doppler (project uk-management)}
+      - DATABASE_URL=${MEDIA_DATABASE_URL:?MEDIA_DATABASE_URL is required — set it in Doppler (project uk-management)}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - uk-network
+
 volumes:
   media_uploads:
     driver: local
