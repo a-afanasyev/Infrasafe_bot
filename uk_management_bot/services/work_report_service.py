@@ -609,7 +609,71 @@ async def publish_report(
         },
     ))
     await db.commit()
+
+    # Прогрев превью — ПОСЛЕ коммита и best-effort: отчёт уже опубликован, и
+    # неудача оптимизации не должна его откатывать. Здесь же, а не только в
+    # тике, потому что менеджер часто смотрит витрину сразу после публикации, а
+    # тик придёт лишь через 10 минут.
+    await warm_report_previews(media_client, report)
     return report
+
+
+async def warm_report_previews(media_client: Any, report: WorkReport) -> dict:
+    """Построить превью для медиа отчёта заранее.
+
+    Никогда не бросает: клиент media-service сам глотает ошибки (см.
+    `MediaServiceClient.warm_previews`), а здесь ловим и всё остальное —
+    прогрев обязан быть незаметным для вызывающего.
+    """
+    ids = list(report.before_media_ids) + list(report.after_media_ids)
+    if not ids:
+        return {}
+    try:
+        return await media_client.warm_previews(ids)
+    except Exception as e:
+        logger.warning(
+            "Прогрев превью отчёта %s не удался: %s — превью построится по "
+            "первому запросу", report.id, e,
+        )
+        return {}
+
+
+# Сколько последних опубликованных отчётов подчищает тик. 24 — размер первой
+# страницы публичного архива (`PAGE_SIZE` во фронте): ровно то, что житель
+# видит, не открывая «Показать ещё».
+_WARM_SWEEP_LIMIT = 24
+
+
+async def warm_recent_previews(
+    db: AsyncSession, media_client: Any, limit: int = _WARM_SWEEP_LIMIT
+) -> dict:
+    """Догреть превью последних опубликованных отчётов.
+
+    Страховка к прогреву в `publish_report`: покрывает отчёты, опубликованные
+    когда media-service был недоступен, и кэш, вытесненный после рестарта тома
+    или переполнения лимита заявок. Уже закэшированные id media-service
+    пропускает по проверке существования файла, поэтому повторные прогоны почти
+    бесплатны.
+    """
+    reports = (
+        await db.execute(
+            select(WorkReport)
+            .where(WorkReport.status == "published")
+            .order_by(WorkReport.published_at.desc(), WorkReport.id.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    ids: list[int] = []
+    for r in reports:
+        ids.extend(list(r.before_media_ids) + list(r.after_media_ids))
+    if not ids:
+        return {}
+    try:
+        return await media_client.warm_previews(ids)
+    except Exception as e:
+        logger.warning("Догрев превью не удался: %s", e)
+        return {}
 
 
 _AUTOPUBLISH_BATCH_LIMIT = 20

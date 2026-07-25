@@ -19,7 +19,7 @@ from app.schemas import (
     MediaSearchResponse, MediaStatisticsResponse, MediaTimelineResponse,
     MediaDateRangeResponse, MediaUploadResponse, MediaFileUrlResponse,
     ErrorResponse, MediaTagResponse, MediaCategoryEnum, FileTypeEnum,
-    MediaStatusEnum, MediaTelegramLookupResponse
+    MediaStatusEnum, MediaTelegramLookupResponse, PreviewWarmRequest
 )
 from app.core.config import settings, TelegramChannels, FileCategories
 from app.services.media_storage import ChannelNotConfiguredError, PublicationReservationError
@@ -359,6 +359,52 @@ async def list_publication_locks(
     except Exception as e:
         logger.error(f"Failed to list publication locks: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения списка публикационных блокировок")
+
+
+@router.post("/previews/warm")
+async def warm_previews(
+    body: PreviewWarmRequest,
+    storage_service: MediaStorageService = Depends(get_storage_service),
+):
+    """Заранее построить превью для перечисленных media_id.
+
+    Вызывается из UK сразу после публикации отчёта, чтобы житель не попадал на
+    холодный кэш: иначе первая загрузка витрины — это десятки промахов, каждый
+    со скачиванием из Telegram, и хвост очереди не влезает в таймаут edge
+    (наблюдалось 2×504 из 48 на холодном кэше).
+
+    Байты наружу не отдаются — только счётчики. Уже закэшированные id
+    пропускаются по проверке существования файла, поэтому повторный вызов
+    почти бесплатен и ручку можно звать идемпотентно.
+
+    ВАЖНО: зарегистрирован ДО bare-маршрута GET /{media_id} — по той же
+    причине, что /publication-locks и /maintenance/*.
+    """
+    warmed = skipped = failed = 0
+    for media_id in body.media_ids:
+        meta = _load_servable_media(media_id)
+        if meta is None:
+            failed += 1
+            continue
+        if preview_cache.get(media_id, meta["request_number"]) is not None:
+            skipped += 1
+            continue
+        try:
+            original, _ = await storage_service.telegram.download_file(
+                meta["telegram_file_id"]
+            )
+        except Exception as e:
+            logger.warning("Прогрев превью: не скачался media %s: %s", media_id, e)
+            failed += 1
+            continue
+        preview = preview_cache.make_preview(original)
+        if preview is None:
+            # Не изображение — превью не бывает, но это не ошибка прогрева.
+            skipped += 1
+            continue
+        await preview_cache.put(media_id, meta["request_number"], preview)
+        warmed += 1
+    return {"warmed": warmed, "already_cached": skipped, "failed": failed}
 
 
 @router.get("/maintenance/preview-cache")

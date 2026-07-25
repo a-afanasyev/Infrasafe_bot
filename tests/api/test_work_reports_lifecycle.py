@@ -85,6 +85,12 @@ class FakeMediaClient:
         self.acquire_calls: list[int] = []
         self.release_calls: list[int] = []
         self.resolve_stale_calls: list[int] = []
+        self.warm_calls: list[list[int]] = []
+
+    async def warm_previews(self, media_ids: list[int]) -> dict:
+        """Прогрев превью — оптимизация; сага и тик зовут его best-effort."""
+        self.warm_calls.append(list(media_ids))
+        return {"warmed": len(media_ids), "already_cached": 0, "failed": 0}
 
     async def resolve_stale_transitions(self, older_than_minutes: int = 15) -> dict:
         self.resolve_stale_calls.append(older_than_minutes)
