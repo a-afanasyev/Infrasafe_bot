@@ -1413,7 +1413,13 @@
       "residentRating": "Aholilar bahosi",
       "efficiencyPeriod": "Davr uchun ish samaradorligi",
       "workingHours": "Ish vaqti",
-      "emergencyService": "Favqulodda xizmat: kunduzi-kechasi"
+      "emergencyService": "Favqulodda xizmat: kunduzi-kechasi",
+      "workReports": "Ishlar hisobotlari"
+    },
+    "workReports": {
+      "viewAll": "Barcha hisobotlar",
+      "before": "Oldin",
+      "after": "Keyin"
     },
     "footer": {
       "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
