@@ -120,7 +120,8 @@ jobs:
     # недостижимом у нас код-пути (SPA без SSR/RSC). У `npm audit` своего
     # --ignore нет — отсюда скрипт. Семантика прежняя (blocking на
     # high/critical), плюс: исключения ЯВНЫЕ и обоснованные, а протухшая запись
-    # allowlist'а сама валит job (не копим мёртвые ignore'ы).
+    # allowlist'а сама валит job (не копим мёртвые ignore'ы, как случилось с
+    # aiohttp-списком в pip-audit ниже).
     defaults:
       run:
         working-directory: frontend
@@ -152,32 +153,23 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit==2.9.0
 
-      # REG-03: blocking CVE gate over the hash-pinned runtime lock. Two ignored
-      # clusters, both unfixable-in-place:
-      #   • aiohttp (11 CVEs) — fixes land in 3.14.x, which aiogram 3.28.2 caps
-      #     out (`aiohttp<3.14`); drop these when aiogram is bumped + bump aiohttp.
+      # REG-03: blocking CVE gate over the hash-pinned runtime lock. Ровно ОДИН
+      # ignore, unfixable-in-place:
       #   • ecdsa PYSEC-2026-1325 (= CVE-2024-23342, Minerva P-256 timing) — pulled
       #     transitively by python-jose. We sign JWTs with HS256 (HMAC) ONLY, never
       #     ECDSA, so the vulnerable sign_digest()/keygen/ECDH path is unreachable;
       #     verification is unaffected regardless, and python-ecdsa maintainers
       #     consider side-channels out of scope (no patched version exists).
+      # Кластер aiohttp (11 CVE) СНЯТ 2026-07-25: sec-130 (df4e78d) поднял
+      # aiogram 3.28.2→3.30.0 + aiohttp 3.13.5→3.14.3, где эти CVE исправлены;
+      # ignore'ы стали мёртвыми и с этого момента только маскировали бы новые
+      # находки под теми же ID (verified: прогон с одним ecdsa-ignore чист).
       # Any NEW vuln in any OTHER package fails this job. Bumpable CVEs
       # (cryptography/python-multipart/starlette) were closed in the REG-03
       # dep-bump, so they must NOT reappear here.
       - name: Audit runtime dependencies
         run: |
           pip-audit -r requirements.txt \
-            --ignore-vuln CVE-2026-34993 \
-            --ignore-vuln CVE-2026-47265 \
-            --ignore-vuln CVE-2026-50269 \
-            --ignore-vuln CVE-2026-54273 \
-            --ignore-vuln CVE-2026-54274 \
-            --ignore-vuln CVE-2026-54275 \
-            --ignore-vuln CVE-2026-54276 \
-            --ignore-vuln CVE-2026-54277 \
-            --ignore-vuln CVE-2026-54278 \
-            --ignore-vuln CVE-2026-54279 \
-            --ignore-vuln CVE-2026-54280 \
             --ignore-vuln PYSEC-2026-1325
 
   backend-tests:
