@@ -185,7 +185,7 @@ docker exec infrasafe-nginx-1 nginx -s reload
 | Stale-chunk фронта | «Ошибка загрузки страницы» на lazy-роутах у открытой сессии после редеплоя фронта (404 стухшего chunk) | Авто-reload по `vite:preloadError` (PR #175); воркэраунд — `Ctrl+Shift+R` |
 | Redis под паролем | pub/sub/rate-limit не работают, если `REDIS_PASSWORD` задан, но URL без auth | `REDIS_PUBSUB_URL` не хардкодить — деривится из `REDIS_URL` с паролем (`docker-compose.yml:83-87`) |
 | compose orphan `uk-caddy` | — | Прод-деплой всегда `-f docker-compose.yml -f docker-compose.media.yml`, без `--remove-orphans` |
-| `media-migrate` без полного env | Падает ДО применения миграций (импорт `Settings` эагерно валидирует переменные) | Нужен ТОТ ЖЕ полный набор Doppler-секретов, что у `media-service` (не только `MEDIA_DATABASE_URL`) — частичный env не спасает, крашится на импорте |
+| `media-migrate` без полного env | Падает ДО применения миграций (импорт `Settings` эагерно валидирует переменные) | Нужны все Doppler-секреты без безопасного дефолта в `Settings` — те же, что у `media-service` (не только `MEDIA_DATABASE_URL`); `REDIS_URL` — единственное сознательное исключение (migrate не трогает Redis, `redis_url` имеет дефолт) — частичный env иначе крашится на импорте |
 
 ---
 
