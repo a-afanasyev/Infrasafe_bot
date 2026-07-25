@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label'
 import TransitionModal, { type TransitionData } from './TransitionModal'
 import RequestMaterialsBlock from '../materials/RequestMaterialsBlock'
 import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal } from './transitions'
+import { STATUS_BADGE, STATUS_DOT } from './statusStyles'
 
 // TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
 const URGENCY: Record<string, { bg: string; text: string }> = {
@@ -41,28 +42,6 @@ const URGENCY: Record<string, { bg: string; text: string }> = {
   'Средняя':    { bg: 'bg-amber/12',    text: 'text-amber' },
   'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
   'Критическая':{ bg: 'bg-red/12',      text: 'text-red' },
-}
-
-const STATUS: Record<string, { bg: string; text: string }> = {
-  'Новая':     { bg: 'bg-blue/12',     text: 'text-blue' },
-  'В работе':  { bg: 'bg-amber/12',    text: 'text-[#d97706]' },
-  'Закуп':     { bg: 'bg-violet/12',   text: 'text-violet' },
-  'Уточнение': { bg: 'bg-cyan/12',     text: 'text-cyan' },
-  'Выполнена': { bg: 'bg-emerald/12',  text: 'text-emerald' },
-  'Исполнено': { bg: 'bg-accent/12',   text: 'text-accent' },
-  'Принято':   { bg: 'bg-green/12',    text: 'text-green' },
-  'Отменена':  { bg: 'bg-red/12',      text: 'text-red' },
-}
-
-const STATUS_DOT: Record<string, string> = {
-  'Новая':     'bg-[#60a5fa]',
-  'В работе':  'bg-[#fbbf24]',
-  'Закуп':     'bg-[#a78bfa]',
-  'Уточнение': 'bg-[#22d3ee]',
-  'Выполнена': 'bg-[#34d399]',
-  'Исполнено': 'bg-accent',
-  'Принято':   'bg-[#4ade80]',
-  'Отменена':  'bg-[#f87171]',
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -207,7 +186,8 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
 
   if (!requestNumber) return null
 
-  const statusStyle = STATUS[request?.status ?? ''] ?? { bg: 'bg-bg-surface', text: 'text-text-muted' }
+  const statusStyle = STATUS_BADGE[request?.status as keyof typeof STATUS_BADGE]
+    ?? { bg: 'bg-bg-surface', text: 'text-text-muted' }
   const urgencyStyle = request?.urgency ? URGENCY[request.urgency] : null
 
   return (
@@ -854,7 +834,7 @@ function StatusDropdown({
             >
               <span className={cn(
                 'w-2 h-2 rounded-full shrink-0',
-                STATUS_DOT[targetStatus] ?? 'bg-text-muted'
+                STATUS_DOT[targetStatus as keyof typeof STATUS_DOT] ?? 'bg-text-muted'
               )} />
               <span className="font-[family-name:var(--font-display)] font-semibold text-[13px]">
                 {tStatus(targetStatus, t)}
