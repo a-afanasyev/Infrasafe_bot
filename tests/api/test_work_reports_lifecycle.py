@@ -796,22 +796,31 @@ async def test_put_settings_updates_fields(client: AsyncClient, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_put_settings_extra_unknown_field_ignored(client: AsyncClient, monkeypatch):
-    """`WorkReportsSettingsIn` has no `autopost_since` field at all — a client
-    trying to smuggle a raw value through gets silently ignored by Pydantic's
-    default extra-field behaviour (not `extra=\"forbid\"`), not a 422."""
+async def test_put_settings_rejects_smuggled_server_field(client: AsyncClient, monkeypatch):
+    """`WorkReportsSettingsIn` has no `autopost_since` field — it is server-owned.
+
+    Until AUD5-APIFE-6 a client smuggling a raw value got a silent drop and a
+    200; the endpoint now answers 422 (`extra="forbid"`). The property under
+    test is unchanged — the client value never reaches storage — but the caller
+    is now told, instead of reading 200 as "accepted".
+
+    Note the deliberate asymmetry with `PUT /board-config`: there `autopost_since`
+    IS a declared field (part of the full config round-trip), accepted and then
+    overwritten by the server stamp. Here the endpoint is a narrow patch, so an
+    undeclared key is a caller error rather than an ignorable leftover.
+    """
     _enable(monkeypatch)
 
     resp = await client.put(
         f"{BASE}/settings",
         json={"limit": 8, "autopost_since": "2000-01-01T00:00:00+00:00"},
     )
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["limit"] == 8
-    # autopost stayed False (untouched) → autopost_since must be None, not
-    # the smuggled 2000 value.
-    assert body["autopost_since"] is None
+    assert resp.status_code == 422, resp.text
+    assert "autopost_since" in resp.text
+
+    # И главное: смуглёж не сохранился — настройки остались нетронутыми.
+    current = await client.get("/api/v2/public/board-config")
+    assert current.json()["work_reports"]["autopost_since"] is None
 
 
 # ── POST /reconcile ──────────────────────────────────────────────────

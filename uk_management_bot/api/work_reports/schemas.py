@@ -94,6 +94,12 @@ class WorkReportUnpublishIn(BaseModel):
 
 
 class WorkReportsSettingsIn(BaseModel):
+    # Та же строгость, что у WorkReportPatchIn выше и у PUT /board-config: эта
+    # ручка — вторая дверь в тот же singleton board_config, и правило у обеих
+    # дверей обязано быть одно, иначе тумблер автопоста молча проглотит то, что
+    # редактор витрины отвергает.
+    model_config = ConfigDict(extra="forbid")
+
     autopost: Optional[bool] = None
     # Публикация без модерации. Валидацию значения не дублируем — bool.
     autopublish: Optional[bool] = None

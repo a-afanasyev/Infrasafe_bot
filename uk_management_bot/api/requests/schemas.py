@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -156,6 +156,14 @@ class CreateInspectorRequestBody(BaseModel):
 
 
 class UpdateRequestBody(BaseModel):
+    # AUD5-APIFE-6: неизвестный ключ — 422, а не 200 с молча выброшенным полем.
+    # Тело PATCH'а тут — почти всегда пара «статус + сопровождающий текст»
+    # (причина возврата, отчёт о выполнении, вопрос уточнения), и потеря второй
+    # половины выглядит для вызывающего как успешный переход: заявка уехала,
+    # текст исчез. Ключи сверены с вызовами apiClient.patch/twaClient.patch во
+    # фронте — тест `tests/api/test_input_schemas_forbid_extra.py` держит список.
+    model_config = ConfigDict(extra="forbid")
+
     status: Optional[str] = None
     urgency: Optional[str] = None
     executor_id: Optional[int] = None
