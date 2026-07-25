@@ -1,22 +1,14 @@
-import { useState, type ReactNode } from 'react'
-import type { TFunction } from 'i18next'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import GroupSection from '../components/workReports/GroupSection'
+import ReasonDialog, { type ReasonTarget } from '../components/workReports/ReasonDialog'
+import WorkReportRow from '../components/workReports/WorkReportRow'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useBoardConfig } from '../hooks/useBoardConfig'
 import {
@@ -30,9 +22,7 @@ import {
   useReopenWorkReport,
   useUpdateWorkReportsSettings,
 } from '../hooks/useWorkReports'
-import { tCategory } from '../i18n/apiMaps'
-import { formatDate } from '../utils/timezone'
-import type { WorkReport, WorkReportStatus } from '../types/workReports'
+import type { WorkReport } from '../types/workReports'
 import type { WorkReportsCfg } from '../types/boardConfig'
 
 /**
@@ -42,6 +32,11 @@ import type { WorkReportsCfg } from '../types/boardConfig'
  *
  * Read-модель настроек — НЕ отдельный эндпоинт (его нет), а
  * useBoardConfig().data?.work_reports, см. заголовок useWorkReports.ts.
+ *
+ * Подкомпоненты (GroupSection/ReasonDialog/WorkReportRow) вынесены в
+ * components/workReports/* — по прецеденту EmployeesPage.tsx
+ * (components/employees/*) и ResolveDialog.tsx (components/access/*), а не
+ * инлайнены в файл страницы.
  */
 
 const DEFAULT_SETTINGS: WorkReportsCfg = {
@@ -49,193 +44,6 @@ const DEFAULT_SETTINGS: WorkReportsCfg = {
   autopost_since: null,
   limit: 6,
   title: { ru: '', uz: '' },
-}
-
-const STATUS_CLASS: Record<WorkReportStatus, string> = {
-  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  needs_media: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  publishing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  published: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  needs_review: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  rejected: 'bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-300',
-}
-
-// ── Section wrapper (EmployeesPage.tsx pending-block shape): heading + count
-// badge, hidden entirely when the group is empty. ──────────────────────────
-function GroupSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
-  if (count === 0) return null
-  return (
-    <div className="bg-bg-card border border-border-default rounded-default p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">{title}</span>
-        <span className="bg-amber/20 text-amber rounded-full px-2 py-0.5 text-[11px] font-semibold">{count}</span>
-      </div>
-      <div className="flex flex-col gap-2">{children}</div>
-    </div>
-  )
-}
-
-// ── Reject/unpublish reason dialog (ResolveDialog.tsx shape, ported to the
-// workReports.* i18n namespace — reject requires a non-empty reason,
-// unpublish does not). ──────────────────────────────────────────────────────
-interface ReasonTarget {
-  report: WorkReport
-  action: 'reject' | 'unpublish'
-}
-
-function ReasonDialog({
-  target,
-  loading,
-  onClose,
-  onSubmit,
-}: {
-  target: ReasonTarget | null
-  loading?: boolean
-  onClose: () => void
-  onSubmit: (reason: string) => void
-}) {
-  const { t } = useTranslation()
-  const [reason, setReason] = useState('')
-
-  // Сброс поля при смене target — render-time pattern (см. ResolveDialog.tsx):
-  // setState-в-effect ругается линтером, а без сброса текст «перетекал» бы
-  // между отчётами.
-  const [prevTarget, setPrevTarget] = useState<ReasonTarget | null>(null)
-  if (target !== prevTarget) {
-    setPrevTarget(target)
-    if (target) setReason('')
-  }
-
-  const isOpen = target !== null
-  const isReject = target?.action === 'reject'
-  const canSubmit = (!isReject || reason.trim().length > 0) && !loading
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {isReject ? t('workReports.actions.reject') : t('workReports.actions.unpublish')}
-          </DialogTitle>
-          <DialogDescription>{t('workReports.reasonDialogDesc')}</DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="wr-reason">{t('workReports.reasonPlaceholder')}</Label>
-          <Textarea
-            id="wr-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={t('workReports.reasonPlaceholder')}
-            rows={3}
-          />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant={isReject ? 'destructive' : 'default'}
-            disabled={!canSubmit}
-            onClick={() => onSubmit(reason.trim())}
-          >
-            {isReject ? t('workReports.actions.reject') : t('workReports.actions.unpublish')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ── One report row: status chip, category, address, date, and per-status
-// actions (PendingApprovalCard.tsx `disabled={...isPending}` convention). ──
-function WorkReportRow({
-  report,
-  t,
-  publish,
-  autofill,
-  onReject,
-  onUnpublish,
-  onReopen,
-}: {
-  report: WorkReport
-  t: TFunction
-  publish: { mutate: (id: number) => void; isPending: boolean }
-  autofill: { mutate: (id: number) => void; isPending: boolean }
-  onReject: (report: WorkReport) => void
-  onUnpublish: (report: WorkReport) => void
-  onReopen: (report: WorkReport) => void
-}) {
-  const isNeedsMedia = report.status === 'needs_media'
-  const isModerationStage = report.status === 'pending' || report.status === 'needs_media'
-
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-default border border-border-default bg-bg-card px-4 py-3">
-      <div className="flex-1 min-w-[220px]">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={cn('px-2 py-0.5 rounded-full text-[11px] font-medium', STATUS_CLASS[report.status])}>
-            {t(`workReports.status.${report.status}`)}
-          </span>
-          <span className="text-[13px] font-semibold text-text-primary">{tCategory(report.category_key, t)}</span>
-          <span className="font-mono text-[12px] text-text-muted">{report.request_number}</span>
-        </div>
-        <div className="mt-0.5 text-[12px] text-text-muted">
-          {report.address_public} · {formatDate(report.performed_at)}
-        </div>
-        {report.status === 'needs_review' && report.reject_reason && (
-          <div className="mt-1 text-[12px] text-red-600 dark:text-red-400">{report.reject_reason}</div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        {report.status === 'publishing' && (
-          <span className="text-[12px] text-text-muted italic">{t('workReports.status.publishing')}…</span>
-        )}
-
-        {isModerationStage && (
-          <>
-            {isNeedsMedia && (
-              <span className="text-[11px] text-amber-700 dark:text-amber-300">
-                {t('workReports.needsMediaExplanation')}
-              </span>
-            )}
-            <Button size="sm" disabled={isNeedsMedia || publish.isPending} onClick={() => publish.mutate(report.id)}>
-              {t('workReports.actions.publish')}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={autofill.isPending}
-              onClick={() => autofill.mutate(report.id)}
-            >
-              {t('workReports.actions.autofill')}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-red text-red hover:bg-red/10"
-              onClick={() => onReject(report)}
-            >
-              {t('workReports.actions.reject')}
-            </Button>
-          </>
-        )}
-
-        {(report.status === 'published' || report.status === 'needs_review') && (
-          <Button size="sm" variant="outline" onClick={() => onUnpublish(report)}>
-            {t('workReports.actions.unpublish')}
-          </Button>
-        )}
-
-        {report.status === 'rejected' && (
-          <Button size="sm" variant="outline" onClick={() => onReopen(report)}>
-            {t('workReports.actions.reopen')}
-          </Button>
-        )}
-      </div>
-    </div>
-  )
 }
 
 export default function WorkReportsPage() {
@@ -313,6 +121,10 @@ export default function WorkReportsPage() {
     }
   }
 
+  // 'publishing' folds into the moderation group rather than getting its own
+  // section: it's a transient in-flight state that should barely ever be
+  // observed and has no actions of its own (WorkReportRow renders it as a
+  // plain "публикуется…" label, no buttons).
   const moderationGroup = reports.filter(
     (r) => r.status === 'pending' || r.status === 'needs_media' || r.status === 'publishing',
   )
