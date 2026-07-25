@@ -21,7 +21,7 @@ from app.schemas import (
     MediaStatusEnum, MediaTelegramLookupResponse
 )
 from app.core.config import settings, TelegramChannels, FileCategories
-from app.services.media_storage import ChannelNotConfiguredError
+from app.services.media_storage import ChannelNotConfiguredError, PublicationReservationError
 from aiogram.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
@@ -339,6 +339,27 @@ async def get_popular_tags(
         raise HTTPException(status_code=500, detail="Ошибка получения популярных тегов")
 
 
+@router.get("/publication-locks")
+async def list_publication_locks(
+    limit: int = Query(default=50, ge=1, le=200, description="Лимит результатов"),
+    offset: int = Query(default=0, ge=0, description="Смещение"),
+    storage_service: MediaStorageService = Depends(get_storage_service),
+):
+    """
+    Список медиа-файлов, зарезервированных под публикацию (publication_locked=true).
+
+    ВАЖНО: зарегистрирован ДО bare-маршрута GET /{media_id} — иначе Starlette
+    попытался бы распарсить "publication-locks" как int media_id.
+    """
+    try:
+        rows, total = await storage_service.list_publication_locks(limit=limit, offset=offset)
+        return {"items": rows, "total": total, "limit": limit, "offset": offset}
+
+    except Exception as e:
+        logger.error(f"Failed to list publication locks: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения списка публикационных блокировок")
+
+
 @router.get("/{media_id}/file")
 async def get_media_file_stream(
     media_id: int,
@@ -353,6 +374,17 @@ async def get_media_file_stream(
 
         media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
         if not media_file:
+            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+
+        # Публичная отдача байтов разрешена только для active-файлов (обычный
+        # случай — фото заявок/карточек) и для archived-файлов, явно
+        # зарезервированных под публикацию (publication_locked=true). Всё
+        # остальное — deleted, archiving, deleting, archived-без-лока — 404,
+        # чтобы не отдавать байты, которые могли уже уйти/уходят из-под нас.
+        publicly_servable = media_file.status == "active" or (
+            media_file.status == "archived" and media_file.publication_locked
+        )
+        if not publicly_servable:
             raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 
         file_bytes, content_type = await storage_service.telegram.download_file(
@@ -563,6 +595,8 @@ async def archive_media(
 
         return {"message": "Медиа-файл успешно заархивирован", "media_id": media_id}
 
+    except PublicationReservationError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -586,11 +620,52 @@ async def delete_media(
 
         return {"message": "Медиа-файл успешно удален", "media_id": media_id}
 
+    except PublicationReservationError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to delete media {media_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка удаления")
+
+
+@router.post("/{media_id}/publication-lock")
+async def acquire_publication_lock(
+    media_id: int,
+    storage_service: MediaStorageService = Depends(get_storage_service)
+):
+    """
+    Резервирует медиа-файл под публикацию (publication_locked=true).
+    Идемпотентно на уже заблокированном active-файле.
+    """
+    try:
+        locked = await storage_service.acquire_publication_lock(media_id)
+        if not locked:
+            raise HTTPException(status_code=404, detail="Медиа-файл не найден или не активен")
+        return {"media_id": media_id, "publication_locked": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to acquire publication lock for media {media_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка резервирования публикации")
+
+
+@router.delete("/{media_id}/publication-lock")
+async def release_publication_lock(
+    media_id: int,
+    storage_service: MediaStorageService = Depends(get_storage_service)
+):
+    """
+    Снимает резервирование под публикацию. Идемпотентно.
+    """
+    try:
+        await storage_service.release_publication_lock(media_id)
+        return {"media_id": media_id, "publication_locked": False}
+
+    except Exception as e:
+        logger.error(f"Failed to release publication lock for media {media_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка снятия резервирования публикации")
 
 
 @router.get("/request/{request_number}", response_model=List[MediaFileResponse])

@@ -50,8 +50,13 @@ class MediaFile(Base):
     auto_tags = Column(JSON, nullable=True)         # Автоматически сгенерированные теги
 
     # === STATUS ===
-    status = Column(String(20), default="active")   # active, archived, deleted
+    status = Column(String(20), default="active")   # active, archived, deleted, archiving, deleting
     is_public = Column(Boolean, default=False)      # Можно ли показывать другим пользователям
+
+    # === PUBLICATION LOCK ===
+    # Зарезервирован для публичного показа (см. migrations/0001_publication_lock.sql
+    # для патча существующих БД — create_all этот столбец на них не добавит).
+    publication_locked = Column(Boolean, nullable=False, default=False, server_default="false")
 
     # === TECHNICAL ===
     upload_source = Column(String(50), nullable=True)  # telegram, web, mobile
