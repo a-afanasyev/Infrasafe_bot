@@ -52,6 +52,11 @@ doppler run --project uk-management --config <cfg> -- \
 # 3. Миграции — ОБЯЗАТЕЛЬНЫЙ шаг перед up (см. §4)
 doppler run --project uk-management --config <cfg> -- \
   docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm --no-deps --name uk-migrate migrate
+# 3b. media-service: тот же «до up» контракт, но ТОЛЬКО если появился новый файл
+#     в media_service/migrations/ (Base.metadata.create_all не альтерит существующие
+#     таблицы — см. §4). profiles: ["tools"], поэтому bare `up -d` его не подхватит:
+doppler run --project uk-management --config <cfg> -- \
+  docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm --no-deps --name uk-media-migrate media-migrate
 
 # 4. Поднять core-сервисы (--no-deps: не трогать stateful postgres/redis/resource-postgres)
 doppler run --project uk-management --config <cfg> -- \
@@ -105,6 +110,16 @@ doppler run --project uk-management --config <cfg> -- \
 - Alembic-миграции **не откатываются автоматически** откатом кода. Прод-схема останется на `head` предыдущего деплоя.
 - Откат схемы (`alembic downgrade`) выполнять только вручную и только при подтверждённой необходимости — многие миграции необратимы/содержат backfill. Downgrade запускать в `uk-management-api` (только там есть alembic — см. §4).
 - Деструктивные git-операции (`reset --hard`, `force push`) — только с явным подтверждением владельца.
+
+### Откат media_service/migrations/0001_publication_lock.sql
+
+У `media_service`-миграций (в отличие от Alembic) нет автоматического downgrade — только ручной SQL:
+
+```sql
+ALTER TABLE media_files DROP COLUMN IF EXISTS publication_locked;
+```
+
+**Обязательное предусловие перед этим откатом**: у ВСЕХ строк `work_reports` с непустым `locked_media_ids` сначала снять публикацию (manager API `/unpublish` либо напрямую в БД). Пока `publication_locked` = true у файла, это единственный механизм, гарантирующий, что байты не будут заархивированы/удалены из-под ещё технически опубликованного отчёта — снос колонки при живых залоченных медиа теряет эту гарантию молча (ошибки не будет, просто данные окажутся уязвимы к архивации).
 
 ---
 
@@ -170,6 +185,7 @@ docker exec infrasafe-nginx-1 nginx -s reload
 | Stale-chunk фронта | «Ошибка загрузки страницы» на lazy-роутах у открытой сессии после редеплоя фронта (404 стухшего chunk) | Авто-reload по `vite:preloadError` (PR #175); воркэраунд — `Ctrl+Shift+R` |
 | Redis под паролем | pub/sub/rate-limit не работают, если `REDIS_PASSWORD` задан, но URL без auth | `REDIS_PUBSUB_URL` не хардкодить — деривится из `REDIS_URL` с паролем (`docker-compose.yml:83-87`) |
 | compose orphan `uk-caddy` | — | Прод-деплой всегда `-f docker-compose.yml -f docker-compose.media.yml`, без `--remove-orphans` |
+| `media-migrate` без полного env | Падает ДО применения миграций (импорт `Settings` эагерно валидирует переменные) | Нужен ТОТ ЖЕ полный набор Doppler-секретов, что у `media-service` (не только `MEDIA_DATABASE_URL`) — частичный env не спасает, крашится на импорте |
 
 ---
 
