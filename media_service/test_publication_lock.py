@@ -659,3 +659,33 @@ def test_metadata_tolerates_null_tags(client_and_service):
     listed = c.get("/api/v1/media/request/250101-778", headers={"X-API-Key": "testkey"})
     assert listed.status_code == 200, listed.text
     assert listed.json()[0]["tags"] == []
+
+
+def test_metadata_tolerates_other_nullable_columns(client_and_service):
+    """Тот же класс дефекта, что и `tags` выше, на остальных nullable-столбцах.
+
+    `original_filename` / `file_size` / `mime_type` / `upload_source` в БД
+    nullable, а в схеме были объявлены обязательными — одна такая строка роняла
+    500 на ВСЮ выдачу медиа заявки. Найдено при E2E-прогоне на строках,
+    заведённых напрямую в БД (живой upload-путь эти поля заполняет всегда).
+    """
+    c, _ = client_and_service
+    media_id = _create_media_file(
+        original_filename=None, file_size=None, mime_type=None,
+        upload_source=None, request_number="250101-779",
+    )
+
+    single = c.get(f"/api/v1/media/{media_id}", headers={"X-API-Key": "testkey"})
+    assert single.status_code == 200, single.text
+    body = single.json()
+    assert body["original_filename"] is None
+    assert body["upload_source"] is None
+    assert body["mime_type"] is None
+    # file_size ОСТАЁТСЯ None, а не 0: потребитель (UK, `_filter_and_cap`)
+    # трактует None как «размер неизвестен → в публичный отчёт не пускать»,
+    # а ноль прошёл бы проверку лимита.
+    assert body["file_size"] is None
+
+    listed = c.get("/api/v1/media/request/250101-779", headers={"X-API-Key": "testkey"})
+    assert listed.status_code == 200, listed.text
+    assert len(listed.json()) == 1
