@@ -268,3 +268,15 @@ class TestCommentOut:
         )
         assert out.is_internal is True
         assert out.created_at == now
+
+
+def test_update_body_accepts_returned_status():
+    """PATCH status=«Возвращена» — путь возврата заявителем (APPLICANT_RETURN).
+    Раньше схема его отвергала, и кнопка «Вернуть» в TWA-приёмке падала 422
+    ещё до движка. Авторизацию решает workflow, не схема."""
+    from uk_management_bot.api.requests.schemas import UpdateRequestBody
+
+    body = UpdateRequestBody(status="Возвращена", return_reason="лифт снова встал")
+
+    assert body.status == "Возвращена"
+    assert body.return_reason == "лифт снова встал"

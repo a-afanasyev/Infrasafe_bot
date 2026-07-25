@@ -7,6 +7,14 @@ from uk_management_bot.utils.constants import URGENCY_VALUES, validate_canonical
 VALID_STATUSES = [
     "Новая", "В работе", "Закуп", "Уточнение",
     "Выполнена", "Исполнено", "Принято", "Отменена",
+    # REQUEST_STATUS_RETURNED. Появился здесь позже остальных: возврат
+    # заявителем («Исполнено» → «Возвращена», APPLICANT_RETURN) шёл только через
+    # бота, а PATCH этот статус отвергал ещё на схеме — из-за чего кнопка
+    # «Вернуть» в TWA-приёмке не работала вовсе. Расширение безопасно:
+    # авторизацию решает не схема, а workflow (единственное действие с этим
+    # target — APPLICANT_RETURN, предикат `_is_owner`), поэтому чужой или
+    # менеджер на такой PATCH получит InvalidTransition.
+    "Возвращена",
 ]
 # Канон — ключи (low/medium/high/critical); валидация толерантна (см. validate_canonical_urgency).
 VALID_URGENCIES = list(URGENCY_VALUES)
