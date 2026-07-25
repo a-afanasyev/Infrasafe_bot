@@ -27,6 +27,7 @@ import {
   Database,
   Cpu,
   BookOpen,
+  Camera,
   Sun,
   Moon,
   Menu,
@@ -88,6 +89,11 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
+  // Модерация визуальных отчётов «до/после». DARK за VITE_WORK_REPORTS_ENABLED:
+  // пункт появляется только когда фича включена билд-аргом.
+  ...(import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
+    ? [{ to: '/dashboard/work-reports', labelKey: 'nav.workReports', Icon: Camera }]
+    : []),
   { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare },
   // Контроль доступа: обзор + история проездов + база доступа + оборудование.
   {

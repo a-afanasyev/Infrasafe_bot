@@ -46,6 +46,12 @@ const ResourceAccountingSection = lazy(() => import('./pages/ResourceAccountingS
 // меню только при VITE_RESOURCES_ENABLED=true (билд-арг). По умолчанию OFF.
 const RESOURCES_ENABLED = import.meta.env.VITE_RESOURCES_ENABLED === 'true'
 
+// Визуальные отчёты «до/после» (work-reports): менеджерская очередь модерации
+// + публичный архив. DARK за VITE_WORK_REPORTS_ENABLED, по умолчанию OFF.
+const WorkReportsPage = lazy(() => import('./pages/WorkReportsPage'))
+const WorkReportsArchivePage = lazy(() => import('./pages/WorkReportsArchivePage'))
+const WORK_REPORTS_ENABLED = import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -115,6 +121,13 @@ export default function App() {
                 <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
                 <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
+                {/* Менеджерская очередь модерации визуальных отчётов «до/после».
+                    Гард — общий admin/manager группы /dashboard (как board-editor);
+                    "только manager" enforced бэкендом (require_roles("manager")).
+                    DARK за VITE_WORK_REPORTS_ENABLED. */}
+                {WORK_REPORTS_ENABLED && (
+                  <Route path="work-reports" element={<PageErrorBoundary><WorkReportsPage /></PageErrorBoundary>} />
+                )}
                 <Route path="feedback" element={<PageErrorBoundary><FeedbackPage /></PageErrorBoundary>} />
               </Route>
 
@@ -166,6 +179,15 @@ export default function App() {
 
               {/* Resident board - public standalone page (УК landing) */}
               <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />
+
+              {/* Публичный архив визуальных отчётов «до/после» — полная лента
+                  (в отличие от WorkReportsModule на табло, который показывает
+                  только первые 6). Публичный top-level роут, вне ProtectedRoute
+                  — та же форма, что и /resident-board выше. DARK за
+                  VITE_WORK_REPORTS_ENABLED. */}
+              {WORK_REPORTS_ENABLED && (
+                <Route path="/work-reports" element={<PageErrorBoundary><WorkReportsArchivePage /></PageErrorBoundary>} />
+              )}
 
               {/* Applicant registration - public Telegram Mini App page */}
               <Route path="/register" element={<PageErrorBoundary><RegisterPage /></PageErrorBoundary>} />

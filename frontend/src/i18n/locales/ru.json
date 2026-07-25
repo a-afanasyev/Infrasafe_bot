@@ -75,7 +75,8 @@
     "accessDatabase": "База доступа",
     "accessEquipment": "Оборудование",
     "materials": "Склад",
-    "resourceAccounting": "Учёт ресурсов"
+    "resourceAccounting": "Учёт ресурсов",
+    "workReports": "Отчёты о работах"
   },
   "resourceAccounting": {
     "unavailable": "Раздел учёта ресурсов временно недоступен. Попробуйте позже или обратитесь к администратору.",
@@ -1945,6 +1946,13 @@
       "reopened": "Отчёт возвращён в работу",
       "settingsUpdated": "Настройки сохранены"
     }
+  },
+  "workReportsArchive": {
+    "title": "Отчёты о выполненных работах",
+    "backToBoard": "← На табло",
+    "empty": "Пока нет опубликованных отчётов",
+    "loadMore": "Показать ещё",
+    "loadingMore": "Загрузка…"
   },
   "materials": {
     "title": "Склад материалов",

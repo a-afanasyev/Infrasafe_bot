@@ -75,7 +75,8 @@
     "accessDatabase": "Kirish bazasi",
     "accessEquipment": "Jihozlar",
     "materials": "Ombor",
-    "resourceAccounting": "Resurs hisobi"
+    "resourceAccounting": "Resurs hisobi",
+    "workReports": "Ishlar hisobotlari"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -1935,6 +1936,13 @@
       "reopened": "Hisobot ishga qaytarildi",
       "settingsUpdated": "Sozlamalar saqlandi"
     }
+  },
+  "workReportsArchive": {
+    "title": "Bajarilgan ishlar hisobotlari",
+    "backToBoard": "← Taxtaga",
+    "empty": "Hozircha nashr etilgan hisobotlar yo'q",
+    "loadMore": "Ko'proq ko'rsatish",
+    "loadingMore": "Yuklanmoqda…"
   },
   "materials": {
     "title": "Materiallar ombori",
