@@ -326,7 +326,7 @@ async def test_flag_disabled_feed_returns_empty_200(client, db_session, monkeypa
 
     resp = await client.get(BASE)
     assert resp.status_code == 200
-    assert resp.json() == {"items": [], "total": 0, "limit": 20, "offset": 0}
+    assert resp.json() == {"items": [], "total": 0, "limit": 12, "offset": 0}
 
 
 @pytest.mark.asyncio

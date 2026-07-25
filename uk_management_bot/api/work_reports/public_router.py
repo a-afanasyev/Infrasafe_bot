@@ -94,7 +94,7 @@ _last_revoke_check_at: Optional[float] = None
 @limiter.limit("120/minute")
 async def get_public_work_reports(
     request: Request,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(12, ge=1, le=50),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> PublicWorkReportsOut:
