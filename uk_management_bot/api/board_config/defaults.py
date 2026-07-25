@@ -3,9 +3,24 @@
 Воспроизводит текущий захардкоженный контент страницы (RU + UZ). Используется
 сидером миграции 006 и как fallback в публичном эндпоинте, если строки нет.
 """
+from uk_management_bot.config.settings import settings
 
-# Идентификаторы перетаскиваемых модулей витрины.
-MODULE_IDS = ("stats", "requests", "announcements", "rating", "hours")
+# Идентификаторы перетаскиваемых модулей витрины. "workreports" зарезервирован
+# для будущего модуля отчётов о выполненных работах (гейт — enabled_module_ids
+# ниже) — до включения флага он не должен появляться в публичном ответе.
+ALL_MODULE_IDS = ("stats", "requests", "announcements", "rating", "hours", "workreports")
+
+
+def enabled_module_ids() -> tuple[str, ...]:
+    """Модули, видимые снаружи при текущем состоянии settings.
+
+    Пока WORK_REPORTS_ENABLED=False (дефолт везде) — "workreports" вырезается,
+    даже если в БД для него уже есть строка layout (см. service.to_public_response).
+    """
+    if settings.WORK_REPORTS_ENABLED:
+        return ALL_MODULE_IDS
+    return tuple(m for m in ALL_MODULE_IDS if m != "workreports")
+
 
 DEFAULT_BOARD_CONFIG = {
     "org": {
@@ -82,4 +97,28 @@ DEFAULT_BOARD_CONFIG = {
         {"id": "rating", "visible": True, "width": "half"},
         {"id": "hours", "visible": True, "width": "half"},
     ],
+    # Настройки будущего модуля отчётов о выполненных работах (НЕ layout-запись —
+    # та лежит в MODULE_DEFAULTS["workreports"] и бэкфиллится нормализатором).
+    "work_reports": {
+        "autopost": False,
+        "autopost_since": None,
+        # Публикация без модерации — выключена по умолчанию (см. WorkReportsCfg).
+        "autopublish": False,
+        # Пустой список = все категории (фильтр не отсекает ничего).
+        "categories": [],
+        "limit": 6,
+        "title": {
+            "ru": "Отчёты о выполненных работах",
+            "uz": "Bajarilgan ishlar hisobotlari",
+        },
+    },
 }
+
+# Дефолт одной layout-записи на каждый известный модуль — используется
+# нормализатором (schemas.StoredBoardConfigData._normalize_layout) для бэкфилла
+# отсутствующих модулей. Первые 5 берём из DEFAULT_BOARD_CONFIG["layout"], чтобы
+# не дублировать литералы; "workreports" — новый, deliberately invisible
+# (visible=False) — появление нового модуля не должно менять то, что уже
+# отрендерено на живой публичной странице, пока менеджер не включит его сам.
+MODULE_DEFAULTS: dict[str, dict] = {item["id"]: dict(item) for item in DEFAULT_BOARD_CONFIG["layout"]}
+MODULE_DEFAULTS["workreports"] = {"id": "workreports", "visible": False, "width": "full"}

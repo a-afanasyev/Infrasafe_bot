@@ -5,8 +5,9 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import List, Optional, Union, Dict, Any, BinaryIO
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Union, Dict, Any, BinaryIO, Tuple
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from aiogram.types import InputFile, BufferedInputFile, Message
 
@@ -24,6 +25,11 @@ class ChannelNotConfiguredError(RuntimeError):
     Поднимается при ленивой валидации домен-нейтральной загрузки — endpoint
     маппит это в HTTP 503 (сервис временно не сконфигурирован для домена).
     """
+
+
+class PublicationReservationError(RuntimeError):
+    """Archive/delete не смогли зарезервировать файл: не active, или
+    publication_locked=True (файл сейчас опубликован на публичном табло)."""
 
 
 class MediaStorageService:
@@ -313,56 +319,200 @@ class MediaStorageService:
         archive_reason: Optional[str] = None
     ) -> bool:
         """
-        Архивирует медиа-файл (перемещает в архивный канал)
+        Архивирует медиа-файл (перемещает в архивный канал).
+
+        Двухфазная сага (см. delete_media для симметричной реализации):
+          Фаза 1 — резервирование status="archiving" одним атомарным UPDATE
+                    (WHERE status='active' AND publication_locked=false),
+                    коммитится отдельно, ДО любого сетевого I/O.
+          Фаза 2 — копирование в архив (Telegram I/O) в свежей сессии;
+                    успех → status="archived"; неудача → компенсация
+                    (status обратно "active", ничего не потеряно).
         """
-        with get_db_context() as db:
-            media_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
-            if not media_file:
-                logger.warning(f"Media file {media_file_id} not found")
-                return False
-
-            try:
-                # 1. Копируем в архивный канал
-                archive_channel = await self._get_channel_for_category(db, FileCategories.ARCHIVE)
-                await self._copy_to_archive(media_file, archive_channel, archive_reason)
-
-                # 2. Обновляем статус
-                media_file.status = "archived"
-                media_file.archived_at = datetime.now(timezone.utc)
-
-                logger.info(f"Media file {media_file_id} archived successfully")
-                return True
-
-            except Exception as e:
-                logger.error(f"Failed to archive media file {media_file_id}: {e}")
-                return False
+        return await self._archive_or_delete_saga(
+            media_file_id, reserving_status="archiving", archive_reason=archive_reason
+        )
 
     async def delete_media(self, media_file_id: int) -> bool:
         """
-        Удаляет медиа-файл
+        Удаляет медиа-файл. Та же двухфазная сага, что и archive_media,
+        но с reserving_status="deleting" — умышленно ДРУГОЕ транзиентное
+        состояние, чем "archiving": будущий crash-recovery процесс должен
+        уметь отличить «файл, возможно, уже удалён из Telegram» (deleting)
+        от «файл точно ещё на месте, просто не скопирован» (archiving) —
+        это разная степень риска при восстановлении после сбоя.
         """
+        return await self._archive_or_delete_saga(
+            media_file_id, reserving_status="deleting", archive_reason=None
+        )
+
+    async def _archive_or_delete_saga(
+        self,
+        media_file_id: int,
+        reserving_status: str,
+        archive_reason: Optional[str],
+    ) -> bool:
+        """Общая двухфазная сага для archive_media/delete_media.
+
+        reserving_status: "archiving" (archive_media) или "deleting" (delete_media).
+        """
+        if reserving_status == "archiving":
+            is_archive = True
+        elif reserving_status == "deleting":
+            is_archive = False
+        else:
+            # Только внутренний вызывающий (archive_media/delete_media) может
+            # передать сюда значение — но проверяем явно, а не полагаемся на
+            # тихий fallthrough в ветку delete: опечатка или будущий третий
+            # транзиентный статус не должны молча трактоваться как удаление.
+            raise ValueError(f"Unknown reserving_status: {reserving_status}")
+
+        # === Фаза 1: резервирование, своя короткая транзакция ===
+        reserved = False
         with get_db_context() as db:
-            media_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
-            if not media_file:
+            exists = db.query(MediaFile.id).filter(MediaFile.id == media_file_id).first()
+            if exists is None:
                 logger.warning(f"Media file {media_file_id} not found")
                 return False
 
-            try:
-                # Удаляем из Telegram канала
-                await self.telegram.delete_message(
-                    chat_id=media_file.telegram_channel_id,
-                    message_id=media_file.telegram_message_id
+            reserved = db.execute(
+                update(MediaFile)
+                .where(
+                    MediaFile.id == media_file_id,
+                    MediaFile.status == "active",
+                    MediaFile.publication_locked.is_(False),
                 )
+                .values(status=reserving_status)
+                .returning(MediaFile.id)
+            ).first() is not None
 
-                # Помечаем как удаленный
-                media_file.status = "deleted"
+        if not reserved:
+            raise PublicationReservationError(
+                f"media file {media_file_id} not archivable: not active or publication-locked"
+            )
 
-                logger.info(f"Media file {media_file_id} deleted successfully")
+        # === Фаза 2: Telegram I/O + финализация, свежая сессия ===
+        with get_db_context() as db:
+            media_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
+            try:
+                if is_archive:
+                    archive_channel = await self._get_channel_for_category(db, FileCategories.ARCHIVE)
+                    await self._copy_to_archive(media_file, archive_channel, archive_reason)
+
+                    media_file.status = "archived"
+                    media_file.archived_at = datetime.now(timezone.utc)
+
+                    logger.info(f"Media file {media_file_id} archived successfully")
+                else:
+                    await self.telegram.delete_message(
+                        chat_id=media_file.telegram_channel_id,
+                        message_id=media_file.telegram_message_id
+                    )
+
+                    media_file.status = "deleted"
+
+                    logger.info(f"Media file {media_file_id} deleted successfully")
+
                 return True
 
             except Exception as e:
-                logger.error(f"Failed to delete media file {media_file_id}: {e}")
+                action = "archive" if is_archive else "delete"
+                logger.error(f"Failed to {action} media file {media_file_id}: {e}")
+                # Компенсация: I/O не удался, байты никуда не делись —
+                # возвращаем резервирование.
+                media_file.status = "active"
                 return False
+
+    async def acquire_publication_lock(self, media_file_id: int) -> bool:
+        """Атомарно резервирует файл под публикацию.
+
+        Успех только на текущий активный файл. Повторный вызов на уже
+        заблокированном active-файле — идемпотентный успех. False означает
+        либо отсутствие файла, либо не-active статус (archived/deleted/
+        транзиентные archiving/deleting).
+        """
+        with get_db_context() as db:
+            locked = db.execute(
+                update(MediaFile)
+                .where(
+                    MediaFile.id == media_file_id,
+                    MediaFile.status == "active",
+                )
+                .values(publication_locked=True)
+                .returning(MediaFile.id)
+            ).first() is not None
+        return locked
+
+    async def release_publication_lock(self, media_file_id: int) -> None:
+        """Снимает publication_locked. Идемпотентно — не ошибается, если
+        файла нет или он уже не заблокирован."""
+        with get_db_context() as db:
+            db.execute(
+                update(MediaFile)
+                .where(MediaFile.id == media_file_id)
+                .values(publication_locked=False)
+            )
+
+    async def resolve_stale_transitions(self, older_than_minutes: int) -> Dict[str, int]:
+        """Довести до терминального состояния строки, застрявшие в транзиентных
+        статусах саги `_reserve_and_run` (крэш процесса между резервированием и
+        финализацией).
+
+        Направления РАЗНЫЕ и не взаимозаменяемы:
+
+        * ``archiving`` → ``active``: до финализации байты гарантированно на
+          месте (копирование в архивный канал байты не удаляет), значит файл
+          безопасно вернуть в оборот и повторить архивацию позже.
+        * ``deleting`` → ``deleted``: Telegram-сообщение могло быть УЖЕ удалено,
+          то есть байтов может не быть. Возврат в ``active`` отдал бы наружу
+          ссылку на возможно исчезнувший файл — терминальным считаем
+          ``deleted``. Это единственный безопасный вывод в отсутствии
+          подтверждения от Telegram.
+
+        Порог по времени защищает от гонки с живой сагой: строка, которую прямо
+        сейчас обрабатывает `_reserve_and_run`, младше порога и не трогается.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+        with get_db_context() as db:
+            reverted = db.execute(
+                update(MediaFile)
+                .where(MediaFile.status == "archiving", MediaFile.updated_at < cutoff)
+                .values(status="active")
+            ).rowcount
+            finalized = db.execute(
+                update(MediaFile)
+                .where(MediaFile.status == "deleting", MediaFile.updated_at < cutoff)
+                .values(status="deleted")
+            ).rowcount
+        if reverted or finalized:
+            logger.info(
+                "resolve_stale_transitions: archiving→active %d, deleting→deleted %d",
+                reverted, finalized,
+            )
+        return {"archiving_reverted": reverted, "deleting_finalized": finalized}
+
+    async def list_publication_locks(
+        self, limit: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Возвращает (rows, total_count) для всех publication_locked=true
+        файлов, упорядоченных по id, с пагинацией.
+
+        Каждая строка — минимум {"id", "status", "updated_at"}: status/
+        updated_at понадобятся будущей логике reconciliation (обнаружение
+        зависших transient-статусов), хотя в этой задаче их никто не
+        потребляет.
+        """
+        with get_db_context() as db:
+            query = db.query(MediaFile).filter(MediaFile.publication_locked.is_(True))
+            total = query.count()
+            media_files = (
+                query.order_by(MediaFile.id).offset(offset).limit(limit).all()
+            )
+            rows = [
+                {"id": mf.id, "status": mf.status, "updated_at": mf.updated_at}
+                for mf in media_files
+            ]
+        return rows, total
 
     # === HELPER METHODS ===
 

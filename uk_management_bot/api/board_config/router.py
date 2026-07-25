@@ -10,14 +10,16 @@
 import logging
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.schemas import BoardConfigData
-from uk_management_bot.api.board_config.service import CONFIG_ROW_ID, load_board_config
+from uk_management_bot.api.board_config.schemas import BoardConfigResponse, BoardConfigUpdateIn
+from uk_management_bot.api.board_config.service import (
+    load_board_config,
+    merge_and_save_board_config,
+    to_public_response,
+)
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.rate_limit import limiter
-from uk_management_bot.database.models.board_config import BoardConfig
 from uk_management_bot.database.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -25,42 +27,39 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/public/board-config", response_model=BoardConfigData)
+@router.get("/public/board-config", response_model=BoardConfigResponse)
 @limiter.limit("120/minute")
 async def get_board_config(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> BoardConfigData:
+) -> BoardConfigResponse:
     """Конфиг витрины для публичной страницы. Без аутентификации.
 
     Если строки ещё нет (миграция не накатана) — отдаём дефолт, страница
     не должна белеть.
     """
-    return await load_board_config(db)
+    cfg = await load_board_config(db)
+    return to_public_response(cfg)
 
 
-@router.put("/board-config", response_model=BoardConfigData)
+@router.put("/board-config", response_model=BoardConfigResponse)
 @limiter.limit("30/minute")
 async def update_board_config(
     request: Request,
-    payload: BoardConfigData,
+    payload: BoardConfigUpdateIn,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
-) -> BoardConfigData:
+) -> BoardConfigResponse:
     """Сохранить конфиг витрины. Только для роли manager.
 
     SEC-084: write-side rate-limit (30/min per client IP) — mirrors the GET
-    limit so a stolen manager token can't churn config writes."""
-    data = payload.model_dump()
+    limit so a stolen manager token can't churn config writes.
 
-    result = await db.execute(select(BoardConfig).where(BoardConfig.id == CONFIG_ROW_ID))
-    row = result.scalar_one_or_none()
-    if row is None:
-        db.add(BoardConfig(id=CONFIG_ROW_ID, data=data, updated_by=user.id))
-    else:
-        row.data = data
-        row.updated_by = user.id
-    await db.commit()
+    Отдаём результат реального мёржа (`to_public_response(merged)`), а не
+    `payload` как раньше — старый код возвращал клиенту его же сырое
+    непромёрженное тело вместо того, что реально сохранилось."""
+    updates = payload.model_dump(mode="json", include=payload.model_fields_set)
+    merged = await merge_and_save_board_config(db, updates, user.id)
 
     logger.info("board_config обновлён пользователем %s", user.id)
-    return payload
+    return to_public_response(merged)

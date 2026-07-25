@@ -261,6 +261,10 @@ class Settings:
     RESOURCE_SERVICE_URL = os.getenv("RESOURCE_SERVICE_URL", "https://resources-api.infrasafe.uz/v1")
     RESOURCE_SERVICE_TOKEN = os.getenv("RESOURCE_SERVICE_TOKEN", "")
 
+    # Work reports (visual before/after board)
+    WORK_REPORTS_ENABLED = os.getenv("WORK_REPORTS_ENABLED", "False").lower() == "true"
+    PUBLIC_MEDIA_MAX_BYTES = int(os.getenv("PUBLIC_MEDIA_MAX_BYTES", str(8 * 1024 * 1024)))
+
     @property
     def REDIS_PUBSUB_URL_RESOLVED(self) -> str:
         """REDIS_PUBSUB_URL with auth derived from REDIS_URL if not explicitly set.

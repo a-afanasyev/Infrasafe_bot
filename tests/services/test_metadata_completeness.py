@@ -91,6 +91,7 @@ _EXPECTED_TABLES = frozenset({
     "vehicles",
     "webhook_inbox",
     "webhook_outbox",
+    "work_reports",
     "yards",
 })
 

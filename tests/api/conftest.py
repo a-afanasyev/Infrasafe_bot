@@ -27,6 +27,7 @@ from uk_management_bot.database.models.yard import Yard  # noqa: F401  # registe
 from uk_management_bot.database.models.building import Building  # noqa: F401  # register tables for create_all
 from uk_management_bot.database.models.apartment import Apartment  # noqa: F401  # register tables for create_all
 from uk_management_bot.database.models.user_apartment import UserApartment  # noqa: F401  # register tables for create_all
+from uk_management_bot.database.models.work_report import WorkReport  # noqa: F401  # register tables for create_all
 
 from uk_management_bot.api.main import app
 from uk_management_bot.api.dependencies import get_db, get_current_user

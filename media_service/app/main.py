@@ -27,6 +27,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _check_publication_lock_column() -> None:
+    """Fail-fast preflight: media_files.publication_locked должна существовать.
+
+    На свежих БД её создаёт create_tables() (через обновлённую модель) — там
+    проверка проходит тривиально. На существующих БД (profk.uz, infrasafe.uz),
+    предшествующих этой колонке, create_all её не добавит (создаёт только
+    отсутствующие таблицы) — нужен разовый прогон
+    media_service/migrations/0001_publication_lock.sql. Импорт engine — внутри
+    функции, чтобы не тревожить порядок импортов модуля на верхнем уровне.
+    """
+    from sqlalchemy import inspect
+    from app.db.database import engine
+
+    columns = {c["name"] for c in inspect(engine).get_columns("media_files")}
+    if "publication_locked" not in columns:
+        raise RuntimeError(
+            "media_files.publication_locked column is missing — run "
+            "media_service/migrations/0001_publication_lock.sql before starting this service."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -39,6 +60,10 @@ async def lifespan(app: FastAPI):
         # Инициализация базы данных
         await init_db()
         logger.info("Database initialized successfully")
+
+        # Preflight: колонка publication_locked должна существовать
+        # (на pre-existing БД её добавляет только миграция 0001, не create_all)
+        _check_publication_lock_column()
 
         # Проверка подключения к БД
         if not check_db_connection():

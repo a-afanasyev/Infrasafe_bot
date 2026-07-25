@@ -43,6 +43,9 @@ from .feedback import Feedback
 # Складской учёт материалов (закупки и движение матсредств)
 from .material import Material, MaterialReceipt, MaterialIssue, MaterialIssueAllocation
 
+# Визуальные отчёты о выполненных работах (публичная лента «до/после»)
+from .work_report import WorkReport
+
 # Импорт моделей, которые могут существовать или не существовать
 try:
     from .request_comment import RequestComment
@@ -88,6 +91,7 @@ __all__ = [
     'MaterialReceipt',
     'MaterialIssue',
     'MaterialIssueAllocation',
+    'WorkReport',
 ]
 
 # Добавляем модели заявок, если они доступны (импортированы в try-блоке выше).

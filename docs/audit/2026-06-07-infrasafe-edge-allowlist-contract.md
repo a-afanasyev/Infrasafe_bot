@@ -45,6 +45,7 @@ Derived from actual code, not assumptions:
 - `/api/v2/addresses/`
 - `/api/v2/feedback/`
 - `/api/v2/media/` (upload + `request/{n}` + `{id}/file`)
+- `/api/v2/work-reports/` — manager API for visual work reports (⏳ pending InfraSafe edge allowlist update — not yet requested; PROFK edge is a plain passthrough and unaffected)
 
 **External inbound (server-to-server, HMAC):**
 - `/api/v2/webhooks/infrasafe/alert` (exact path; no other inbound webhooks exist)
@@ -70,6 +71,8 @@ Everything else → **404 at the edge.**
 ## Standing agreement (important)
 
 Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix consumed by the SPA/TWA through the public edge will return 404 until InfraSafe adds it to the allowlist.** When adding such an endpoint, ping InfraSafe with the prefix ahead of release (minute-level change on their side). Internal-only endpoints (bot→API) are unaffected.
+
+- `/api/v2/work-reports/` (visual work reports, manager API) — added to this doc 2026-07-25, not yet requested from InfraSafe; ping before any infrasafe.uz rollout of this feature.
 
 ## Verification (2026-06-07)
 

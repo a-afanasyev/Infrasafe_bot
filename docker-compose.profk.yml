@@ -97,6 +97,11 @@ services:
       - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
       - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
       - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
+      # DARK-гейт визуального модуля «Отчёты о работах»: гейтит manager+public API
+      # (/api/v2/work-reports/, /api/v2/public/work-reports) и модуль board_config
+      # `workreports`. Зеркалит фронтовый VITE_WORK_REPORTS_ENABLED — синхронизация
+      # ручная (автосвязи нет), для рабочей фичи должны быть выставлены оба.
+      - WORK_REPORTS_ENABLED=${WORK_REPORTS_ENABLED:-false}
       # ARCH-106 (Doppler cutover, Phase 1) — обязательные (см. app для объяснения :?):
       - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
@@ -296,6 +301,8 @@ services:
         VITE_BRAND: profk
         # DARK-гейт раздела «Учёт ресурсов»: пусто = OFF, прод .env ставит true.
         VITE_RESOURCES_ENABLED: "${VITE_RESOURCES_ENABLED:-}"
+        # DARK-гейт модуля «Отчёты о работах»: пусто = OFF, прод .env ставит true.
+        VITE_WORK_REPORTS_ENABLED: "${VITE_WORK_REPORTS_ENABLED:-}"
     container_name: uk-frontend
     restart: unless-stopped
     ports:
@@ -350,6 +357,39 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # One-shot runner для media_service/migrations/*.sql (run_migrations.py) —
+  # применяет колоночные/индексные миграции, которые Base.metadata.create_all()
+  # НЕ покрывает (create_all создаёт только отсутствующие таблицы, существующие
+  # не меняет). Та же форма, что у бот-side `migrate`-сервиса: profiles: ["tools"]
+  # держит его вне `up -d`, инвокация явная:
+  #   docker compose -f docker-compose.profk.yml run --rm media-migrate
+  media-migrate:
+    build:
+      context: ./media_service
+      dockerfile: Dockerfile
+    image: uk-media-service
+    profiles: ["tools"]
+    command: ["python", "run_migrations.py"]
+    env_file:
+      - media_service/.env
+    environment:
+      # Дублирует каждое поле Settings без безопасного дефолта (секреты + URL БД) —
+      # та же причина, что у bot-side `migrate`: Settings эагерно валидирует
+      # несколько переменных при импорте, хотя джобе нужен только доступ к БД,
+      # поэтому частичный env упадёт до main().
+      # REDIS_URL сознательно НЕ дублируется (в отличие от media-service выше,
+      # где он есть): migrate не трогает Redis, а settings.redis_url имеет
+      # безопасный дефолт (в отличие от переменных ниже).
+      - TELEGRAM_BOT_TOKEN=${MEDIA_BOT_TOKEN:?MEDIA_BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - SECRET_KEY=${MEDIA_SECRET_KEY:?MEDIA_SECRET_KEY is required — set it in Doppler (project uk-management)}
+      - MEDIA_API_KEYS=${MEDIA_API_KEYS:?MEDIA_API_KEYS is required — set it in Doppler (project uk-management)}
+      - DATABASE_URL=${MEDIA_DATABASE_URL:?MEDIA_DATABASE_URL is required — set it in Doppler (project uk-management)}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - uk-internal
 
   # Сервис «Учёт ресурсов» (resource-api) — внесён в монорепо UK (был отдельный
   # стек ~/uk-resource). Своя БД resource-postgres (postgres:16, свой том). Нативный

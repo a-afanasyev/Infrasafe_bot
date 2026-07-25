@@ -18,6 +18,11 @@ ENV VITE_BRAND=$VITE_BRAND
 # ПОСЛЕ того как партнёрский edge начнёт проксировать /uk/api/resource/* + минтинг.
 ARG VITE_RESOURCES_ENABLED=
 ENV VITE_RESOURCES_ENABLED=$VITE_RESOURCES_ENABLED
+# DARK-гейт визуального модуля «Отчёты о работах» (before/after фото) — build-time.
+# Пусто = OFF (модуль табло, роут архива и пункт меню не монтируются). Включение:
+# --build-arg VITE_WORK_REPORTS_ENABLED=true (согласованно с backend WORK_REPORTS_ENABLED).
+ARG VITE_WORK_REPORTS_ENABLED=
+ENV VITE_WORK_REPORTS_ENABLED=$VITE_WORK_REPORTS_ENABLED
 RUN npm run build
 
 FROM nginx:1.27-alpine

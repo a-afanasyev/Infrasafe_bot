@@ -75,7 +75,8 @@
     "accessDatabase": "Kirish bazasi",
     "accessEquipment": "Jihozlar",
     "materials": "Ombor",
-    "resourceAccounting": "Resurs hisobi"
+    "resourceAccounting": "Resurs hisobi",
+    "workReports": "Ishlar hisobotlari"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -605,7 +606,8 @@
       "requests": "Joriy arizalar",
       "announcements": "E'lonlar",
       "rating": "Aholilar bahosi",
-      "hours": "Ish vaqti"
+      "hours": "Ish vaqti",
+      "workreports": "Ishlar hisobotlari"
     },
     "org": "Boshqaruv kompaniyasi",
     "orgName": "Nomi",
@@ -1412,7 +1414,13 @@
       "residentRating": "Aholilar bahosi",
       "efficiencyPeriod": "Davr uchun ish samaradorligi",
       "workingHours": "Ish vaqti",
-      "emergencyService": "Favqulodda xizmat: kunduzi-kechasi"
+      "emergencyService": "Favqulodda xizmat: kunduzi-kechasi",
+      "workReports": "Ishlar hisobotlari"
+    },
+    "workReports": {
+      "viewAll": "Barcha hisobotlar",
+      "before": "Oldin",
+      "after": "Keyin"
     },
     "footer": {
       "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
@@ -1874,6 +1882,76 @@
     "sourceBot": "Bot",
     "sourceTwa": "Mini App",
     "alreadyReplied": "Javob yuborilgan"
+  },
+  "workReports": {
+    "title": "Ishlar hisobotlari",
+    "privacyWarning": "Manzilni anonimlashtirish fotosuratning o'zini anonimlashtirmaydi: unda hali ham eshik raqami, ism yozuvi, avtomobil raqami yoki inson yuzi ko'rinishi mumkin. Buni tekshirish moderatorning vazifasi — dastur buni tekshirmaydi.",
+    "sync": "Sinxronlash",
+    "settings": {
+      "heading": "Vitrina sozlamalari",
+      "toggleLabel": "Avto-nashr",
+      "autopostOn": "Avto-nashr yoqilgan",
+      "autopostOff": "Avto-nashr o'chirilgan",
+      "limitLabel": "Vitrinadagi hisobotlar limiti",
+      "titleLabel": "Blok sarlavhasi",
+      "save": "Saqlash",
+      "autopublishLabel": "Moderatsiyasiz nashr qilish",
+      "autopublishHint": "«Oldin» va «keyin» suratlari bor hisobotlar tasdiqlanmasdan darhol ommaviy tasmaga chiqadi. Manzilni tizim o‘zi anonimlashtiradi, lekin suratning mazmunini emas: bu rejimda eshik raqami, familiyali taxtacha, avtomobil raqami yoki odam yuzini hech kim tekshirmaydi.",
+      "categoriesLabel": "Tasma uchun toifalar",
+      "categoriesHint": "Avtomatika (avtopostlash va moderatsiyasiz nashr) faqat belgilangan toifalar bilan ishlaydi. Qolgan hisobotlar moderatsiyada qoladi — ularni qo‘lda nashr qilish mumkin.",
+      "categoriesAll": "Hech bir toifa belgilanmagan — barchasi tasmaga tushadi."
+    },
+    "createDraft": {
+      "label": "Ariza raqami",
+      "placeholder": "Masalan, 260725-001",
+      "submit": "Yaratish"
+    },
+    "groups": {
+      "moderation": "Moderatsiyada",
+      "published": "Nashr etilgan",
+      "needsReview": "E'tibor talab qiladi",
+      "rejected": "Rad etilgan"
+    },
+    "status": {
+      "pending": "Kutilmoqda",
+      "needs_media": "Foto yo'q",
+      "publishing": "Nashr qilinmoqda",
+      "published": "Nashr etilgan",
+      "needs_review": "Qayta ko'rib chiqishda",
+      "rejected": "Rad etilgan"
+    },
+    "actions": {
+      "publish": "Nashr qilish",
+      "unpublish": "Nashrdan olish",
+      "reject": "Rad etish",
+      "reopen": "Ishga qaytarish",
+      "autofill": "Avto-to'ldirish"
+    },
+    "needsMediaExplanation": "Nashr qilish uchun \"oldin\" va \"keyin\" fotolar kerak",
+    "reasonPlaceholder": "Sabab",
+    "reasonDialogDesc": "Sabab hisobot moderatsiyasi tarixida saqlanadi.",
+    "confirmReopenDesc": "{{number}} arizasi moderatsiya navbatiga qaytadi.",
+    "toast": {
+      "synced": "Sinxronlash bajarildi",
+      "created": "Hisobot qoralamasi yaratildi",
+      "updated": "Hisobot yangilandi",
+      "published": "Hisobot nashr etildi",
+      "unpublished": "Hisobot nashrdan olindi",
+      "rejected": "Hisobot rad etildi",
+      "reopened": "Hisobot ishga qaytarildi",
+      "settingsUpdated": "Sozlamalar saqlandi"
+    }
+  },
+  "workReportsArchive": {
+    "title": "Bajarilgan ishlar hisobotlari",
+    "backToBoard": "← Taxtaga",
+    "empty": "Hozircha nashr etilgan hisobotlar yo'q",
+    "loadMore": "Ko'proq ko'rsatish",
+    "loadingMore": "Yuklanmoqda…"
+  },
+  "workReportDetail": {
+    "title": "Bajarilgan ishlar hisoboti",
+    "notFound": "Hisobot topilmadi yoki nashrdan olingan"
   },
   "materials": {
     "title": "Materiallar ombori",

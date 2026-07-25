@@ -8,6 +8,11 @@ import type { BoardConfigData, LocalizedText } from '../types/boardConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { brand } from '../brand/brand'
 import { groupBoardRows } from '../utils/boardRows'
+import WorkReportsModule from '../components/board/WorkReportsModule'
+
+// DARK-гейт модуля визуальных отчётов «до/после» на табло: монтируется только
+// при VITE_WORK_REPORTS_ENABLED=true (билд-арг), по умолчанию OFF.
+const WORK_REPORTS_ENABLED = import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -277,6 +282,12 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     announcements: announcementsModule,
     rating: ratingModule,
     hours: hoursModule,
+    // Настройки приходят props'ами, а не вторым useBoardConfig() внутри модуля:
+    // здесь уже есть `config`, включая `configOverride` из редактора витрины —
+    // значит превью в редакторе сразу отражает правку лимита/заголовка.
+    ...(WORK_REPORTS_ENABLED
+      ? { workreports: <WorkReportsModule limit={config.work_reports?.limit} title={loc(config.work_reports?.title as LocalizedText)} /> }
+      : {}),
   }
 
   return (

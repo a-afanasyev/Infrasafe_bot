@@ -428,6 +428,109 @@ class MediaServiceClient:
             logger.error(f"Failed to delete media {media_id}: {e}")
             return False
 
+    async def acquire_publication_lock(self, media_id: int) -> bool:
+        """
+        Захват publication-lock на медиа-файл (POST /media/{id}/publication-lock)
+
+        Идемпотентно: повторный захват уже залоченного активного файла — успех.
+
+        Args:
+            media_id: ID медиа-файла
+
+        Returns:
+            True если успешно (включая идемпотентный кейс уже залоченного
+            активного файла). False при любой неудаче (файл не найден, не
+            активен, сетевая ошибка) — тот же контракт "проглатывания" bool,
+            что у archive_media/delete_media выше; вызывающих, которым нужно
+            различать причины отказа, пока не существует.
+        """
+        try:
+            response = await self.client.post(f"/media/{media_id}/publication-lock")
+            response.raise_for_status()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to acquire publication lock for media {media_id}: {e}")
+            return False
+
+    async def release_publication_lock(self, media_id: int) -> bool:
+        """
+        Снятие publication-lock с медиа-файла (DELETE /media/{id}/publication-lock)
+
+        Идемпотентно — тот же контракт "проглатывания" bool, что и выше.
+
+        Args:
+            media_id: ID медиа-файла
+
+        Returns:
+            True если успешно
+        """
+        try:
+            response = await self.client.delete(f"/media/{media_id}/publication-lock")
+            response.raise_for_status()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to release publication lock for media {media_id}: {e}")
+            return False
+
+    async def list_publication_locks(self, limit: int = 200, offset: int = 0) -> Dict[str, Any]:
+        """
+        Получение списка активных publication-lock'ов (GET /media/publication-locks)
+
+        В ОТЛИЧИЕ от двух методов выше, этот RAISES при неудаче вместо
+        возврата пустого/false результата. Это осознанно: будущий процесс
+        сверки (не часть этой задачи) будет использовать этот метод, чтобы
+        решить, какие локи снять — если ошибку запроса тихо схлопнуть в
+        "сейчас залоченных нет", такой процесс ошибочно снял бы все локи,
+        которые должен был сохранить. НЕ схлопывать ошибки в
+        безопасный-на-вид пустой dict.
+
+        Args:
+            limit: Лимит результатов
+            offset: Смещение
+
+        Returns:
+            Список активных publication-lock'ов с пагинацией
+        """
+        try:
+            response = await self.client.get(
+                "/media/publication-locks", params={"limit": limit, "offset": offset}
+            )
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Failed to list publication locks: {e}")
+            raise
+
+    async def resolve_stale_transitions(self, older_than_minutes: int = 15) -> Dict[str, Any]:
+        """Восстановление строк, зависших в транзиентных статусах
+        `archiving`/`deleting` (POST /media/maintenance/resolve-stale-transitions).
+
+        Best-effort: возвращает пустой dict при неудаче вместо исключения —
+        вызывающий (`work_report_service.reconcile_publication_locks`) это
+        фоновая сверка, и недоступность media-service не должна ронять её
+        остальные направления. Контраст с `list_publication_locks` выше, который
+        RAISES: там пустой результат был бы истолкован как «локов нет» и привёл
+        бы к снятию всех локов.
+        """
+        try:
+            response = await self.client.post(
+                "/media/maintenance/resolve-stale-transitions",
+                params={"older_than_minutes": older_than_minutes},
+            )
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Failed to resolve stale media transitions: {e}")
+            return {}
+
     async def get_request_timeline(self, request_number: str) -> Dict[str, Any]:
         """
         Получение временной линии медиа-файлов для заявки
