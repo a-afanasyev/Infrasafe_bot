@@ -300,16 +300,29 @@ async def test_publish_409_empty_address(db_session):
 
 
 @pytest.mark.asyncio
-async def test_publish_422_missing_before_media(db_session):
+async def test_publish_allowed_without_before_media(db_session):
+    """Фото «до» НЕ обязательно (решение владельца 2026-07-25).
+
+    Раньше такой отчёт получал 422 и работа не попадала в ленту вовсе, хотя
+    результат был снят. Часто «до» физически нет: житель фотографирует уже
+    текущее состояние, исполнитель на аварии не успевает. Витрина показывает
+    отсутствующую сторону подписью «нет фото».
+    """
     db_session.add(_mk_request("260725-307"))
     report = _mk_report("260725-307", before_media_ids=[], after_media_ids=[2])
     db_session.add(report)
     await db_session.commit()
     await db_session.refresh(report)
+    client = FakeMediaClient(by_category={
+        "request_photo": [], "completion_photo": [_photo(2)],
+    })
 
-    with pytest.raises(WorkReportPublishError) as exc_info:
-        await publish_report(db_session, FakeMediaClient(), report.id, MODERATOR_ID)
-    assert exc_info.value.status_code == 422
+    result = await publish_report(db_session, client, report.id, MODERATOR_ID)
+
+    assert result.status == "published"
+    assert result.before_media_ids == []
+    # Локи берутся только на реально опубликованные байты.
+    assert client.acquire_calls == [2]
 
 
 @pytest.mark.asyncio
@@ -810,9 +823,9 @@ async def test_autopublish_audit_does_not_claim_human_approval(db_session):
 
 
 @pytest.mark.asyncio
-async def test_autopublish_leaves_draft_without_before_side_for_moderation(db_session):
-    """«Без модерации» не значит «опубликовать что угодно»: нет фото «до» —
-    отчёт уходит в needs_media и в ленту не попадает."""
+async def test_autopublish_publishes_draft_without_before_side(db_session):
+    """Нет фото «до» — не препятствие: критерий готовности совпадает с
+    publish_report (нужен результат), иначе работа не попала бы в ленту вовсе."""
     await _seed_autopublish(db_session, enabled=True)
     db_session.add(_mk_request("260725-504"))
     report = _mk_report("260725-504")
@@ -821,6 +834,26 @@ async def test_autopublish_leaves_draft_without_before_side_for_moderation(db_se
 
     client = FakeMediaClient(by_category={
         "request_photo": [], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 1
+    assert result["left_for_moderation"] == 0
+    assert (await _reload(db_session, report.id)).status == "published"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_leaves_draft_without_result_for_moderation(db_session):
+    """«Без модерации» не значит «опубликовать что угодно»: без фото РЕЗУЛЬТАТА
+    карточка «работы выполнены» не имеет ни одного доказательства."""
+    await _seed_autopublish(db_session, enabled=True)
+    db_session.add(_mk_request("260725-505"))
+    report = _mk_report("260725-505")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [],
     })
     result = await autopublish_ready_drafts(db_session, client)
 

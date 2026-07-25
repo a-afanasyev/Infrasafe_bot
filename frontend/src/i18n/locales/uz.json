@@ -1420,7 +1420,8 @@
     "workReports": {
       "viewAll": "Barcha hisobotlar",
       "before": "Oldin",
-      "after": "Keyin"
+      "after": "Keyin",
+      "noPhoto": "Foto yo‘q"
     },
     "footer": {
       "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
@@ -1896,7 +1897,7 @@
       "titleLabel": "Blok sarlavhasi",
       "save": "Saqlash",
       "autopublishLabel": "Moderatsiyasiz nashr qilish",
-      "autopublishHint": "«Oldin» va «keyin» suratlari bor hisobotlar tasdiqlanmasdan darhol ommaviy tasmaga chiqadi. Manzilni tizim o‘zi anonimlashtiradi, lekin suratning mazmunini emas: bu rejimda eshik raqami, familiyali taxtacha, avtomobil raqami yoki odam yuzini hech kim tekshirmaydi.",
+      "autopublishHint": "Natija fotosi bo‘lgan hisobotlar tasdiqlashsiz darhol ommaviy lentaga chiqadi («oldin» fotosi shart emas — vitrinada «Foto yo‘q» ko‘rsatiladi). Manzilni tizim o‘zi anonimlashtiradi, lekin foto mazmunini emas: eshik raqami, familiyali taxtacha, davlat raqami yoki inson yuzi bu rejimda tekshirilmaydi.",
       "categoriesLabel": "Tasma uchun toifalar",
       "categoriesHint": "Moderatsiyasiz nashr faqat belgilangan toifalar bilan ishlaydi. Qolgan hisobotlar ham navbatga tushadi va moderatsiyada qoladi — ularni qo‘lda nashr qilish mumkin.",
       "categoriesAll": "Hech bir toifa belgilanmagan — barchasi tasmaga tushadi."
@@ -1914,7 +1915,7 @@
     },
     "status": {
       "pending": "Kutilmoqda",
-      "needs_media": "Foto yo'q",
+      "needs_media": "Natija fotosi yo‘q",
       "publishing": "Nashr qilinmoqda",
       "published": "Nashr etilgan",
       "needs_review": "Qayta ko'rib chiqishda",
@@ -1927,7 +1928,7 @@
       "reopen": "Ishga qaytarish",
       "autofill": "Avto-to'ldirish"
     },
-    "needsMediaExplanation": "Nashr qilish uchun \"oldin\" va \"keyin\" fotolar kerak",
+    "needsMediaExplanation": "Nashr qilish uchun natija fotosi kerak. «Oldin» fotosi shart emas — vitrinada «Foto yo‘q» ko‘rsatiladi",
     "reasonPlaceholder": "Sabab",
     "reasonDialogDesc": "Sabab hisobot moderatsiyasi tarixida saqlanadi.",
     "confirmReopenDesc": "{{number}} arizasi moderatsiya navbatiga qaytadi.",

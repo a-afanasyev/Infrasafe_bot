@@ -106,7 +106,7 @@ describe('WorkReportsPage', () => {
 
     const publishBtn = await screen.findByRole('button', { name: 'Опубликовать' })
     expect(publishBtn).toBeDisabled()
-    expect(screen.getByText('Нужны фото «до» и «после», чтобы опубликовать')).toBeInTheDocument()
+    expect(screen.getByText(/Нужно фото результата, чтобы опубликовать/)).toBeInTheDocument()
   })
 
   it('shows a needs_review report in its own group with the reject_reason', async () => {

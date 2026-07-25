@@ -22,9 +22,16 @@ export interface WorkReportPhotoProps {
   // Extra style merged onto the placeholder only (font-size/padding), applied
   // on top of boxStyle — also tuned per consumer.
   placeholderStyle?: React.CSSProperties
+  // Текст плейсхолдера. Отдельно от `alt`, потому что смысл разный: alt — это
+  // «До»/«После» (какая сторона), а здесь нужно сказать, что снимка нет.
+  // Отчёт без фото «до» — штатное состояние с 2026-07-25: обязателен только
+  // результат, и витрина честно показывает «нет фото» вместо пустой плитки.
+  emptyLabel?: string
 }
 
-export default function WorkReportPhoto({ src, alt, boxStyle, placeholderStyle }: WorkReportPhotoProps) {
+export default function WorkReportPhoto({
+  src, alt, boxStyle, placeholderStyle, emptyLabel,
+}: WorkReportPhotoProps) {
   const [failed, setFailed] = useState(false)
   if (!src || failed) {
     return (
@@ -40,7 +47,7 @@ export default function WorkReportPhoto({ src, alt, boxStyle, placeholderStyle }
           ...placeholderStyle,
         }}
       >
-        {alt}
+        {emptyLabel || alt}
       </div>
     )
   }

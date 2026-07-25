@@ -27,7 +27,9 @@ const photoBoxStyle: React.CSSProperties = {
 }
 const photoPlaceholderStyle: React.CSSProperties = { fontSize: '0.85rem', padding: 10 }
 
-function PhotoColumn({ ids, reportId, label }: { ids: number[]; reportId: number; label: string }) {
+function PhotoColumn({
+  ids, reportId, label, emptyLabel,
+}: { ids: number[]; reportId: number; label: string; emptyLabel: string }) {
   return (
     <div>
       <div
@@ -42,14 +44,16 @@ function PhotoColumn({ ids, reportId, label }: { ids: number[]; reportId: number
         {label}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Пустая сторона у опубликованного отчёта — состояние, которого быть не
-            должно (publish требует обе), но рендерим плейсхолдер, а не пустоту:
-            «ничего» читалось бы как поломка вёрстки. */}
+        {/* Пустое «до» — штатное состояние с 2026-07-25: publish требует только
+            фото результата. Показываем подпись «нет фото», а не пустоту: «ничего»
+            читалось бы как поломка вёрстки, а надпись честно говорит, что снимка
+            до работ не сделали. */}
         {ids.length === 0 ? (
           <WorkReportPhoto
             alt={label}
             boxStyle={photoBoxStyle}
             placeholderStyle={photoPlaceholderStyle}
+            emptyLabel={emptyLabel}
           />
         ) : (
           ids.map((mediaId) => (
@@ -215,11 +219,13 @@ export default function WorkReportDetailPage() {
                   ids={report.before}
                   reportId={report.id}
                   label={t('board.workReports.before')}
+                  emptyLabel={t('board.workReports.noPhoto')}
                 />
                 <PhotoColumn
                   ids={report.after}
                   reportId={report.id}
                   label={t('board.workReports.after')}
+                  emptyLabel={t('board.workReports.noPhoto')}
                 />
               </div>
             </div>

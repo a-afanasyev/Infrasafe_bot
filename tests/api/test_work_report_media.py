@@ -104,7 +104,8 @@ async def test_autofill_fetch_limit_is_larger_than_cap():
 
 
 @pytest.mark.asyncio
-async def test_autofill_flips_pending_to_needs_media_when_one_side_empty():
+async def test_autofill_flips_pending_to_needs_media_without_result():
+    """needs_media = нет фото РЕЗУЛЬТАТА. «До» опционально с 2026-07-25."""
     client = FakeMediaClient({"request_photo": [_photo(1)], "completion_photo": []})
     report = _mk_report(status="pending")
 
@@ -114,7 +115,21 @@ async def test_autofill_flips_pending_to_needs_media_when_one_side_empty():
 
 
 @pytest.mark.asyncio
-async def test_autofill_flips_needs_media_back_to_pending_when_both_sides_filled():
+async def test_autofill_keeps_pending_without_before_side():
+    """Есть результат, нет «до» — отчёт готов к публикации, а не в needs_media:
+    иначе работа со снятым результатом не попала бы в ленту вовсе."""
+    client = FakeMediaClient({"request_photo": [], "completion_photo": [_photo(2)]})
+    report = _mk_report(status="pending")
+
+    result = await autofill_media(None, client, report)
+
+    assert result.status == "pending"
+    assert result.before_media_ids == []
+    assert result.after_media_ids == [2]
+
+
+@pytest.mark.asyncio
+async def test_autofill_flips_needs_media_back_to_pending_when_result_appears():
     client = FakeMediaClient({"request_photo": [_photo(1)], "completion_photo": [_photo(2)]})
     report = _mk_report(status="needs_media")
 

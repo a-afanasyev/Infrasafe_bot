@@ -89,14 +89,17 @@ describe('WorkReportDetailPage', () => {
     expect(screen.queryAllByRole('img')).toHaveLength(0)
   })
 
-  it('renders a placeholder instead of an empty column when a side has no photos', () => {
-    mockQuery.data = makeReport({ after: [] })
+  it('показывает «Нет фото» на стороне без снимков', () => {
+    // Отчёт без «до» — штатное состояние с 2026-07-25: обязателен только
+    // результат. Пустая колонка читалась бы как поломка вёрстки, поэтому там
+    // явная подпись.
+    mockQuery.data = makeReport({ before: [], after: [201] })
     renderAt('42')
 
-    // Пустая сторона у опубликованного отчёта — состояние, которого быть не
-    // должно (publish требует обе), но «ничего» читалось бы как поломка вёрстки.
-    expect(screen.getAllByRole('img')).toHaveLength(2)
-    expect(screen.getAllByText('После').length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('img')).toHaveLength(1)
+    expect(screen.getByText('Нет фото')).toBeInTheDocument()
+    // Заголовок колонки «До» при этом остаётся — видно, какой стороны не хватает.
+    expect(screen.getByText('До')).toBeInTheDocument()
   })
 
 it('фото ведёт на оригинал, а показывает превью', () => {
