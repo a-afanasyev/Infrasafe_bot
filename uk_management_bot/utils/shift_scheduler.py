@@ -641,6 +641,16 @@ class ShiftScheduler:
 
             if media_client is not None:
                 try:
+                    # Догрев превью — страховка к прогреву в publish_report:
+                    # покрывает отчёты, опубликованные при недоступном
+                    # media-service, и кэш, вытесненный лимитом или рестартом.
+                    summary['warmed'] = await work_report_service.warm_recent_previews(
+                        db, media_client
+                    )
+                except Exception as e:
+                    logger.warning(f"Отчёты о работах: догрев превью не прошёл: {e}")
+
+                try:
                     summary['reconcile'] = await work_report_service.reconcile_publication_locks(
                         db, media_client
                     )

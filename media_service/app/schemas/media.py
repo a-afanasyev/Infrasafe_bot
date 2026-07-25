@@ -83,6 +83,14 @@ class MediaArchiveRequest(StrictSchema):
     archive_reason: Optional[str] = Field(None, max_length=255, description="Причина архивации")
 
 
+class PreviewWarmRequest(StrictSchema):
+    # Потолок на пачку: прогрев идёт через семафор скачиваний, и слишком длинный
+    # список держал бы соединение вызывающего минутами. UK шлёт медиа одного
+    # отчёта (до 8) либо пачку свежих опубликованных.
+    media_ids: List[int] = Field(..., min_length=1, max_length=200,
+                                 description="ID медиа, для которых нужно построить превью")
+
+
 class MediaDateRangeRequest(StrictSchema):
     date_from: datetime = Field(..., description="Дата начала")
     date_to: datetime = Field(..., description="Дата окончания")

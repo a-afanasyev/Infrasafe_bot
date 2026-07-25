@@ -531,6 +531,33 @@ class MediaServiceClient:
             logger.error(f"Failed to resolve stale media transitions: {e}")
             return {}
 
+    async def warm_previews(self, media_ids: List[int]) -> Dict[str, Any]:
+        """Заранее построить превью для перечисленных медиа (POST /media/previews/warm).
+
+        Нужно, чтобы житель не попадал на холодный кэш: без прогрева первая
+        загрузка витрины — это десятки промахов, каждый со скачиванием из
+        Telegram, и хвост очереди не влезает в таймаут edge (наблюдалось 2×504
+        из 48 на холодном кэше).
+
+        Best-effort, как `resolve_stale_transitions`: возвращает пустой dict при
+        неудаче. Прогрев — оптимизация, и его провал не должен ронять ни
+        публикацию, ни тик планировщика; непрогретое превью просто построится
+        по первому запросу.
+        """
+        if not media_ids:
+            return {}
+        try:
+            response = await self.client.post(
+                "/media/previews/warm", json={"media_ids": list(media_ids)}
+            )
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.warning(f"Failed to warm media previews {media_ids}: {e}")
+            return {}
+
     async def get_request_timeline(self, request_number: str) -> Dict[str, Any]:
         """
         Получение временной линии медиа-файлов для заявки

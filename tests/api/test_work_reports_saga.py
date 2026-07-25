@@ -68,6 +68,7 @@ class FakeMediaClient:
         self._list_locks_items = list_locks_items if list_locks_items is not None else []
         self._release_raises = release_raises
         self.resolve_stale_calls: list[int] = []
+        self.warm_calls: list[list[int]] = []
 
     async def get_request_media(self, request_number: str, category: str, limit: int = 50):
         return self._by_category.get(category, [])
@@ -94,6 +95,11 @@ class FakeMediaClient:
             "limit": limit,
             "offset": offset,
         }
+
+    async def warm_previews(self, media_ids: list[int]) -> dict:
+        """Прогрев превью — оптимизация; сага и тик зовут его best-effort."""
+        self.warm_calls.append(list(media_ids))
+        return {"warmed": len(media_ids), "already_cached": 0, "failed": 0}
 
     async def resolve_stale_transitions(self, older_than_minutes: int = 15) -> dict:
         """Четвёртое направление сверки — восстановление зависших
@@ -968,3 +974,77 @@ async def test_autopublish_batch_window_not_starved_by_filtered_out_drafts(db_se
     assert result["published"] == 1
     assert (await _reload(db_session, wanted.id)).status == "published"
     assert (await _reload(db_session, stale.id)).status == "pending"
+
+
+# ── прогрев превью ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_publish_warms_previews_for_its_media(db_session):
+    """Житель часто открывает витрину сразу после публикации, а тик придёт лишь
+    через 10 минут — поэтому превью греются в самой публикации."""
+    db_session.add(_mk_request("260725-w01"))
+    report = _mk_report("260725-w01", before_media_ids=[1, 2], after_media_ids=[10])
+    db_session.add(report)
+    await db_session.commit()
+    await db_session.refresh(report)
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1), _photo(2)],
+        "completion_photo": [_photo(10)],
+    })
+
+    await publish_report(db_session, client, report.id, MODERATOR_ID)
+
+    assert client.warm_calls == [[1, 2, 10]]
+
+
+@pytest.mark.asyncio
+async def test_publish_survives_failing_warm(db_session):
+    """Прогрев — оптимизация: его сбой не имеет права откатить публикацию."""
+    db_session.add(_mk_request("260725-w02"))
+    report = _mk_report("260725-w02", before_media_ids=[1], after_media_ids=[10])
+    db_session.add(report)
+    await db_session.commit()
+    await db_session.refresh(report)
+
+    class WarmBroken(FakeMediaClient):
+        async def warm_previews(self, media_ids):
+            raise RuntimeError("media-service down")
+
+    client = WarmBroken(by_category={
+        "request_photo": [_photo(1)],
+        "completion_photo": [_photo(10)],
+    })
+
+    result = await publish_report(db_session, client, report.id, MODERATOR_ID)
+
+    assert result.status == "published"
+
+
+@pytest.mark.asyncio
+async def test_warm_recent_previews_covers_published_only(db_session):
+    """Догрев в тике берёт только опубликованные — черновики в ленту не идут,
+    греть их нечего."""
+    from uk_management_bot.services.work_report_service import warm_recent_previews
+
+    published = _mk_report("260725-w03", status="published", before_media_ids=[10],
+                           after_media_ids=[11])
+    published.published_at = datetime.now(timezone.utc)
+    db_session.add(published)
+    db_session.add(_mk_report("260725-w04", status="pending", before_media_ids=[20],
+                              after_media_ids=[21]))
+    await db_session.commit()
+    client = FakeMediaClient()
+
+    await warm_recent_previews(db_session, client)
+
+    assert client.warm_calls == [[10, 11]]
+
+
+@pytest.mark.asyncio
+async def test_warm_recent_previews_noop_without_published(db_session):
+    from uk_management_bot.services.work_report_service import warm_recent_previews
+
+    client = FakeMediaClient()
+    assert await warm_recent_previews(db_session, client) == {}
+    assert client.warm_calls == []

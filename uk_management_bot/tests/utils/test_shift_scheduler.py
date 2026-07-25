@@ -527,6 +527,7 @@ class TestWorkReportsTick:
         svc.autopublish_ready_drafts = AsyncMock(return_value={"published": 1})
         svc.revoke_stale_publications = AsyncMock(return_value=0)
         svc.reconcile_publication_locks = AsyncMock(return_value={})
+        svc.warm_recent_previews = AsyncMock(return_value={"warmed": 4})
         for k, v in over.items():
             setattr(svc, k, v)
         return svc
@@ -594,6 +595,27 @@ class TestWorkReportsTick:
 
         assert sched.task_stats["work_reports_sync"]["success"] == 1
         assert sched.task_stats["work_reports_sync"]["failed"] == 0
+
+    def test_warms_previews_so_residents_never_hit_cold_cache(self):
+        """Догрев в тике — страховка к прогреву в publish_report: покрывает
+        отчёты, опубликованные при недоступном media-service, и кэш,
+        вытесненный лимитом заявок или рестартом."""
+        svc = self._service()
+        sched = _make_scheduler()
+        with self._patched(svc):
+            self._run(sched)
+
+        svc.warm_recent_previews.assert_awaited_once()
+
+    def test_failing_warm_does_not_skip_reconcile(self):
+        """Прогрев и сверка независимы: сбой первого не отменяет вторую."""
+        svc = self._service(warm_recent_previews=AsyncMock(side_effect=Exception("boom")))
+        sched = _make_scheduler()
+        with self._patched(svc):
+            self._run(sched)
+
+        svc.reconcile_publication_locks.assert_awaited_once()
+        assert sched.task_stats["work_reports_sync"]["success"] == 1
 
     def test_registered_in_setup_jobs(self):
         sched = _make_scheduler()

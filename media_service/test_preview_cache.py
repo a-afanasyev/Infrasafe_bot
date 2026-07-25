@@ -286,3 +286,61 @@ def test_maintenance_endpoint_reports_cache_state(client_with):
     assert body["files"] == 1
     assert body["bytes"] > 0
     assert body["limit_requests"] >= 1
+
+
+# ── прогрев (POST /previews/warm) ─────────────────────────────────────
+
+
+def test_warm_builds_previews_without_returning_bytes(client_with, cache_dir):
+    """UK зовёт это сразу после публикации, чтобы житель не попал на холодный
+    кэш. Байты наружу не отдаются — только счётчики."""
+    client, svc = client_with()
+    a = _create_media_file(request_number="250101-950")
+    b = _create_media_file(request_number="250101-950")
+
+    resp = client.post("/api/v1/media/previews/warm", json={"media_ids": [a, b]},
+                       headers={"X-API-Key": "testkey"})
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"warmed": 2, "already_cached": 0, "failed": 0}
+    assert len(svc.telegram.download_file_calls) == 2
+    assert sorted(os.listdir(os.path.join(cache_dir, "250101-950"))) == [f"{a}.jpg", f"{b}.jpg"]
+
+
+def test_warm_is_idempotent_and_cheap_on_second_call(client_with):
+    """Повторный прогрев не должен снова качать: тик планировщика зовёт ручку
+    каждые 10 минут по последним 24 отчётам."""
+    client, svc = client_with()
+    media_id = _create_media_file(request_number="250101-951")
+
+    first = client.post("/api/v1/media/previews/warm", json={"media_ids": [media_id]},
+                        headers={"X-API-Key": "testkey"})
+    second = client.post("/api/v1/media/previews/warm", json={"media_ids": [media_id]},
+                         headers={"X-API-Key": "testkey"})
+
+    assert first.json()["warmed"] == 1
+    assert second.json() == {"warmed": 0, "already_cached": 1, "failed": 0}
+    assert len(svc.telegram.download_file_calls) == 1
+
+
+def test_warm_counts_failures_and_continues(client_with):
+    """Сбойный/удалённый файл не срывает прогрев остальных."""
+    client, _ = client_with()
+    ok = _create_media_file(request_number="250101-952")
+    gone = _create_media_file(request_number="250101-952", status="deleted")
+
+    resp = client.post("/api/v1/media/previews/warm", json={"media_ids": [gone, ok, 999999]},
+                       headers={"X-API-Key": "testkey"})
+
+    body = resp.json()
+    assert body["warmed"] == 1
+    assert body["failed"] == 2
+
+
+def test_warm_rejects_empty_and_oversized_batches(client_with):
+    client, _ = client_with()
+
+    assert client.post("/api/v1/media/previews/warm", json={"media_ids": []},
+                       headers={"X-API-Key": "testkey"}).status_code == 422
+    assert client.post("/api/v1/media/previews/warm", json={"media_ids": list(range(201))},
+                       headers={"X-API-Key": "testkey"}).status_code == 422
