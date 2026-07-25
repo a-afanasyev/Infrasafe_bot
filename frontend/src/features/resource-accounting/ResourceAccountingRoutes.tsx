@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router';
 import { useResourceAuth } from './auth/ResourceAuthContext';
 import { isAdmin, isMeterEntry } from './auth/roles';
 import { DashboardPage } from './pages/DashboardPage';

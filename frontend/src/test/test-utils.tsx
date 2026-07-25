@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { render, renderHook, type RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import i18next from 'i18next'
 import ru from '../i18n/locales/ru.json'
 

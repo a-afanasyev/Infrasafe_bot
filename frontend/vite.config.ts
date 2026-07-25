@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => ({
         // AnalyticsPage is already React.lazy'd; this carves shared libs into
         // cacheable vendor chunks so the main bundle drops < 400 kB.
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'react-vendor': ['react', 'react-dom', 'react-router'],
           'query-vendor': ['@tanstack/react-query'],
           'dnd-vendor': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
           'i18n-vendor': ['i18next', 'react-i18next'],

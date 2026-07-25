@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TwaApartment } from '../../types'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Phone } from 'lucide-react'
 import KanbanBoard from '../components/kanban/KanbanBoard'

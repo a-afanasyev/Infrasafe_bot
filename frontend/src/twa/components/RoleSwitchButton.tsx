@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Repeat } from 'lucide-react'
 import { twaClient } from '../twaClient'

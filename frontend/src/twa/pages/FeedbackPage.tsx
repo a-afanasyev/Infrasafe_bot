@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { AlertTriangle, Lightbulb } from 'lucide-react'

@@ -14,22 +14,15 @@
 
 import { execFileSync } from 'node:child_process'
 
-// Обоснованные исключения. Каждая запись — конкретный GHSA, НЕ пакет целиком.
-const ALLOWLIST = [
-  {
-    id: 'GHSA-qwww-vcr4-c8h2',
-    package: 'react-router',
-    added: '2026-07-25',
-    // «RSC Mode CSRF Bypass Allows Action Execution Before 400 Response».
-    // Затрагивает ТОЛЬКО React Server Components-режим react-router (RSC
-    // server actions). Наш фронт — SPA на Vite: никакого SSR/RSC, роутер
-    // используется в declarative/data-режиме (createBrowserRouter/<Routes>),
-    // серверных actions нет вовсе → уязвимый путь недостижим. Патч только в
-    // react-router 8.3.0 (мажор, миграция v7→v8); внутри ^7 закрыто всё
-    // остальное бампом до 7.18.1. Снять при апгрейде на v8.
-    reason: 'RSC-only path; SPA build has no SSR/RSC or server actions. Fixed only in v8 (major).',
-  },
-]
+// Обоснованные исключения. Каждая запись — конкретный GHSA, НЕ пакет целиком:
+//   { id: 'GHSA-xxxx-xxxx-xxxx', package: 'name', added: 'YYYY-MM-DD', reason: '…' }
+// Формат reason: почему код-путь недостижим ИЛИ почему патча нет — и что
+// снимет запись. Пустой список — нормальное состояние: сначала пытаемся
+// закрыть находку бампом, allowlist только когда бампа не существует.
+//
+// История: GHSA-qwww-vcr4-c8h2 (react-router, RSC-only) добавлялся 2026-07-25 и
+// снят в тот же день — апгрейд react-router 7.18.1 → 8.3.0 закрыл его по-настоящему.
+const ALLOWLIST = []
 
 const BLOCKING = new Set(['high', 'critical'])
 

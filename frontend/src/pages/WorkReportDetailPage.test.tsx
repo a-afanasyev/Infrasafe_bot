@@ -21,10 +21,10 @@ const { mockQuery, mockParams } = vi.hoisted(() => ({
 
 // `test-utils.render` уже оборачивает дерево в MemoryRouter без initialEntries,
 // поэтому URL там всегда "/" и route-параметр так не задать. Подменяем ТОЛЬКО
-// useParams, а не весь react-router-dom: Link/роутер остаются настоящими, иначе
+// useParams, а не весь react-router: Link/роутер остаются настоящими, иначе
 // тест на href'ы проверял бы заглушку.
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual<typeof import('react-router')>('react-router')
   return { ...actual, useParams: () => ({ reportId: mockParams.reportId }) }
 })
 

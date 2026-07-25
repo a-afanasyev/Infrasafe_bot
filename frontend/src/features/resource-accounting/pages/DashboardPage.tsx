@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api, apiPaged } from '../api/client';
 import type { ExportItem, Meter, Period, ValidationSummary } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';

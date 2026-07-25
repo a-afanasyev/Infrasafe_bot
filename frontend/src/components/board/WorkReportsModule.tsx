@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { tCategory } from '../../i18n/apiMaps'
 import { usePublicWorkReports, publicWorkReportMediaUrl } from '../../hooks/usePublicWorkReports'
 import WorkReportPhoto from './WorkReportPhoto'

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { TwaRequest } from '../../types'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'

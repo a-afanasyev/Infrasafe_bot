@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '@/api/client'
 import { cn } from '@/lib/utils'

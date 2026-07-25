@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Package, Download, Plus, ArrowDownToLine, ArrowUpFromLine, Scale, Pencil, Undo2 } from 'lucide-react'
 import { usePageTitle } from '../../hooks/usePageTitle'
