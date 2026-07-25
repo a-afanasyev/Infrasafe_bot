@@ -1610,7 +1610,9 @@
       "empty": "Qabul qilish uchun arizalar yo'q",
       "rateWork": "Ish sifatini baholang",
       "accept": "Qabul qilish",
-      "return": "Qaytarish"
+      "return": "Qaytarish",
+      "returnReasonPlaceholder": "Nima to‘g‘ri emas? Masalan: lift bir soatdan keyin yana to‘xtadi",
+      "returnReasonHint": "Sabab majburiy — ijrochi nimani qayta qilishni shundan biladi"
     },
     "profile": {
       "title": "Profil",

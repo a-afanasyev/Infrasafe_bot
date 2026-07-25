@@ -17,6 +17,9 @@ export default function AcceptancePage() {
   const { haptic } = useTelegramSDK()
   const [expanded, setExpanded] = useState<string | null>(null)
   const [ratings, setRatings] = useState<Record<string, number>>({})
+  // Причина возврата, по заявке. Обязательна: движок требует return_reason у
+  // APPLICANT_RETURN, а исполнителю без неё непонятно, что переделывать.
+  const [returnReasons, setReturnReasons] = useState<Record<string, string>>({})
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['twa', 'acceptance'],
@@ -40,13 +43,25 @@ export default function AcceptancePage() {
   })
 
   const returnMutation = useMutation({
+    // Канон-ребро возврата заявителем — APPLICANT_RETURN: «Исполнено» →
+    // «Возвращена», дальше разбирает менеджер. Раньше здесь стоял
+    // status: 'В работе' — ребро, которое у заявителя СНЯТО (это
+    // MANAGER_RETURN_TO_WORK), и кнопка падала с «no action maps 'Исполнено' ->
+    // 'В работе' for this actor». Причина обязательна: движок требует
+    // return_reason, и без неё исполнитель не узнает, что переделывать.
     mutationFn: (num: string) => twaClient.patch(`/api/v2/requests/${num}`, {
-      status: 'В работе',
+      status: 'Возвращена',
+      return_reason: (returnReasons[num] || '').trim(),
     }),
-    onSuccess: () => {
+    onSuccess: (_data, num) => {
       haptic('notification')
       queryClient.invalidateQueries({ queryKey: ['twa', 'acceptance'] })
       setExpanded(null)
+      setReturnReasons(prev => {
+        const next = { ...prev }
+        delete next[num]
+        return next
+      })
     },
     onError: (err: unknown) => {
       notifyError(err)
@@ -86,6 +101,15 @@ export default function AcceptancePage() {
               <p className="text-[12px] text-gray-600 dark:text-gray-400 mb-3">{t('twa.acceptance.rateWork')}</p>
               <StarRating value={ratings[req.request_number] || 0} onChange={(v) => setRatings(prev => ({ ...prev, [req.request_number]: v }))} />
 
+              <textarea
+                value={returnReasons[req.request_number] || ''}
+                onChange={(e) => setReturnReasons(prev => ({ ...prev, [req.request_number]: e.target.value }))}
+                placeholder={t('twa.acceptance.returnReasonPlaceholder')}
+                rows={2}
+                className="w-full mt-3 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-[13px] text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">{t('twa.acceptance.returnReasonHint')}</p>
+
               <div className="flex gap-2 mt-4">
                 <button
                   disabled={!ratings[req.request_number] || acceptMutation.isPending || returnMutation.isPending}
@@ -96,7 +120,11 @@ export default function AcceptancePage() {
                 </button>
                 <button
                   onClick={() => returnMutation.mutate(req.request_number)}
-                  disabled={acceptMutation.isPending || returnMutation.isPending}
+                  disabled={
+                    !(returnReasons[req.request_number] || '').trim()
+                    || acceptMutation.isPending
+                    || returnMutation.isPending
+                  }
                   className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-xl text-[13px] font-medium disabled:opacity-40"
                 >
                   {t('twa.acceptance.return')}

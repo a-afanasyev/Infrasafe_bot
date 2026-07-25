@@ -488,6 +488,29 @@ class TestResolveCommand:
             LegacyStatusIntent("c", REQUEST_STATUS_APPROVED, {"rating": 5}))
         assert cmd.action == Action.APPLICANT_ACCEPT
 
+    def test_returned_target_owner_maps_to_applicant_return(self):
+        """Возврат заявителем: «Исполнено» + target «Возвращена» → APPLICANT_RETURN.
+
+        Регрессия прод-бага: TWA-приёмка просила target «В работе» — ребро, снятое
+        у заявителя (это MANAGER_RETURN_TO_WORK), и падала с «no action maps
+        'Исполнено' -> 'В работе' for this actor».
+        """
+        # REQUEST_STATUS_COMPLETED — это канон «Исполнено» (менеджер подтвердил),
+        # а REQUEST_STATUS_EXECUTED — «Выполнена». Возврат заявителем идёт
+        # именно из «Исполнено».
+        cmd = resolve_command(
+            _snap(REQUEST_STATUS_COMPLETED), OWNER,
+            LegacyStatusIntent("c", STATUS_RETURNED,
+                               {"return_reason": "лифт снова встал"}))
+        assert cmd.action == Action.APPLICANT_RETURN
+
+    def test_in_progress_target_owner_has_no_action(self):
+        """Тот самый снятый переход: у заявителя нет ребра «Исполнено» → «В работе»."""
+        with pytest.raises(InvalidTransition):
+            resolve_command(
+                _snap(REQUEST_STATUS_COMPLETED), OWNER,
+                LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+
     def test_in_progress_target_from_new_is_assign(self):
         cmd = resolve_command(
             _snap(REQUEST_STATUS_NEW), MANAGER,

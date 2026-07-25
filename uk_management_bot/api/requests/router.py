@@ -481,6 +481,14 @@ def _build_workflow_payload(target_status: str, updates: dict) -> dict:
             p["executor_id"] = updates["executor_id"]
         if updates.get("return_reason") is not None:
             p["reason"] = updates["return_reason"]
+    elif target_status == C.REQUEST_STATUS_RETURNED:
+        # APPLICANT_RETURN — возврат заявителем на доработку. Имя поля НЕ
+        # переводится (в отличие от ветки «В работе» выше, где return_reason →
+        # reason для MANAGER_RETURN_TO_WORK): движок ждёт именно `return_reason`
+        # и он ОБЯЗАТЕЛЕН — без него PayloadInvalid. Ветки здесь не было вовсе,
+        # поэтому возврат из TWA-приёмки не доходил до движка.
+        if updates.get("return_reason") is not None:
+            p["return_reason"] = updates["return_reason"]
     elif target_status == C.REQUEST_STATUS_CANCELLED:
         # CANCEL — reason опционален.
         if updates.get("return_reason") is not None:

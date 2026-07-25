@@ -77,6 +77,20 @@ class TestBuildWorkflowPayload:
             C.REQUEST_STATUS_IN_PROGRESS, {"return_reason": "переделать"}
         ) == {"reason": "переделать"}
 
+    def test_returned_keeps_return_reason_name(self):
+        """APPLICANT_RETURN ждёт именно `return_reason` — в отличие от ветки
+        «В работе», где то же поле переводится в `reason` для
+        MANAGER_RETURN_TO_WORK. Ветки для «Возвращена» не было вовсе, из-за чего
+        возврат из TWA-приёмки не доходил до движка."""
+        assert _build_workflow_payload(
+            C.REQUEST_STATUS_RETURNED, {"return_reason": "лифт снова встал"}
+        ) == {"return_reason": "лифт снова встал"}
+
+    def test_returned_without_reason_gives_empty_payload(self):
+        """Пустой payload → движок сам отвергнет по PAYLOAD_SCHEMAS
+        (return_reason обязателен). Маппер молча ничего не подставляет."""
+        assert _build_workflow_payload(C.REQUEST_STATUS_RETURNED, {}) == {}
+
     def test_cancel_reason_optional(self):
         assert _build_workflow_payload(C.REQUEST_STATUS_CANCELLED, {}) == {}
         assert _build_workflow_payload(
