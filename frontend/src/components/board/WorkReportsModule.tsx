@@ -1,9 +1,10 @@
-import { useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { tCategory } from '../../i18n/apiMaps'
 import { usePublicWorkReports, publicWorkReportMediaUrl } from '../../hooks/usePublicWorkReports'
+import WorkReportPhoto from './WorkReportPhoto'
+import { formatCompletedOn } from './formatCompletedOn'
 import type { PublicWorkReport } from '../../types/workReports'
 
 // T10 — public resident-board widget: compact preview of recently-published
@@ -11,7 +12,10 @@ import type { PublicWorkReport } from '../../types/workReports'
 // ResidentBoardPage.tsx into its own file (that file is already 354 lines and
 // shouldn't grow further) — so cardStyle/headerStyle/titleStyle below are a
 // deliberate, small duplication of the literal values defined there (not
-// exported from that file, can't import them).
+// exported from that file, can't import them). WorkReportPhoto and
+// formatCompletedOn, by contrast, are shared with WorkReportsArchivePage.tsx
+// via WorkReportPhoto.tsx/formatCompletedOn.ts — see those files' header
+// comments for why.
 
 // Matches the backend's WorkReportsCfg.limit DEFAULT (6). Not wired to the
 // manager-configurable value here — that would require pulling in
@@ -22,50 +26,8 @@ const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid 
 const headerStyle: React.CSSProperties = { padding: '20px 28px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#f0ede6' }
 const titleStyle: React.CSSProperties = { fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.1rem' }
 
-// "YYYY-MM-DD" (date-only, per PublicWorkReport.completed_on) → "DD.MM.YYYY".
-// Deliberately NOT reusing ResidentBoardPage's formatPublished — that one
-// expects a full datetime ISO string with a time component.
-// Regex, not new Date(dateOnly) — Date parses "YYYY-MM-DD" as UTC midnight,
-// which renders as the previous day in timezones behind UTC.
-function formatCompletedOn(dateOnly: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly)
-  if (!m) return dateOnly
-  const [, y, mo, d] = m
-  return `${d}.${mo}.${y}`
-}
-
 const photoBoxStyle: React.CSSProperties = { aspectRatio: '4 / 3', borderRadius: 8, overflow: 'hidden', background: '#f0ede6' }
-
-interface WorkReportPhotoProps {
-  // undefined when the report is (defensively) missing a before/after media
-  // id — render the placeholder directly, never pass undefined into
-  // publicWorkReportMediaUrl.
-  src?: string
-  alt: string
-}
-
-function WorkReportPhoto({ src, alt }: WorkReportPhotoProps) {
-  const [failed, setFailed] = useState(false)
-  if (!src || failed) {
-    return (
-      <div style={{ ...photoBoxStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.72rem', fontWeight: 600, textAlign: 'center', padding: 4 }}>
-        {alt}
-      </div>
-    )
-  }
-  return (
-    <div style={photoBoxStyle}>
-      <img
-        src={src}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        onError={() => setFailed(true)}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-      />
-    </div>
-  )
-}
+const photoPlaceholderStyle: React.CSSProperties = { fontSize: '0.72rem', padding: 4 }
 
 function ReportCard({ report, t }: { report: PublicWorkReport; t: TFunction }) {
   const beforeId = report.before[0]
@@ -87,10 +49,14 @@ function ReportCard({ report, t }: { report: PublicWorkReport; t: TFunction }) {
         <WorkReportPhoto
           src={beforeId != null ? publicWorkReportMediaUrl(report.id, beforeId) : undefined}
           alt={t('board.workReports.before')}
+          boxStyle={photoBoxStyle}
+          placeholderStyle={photoPlaceholderStyle}
         />
         <WorkReportPhoto
           src={afterId != null ? publicWorkReportMediaUrl(report.id, afterId) : undefined}
           alt={t('board.workReports.after')}
+          boxStyle={photoBoxStyle}
+          placeholderStyle={photoPlaceholderStyle}
         />
       </div>
     </div>

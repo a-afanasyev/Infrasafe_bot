@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { tCategory } from '../i18n/apiMaps'
@@ -6,58 +5,25 @@ import { usePublicWorkReports, publicWorkReportMediaUrl } from '../hooks/usePubl
 import { usePageTitle } from '../hooks/usePageTitle'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import WorkReportPhoto from '../components/board/WorkReportPhoto'
+import { formatCompletedOn } from '../components/board/formatCompletedOn'
 import type { PublicWorkReport } from '../types/workReports'
 
 // T12 — public, unauthenticated full archive of all published before/after
 // work reports (unlike WorkReportsModule.tsx on the resident board, which
 // shows only a capped 6-item preview). This is a NEW, self-contained page:
-// cardStyle-ish literals and the photo sub-component below intentionally
-// duplicate WorkReportsModule.tsx's shape rather than importing from it — the
-// same accepted tradeoff already used between ResidentBoardPage.tsx and
-// WorkReportsModule.tsx (cardStyle/headerStyle/titleStyle duplicated there).
-
-// "YYYY-MM-DD" (date-only, per PublicWorkReport.completed_on) → "DD.MM.YYYY".
-// Regex, not new Date(dateOnly) — Date parses "YYYY-MM-DD" as UTC midnight,
-// which renders as the previous day in timezones behind UTC.
-function formatCompletedOn(dateOnly: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly)
-  if (!m) return dateOnly
-  const [, y, mo, d] = m
-  return `${d}.${mo}.${y}`
-}
+// the card-wrapper literals below intentionally duplicate
+// WorkReportsModule.tsx's shape rather than importing from it — the same
+// accepted tradeoff already used between ResidentBoardPage.tsx and
+// WorkReportsModule.tsx (cardStyle/headerStyle/titleStyle duplicated there;
+// inert CSS, no functional consequence if it drifts). WorkReportPhoto and
+// formatCompletedOn, by contrast, are shared via WorkReportPhoto.tsx/
+// formatCompletedOn.ts — that is duplicated BEHAVIOR (state, onError
+// fallback, date-parsing correctness), see those files' header comments for
+// why they moved out.
 
 const photoBoxStyle: React.CSSProperties = { aspectRatio: '4 / 3', borderRadius: 10, overflow: 'hidden', background: '#f0ede6' }
-
-interface WorkReportPhotoProps {
-  // undefined when the report is (defensively) missing a before/after media
-  // id — render the placeholder directly, never pass undefined into
-  // publicWorkReportMediaUrl.
-  src?: string
-  alt: string
-}
-
-function WorkReportPhoto({ src, alt }: WorkReportPhotoProps) {
-  const [failed, setFailed] = useState(false)
-  if (!src || failed) {
-    return (
-      <div style={{ ...photoBoxStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.75rem', fontWeight: 600, textAlign: 'center', padding: 6 }}>
-        {alt}
-      </div>
-    )
-  }
-  return (
-    <div style={photoBoxStyle}>
-      <img
-        src={src}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        onError={() => setFailed(true)}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-      />
-    </div>
-  )
-}
+const photoPlaceholderStyle: React.CSSProperties = { fontSize: '0.75rem', padding: 6 }
 
 function ArchiveCard({ report }: { report: PublicWorkReport }) {
   const { t } = useTranslation()
@@ -81,6 +47,8 @@ function ArchiveCard({ report }: { report: PublicWorkReport }) {
           <WorkReportPhoto
             src={beforeId != null ? publicWorkReportMediaUrl(report.id, beforeId) : undefined}
             alt={t('board.workReports.before')}
+            boxStyle={photoBoxStyle}
+            placeholderStyle={photoPlaceholderStyle}
           />
           <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>{t('board.workReports.before')}</div>
         </div>
@@ -88,6 +56,8 @@ function ArchiveCard({ report }: { report: PublicWorkReport }) {
           <WorkReportPhoto
             src={afterId != null ? publicWorkReportMediaUrl(report.id, afterId) : undefined}
             alt={t('board.workReports.after')}
+            boxStyle={photoBoxStyle}
+            placeholderStyle={photoPlaceholderStyle}
           />
           <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>{t('board.workReports.after')}</div>
         </div>
