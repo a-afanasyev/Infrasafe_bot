@@ -325,6 +325,38 @@ async def test_publish_allowed_without_before_media(db_session):
     assert client.acquire_calls == [2]
 
 
+@pytest.mark.parametrize("before,after,publishable", [
+    ([1], [2], True),    # обе стороны — классический «до/после»
+    ([], [2], True),     # только результат — «до» не сняли, витрина покажет «нет фото»
+    ([1], [], False),    # только «до» — работа не показана, публиковать нечего
+    ([], [], False),     # ни одного фото — карточка без единого доказательства
+])
+@pytest.mark.asyncio
+async def test_publish_requires_result_photo_matrix(db_session, before, after, publishable):
+    """Полная матрица правила (решение владельца): публикуем при «до+после» и
+    при «только после»; отказываем, если фото результата нет — включая случай,
+    когда нет ни одного снимка."""
+    number = f"260725-m{len(before)}{len(after)}"
+    db_session.add(_mk_request(number))
+    report = _mk_report(number, before_media_ids=before, after_media_ids=after)
+    db_session.add(report)
+    await db_session.commit()
+    await db_session.refresh(report)
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(i) for i in before],
+        "completion_photo": [_photo(i) for i in after],
+    })
+
+    if publishable:
+        result = await publish_report(db_session, client, report.id, MODERATOR_ID)
+        assert result.status == "published"
+    else:
+        with pytest.raises(WorkReportPublishError) as exc:
+            await publish_report(db_session, client, report.id, MODERATOR_ID)
+        assert exc.value.status_code == 422
+        assert "result media" in str(exc.value)
+
+
 @pytest.mark.asyncio
 async def test_publish_422_missing_after_media(db_session):
     db_session.add(_mk_request("260725-308"))
