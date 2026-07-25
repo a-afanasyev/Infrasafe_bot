@@ -244,11 +244,26 @@ async def get_public_work_report_media(
     # Real streaming, not buffering (departs from api/routes/media_proxy.py's
     # resp.content pattern) — public traffic to an image endpoint is exactly
     # the case where buffering full bodies in the API process is a
-    # memory/DoS concern. Use the lower-level send(..., stream=True) so the
-    # upstream status code can be inspected BEFORE committing to a
-    # StreamingResponse — a StreamingResponse can't be cleanly turned back
-    # into an HTTPException once bytes have started flowing.
+    # memory/DoS concern.
+    #
+    # This uses the manual build_request()/send(..., stream=True) shape
+    # rather than the more idiomatic `async with client.stream(...) as resp:`
+    # — NOT for the status-check ordering alone (client.stream()'s context
+    # manager also exposes .status_code before the body is read, so that on
+    # its own wouldn't rule it out). The real reason is response lifetime:
+    # the StreamingResponse body below is drained by Starlette AFTER this
+    # function returns, so the upstream response has to stay open past this
+    # function's scope. `async with client.stream(...)` would call
+    # __aexit__ — closing the connection — the moment this function
+    # returns, before Starlette ever drains a byte. The manual
+    # send(stream=True) + explicit aclose() (in _close()/the generator's
+    # finally) is the only shape whose lifetime actually matches.
     client = httpx.AsyncClient(timeout=60)
+
+    async def _close() -> None:
+        await upstream_response.aclose()
+        await client.aclose()
+
     try:
         upstream_request = client.build_request(
             "GET", f"{media_url}/api/v1/media/{media_id}/file", headers=headers
@@ -259,9 +274,11 @@ async def get_public_work_report_media(
         raise HTTPException(status_code=503, detail="Media service unavailable")
 
     if upstream_response.status_code != 200:
-        await upstream_response.aclose()
-        await client.aclose()
-        raise HTTPException(status_code=404, detail="Media not found")
+        await _close()
+        # Deliberately no detail — this fires only after the IDOR guard
+        # above already passed, so it's not a new information leak, but it
+        # keeps every 404 this endpoint can raise equally detail-less.
+        raise HTTPException(status_code=404)
 
     async def body() -> AsyncIterator[bytes]:
         sent = 0
@@ -278,7 +295,6 @@ async def get_public_work_report_media(
                     break
                 yield chunk
         finally:
-            await upstream_response.aclose()
-            await client.aclose()
+            await _close()
 
     return StreamingResponse(body(), media_type=content_type, headers=cache_headers)
