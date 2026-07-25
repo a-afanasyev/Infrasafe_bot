@@ -43,7 +43,8 @@ class ShiftScheduler:
             'cleanup_expired': {'success': 0, 'failed': 0, 'last_run': None},
             'notify_upcoming': {'success': 0, 'failed': 0, 'last_run': None},
             'auto_assign_requests': {'success': 0, 'failed': 0, 'last_run': None},
-            'sync_assignments': {'success': 0, 'failed': 0, 'last_run': None}
+            'sync_assignments': {'success': 0, 'failed': 0, 'last_run': None},
+            'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None}
         }
 
     @property
@@ -147,6 +148,21 @@ class ShiftScheduler:
                 IntervalTrigger(minutes=2),
                 id='auto_manager_tick',
                 name='Автоматический менеджер — назначение дежурных',
+                max_instances=1,
+                coalesce=True
+            )
+
+            # 11. Визуальные отчёты «до/после» — автопост/автопубликация/отзыв
+            #     (каждые 10 минут). Без этой задачи тумблер «Автопост» ничего
+            #     не автоматизировал: черновики создавались только когда
+            #     менеджер вручную жал «Синхронизировать» на своей странице, а
+            #     отзыв возвращённых заявок — только когда кто-то открывал
+            #     публичную витрину.
+            self.scheduler.add_job(
+                self._work_reports_tick,
+                IntervalTrigger(minutes=10),
+                id='work_reports_sync',
+                name='Отчёты о работах — автопост и автопубликация',
                 max_instances=1,
                 coalesce=True
             )
@@ -559,6 +575,92 @@ class ShiftScheduler:
             await self._auto_manager.run_once()
         except Exception as e:
             logger.error(f"Ошибка тика автоматического менеджера: {e}")
+
+    async def _work_reports_tick(self):
+        """Тик визуальных отчётов «до/после».
+
+        Делает то же, что `POST /api/v2/work-reports/sync`, но без человека:
+        наполняет очередь черновиками, публикует готовые (если включена
+        автопубликация) и снимает публикации с заявок, переставших
+        удовлетворять предикату. До появления этой задачи «Автопост» ничего не
+        автоматизировал — черновик создавался только по нажатию кнопки
+        менеджером, а отзыв срабатывал лишь на промахе кэша публичной ленты.
+
+        ⚠️ С включённым `autopublish` фотографии жителей уезжают в открытую
+        ленту без просмотра человеком. Анонимизируется только адрес (дом/двор
+        без квартиры); что попало в кадр — код не проверяет. Режим включён
+        владельцем осознанно (решение 2026-07-25).
+
+        Фазы изолированы друг от друга: сбой одной не должен отменять
+        остальные — они независимы, а media-service нужен только двум из них.
+        Здесь своя async-сессия: сервис-функции work_report_service асинхронные,
+        в отличие от остальных задач планировщика на `SessionLocal`.
+        """
+        from uk_management_bot.config.settings import settings
+        if not settings.WORK_REPORTS_ENABLED:
+            return
+
+        from uk_management_bot.database.session import AsyncSessionLocal
+        if AsyncSessionLocal is None:
+            # SQLite dev-режим — async-движка нет (см. database/session.py).
+            logger.debug("Отчёты о работах: async-сессия недоступна, тик пропущен")
+            return
+
+        from uk_management_bot.integrations import get_media_client
+        from uk_management_bot.services import work_report_service
+
+        task_name = 'work_reports_sync'
+        media_client = get_media_client()
+        summary: Dict[str, Any] = {}
+        failed = False
+
+        async with AsyncSessionLocal() as db:
+            try:
+                summary['sync'] = await work_report_service.sync_pending_drafts(db)
+            except Exception as e:
+                failed = True
+                logger.error(f"Отчёты о работах: синк черновиков не прошёл: {e}")
+                await db.rollback()
+
+            if media_client is not None:
+                try:
+                    summary['autopublish'] = await work_report_service.autopublish_ready_drafts(
+                        db, media_client, triggered_by=None
+                    )
+                except Exception as e:
+                    failed = True
+                    logger.error(f"Отчёты о работах: автопубликация не прошла: {e}")
+                    await db.rollback()
+
+            try:
+                summary['revoked'] = await work_report_service.revoke_stale_publications(db)
+            except Exception as e:
+                failed = True
+                logger.error(f"Отчёты о работах: отзыв устаревших публикаций не прошёл: {e}")
+                await db.rollback()
+
+            if media_client is not None:
+                try:
+                    summary['reconcile'] = await work_report_service.reconcile_publication_locks(
+                        db, media_client
+                    )
+                except Exception as e:
+                    # Сверка локов — фоновая гигиена, её сбой не должен
+                    # окрашивать тик в failed: полезная работа выше уже сделана.
+                    logger.warning(f"Отчёты о работах: сверка локов не прошла: {e}")
+                    await db.rollback()
+
+        created = (summary.get('sync') or {}).get('created', 0)
+        published = (summary.get('autopublish') or {}).get('published', 0)
+        revoked = summary.get('revoked', 0)
+        if created or published or revoked:
+            logger.info(
+                "Отчёты о работах: создано %s, опубликовано %s, снято %s",
+                created, published, revoked,
+            )
+
+        self.task_stats[task_name]['failed' if failed else 'success'] += 1
+        self.task_stats[task_name]['last_run'] = utc_now()
 
 
 # Глобальный экземпляр планировщика
