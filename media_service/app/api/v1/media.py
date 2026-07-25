@@ -10,8 +10,9 @@ from fastapi.responses import JSONResponse, StreamingResponse, Response
 from sqlalchemy.orm import Session
 import io
 
-from app.db.database import get_db
+from app.db.database import get_db, SessionLocal
 from app.services import MediaStorageService, MediaSearchService
+from app.services import preview_cache
 from app.schemas import (
     MediaUploadRequest, MediaSearchRequest, MediaUpdateTagsRequest,
     MediaArchiveRequest, MediaDateRangeRequest, MediaFileResponse,
@@ -360,6 +361,19 @@ async def list_publication_locks(
         raise HTTPException(status_code=500, detail="Ошибка получения списка публикационных блокировок")
 
 
+@router.get("/maintenance/preview-cache")
+async def preview_cache_stats():
+    """Состояние дискового кэша превью: сколько заявок лежит, сколько файлов,
+    какой объём, каковы лимиты. Нужно, чтобы после деплоя убедиться, что
+    вытеснение держит потолок (по умолчанию 100 заявок), а не растёт вечно.
+
+    ВАЖНО: зарегистрирован ДО bare-маршрута GET /{media_id} — иначе
+    `maintenance` распарсился бы как media_id (та же причина, что у
+    /publication-locks).
+    """
+    return preview_cache.stats()
+
+
 @router.post("/maintenance/resolve-stale-transitions")
 async def resolve_stale_transitions(
     older_than_minutes: int = Query(default=15, ge=1, le=1440),
@@ -383,61 +397,127 @@ async def resolve_stale_transitions(
         raise HTTPException(status_code=500, detail="Ошибка восстановления зависших переходов")
 
 
+def _load_servable_media(media_id: int) -> Optional[dict]:
+    """Прочитать метаданные файла КОРОТКОЙ сессией и сразу её закрыть.
+
+    Критично, что сессия не берётся через `Depends(get_db)`: FastAPI держал бы
+    её до конца ответа, то есть всё время скачивания из Telegram (~1 с). При
+    десятках одновременных запросов (публичная витрина на 30 карточках) пул
+    5+10 выедался целиком, запросы ждали 30 с и падали в 504 — вместе с
+    приватными фото заявок, которые ходят через этот же эндпоинт
+    (инцидент 2026-07-25).
+
+    None — файл не найден или отдавать его нельзя. Публично отдаются только
+    `active` и `archived` с publication_locked=true; deleted/archiving/deleting
+    и archived-без-лока — 404, чтобы не отдавать байты, которые уже уходят
+    из-под нас.
+    """
+    from app.models.media import MediaFile
+
+    with SessionLocal() as db:
+        row = db.query(MediaFile).filter(MediaFile.id == media_id).first()
+        if row is None:
+            return None
+        servable = row.status == "active" or (
+            row.status == "archived" and row.publication_locked
+        )
+        if not servable:
+            return None
+        return {
+            "id": row.id,
+            "telegram_file_id": row.telegram_file_id,
+            "mime_type": row.mime_type,
+            "original_filename": row.original_filename,
+            "request_number": row.request_number,
+        }
+
+
+def _image_response(data: bytes, meta: dict, fallback_type: str) -> Response:
+    # mime_type, записанный при загрузке, бывает неверным: мобильные пикеры
+    # присылают image/png для JPEG (и наоборот), а Telegram CDN отдаёт
+    # application/octet-stream независимо от содержимого. Определяем по
+    # магическим байтам — только этому типу браузер поверит в <img>.
+    effective_type = _sniff_image_mime(data) or (
+        meta["mime_type"]
+        if meta["mime_type"] and meta["mime_type"] != "application/octet-stream"
+        else fallback_type
+    )
+    safe_filename = (
+        (meta["original_filename"] or "file")
+        .replace('"', "").replace("\r", "").replace("\n", "")[:255]
+    )
+    return Response(
+        content=data,
+        media_type=effective_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{safe_filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/{media_id}/preview")
+async def get_media_preview(
+    media_id: int,
+    storage_service: MediaStorageService = Depends(get_storage_service),
+):
+    """Уменьшенное превью (JPEG, длинная сторона ≤ preview_max_px) с дисковым кэшем.
+
+    Ради этого маршрута существует весь preview_cache: витрина показывает, что
+    работы идут, и детали в ней не разглядывают — оригинал нужен только по
+    адресному клику (`/{media_id}/file`). Промах кэша стоит одного скачивания,
+    попадание — не трогает Telegram вообще.
+    """
+    meta = _load_servable_media(media_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+
+    cached = preview_cache.get(media_id, meta["request_number"])
+    if cached is not None:
+        return _image_response(cached, meta, "image/jpeg")
+
+    try:
+        original, content_type = await storage_service.telegram.download_file(
+            meta["telegram_file_id"]
+        )
+    except Exception as e:
+        logger.error(f"Failed to download media {media_id} for preview: {e}")
+        raise HTTPException(status_code=502, detail="Источник файла недоступен")
+
+    preview = preview_cache.make_preview(original)
+    if preview is None:
+        # Не изображение (видео, документ) либо битые данные — отдаём как есть,
+        # но в кэш не кладём: уменьшать нечего.
+        return _image_response(original, meta, content_type)
+
+    await preview_cache.put(media_id, meta["request_number"], preview)
+    return _image_response(preview, meta, "image/jpeg")
+
+
 @router.get("/{media_id}/file")
 async def get_media_file_stream(
     media_id: int,
     storage_service: MediaStorageService = Depends(get_storage_service),
-    db: Session = Depends(get_db)
 ):
     """
-    Stream media file bytes (token stays server-side)
+    Stream ORIGINAL media file bytes (token stays server-side).
+
+    Превью — отдельный маршрут `/{media_id}/preview`; сюда ходят только за
+    оригиналом (адресный клик по фото, скачивание).
     """
+    meta = _load_servable_media(media_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+
     try:
-        from app.models.media import MediaFile
-
-        media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
-        if not media_file:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
-
-        # Публичная отдача байтов разрешена только для active-файлов (обычный
-        # случай — фото заявок/карточек) и для archived-файлов, явно
-        # зарезервированных под публикацию (publication_locked=true). Всё
-        # остальное — deleted, archiving, deleting, archived-без-лока — 404,
-        # чтобы не отдавать байты, которые могли уже уйти/уходят из-под нас.
-        publicly_servable = media_file.status == "active" or (
-            media_file.status == "archived" and media_file.publication_locked
-        )
-        if not publicly_servable:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
-
         file_bytes, content_type = await storage_service.telegram.download_file(
-            media_file.telegram_file_id
+            meta["telegram_file_id"]
         )
-        # mime_type stored at upload time can be wrong: some mobile pickers
-        # report image/png for JPEGs (or vice-versa) and Telegram CDN
-        # returns application/octet-stream regardless. Sniff the magic
-        # bytes here — that's the authoritative content type and the only
-        # one the browser will agree to render in <img>/<video>.
-        effective_type = _sniff_image_mime(file_bytes) or (
-            media_file.mime_type
-            if media_file.mime_type and media_file.mime_type != "application/octet-stream"
-            else content_type
-        )
-        safe_filename = (media_file.original_filename or "file").replace('"', "").replace("\r", "").replace("\n", "")[:255]
-        return Response(
-            content=file_bytes,
-            media_type=effective_type,
-            headers={
-                "Content-Disposition": f'inline; filename="{safe_filename}"',
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
-
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Failed to stream media file {media_id}: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка получения файла")
+        raise HTTPException(status_code=502, detail="Источник файла недоступен")
+
+    return _image_response(file_bytes, meta, content_type)
 
 
 @router.get("/telegram/{telegram_file_id}", response_model=MediaTelegramLookupResponse)

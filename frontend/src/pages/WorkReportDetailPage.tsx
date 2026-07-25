@@ -1,7 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import { tCategory } from '../i18n/apiMaps'
-import { usePublicWorkReport, publicWorkReportMediaUrl } from '../hooks/usePublicWorkReports'
+import {
+  usePublicWorkReport,
+  publicWorkReportMediaUrl,
+  publicWorkReportOriginalUrl,
+} from '../hooks/usePublicWorkReports'
 import { usePageTitle } from '../hooks/usePageTitle'
 import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
@@ -49,13 +53,24 @@ function PhotoColumn({ ids, reportId, label }: { ids: number[]; reportId: number
           />
         ) : (
           ids.map((mediaId) => (
-            <WorkReportPhoto
+            // Показываем превью, а по клику открываем оригинал в новой вкладке.
+            // Оригинал — скачивание из Telegram на каждый промах кэша, поэтому
+            // он должен стоить осознанного действия, а не появляться в вёрстке.
+            <a
               key={mediaId}
-              src={publicWorkReportMediaUrl(reportId, mediaId)}
-              alt={label}
-              boxStyle={photoBoxStyle}
-              placeholderStyle={photoPlaceholderStyle}
-            />
+              href={publicWorkReportOriginalUrl(reportId, mediaId)}
+              target="_blank"
+              rel="noreferrer"
+              title={label}
+              style={{ display: 'block' }}
+            >
+              <WorkReportPhoto
+                src={publicWorkReportMediaUrl(reportId, mediaId)}
+                alt={label}
+                boxStyle={photoBoxStyle}
+                placeholderStyle={photoPlaceholderStyle}
+              />
+            </a>
           ))
         )}
       </div>

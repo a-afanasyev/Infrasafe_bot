@@ -22,6 +22,11 @@ COPY client/ ./client/
 COPY migrations/ ./migrations/
 COPY run_migrations.py .
 
+# Каталог кэша превью создаём В ОБРАЗЕ и с нужным владельцем: именованный том
+# монтируется сюда, а Docker берёт владельца с этого пути образа. Без него том
+# оказался бы root:root, и media_user не смог бы в него писать.
+RUN mkdir -p /app/.preview-cache
+
 # Изменение владельца файлов
 RUN chown -R media_user:media_user /app
 

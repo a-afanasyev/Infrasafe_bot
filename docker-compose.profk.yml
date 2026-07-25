@@ -342,6 +342,11 @@ services:
       # Сам media-код redis не использует; строка нужна только чтобы убрать пароль с диска.
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required — set it in Doppler (project uk-management)}@uk-redis:6379/1
       - ./media_service/channels.json:/app/data/channels.json:ro
+    volumes:
+      # Кэш превью публичной витрины. Томом, а не в слое контейнера: иначе
+      # каждый рестарт media-service сбрасывал бы кэш, и первая же загрузка
+      # заполненной витрины снова пошла бы 60 скачиваниями в Telegram.
+      - media_preview_cache:/app/.preview-cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -474,6 +479,8 @@ volumes:
   redis_data:
     driver: local
   media_uploads:
+    driver: local
+  media_preview_cache:
     driver: local
   # Переиспользуем существующий том (данные!). На profk .env:
   # RESOURCE_PG_VOLUME=resource-profk_resource_pg_data

@@ -56,6 +56,16 @@ export function usePublicWorkReport(reportId: number | undefined) {
 // Прямой URL байтов фото для <img src> — НИКОГДА не через axios/JSON и не
 // через blob: (CSP на этом деплое блокирует blob: на /uk/*, см. reference
 // про CSP-landmine).
+/** Превью (JPEG ≤480px, у media-service лежит в дисковом кэше). Именно им
+ *  рисуются и миниатюры на табло, и снимки на странице отчёта: витрина
+ *  показывает, что работы идут, детали в ней не разглядывают. */
 export function publicWorkReportMediaUrl(reportId: number, mediaId: number): string {
   return `${BASE_URL}${BASE}/${reportId}/media/${mediaId}`
+}
+
+/** Оригинал — только по адресному клику по конкретному фото. Каждый промах
+ *  кэша здесь стоит скачивания из Telegram, поэтому в вёрстку страниц такие
+ *  ссылки не подставляются, только в href. */
+export function publicWorkReportOriginalUrl(reportId: number, mediaId: number): string {
+  return `${BASE_URL}${BASE}/${reportId}/media/${mediaId}?original=1`
 }

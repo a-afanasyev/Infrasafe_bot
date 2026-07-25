@@ -254,9 +254,19 @@ async def get_public_work_report_media(
     request: Request,
     report_id: int,
     media_id: int,
+    original: bool = Query(
+        False,
+        description="Отдать оригинал вместо превью (адресный клик по фото)",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Stream a published work report's photo bytes. NO authentication.
+
+    По умолчанию отдаётся ПРЕВЬЮ (media-service держит их в дисковом кэше):
+    витрина показывает, что работы идут, и разглядывать детали в ней не нужно,
+    а оригиналы — это скачивание из Telegram на каждый промах, что при 30
+    карточках выедало пул соединений media-service (инцидент 2026-07-25).
+    Оригинал — только по `?original=1`, то есть по клику по конкретному фото.
 
     IDOR guard is the security-critical core of this endpoint. There's no
     "who is asking" here — the only question is "does this exact
@@ -282,8 +292,9 @@ async def get_public_work_report_media(
 
     # Media bytes are immutable once published — the id alone is a valid
     # cache key, no need to touch media-service at all on a conditional-GET
-    # hit.
-    etag = f'"wr-{media_id}"'
+    # hit. `original` is part of the key: preview and original are different
+    # bytes at the same id, and a shared ETag would serve one for the other.
+    etag = f'"wr-{media_id}-orig"' if original else f'"wr-{media_id}"'
     cache_headers = {"Cache-Control": "public, max-age=3600", "ETag": etag}
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=cache_headers)
@@ -298,6 +309,10 @@ async def get_public_work_report_media(
         if item.get("id") == media_id:
             content_type = item.get("mime", content_type)
             break
+    if not original:
+        # Превью media-service всегда пересобирает в JPEG, каким бы ни был
+        # оригинал — снапшотный mime здесь неверен по определению.
+        content_type = "image/jpeg"
 
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
     if not media_url:
@@ -328,8 +343,9 @@ async def get_public_work_report_media(
         await client.aclose()
 
     try:
+        upstream_path = "file" if original else "preview"
         upstream_request = client.build_request(
-            "GET", f"{media_url}/api/v1/media/{media_id}/file", headers=headers
+            "GET", f"{media_url}/api/v1/media/{media_id}/{upstream_path}", headers=headers
         )
         upstream_response = await client.send(upstream_request, stream=True)
     except httpx.TransportError:

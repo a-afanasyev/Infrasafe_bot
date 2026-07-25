@@ -80,6 +80,22 @@ class Settings(BaseSettings):
     enable_thumbnails: bool = True
     enable_compression: bool = False
 
+    # === PREVIEW CACHE / TELEGRAM CONCURRENCY ===
+    # Публичная витрина «до/после» запрашивает десятки изображений за одну
+    # загрузку страницы. Каждый промах кэша — это скачивание из Telegram
+    # (~1 с), поэтому: (а) отдаём превью, а не оригинал, (б) кладём превью на
+    # диск, (в) ограничиваем число одновременных скачиваний.
+    preview_cache_dir: str = "/app/.preview-cache"
+    # Лимит в ЗАЯВКАХ, а не в файлах: кэш разложен по каталогу на заявку, и
+    # вытесняется целая заявка (все её превью) — так лимит совпадает с тем, как
+    # на витрину смотрят: последние N выполненных работ.
+    preview_cache_max_requests: int = 100
+    preview_max_px: int = 480
+    preview_jpeg_quality: int = 72
+    # Больше 4 одновременных скачиваний Telegram всё равно не отдаёт быстрее, а
+    # очередь из них выедает пул соединений и воркеры.
+    telegram_download_concurrency: int = 4
+
     # === TESTING ===
     test_mode: bool = False  # Режим тестирования без Telegram
 
