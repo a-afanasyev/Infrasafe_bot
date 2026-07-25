@@ -9,7 +9,6 @@ import copy
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +20,8 @@ from uk_management_bot.database.models.work_report import WorkReport
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.services.work_report_service import sync_pending_drafts
 
-_UTC_NOW = lambda: datetime.now(timezone.utc)
+def _UTC_NOW() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 async def _seed_board_config(
