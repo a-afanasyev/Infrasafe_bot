@@ -14,9 +14,9 @@ jobs:
     name: lint (ruff, whole scope)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -42,9 +42,9 @@ jobs:
     # mypy — отдельная многонедельная работа (~3118 ошибок сегодня); эта джоба
     # даёт видимость, флипнуть в ratchet/blocking по мере падения счётчика.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -71,9 +71,9 @@ jobs:
     # blocking, не advisory-заглушка. Полный скан (Low/Medium — 63 находки,
     # типичный SAST-шум) — отдельный always-advisory шаг, НЕ blocking.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -124,11 +124,11 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -141,9 +141,9 @@ jobs:
     name: pip-audit (dependency CVE gate)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -208,9 +208,9 @@ jobs:
       ADMIN_PASSWORD: "ci-dummy-admin-pw-0123456"
       DEBUG: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -263,14 +263,16 @@ jobs:
       # и handlers/ гейтятся отдельными --omit/--include-порогами, чтобы ~28k
       # слабопокрытых строк хендлеров не размывали сигнал по ядру. Оба floor —
       # regression-guard чуть ниже измеренного; ПОДНИМАТЬ по мере роста, не опускать.
-      # Измерено 2026-07-22: core 69.3%, handlers 27.1% (см. AUD3-04 в бэклоге).
+      # Измерено 2026-07-25 (run 30164099318): core 70.7%, handlers 27.9% —
+      # floor'ы подняты 65 → 69 и 27.1 → 27.5 (предыдущий замер 2026-07-22:
+      # core 69.3%, handlers 27.1%; см. AUD3-04 в бэклоге).
       - name: Coverage floor (ratchet)
         run: |
           coverage report   # полный, информативный (теперь включает handlers/)
           # Core-код (без handlers) — исторический ratchet:
-          coverage report --omit="uk_management_bot/handlers/*" --fail-under=65
+          coverage report --omit="uk_management_bot/handlers/*" --fail-under=69
           # AUD3-04: handlers измеряются отдельным floor (ratchet: только вверх):
-          coverage report --include="uk_management_bot/handlers/*" --fail-under=27.1
+          coverage report --include="uk_management_bot/handlers/*" --fail-under=27.5
 
   access-control-tests:
     name: access-control-tests (postgres)
@@ -322,9 +324,9 @@ jobs:
       ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
       ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -390,9 +392,9 @@ jobs:
       ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
       ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -505,9 +507,9 @@ jobs:
       ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
       ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -895,12 +897,12 @@ jobs:
     name: images-build (docker)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build bot image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -910,7 +912,7 @@ jobs:
           cache-to: "type=gha,mode=max"
 
       - name: Build api image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.api
@@ -923,7 +925,7 @@ jobs:
       # чтобы поломка Dockerfile.access ловилась до деплоя. Отдельный cache-scope,
       # чтобы не тереть gha-кэш bot/api.
       - name: Build access image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.access
@@ -939,11 +941,11 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -957,7 +959,8 @@ jobs:
       # PRC-03 (audit #4): eslint теперь BLOCKING. Все 60 legacy-ошибок устранены
       # (no-explicit-any→unknown/типы, вынос не-компонентных экспортов, обоснованный
       # eslint-disable для намеренных react-hooks-паттернов); `npm run lint`
-      # (`eslint .`) падает только на errors (0 сейчас), 8 warnings терпимы.
+      # (`eslint .`) падает только на errors (0 сейчас), warnings терпимы
+      # (12 на 2026-07-25 — счётчик информативный, гейт на него не смотрит).
       - name: Lint (blocking)
         run: npm run lint
 

@@ -46,11 +46,15 @@ export default mergeConfig(
         // Phase 5 (pages): LoginPage (password + MFA flow) + RegisterPage (resident
         // self-reg phases). Floors sit a few points under the achieved global so a
         // regression trips them without day-to-day flake.
+        //
+        // 2026-07-25: floor'ы подтянуты к фактическому замеру (lines 41.55,
+        // statements 39.56, functions 30.72, branches 32.1) — отставали на
+        // ~15 пунктов и уже не ловили регрессию.
         thresholds: {
-          lines: 26,
-          statements: 24,
-          functions: 17,
-          branches: 19,
+          lines: 40,
+          statements: 38,
+          functions: 29,
+          branches: 30,
         },
       },
     },
