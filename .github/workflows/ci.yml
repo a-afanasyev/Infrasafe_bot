@@ -112,10 +112,15 @@ jobs:
     # if: always() — blocking npm-audit-шаг там пропустил бы ВСЕ остальные
     # проверки frontend job'ы для КАЖДОГО PR при будущей high/critical-находке
     # на транзитивную зависимость, даже для PR, не трогающих зависимости).
-    # Baseline (2026-07-15, Step 0): 0 уязвимостей на всех уровнях —
-    # --audit-level=high сразу blocking, единственный шаг (--audit-level меняет
-    # только exit-code threshold, не фильтрует вывод — второй "полный" прогон
-    # был бы тем же самым выводом второй раз).
+    # Baseline (2026-07-15, Step 0): 0 уязвимостей на всех уровнях.
+    # 2026-07-25: голый `npm audit --audit-level=high` заменён на allowlist-гейт
+    # frontend/scripts/audit-gate.mjs. Причина — advisory-волна на react-router:
+    # 4 из 5 закрылись бампом внутри ^7 (7.17.0 → 7.18.1), а последняя
+    # (GHSA-qwww-vcr4-c8h2, RSC-only) чинится только мажором v8 при физически
+    # недостижимом у нас код-пути (SPA без SSR/RSC). У `npm audit` своего
+    # --ignore нет — отсюда скрипт. Семантика прежняя (blocking на
+    # high/critical), плюс: исключения ЯВНЫЕ и обоснованные, а протухшая запись
+    # allowlist'а сама валит job (не копим мёртвые ignore'ы).
     defaults:
       run:
         working-directory: frontend
@@ -130,8 +135,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Audit frontend dependencies (blocking on high/critical)
-        run: npm audit --omit=dev --audit-level=high
+      - name: Audit frontend dependencies (blocking on high/critical, allowlist-aware)
+        run: npm run audit:ci
 
   pip-audit:
     name: pip-audit (dependency CVE gate)

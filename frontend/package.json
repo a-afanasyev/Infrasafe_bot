@@ -10,6 +10,7 @@
     "build:profk": "VITE_BRAND=profk npm run build",
     "lint": "eslint .",
     "guard:brand": "node scripts/check-brand-hardcodes.mjs",
+    "audit:ci": "node scripts/audit-gate.mjs",
     "preview": "vite preview",
     "preview:profk": "vite preview",
     "test": "vitest run",
