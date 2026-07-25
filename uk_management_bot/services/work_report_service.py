@@ -429,6 +429,21 @@ async def revoke_stale_publications(db: AsyncSession) -> int:
 # ===========================================================================
 
 
+async def _load_report_for_update(db: AsyncSession, report_id: int) -> WorkReport:
+    """Common prefix of every saga transition: lock the report row
+    (``FOR UPDATE``, serializes concurrent transitions on the SAME report)
+    and 404 if it doesn't exist. The status check and everything after it
+    genuinely differ per transition and stay in the caller."""
+    report = (
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    return report
+
+
 async def publish_report(
     db: AsyncSession, media_client: Any, report_id: int, moderator_id: int
 ) -> WorkReport:
@@ -462,13 +477,7 @@ async def publish_report(
     reflecting what's locked — that's what ``reconcile_publication_locks``
     is for.
     """
-    report = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
-        )
-    ).scalar_one_or_none()
-    if report is None:
-        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    report = await _load_report_for_update(db, report_id)
     if report.status != "pending":
         raise WorkReportPublishError(
             f"work report {report_id} is {report.status}, expected pending", 409
@@ -579,13 +588,7 @@ async def unpublish_report(
     yet), not "a public report exists whose photo bytes have no lock
     guarantee" (a real privacy/correctness problem).
     """
-    report = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
-        )
-    ).scalar_one_or_none()
-    if report is None:
-        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    report = await _load_report_for_update(db, report_id)
     if report.status not in ("published", "needs_review"):
         raise WorkReportPublishError(
             f"work report {report_id} is {report.status}, expected published or needs_review",
@@ -637,13 +640,7 @@ async def reject_report(
     so this is a plain status transition + audit log, no media-service
     interaction.
     """
-    report = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
-        )
-    ).scalar_one_or_none()
-    if report is None:
-        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    report = await _load_report_for_update(db, report_id)
     if report.status not in ("pending", "needs_media"):
         raise WorkReportPublishError(
             f"work report {report_id} is {report.status}, expected pending or needs_media",
@@ -664,13 +661,7 @@ async def reject_report(
 
 async def reopen_report(db: AsyncSession, report_id: int, moderator_id: int) -> WorkReport:
     """``rejected`` → ``pending``."""
-    report = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
-        )
-    ).scalar_one_or_none()
-    if report is None:
-        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    report = await _load_report_for_update(db, report_id)
     if report.status != "rejected":
         raise WorkReportPublishError(
             f"work report {report_id} is {report.status}, expected rejected", 409
@@ -718,6 +709,8 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
     now = datetime.now(timezone.utc)
     stale_before = now - timedelta(minutes=_RECONCILE_STALE_MINUTES)
 
+    # 1) Отчёты, застрявшие в `publishing` дольше _RECONCILE_STALE_MINUTES —
+    # снять их locks и вернуть в pending.
     stale_reports = (await db.execute(
         select(WorkReport).where(
             WorkReport.status == "publishing",
@@ -733,8 +726,18 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
         report.state_changed_at = now
         unstuck += 1
     if stale_reports:
+        # Один commit на весь батч — не по-репорту, в отличие от
+        # publish_report. Безопасно: release_publication_lock идемпотентен,
+        # так что крэш посреди батча означает лишь, что следующий прогон
+        # reconcile повторно отпустит уже отпущенные id как no-op. У
+        # publish_report'а per-lock commit важен по другой причине — там
+        # acquire НЕ идемпотентен в этом же смысле (лок либо взят, либо нет),
+        # и locked_media_ids обязан отражать реальность на случай крэша.
         await db.commit()
 
+    # 2) Инвентаризация media-service — источник истины "что реально
+    # залочено". Locked id, не встречающийся ни в одном published/publishing
+    # отчёте здесь — осиротевший lock, снять.
     inventory_ids: set[int] = set()
     offset = 0
     while True:
@@ -756,6 +759,8 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
     for media_id in orphaned:
         await media_client.release_publication_lock(media_id)
 
+    # 3) Обратное направление: media id из published/publishing отчёта,
+    # отсутствующий среди locked в media-service — взять заново (best-effort).
     missing = covered_ids - inventory_ids
     relocked = 0
     for media_id in missing:
