@@ -1048,3 +1048,56 @@ async def test_warm_recent_previews_noop_without_published(db_session):
     client = FakeMediaClient()
     assert await warm_recent_previews(db_session, client) == {}
     assert client.warm_calls == []
+
+
+@pytest.mark.asyncio
+async def test_warm_is_chunked_to_survive_client_timeout(db_session):
+    """Прогрев дробится на пачки.
+
+    Регрессия profk: 48 id одним запросом — это ~70 с скачиваний, а у клиента
+    media-service таймаут 30 с, и прогрев не срабатывал вовсе (в логах пустая
+    ошибка ReadTimeout).
+    """
+    from uk_management_bot.services.work_report_service import (
+        _WARM_CHUNK, warm_recent_previews,
+    )
+
+    now = datetime.now(timezone.utc)
+    for i in range(6):
+        r = _mk_report(f"260725-c{i:02d}", status="published",
+                       before_media_ids=[i * 2 + 1], after_media_ids=[i * 2 + 2])
+        r.published_at = now
+        db_session.add(r)
+    await db_session.commit()
+    client = FakeMediaClient()
+
+    result = await warm_recent_previews(db_session, client)
+
+    assert len(client.warm_calls) > 1, "12 id должны уйти несколькими пачками"
+    assert all(len(c) <= _WARM_CHUNK for c in client.warm_calls)
+    # Ни один id не потерян и не продублирован.
+    flat = [m for c in client.warm_calls for m in c]
+    assert sorted(flat) == list(range(1, 13))
+    assert result["warmed"] == 12
+
+
+@pytest.mark.asyncio
+async def test_failed_chunk_is_counted_not_hidden(db_session):
+    """Сбой пачки не должен выглядеть как успех: клиент глотает исключение и
+    возвращает пустой dict, поэтому пустой ответ считаем провалом всей пачки."""
+    from uk_management_bot.services.work_report_service import warm_recent_previews
+
+    r = _mk_report("260725-c99", status="published", before_media_ids=[1],
+                   after_media_ids=[2])
+    r.published_at = datetime.now(timezone.utc)
+    db_session.add(r)
+    await db_session.commit()
+
+    class WarmSilentlyFails(FakeMediaClient):
+        async def warm_previews(self, media_ids):
+            self.warm_calls.append(list(media_ids))
+            return {}
+
+    result = await warm_recent_previews(db_session, WarmSilentlyFails())
+
+    assert result == {"warmed": 0, "already_cached": 0, "failed": 2}
