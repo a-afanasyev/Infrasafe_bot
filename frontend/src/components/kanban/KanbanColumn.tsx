@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import RequestCard from './RequestCard'
 import type { KanbanColumn as TColumn } from '../../hooks/useKanban'
 import { isTransitionAllowed, FROZEN_STATUSES } from './transitions'
-import { tStatus } from '../../i18n/apiMaps'
+import { tStatus, type ApiStatus } from '../../i18n/apiMaps'
+import { STATUS_DOT } from './statusStyles'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -15,19 +16,7 @@ interface Props {
   overItemId: string | null
 }
 
-const STATUS_DOT: Record<string, string> = {
-  'Новая':     'bg-[#60a5fa]',
-  'В работе':  'bg-[#fbbf24]',
-  'Закуп':     'bg-[#a78bfa]',
-  'Уточнение': 'bg-[#22d3ee]',
-  'Выполнена': 'bg-[#34d399]',
-  'Исполнено': 'bg-accent',
-  'Возвращена': 'bg-[#fb923c]',
-  'Принято':   'bg-[#4ade80]',
-  'Отменена':  'bg-[#f87171]',
-}
-
-const STATUS_GLOW: Record<string, string> = {
+const STATUS_GLOW: Record<ApiStatus, string> = {
   'Новая':     'shadow-[inset_0_0_32px_rgba(96,165,250,0.1)]',
   'В работе':  'shadow-[inset_0_0_32px_rgba(251,191,36,0.1)]',
   'Закуп':     'shadow-[inset_0_0_32px_rgba(167,139,250,0.1)]',
@@ -39,7 +28,7 @@ const STATUS_GLOW: Record<string, string> = {
   'Отменена':  'shadow-[inset_0_0_32px_rgba(248,113,113,0.1)]',
 }
 
-const STATUS_BORDER_ACTIVE: Record<string, string> = {
+const STATUS_BORDER_ACTIVE: Record<ApiStatus, string> = {
   'Новая':     'border-[#60a5fa]/40',
   'В работе':  'border-[#fbbf24]/40',
   'Закуп':     'border-[#a78bfa]/40',
@@ -96,7 +85,10 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
   const { t } = useTranslation()
   const frozen = FROZEN_STATUSES.has(column.status)
   const { setNodeRef } = useDroppable({ id: column.status, disabled: frozen })
-  const dotClass = STATUS_DOT[column.status] ?? 'bg-text-muted'
+  // `column.status` — строка с бэкенда; карты полные по `ApiStatus`, но
+  // `?? fallback` оставлен: статус может приехать из будущей версии API.
+  const statusKey = column.status as ApiStatus
+  const dotClass = STATUS_DOT[statusKey] ?? 'bg-text-muted'
 
   const isDragging = activeDragStatus !== null
   const isValidTarget = isDragging && isTransitionAllowed(activeDragStatus, column.status)
@@ -118,8 +110,8 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
       'flex min-w-[240px] max-w-[260px] shrink-0 flex-col rounded-[14px] border transition-all duration-200',
       isHoveredValid
         ? cn(
-            STATUS_BORDER_ACTIVE[column.status] ?? 'border-accent/40',
-            STATUS_GLOW[column.status] ?? '',
+            STATUS_BORDER_ACTIVE[statusKey] ?? 'border-accent/40',
+            STATUS_GLOW[statusKey] ?? '',
             'bg-bg-surface scale-[1.01]',
           )
         : isValidTarget

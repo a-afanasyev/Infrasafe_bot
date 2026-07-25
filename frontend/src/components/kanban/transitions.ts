@@ -2,7 +2,10 @@
  * Канбан: правила переходов статусов заявок.
  * Вынесено из KanbanBoard.tsx, чтобы файл-компонент экспортировал только
  * компонент (react-refresh/only-export-components).
- * Must mirror backend _REQUEST_VALID_TRANSITIONS exactly.
+ * Зеркалит канон движка — `uk_management_bot/utils/request_workflow.py`
+ * (`ACTION_TABLE`/`allowed_actions`). Прежняя ссылка на
+ * `_REQUEST_VALID_TRANSITIONS` в `api/requests/router.py` протухла: матрица
+ * оттуда удалена при переходе на единый источник правды.
  */
 import type { KanbanColumn as TColumn } from '../../hooks/useKanban'
 import { FROZEN_STATUSES } from '../../constants'

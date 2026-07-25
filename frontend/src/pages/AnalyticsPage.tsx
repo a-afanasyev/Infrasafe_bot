@@ -18,7 +18,7 @@ import { useShiftStats, useRequestStats, type AnalyticsPeriod } from '../hooks/u
 import { usePageTitle } from '../hooks/usePageTitle'
 import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
 import { formatDateTime } from '../utils/timezone'
-import { tCategory, tStatus } from '../i18n/apiMaps'
+import { tCategory, tStatus, type ApiStatus } from '../i18n/apiMaps'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import EmptyState from '../components/shared/EmptyState'
 import { cn } from '@/lib/utils'
@@ -26,13 +26,17 @@ import { Button } from '@/components/ui/button'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
+// Ключ — канон `ApiStatus` (+ `rejected` для среза отказов): не-полная карта
+// красила бы сегмент в неопределённый цвет. «Возвращена» тут — оранжевый, а не
+// зелёный: в отчёте возврат не должен визуально сливаться с выполненным.
+const STATUS_COLORS: Record<ApiStatus | 'rejected', string> = {
   'Новая': 'var(--blue)',
   'Уточнение': 'var(--amber)',
   'В работе': 'var(--accent)',
   'Закуп': 'var(--cyan)',
   'Выполнена': 'var(--emerald)',
   'Исполнено': 'var(--emerald)',
+  'Возвращена': '#fb923c',
   'Принято': 'var(--emerald)',
   'Отменена': 'var(--text-muted)',
   rejected: 'var(--red)',
@@ -405,7 +409,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col gap-2.5">
               {byStatusEntries.map(([status, count]) => {
                 const pct = statusTotal > 0 ? Math.round((count / statusTotal) * 100) : 0
-                const color = STATUS_COLORS[status] ?? 'var(--text-muted)'
+                const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? 'var(--text-muted)'
                 return (
                   <div key={status}>
                     <div className="flex items-center gap-2 mb-1">
