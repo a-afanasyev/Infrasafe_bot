@@ -342,10 +342,15 @@ async def autofill_media(db: AsyncSession, media_client: Any, report: WorkReport
     report.after_media_ids = _filter_and_cap(after_raw)
     report.media_synced_at = datetime.now(timezone.utc)
 
-    both_sides_present = bool(report.before_media_ids) and bool(report.after_media_ids)
-    if not both_sides_present and report.status == "pending":
+    # Обязателен ТОЛЬКО результат (решение владельца 2026-07-25): «до» часто
+    # физически нет — житель снял уже текущее состояние, исполнитель приехал на
+    # аварию без времени фотографировать. Раньше такой отчёт застревал в
+    # needs_media и работа не попадала в ленту вовсе, хотя результат был.
+    # Отсутствующее «до» витрина честно показывает подписью «нет фото».
+    result_present = bool(report.after_media_ids)
+    if not result_present and report.status == "pending":
         report.status = "needs_media"
-    elif both_sides_present and report.status == "needs_media":
+    elif result_present and report.status == "needs_media":
         report.status = "pending"
 
     return report
@@ -534,9 +539,13 @@ async def publish_report(
             f"work report {report_id} has an invalid public address", 409
         )
 
-    if not report.before_media_ids or not report.after_media_ids:
+    # Фото РЕЗУЛЬТАТА обязательно, «до» — нет (решение владельца 2026-07-25).
+    # Отчёт без результата публиковать нечему: карточка «работы выполнены» без
+    # единого доказательства — это не отчёт. Отсутствующее «до» витрина
+    # показывает подписью «нет фото», и это честнее, чем скрывать работу целиком.
+    if not report.after_media_ids:
         raise WorkReportPublishError(
-            f"work report {report_id} is missing before/after media", 422
+            f"work report {report_id} is missing result media", 422
         )
 
     try:
@@ -793,7 +802,9 @@ async def autopublish_ready_drafts(
                 "autopublish: автозаполнение отчёта %s не удалось: %s", report.id, e
             )
             continue
-        if report.before_media_ids and report.after_media_ids:
+        # Тот же критерий готовности, что в publish_report: нужен результат,
+        # «до» опционально.
+        if report.after_media_ids:
             ready_ids.append(report.id)
         else:
             left += 1

@@ -98,11 +98,11 @@ describe('WorkReportsModule', () => {
     const beforeImg = images[0]
     fireEvent.error(beforeImg)
 
-    // Плейсхолдер рендерит alt-текст ("До") вместо битого <img>. Таких узлов
-    // теперь ДВА: подпись под парой миниатюр и сам плейсхолдер — поэтому
-    // getAllByText, а не getByText. Существенное здесь — что <img> стало на
-    // один меньше.
-    expect(screen.getAllByText('До')).toHaveLength(2)
+    // Плейсхолдер битой картинки говорит «Нет фото» — для жителя это честнее,
+    // чем подпись стороны на пустом месте. Подпись «До» под плиткой остаётся:
+    // видно, какая именно сторона не отобразилась.
+    expect(screen.getByText('Нет фото')).toBeInTheDocument()
+    expect(screen.getByText('До')).toBeInTheDocument()
     expect(screen.getAllByRole('img')).toHaveLength(1)
   })
 
@@ -192,3 +192,13 @@ describe('WorkReportsModule', () => {
     expect(screen.getByText('После')).toBeInTheDocument()
   })
 })
+
+  it('рисует «Нет фото» на месте отсутствующего снимка «до»', () => {
+    // Отчёт без «до» публикуется с 2026-07-25 — миниатюра обязана это показать,
+    // а не выглядеть как недогрузившаяся картинка.
+    mockQuery.data = { pages: [{ items: [makeReport({ before: [], after: [201] })], total: 1, limit: 24, offset: 0 }] }
+    render(<WorkReportsModule />)
+
+    expect(screen.getByText('Нет фото')).toBeInTheDocument()
+    expect(screen.getAllByRole('img')).toHaveLength(1)
+  })

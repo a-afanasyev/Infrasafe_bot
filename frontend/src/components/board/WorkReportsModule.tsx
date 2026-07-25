@@ -49,12 +49,14 @@ function ReportThumb({ report, t }: { report: PublicWorkReport; t: TFunction }) 
           alt={t('board.workReports.before')}
           boxStyle={photoBoxStyle}
           placeholderStyle={photoPlaceholderStyle}
+          emptyLabel={t('board.workReports.noPhoto')}
         />
         <WorkReportPhoto
           src={afterId != null ? publicWorkReportMediaUrl(report.id, afterId) : undefined}
           alt={t('board.workReports.after')}
           boxStyle={photoBoxStyle}
           placeholderStyle={photoPlaceholderStyle}
+          emptyLabel={t('board.workReports.noPhoto')}
         />
       </div>
       {/* Подписи «До/После» — как на странице архива: пара без подписей

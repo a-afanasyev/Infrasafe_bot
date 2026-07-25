@@ -54,6 +54,7 @@ function ArchiveCard({ report }: { report: PublicWorkReport }) {
             alt={t('board.workReports.before')}
             boxStyle={photoBoxStyle}
             placeholderStyle={photoPlaceholderStyle}
+            emptyLabel={t('board.workReports.noPhoto')}
           />
           <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>{t('board.workReports.before')}</div>
         </div>
@@ -63,6 +64,7 @@ function ArchiveCard({ report }: { report: PublicWorkReport }) {
             alt={t('board.workReports.after')}
             boxStyle={photoBoxStyle}
             placeholderStyle={photoPlaceholderStyle}
+            emptyLabel={t('board.workReports.noPhoto')}
           />
           <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>{t('board.workReports.after')}</div>
         </div>
