@@ -321,6 +321,80 @@ class TestArchiveAndDelete:
 
 
 # ---------------------------------------------------------------------------
+# Publication locks (T5)
+# ---------------------------------------------------------------------------
+
+class TestPublicationLocks:
+    @pytest.mark.asyncio
+    async def test_acquire_returns_true_on_success(self):
+        client = MediaServiceClient("http://localhost")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        client.client.post = AsyncMock(return_value=mock_response)
+
+        result = await client.acquire_publication_lock(5)
+
+        assert result is True
+        client.client.post.assert_awaited_once_with("/media/5/publication-lock")
+
+    @pytest.mark.asyncio
+    async def test_acquire_returns_false_on_exception(self):
+        client = MediaServiceClient("http://localhost")
+        client.client.post = AsyncMock(side_effect=Exception("network error"))
+
+        result = await client.acquire_publication_lock(5)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_release_returns_true_on_success(self):
+        client = MediaServiceClient("http://localhost")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        client.client.delete = AsyncMock(return_value=mock_response)
+
+        result = await client.release_publication_lock(5)
+
+        assert result is True
+        client.client.delete.assert_awaited_once_with("/media/5/publication-lock")
+
+    @pytest.mark.asyncio
+    async def test_release_returns_false_on_exception(self):
+        client = MediaServiceClient("http://localhost")
+        client.client.delete = AsyncMock(side_effect=Exception("network error"))
+
+        result = await client.release_publication_lock(5)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_list_returns_json_on_success(self):
+        client = MediaServiceClient("http://localhost")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"items": [], "total": 0}
+        client.client.get = AsyncMock(return_value=mock_response)
+
+        result = await client.list_publication_locks(limit=50, offset=10)
+
+        assert result == {"items": [], "total": 0}
+        client.client.get.assert_awaited_once_with(
+            "/media/publication-locks", params={"limit": 50, "offset": 10}
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_raises_on_exception(self):
+        """UNLIKE acquire/release, list_publication_locks propagates failures —
+        a future reconciliation process must not treat a fetch error as "no
+        locks held" and release everything it should have preserved."""
+        client = MediaServiceClient("http://localhost")
+        client.client.get = AsyncMock(side_effect=Exception("network error"))
+
+        with pytest.raises(Exception, match="network error"):
+            await client.list_publication_locks()
+
+
+# ---------------------------------------------------------------------------
 # Convenience functions
 # ---------------------------------------------------------------------------
 

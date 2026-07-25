@@ -28,6 +28,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_EXECUTED,
     REQUEST_STATUS_RETURNED,
@@ -136,4 +137,26 @@ def returned_for_review_clause() -> ColumnElement:
             Request.status == REQUEST_STATUS_COMPLETED,
             Request.is_returned.is_(True),
         ),
+    )
+
+
+def is_report_eligible(request) -> bool:
+    """Заявка подходит для визуального отчёта «до/после» (work_report_service):
+    прошла проверку менеджером (Исполнено) или уже принята заявителем
+    (Принято), и не возвращена.
+
+    "Выполнена" (самозаявление исполнителя, ДО проверки менеджером)
+    намеренно исключена — публичная витрина показывает только работы,
+    прошедшие ревью.
+    """
+    return (
+        request.status in (REQUEST_STATUS_COMPLETED, REQUEST_STATUS_APPROVED)
+        and not bool(getattr(request, "is_returned", False))
+    )
+
+
+def report_eligible_clause() -> ColumnElement:
+    return and_(
+        Request.status.in_((REQUEST_STATUS_COMPLETED, REQUEST_STATUS_APPROVED)),
+        Request.is_returned.is_(False),
     )
