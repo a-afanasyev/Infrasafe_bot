@@ -1882,6 +1882,60 @@
     "sourceTwa": "Mini App",
     "alreadyReplied": "Javob yuborilgan"
   },
+  "workReports": {
+    "title": "Ishlar hisobotlari",
+    "privacyWarning": "Manzilni anonimlashtirish fotosuratning o'zini anonimlashtirmaydi: unda hali ham eshik raqami, ism yozuvi, avtomobil raqami yoki inson yuzi ko'rinishi mumkin. Buni tekshirish moderatorning vazifasi — dastur buni tekshirmaydi.",
+    "sync": "Sinxronlash",
+    "settings": {
+      "heading": "Vitrina sozlamalari",
+      "toggleLabel": "Avto-nashr",
+      "autopostOn": "Avto-nashr yoqilgan",
+      "autopostOff": "Avto-nashr o'chirilgan",
+      "limitLabel": "Vitrinadagi hisobotlar limiti",
+      "titleLabel": "Blok sarlavhasi",
+      "save": "Saqlash"
+    },
+    "createDraft": {
+      "label": "Ariza raqami",
+      "placeholder": "Masalan, 260725-001",
+      "submit": "Yaratish"
+    },
+    "groups": {
+      "moderation": "Moderatsiyada",
+      "published": "Nashr etilgan",
+      "needsReview": "E'tibor talab qiladi",
+      "rejected": "Rad etilgan"
+    },
+    "status": {
+      "pending": "Kutilmoqda",
+      "needs_media": "Foto yo'q",
+      "publishing": "Nashr qilinmoqda",
+      "published": "Nashr etilgan",
+      "needs_review": "Qayta ko'rib chiqishda",
+      "rejected": "Rad etilgan"
+    },
+    "actions": {
+      "publish": "Nashr qilish",
+      "unpublish": "Nashrdan olish",
+      "reject": "Rad etish",
+      "reopen": "Ishga qaytarish",
+      "autofill": "Avto-to'ldirish"
+    },
+    "needsMediaExplanation": "Nashr qilish uchun \"oldin\" va \"keyin\" fotolar kerak",
+    "reasonPlaceholder": "Sabab",
+    "reasonDialogDesc": "Sabab hisobot moderatsiyasi tarixida saqlanadi.",
+    "confirmReopenDesc": "{{number}} arizasi moderatsiya navbatiga qaytadi.",
+    "toast": {
+      "synced": "Sinxronlash bajarildi",
+      "created": "Hisobot qoralamasi yaratildi",
+      "updated": "Hisobot yangilandi",
+      "published": "Hisobot nashr etildi",
+      "unpublished": "Hisobot nashrdan olindi",
+      "rejected": "Hisobot rad etildi",
+      "reopened": "Hisobot ishga qaytarildi",
+      "settingsUpdated": "Sozlamalar saqlandi"
+    }
+  },
   "materials": {
     "title": "Materiallar ombori",
     "subtitle": "Xaridlar, qoldiqlar va moddiy vositalar harakati",
