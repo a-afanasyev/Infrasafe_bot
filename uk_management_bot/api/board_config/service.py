@@ -7,15 +7,21 @@
 ⚠️ `CONFIG_ROW_ID` живёт здесь, а не в router.py: router.py импортит из этого
 модуля, поэтому обратный импорт создал бы цикл.
 """
+import copy
 import logging
+from datetime import datetime, timezone
 
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
-from uk_management_bot.api.board_config.schemas import BoardConfigData, WorkingHourCfg
+from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG, enabled_module_ids
+from uk_management_bot.api.board_config.schemas import (
+    BoardConfigResponse,
+    StoredBoardConfigData,
+    WorkingHourCfg,
+)
 from uk_management_bot.database.models.board_config import BoardConfig
 
 logger = logging.getLogger(__name__)
@@ -35,7 +41,7 @@ DAY_SHORT = {
 CLOSED_LABEL = {"ru": "Выходной", "uz": "Dam olish kuni"}
 
 
-async def load_board_config(db: AsyncSession) -> BoardConfigData:
+async def load_board_config(db: AsyncSession) -> StoredBoardConfigData:
     """Загрузить строку board_config (id=1) или отдать дефолт.
 
     Fallback на `DEFAULT_BOARD_CONFIG`, если строки ещё нет (миграция не
@@ -51,12 +57,102 @@ async def load_board_config(db: AsyncSession) -> BoardConfigData:
         logger.warning("board_config недоступен, отдаю дефолт: %s", e)
 
     try:
-        return BoardConfigData.model_validate(data)
+        return StoredBoardConfigData.model_validate(data)
     except ValidationError as e:
         # Битая/легаси-строка в БД (ручная правка, эволюция схемы без бэкфилла)
         # не должна ронять публичные эндпоинты 500 — падаем в дефолт.
         logger.warning("board_config.data не проходит схему, отдаю дефолт: %s", e)
-        return BoardConfigData.model_validate(DEFAULT_BOARD_CONFIG)
+        return StoredBoardConfigData.model_validate(DEFAULT_BOARD_CONFIG)
+
+
+async def merge_and_save_board_config(
+    db: AsyncSession,
+    updates: dict,
+    updated_by: int,
+) -> StoredBoardConfigData:
+    """Смёржить `updates` в сохранённый board_config и сохранить результат.
+
+    Единая точка записи — сюда идёт и PUT редактора витрины, и (в будущей
+    задаче) PUT настроек work-reports. `updates` — плоский dict, содержащий
+    ТОЛЬКО те top-level ключи, которые вызывающий явно хочет перезаписать
+    (см. router.py: `payload.model_dump(include=payload.model_fields_set)`).
+
+    `layout` — единственное поле с union-мёржем, а не overwrite: это и есть
+    фикс бага «старый клиент PUT'ом стирает модуль, включённый менеджером
+    позже» — берём порядок из входящего списка (drag-and-drop клиента), затем
+    дописываем те id из сохранённого layout, которых нет во входящем — не
+    только "workreports", а любой id, отсутствующий в теле запроса.
+
+    `work_reports.autopost_since` — серверное поле, клиентское значение
+    игнорируется всегда: стамп на переходе False→True, сохранённое значение
+    при True→True, None при *→False.
+    """
+    result = await db.execute(
+        select(BoardConfig).where(BoardConfig.id == CONFIG_ROW_ID).with_for_update()
+    )
+    row = result.scalar_one_or_none()
+    if row is not None and row.data:
+        stored: dict = copy.deepcopy(row.data)
+    else:
+        stored = copy.deepcopy(DEFAULT_BOARD_CONFIG)
+
+    # Deep copy (not a shallow `dict(stored)`): fields not touched by `updates`
+    # (e.g. work_reports on a body that omits it) must not alias `stored`'s
+    # nested dicts — the autopost_since stamping below mutates in place.
+    merged = copy.deepcopy(stored)
+    for key, value in updates.items():
+        if key == "layout":
+            continue
+        merged[key] = value
+
+    if "layout" in updates:
+        incoming = updates["layout"] or []
+        incoming_ids = {item["id"] for item in incoming}
+        carried_over = [item for item in stored.get("layout", []) if item["id"] not in incoming_ids]
+        merged["layout"] = list(incoming) + carried_over
+
+    if "work_reports" in merged:
+        before_autopost = bool(stored.get("work_reports", {}).get("autopost"))
+        after_autopost = bool(merged["work_reports"].get("autopost"))
+        if not before_autopost and after_autopost:
+            merged["work_reports"]["autopost_since"] = datetime.now(timezone.utc).isoformat()
+        elif after_autopost:
+            merged["work_reports"]["autopost_since"] = stored.get("work_reports", {}).get(
+                "autopost_since"
+            )
+        else:
+            merged["work_reports"]["autopost_since"] = None
+
+    normalized = StoredBoardConfigData.model_validate(merged)
+
+    if row is None:
+        db.add(
+            BoardConfig(
+                id=CONFIG_ROW_ID,
+                data=normalized.model_dump(mode="json"),
+                updated_by=updated_by,
+            )
+        )
+    else:
+        row.data = normalized.model_dump(mode="json")
+        row.updated_by = updated_by
+    await db.commit()
+
+    return normalized
+
+
+def to_public_response(cfg: StoredBoardConfigData) -> BoardConfigResponse:
+    """Гейт по фиче-флагу на границе ответа: вырезать невключённые модули из layout.
+
+    Возвращает НЕ-нормализующую модель (`BoardConfigResponse`), поэтому вырезанный
+    "workreports" остаётся вырезанным и после повторной валидации через
+    `response_model` — в отличие от StoredBoardConfigData, которая бы тут же
+    зафиллила его обратно.
+    """
+    enabled = set(enabled_module_ids())
+    data = cfg.model_dump(mode="json")
+    data["layout"] = [item for item in data["layout"] if item["id"] in enabled]
+    return BoardConfigResponse.model_validate(data)
 
 
 def _day_display(hour: WorkingHourCfg, lang: str) -> str:
