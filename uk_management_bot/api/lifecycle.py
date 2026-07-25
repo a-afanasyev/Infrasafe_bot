@@ -19,6 +19,24 @@ _logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Логирование — ПЕРВЫМ делом, иначе всё, что пишет остальной startup, уходит
+    # в никуда. `setup_structured_logging()` конфигурирует root-логгер, но звался
+    # только из main.py бота; API запускается через `uvicorn api.main:app` и его
+    # не вызывал. Uvicorn настраивает лишь свои логгеры, поэтому прикладной
+    # logger.info() не имел ни одного handler'а и пропадал (WARNING+ вытекал
+    # случайно, через logging.lastResort). Заметили, когда в api-логах не
+    # оказалось ни одной строки о регистрации бота уведомлений.
+    #
+    # Побочная польза: в проде формат тот же JSON, что у бота, и включается
+    # SecurityFilter — редакция секретов в сообщениях (уведомления логируют
+    # пользовательские данные при сбое отправки).
+    try:
+        from uk_management_bot.utils.structured_logger import setup_structured_logging
+        setup_structured_logging()
+    except Exception:
+        # Логирование не должно быть причиной отказа старта API.
+        logging.getLogger(__name__).exception("structured logging setup failed")
+
     # startup — launch outbox processor if enabled
     from uk_management_bot.services.webhook_sender import process_outbox
 
