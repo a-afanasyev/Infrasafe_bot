@@ -531,6 +531,10 @@ class MediaServiceClient:
             logger.error(f"Failed to resolve stale media transitions: {e}")
             return {}
 
+    # Прогрев — фоновая операция, ей нужен свой лимит: общие 30 с не покрывают
+    # пачку холодных файлов (каждый = get_file + скачивание из Telegram).
+    _WARM_TIMEOUT_SECONDS = 120
+
     async def warm_previews(self, media_ids: List[int]) -> Dict[str, Any]:
         """Заранее построить превью для перечисленных медиа (POST /media/previews/warm).
 
@@ -548,7 +552,14 @@ class MediaServiceClient:
             return {}
         try:
             response = await self.client.post(
-                "/media/previews/warm", json={"media_ids": list(media_ids)}
+                "/media/previews/warm",
+                json={"media_ids": list(media_ids)},
+                # Свой таймаут вместо общих 30 с: прогрев одного файла — это
+                # два обращения к Telegram (get_file + скачивание), 2–4 с, и
+                # пачка из 8 холодных упиралась в общий лимит (поймано на
+                # profk: пустая ReadTimeout-ошибка, прогрев не срабатывал).
+                # Это фоновая операция, ждать её дольше не мешает никому.
+                timeout=self._WARM_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
 
