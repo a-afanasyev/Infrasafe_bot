@@ -1,12 +1,21 @@
 """Сервис визуальных отчётов «до/после» (публичная витрина резидентов).
 
-Функциональный модуль (не класс) — как `material_service.py`. Эта задача
-строит 4 из ~9 итоговых функций модуля: чистый резолвер публичного адреса,
-автосинхронизацию черновиков из завершённых заявок, автозаполнение/валидацию
-медиа и снятие публикации с заявок, переставших быть eligible. Сага публикации
-(``publish_report``/``unpublish_report``/``reject_report``/``reopen_report``/
-``reconcile_publication_locks``) — отдельная задача, дописывается в этот же
-файл.
+Функциональный модуль (не класс) — как `material_service.py`. ~9 функций:
+
+* ``derive_public_address`` — чистый резолвер публичного адреса;
+* ``sync_pending_drafts`` — автосинхронизация черновиков из завершённых заявок;
+* ``autofill_media`` / ``validate_media_ids`` — автозаполнение и ручная
+  валидация медиа;
+* ``revoke_stale_publications`` — снятие публикации с заявок, переставших
+  быть eligible;
+* ``publish_report`` / ``unpublish_report`` / ``reject_report`` /
+  ``reopen_report`` / ``reconcile_publication_locks`` — сага публикации,
+  координирующая состояние между БД бота (`work_reports`) и отдельной БД
+  media-service (`media_files`) БЕЗ two-phase commit. Именно эта пятёрка
+  несёт основной риск модуля: баг здесь может либо опубликовать контент, не
+  прошедший модерацию, либо навсегда «подвесить» медиа в залоченном
+  состоянии. Порядок операций внутри каждой функции — часть контракта, не
+  стилистика; см. docstring каждой функции.
 
 Инварианты (см. также database/models/work_report.py):
 
@@ -19,9 +28,14 @@
   подбор кандидатов, не выбор человека. Ручная валидация (`validate_media_ids`)
   на тех же условиях — REJECTS, потому что выбор сделал человек и тихий
   дроп был бы неверной реакцией на его ошибку.
+* Сага публикации не использует two-phase commit между двумя БД: вместо
+  этого — строго упорядоченные шаги с компенсацией (publish_report) и
+  идемпотентная фоновая сверка (reconcile_publication_locks) как
+  self-healing на случай крэша посреди саги.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -42,7 +56,10 @@ from uk_management_bot.services.request_address import (
     format_building_address,
     format_yard_address,
 )
-from uk_management_bot.utils.workflow_predicates import report_eligible_clause
+from uk_management_bot.utils.workflow_predicates import (
+    is_report_eligible,
+    report_eligible_clause,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +81,29 @@ class MediaValidationError(WorkReportServiceError):
     проверка перед публикацией) и тихий дроп был бы неверной реакцией на его
     ошибку. Контраст с `autofill_media` ниже, который молча фильтрует
     автоматически найденных кандидатов."""
+
+
+class WorkReportPublishError(WorkReportServiceError):
+    """Raised by the publication saga (publish/unpublish/reject/reopen) when
+    the requested transition can't happen right now. `status_code` carries the
+    HTTP semantics a router should use directly — mirrors
+    `request_address.AddressResolutionError`'s shape (message + status_code),
+    an established pattern in this codebase for service errors a router just
+    re-raises as HTTPException.
+
+    404 — the report doesn't exist.
+    409 — wrong current status for this transition, OR the underlying request
+    stopped being eligible (deleted/status changed/returned) — a conflict with
+    current server state, not a defect in the request body.
+    422 — the report is missing before/after media, or a media id fails
+    re-validation — a defect in what's being published, reachable via manual
+    API calls that bypass autofill's own needs_media gating.
+    """
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
 
 
 # ===========================================================================
@@ -110,6 +150,19 @@ def derive_public_address(request: Request) -> Optional[str]:
     if request.address_type == "yard" and request.yard_obj is not None:
         return format_yard_address(request.yard_obj)
     return None
+
+
+_APARTMENT_MARKER_PATTERN = re.compile(r"кв\.?\s*\d", re.IGNORECASE)
+
+
+def address_looks_like_apartment(address: str) -> bool:
+    """Fail-closed heuristic: True if the string contains an apartment-number
+    marker (e.g. "кв. 42", "кв42", "Кв. 7"). This is a REJECT guard, not a
+    cleaner — legacy free-text address data spans years of manual entry and a
+    regex "fix-up" risks a false negative that publishes an apartment number
+    irreversibly; false positives (rejecting something safe) are the
+    acceptable failure mode here, not false negatives."""
+    return bool(_APARTMENT_MARKER_PATTERN.search(address))
 
 
 # ===========================================================================
@@ -368,3 +421,356 @@ async def revoke_stale_publications(db: AsyncSession) -> int:
         ))
     await db.commit()
     return len(rows)
+
+
+# ===========================================================================
+# Publication saga: publish_report / unpublish_report / reject_report /
+# reopen_report / reconcile_publication_locks
+# ===========================================================================
+
+
+async def publish_report(
+    db: AsyncSession, media_client: Any, report_id: int, moderator_id: int
+) -> WorkReport:
+    """``pending`` → ``publishing`` (transient) → ``published``.
+
+    Ordering is load-bearing — do not reorder steps:
+
+    1. Lock the report row (``FOR UPDATE``) — serializes concurrent publish
+       attempts on the SAME report.
+    2. Re-check the underlying request still exists and is eligible — the
+       last gate before content goes public.
+    3. Re-check the public address is still safe (defense in depth — should
+       already hold from creation time).
+    4. Require both media sides be non-empty.
+    5. Re-validate every media id against CURRENT media-service metadata.
+    6. Flip to ``publishing`` and commit — NOT publicly visible yet (a public
+       feed filters strictly on ``status == "published"``), but this makes
+       the report ineligible for a second concurrent publish attempt once
+       this transaction's lock is released.
+    7. Acquire a publication lock per media id, SEQUENTIALLY, committing
+       ``locked_media_ids`` after EVERY successful acquire so the on-disk
+       state always matches what's actually locked in media-service even if
+       the process crashes mid-loop. On the first failure, compensate: release
+       every lock acquired in THIS attempt, revert to ``pending``, raise 409.
+    8. Snapshot media metadata for the now-locked ids.
+    9. Flip to ``published``, stamp moderation fields, write an audit log,
+       commit.
+
+    A crash between steps 6 and 9 leaves the report stuck in ``publishing``
+    (correctly invisible publicly) with ``locked_media_ids`` accurately
+    reflecting what's locked — that's what ``reconcile_publication_locks``
+    is for.
+    """
+    report = (
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    if report.status != "pending":
+        raise WorkReportPublishError(
+            f"work report {report_id} is {report.status}, expected pending", 409
+        )
+
+    request = (
+        await db.execute(
+            select(Request).where(Request.request_number == report.request_number)
+        )
+    ).scalar_one_or_none()
+    if request is None or not is_report_eligible(request):
+        raise WorkReportPublishError(
+            f"request {report.request_number} no longer eligible", 409
+        )
+
+    if not report.address_public or address_looks_like_apartment(report.address_public):
+        raise WorkReportPublishError(
+            f"work report {report_id} has an invalid public address", 409
+        )
+
+    if not report.before_media_ids or not report.after_media_ids:
+        raise WorkReportPublishError(
+            f"work report {report_id} is missing before/after media", 422
+        )
+
+    try:
+        await validate_media_ids(
+            media_client, report.request_number, report.before_media_ids, report.after_media_ids
+        )
+    except MediaValidationError as e:
+        raise WorkReportPublishError(str(e), 422) from e
+
+    report.status = "publishing"
+    report.state_changed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    all_media_ids = list(report.before_media_ids) + list(report.after_media_ids)
+    acquired: list[int] = []
+    for media_id in all_media_ids:
+        ok = await media_client.acquire_publication_lock(media_id)
+        if not ok:
+            for locked_id in acquired:
+                await media_client.release_publication_lock(locked_id)
+            report.locked_media_ids = []
+            report.status = "pending"
+            report.state_changed_at = datetime.now(timezone.utc)
+            await db.commit()
+            raise WorkReportPublishError(
+                f"could not acquire publication lock for media {media_id}", 409
+            )
+        acquired.append(media_id)
+        report.locked_media_ids = list(acquired)
+        await db.commit()
+
+    before_meta = {
+        item["id"]: item
+        for item in await media_client.get_request_media(
+            report.request_number, category="request_photo", limit=_VALIDATE_FETCH_LIMIT
+        )
+    }
+    after_meta = {
+        item["id"]: item
+        for item in await media_client.get_request_media(
+            report.request_number, category="completion_photo", limit=_VALIDATE_FETCH_LIMIT
+        )
+    }
+    combined_meta = {**before_meta, **after_meta}
+    media_meta = [
+        {
+            "id": media_id,
+            "file_type": "photo",
+            "mime": combined_meta[media_id]["mime_type"],
+            "size": combined_meta[media_id]["file_size"],
+        }
+        for media_id in acquired
+    ]
+
+    report.media_meta = media_meta
+    report.status = "published"
+    report.published_at = datetime.now(timezone.utc)
+    report.moderated_by = moderator_id
+    db.add(AuditLog(
+        user_id=moderator_id,
+        action="work_report.publish",
+        details={
+            "report_id": report.id,
+            "request_number": report.request_number,
+            "before_ids": report.before_media_ids,
+            "after_ids": report.after_media_ids,
+        },
+    ))
+    await db.commit()
+    return report
+
+
+async def unpublish_report(
+    db: AsyncSession,
+    media_client: Any,
+    report_id: int,
+    moderator_id: int,
+    reason: Optional[str] = None,
+) -> WorkReport:
+    """``published``/``needs_review`` → ``rejected``.
+
+    Order matters for safety: hide in the UK database FIRST (commit), THEN
+    release media locks — never the other way around. The failure-safe
+    direction is "an extra lock lingers" (annoying, file can't be archived
+    yet), not "a public report exists whose photo bytes have no lock
+    guarantee" (a real privacy/correctness problem).
+    """
+    report = (
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    if report.status not in ("published", "needs_review"):
+        raise WorkReportPublishError(
+            f"work report {report_id} is {report.status}, expected published or needs_review",
+            409,
+        )
+
+    media_ids_to_release = list(report.locked_media_ids)
+    report.status = "rejected"
+    report.reject_reason = reason or report.reject_reason
+    report.moderated_by = moderator_id
+    report.state_changed_at = datetime.now(timezone.utc)
+    report.locked_media_ids = []
+    db.add(AuditLog(
+        user_id=moderator_id,
+        action="work_report.unpublish",
+        details={"report_id": report.id, "request_number": report.request_number, "reason": reason},
+    ))
+    await db.commit()  # DB-side hidden FIRST — see docstring on why this ordering is load-bearing
+
+    # A media id shared with another still-live (published/publishing) report
+    # must stay locked. Small expected scale (concurrently live publications,
+    # not raw media rows) — plain Python set membership over loaded rows
+    # avoids fragile dialect-specific JSON-array-containment SQL (Postgres
+    # JSONB @>/? vs SQLite json_each are not the same code).
+    other_locked: set[int] = set()
+    other_rows = (await db.execute(
+        select(WorkReport.locked_media_ids).where(
+            WorkReport.id != report.id,
+            WorkReport.status.in_(("published", "publishing")),
+        )
+    )).all()
+    for (ids,) in other_rows:
+        other_locked.update(ids or [])
+
+    for media_id in media_ids_to_release:
+        if media_id in other_locked:
+            continue
+        await media_client.release_publication_lock(media_id)
+
+    return report
+
+
+async def reject_report(
+    db: AsyncSession, report_id: int, moderator_id: int, reason: str
+) -> WorkReport:
+    """``pending``/``needs_media`` → ``rejected``.
+
+    No media locks exist yet at this stage (the report was never published),
+    so this is a plain status transition + audit log, no media-service
+    interaction.
+    """
+    report = (
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    if report.status not in ("pending", "needs_media"):
+        raise WorkReportPublishError(
+            f"work report {report_id} is {report.status}, expected pending or needs_media",
+            409,
+        )
+    report.status = "rejected"
+    report.reject_reason = reason
+    report.moderated_by = moderator_id
+    report.state_changed_at = datetime.now(timezone.utc)
+    db.add(AuditLog(
+        user_id=moderator_id,
+        action="work_report.reject",
+        details={"report_id": report.id, "request_number": report.request_number, "reason": reason},
+    ))
+    await db.commit()
+    return report
+
+
+async def reopen_report(db: AsyncSession, report_id: int, moderator_id: int) -> WorkReport:
+    """``rejected`` → ``pending``."""
+    report = (
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise WorkReportPublishError(f"work report {report_id} not found", 404)
+    if report.status != "rejected":
+        raise WorkReportPublishError(
+            f"work report {report_id} is {report.status}, expected rejected", 409
+        )
+    report.status = "pending"
+    report.reject_reason = None
+    report.state_changed_at = datetime.now(timezone.utc)
+    db.add(AuditLog(
+        user_id=moderator_id,
+        action="work_report.reopen",
+        details={"report_id": report.id, "request_number": report.request_number},
+    ))
+    await db.commit()
+    return report
+
+
+_RECONCILE_STALE_MINUTES = 15
+
+
+async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> dict:
+    """Три направления самолечения:
+
+    1. Отчёт застрял в `publishing` дольше 15 минут (крэш между шагом 6 и
+       шагом 9 publish_report) → снять все его locked_media_ids, вернуть
+       `pending`.
+    2. Locked id в инвентаризации media-service, не встречающийся ни в одном
+       `published`/`publishing` отчёте здесь — осиротевший lock (крэш между
+       успешным acquire в media-service и записью id в `locked_media_ids`,
+       см. шаг 7 publish_report) → снять.
+    3. Media id из `published`/`publishing` отчёта, отсутствующий среди
+       locked в media-service — самолечение после отдельного сбоя
+       media-service → взять заново; неудача повторного acquire — best-effort
+       (лог warning, не бросает исключение и не прерывает остальную сверку —
+       это фоновая maintenance-функция, а не пользовательский запрос).
+
+    НЕ реализовано здесь (задокументированный, а не забытый пробел):
+    восстановление зависших `archiving`/`deleting` статусов в media-service
+    (упомянуто в общем плане проекта) требует новой возможности со стороны
+    media-service — `GET /publication-locks` видит только
+    `publication_locked=true` строки, а `archiving`/`deleting` — отдельное,
+    не обязательно залоченное транзиентное состояние. Добавление такой
+    возможности — вне границ файлов этой задачи (это T4's/media_service's
+    домен); зафиксировать как follow-up, а не молча пропустить.
+    """
+    now = datetime.now(timezone.utc)
+    stale_before = now - timedelta(minutes=_RECONCILE_STALE_MINUTES)
+
+    stale_reports = (await db.execute(
+        select(WorkReport).where(
+            WorkReport.status == "publishing",
+            WorkReport.state_changed_at < stale_before,
+        ).with_for_update()
+    )).scalars().all()
+    unstuck = 0
+    for report in stale_reports:
+        for media_id in report.locked_media_ids:
+            await media_client.release_publication_lock(media_id)
+        report.locked_media_ids = []
+        report.status = "pending"
+        report.state_changed_at = now
+        unstuck += 1
+    if stale_reports:
+        await db.commit()
+
+    inventory_ids: set[int] = set()
+    offset = 0
+    while True:
+        page = await media_client.list_publication_locks(limit=200, offset=offset)
+        items = page.get("items", [])
+        inventory_ids.update(item["id"] for item in items)
+        if len(items) < 200:
+            break
+        offset += 200
+
+    covered_ids: set[int] = set()
+    live_rows = (await db.execute(
+        select(WorkReport.locked_media_ids).where(WorkReport.status.in_(("published", "publishing")))
+    )).all()
+    for (ids,) in live_rows:
+        covered_ids.update(ids or [])
+
+    orphaned = inventory_ids - covered_ids
+    for media_id in orphaned:
+        await media_client.release_publication_lock(media_id)
+
+    missing = covered_ids - inventory_ids
+    relocked = 0
+    for media_id in missing:
+        ok = await media_client.acquire_publication_lock(media_id)
+        if ok:
+            relocked += 1
+        else:
+            logger.warning(
+                "reconcile_publication_locks: could not re-acquire lock for media %d "
+                "(likely archived without an active lock — see module docstring "
+                "on the archiving/deleting recovery gap)", media_id,
+            )
+
+    return {
+        "unstuck_publishing": unstuck,
+        "orphaned_locks_released": len(orphaned),
+        "missing_locks_relocked": relocked,
+    }
