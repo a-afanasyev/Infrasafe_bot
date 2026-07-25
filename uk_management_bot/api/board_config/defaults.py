@@ -102,6 +102,10 @@ DEFAULT_BOARD_CONFIG = {
     "work_reports": {
         "autopost": False,
         "autopost_since": None,
+        # Публикация без модерации — выключена по умолчанию (см. WorkReportsCfg).
+        "autopublish": False,
+        # Пустой список = все категории (фильтр не отсекает ничего).
+        "categories": [],
         "limit": 6,
         "title": {
             "ru": "Отчёты о выполненных работах",

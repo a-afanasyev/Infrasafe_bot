@@ -64,6 +64,12 @@ export interface LayoutItem {
 export interface WorkReportsCfg {
   autopost: boolean
   autopost_since: string | null // ISO datetime string over the wire, or null
+  // Публикация БЕЗ модерации: черновик с обеими сторонами фото уезжает в ленту
+  // сразу. Адрес анонимизируется кодом, содержимое снимка — нет, поэтому
+  // единственный контроль за ним в этом режиме отсутствует.
+  autopublish: boolean
+  // Фильтр «какие категории попадают в ленту». ПУСТОЙ = без ограничения.
+  categories: string[]
   limit: number
   title: LocalizedText
 }
@@ -139,6 +145,8 @@ export const defaultBoardConfig: BoardConfigData = {
   work_reports: {
     autopost: false,
     autopost_since: null,
+    autopublish: false,
+    categories: [],
     limit: 6,
     title: { ru: 'Отчёты о выполненных работах', uz: 'Bajarilgan ishlar hisobotlari' },
   },

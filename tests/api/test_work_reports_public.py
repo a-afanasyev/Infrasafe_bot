@@ -12,6 +12,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
 
 import uk_management_bot.api.work_reports.public_router as public_router
 from uk_management_bot.api.dependencies import get_db
@@ -388,6 +389,47 @@ async def test_feed_cache_hit_serves_stale_within_ttl(client, db_session, monkey
     assert resp2.json()["total"] == 1  # still stale/cached
 
 
+@pytest.mark.asyncio
+async def test_revocation_clears_cache_so_feed_drops_report_immediately(
+    client, db_session, monkeypatch
+):
+    """Сработавшая ревокация обязана сбросить кэш ленты.
+
+    Иначе окна складывались бы: отозванный отчёт жил бы в ленте до 60с троттла
+    ревокации ПЛЮС до 30с TTL кэша. Ревокация проверяется ДО чтения кэша и при
+    любом изменении его очищает, поэтому потолок один — троттл.
+    """
+    from uk_management_bot.database.models.request import Request
+
+    _enable(monkeypatch)
+    db_session.add(Request(
+        request_number="260725-revcache", user_id=1, category="plumbing",
+        status="Исполнено", description="t", urgency="low", is_returned=False,
+    ))
+    await _mk_report(
+        db_session, "260725-revcache", status="published",
+        published_at=datetime.now(timezone.utc),
+    )
+
+    # Прогрев: отчёт в ленте и в кэше.
+    assert (await client.get(BASE, params={"limit": 10, "offset": 0})).json()["total"] == 1
+    assert (10, 0) in public_router._work_reports_feed_cache
+
+    # Заявку вернули → отчёт перестал быть eligible. Троттл сбрасываем: иначе
+    # ревокация просто не запустится в пределах теста, и проверялся бы троттл,
+    # а не инвалидация.
+    req = (await db_session.execute(
+        select(Request).where(Request.request_number == "260725-revcache")
+    )).scalar_one()
+    req.is_returned = True
+    await db_session.commit()
+    public_router._last_revoke_check_at = None
+
+    resp = await client.get(BASE, params={"limit": 10, "offset": 0})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0, "кэш не сброшен — отозванный отчёт всё ещё в ленте"
+
+
 # ── Revoke-throttle ──────────────────────────────────────────────────
 
 
@@ -443,3 +485,80 @@ async def test_media_stream_aborts_when_actual_bytes_exceed_limit(client, db_ses
     assert resp.content == b"1234567890"
     assert len(resp.content) <= 10
     assert resp.content != b"".join(chunks)
+
+
+# ── GET /work-reports/{id} — один отчёт (глубокая ссылка) ────────────
+
+
+@pytest.mark.asyncio
+async def test_single_report_returns_published_one(client, db_session, monkeypatch):
+    _enable(monkeypatch)
+    report = await _mk_report(
+        db_session, "260725-one1", status="published",
+        published_at=datetime.now(timezone.utc),
+    )
+
+    resp = await client.get(f"{BASE}/{report.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == report.id
+    assert body["address"] == report.address_public
+    assert body["before"] == [1] and body["after"] == [2]
+    # Тот же анонимизированный контракт, что у ленты.
+    assert "request_number" not in body
+    assert "description" not in body
+    assert body["completed_on"] == report.performed_at.date().isoformat()
+
+
+@pytest.mark.parametrize("status", NON_PUBLISHED_STATUSES)
+@pytest.mark.asyncio
+async def test_single_report_404_for_non_published(client, db_session, monkeypatch, status):
+    _enable(monkeypatch)
+    report = await _mk_report(db_session, f"260725-o{status[:3]}", status=status)
+
+    resp = await client.get(f"{BASE}/{report.id}")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_single_report_404_for_missing_id(client, monkeypatch):
+    _enable(monkeypatch)
+    resp = await client.get(f"{BASE}/999999")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_single_report_404_when_flag_off(client, db_session, monkeypatch):
+    """У одиночного ресурса нет осмысленного «пусто» — в отличие от ленты,
+    которая при выключенном флаге отдаёт стабильный 200 [].
+    """
+    report = await _mk_report(
+        db_session, "260725-one2", status="published",
+        published_at=datetime.now(timezone.utc),
+    )
+    _disable(monkeypatch)
+
+    resp = await client.get(f"{BASE}/{report.id}")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_single_report_route_does_not_shadow_media_route(client, db_session, monkeypatch):
+    """`/{id}` и `/{id}/media/{media_id}` — разное число сегментов, коллизии
+    быть не должно. Тест держит это свойство: одна и та же строка обслуживает
+    оба маршрута.
+    """
+    _enable(monkeypatch)
+    report = await _mk_report(
+        db_session, "260725-one3", status="published",
+        published_at=datetime.now(timezone.utc),
+    )
+
+    assert (await client.get(f"{BASE}/{report.id}")).status_code == 200
+    # Медиа-маршрут по тому же id всё ещё жив (404 тут — от «нет такого media_id
+    # в списке», а не от промаха маршрутизации: 1 в списке есть, 777 — нет).
+    assert (await client.get(f"{BASE}/{report.id}/media/777")).status_code == 404
+

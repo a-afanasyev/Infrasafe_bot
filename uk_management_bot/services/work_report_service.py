@@ -118,6 +118,15 @@ MAX_MEDIA_PER_SIDE = 4
 _AUTOFILL_FETCH_LIMIT = MAX_MEDIA_PER_SIDE * 4
 _VALIDATE_FETCH_LIMIT = 200
 
+# Статусы, в которых отчёт СЧИТАЕТСЯ держателем publication-lock'ов из своего
+# `locked_media_ids`. `needs_review` включён наравне с published/publishing: он
+# получается автоматической ревокацией (`revoke_stale_publications`), которая
+# не ходит в media-service и локи не снимает, а отчёт может вернуться в ленту
+# (unpublish → reopen → publish). Если бы `needs_review` тут не значился,
+# `reconcile_publication_locks` счёл бы его локи осиротевшими и снял их, оставив
+# `locked_media_ids` лгать о реальном состоянии media-service.
+_LOCK_HOLDING_STATUSES = ("published", "publishing", "needs_review")
+
 
 # ===========================================================================
 # derive_public_address — pure, без I/O
@@ -247,8 +256,16 @@ async def sync_pending_drafts(db: AsyncSession) -> dict:
     from uk_management_bot.keyboards.requests import resolve_category_key
 
     dialect_name = db.get_bind().dialect.name
+    # Фильтр категорий применяем в Python, а не в SQL: `Request.category` хранит
+    # и канон-ключи, и легаси-RU-подписи (см. resolve_category_key), поэтому
+    # сравнение в SQL молча пропустило бы старые строки. Пустой список =
+    # без ограничения.
+    allowed_categories = set(cfg.work_reports.categories)
     created = 0
     for r in candidates:
+        category_key = resolve_category_key(r.category)
+        if allowed_categories and category_key not in allowed_categories:
+            continue
         address = derive_public_address(r)
         if address is None:
             logger.warning(
@@ -260,7 +277,7 @@ async def sync_pending_drafts(db: AsyncSession) -> dict:
         performed_at = r.completed_at or r.updated_at or r.created_at
         values = {
             "request_number": r.request_number,
-            "category_key": resolve_category_key(r.category),
+            "category_key": category_key,
             "address_public": address,
             "performed_at": performed_at,
             "status": "pending",
@@ -445,9 +462,23 @@ async def _load_report_for_update(db: AsyncSession, report_id: int) -> WorkRepor
 
 
 async def publish_report(
-    db: AsyncSession, media_client: Any, report_id: int, moderator_id: int
+    db: AsyncSession,
+    media_client: Any,
+    report_id: int,
+    moderator_id: Optional[int],
+    *,
+    automatic: bool = False,
 ) -> WorkReport:
     """``pending`` → ``publishing`` (transient) → ``published``.
+
+    `automatic=True` — публикация без модерации (`autopublish`, см.
+    `autopublish_ready_drafts`). Меняет ТОЛЬКО аудит-след: действие
+    `work_report.autopublish` вместо `work_report.publish`, и `moderated_by`
+    остаётся пустым. Так по журналу видно, что содержимое фотографий человек не
+    подтверждал — для «отчётности проверяющим органам» это существенная разница,
+    и подменять её именем менеджера, который всего лишь включил тумблер, нельзя.
+    Все проверки безопасности (eligibility, адрес, обе стороны фото,
+    перевалидация медиа, publication-lock) идентичны — режим их не ослабляет.
 
     Ordering is load-bearing — do not reorder steps:
 
@@ -558,19 +589,154 @@ async def publish_report(
     report.media_meta = media_meta
     report.status = "published"
     report.published_at = datetime.now(timezone.utc)
-    report.moderated_by = moderator_id
+    report.moderated_by = None if automatic else moderator_id
     db.add(AuditLog(
-        user_id=moderator_id,
-        action="work_report.publish",
+        user_id=None if automatic else moderator_id,
+        action="work_report.autopublish" if automatic else "work_report.publish",
         details={
             "report_id": report.id,
             "request_number": report.request_number,
             "before_ids": report.before_media_ids,
             "after_ids": report.after_media_ids,
+            # Кто включил режим — не то же самое, что «кто одобрил контент».
+            # Пишем отдельным ключом, чтобы журнал не выглядел как одобрение.
+            **({"triggered_by": moderator_id} if automatic else {}),
         },
     ))
     await db.commit()
     return report
+
+
+_AUTOPUBLISH_BATCH_LIMIT = 20
+
+
+async def autopublish_ready_drafts(
+    db: AsyncSession, media_client: Any, triggered_by: Optional[int] = None
+) -> dict:
+    """Режим «без модерации»: дозаполнить черновики медиа и опубликовать те, у
+    которых нашлись обе стороны фото.
+
+    Живёт отдельно от `sync_pending_drafts` (которая SQL-only и media-service не
+    видит) — здесь нужен media_client. Вызывается из `POST /work-reports/sync`
+    сразу после синка, поэтому «автопубликация» наступает при открытии очереди
+    менеджером, а не в отдельном фоновом процессе.
+
+    Что режим НЕ меняет:
+
+    * список проверок в `publish_report` — eligibility заявки, безопасность
+      адреса, наличие обеих сторон, перевалидация каждого media_id, взятие
+      publication-lock. Ослаблена только человеческая проверка содержимого фото.
+
+    Фильтр категорий проверяется ЗДЕСЬ ПОВТОРНО, а не только в
+    `sync_pending_drafts`: там он решает, что становится черновиком, но черновик
+    мог быть создан ДО того, как категорию убрали из списка (или вручную, минуя
+    синк). Без этой проверки автопубликация уносила бы в открытую ленту
+    категорию, которую владелец из ленты уже исключил. Отчёты вне списка
+    остаются на модерации — их публикация всё ещё возможна руками, это
+    сознательно: список ограничивает автоматику, а не запрещает менеджеру
+    опубликовать конкретный отчёт осознанно.
+
+    Черновик без одной из сторон остаётся `needs_media` (autofill сам его туда
+    переводит) и в ленту не уезжает — то есть «без модерации» не означает
+    «опубликовать что угодно». Ошибка публикации одного отчёта не срывает
+    остальные: пакет продолжается, счётчик `failed` растёт.
+    """
+    cfg = await load_board_config(db)
+    if not cfg.work_reports.autopublish:
+        return {
+            "published": 0,
+            "left_for_moderation": 0,
+            "skipped_by_category": 0,
+            "failed": 0,
+            "enabled": False,
+        }
+
+    pending_clause = WorkReport.status.in_(("pending", "needs_media"))
+    allowed_categories = cfg.work_reports.categories
+    # Фильтруем в SQL, а не в Python после выборки: иначе черновики чужих
+    # категорий накапливались бы и съедали окно пакета (_AUTOPUBLISH_BATCH_LIMIT),
+    # оставляя подходящие вечно неопубликованными.
+    #
+    # В SQL это безопасно (в отличие от sync_pending_drafts, где фильтр обязан
+    # быть в Python): `WorkReport.category_key` — снапшот, в него всегда пишется
+    # канон-ключ (`resolve_category_key`), легаси-RU-подписей там не бывает.
+    category_clause = (
+        WorkReport.category_key.in_(allowed_categories) if allowed_categories else None
+    )
+
+    stmt = select(WorkReport).where(pending_clause)
+    if category_clause is not None:
+        stmt = stmt.where(category_clause)
+    candidates = (
+        (await db.execute(
+            stmt.order_by(WorkReport.created_at)
+            .limit(_AUTOPUBLISH_BATCH_LIMIT)
+            .with_for_update()
+        )).scalars().all()
+    )
+
+    # Отдельный счётчик, а не «доливка» в left_for_moderation: причины разные
+    # (нет фото vs категория вне списка), и сводка в /sync должна их различать.
+    skipped_by_category = 0
+    if category_clause is not None:
+        skipped_by_category = (
+            await db.execute(
+                select(func.count()).select_from(WorkReport)
+                .where(pending_clause, ~category_clause)
+            )
+        ).scalar_one()
+
+    ready_ids: list[int] = []
+    left = 0
+    failed = 0
+    for report in candidates:
+        # autofill_media ходит в media-service, а его клиент бросает на любой
+        # не-2xx (`raise_for_status`) и на транспортных сбоях. Без этого
+        # перехвата один сбойный запрос ронял весь POST /sync пятисоткой —
+        # вместе с синком и ревокацией, которые к media-service отношения не
+        # имеют, — и страница очереди у менеджера просто перестала бы грузиться.
+        try:
+            await autofill_media(db, media_client, report)
+        except Exception as e:
+            failed += 1
+            logger.warning(
+                "autopublish: автозаполнение отчёта %s не удалось: %s", report.id, e
+            )
+            continue
+        if report.before_media_ids and report.after_media_ids:
+            ready_ids.append(report.id)
+        else:
+            left += 1
+    # Коммитим автозаполнение ДО публикации: publish_report берёт собственный
+    # `FOR UPDATE` на строку, а держать наш лок в этот момент — взаимная
+    # блокировка.
+    await db.commit()
+
+    published = 0
+    for report_id in ready_ids:
+        # Широкий except по той же причине, что и у autofill выше: publish_report
+        # берёт publication-lock через media-service, и его недоступность не
+        # должна срывать остальной пакет и весь /sync.
+        try:
+            await publish_report(db, media_client, report_id, triggered_by, automatic=True)
+            published += 1
+        except Exception as e:
+            failed += 1
+            logger.warning("autopublish: отчёт %s не опубликован: %s", report_id, e)
+
+    if published or failed or skipped_by_category:
+        logger.info(
+            "autopublish: опубликовано %d, оставлено на модерации %d, "
+            "пропущено по категории %d, ошибок %d",
+            published, left, skipped_by_category, failed,
+        )
+    return {
+        "published": published,
+        "left_for_moderation": left,
+        "skipped_by_category": skipped_by_category,
+        "failed": failed,
+        "enabled": True,
+    }
 
 
 async def unpublish_report(
@@ -608,16 +774,17 @@ async def unpublish_report(
     ))
     await db.commit()  # DB-side hidden FIRST — see docstring on why this ordering is load-bearing
 
-    # A media id shared with another still-live (published/publishing) report
-    # must stay locked. Small expected scale (concurrently live publications,
-    # not raw media rows) — plain Python set membership over loaded rows
-    # avoids fragile dialect-specific JSON-array-containment SQL (Postgres
-    # JSONB @>/? vs SQLite json_each are not the same code).
+    # A media id shared with another still-live report (see
+    # _LOCK_HOLDING_STATUSES) must stay locked. Small expected scale
+    # (concurrently live publications, not raw media rows) — plain Python set
+    # membership over loaded rows avoids fragile dialect-specific
+    # JSON-array-containment SQL (Postgres JSONB @>/? vs SQLite json_each are
+    # not the same code).
     other_locked: set[int] = set()
     other_rows = (await db.execute(
         select(WorkReport.locked_media_ids).where(
             WorkReport.id != report.id,
-            WorkReport.status.in_(("published", "publishing")),
+            WorkReport.status.in_(_LOCK_HOLDING_STATUSES),
         )
     )).all()
     for (ids,) in other_rows:
@@ -691,20 +858,20 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
        `published`/`publishing` отчёте здесь — осиротевший lock (крэш между
        успешным acquire в media-service и записью id в `locked_media_ids`,
        см. шаг 7 publish_report) → снять.
-    3. Media id из `published`/`publishing` отчёта, отсутствующий среди
-       locked в media-service — самолечение после отдельного сбоя
-       media-service → взять заново; неудача повторного acquire — best-effort
-       (лог warning, не бросает исключение и не прерывает остальную сверку —
-       это фоновая maintenance-функция, а не пользовательский запрос).
+    3. Media id из отчёта-держателя lock'а (см. `_LOCK_HOLDING_STATUSES`),
+       отсутствующий среди locked в media-service — самолечение после
+       отдельного сбоя media-service → взять заново; неудача повторного
+       acquire — best-effort (лог warning, не бросает исключение и не прерывает
+       остальную сверку — это фоновая maintenance-функция, а не
+       пользовательский запрос).
 
-    НЕ реализовано здесь (задокументированный, а не забытый пробел):
-    восстановление зависших `archiving`/`deleting` статусов в media-service
-    (упомянуто в общем плане проекта) требует новой возможности со стороны
-    media-service — `GET /publication-locks` видит только
-    `publication_locked=true` строки, а `archiving`/`deleting` — отдельное,
-    не обязательно залоченное транзиентное состояние. Добавление такой
-    возможности — вне границ файлов этой задачи (это T4's/media_service's
-    домен); зафиксировать как follow-up, а не молча пропустить.
+    4. Строки media-service, зависшие в транзиентных `archiving`/`deleting`
+       (крэш посреди саги архивации/удаления), доводятся до терминального
+       статуса. Делает это сам media-service — только он знает семантику своих
+       переходов и видит строки независимо от наличия lock'а (`GET
+       /publication-locks` показывает лишь `publication_locked=true`). Здесь —
+       только вызов; направления и их обоснование в
+       `MediaStorageService.resolve_stale_transitions`.
     """
     now = datetime.now(timezone.utc)
     stale_before = now - timedelta(minutes=_RECONCILE_STALE_MINUTES)
@@ -750,7 +917,7 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
 
     covered_ids: set[int] = set()
     live_rows = (await db.execute(
-        select(WorkReport.locked_media_ids).where(WorkReport.status.in_(("published", "publishing")))
+        select(WorkReport.locked_media_ids).where(WorkReport.status.in_(_LOCK_HOLDING_STATUSES))
     )).all()
     for (ids,) in live_rows:
         covered_ids.update(ids or [])
@@ -774,8 +941,16 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
                 "on the archiving/deleting recovery gap)", media_id,
             )
 
+    # 4) Зависшие транзиентные статусы в media-service — его собственная
+    # ответственность (см. docstring). Best-effort: клиент проглатывает сбой и
+    # возвращает {}, чтобы недоступность media-service не обнулила пункты 1–3.
+    stale_transitions = await media_client.resolve_stale_transitions(
+        older_than_minutes=_RECONCILE_STALE_MINUTES
+    )
+
     return {
         "unstuck_publishing": unstuck,
         "orphaned_locks_released": len(orphaned),
         "missing_locks_relocked": relocked,
+        "stale_transitions": stale_transitions,
     }

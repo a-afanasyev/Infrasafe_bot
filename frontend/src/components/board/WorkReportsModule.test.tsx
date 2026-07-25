@@ -98,8 +98,11 @@ describe('WorkReportsModule', () => {
     const beforeImg = images[0]
     fireEvent.error(beforeImg)
 
-    // Placeholder renders the alt text ("До") instead of the broken <img>.
-    expect(screen.getByText('До')).toBeInTheDocument()
+    // Плейсхолдер рендерит alt-текст ("До") вместо битого <img>. Таких узлов
+    // теперь ДВА: подпись под парой миниатюр и сам плейсхолдер — поэтому
+    // getAllByText, а не getByText. Существенное здесь — что <img> стало на
+    // один меньше.
+    expect(screen.getAllByText('До')).toHaveLength(2)
     expect(screen.getAllByRole('img')).toHaveLength(1)
   })
 
@@ -124,5 +127,68 @@ describe('WorkReportsModule', () => {
     render(<WorkReportsModule />)
 
     expect(screen.getByRole('link', { name: 'Все отчёты' })).toHaveAttribute('href', '/work-reports')
+  })
+
+  // Настройки из board_config (`work_reports.limit` / `.title`) редактируются
+  // менеджером на странице модерации. До этих тестов они были write-only:
+  // сохранялись и не влияли ни на что.
+  it('honours the manager-configured limit instead of the hardcoded default', () => {
+    const reports = Array.from({ length: 9 }, (_, i) =>
+      makeReport({ id: i + 1, address: `Адрес ${i + 1}` }),
+    )
+    mockQuery.data = { pages: [makePage(reports)] }
+    render(<WorkReportsModule limit={2} />)
+
+    expect(screen.getByText('Адрес 1')).toBeInTheDocument()
+    expect(screen.getByText('Адрес 2')).toBeInTheDocument()
+    expect(screen.queryByText('Адрес 3')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the default limit when the config has not loaded yet', () => {
+    const reports = Array.from({ length: 9 }, (_, i) =>
+      makeReport({ id: i + 1, address: `Адрес ${i + 1}` }),
+    )
+    mockQuery.data = { pages: [makePage(reports)] }
+    render(<WorkReportsModule limit={undefined} />)
+
+    expect(screen.getByText('Адрес 6')).toBeInTheDocument()
+    expect(screen.queryByText('Адрес 7')).not.toBeInTheDocument()
+  })
+
+  it('renders the manager-configured title, falling back to i18n when empty', () => {
+    mockQuery.data = { pages: [makePage([makeReport()])] }
+    const { unmount } = render(<WorkReportsModule title="Наши работы" />)
+    expect(screen.getByText('Наши работы')).toBeInTheDocument()
+    unmount()
+
+    render(<WorkReportsModule title="" />)
+    expect(screen.getByText('Отчёты о работах')).toBeInTheDocument()  // board.sections.workReports
+  })
+
+  it('each thumbnail links to its own report page', () => {
+    const reports = [makeReport({ id: 7 }), makeReport({ id: 9, address: 'Двор Б' })]
+    mockQuery.data = { pages: [makePage(reports)] }
+    render(<WorkReportsModule />)
+
+    // Ссылка — вся плитка, а не мелкая зона: табло висит на телевизоре/тач-панели.
+    expect(screen.getByRole('link', { name: /Двор Б/ })).toHaveAttribute(
+      'href',
+      '/work-reports/9',
+    )
+    const hrefs = screen
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+    expect(hrefs).toContain('/work-reports/7')
+    expect(hrefs).toContain('/work-reports/9')
+  })
+
+  it('labels each thumbnail half with До/После', () => {
+    mockQuery.data = { pages: [makePage([makeReport()])] }
+    render(<WorkReportsModule />)
+
+    // Пара без подписей читается неоднозначно, особенно когда кадры похожи —
+    // на странице архива подписи были, на табло их не было.
+    expect(screen.getByText('До')).toBeInTheDocument()
+    expect(screen.getByText('После')).toBeInTheDocument()
   })
 })

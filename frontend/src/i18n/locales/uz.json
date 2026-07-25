@@ -1894,7 +1894,12 @@
       "autopostOff": "Avto-nashr o'chirilgan",
       "limitLabel": "Vitrinadagi hisobotlar limiti",
       "titleLabel": "Blok sarlavhasi",
-      "save": "Saqlash"
+      "save": "Saqlash",
+      "autopublishLabel": "Moderatsiyasiz nashr qilish",
+      "autopublishHint": "«Oldin» va «keyin» suratlari bor hisobotlar tasdiqlanmasdan darhol ommaviy tasmaga chiqadi. Manzilni tizim o‘zi anonimlashtiradi, lekin suratning mazmunini emas: bu rejimda eshik raqami, familiyali taxtacha, avtomobil raqami yoki odam yuzini hech kim tekshirmaydi.",
+      "categoriesLabel": "Tasma uchun toifalar",
+      "categoriesHint": "Avtomatika (avtopostlash va moderatsiyasiz nashr) faqat belgilangan toifalar bilan ishlaydi. Qolgan hisobotlar moderatsiyada qoladi — ularni qo‘lda nashr qilish mumkin.",
+      "categoriesAll": "Hech bir toifa belgilanmagan — barchasi tasmaga tushadi."
     },
     "createDraft": {
       "label": "Ariza raqami",
@@ -1943,6 +1948,10 @@
     "empty": "Hozircha nashr etilgan hisobotlar yo'q",
     "loadMore": "Ko'proq ko'rsatish",
     "loadingMore": "Yuklanmoqda…"
+  },
+  "workReportDetail": {
+    "title": "Bajarilgan ishlar hisoboti",
+    "notFound": "Hisobot topilmadi yoki nashrdan olingan"
   },
   "materials": {
     "title": "Materiallar ombori",

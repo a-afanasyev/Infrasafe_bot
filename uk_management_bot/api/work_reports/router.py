@@ -10,15 +10,16 @@
 Фиче-флаг `settings.WORK_REPORTS_ENABLED` гейтит ВЕСЬ роутер единым 404 (не
 403/иной код) — не палит наличие фичи неавторизованному/не-менеджеру.
 
-Большинство статичных путей объявлено до `/{report_id}` (house style, см.
-`api/materials/router.py`); `/settings` и `/reconcile` — исключение, идут
-ПОСЛЕ динамического блока. Это не routing-опасность (разные HTTP-методы/
-шейпы у всех путей ниже — коллизии в принципе нет), просто порядок в файле
-не строго "все статичные сначала".
+ВСЕ статичные пути объявлены до динамического `/{report_id}`-блока (house
+style, см. `api/materials/router.py:11,311`). Сегодня коллизий не было бы и
+при обратном порядке (у `/settings`/`/reconcile` нет одноимённых динамических
+соседей с тем же методом), но добавление `PUT`/`POST /{report_id}` тихо
+перехватило бы их — порядок держим строгим, чтобы этот класс поломки был
+невозможен, а не «маловероятен».
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
@@ -27,7 +28,7 @@ from sqlalchemy.orm import selectinload
 
 from uk_management_bot.api.board_config.schemas import WorkReportsCfg
 from uk_management_bot.api.board_config.service import load_board_config, merge_and_save_board_config
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_approved_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.work_reports.schemas import (
     WorkReportCreateIn,
@@ -66,7 +67,18 @@ async def _require_work_reports_enabled() -> None:
 
 
 router = APIRouter(dependencies=[Depends(_require_work_reports_enabled)])
-_manager_only = require_roles("manager")
+# `require_approved_roles`, а не `require_roles`: этот модуль публикует контент в
+# открытый интернет, поэтому не-approved менеджер (pending/blocked-на-модерации)
+# не должен им управлять. Строже, чем PUT /board-config (там `require_roles`), и
+# совпадает с модулем материалов (`api/materials/router.py:53`).
+_manager_only = require_approved_roles("manager")
+
+# Статусы отчёта — единый источник для валидации query-параметра и
+# зеркало CheckConstraint'а в модели (`database/models/work_report.py`).
+ReportStatus = Literal["pending", "needs_media", "publishing", "published", "needs_review", "rejected"]
+# Статусы, в которых менять состав медиа осмысленно: отчёт ещё не в саге
+# публикации и не опубликован.
+_MEDIA_EDITABLE_STATUSES = ("pending", "needs_media")
 
 # Троттлинг автоматического reconcile внутри /sync — per-worker in-memory,
 # намеренно неточно между воркерами (см. план); ручной POST /reconcile этот
@@ -148,7 +160,9 @@ async def _resolve_manual_address(
 
 @router.get("", response_model=WorkReportListOut)
 async def list_work_reports(
-    status: Optional[str] = Query(None),
+    # Literal, а не свободная строка: опечатка в фильтре должна давать 422, а не
+    # тихо пустой список, который читается как «отчётов нет».
+    status: Optional[ReportStatus] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -185,15 +199,26 @@ async def sync_work_reports(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ) -> dict:
-    """Автосинк черновиков + отзыв устаревших публикаций + (троттлено раз в
-    5 минут на воркер) фоновая сверка publication-lock'ов."""
+    """Автосинк черновиков + автопубликация (если включена) + отзыв устаревших
+    публикаций + (троттлено раз в 5 минут на воркер) сверка publication-lock'ов.
+
+    `user.id` уходит в автопубликацию как `triggered_by` — это «кто включил
+    режим», НЕ «кто одобрил контент»; в аудите оно и лежит отдельным ключом
+    (см. `publish_report(automatic=True)`)."""
     global _last_reconcile_at
 
     sync_result = await work_report_service.sync_pending_drafts(db)
+
+    media_client = get_media_client()
+    autopublish_result = None
+    if media_client is not None:
+        autopublish_result = await work_report_service.autopublish_ready_drafts(
+            db, media_client, triggered_by=user.id
+        )
+
     revoked = await work_report_service.revoke_stale_publications(db)
 
     reconcile_result = None
-    media_client = get_media_client()
     now = datetime.now(timezone.utc)
     if media_client is not None and (
         _last_reconcile_at is None or now - _last_reconcile_at >= _RECONCILE_THROTTLE
@@ -201,7 +226,12 @@ async def sync_work_reports(
         reconcile_result = await work_report_service.reconcile_publication_locks(db, media_client)
         _last_reconcile_at = now
 
-    return {"sync": sync_result, "revoked": revoked, "reconcile": reconcile_result}
+    return {
+        "sync": sync_result,
+        "autopublish": autopublish_result,
+        "revoked": revoked,
+        "reconcile": reconcile_result,
+    }
 
 
 # ── POST / create ────────────────────────────────────────────────────────
@@ -272,13 +302,21 @@ async def autofill_pending(
     if media_client is None:
         raise HTTPException(status_code=503, detail="media service not configured")
 
+    # `with_for_update()` + фильтр по статусу — та же защита, что в PATCH ниже:
+    # сага публикации блокирует строку отчёта, и пакетное автозаполнение обязано
+    # играть по тем же правилам, иначе перезапишет состав медиа у отчёта, который
+    # параллельно публикуется (см. комментарий в patch_work_report).
     rows = (
         (
             await db.execute(
                 select(WorkReport)
-                .where(WorkReport.media_synced_at.is_(None))
+                .where(
+                    WorkReport.media_synced_at.is_(None),
+                    WorkReport.status.in_(_MEDIA_EDITABLE_STATUSES),
+                )
                 .order_by(WorkReport.created_at)
                 .limit(20)
+                .with_for_update()
             )
         )
         .scalars()
@@ -288,6 +326,46 @@ async def autofill_pending(
         await work_report_service.autofill_media(db, media_client, report)
     await db.commit()
     return {"processed": len(rows)}
+
+
+# ── PUT /settings ─────────────────────────────────────────────────────────
+
+
+@router.put("/settings", response_model=WorkReportsCfg)
+async def update_work_reports_settings(
+    body: WorkReportsSettingsIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+) -> WorkReportsCfg:
+    """Обновить `work_reports`-блок board_config. Переиспользует
+    `merge_and_save_board_config` — он же обслуживает PUT редактора витрины
+    (см. его docstring) — а не переизобретает autopost_since-стамп здесь.
+
+    `WorkReportsSettingsIn` не имеет поля `autopost_since` вообще — самый
+    простой guard от смуглинга клиентского значения; сервис-слой всё равно
+    бы его перезаписал (см. `merge_and_save_board_config`).
+    """
+    cfg = await load_board_config(db)
+    merged = cfg.work_reports.model_dump()
+    merged.update(body.model_dump(exclude_unset=True))
+
+    result = await merge_and_save_board_config(db, {"work_reports": merged}, user.id)
+    logger.info("work_reports settings обновлены пользователем %s", user.id)
+    return result.work_reports
+
+
+# ── POST /reconcile (ручной/операторский триггер, без троттла) ──────────
+
+
+@router.post("/reconcile")
+async def reconcile_work_reports(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+) -> dict:
+    media_client = get_media_client()
+    if media_client is None:
+        raise HTTPException(status_code=503, detail="media service not configured")
+    return await work_report_service.reconcile_publication_locks(db, media_client)
 
 
 # ── POST /{report_id}/autofill ───────────────────────────────────────────
@@ -303,11 +381,20 @@ async def autofill_one(
     if media_client is None:
         raise HTTPException(status_code=503, detail="media service not configured")
 
+    # `with_for_update()`: см. patch_work_report — без блокировки строки это
+    # состязается с сагой публикации и может перезаписать уже замороженный состав.
     report = (
-        await db.execute(select(WorkReport).where(WorkReport.id == report_id))
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
     ).scalar_one_or_none()
     if report is None:
         raise HTTPException(status_code=404, detail=f"work report {report_id} not found")
+    if report.status not in _MEDIA_EDITABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"work report {report_id} is {report.status}, expected pending or needs_media",
+        )
 
     await work_report_service.autofill_media(db, media_client, report)
     await db.commit()
@@ -325,12 +412,24 @@ async def patch_work_report(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ) -> WorkReport:
+    # `with_for_update()` ОБЯЗАТЕЛЕН, а не оптимизация. Без него проверка статуса
+    # ниже — TOCTOU против саги публикации: её окно включает сетевой вызов в
+    # media-service, и параллельный publish успевал полностью пройти между этим
+    # SELECT'ом и коммитом ниже. Итог был: у опубликованного отчёта менялся
+    # before/after-список, из-за чего наружу отдавался media_id БЕЗ
+    # publication-lock и без записи в media_meta (Content-Type сваливался в
+    # octet-stream), а вытесненный id оставался залоченным навсегда — reconcile
+    # не видел его как осиротевший, потому что locked_media_ids всё ещё его
+    # перечислял. Блокировка строки закрывает все точки склейки: любое
+    # чередование оставляет статус publishing/published, и проверка ниже даёт 409.
     report = (
-        await db.execute(select(WorkReport).where(WorkReport.id == report_id))
+        await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
+        )
     ).scalar_one_or_none()
     if report is None:
         raise HTTPException(status_code=404, detail=f"work report {report_id} not found")
-    if report.status not in ("pending", "needs_media"):
+    if report.status not in _MEDIA_EDITABLE_STATUSES:
         raise HTTPException(
             status_code=409,
             detail=f"work report {report_id} is {report.status}, expected pending or needs_media",
@@ -445,43 +544,3 @@ async def reopen_work_report(
         return await work_report_service.reopen_report(db, report_id, user.id)
     except WorkReportPublishError as e:
         raise _publish_error_to_http(e)
-
-
-# ── PUT /settings ─────────────────────────────────────────────────────────
-
-
-@router.put("/settings", response_model=WorkReportsCfg)
-async def update_work_reports_settings(
-    body: WorkReportsSettingsIn,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(_manager_only),
-) -> WorkReportsCfg:
-    """Обновить `work_reports`-блок board_config. Переиспользует
-    `merge_and_save_board_config` — он же обслуживает PUT редактора витрины
-    (см. его docstring) — а не переизобретает autopost_since-стамп здесь.
-
-    `WorkReportsSettingsIn` не имеет поля `autopost_since` вообще — самый
-    простой guard от смуглинга клиентского значения; сервис-слой всё равно
-    бы его перезаписал (см. `merge_and_save_board_config`).
-    """
-    cfg = await load_board_config(db)
-    merged = cfg.work_reports.model_dump()
-    merged.update(body.model_dump(exclude_unset=True))
-
-    result = await merge_and_save_board_config(db, {"work_reports": merged}, user.id)
-    logger.info("work_reports settings обновлены пользователем %s", user.id)
-    return result.work_reports
-
-
-# ── POST /reconcile (ручной/операторский триггер, без троттла) ──────────
-
-
-@router.post("/reconcile")
-async def reconcile_work_reports(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(_manager_only),
-) -> dict:
-    media_client = get_media_client()
-    if media_client is None:
-        raise HTTPException(status_code=503, detail="media service not configured")
-    return await work_report_service.reconcile_publication_locks(db, media_client)

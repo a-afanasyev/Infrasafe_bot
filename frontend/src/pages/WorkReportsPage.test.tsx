@@ -10,6 +10,8 @@ import type { WorkReportsCfg } from '../types/boardConfig'
 const DEFAULT_CFG: WorkReportsCfg = {
   autopost: false,
   autopost_since: null,
+  autopublish: false,
+  categories: [],
   limit: 6,
   title: { ru: '', uz: '' },
 }
@@ -207,5 +209,82 @@ describe('WorkReportsPage', () => {
 
     await waitFor(() => expect(reopenCalled).toBe(true))
     await waitFor(() => expect(getListCalls).toBeGreaterThan(callsBefore))
+  })
+
+  it('fires PUT .../settings with the new autopublish value', async () => {
+    let autopublish = false
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/public/board-config', () =>
+        HttpResponse.json({ work_reports: { ...DEFAULT_CFG, autopublish } }),
+      ),
+      mockList([]),
+      http.put('*/api/v2/work-reports/settings', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        autopublish = true
+        return HttpResponse.json({ ...DEFAULT_CFG, autopublish })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<WorkReportsPage />)
+
+    const checkbox = await screen.findByRole('checkbox', { name: 'Публиковать без модерации' })
+    expect(checkbox).not.toBeChecked()
+    await user.click(checkbox)
+
+    // Partial update: тумблер шлёт ТОЛЬКО своё поле, чтобы не затирать
+    // несохранённые правки лимита/заголовка в соседнем черновике.
+    await waitFor(() => expect(body).toEqual({ autopublish: true }))
+    await waitFor(() => expect(checkbox).toBeChecked())
+  })
+
+  it('shows the explicit "no restriction" hint while no category is checked', async () => {
+    server.use(mockBoardConfig(), mockList([]))
+    render(<WorkReportsPage />)
+
+    // Пустой фильтр = все категории. Без этой подписи пустое состояние
+    // читается как «ничего не публикуется».
+    await screen.findByText('Ни одна категория не отмечена — в ленту попадают все.')
+  })
+
+  it('toggling a category sends the full new list, not a diff', async () => {
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/public/board-config', () =>
+        HttpResponse.json({ work_reports: { ...DEFAULT_CFG, categories: ['cleaning'] } }),
+      ),
+      mockList([]),
+      http.put('*/api/v2/work-reports/settings', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ ...DEFAULT_CFG, categories: ['cleaning', 'plumbing'] })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<WorkReportsPage />)
+
+    // Список категорий рендерится сразу, а состояние галок приходит с
+    // board-config — поэтому ждём отмеченность, а не проверяем синхронно.
+    const cleaning = await screen.findByRole('checkbox', { name: 'Уборка' })
+    await waitFor(() => expect(cleaning).toBeChecked())
+    await user.click(await screen.findByRole('checkbox', { name: 'Сантехника' }))
+
+    await waitFor(() => expect(body).toEqual({ categories: ['cleaning', 'plumbing'] }))
+  })
+
+  it('survives a board-config response without the new fields (frontend ahead of backend)', async () => {
+    // Раскатка фронта раньше бэкенда: в ответе нет ни autopublish, ни
+    // categories. Страница обязана отрендериться, а не упасть на
+    // settings.categories.includes(...).
+    server.use(
+      http.get('*/api/v2/public/board-config', () =>
+        HttpResponse.json({ work_reports: { autopost: false, autopost_since: null, limit: 6, title: { ru: '', uz: '' } } }),
+      ),
+      mockList([]),
+    )
+    render(<WorkReportsPage />)
+
+    const checkbox = await screen.findByRole('checkbox', { name: 'Публиковать без модерации' })
+    expect(checkbox).not.toBeChecked()
+    await screen.findByText('Ни одна категория не отмечена — в ленту попадают все.')
   })
 })

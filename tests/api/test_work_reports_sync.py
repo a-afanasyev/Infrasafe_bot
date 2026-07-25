@@ -25,13 +25,20 @@ _UTC_NOW = lambda: datetime.now(timezone.utc)
 
 
 async def _seed_board_config(
-    db: AsyncSession, *, autopost: bool, autopost_since: datetime | None
+    db: AsyncSession,
+    *,
+    autopost: bool,
+    autopost_since: datetime | None,
+    categories: list[str] | None = None,
+    autopublish: bool = False,
 ) -> None:
     data = copy.deepcopy(DEFAULT_BOARD_CONFIG)
     data["work_reports"]["autopost"] = autopost
     data["work_reports"]["autopost_since"] = (
         autopost_since.isoformat() if autopost_since is not None else None
     )
+    data["work_reports"]["autopublish"] = autopublish
+    data["work_reports"]["categories"] = categories if categories is not None else []
     db.add(BoardConfig(id=1, data=data, updated_by=None))
     await db.commit()
 
@@ -357,3 +364,49 @@ async def test_performed_at_uses_completed_at_for_prinyato(db_session: AsyncSess
         )
     ).scalar_one()
     assert abs((report.performed_at.replace(tzinfo=None) - marker.replace(tzinfo=None)).total_seconds()) < 2
+
+
+# ── Фильтр категорий (work_reports.categories) ──────────────────────
+#
+# Пустой список = БЕЗ ограничения (это фильтр, а пустой фильтр ничего не
+# отсекает) — покрыто всеми тестами выше, которые его не задают.
+
+
+@pytest.mark.asyncio
+async def test_category_filter_keeps_only_listed_categories(db_session: AsyncSession):
+    await _seed_board_config(
+        db_session, autopost=True, autopost_since=_UTC_NOW() - timedelta(days=1),
+        categories=["cleaning"],
+    )
+    yard = await _mk_yard(db_session, "Двор")
+    await _mk_request(db_session, "260725-401", yard_id=yard.id, updated_at=_UTC_NOW())
+    req = await _mk_request(db_session, "260725-402", yard_id=yard.id, updated_at=_UTC_NOW())
+    req.category = "cleaning"
+    await db_session.commit()
+
+    await sync_pending_drafts(db_session)
+
+    # 401 — plumbing (не в списке), 402 — cleaning (в списке).
+    assert await _existing_report_numbers(db_session) == {"260725-402"}
+
+
+@pytest.mark.asyncio
+async def test_category_filter_matches_legacy_russian_labels(db_session: AsyncSession):
+    """`Request.category` у старых строк хранит RU-подпись, а не канон-ключ —
+    поэтому фильтр сравнивает через resolve_category_key, а не в SQL напрямую.
+    Без этого легаси-заявки молча выпадали бы из ленты."""
+    await _seed_board_config(
+        db_session, autopost=True, autopost_since=_UTC_NOW() - timedelta(days=1),
+        categories=["cleaning"],
+    )
+    yard = await _mk_yard(db_session, "Двор")
+    req = await _mk_request(db_session, "260725-403", yard_id=yard.id, updated_at=_UTC_NOW())
+    req.category = "Уборка"  # легаси-подпись той же категории
+    await db_session.commit()
+
+    await sync_pending_drafts(db_session)
+
+    numbers = await _existing_report_numbers(db_session)
+    assert numbers == {"260725-403"}
+    report = (await db_session.execute(select(WorkReport))).scalars().one()
+    assert report.category_key == "cleaning"  # в снапшот пишется канон-ключ

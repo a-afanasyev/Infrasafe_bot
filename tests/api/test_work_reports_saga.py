@@ -15,9 +15,12 @@ from sqlalchemy import select
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.work_report import WorkReport
+from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.database.models.board_config import BoardConfig
 from uk_management_bot.services.work_report_service import (
     WorkReportPublishError,
     address_looks_like_apartment,
+    autopublish_ready_drafts,
     publish_report,
     reconcile_publication_locks,
     reject_report,
@@ -64,6 +67,7 @@ class FakeMediaClient:
         self._acquire_fail_media_ids = acquire_fail_media_ids or set()
         self._list_locks_items = list_locks_items if list_locks_items is not None else []
         self._release_raises = release_raises
+        self.resolve_stale_calls: list[int] = []
 
     async def get_request_media(self, request_number: str, category: str, limit: int = 50):
         return self._by_category.get(category, [])
@@ -90,6 +94,14 @@ class FakeMediaClient:
             "limit": limit,
             "offset": offset,
         }
+
+    async def resolve_stale_transitions(self, older_than_minutes: int = 15) -> dict:
+        """Четвёртое направление сверки — восстановление зависших
+        `archiving`/`deleting` на стороне media-service. Здесь только
+        фиксируем факт вызова: сама логика переходов живёт в media_service и
+        покрыта его собственным сюитом (media_service/test_publication_lock.py)."""
+        self.resolve_stale_calls.append(older_than_minutes)
+        return {"archiving_reverted": 0, "deleting_finalized": 0}
 
 
 class RaisingReleaseClient:
@@ -424,6 +436,43 @@ async def test_unpublish_does_not_release_lock_shared_with_another_live_report(d
 
 
 @pytest.mark.asyncio
+async def test_unpublish_keeps_lock_shared_with_needs_review_report(db_session):
+    """`needs_review` — тоже держатель lock'а (_LOCK_HOLDING_STATUSES).
+
+    Такой отчёт получается автоматической ревокацией, которая в media-service не
+    ходит и локи не снимает, а вернуться в ленту он может (unpublish → reopen →
+    publish). Значит его байты обязаны оставаться защищёнными от архивации.
+    """
+    report_a = _mk_report("260725-321-c", status="published", locked_media_ids=[1, 2])
+    report_b = _mk_report("260725-321-d", status="needs_review", locked_media_ids=[2])
+    db_session.add_all([report_a, report_b])
+    await db_session.commit()
+    await db_session.refresh(report_a)
+
+    client = FakeMediaClient()
+    await unpublish_report(db_session, client, report_a.id, MODERATOR_ID)
+
+    assert 2 not in client.release_calls
+    assert 1 in client.release_calls
+
+
+@pytest.mark.asyncio
+async def test_reconcile_does_not_strip_locks_of_needs_review_report(db_session):
+    """Регрессия: до включения `needs_review` в _LOCK_HOLDING_STATUSES сверка
+    считала его локи осиротевшими и снимала их, оставляя `locked_media_ids`
+    лгать о реальном состоянии media-service."""
+    report = _mk_report("260725-321-e", status="needs_review", locked_media_ids=[77])
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(list_locks_items=[{"id": 77}])
+    result = await reconcile_publication_locks(db_session, client)
+
+    assert result["orphaned_locks_released"] == 0
+    assert client.release_calls == []
+
+
+@pytest.mark.asyncio
 async def test_unpublish_needs_review_to_rejected(db_session):
     report = _mk_report("260725-322", status="needs_review", locked_media_ids=[5])
     db_session.add(report)
@@ -604,7 +653,12 @@ async def test_reconcile_all_three_directions(db_session):
         "unstuck_publishing": 1,
         "orphaned_locks_released": 1,
         "missing_locks_relocked": 1,
+        # Четвёртое направление делегировано media-service (см. docstring
+        # reconcile_publication_locks) — здесь проверяем только, что оно вызвано
+        # с тем же порогом staleness, а не дублируем его логику.
+        "stale_transitions": {"archiving_reverted": 0, "deleting_finalized": 0},
     }
+    assert client.resolve_stale_calls == [15]
 
     stale_reloaded = await _reload(db_session, stale.id)
     assert stale_reloaded.status == "pending"
@@ -660,3 +714,257 @@ async def test_reconcile_tolerates_reacquire_failure(db_session):
 ])
 def test_address_looks_like_apartment(address, expected):
     assert address_looks_like_apartment(address) == expected
+
+
+# ===========================================================================
+# autopublish_ready_drafts — режим «без модерации»
+# ===========================================================================
+
+
+async def _seed_autopublish(
+    db_session, *, enabled: bool, categories: list[str] | None = None
+) -> None:
+    import copy
+
+    data = copy.deepcopy(DEFAULT_BOARD_CONFIG)
+    data["work_reports"]["autopublish"] = enabled
+    data["work_reports"]["categories"] = categories if categories is not None else []
+    db_session.add(BoardConfig(id=1, data=data, updated_by=None))
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_autopublish_disabled_is_a_noop(db_session):
+    """Дефолт — выключено. Черновик обязан остаться в очереди."""
+    await _seed_autopublish(db_session, enabled=False)
+    db_session.add(_mk_request("260725-501"))
+    report = _mk_report("260725-501")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result == {
+        "published": 0, "left_for_moderation": 0, "skipped_by_category": 0,
+        "failed": 0, "enabled": False,
+    }
+    assert (await _reload(db_session, report.id)).status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_publishes_draft_with_both_sides(db_session):
+    await _seed_autopublish(db_session, enabled=True)
+    db_session.add(_mk_request("260725-502"))
+    report = _mk_report("260725-502")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client, triggered_by=MODERATOR_ID)
+
+    assert result["published"] == 1
+    assert result["left_for_moderation"] == 0
+    reloaded = await _reload(db_session, report.id)
+    assert reloaded.status == "published"
+    # Медиа заморожены и залочены — режим не ослабляет ни одну гарантию саги.
+    assert sorted(reloaded.locked_media_ids) == [1, 2]
+    assert {m["id"] for m in reloaded.media_meta} == {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_autopublish_audit_does_not_claim_human_approval(db_session):
+    """Ключевое отличие от ручной публикации: `moderated_by` пуст, действие —
+    `work_report.autopublish`, а инициатор режима лежит отдельным ключом. Иначе
+    журнал выглядел бы как одобрение содержимого фото человеком."""
+    await _seed_autopublish(db_session, enabled=True)
+    db_session.add(_mk_request("260725-503"))
+    report = _mk_report("260725-503")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    await autopublish_ready_drafts(db_session, client, triggered_by=MODERATOR_ID)
+
+    reloaded = await _reload(db_session, report.id)
+    assert reloaded.moderated_by is None
+
+    entry = (await db_session.execute(
+        select(AuditLog).where(AuditLog.action == "work_report.autopublish")
+    )).scalars().one()
+    assert entry.user_id is None
+    assert entry.details["triggered_by"] == MODERATOR_ID
+    assert entry.details["request_number"] == "260725-503"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_leaves_draft_without_before_side_for_moderation(db_session):
+    """«Без модерации» не значит «опубликовать что угодно»: нет фото «до» —
+    отчёт уходит в needs_media и в ленту не попадает."""
+    await _seed_autopublish(db_session, enabled=True)
+    db_session.add(_mk_request("260725-504"))
+    report = _mk_report("260725-504")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 0
+    assert result["left_for_moderation"] == 1
+    assert (await _reload(db_session, report.id)).status == "needs_media"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_skips_ineligible_request_without_failing_batch(db_session):
+    """Одна неудача не срывает пакет: заявка, переставшая быть eligible, даёт
+    409 внутри publish_report, а следующий отчёт всё равно публикуется."""
+    await _seed_autopublish(db_session, enabled=True)
+    db_session.add(_mk_request("260725-505", is_returned=True))
+    db_session.add(_mk_request("260725-506"))
+    bad = _mk_report("260725-505")
+    good = _mk_report("260725-506")
+    db_session.add_all([bad, good])
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 1
+    assert result["failed"] == 1
+    assert (await _reload(db_session, bad.id)).status == "pending"
+    assert (await _reload(db_session, good.id)).status == "published"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_survives_media_service_failure(db_session):
+    """Сбой media-service не должен ронять весь пакет (а через него — и весь
+    POST /sync, где рядом идут синк и ревокация, к media-service не относящиеся).
+    Клиент бросает на любой не-2xx, поэтому перехват здесь широкий."""
+    await _seed_autopublish(db_session, enabled=True)
+    db_session.add(_mk_request("260725-507"))
+    db_session.add(_mk_request("260725-508"))
+    broken = _mk_report("260725-507")
+    ok = _mk_report("260725-508")
+    db_session.add_all([broken, ok])
+    await db_session.commit()
+
+    class HalfBrokenClient(FakeMediaClient):
+        async def get_request_media(self, request_number, category, limit=50):
+            if request_number == "260725-507":
+                raise RuntimeError("media-service 404")
+            return await super().get_request_media(request_number, category, limit)
+
+    client = HalfBrokenClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 1
+    assert result["failed"] == 1
+    assert (await _reload(db_session, broken.id)).status == "pending"
+    assert (await _reload(db_session, ok.id)).status == "published"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_skips_report_outside_category_filter(db_session):
+    """Черновик мог быть создан ДО того, как категорию убрали из списка (или
+    вручную, минуя синк). Без повторной проверки здесь автопубликация уносила бы
+    в открытую ленту категорию, которую владелец из ленты уже исключил."""
+    await _seed_autopublish(db_session, enabled=True, categories=["cleaning"])
+    db_session.add(_mk_request("260725-509"))
+    # _mk_report по умолчанию кладёт category_key="plumbing" — вне списка.
+    report = _mk_report("260725-509")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 0
+    assert result["skipped_by_category"] == 1
+    reloaded = await _reload(db_session, report.id)
+    assert reloaded.status == "pending"
+    # Медиа даже не подтягивались — до autofill дело не дошло.
+    assert reloaded.media_synced_at is None
+
+
+@pytest.mark.asyncio
+async def test_autopublish_publishes_report_inside_category_filter(db_session):
+    await _seed_autopublish(db_session, enabled=True, categories=["plumbing", "cleaning"])
+    db_session.add(_mk_request("260725-510"))
+    report = _mk_report("260725-510")  # plumbing — в списке
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 1
+    assert result["skipped_by_category"] == 0
+    assert (await _reload(db_session, report.id)).status == "published"
+
+
+@pytest.mark.asyncio
+async def test_autopublish_empty_category_filter_means_no_restriction(db_session):
+    """Пустой список = без ограничения (это фильтр, а пустой фильтр ничего не
+    отсекает) — та же семантика, что в sync_pending_drafts и в UI."""
+    await _seed_autopublish(db_session, enabled=True, categories=[])
+    db_session.add(_mk_request("260725-511"))
+    report = _mk_report("260725-511")
+    db_session.add(report)
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    result = await autopublish_ready_drafts(db_session, client)
+
+    assert result["published"] == 1
+    assert result["skipped_by_category"] == 0
+
+
+@pytest.mark.asyncio
+async def test_autopublish_batch_window_not_starved_by_filtered_out_drafts(db_session):
+    """Фильтр в SQL, а не в Python после выборки: иначе черновики чужих
+    категорий съедали бы окно пакета и подходящий отчёт не публиковался бы
+    никогда. Проверяем на окне размером 1."""
+    import uk_management_bot.services.work_report_service as svc
+
+    await _seed_autopublish(db_session, enabled=True, categories=["cleaning"])
+    # Более старый черновик чужой категории идёт первым по created_at.
+    db_session.add(_mk_request("260725-512"))
+    db_session.add(_mk_request("260725-513"))
+    stale = _mk_report("260725-512")  # plumbing, вне списка
+    wanted = _mk_report("260725-513")
+    wanted.category_key = "cleaning"
+    db_session.add_all([stale, wanted])
+    await db_session.commit()
+
+    client = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "completion_photo": [_photo(2)],
+    })
+    original_limit = svc._AUTOPUBLISH_BATCH_LIMIT
+    svc._AUTOPUBLISH_BATCH_LIMIT = 1
+    try:
+        result = await autopublish_ready_drafts(db_session, client)
+    finally:
+        svc._AUTOPUBLISH_BATCH_LIMIT = original_limit
+
+    assert result["published"] == 1
+    assert (await _reload(db_session, wanted.id)).status == "published"
+    assert (await _reload(db_session, stale.id)).status == "pending"

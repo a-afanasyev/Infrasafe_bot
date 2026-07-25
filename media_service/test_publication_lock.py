@@ -546,3 +546,116 @@ async def test_saga_rejects_unknown_reserving_status():
     # Guard fires before phase 1 touches the row — status must be untouched.
     status, _ = _get_status_and_lock(media_id)
     assert status == "active"
+
+
+# ---------- MediaStatusEnum covers the transient saga statuses ----------
+
+@pytest.mark.parametrize("status_value", ["archiving", "deleting"])
+def test_metadata_endpoints_serialize_transient_statuses(client_and_service, status_value):
+    """Транзиентные статусы саги обязаны быть членами MediaStatusEnum.
+
+    `status` в MediaFileResponse типизирован этим enum'ом, поэтому без них
+    любой ответ, включающий такую строку, падал бы на валидации 500. Самый
+    больной путь — именно этот bare-эндпоинт: приватный прокси UK
+    (`api/routes/media_proxy.py:proxy_media_file`) зовёт его на КАЖДУЮ картинку,
+    чтобы разрешить media_id → request_number, так что файл в процессе
+    удаления ломал бы выдачу приватного фото.
+
+    Список GET /media/request/{n} к этому классу поломки не относится — он
+    фильтрует `status == "active"` (media_storage.get_request_media), поэтому
+    транзиентные строки в него просто не попадают; проверяем это тем же тестом,
+    чтобы фильтр не «починили» случайно.
+    """
+    c, _ = client_and_service
+    media_id = _create_media_file(status=status_value, request_number="250101-777")
+
+    single = c.get(f"/api/v1/media/{media_id}", headers={"X-API-Key": "testkey"})
+    assert single.status_code == 200, single.text
+    assert single.json()["status"] == status_value
+
+    listed = c.get("/api/v1/media/request/250101-777", headers={"X-API-Key": "testkey"})
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == []
+
+
+# ---------- resolve_stale_transitions ----------
+
+def _age_row(media_id: int, minutes: int) -> None:
+    """Сдвигает updated_at в прошлое: порог staleness считается по нему."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.database import SessionLocal
+    from app.models.media import MediaFile
+
+    s = SessionLocal()
+    try:
+        mf = s.query(MediaFile).filter(MediaFile.id == media_id).first()
+        mf.updated_at = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        s.commit()
+    finally:
+        s.close()
+
+
+@pytest.mark.asyncio
+async def test_resolve_stale_transitions_directions_differ():
+    """archiving → active, deleting → deleted. Направления НЕ симметричны:
+    при archiving байты гарантированно на месте (копирование не удаляет), а при
+    deleting Telegram-сообщение могло уже исчезнуть — возврат в active отдал бы
+    наружу ссылку на возможно удалённый файл."""
+    svc = _make_service()
+    stuck_archiving = _create_media_file(status="archiving")
+    stuck_deleting = _create_media_file(status="deleting")
+    _age_row(stuck_archiving, 30)
+    _age_row(stuck_deleting, 30)
+
+    result = await svc.resolve_stale_transitions(older_than_minutes=15)
+
+    assert result == {"archiving_reverted": 1, "deleting_finalized": 1}
+    assert _get_status_and_lock(stuck_archiving)[0] == "active"
+    assert _get_status_and_lock(stuck_deleting)[0] == "deleted"
+
+
+@pytest.mark.asyncio
+async def test_resolve_stale_transitions_leaves_fresh_rows_alone():
+    """Порог по времени защищает от гонки с живой сагой: строку, которую прямо
+    сейчас обрабатывает _archive_or_delete_saga, трогать нельзя."""
+    svc = _make_service()
+    fresh = _create_media_file(status="archiving")
+    _age_row(fresh, 1)
+
+    result = await svc.resolve_stale_transitions(older_than_minutes=15)
+
+    assert result == {"archiving_reverted": 0, "deleting_finalized": 0}
+    assert _get_status_and_lock(fresh)[0] == "archiving"
+
+
+@pytest.mark.asyncio
+async def test_resolve_stale_transitions_endpoint(client_and_service):
+    c, _ = client_and_service
+    stuck = _create_media_file(status="deleting")
+    _age_row(stuck, 30)
+
+    resp = c.post(
+        "/api/v1/media/maintenance/resolve-stale-transitions?older_than_minutes=15",
+        headers={"X-API-Key": "testkey"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["deleting_finalized"] == 1
+    assert _get_status_and_lock(stuck)[0] == "deleted"
+
+
+def test_metadata_tolerates_null_tags(client_and_service):
+    """Регрессия (предсуществующий дефект, найденный при ревью): столбец
+    `tags` — JSON без NOT NULL, и строка с NULL валидацию не проходила. Один
+    такой файл ронял 500 на всю выдачу GET /media/request/{n}."""
+    c, _ = client_and_service
+    media_id = _create_media_file(tags=None, request_number="250101-778")
+
+    single = c.get(f"/api/v1/media/{media_id}", headers={"X-API-Key": "testkey"})
+    assert single.status_code == 200, single.text
+    assert single.json()["tags"] == []
+
+    listed = c.get("/api/v1/media/request/250101-778", headers={"X-API-Key": "testkey"})
+    assert listed.status_code == 200, listed.text
+    assert listed.json()[0]["tags"] == []

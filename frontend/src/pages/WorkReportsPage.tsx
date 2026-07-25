@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,8 @@ import {
   useReopenWorkReport,
   useUpdateWorkReportsSettings,
 } from '../hooks/useWorkReports'
-import type { WorkReport } from '../types/workReports'
+import { tCategory } from '../i18n/apiMaps'
+import { WORK_REPORT_CATEGORY_KEYS, type WorkReport } from '../types/workReports'
 import type { WorkReportsCfg } from '../types/boardConfig'
 
 /**
@@ -42,6 +43,8 @@ import type { WorkReportsCfg } from '../types/boardConfig'
 const DEFAULT_SETTINGS: WorkReportsCfg = {
   autopost: false,
   autopost_since: null,
+  autopublish: false,
+  categories: [],
   limit: 6,
   title: { ru: '', uz: '' },
 }
@@ -51,7 +54,23 @@ export default function WorkReportsPage() {
   usePageTitle(t('workReports.title'))
 
   const { data: boardConfig } = useBoardConfig()
-  const settings = boardConfig?.work_reports ?? DEFAULT_SETTINGS
+  const rawSettings = boardConfig?.work_reports
+  // Нормализуем, а не берём блок как есть: фронт может доехать раньше бэкенда
+  // (или ответить из кэша старой версии), и тогда `categories`/`autopublish` в
+  // ответе отсутствуют. Без этого `settings.categories.includes(...)` падал бы
+  // и уносил всю страницу, а не одну настройку.
+  //
+  // useMemo обязателен, а не косметика: ссылка на `settings` участвует в
+  // reseed-проверке ниже (`settings !== seededFrom`), и новый объект на каждом
+  // рендере зациклил бы setState.
+  const settings: WorkReportsCfg = useMemo(
+    () => ({
+      ...DEFAULT_SETTINGS,
+      ...(rawSettings ?? {}),
+      categories: rawSettings?.categories ?? [],
+    }),
+    [rawSettings],
+  )
 
   const { data: listData, isLoading: listLoading, isError: listError } = useWorkReports()
   const reports = listData?.items ?? []
@@ -214,6 +233,70 @@ export default function WorkReportsPage() {
           <Button size="sm" disabled={!settingsDirty || updateSettings.isPending} onClick={handleSaveSettings}>
             {t('workReports.settings.save')}
           </Button>
+        </div>
+
+        {/* Публикация без модерации. Отдельным блоком с явным предупреждением,
+            а не ещё одним чекбоксом в ряд с лимитом: это единственная
+            настройка, которая убирает человека из цепочки перед публикацией
+            фотографий. Мутация уходит сразу, как у тумблера автопостинга. */}
+        <div className="border-t border-border-default pt-4 flex flex-col gap-2">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={settings.autopublish}
+              onChange={() => updateSettings.mutate({ autopublish: !settings.autopublish })}
+              disabled={updateSettings.isPending}
+              aria-label={t('workReports.settings.autopublishLabel')}
+            />
+            <span className="flex flex-col gap-0.5">
+              <span
+                className={
+                  settings.autopublish
+                    ? 'text-[13px] font-semibold text-amber-600 dark:text-amber-400'
+                    : 'text-[13px] font-semibold text-text-primary'
+                }
+              >
+                {t('workReports.settings.autopublishLabel')}
+              </span>
+              <span className="text-[12px] text-text-muted">
+                {t('workReports.settings.autopublishHint')}
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {/* Фильтр категорий: что вообще попадает в ленту. Ни одной галки =
+            без ограничения (пустой фильтр ничего не отсекает) — подписано
+            явно, иначе пустое состояние читается как «ничего не публикуется». */}
+        <div className="border-t border-border-default pt-4 flex flex-col gap-2">
+          <span className="text-[13px] font-semibold text-text-primary">
+            {t('workReports.settings.categoriesLabel')}
+          </span>
+          <span className="text-[12px] text-text-muted">
+            {settings.categories.length === 0
+              ? t('workReports.settings.categoriesAll')
+              : t('workReports.settings.categoriesHint')}
+          </span>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+            {WORK_REPORT_CATEGORY_KEYS.map((key) => (
+              <label key={key} className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.categories.includes(key)}
+                  disabled={updateSettings.isPending}
+                  onChange={() =>
+                    updateSettings.mutate({
+                      categories: settings.categories.includes(key)
+                        ? settings.categories.filter((c) => c !== key)
+                        : [...settings.categories, key],
+                    })
+                  }
+                />
+                {tCategory(key, t)}
+              </label>
+            ))}
+          </div>
         </div>
       </div>
 

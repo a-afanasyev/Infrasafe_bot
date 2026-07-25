@@ -121,6 +121,26 @@ ALTER TABLE media_files DROP COLUMN IF EXISTS publication_locked;
 
 **Обязательное предусловие перед этим откатом**: у ВСЕХ строк `work_reports` с непустым `locked_media_ids` сначала снять публикацию (manager API `/unpublish` либо напрямую в БД). Пока `publication_locked` = true у файла, это единственный механизм, гарантирующий, что байты не будут заархивированы/удалены из-под ещё технически опубликованного отчёта — снос колонки при живых залоченных медиа теряет эту гарантию молча (ошибки не будет, просто данные окажутся уязвимы к архивации).
 
+### Зависшие publication-lock и транзиентные статусы медиа
+
+Сага публикации распределена между БД бота (`work_reports`) и БД media-service (`media_files`) без two-phase commit, поэтому крэш посреди неё оставляет расхождение. Самолечение идемпотентно и не требует ручного SQL:
+
+```bash
+# Сверка со стороны UK: расстрявшие publishing → pending, осиротевшие локи снять,
+# недостающие взять заново, плюс вызов maintenance-ручки media-service (ниже).
+# Автоматически выполняется при открытии очереди модерации (POST /work-reports/sync,
+# троттл 5 мин на воркер) — ручной вызов нужен только для немедленной диагностики.
+curl -X POST https://<host>/uk/api/v2/work-reports/reconcile -b "uk_access=<manager-cookie>"
+
+# Только media-service (archiving → active, deleting → deleted для строк старше порога).
+# Внутренний эндпоинт, наружу не проброшен — звать из docker-сети.
+docker exec uk-management-api curl -s -X POST \
+  "http://media-service:8000/api/v1/media/maintenance/resolve-stale-transitions?older_than_minutes=15" \
+  -H "X-API-Key: $MEDIA_API_KEY"
+```
+
+Направления восстановления `archiving`/`deleting` намеренно разные: при `archiving` байты гарантированно на месте (копирование в архив ничего не удаляет) → возврат в `active`; при `deleting` Telegram-сообщение могло уже исчезнуть → терминальным считается `deleted`, потому что возврат в `active` отдал бы наружу ссылку на возможно удалённый файл.
+
 ---
 
 ## 4. Проверка миграций

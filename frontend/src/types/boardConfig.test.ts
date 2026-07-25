@@ -29,6 +29,10 @@ describe('defaultBoardConfig.work_reports', () => {
   it('matches the backend default shape', () => {
     expect(defaultBoardConfig.work_reports).toEqual({
       autopost: false,
+      // Публикация без модерации — выключена по умолчанию; пустой список
+      // категорий = без ограничения (см. WorkReportsCfg на бэкенде).
+      autopublish: false,
+      categories: [],
       autopost_since: null,
       limit: 6,
       title: { ru: 'Отчёты о выполненных работах', uz: 'Bajarilgan ishlar hisobotlari' },

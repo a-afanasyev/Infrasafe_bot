@@ -282,7 +282,12 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     announcements: announcementsModule,
     rating: ratingModule,
     hours: hoursModule,
-    ...(WORK_REPORTS_ENABLED ? { workreports: <WorkReportsModule /> } : {}),
+    // Настройки приходят props'ами, а не вторым useBoardConfig() внутри модуля:
+    // здесь уже есть `config`, включая `configOverride` из редактора витрины —
+    // значит превью в редакторе сразу отражает правку лимита/заголовка.
+    ...(WORK_REPORTS_ENABLED
+      ? { workreports: <WorkReportsModule limit={config.work_reports?.limit} title={loc(config.work_reports?.title as LocalizedText)} /> }
+      : {}),
   }
 
   return (

@@ -81,6 +81,11 @@ class FakeMediaClient:
         self._list_locks_items = list_locks_items if list_locks_items is not None else []
         self.acquire_calls: list[int] = []
         self.release_calls: list[int] = []
+        self.resolve_stale_calls: list[int] = []
+
+    async def resolve_stale_transitions(self, older_than_minutes: int = 15) -> dict:
+        self.resolve_stale_calls.append(older_than_minutes)
+        return {"archiving_reverted": 0, "deleting_finalized": 0}
 
     async def get_request_media(self, request_number: str, category: str, limit: int = 50):
         return self._by_category.get(category, [])
@@ -178,6 +183,27 @@ async def test_non_manager_create_403(client: AsyncClient, resident_user, monkey
     _enable(monkeypatch)
     with _as_user(resident_user):
         resp = await client.post(BASE, json={"request_number": "260725-001"})
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_unapproved_manager_403(client: AsyncClient, db_session, monkeypatch):
+    """Роль manager есть, но пользователь ещё не approved → 403.
+
+    Роутер гейтится `require_approved_roles`, а не `require_roles`: модуль
+    публикует контент в открытый интернет, поэтому менеджер, сидящий на
+    модерации, управлять им не должен.
+    """
+    _enable(monkeypatch)
+    pending_manager = User(
+        telegram_id=777333, username="pendingmgr", first_name="Pending",
+        roles='["manager"]', active_role="manager", status="pending",
+    )
+    db_session.add(pending_manager)
+    await db_session.commit()
+
+    with _as_user(pending_manager):
+        resp = await client.get(BASE)
     assert resp.status_code == 403
 
 
@@ -356,8 +382,11 @@ async def test_sync_returns_summary_shape(client: AsyncClient, monkeypatch):
     resp = await client.post(f"{BASE}/sync")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"sync", "revoked", "reconcile"}
+    assert set(body.keys()) == {"sync", "autopublish", "revoked", "reconcile"}
+    # Без media-клиента и автопубликация, и сверка пропускаются: обе ходят в
+    # media-service (autofill/lock), поэтому без него им нечего делать.
     assert body["reconcile"] is None
+    assert body["autopublish"] is None
 
 
 @pytest.mark.asyncio
@@ -711,7 +740,13 @@ async def test_reconcile_happy_path_summary_shape(client: AsyncClient, monkeypat
     resp = await client.post(f"{BASE}/reconcile")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"unstuck_publishing", "orphaned_locks_released", "missing_locks_relocked"}
+    assert set(body.keys()) == {
+        "unstuck_publishing", "orphaned_locks_released", "missing_locks_relocked",
+        # Четвёртое направление: восстановление зависших archiving/deleting на
+        # стороне media-service (он один знает семантику своих переходов).
+        "stale_transitions",
+    }
+    assert fake.resolve_stale_calls == [15]
 
 
 @pytest.mark.asyncio
@@ -721,3 +756,100 @@ async def test_reconcile_503_without_media_client(client: AsyncClient, monkeypat
 
     resp = await client.post(f"{BASE}/reconcile")
     assert resp.status_code == 503
+
+
+# ── Валидация на границе ────────────────────────────────────────────
+#
+# Все четыре кейса ниже раньше проходили молча: неизвестный статус давал пустой
+# список (читается как «отчётов нет»), неизвестная категория и список медиа
+# любой длины доезжали до публичной ленты, а autofill мог перезаписать состав
+# уже опубликованного отчёта.
+
+
+@pytest.mark.asyncio
+async def test_list_rejects_unknown_status_filter(client: AsyncClient, monkeypatch):
+    _enable(monkeypatch)
+    resp = await client.get(BASE, params={"status": "pendign"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_rejects_unknown_category_key(client: AsyncClient, db_session, monkeypatch):
+    _enable(monkeypatch)
+    report = await _mk_report(db_session, "260725-901")
+
+    resp = await client.patch(f"{BASE}/{report.id}", json={"category_key": "нет-такой"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_accepts_canonical_category_key(client: AsyncClient, db_session, monkeypatch):
+    _enable(monkeypatch)
+    report = await _mk_report(db_session, "260725-902")
+
+    resp = await client.patch(f"{BASE}/{report.id}", json={"category_key": "electricity"})
+    assert resp.status_code == 200
+    assert resp.json()["category_key"] == "electricity"
+
+
+@pytest.mark.asyncio
+async def test_patch_rejects_media_list_over_cap(client: AsyncClient, db_session, monkeypatch):
+    """Тот же cap (MAX_MEDIA_PER_SIDE=4), что применяет autofill — ручной PATCH
+    не должен быть лазейкой в обход него."""
+    _enable(monkeypatch)
+    report = await _mk_report(db_session, "260725-903")
+
+    resp = await client.patch(f"{BASE}/{report.id}", json={"before_media_ids": [1, 2, 3, 4, 5]})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_autofill_one_409_on_published_report(client: AsyncClient, db_session, monkeypatch):
+    """Автозаполнение опубликованного отчёта перезаписало бы замороженный
+    состав медиа — тот же класс поломки, что закрывает row-lock в PATCH."""
+    _enable(monkeypatch)
+    report = await _mk_report(
+        db_session, "260725-904", status="published",
+        before_media_ids=[1], after_media_ids=[2], locked_media_ids=[1, 2],
+    )
+    _patch_media_client(monkeypatch, FakeMediaClient(by_category={
+        "request_photo": [_photo(7)], "completion_photo": [_photo(8)],
+    }))
+
+    resp = await client.post(f"{BASE}/{report.id}/autofill")
+    assert resp.status_code == 409
+
+    reloaded = (await db_session.execute(
+        select(WorkReport).where(WorkReport.id == report.id)
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+    assert reloaded.before_media_ids == [1]
+    assert reloaded.after_media_ids == [2]
+
+
+@pytest.mark.asyncio
+async def test_autofill_pending_skips_published_rows(client: AsyncClient, db_session, monkeypatch):
+    """Пакетное автозаполнение фильтруется по статусу: строка published с
+    media_synced_at=None (ручной отчёт, опубликованный без autofill) не должна
+    попасть под перезапись."""
+    _enable(monkeypatch)
+    editable = await _mk_report(db_session, "260725-905", status="pending")
+    published = await _mk_report(
+        db_session, "260725-906", status="published",
+        before_media_ids=[1], after_media_ids=[2], locked_media_ids=[1, 2],
+    )
+    _patch_media_client(monkeypatch, FakeMediaClient(by_category={
+        "request_photo": [_photo(7)], "completion_photo": [_photo(8)],
+    }))
+
+    resp = await client.post(f"{BASE}/autofill-pending")
+    assert resp.status_code == 200
+    assert resp.json() == {"processed": 1}
+
+    reloaded = (await db_session.execute(
+        select(WorkReport).where(WorkReport.id == published.id)
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+    assert reloaded.before_media_ids == [1]
+    assert reloaded.media_synced_at is None
+    assert editable.id != published.id

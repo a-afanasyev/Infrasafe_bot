@@ -6,8 +6,12 @@ import { server } from '@/test/msw/server'
 import { usePublicWorkReports, publicWorkReportMediaUrl } from './usePublicWorkReports'
 import type { PublicWorkReport } from '../types/workReports'
 
-const TOTAL = 15
-const PAGE_SIZE = 12
+// PAGE_SIZE зеркалит хук: 24 = максимум, который менеджер может выставить в
+// WorkReportsCfg.limit, поэтому первая страница обязана покрывать его целиком
+// (WorkReportsModule нарезает карточки из pages[0]).
+const PAGE_SIZE = 24
+// Заведомо больше одной страницы, чтобы пагинация реально проверялась.
+const TOTAL = 30
 
 function makeItems(count: number, startId: number): PublicWorkReport[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -39,7 +43,7 @@ function installFeedHandler() {
 }
 
 describe('usePublicWorkReports', () => {
-  it('первая страница запрашивается с offset=0 и limit=12', async () => {
+  it('первая страница запрашивается с offset=0 и limit=24', async () => {
     installFeedHandler()
     const { result } = renderHook(() => usePublicWorkReports())
     await waitFor(() => expect(result.current.isSuccess).toBe(true))

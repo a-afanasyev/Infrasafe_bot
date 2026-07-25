@@ -4,7 +4,7 @@ Pydantic схемы для Media API
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from enum import Enum
 
 
@@ -37,6 +37,17 @@ class MediaStatusEnum(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
     DELETED = "deleted"
+    # Транзиентные состояния саги архивации/удаления
+    # (media_storage._archive_or_delete_saga): резервирование коммитится ДО
+    # Telegram-I/O, поэтому строка реально наблюдаема в этих статусах. Обязаны
+    # быть в enum'е: `status` типизирован им в MediaFileResponse, и без этих
+    # членов любой ответ, включающий такую строку, падал бы 500 на валидации.
+    # Больнее всего на bare-эндпоинте GET /media/{id}: приватный прокси UK
+    # (api/routes/media_proxy.py:proxy_media_file) зовёт его на КАЖДУЮ картинку,
+    # чтобы разрешить media_id → request_number. Список GET /media/request/{n}
+    # тут не страдает — он и так фильтрует status == "active".
+    ARCHIVING = "archiving"
+    DELETING = "deleting"
 
 
 # Request schemas
@@ -112,6 +123,17 @@ class MediaFileResponse(BaseModel):
     upload_source: str
     status: MediaStatusEnum
     uploaded_at: datetime
+
+    # `MediaFile.tags` — JSON-столбец БЕЗ NOT NULL, то есть в БД законно лежит
+    # NULL (строки, залитые до появления тегирования, и любой путь, который их
+    # не выставляет). Дефолт `= []` от этого не спасает: он применяется только
+    # когда ключа нет, а не когда пришёл явный None — валидация падала, и один
+    # такой файл ронял 500 на ВСЮ выдачу GET /media/request/{n}
+    # (List[MediaFileResponse]), то есть галерею заявки целиком.
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tags_none_to_empty(cls, v):
+        return [] if v is None else v
     archived_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -155,6 +177,13 @@ class MediaTimelineItem(BaseModel):
     tags: List[str] = []
     file_size: int
     filename: str
+
+    # То же, что в MediaFileResponse: NULL в столбце tags законен, и один такой
+    # элемент не должен ронять весь timeline.
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tags_none_to_empty(cls, v):
+        return [] if v is None else v
 
 
 class MediaTimelineResponse(BaseModel):

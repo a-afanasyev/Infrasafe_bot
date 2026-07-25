@@ -5,7 +5,7 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union, Dict, Any, BinaryIO, Tuple
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -452,6 +452,44 @@ class MediaStorageService:
                 .where(MediaFile.id == media_file_id)
                 .values(publication_locked=False)
             )
+
+    async def resolve_stale_transitions(self, older_than_minutes: int) -> Dict[str, int]:
+        """Довести до терминального состояния строки, застрявшие в транзиентных
+        статусах саги `_reserve_and_run` (крэш процесса между резервированием и
+        финализацией).
+
+        Направления РАЗНЫЕ и не взаимозаменяемы:
+
+        * ``archiving`` → ``active``: до финализации байты гарантированно на
+          месте (копирование в архивный канал байты не удаляет), значит файл
+          безопасно вернуть в оборот и повторить архивацию позже.
+        * ``deleting`` → ``deleted``: Telegram-сообщение могло быть УЖЕ удалено,
+          то есть байтов может не быть. Возврат в ``active`` отдал бы наружу
+          ссылку на возможно исчезнувший файл — терминальным считаем
+          ``deleted``. Это единственный безопасный вывод в отсутствии
+          подтверждения от Telegram.
+
+        Порог по времени защищает от гонки с живой сагой: строка, которую прямо
+        сейчас обрабатывает `_reserve_and_run`, младше порога и не трогается.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+        with get_db_context() as db:
+            reverted = db.execute(
+                update(MediaFile)
+                .where(MediaFile.status == "archiving", MediaFile.updated_at < cutoff)
+                .values(status="active")
+            ).rowcount
+            finalized = db.execute(
+                update(MediaFile)
+                .where(MediaFile.status == "deleting", MediaFile.updated_at < cutoff)
+                .values(status="deleted")
+            ).rowcount
+        if reverted or finalized:
+            logger.info(
+                "resolve_stale_transitions: archiving→active %d, deleting→deleted %d",
+                reverted, finalized,
+            )
+        return {"archiving_reverted": reverted, "deleting_finalized": finalized}
 
     async def list_publication_locks(
         self, limit: int, offset: int

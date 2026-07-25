@@ -86,8 +86,44 @@ class LayoutItem(BaseModel):
 class WorkReportsCfg(BaseModel):
     autopost: bool = False
     autopost_since: datetime | None = None
+    # Публиковать БЕЗ модерации: черновик, у которого нашлись обе стороны фото,
+    # уезжает в публичную ленту сразу, без подтверждения человеком. Единственный
+    # контроль за СОДЕРЖИМЫМ снимка (номер двери, табличка с фамилией, госномер,
+    # лицо) — это глаза модератора; адрес анонимизируется кодом, фото — нет.
+    # Поэтому дефолт False, и в аудите такие публикации помечаются отдельным
+    # действием `work_report.autopublish` с user_id=NULL, чтобы по журналу было
+    # видно: человек это не подтверждал.
+    autopublish: bool = False
+    # Фильтр «какие категории вообще попадают в ленту». ПУСТОЙ СПИСОК = без
+    # ограничения (все категории), а не «ни одной» — это фильтр, и пустой фильтр
+    # ничего не отсекает. Существующие конфиги без этого поля поэтому продолжают
+    # работать как раньше.
+    categories: list[str] = Field(default_factory=list)
     limit: int = Field(6, ge=1, le=24)
     title: LocalizedText = Field(default_factory=LocalizedText)
+
+    @field_validator("categories")
+    @classmethod
+    def _known_categories(cls, v: list[str]) -> list[str]:
+        """Только канонические ключи категорий, без дублей, порядок сохраняем.
+
+        Импорт ленивый — `keyboards.requests` тянет aiogram.types (тот же приём,
+        что в api/work_reports/schemas.py и work_report_service).
+        """
+        from uk_management_bot.keyboards.requests import CANONICAL_CATEGORY_KEYS
+
+        unknown = [c for c in v if c not in CANONICAL_CATEGORY_KEYS]
+        if unknown:
+            raise ValueError(
+                f"unknown category keys: {unknown}; allowed: {sorted(CANONICAL_CATEGORY_KEYS)}"
+            )
+        seen: set[str] = set()
+        deduped = []
+        for c in v:
+            if c not in seen:
+                seen.add(c)
+                deduped.append(c)
+        return deduped
 
 
 class _BoardConfigFields(BaseModel):

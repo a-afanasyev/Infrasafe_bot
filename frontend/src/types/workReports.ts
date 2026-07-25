@@ -66,9 +66,31 @@ export interface WorkReportPatchPayload {
 
 export interface WorkReportsSettingsPayload {
   autopost?: boolean
+  autopublish?: boolean
+  categories?: string[]
   limit?: number
   title?: LocalizedText
 }
+
+/**
+ * Канонические ключи категорий, доступные для фильтра автопостинга. Зеркалит
+ * `CANONICAL_CATEGORY_KEYS` из uk_management_bot/keyboards/requests.py — бэкенд
+ * отклоняет всё, чего в том кортеже нет (см. `WorkReportsCfg._known_categories`).
+ * Порядок — как в UI-меню бота: сначала 8 «менюшных», затем 3 остальных.
+ */
+export const WORK_REPORT_CATEGORY_KEYS = [
+  'electricity',
+  'plumbing',
+  'heating',
+  'elevator',
+  'cleaning',
+  'landscaping',
+  'security',
+  'internet',
+  'ventilation',
+  'repair',
+  'other',
+] as const
 
 // Public feed — a DIFFERENT, narrower shape than WorkReport above (no
 // request_number, no description, no user ids — this is what unauthenticated

@@ -360,6 +360,29 @@ async def list_publication_locks(
         raise HTTPException(status_code=500, detail="Ошибка получения списка публикационных блокировок")
 
 
+@router.post("/maintenance/resolve-stale-transitions")
+async def resolve_stale_transitions(
+    older_than_minutes: int = Query(default=15, ge=1, le=1440),
+    storage_service: MediaStorageService = Depends(get_storage_service),
+):
+    """Довести до терминального состояния строки, зависшие в транзиентных
+    статусах `archiving`/`deleting` (крэш посреди саги archive/delete).
+
+    ВАЖНО: зарегистрирован ДО bare-маршрута GET /{media_id} по той же причине,
+    что и /publication-locks выше — иначе префикс распарсился бы как media_id.
+    Направления восстановления и почему они разные — см.
+    `MediaStorageService.resolve_stale_transitions`.
+    """
+    try:
+        return await storage_service.resolve_stale_transitions(
+            older_than_minutes=older_than_minutes
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to resolve stale transitions: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка восстановления зависших переходов")
+
+
 @router.get("/{media_id}/file")
 async def get_media_file_stream(
     media_id: int,

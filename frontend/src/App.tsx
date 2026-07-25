@@ -50,6 +50,7 @@ const RESOURCES_ENABLED = import.meta.env.VITE_RESOURCES_ENABLED === 'true'
 // + публичный архив. DARK за VITE_WORK_REPORTS_ENABLED, по умолчанию OFF.
 const WorkReportsPage = lazy(() => import('./pages/WorkReportsPage'))
 const WorkReportsArchivePage = lazy(() => import('./pages/WorkReportsArchivePage'))
+const WorkReportDetailPage = lazy(() => import('./pages/WorkReportDetailPage'))
 const WORK_REPORTS_ENABLED = import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
 
 const queryClient = new QueryClient({
@@ -187,6 +188,14 @@ export default function App() {
                   VITE_WORK_REPORTS_ENABLED. */}
               {WORK_REPORTS_ENABLED && (
                 <Route path="/work-reports" element={<PageErrorBoundary><WorkReportsArchivePage /></PageErrorBoundary>} />
+              )}
+              {/* Страница одного отчёта — цель нажатия по миниатюре в блоке на
+                  табло. Отдельный URL (а не модалка): ссылку на конкретную
+                  работу можно дать проверяющему органу. Объявлен ПОСЛЕ
+                  статического /work-reports — react-router 6 выбирает по
+                  специфичности, но порядок держим читаемым. */}
+              {WORK_REPORTS_ENABLED && (
+                <Route path="/work-reports/:reportId" element={<PageErrorBoundary><WorkReportDetailPage /></PageErrorBoundary>} />
               )}
 
               {/* Applicant registration - public Telegram Mini App page */}

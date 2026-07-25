@@ -507,6 +507,30 @@ class MediaServiceClient:
             logger.error(f"Failed to list publication locks: {e}")
             raise
 
+    async def resolve_stale_transitions(self, older_than_minutes: int = 15) -> Dict[str, Any]:
+        """Восстановление строк, зависших в транзиентных статусах
+        `archiving`/`deleting` (POST /media/maintenance/resolve-stale-transitions).
+
+        Best-effort: возвращает пустой dict при неудаче вместо исключения —
+        вызывающий (`work_report_service.reconcile_publication_locks`) это
+        фоновая сверка, и недоступность media-service не должна ронять её
+        остальные направления. Контраст с `list_publication_locks` выше, который
+        RAISES: там пустой результат был бы истолкован как «локов нет» и привёл
+        бы к снятию всех локов.
+        """
+        try:
+            response = await self.client.post(
+                "/media/maintenance/resolve-stale-transitions",
+                params={"older_than_minutes": older_than_minutes},
+            )
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Failed to resolve stale media transitions: {e}")
+            return {}
+
     async def get_request_timeline(self, request_number: str) -> Dict[str, Any]:
         """
         Получение временной линии медиа-файлов для заявки

@@ -85,7 +85,10 @@ _work_reports_feed_cache: dict[tuple[int, int], tuple[PublicWorkReportsOut, floa
 
 # revoke_stale_publications is real DB write work (it commits); riding it
 # on every public GET would be wasteful and racy under load, so it only
-# runs at most once per _REVOKE_THROTTLE_SECONDS, per worker.
+# runs at most once per _REVOKE_THROTTLE_SECONDS, per worker. This is also the
+# feed's worst-case staleness for a report that stopped being eligible — the
+# cache does NOT add to it, because a revocation that changed anything clears
+# the cache (see the handler).
 _REVOKE_THROTTLE_SECONDS = 60
 _last_revoke_check_at: Optional[float] = None
 
@@ -110,13 +113,17 @@ async def get_public_work_reports(
 
     cache_key = (limit, offset)
     now = time.monotonic()
-    cached = _work_reports_feed_cache.get(cache_key)
-    if cached is not None and cached[1] > now:
-        return cached[0]
 
+    # Ревокация проверяется ДО чтения кэша, а не после. Иначе окна складывались
+    # бы: попадание в кэш возвращало бы ответ, ни разу не дав ревокации
+    # выполниться, и отозванный отчёт жил бы в ленте до 60с троттла ПЛЮС до 30с
+    # TTL. В этом порядке потолок ровно один — троттл, потому что сработавшая
+    # ревокация тут же сбрасывает кэш и текущий запрос пересобирает ответ.
     if _last_revoke_check_at is None or (now - _last_revoke_check_at) > _REVOKE_THROTTLE_SECONDS:
         try:
-            await revoke_stale_publications(db)
+            revoked = await revoke_stale_publications(db)
+            if revoked:
+                _work_reports_feed_cache.clear()
         except Exception as e:
             # Broad on purpose — this is best-effort background maintenance
             # riding along on a public GET; a bug in it must never break the
@@ -127,6 +134,10 @@ async def get_public_work_reports(
             logger.warning("revoke_stale_publications failed during public feed build: %s", e)
             await db.rollback()
         _last_revoke_check_at = now
+
+    cached = _work_reports_feed_cache.get(cache_key)
+    if cached is not None and cached[1] > now:
+        return cached[0]
 
     try:
         total = (
@@ -178,6 +189,58 @@ async def get_public_work_reports(
     _work_reports_feed_cache[cache_key] = (result, now + _FEED_CACHE_TTL_SECONDS)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# GET /work-reports/{report_id} — один отчёт (страница отчёта на табло)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/work-reports/{report_id}", response_model=PublicWorkReportOut)
+@limiter.limit("120/minute")
+async def get_public_work_report(
+    request: Request,
+    report_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> PublicWorkReportOut:
+    """Один опубликованный отчёт — под глубокую ссылку /uk/work-reports/{id}.
+
+    Отдельный эндпоинт, а не «найти в уже загруженной ленте»: страница отчёта
+    открывается по прямой ссылке (её можно дать проверяющим), и отчёт может быть
+    вне первой страницы ленты — либо вообще за пределами `limit`, который
+    настраивает менеджер.
+
+    Флаг выключен → 404 (как у медиа), а НЕ пустой ответ: у одиночного ресурса
+    нет осмысленного «пусто», в отличие от списка, где стабильный `200 []`
+    удобнее для опрашивающего клиента.
+
+    Схема ровно та же, что в ленте: ни `request_number`, ни описания, ни id
+    пользователей — см. модуль-docstring.
+    """
+    if not settings.WORK_REPORTS_ENABLED:
+        raise HTTPException(status_code=404)
+
+    try:
+        report = (
+            await db.execute(select(WorkReport).where(WorkReport.id == report_id))
+        ).scalar_one_or_none()
+    except (OperationalError, ProgrammingError) as e:
+        # Таблицы ещё нет (миграция не накатана) — 404, а не 500: тот же принцип
+        # «публичная страница не белеет», что и у ленты выше.
+        logger.warning("work_reports table unavailable for public report %s: %s", report_id, e)
+        raise HTTPException(status_code=404)
+
+    if report is None or report.status != "published":
+        raise HTTPException(status_code=404)
+
+    return PublicWorkReportOut(
+        id=report.id,
+        category_key=report.category_key,
+        address=report.address_public,
+        completed_on=report.performed_at.date(),
+        before=list(report.before_media_ids),
+        after=list(report.after_media_ids),
+    )
 
 
 # ---------------------------------------------------------------------------

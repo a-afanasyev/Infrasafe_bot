@@ -30,7 +30,12 @@ function ArchiveCard({ report }: { report: PublicWorkReport }) {
   const beforeId = report.before[0]
   const afterId = report.after[0]
   return (
-    <div style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', padding: 20 }}>
+    // Карточка целиком — ссылка на страницу отчёта, как и миниатюра в блоке на
+    // табло: одна и та же цель нажатия из обоих мест.
+    <Link
+      to={`/work-reports/${report.id}`}
+      style={{ textDecoration: 'none', color: 'inherit', display: 'block', background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', padding: 20 }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
         <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#eff3ff', color: '#2563eb' }}>
           {tCategory(report.category_key, t)}
@@ -62,7 +67,7 @@ function ArchiveCard({ report }: { report: PublicWorkReport }) {
           <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>{t('board.workReports.after')}</div>
         </div>
       </div>
-    </div>
+    </Link>
   )
 }
 
