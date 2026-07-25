@@ -25,6 +25,8 @@ const titleStyle: React.CSSProperties = { fontFamily: "'Sora',sans-serif", fontW
 // "YYYY-MM-DD" (date-only, per PublicWorkReport.completed_on) → "DD.MM.YYYY".
 // Deliberately NOT reusing ResidentBoardPage's formatPublished — that one
 // expects a full datetime ISO string with a time component.
+// Regex, not new Date(dateOnly) — Date parses "YYYY-MM-DD" as UTC midnight,
+// which renders as the previous day in timezones behind UTC.
 function formatCompletedOn(dateOnly: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly)
   if (!m) return dateOnly
