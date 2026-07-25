@@ -7,8 +7,14 @@ import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
 import { CATEGORIES, URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
+import { downscaleImage } from '../../utils/downscaleImage'
 import PhotoUploader from '../../components/PhotoUploader'
 import RoleSwitchButton from '../../components/RoleSwitchButton'
+
+// Явный лимит на загрузку одного фото: twaClient создан без timeout, а
+// оборванная отдача тела на мобильной сети может не завершиться никогда.
+const UPLOAD_TIMEOUT_MS = 60_000
+
 
 // FS-04: category — канон-EN-ключ из общего constants, шлём как есть.
 
@@ -112,12 +118,15 @@ export default function InspectorCreatePage() {
     setUploadProgress({ done: 0, total: photos.length })
     for (let i = 0; i < photos.length; i++) {
       const form = new FormData()
-      form.append('file', photos[i])
+      // См. applicant/CreatePage.tsx: оригинал с камеры отбивается 413 на
+      // edge-nginx до нашего API, а без timeout запрос мог не завершиться никогда.
+      form.append('file', await downscaleImage(photos[i]))
       form.append('request_number', requestNumber)
       form.append('category', 'request_photo')
       try {
         await twaClient.post('/api/v2/media/upload', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: UPLOAD_TIMEOUT_MS,
         })
       } catch {
         failedIdx.push(i + 1)

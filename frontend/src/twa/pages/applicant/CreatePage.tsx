@@ -8,6 +8,7 @@ import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
 import { CATEGORIES, URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
+import { downscaleImage } from '../../utils/downscaleImage'
 import PhotoUploader from '../../components/PhotoUploader'
 
 // FS-04: category — канон-EN-ключ, шлём как есть (CATEGORIES из общего constants).
@@ -24,6 +25,10 @@ interface RequestAddresses {
   buildings: AddressItem[]
   apartments: AddressItem[]
 }
+
+// Явный лимит на загрузку одного фото: twaClient создан без timeout, а
+// оборванная отдача тела на мобильной сети может не завершиться никогда.
+const UPLOAD_TIMEOUT_MS = 60_000
 
 const EMPTY_ADDRESSES: RequestAddresses = { yards: [], buildings: [], apartments: [] }
 
@@ -128,12 +133,21 @@ export default function CreatePage() {
     setUploadProgress({ done: 0, total: photos.length })
     for (let i = 0; i < photos.length; i++) {
       const form = new FormData()
-      form.append('file', photos[i])
+      // Оригинал с камеры (8–15 МБ) отбивается 413 на edge-nginx ДО нашего API,
+      // поэтому уменьшаем здесь. Утилита не бросает: при неудаче вернёт исходный
+      // файл, и дальше сработает обычная обработка ошибки загрузки.
+      form.append('file', await downscaleImage(photos[i]))
       form.append('request_number', requestNumber)
       form.append('category', 'request_photo')
       try {
         await twaClient.post('/api/v2/media/upload', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          // twaClient создан без timeout (axios default = ждать бесконечно), а
+          // прерванная отдача тела на мобильной сети может не завершиться ни
+          // успехом, ни ошибкой. Без явного лимита мастер навсегда залипал на
+          // «Загрузка...», и житель считал, что заявка не создалась — хотя она
+          // уже была создана предыдущим запросом.
+          timeout: UPLOAD_TIMEOUT_MS,
         })
       } catch {
         failedIdx.push(i + 1)
