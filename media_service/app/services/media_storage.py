@@ -356,6 +356,17 @@ class MediaStorageService:
 
         reserving_status: "archiving" (archive_media) или "deleting" (delete_media).
         """
+        if reserving_status == "archiving":
+            is_archive = True
+        elif reserving_status == "deleting":
+            is_archive = False
+        else:
+            # Только внутренний вызывающий (archive_media/delete_media) может
+            # передать сюда значение — но проверяем явно, а не полагаемся на
+            # тихий fallthrough в ветку delete: опечатка или будущий третий
+            # транзиентный статус не должны молча трактоваться как удаление.
+            raise ValueError(f"Unknown reserving_status: {reserving_status}")
+
         # === Фаза 1: резервирование, своя короткая транзакция ===
         reserved = False
         with get_db_context() as db:
@@ -384,7 +395,7 @@ class MediaStorageService:
         with get_db_context() as db:
             media_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
             try:
-                if reserving_status == "archiving":
+                if is_archive:
                     archive_channel = await self._get_channel_for_category(db, FileCategories.ARCHIVE)
                     await self._copy_to_archive(media_file, archive_channel, archive_reason)
 
@@ -405,7 +416,7 @@ class MediaStorageService:
                 return True
 
             except Exception as e:
-                action = "archive" if reserving_status == "archiving" else "delete"
+                action = "archive" if is_archive else "delete"
                 logger.error(f"Failed to {action} media file {media_file_id}: {e}")
                 # Компенсация: I/O не удался, байты никуда не делись —
                 # возвращаем резервирование.

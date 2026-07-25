@@ -525,3 +525,24 @@ def test_acquire_lock_endpoint_404_on_non_active(client_and_service):
         headers={"X-API-Key": "testkey"},
     )
     assert resp.status_code == 404, resp.text
+
+
+# ---------- defensive guard: unknown reserving_status ----------
+
+@pytest.mark.asyncio
+async def test_saga_rejects_unknown_reserving_status():
+    """_archive_or_delete_saga only accepts "archiving"/"deleting" from its
+    two callers (archive_media/delete_media). A stray third value (typo, or
+    a future transient status added without updating this method) must raise
+    ValueError up front — not silently fall through to the delete branch."""
+    svc = _make_service()
+    media_id = _create_media_file(status="active")
+
+    with pytest.raises(ValueError, match="Unknown reserving_status"):
+        await svc._archive_or_delete_saga(
+            media_id, reserving_status="bogus", archive_reason=None
+        )
+
+    # Guard fires before phase 1 touches the row — status must be untouched.
+    status, _ = _get_status_and_lock(media_id)
+    assert status == "active"
