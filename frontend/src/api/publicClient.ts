@@ -7,6 +7,14 @@ import axios from 'axios'
 // public media-streaming endpoint, never fetched via axios/JSON — see
 // usePublicWorkReports.ts) can reuse this computation instead of
 // duplicating it.
+//
+// NAMING TRAP: `api/client.ts` ALSO exports something called `publicClient`
+// — a DIFFERENT, unrelated axios instance (withCredentials: true, for
+// login/OTP flows). Same name, different module, opposite credentials
+// setting. Importing the wrong one type-checks fine and "works" in the
+// common case — it just silently attaches session cookies to a request
+// meant to be anonymous. For anonymous/public board & feed endpoints, THIS
+// file's `publicClient` (withCredentials: false) is the one you want.
 export const BASE_URL =
   import.meta.env.VITE_API_URL ??
   import.meta.env.BASE_URL.replace(/\/$/, '')

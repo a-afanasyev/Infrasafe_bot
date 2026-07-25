@@ -18,6 +18,14 @@ export const apiClient = axios.create({
 // apiClient на 401 пытается refresh → при неудаче редиректит на /login,
 // что на самой странице логина перезагружало её и стирало inline-ошибку
 // («неверный пароль» выглядел как молчаливый сброс формы).
+//
+// NAMING TRAP: `api/publicClient.ts` ALSO exports a `publicClient` — a
+// DIFFERENT, unrelated axios instance (withCredentials: false, for
+// anonymous board/feed endpoints). Same name, different module, opposite
+// credentials setting. Importing the wrong one type-checks fine and "works"
+// in the common case — it just silently drops the auth-cookie-setting
+// behavior a login/OTP flow needs. For login/verify-otp/refresh, THIS
+// file's `publicClient` (withCredentials: true) is the one you want.
 export const publicClient = axios.create({
   baseURL: BASE_URL,
   withCredentials: true, // login/verify-otp ставят auth-cookies в ответе

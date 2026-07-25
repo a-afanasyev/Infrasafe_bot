@@ -1,4 +1,8 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
+// publicClient здесь — из api/publicClient.ts (withCredentials: false, для
+// анонимных эндпоинтов), НЕ одноимённый экспорт из api/client.ts
+// (withCredentials: true, для login/OTP) — см. naming-trap комментарий в
+// обоих файлах.
 import { publicClient, BASE_URL } from '../api/publicClient'
 import type { PublicWorkReportsPage } from '../types/workReports'
 
@@ -9,7 +13,7 @@ import type { PublicWorkReportsPage } from '../types/workReports'
 // getNextPageParam возвращает undefined, когда страниц больше нет — v5-конвенция,
 // НЕ v4-булев hasNextPage).
 
-const ENDPOINT = '/api/v2/public/work-reports'
+const BASE = '/api/v2/public/work-reports'
 const PAGE_SIZE = 12
 
 export function usePublicWorkReports() {
@@ -17,7 +21,7 @@ export function usePublicWorkReports() {
     queryKey: ['public-work-reports'],
     queryFn: ({ pageParam }) =>
       publicClient
-        .get(ENDPOINT, { params: { limit: PAGE_SIZE, offset: pageParam } })
+        .get(BASE, { params: { limit: PAGE_SIZE, offset: pageParam } })
         .then((r) => r.data),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -32,5 +36,5 @@ export function usePublicWorkReports() {
 // через blob: (CSP на этом деплое блокирует blob: на /uk/*, см. reference
 // про CSP-landmine).
 export function publicWorkReportMediaUrl(reportId: number, mediaId: number): string {
-  return `${BASE_URL}${ENDPOINT}/${reportId}/media/${mediaId}`
+  return `${BASE_URL}${BASE}/${reportId}/media/${mediaId}`
 }
