@@ -30,6 +30,7 @@ from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.request_number_service import RequestNumberService
+from uk_management_bot.services.workflow_notifications import dispatch_notify_intents
 from uk_management_bot.services.workflow_runner import (
     run_command_async,
     RequestNotFound,
@@ -587,8 +588,9 @@ async def update_request(
             raise HTTPException(status_code=422, detail=str(e))
 
         # Webhook + audit уже эмитированы внутри транзакции run_command. Здесь —
-        # только best-effort realtime для канбана (intent emit'ится лишь при смене
-        # внешней проекции; flag-only без смены проекции событий не даёт).
+        # best-effort realtime для канбана (intent emit'ится лишь при смене
+        # внешней проекции; flag-only без смены проекции событий не даёт) и
+        # адресные уведомления в Telegram.
         for ev in outcome.post_commit_intents:
             if ev.kind == "realtime":
                 await publish_request_event("request.status_changed", {
@@ -597,6 +599,11 @@ async def update_request(
                     "old_status": normalize_status(outcome.old_state),
                     "new_status": ev.data.get("status"),
                 })
+        # `notify` раньше здесь молча выбрасывался: движок его выпускал, а
+        # исполнял только бот и только внутри своего хендлера — поэтому переход,
+        # сделанный из дашборда, никого не уведомлял (прод-жалоба про уточнение).
+        # Диспетчер сам решает, о чём молчать, и не бросает.
+        await dispatch_notify_intents(db, request_number, outcome.post_commit_intents)
 
         # Свежая карточка из живой сессии (run_command коммитнул в своей сессии и
         # закрыл её; READ COMMITTED → новый SELECT видит коммит).

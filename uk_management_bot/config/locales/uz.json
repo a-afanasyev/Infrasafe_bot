@@ -8146,7 +8146,15 @@
     "access_details": "📍 **Tafsilotlar:**\n{details}",
     "access_revoked_title": "🚫 **Kirish huquqlari bekor qilindi**",
     "access_revoked_body": "{level_name} uchun ariza berish huquqlaringiz bekor qilindi.",
-    "access_revoked_reason": "💬 **Sabab:**\n{reason}"
+    "access_revoked_reason": "💬 **Sabab:**\n{reason}",
+    "workflow": {
+      "clarify_request": "❓ #{request_number} arizasi bo‘yicha javob kerak\n\n📍 {address}\n\nMenejer aniqlashtiruvchi savol berdi — arizani oching va javob bering, aks holda ishlar boshlanmaydi.",
+      "assigned": "🔧 #{request_number} arizasi ishga qabul qilindi\n\n📍 {address}",
+      "executed": "✅ #{request_number} arizasi bo‘yicha ishlar bajarildi\n\n📍 {address}\n\nNatijani tekshiring va ishni qabul qiling yoki qayta ishlashga qaytaring.",
+      "ready_for_acceptance": "📋 #{request_number} arizasi qabul qilishga tayyor\n\n📍 {address}\n\n«Qabul qilish» bo‘limida ish sifatini baholang.",
+      "returned_to_work": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}",
+      "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}"
+    }
   },
   "document_types": {
     "passport": "pasport",
