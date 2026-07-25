@@ -1,5 +1,9 @@
 # syntax=docker/dockerfile:1.6
-FROM node:20-alpine AS builder
+# Node 24 (как в CI): react-router 8 требует engines node >=22.22.0, Vite 7 —
+# >=20.19. engine-strict у нас выключен, так что на node:20 сборка пока лишь
+# ругалась бы EBADENGINE — но образ фронта в CI не собирается, и рассинхрон
+# всплыл бы только на прод-хосте.
+FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
