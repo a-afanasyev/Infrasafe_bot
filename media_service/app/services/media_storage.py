@@ -4,14 +4,13 @@
 """
 
 import logging
-import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Union, Dict, Any, BinaryIO, Tuple
+from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import update
 from sqlalchemy.orm import Session
-from aiogram.types import InputFile, BufferedInputFile, Message
+from aiogram.types import BufferedInputFile, Message
 
-from app.models.media import MediaFile, MediaChannel, MediaTag, MediaUploadSession
+from app.models.media import MediaFile, MediaChannel, MediaTag
 from app.services.telegram_client import TelegramClientService
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
 from app.db.database import get_db_context
@@ -635,7 +634,10 @@ class MediaStorageService:
         # Загружаем из БД
         channel = db.query(MediaChannel).filter(
             MediaChannel.purpose == channel_purpose,
-            MediaChannel.is_active == True
+            # `.is_(True)` — SQL-предикат, а не питоновское сравнение: даёт тот же
+            # `WHERE is_active` и снимает E712, не полагаясь на неявную истинность
+            # колонки (ruff предлагал именно её).
+            MediaChannel.is_active.is_(True)
         ).first()
 
         if not channel:
@@ -809,7 +811,7 @@ class MediaStorageService:
                 raise ValueError("Failed to get file URL")
 
             # Генерируем подпись для архива
-            archive_caption = f"🗄️ АРХИВ\n"
+            archive_caption = "🗄️ АРХИВ\n"
             archive_caption += f"📋 #{media_file.request_number}\n"
             archive_caption += f"📅 Оригинал: {media_file.uploaded_at.strftime('%d.%m.%Y %H:%M')}\n"
             if archive_reason:

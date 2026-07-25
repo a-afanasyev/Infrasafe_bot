@@ -6,8 +6,7 @@
 import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy import or_, func
 
 from app.models.media import MediaFile, MediaTag
 from app.db.database import get_db_context

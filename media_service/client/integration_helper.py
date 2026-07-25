@@ -3,9 +3,9 @@
 """
 
 import logging
-from typing import Optional, List, Dict, Any, BinaryIO
+from typing import Optional, List, Dict, Any
 from io import BytesIO
-from aiogram.types import Message, PhotoSize, Video, Document, InputFile
+from aiogram.types import Message, PhotoSize, Video, Document
 from aiogram import Bot
 
 from .media_client import MediaServiceClient

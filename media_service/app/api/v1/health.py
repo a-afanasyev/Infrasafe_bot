@@ -4,10 +4,9 @@ Health check API endpoints
 
 import logging
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException
 
-from app.db.database import get_db, check_db_connection
+from app.db.database import check_db_connection
 from app.schemas import HealthResponse
 from app.core.config import settings
 from app.services import TelegramClientService
@@ -50,7 +49,7 @@ async def detailed_health_check():
             dependencies["database"] = "ok" if db_status else "error"
             if not db_status:
                 overall_status = "degraded"
-        except Exception as e:
+        except Exception:
             dependencies["database"] = "error"
             overall_status = "degraded"
 
@@ -61,7 +60,7 @@ async def detailed_health_check():
             bot_info = await telegram.bot.get_me()
             dependencies["telegram"] = "ok" if bot_info else "error"
             await telegram.close()
-        except Exception as e:
+        except Exception:
             dependencies["telegram"] = "error"
             overall_status = "degraded"
 
@@ -75,7 +74,7 @@ async def detailed_health_check():
             dependencies["configuration"] = "ok" if config_status else "error"
             if not config_status:
                 overall_status = "degraded"
-        except Exception as e:
+        except Exception:
             dependencies["configuration"] = "error"
             overall_status = "degraded"
 

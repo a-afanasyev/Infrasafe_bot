@@ -170,6 +170,42 @@ jobs:
           pip-audit -r requirements.txt \
             --ignore-vuln PYSEC-2026-1325
 
+      # AUD5-PRAC-2: media_service — второй живой прод-сервис со своим
+      # requirements.txt, который не сканировал никто. Его пин python-multipart
+      # 0.0.20 нёс 6 CVE ровно в парсере загрузок, то есть на горячем пути
+      # сервиса; корневой файл бампнули ещё в REG-03, этот остался позади именно
+      # потому, что был вне гейта.
+      # Без --ignore-vuln СОЗНАТЕЛЬНО: ecdsa-CVE, которое корневой файл вынужден
+      # игнорировать (тянет python-jose), здесь устранено удалением самого
+      # python-jose — сервис его нигде не импортирует.
+      - name: Audit media_service dependencies
+        run: pip-audit -r media_service/requirements.txt
+
+  media-tests:
+    name: media-tests (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: media_service
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: media_service/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # БД не нужна: conftest.py поднимает файловый sqlite и мокает Telegram,
+      # окружение выставляет сам (os.environ.setdefault — см. его докстринг).
+      # `test_upload.py`/`test_frontend.py` исключены в pytest.ini: они ходят в
+      # живой стек и «проходят» всегда (см. комментарий там же).
+      - name: Run tests
+        run: pytest -q
+
   backend-tests:
     name: backend-tests (pytest)
     runs-on: ubuntu-latest
@@ -933,6 +969,19 @@ jobs:
           load: false
           cache-from: type=gha,scope=access
           cache-to: "type=gha,mode=max,scope=access"
+
+      # AUD5-PRAC-2: media-service — тоже живой прод-сервис (profk + 105), а его
+      # Dockerfile не собирался ни одним гейтом. Контекст здесь `media_service/`,
+      # не корень: образ собирается из своего каталога (см. docker-compose).
+      - name: Build media image
+        uses: docker/build-push-action@v7
+        with:
+          context: media_service
+          file: media_service/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=media
+          cache-to: "type=gha,mode=max,scope=media"
 
   frontend:
     name: frontend (build + lint + test)

@@ -3,12 +3,11 @@
 Основано на спецификации photo.md
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, BigInteger, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, BigInteger, JSON
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
 Base = declarative_base()
 

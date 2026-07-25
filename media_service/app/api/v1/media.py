@@ -6,20 +6,18 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
-from fastapi.responses import JSONResponse, StreamingResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
-import io
 
 from app.db.database import get_db, SessionLocal
 from app.services import MediaStorageService, MediaSearchService
 from app.services import preview_cache
 from app.schemas import (
-    MediaUploadRequest, MediaSearchRequest, MediaUpdateTagsRequest,
+    MediaUpdateTagsRequest,
     MediaArchiveRequest, MediaDateRangeRequest, MediaFileResponse,
     MediaSearchResponse, MediaStatisticsResponse, MediaTimelineResponse,
     MediaDateRangeResponse, MediaUploadResponse, MediaFileUrlResponse,
-    ErrorResponse, MediaTagResponse, MediaCategoryEnum, FileTypeEnum,
-    MediaStatusEnum, MediaTelegramLookupResponse, PreviewWarmRequest
+    MediaTagResponse, MediaCategoryEnum, MediaStatusEnum, MediaTelegramLookupResponse, PreviewWarmRequest
 )
 from app.core.config import settings, TelegramChannels, FileCategories
 from app.services.media_storage import ChannelNotConfiguredError, PublicationReservationError

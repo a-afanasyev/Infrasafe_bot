@@ -5,10 +5,8 @@
 """
 
 import requests
-import json
 import time
 import sys
-from io import BytesIO
 
 class MediaServiceTester:
     def __init__(self):
