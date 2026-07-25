@@ -366,14 +366,23 @@ async def test_performed_at_uses_completed_at_for_prinyato(db_session: AsyncSess
     assert abs((report.performed_at.replace(tzinfo=None) - marker.replace(tzinfo=None)).total_seconds()) < 2
 
 
-# ── Фильтр категорий (work_reports.categories) ──────────────────────
+# ── Фильтр категорий (work_reports.categories) НЕ действует на синк ──
 #
-# Пустой список = БЕЗ ограничения (это фильтр, а пустой фильтр ничего не
-# отсекает) — покрыто всеми тестами выше, которые его не задают.
+# Список ограничивает только автопубликацию (`autopublish_ready_drafts`, тесты в
+# test_work_reports_saga.py). Очередь модерации наполняется по всем подходящим
+# заявкам — см. тест ниже.
 
 
 @pytest.mark.asyncio
-async def test_category_filter_keeps_only_listed_categories(db_session: AsyncSession):
+async def test_sync_ignores_category_filter(db_session: AsyncSession):
+    """Черновик создаётся и для категории вне списка.
+
+    Раньше фильтр стоял здесь, и это было необратимо: заявка вне списка не
+    получала черновика, уезжала из 14-дневного окна `floor_ts` и после снятия
+    галочки уже не подхватывалась — в отличие от черновика, который просто
+    ждёт в очереди. Плюс подпись в UI обещает «остальные отчёты остаются на
+    модерации». Что уйдёт в ленту без человека — решает автопубликация.
+    """
     await _seed_board_config(
         db_session, autopost=True, autopost_since=_UTC_NOW() - timedelta(days=1),
         categories=["cleaning"],
@@ -386,22 +395,25 @@ async def test_category_filter_keeps_only_listed_categories(db_session: AsyncSes
 
     await sync_pending_drafts(db_session)
 
-    # 401 — plumbing (не в списке), 402 — cleaning (в списке).
-    assert await _existing_report_numbers(db_session) == {"260725-402"}
+    # 401 — plumbing (вне списка), 402 — cleaning (в списке): в очереди ОБА.
+    assert await _existing_report_numbers(db_session) == {"260725-401", "260725-402"}
 
 
 @pytest.mark.asyncio
-async def test_category_filter_matches_legacy_russian_labels(db_session: AsyncSession):
-    """`Request.category` у старых строк хранит RU-подпись, а не канон-ключ —
-    поэтому фильтр сравнивает через resolve_category_key, а не в SQL напрямую.
-    Без этого легаси-заявки молча выпадали бы из ленты."""
+async def test_legacy_russian_category_label_snapshots_canonical_key(db_session: AsyncSession):
+    """`Request.category` у старых строк хранит RU-подпись, а не канон-ключ.
+
+    В снапшот отчёта обязан попасть канон-ключ (`resolve_category_key`): по нему
+    сравнивает фильтр автопубликации и его рендерит публичная лента. Список
+    категорий задан намеренно — заодно фиксируем, что синк на него не смотрит.
+    """
     await _seed_board_config(
         db_session, autopost=True, autopost_since=_UTC_NOW() - timedelta(days=1),
-        categories=["cleaning"],
+        categories=["plumbing"],
     )
     yard = await _mk_yard(db_session, "Двор")
     req = await _mk_request(db_session, "260725-403", yard_id=yard.id, updated_at=_UTC_NOW())
-    req.category = "Уборка"  # легаси-подпись той же категории
+    req.category = "Уборка"  # легаси-подпись категории cleaning
     await db_session.commit()
 
     await sync_pending_drafts(db_session)
@@ -409,4 +421,4 @@ async def test_category_filter_matches_legacy_russian_labels(db_session: AsyncSe
     numbers = await _existing_report_numbers(db_session)
     assert numbers == {"260725-403"}
     report = (await db_session.execute(select(WorkReport))).scalars().one()
-    assert report.category_key == "cleaning"  # в снапшот пишется канон-ключ
+    assert report.category_key == "cleaning"

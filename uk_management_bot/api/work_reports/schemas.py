@@ -50,6 +50,14 @@ class WorkReportCreateIn(BaseModel):
 
 
 class WorkReportPatchIn(BaseModel):
+    # extra="forbid" именно здесь: у PATCH'а нет поля свободного адреса (адрес
+    # выводится из связей заявки, override — только building_id/yard_id для
+    # legacy), и клиент, приславший `address_public`, по умолчанию получал 200 с
+    # молча выброшенным полем — то есть «адрес изменён» с точки зрения вызывающего,
+    # хотя ничего не изменилось. Для ручки, правящей содержимое публичной
+    # карточки, тихое игнорирование опечатки — плохой контракт.
+    model_config = ConfigDict(extra="forbid")
+
     category_key: Optional[str] = None
     # Тот же cap, что применяет autofill_media — иначе ручной PATCH обходил бы
     # его и морозил произвольно длинный список (столько же publication-lock'ов

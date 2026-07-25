@@ -109,9 +109,19 @@ class MediaFileResponse(BaseModel):
     telegram_message_id: int
     telegram_file_id: str
     file_type: FileTypeEnum
-    original_filename: str
-    file_size: int
-    mime_type: str
+    # Все четыре — nullable в БД (`MediaFile`), поэтому и здесь Optional. Раньше
+    # они были объявлены обязательными, и ОДНА строка с NULL валила 500 на всю
+    # выдачу `GET /media/request/{n}` (List[MediaFileResponse]) — тот же класс
+    # дефекта, что уже закрыт валидатором `tags` ниже. Живой upload-путь их
+    # всегда заполняет (endpoint отклоняет запрос без имени файла), так что
+    # None здесь — про исторические и вручную созданные строки.
+    #
+    # `file_size` НЕ приводим к 0: потребитель (UK, `_filter_and_cap`) трактует
+    # None как «размер неизвестен → в публичный отчёт не пускать». Ноль прошёл
+    # бы проверку лимита и втащил в открытую ленту файл неизвестного веса.
+    original_filename: Optional[str] = None
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
     description: Optional[str] = None
     caption: Optional[str] = None
     # Домен-нейтрально: у access-медиа (контроль доступа) request_number = None,
@@ -120,7 +130,7 @@ class MediaFileResponse(BaseModel):
     uploaded_by_user_id: int
     category: MediaCategoryEnum
     tags: List[str] = []
-    upload_source: str
+    upload_source: Optional[str] = None
     status: MediaStatusEnum
     uploaded_at: datetime
 

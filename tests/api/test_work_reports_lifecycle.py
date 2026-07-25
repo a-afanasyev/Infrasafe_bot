@@ -9,6 +9,7 @@
 (не FastAPI-dependency — обычная функция, импортированная в роутере
 напрямую, поэтому патчится по имени в модуле роутера).
 """
+import copy
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -18,9 +19,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import uk_management_bot.api.work_reports.router as work_reports_router
+from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.api.dependencies import get_current_user
 from uk_management_bot.api.main import app
 from uk_management_bot.config.settings import settings
+from uk_management_bot.database.models.board_config import BoardConfig
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
@@ -129,6 +132,17 @@ async def _mk_request(db: AsyncSession, number: str, **kwargs) -> Request:
     db.add(req)
     await db.commit()
     return req
+
+
+async def _seed_autopost(db: AsyncSession, *, since: datetime) -> None:
+    """Включить автопост с бэкдейтом — иначе `floor_ts` равен моменту включения
+    и синк ничего не создаёт (тот же приём, что `_seed_board_config` в
+    test_work_reports_sync.py)."""
+    data = copy.deepcopy(DEFAULT_BOARD_CONFIG)
+    data["work_reports"]["autopost"] = True
+    data["work_reports"]["autopost_since"] = since.isoformat()
+    db.add(BoardConfig(id=1, data=data, updated_by=None))
+    await db.commit()
 
 
 async def _mk_report(db: AsyncSession, number: str, **kwargs) -> WorkReport:
@@ -382,11 +396,12 @@ async def test_sync_returns_summary_shape(client: AsyncClient, monkeypatch):
     resp = await client.post(f"{BASE}/sync")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"sync", "autopublish", "revoked", "reconcile"}
+    assert set(body.keys()) == {"sync", "autopublish", "revoked", "reconcile", "reconcile_error"}
     # Без media-клиента и автопубликация, и сверка пропускаются: обе ходят в
     # media-service (autofill/lock), поэтому без него им нечего делать.
     assert body["reconcile"] is None
     assert body["autopublish"] is None
+    assert body["reconcile_error"] is None
 
 
 @pytest.mark.asyncio
@@ -402,6 +417,71 @@ async def test_sync_reconcile_throttled_on_second_rapid_call(client: AsyncClient
 
     second = await client.post(f"{BASE}/sync")
     assert second.status_code == 200
+    assert second.json()["reconcile"] is None
+
+
+class _LocksInventoryDown(FakeMediaClient):
+    """media-service отвечает ошибкой на инвентаризацию локов.
+
+    `list_publication_locks` в реальном клиенте бросает намеренно (глотать
+    нельзя: по пустому списку сверка сняла бы живые локи), поэтому заглушка
+    воспроизводит именно исключение, а не пустой ответ.
+    """
+
+    async def list_publication_locks(self, limit: int = 200, offset: int = 0) -> dict:
+        raise RuntimeError("media-service unreachable")
+
+
+@pytest.mark.asyncio
+async def test_sync_survives_failing_lock_reconciliation(
+    client: AsyncClient, db_session, monkeypatch, manager_user
+):
+    """Упавшая сверка локов не должна ронять /sync.
+
+    Синк, автопубликация и отзыв к этому моменту уже закоммичены, а /sync —
+    единственный вход менеджера в очередь: 500 здесь означал бы «очередь не
+    открывается, пока лежит media-service».
+    """
+    _enable(monkeypatch)
+    _reset_reconcile_throttle(monkeypatch)
+    _patch_media_client(monkeypatch, _LocksInventoryDown())
+    await _seed_autopost(db_session, since=datetime.now(timezone.utc) - timedelta(days=1))
+    yard = await _mk_yard(db_session, "Двор")
+    await _mk_request(db_session, "260725-950", yard_id=yard.id)
+
+    resp = await client.post(f"{BASE}/sync")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # Полезная работа сделана и видна в ответе...
+    assert body["sync"]["created"] == 1
+    # ...а провал сверки назван явно, а не проглочен молчанием.
+    assert body["reconcile"] is None
+    assert body["reconcile_error"] == "RuntimeError"
+    assert (await db_session.execute(
+        select(WorkReport).where(WorkReport.request_number == "260725-950")
+    )).scalars().one().status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_sync_throttles_reconcile_even_after_failure(client: AsyncClient, monkeypatch):
+    """Метка троттла ставится и при провале сверки.
+
+    Иначе `_last_reconcile_at` не обновлялся бы, и каждый следующий /sync снова
+    упирался бы в недоступный media-service — на проде это таймаут на таймауте.
+    """
+    _enable(monkeypatch)
+    _reset_reconcile_throttle(monkeypatch)
+    _patch_media_client(monkeypatch, _LocksInventoryDown())
+
+    first = await client.post(f"{BASE}/sync")
+    assert first.status_code == 200
+    assert first.json()["reconcile_error"] == "RuntimeError"
+
+    second = await client.post(f"{BASE}/sync")
+    assert second.status_code == 200
+    # Сверку даже не пытались запустить — значит метка времени была поставлена.
+    assert second.json()["reconcile_error"] is None
     assert second.json()["reconcile"] is None
 
 

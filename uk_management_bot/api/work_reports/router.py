@@ -219,18 +219,43 @@ async def sync_work_reports(
     revoked = await work_report_service.revoke_stale_publications(db)
 
     reconcile_result = None
+    reconcile_error = None
     now = datetime.now(timezone.utc)
     if media_client is not None and (
         _last_reconcile_at is None or now - _last_reconcile_at >= _RECONCILE_THROTTLE
     ):
-        reconcile_result = await work_report_service.reconcile_publication_locks(db, media_client)
-        _last_reconcile_at = now
+        # Сверка — фоновая maintenance-операция, ехавшая прицепом к /sync, и она
+        # НЕ должна ронять ответ: синк, автопубликация и отзыв выше уже
+        # закоммичены, а `list_publication_locks` намеренно бросает при ошибке
+        # media-service (глотать её внутри reconcile нельзя — по пустой
+        # инвентаризации он снял бы живые локи). Поэтому изолируем здесь:
+        # иначе лежащий media-service делал бы 500 на единственном входе
+        # менеджера в очередь при полностью успешной полезной работе.
+        try:
+            reconcile_result = await work_report_service.reconcile_publication_locks(
+                db, media_client
+            )
+        except Exception as e:
+            # Сессия могла остаться в failed-транзакции (reconcile коммитит
+            # внутри себя, но упасть может и посередине) — откатываем, чтобы
+            # не отдать 500 уже на сериализации ответа.
+            await db.rollback()
+            reconcile_error = type(e).__name__
+            logger.warning("reconcile_publication_locks не прошёл внутри /sync: %s", e)
+        finally:
+            # Стамп в finally, а не после успеха: иначе при недоступном
+            # media-service троттл не включается, и каждый следующий /sync
+            # снова упирается в тот же таймаут.
+            _last_reconcile_at = now
 
     return {
         "sync": sync_result,
         "autopublish": autopublish_result,
         "revoked": revoked,
         "reconcile": reconcile_result,
+        # Явное поле, а не молчание: оператор должен видеть, что сверка локов
+        # не выполнилась, даже когда всё остальное прошло.
+        "reconcile_error": reconcile_error,
     }
 
 

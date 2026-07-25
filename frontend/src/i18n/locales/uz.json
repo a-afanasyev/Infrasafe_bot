@@ -1898,7 +1898,7 @@
       "autopublishLabel": "Moderatsiyasiz nashr qilish",
       "autopublishHint": "«Oldin» va «keyin» suratlari bor hisobotlar tasdiqlanmasdan darhol ommaviy tasmaga chiqadi. Manzilni tizim o‘zi anonimlashtiradi, lekin suratning mazmunini emas: bu rejimda eshik raqami, familiyali taxtacha, avtomobil raqami yoki odam yuzini hech kim tekshirmaydi.",
       "categoriesLabel": "Tasma uchun toifalar",
-      "categoriesHint": "Avtomatika (avtopostlash va moderatsiyasiz nashr) faqat belgilangan toifalar bilan ishlaydi. Qolgan hisobotlar moderatsiyada qoladi — ularni qo‘lda nashr qilish mumkin.",
+      "categoriesHint": "Moderatsiyasiz nashr faqat belgilangan toifalar bilan ishlaydi. Qolgan hisobotlar ham navbatga tushadi va moderatsiyada qoladi — ularni qo‘lda nashr qilish mumkin.",
       "categoriesAll": "Hech bir toifa belgilanmagan — barchasi tasmaga tushadi."
     },
     "createDraft": {

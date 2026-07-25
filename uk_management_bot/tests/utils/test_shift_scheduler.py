@@ -478,6 +478,130 @@ class TestAutoManagerTick:
         asyncio.get_event_loop().run_until_complete(sched._auto_manager_tick())
 
 
+class TestWorkReportsTick:
+    """_work_reports_tick — автоматика визуальных отчётов «до/после».
+
+    Без этой задачи тумблер «Автопост» ничего не автоматизировал: черновики
+    появлялись только по нажатию «Синхронизировать» менеджером (прод-жалоба
+    2026-07-25). Доменные функции покрыты в tests/api/test_work_reports_*;
+    здесь проверяется обвязка планировщика — гейт флага, изоляция фаз, статистика.
+    """
+
+    MODULE = "uk_management_bot.utils.shift_scheduler"
+
+    def _run(self, sched):
+        asyncio.get_event_loop().run_until_complete(sched._work_reports_tick())
+
+    @staticmethod
+    def _session_cm(session):
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=session)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        factory = MagicMock(return_value=cm)
+        return factory
+
+    def _patched(self, service, *, flag=True, media_client=MagicMock(), session=None):
+        """Подменить всё, что тик импортирует лениво внутри себя."""
+        from contextlib import ExitStack
+        # Тик делает `from uk_management_bot.services import work_report_service`,
+        # поэтому атрибут на пакете должен существовать до patch().
+        import uk_management_bot.services.work_report_service  # noqa: F401
+        session = session or AsyncMock()
+        settings = MagicMock()
+        settings.WORK_REPORTS_ENABLED = flag
+        stack = ExitStack()
+        stack.enter_context(patch("uk_management_bot.config.settings.settings", settings))
+        stack.enter_context(patch(
+            "uk_management_bot.database.session.AsyncSessionLocal", self._session_cm(session)
+        ))
+        stack.enter_context(patch(
+            "uk_management_bot.integrations.get_media_client", return_value=media_client
+        ))
+        stack.enter_context(patch("uk_management_bot.services.work_report_service", service))
+        return stack
+
+    @staticmethod
+    def _service(**over):
+        svc = MagicMock()
+        svc.sync_pending_drafts = AsyncMock(return_value={"created": 2})
+        svc.autopublish_ready_drafts = AsyncMock(return_value={"published": 1})
+        svc.revoke_stale_publications = AsyncMock(return_value=0)
+        svc.reconcile_publication_locks = AsyncMock(return_value={})
+        for k, v in over.items():
+            setattr(svc, k, v)
+        return svc
+
+    def test_runs_all_phases_and_counts_success(self):
+        svc = self._service()
+        sched = _make_scheduler()
+        with self._patched(svc):
+            self._run(sched)
+
+        svc.sync_pending_drafts.assert_awaited_once()
+        svc.autopublish_ready_drafts.assert_awaited_once()
+        svc.revoke_stale_publications.assert_awaited_once()
+        assert sched.task_stats["work_reports_sync"]["success"] == 1
+
+    def test_autopublish_is_machine_triggered(self):
+        """triggered_by=None — публикацию не инициировал человек, и аудит
+        не должен приписывать её менеджеру, включившему тумблер."""
+        svc = self._service()
+        sched = _make_scheduler()
+        with self._patched(svc):
+            self._run(sched)
+
+        assert svc.autopublish_ready_drafts.await_args.kwargs["triggered_by"] is None
+
+    def test_noop_when_flag_disabled(self):
+        svc = self._service()
+        sched = _make_scheduler()
+        with self._patched(svc, flag=False):
+            self._run(sched)
+
+        svc.sync_pending_drafts.assert_not_awaited()
+
+    def test_skips_media_phases_without_media_client(self):
+        svc = self._service()
+        sched = _make_scheduler()
+        with self._patched(svc, media_client=None):
+            self._run(sched)
+
+        # Синк и отзыв — SQL-only, они обязаны работать и без media-service.
+        svc.sync_pending_drafts.assert_awaited_once()
+        svc.revoke_stale_publications.assert_awaited_once()
+        svc.autopublish_ready_drafts.assert_not_awaited()
+        svc.reconcile_publication_locks.assert_not_awaited()
+
+    def test_failing_sync_does_not_skip_revocation(self):
+        """Фазы независимы: упавший синк не должен оставить в ленте отчёт по
+        заявке, которую житель вернул."""
+        svc = self._service(sync_pending_drafts=AsyncMock(side_effect=Exception("boom")))
+        sched = _make_scheduler()
+        with self._patched(svc):
+            self._run(sched)
+
+        svc.revoke_stale_publications.assert_awaited_once()
+        assert sched.task_stats["work_reports_sync"]["failed"] == 1
+
+    def test_failing_reconcile_does_not_mark_tick_failed(self):
+        """Сверка локов — фоновая гигиена; её сбой не окрашивает тик в failed."""
+        svc = self._service(
+            reconcile_publication_locks=AsyncMock(side_effect=Exception("media down"))
+        )
+        sched = _make_scheduler()
+        with self._patched(svc):
+            self._run(sched)
+
+        assert sched.task_stats["work_reports_sync"]["success"] == 1
+        assert sched.task_stats["work_reports_sync"]["failed"] == 0
+
+    def test_registered_in_setup_jobs(self):
+        sched = _make_scheduler()
+        sched.setup_jobs()
+        ids = [c.kwargs.get("id") for c in sched._mock_apscheduler.add_job.call_args_list]
+        assert "work_reports_sync" in ids
+
+
 # ---------------------------------------------------------------------------
 # bot seam (COD-02/03): prod passes bot, jobs build fresh per-session notifier
 # ---------------------------------------------------------------------------
