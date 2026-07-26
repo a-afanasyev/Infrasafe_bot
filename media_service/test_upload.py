@@ -18,10 +18,10 @@ def create_test_image():
 
     # Добавляем текст (если доступен)
     try:
-        from PIL import ImageDraw, ImageFont
+        from PIL import ImageDraw
         draw = ImageDraw.Draw(img)
         draw.text((10, 40), "TEST", fill='white')
-    except:
+    except Exception:
         pass
 
     # Сохраняем в BytesIO как JPEG

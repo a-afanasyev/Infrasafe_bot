@@ -46,9 +46,14 @@ precision = 1
 line-length = 88
 target-version = "py311"
 # PRAC-01-FU scope decision (owner, 2026-06-14): enforce E/F on bot/API only.
-# media_service/scripts/docs carry ~169 E/F deferred to PRAC-01-FU2.
+# media_service вернён в scope 2026-07-26 (AUD5-PRAC-2): это живой прод-сервис,
+# и он оставался единственным, чей код не проходил ни одного гейта. Прежняя
+# оценка «~169 E/F» относилась ко ВСЕМУ отложенному набору — на самом деле в
+# media_service их было 39, остальные 127 живут в `scripts`, который остаётся
+# отложенным (AUD5-PRAC-11: правки там трогают одноразовые ops-скрипты, и это
+# отдельный разговор).
 # force-exclude makes these apply even when paths are passed explicitly (CI / pre-commit).
-extend-exclude = ["media_service", "scripts", "docs", "resource-accounting"]
+extend-exclude = ["scripts", "docs", "resource-accounting"]
 force-exclude = true
 
 [tool.ruff.lint]

@@ -3,8 +3,6 @@
 Скрипт для инициализации каналов в базе данных MediaService
 """
 
-import asyncio
-from sqlalchemy.orm import Session
 from app.db.database import engine, SessionLocal, Base
 from app.models.media import MediaChannel
 from app.core.config import settings, TelegramChannels

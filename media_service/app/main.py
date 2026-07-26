@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 import time
 
-from starlette.responses import Response as StarletteResponse
 
 from app.core.config import settings
 from app.db.database import init_db, check_db_connection

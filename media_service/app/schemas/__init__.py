@@ -26,6 +26,10 @@ from .media import (
 )
 
 __all__ = [
+    # Базовый класс схем (SEC-022: extra="forbid" на всех входных моделях) —
+    # импортируется и ре-экспортируется наравне с остальными, поэтому обязан
+    # быть в __all__: иначе он выглядит неиспользуемым импортом.
+    "StrictSchema",
     "MediaUploadRequest",
     "MediaSearchRequest",
     "MediaUpdateTagsRequest",

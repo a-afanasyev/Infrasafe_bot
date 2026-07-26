@@ -16,7 +16,6 @@ media_service грузит свой `Settings` на уровне модуля и
 пути через importlib — это же повторно исполняет валидаторы на каждый кейс.
 """
 import importlib.util
-import os
 from pathlib import Path
 
 import pytest

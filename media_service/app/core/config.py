@@ -3,9 +3,8 @@
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field
 from typing import List, Optional
-import os
 
 
 class Settings(BaseSettings):
