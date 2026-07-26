@@ -9,12 +9,15 @@
 #      на момент последней сборки, а не рабочего дерева;
 #   2. в живой контейнер во время отладки попадают файлы через `docker cp` —
 #      после этого его содержимое вообще не соответствует ни одному коммиту;
-#   3. образ сознательно НЕ содержит `docker-compose*.yml` (это деплой-описания,
-#      не рантайм приложения), а SSOT-гейт `test_compose_secret_env_ssot.py`
-#      читает именно их — в контейнере он падал тремя FileNotFoundError, хотя в
-#      CI зелёный. Это дефект харнесса, а не тестов: они проверяют файлы репо,
-#      значит харнесс обязан их предоставить. Здесь они монтируются read-only —
-#      складывать их в образ было бы неверно.
+#   3. образ сознательно НЕ содержит конфигурационных файлов репозитория
+#      (`docker-compose*.yml`, `frontend/nginx.conf`) — это деплой-описания, не
+#      рантайм приложения. А config-гейты (`test_compose_secret_env_ssot.py`,
+#      `test_health_contract.py`) читают именно их — в контейнере они падали
+#      FileNotFoundError при полностью зелёном CI. Это дефект харнесса, а не
+#      тестов: они проверяют файлы репо, значит харнесс обязан их предоставить.
+#      Здесь такие файлы монтируются read-only ПОФАЙЛОВО — складывать их в
+#      образ было бы неверно, а монтировать каталог целиком означало бы
+#      перекрыть код из образа и вернуть подмену из пункта 1.
 #
 # Что воспроизводится один-в-один с `ci.yml`:
 #   * тот же образ, что и прод-бот (сборка из текущего дерева);
@@ -58,13 +61,15 @@ ENV_ARGS=(
   -e DEBUG=true
 )
 
-# Compose-файлы — только те три, которые читает SSOT-гейт. Точечно, чтобы не
-# перекрыть монтированием код из образа: это вернуло бы ту самую подмену
-# «тестируем дерево, а не собранный артефакт».
-COMPOSE_MOUNTS=(
+# Конфиг-файлы репозитория, которые читают config-гейты. Пофайлово и только
+# нужные: монтирование каталога перекрыло бы код из образа.
+#   docker-compose{,.profk,.media}.yml — tests/services/test_compose_secret_env_ssot.py
+#   frontend/nginx.conf               — tests/api/test_health_contract.py (PENT-F17)
+CONFIG_MOUNTS=(
   -v "${ROOT}/docker-compose.yml:/app/docker-compose.yml:ro"
   -v "${ROOT}/docker-compose.profk.yml:/app/docker-compose.profk.yml:ro"
   -v "${ROOT}/docker-compose.media.yml:/app/docker-compose.media.yml:ro"
+  -v "${ROOT}/frontend/nginx.conf:/app/frontend/nginx.conf:ro"
 )
 
 cleanup() {
@@ -102,11 +107,11 @@ docker run --rm --network "$NET" -v "${ROOT}/alembic:/app/alembic:ro" \
   'python -m alembic upgrade head >/dev/null && python -m alembic check'
 
 echo "==> сьют 1/2: pytest -q (uk_management_bot, postgres)"
-docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${COMPOSE_MOUNTS[@]}" \
+docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
   --entrypoint sh "$IMAGE" -c 'pytest -q'
 
 echo "==> сьют 2/2: pytest -q tests/api tests/services (sqlite-conftest'ы)"
-docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${COMPOSE_MOUNTS[@]}" \
+docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
   -e INFRASAFE_WEBHOOK_ENABLED=true \
   --entrypoint sh "$IMAGE" -c 'pytest -q tests/api tests/services'
 

@@ -128,5 +128,5 @@ RBAC: всё — `require_approved_roles("manager", "system_admin")` (`api/depen
 ## 8. Связанные документы
 
 - Полный план/решения владельца: `~/.claude/plans/serene-pondering-marshmallow.md`.
-- Схема БД: [DATABASE_SCHEMA_ACTUAL.md](DATABASE_SCHEMA_ACTUAL.md) (требует добавления 4 таблиц).
+- Схема БД: [DATABASE_SCHEMA_ACTUAL.md](Archive/2026-07-26-stale-docs/DATABASE_SCHEMA_ACTUAL.md) (требует добавления 4 таблиц).
 - Деплой: [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) (миграция 036 + edge-allowlist).

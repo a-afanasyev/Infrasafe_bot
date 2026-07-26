@@ -58,7 +58,10 @@ _logger = logging.getLogger(__name__)
 
 
 # Disable interactive docs in prod (plan §4.6, §7.5).
-# Public OpenAPI surface increases attack/scrape risk; ops gets schemas via repo.
+# Public OpenAPI surface increases attack/scrape risk; ops gets schemas via repo:
+# `docs/tech/openapi.json` (AUD5-PRAC-8) — снапшот генерируется
+# `scripts/dump_openapi.py` и сверяется CI-гейтом, поэтому обещание «схема в
+# репозитории» теперь исполняется, а не только заявлено.
 _docs_kwargs = {} if settings.DEBUG else {
     "docs_url": None,
     "redoc_url": None,

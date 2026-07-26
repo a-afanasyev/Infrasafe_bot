@@ -19,16 +19,16 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **400**
-- закрыто маркером: **311**
-- открыто маркером: **89**
+- закрыто маркером: **314**
+- открыто маркером: **86**
 
-  - `actionable` — **59**
+  - `actionable` — **56**
   - `decision` — **26**
   - `calendar` — **1**
   - `no-pr` — **2**
   - `doc-closed` — **1**
 
-Из них actionable по приоритету: P2=32, P3=27.
+Из них actionable по приоритету: P2=31, P3=25.
 
 Значения `status`:
 
@@ -80,10 +80,7 @@
 | `TEST-068` | P2 | actionable | plan-2026-07-26 | П11 | — | — | — |  |
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | plan-2026-07-26 | П2b | — | — | — | security.txt = SPA-200; вариант 404 = принятый риск, не фикс |
-| `PENT-F10` | P3 | actionable | to-verify | П2c | — | — | — | после Doppler проверять .env.postgres и .secrets/roles/* |
-| `AUD5-PRAC-1` | P2 | actionable | plan-2026-07-26 | П2d | — | — | — |  |
-| `AUD5-PRAC-7` | P3 | actionable | doc-2026-07-21 | П2d | — | — | — |  |
-| `AUD5-PRAC-8` | P3 | actionable | doc-2026-07-21 | П2d | — | — | — |  |
+| `PENT-F10` | P3 | actionable | verified-2026-07-26 | П2c | — | — | — | profk чист (600/700 везде); остаток — .105 за ssh-блокером |
 | `AUD5-CODE-7` | P2 | actionable | plan-2026-07-26 | П3a | — | — | — | keyboards/base.py:59 (в бэклоге :54-55 — строки уползли) |
 | `AUD3-12` | P2 | actionable | plan-2026-07-26 | П3b | — | — | — | нужен выбор atomic / partial-success до кода |
 | `AUD3-13` | P2 | actionable | doc-2026-07-14 | П3c | — | — | — |  |

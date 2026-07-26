@@ -313,6 +313,13 @@ jobs:
           INFRASAFE_WEBHOOK_ENABLED: "true"
         run: coverage run -a -m pytest -q tests/api tests/services
 
+      # AUD5-PRAC-8: интерактивные доки в проде выключены осознанно, а обещанный
+      # взамен снапшот схемы в репозитории отсутствовал — контракт менялся без
+      # следа в диффе. Гейт сверяет `docs/tech/openapi.json` с `app.openapi()`.
+      # Стоит здесь, а не отдельной джобой: зависимости уже установлены.
+      - name: OpenAPI snapshot gate
+        run: python3 scripts/dump_openapi.py --check
+
       # PRC-01 / AUD3-04: два раздельных ratchet-floor на одном прогоне. Core-код
       # и handlers/ гейтятся отдельными --omit/--include-порогами, чтобы ~28k
       # слабопокрытых строк хендлеров не размывали сигнал по ядру. Оба floor —

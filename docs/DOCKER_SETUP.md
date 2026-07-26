@@ -54,23 +54,19 @@ docker-compose --version
 
 ### 2. Настройка переменных окружения
 
-#### Для Production (PostgreSQL):
 ```bash
-# Скопируйте пример конфигурации
-cp env.example .env
-
-# Отредактируйте .env файл с вашими настройками
+# Единственный канонический пример окружения корневого стека
+cp .env.example .env
 nano .env
 ```
 
-#### Для Development (SQLite):
-```bash
-# Скопируйте development конфигурацию
-cp env.dev.example .env
-
-# Отредактируйте .env файл с вашими настройками
-nano .env
-```
+> AUD5-PRAC-1 (2026-07-26): раньше здесь предлагались `env.example` (production/
+> PostgreSQL) и `env.dev.example` (development/SQLite). Оба файла удалены:
+> первый требовал `SECRET_KEY`/`JWT_SECRET_KEY`, которых код не читает вообще, и
+> не содержал ни одного обязательного секрета; второй был пустым. SQLite-ветка
+> тоже неактуальна — `settings.py` запрещает SQLite при `DEBUG=False`, а dev-стек
+> работает на том же PostgreSQL. Порядок первого запуска (роли PR-7 → `migrate` →
+> сервисы) — в корневом [README](../README.md).
 
 **ВАЖНО**: Обязательно измените следующие параметры в `.env`:
 
@@ -149,8 +145,7 @@ UK/
 ├── docker-compose.dev.yml     # Development конфигурация (SQLite)
 ├── docker-compose.media.yml   # Override: media-service (прод)
 ├── .dockerignore             # Исключения для Docker
-├── env.example               # Пример переменных окружения (PostgreSQL)
-├── env.dev.example           # Пример переменных окружения (SQLite)
+├── .env.example              # Единственный пример переменных окружения
 ├── .env                      # Ваши переменные окружения
 ├── uk_management_bot/        # Код приложения
 └── DOCKER_SETUP.md          # Этот файл
@@ -414,7 +409,7 @@ docker-compose exec app netstat -tulpn
 
 ```bash
 # Создайте отдельный .env.production
-cp env.example .env.production
+cp .env.example .env.production
 
 # Используйте production конфигурацию
 docker compose -f docker-compose.yml -f docker-compose.media.yml up -d  # прод; БЕЗ --remove-orphans

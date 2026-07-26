@@ -13,7 +13,7 @@ uk_management_bot/        — бот: handlers, services, middlewares, keyboards
 uk_management_bot/api/    — FastAPI backend (REST + WebSocket); образ из Dockerfile.api → uk-management-api
 frontend/                 — React SPA: дашборд (/dashboard) + TWA Mini App (/twa); Vite, TanStack Query, Zustand, i18next
 media_service/            — отдельный сервис хранения/раздачи медиа
-alembic/                  — миграции PostgreSQL (запускаются только в api-контейнере)
+alembic/                  — миграции PostgreSQL (применяются сервисом `migrate`, не в api)
 access_control/           — материалы по ролям и доступу
 docs/                     — документация; docs/audit/ — бэклог и планы закрытия
 docker-compose.yml        — dev-окружение (app, api, frontend, postgres, redis)
@@ -24,7 +24,8 @@ docker-compose.yml        — dev-окружение (app, api, frontend, postgr
 | Сервис | Контейнер | Порт (host → container) | Назначение |
 |---|---|---|---|
 | Бот | `uk-management-bot` (`app`) | — | aiogram 3, `python -m uk_management_bot.main` |
-| API | `uk-management-api` (`api`) | `127.0.0.1:8085 → 8080` | FastAPI REST + WebSocket; здесь же выполняется alembic |
+| API | `uk-management-api` (`api`) | `127.0.0.1:8085 → 8080` | FastAPI REST + WebSocket; на старте — read-only preflight схемы |
+| Миграции | `uk-migrate` (`migrate`, профиль `tools`) | — | `alembic upgrade head` под ролью-владельцем схемы (PR-7) |
 | Фронт | `uk-frontend` (`frontend`) | `127.0.0.1:3002 → 80` | React SPA (дашборд + TWA) |
 | БД | `uk-postgres` | `127.0.0.1:5432` | PostgreSQL 15 |
 | Кэш | `uk-redis` | `127.0.0.1:6379` | Redis 7 (rate-limit, throttle, кэш) |
@@ -35,21 +36,43 @@ docker-compose.yml        — dev-окружение (app, api, frontend, postgr
 ## Быстрый старт (dev)
 
 ```bash
-cp env.example .env          # заполнить BOT_TOKEN, JWT_SECRET, INVITE_SECRET и пр.
-docker compose up -d         # app, api, frontend, postgres, redis
+cp .env.example .env         # единственный канонический пример; заполнить BOT_TOKEN,
+                             # JWT_SECRET, INVITE_SECRET, ADMIN_PASSWORD (≥16 символов),
+                             # UK_WEBHOOK_SECRET, OUTBOX_SOURCE_INSTANCE
+cp .env.postgres.example .env.postgres   # пароли служебных ролей PR-7 (F-01)
+
+# 1. Поднять только БД и кэш — остальному нужны уже созданные роли.
+docker compose up -d postgres redis
+
+# 2. Создать роли least-privilege (PR-7): владелец схемы + runtime-роли.
+#    Кладёт креды в .secrets/roles/.env.{bot,api,access,migrate} — их читает env_file.
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+docker compose run --rm provision-roles
+
+# 3. Схема — отдельным сервисом `migrate` (см. ниже почему не в api-контейнере).
+docker compose run --rm migrate
+
+# 4. Приложения.
+docker compose up -d app api frontend
 docker logs uk-management-bot --tail 20
 ```
 
-Миграции (только в api-контейнере — в образе бота alembic нет):
+Шаги 2 и 3 обязательны и именно в этом порядке: `migrate` читает
+`.secrets/roles/.env.migrate`, который создаётся на шаге 2, а `api`/`access-api` на
+старте делают read-only preflight и падают `exit 1` при любом расхождении схемы с
+зашитым в образ `EXPECTED_ALEMBIC_HEAD`. Оба сервиса — под compose-профилем `tools`,
+поэтому обычный `docker compose up -d` их не поднимает (и не должен).
+
+> `docker exec uk-management-api alembic upgrade head` технически работает, но это НЕ
+> рабочая процедура: порядок всегда `migrate` → `up`, иначе api не поднимется. На проде
+> та же команда идёт через `doppler run --` — см.
+> [`.claude/skills/uk-deploy/SKILL.md`](.claude/skills/uk-deploy/SKILL.md).
+
+Пересборка бота после правок (сервис называется `app`; `uk-management-bot` — имя
+контейнера, `build`/`up` по нему не работают):
 
 ```bash
-docker exec uk-management-api alembic upgrade head
-```
-
-Пересборка бота после правок:
-
-```bash
-docker compose build uk-management-bot && docker compose up -d uk-management-bot
+docker compose build app && docker compose up -d app
 ```
 
 Фронтенд dev с hot-reload: `cd frontend && npm run dev` → `http://localhost:5173/uk/`
@@ -58,12 +81,25 @@ docker compose build uk-management-bot && docker compose up -d uk-management-bot
 
 ## Тесты
 
-Бот (только внутри контейнера, два блокирующих набора — оба в CI):
+Эталон перед мержем — прогон, эквивалентный CI-джобе `backend-tests`
+(свежая сборка образа + одноразовые postgres/redis + оба набора раздельно):
+
+```bash
+make test-ci
+```
+
+Быстрая петля в живом контейнере (два блокирующих набора — оба в CI):
 
 ```bash
 docker exec uk-management-bot pytest -q                          # unit/handlers/services
 docker exec uk-management-bot pytest -q tests/api tests/services # API + интеграция/SSOT-гейты
 ```
+
+> Петля быстрее, но **не эталон**: образ печётся, поэтому `docker exec` гоняет код на
+> момент последней сборки, а не рабочего дерева; кроме того в образе нет
+> `docker-compose*.yml` и `frontend/nginx.conf`, и config-гейты, которые их читают,
+> падают там `FileNotFoundError` при полностью зелёном CI. `make test-ci` монтирует
+> эти файлы точечно и потому даёт тот же результат, что CI.
 
 Фронт:
 

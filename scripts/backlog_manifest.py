@@ -124,11 +124,11 @@ ASSIGNMENT: dict[str, dict] = {
                   note="/uk/health отдаёт SPA index.html — мониторинг ложно зелёный"),
     "PENT-F14": A(pkg="П2b", status="actionable", method="plan-2026-07-26",
                   note="security.txt = SPA-200; вариант 404 = принятый риск, не фикс"),
-    "PENT-F10": A(pkg="П2c", status="actionable", method="to-verify",
-                  note="после Doppler проверять .env.postgres и .secrets/roles/*"),
-    "AUD5-PRAC-1": A(pkg="П2d", status="actionable", method="plan-2026-07-26"),
-    "AUD5-PRAC-7": A(pkg="П2d", status="actionable", method="doc-2026-07-21"),
-    "AUD5-PRAC-8": A(pkg="П2d", status="actionable", method="doc-2026-07-21"),
+    "PENT-F10": A(pkg="П2c", status="actionable", method="verified-2026-07-26",
+                  note="profk чист (600/700 везде); остаток — .105 за ssh-блокером"),
+    # П2d закрыт целиком 2026-07-26: `AUD5-PRAC-1` (канонический .env.example +
+    # честный первый запуск в README), `AUD5-PRAC-7` (23 стухших дока в архив),
+    # `AUD5-PRAC-8` (снапшот OpenAPI + CI-гейт).
     # ── П3
     "AUD5-CODE-7": A(pkg="П3a", status="actionable", method="plan-2026-07-26",
                      note="keyboards/base.py:59 (в бэклоге :54-55 — строки уползли)"),
