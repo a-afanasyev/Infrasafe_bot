@@ -194,6 +194,10 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
     data = await state.get_data()
     user_apartment_id = data['user_apartment_id']
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             # Сначала получаем информацию о заявке для уведомления

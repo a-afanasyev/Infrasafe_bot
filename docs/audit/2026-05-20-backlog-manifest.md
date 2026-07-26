@@ -19,16 +19,16 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **400**
-- закрыто маркером: **315**
-- открыто маркером: **85**
+- закрыто маркером: **317**
+- открыто маркером: **83**
 
-  - `actionable` — **55**
+  - `actionable` — **53**
   - `decision` — **26**
   - `calendar` — **1**
   - `no-pr` — **2**
   - `doc-closed` — **1**
 
-Из них actionable по приоритету: P2=30, P3=25.
+Из них actionable по приоритету: P2=29, P3=24.
 
 Значения `status`:
 
@@ -83,8 +83,6 @@
 | `PENT-F10` | P3 | actionable | verified-2026-07-26 | П2c | — | — | — | profk чист (600/700 везде); остаток — .105 за ssh-блокером |
 | `AUD3-12` | P2 | actionable | plan-2026-07-26 | П3b | — | — | — | нужен выбор atomic / partial-success до кода |
 | `AUD3-13` | P2 | actionable | doc-2026-07-14 | П3c | — | — | — |  |
-| `BUG-128` | P2 | actionable | to-verify | П3d | — | — | — |  |
-| `WR-06` | P3 | actionable | doc-2026-07-14 | П3d | — | — | — | 4 реальных сайта из 70 |
 | `AUD5-APIFE-3` | P2 | actionable | plan-2026-07-26 | П4 | — | — | — | сначала retention-решение, иначе колонки опустеют |
 | `AUD5-APIFE-7` | P2 | actionable | plan-2026-07-26 | П4 | — | — | — |  |
 | `AUD5-APIFE-8` | P2 | actionable | plan-2026-07-26 | П4 | — | — | — | AC «активный фильтр» недостижим: useKanban() без фильтров |

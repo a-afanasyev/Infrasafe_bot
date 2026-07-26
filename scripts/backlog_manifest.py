@@ -136,9 +136,8 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD3-12": A(pkg="П3b", status="actionable", method="plan-2026-07-26",
                  note="нужен выбор atomic / partial-success до кода"),
     "AUD3-13": A(pkg="П3c", status="actionable", method="doc-2026-07-14"),
-    "BUG-128": A(pkg="П3d", status="actionable", method="to-verify"),
-    "WR-06": A(pkg="П3d", status="actionable", method="doc-2026-07-14",
-               note="4 реальных сайта из 70"),
+    # П3d закрыт 2026-07-26: `BUG-128` (POST зеркалит planned_*) и `WR-06`
+    # (класс unbound `lang`: 4 заявленных + 16 найденных сайтов + AST-гейт).
     # ── П4: доска менеджера
     "AUD5-APIFE-7": A(pkg="П4", status="actionable", method="plan-2026-07-26"),
     "AUD5-APIFE-8": A(pkg="П4", status="actionable", method="plan-2026-07-26",

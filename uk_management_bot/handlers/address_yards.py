@@ -234,6 +234,10 @@ async def show_yard_details(callback: CallbackQuery, language: str = "ru"):
     """Показать детальную информацию о дворе"""
     yard_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             yard = AddressService.get_yard_by_id(db, yard_id)
@@ -497,6 +501,10 @@ async def toggle_yard_status(callback: CallbackQuery, language: str = "ru"):
     """Переключить активность двора"""
     yard_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             lang = language
@@ -536,6 +544,10 @@ async def confirm_yard_deletion(callback: CallbackQuery, language: str = "ru"):
     """Подтверждение удаления двора"""
     yard_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             lang = language

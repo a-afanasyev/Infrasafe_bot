@@ -791,6 +791,15 @@ async def create_shift(db: AsyncSession, *, body) -> Shift:
         user_id=body.user_id,
         start_time=body.start_time,
         end_time=body.end_time,
+        # BUG-128: planned_* обязаны зеркалить фактические времена. Бот-расписание
+        # (`handlers/my_shifts.py:handle_week_schedule`) фильтрует по
+        # `func.date(Shift.planned_start_time)`, поэтому без этих двух строк смена,
+        # созданная менеджером в веб-дашборде, оставалась с NULL и исполнитель её
+        # в «Мои смены → Расписание на неделю» не видел вообще. Два других пути
+        # создания/правки (`create_shifts_from_template`, `apply_shift_update`)
+        # синхронизировали их с самого начала — расходился только POST.
+        planned_start_time=body.start_time,
+        planned_end_time=body.end_time,
         status="active",
         shift_type=body.shift_type,
         specialization_focus=body.specialization_focus or [],
