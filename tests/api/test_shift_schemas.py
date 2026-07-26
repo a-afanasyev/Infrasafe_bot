@@ -1,4 +1,17 @@
-"""Tests for shift Pydantic schemas (uk_management_bot/api/shifts/schemas.py)."""
+"""Tests for shift Pydantic schemas (uk_management_bot/api/shifts/schemas.py).
+
+AUD5-APIFE-19 (2026-07-26): единственный сьют на этот модуль. Раньше их было два
+— этот и co-located `uk_management_bot/api/shifts/test_schemas.py` (620 + 562
+строки, по 73 теста), написанные независимо: пересекающиеся, но НЕ совпадающие
+наборы кейсов. Двойная стоимость поддержки — не главная беда; хуже, что
+co-located сьют уезжал в прод-образ бота (`COPY uk_management_bot/`), а
+расхождение двух наборов означало, что правка схемы могла остаться незамеченной
+одним из них. Уникальные кейсы второго сьюта перенесены сюда поимённо (CSV-
+специализации из инвайта, `roles` из JSON-строки, валидные ГРАНИЦЫ диапазонов —
+там, где здесь проверялся только отказ за границей, — `notes`, поздние поля
+`UpdateShiftBody`, `manager`/`pending` в `CreateEmployeeRequest`), после чего
+он удалён.
+"""
 import pytest
 from datetime import datetime, date, timedelta, timezone
 from pydantic import ValidationError
@@ -88,6 +101,39 @@ class TestEmployeeBrief:
         emp = EmployeeBrief.model_validate(FakeUser())
         assert emp.id == 10
         assert emp.specialization == ["plumber"]
+
+    def test_csv_specialization_from_invite_parsed(self):
+        """CSV из инвайта (`electrician,plumber`) → список, порядок сохранён."""
+        emp = EmployeeBrief(
+            id=6, first_name="Inv", last_name=None, phone=None,
+            specialization="electrician,plumber",
+            active_shift_id=None, verification_status="pending",
+        )
+        assert emp.specialization == ["electrician", "plumber"]
+
+    def test_status_defaults_to_approved(self):
+        """`verification_status` вне известного набора не меняет `status`."""
+        emp = EmployeeBrief(
+            id=4, first_name="Test", last_name=None, phone=None,
+            specialization=[], active_shift_id=None, verification_status="verified",
+        )
+        assert emp.status == "approved"
+
+    def test_roles_parsed_from_json_string(self):
+        """`roles` (JSON-строка `User.roles`) → список для бейджа роли."""
+        emp = EmployeeBrief(
+            id=8, first_name="M", last_name=None, phone=None,
+            specialization=None, active_shift_id=None,
+            verification_status="verified", roles='["applicant", "manager"]',
+        )
+        assert emp.roles == ["applicant", "manager"]
+
+    def test_roles_default_empty_when_absent(self):
+        emp = EmployeeBrief(
+            id=9, first_name="M", last_name=None, phone=None,
+            specialization=None, active_shift_id=None, verification_status="verified",
+        )
+        assert emp.roles == []
 
     def test_from_attributes_config(self):
         assert EmployeeBrief.model_config["from_attributes"] is True
@@ -228,6 +274,24 @@ class TestCreateShiftBody:
         with pytest.raises(ValidationError):
             CreateShiftBody(user_id=1, start_time=start, end_time=end, priority_level=6)
 
+    @pytest.mark.parametrize("level", [1, 5])
+    def test_priority_level_valid_bounds(self, level: int):
+        """Обе границы допустимого диапазона принимаются (не только отказ на 6)."""
+        start = datetime.now()
+        end = start + timedelta(hours=8)
+        body = CreateShiftBody(
+            user_id=1, start_time=start, end_time=end, priority_level=level
+        )
+        assert body.priority_level == level
+
+    def test_notes_optional(self):
+        start = datetime.now()
+        end = start + timedelta(hours=8)
+        body = CreateShiftBody(
+            user_id=1, start_time=start, end_time=end, notes="Замечание"
+        )
+        assert body.notes == "Замечание"
+
     @pytest.mark.parametrize("shift_type", ["regular", "emergency", "overtime", "maintenance"])
     def test_valid_shift_types(self, shift_type: str):
         start = datetime.now()
@@ -307,6 +371,32 @@ class TestUpdateShiftBody:
         body = UpdateShiftBody()
         assert body.start_time is None
         assert body.end_time is None
+
+    def test_valid_max_requests(self):
+        assert UpdateShiftBody(max_requests=5).max_requests == 5
+
+    def test_new_fields_default_none(self):
+        """Поля, добавленные позже базового набора, тоже по умолчанию None."""
+        body = UpdateShiftBody()
+        assert body.shift_type is None
+        assert body.priority_level is None
+        assert body.specialization_focus is None
+
+    def test_start_time_and_specializations_accepted(self):
+        body = UpdateShiftBody(
+            start_time=datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc),
+            specialization_focus=["electrician", "plumber"],
+        )
+        assert body.start_time == datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc)
+        assert body.specialization_focus == ["electrician", "plumber"]
+
+    @pytest.mark.parametrize("level", [0, 6])
+    def test_priority_level_out_of_range_raises(self, level: int):
+        with pytest.raises(ValidationError):
+            UpdateShiftBody(priority_level=level)
+
+    def test_valid_priority_level(self):
+        assert UpdateShiftBody(priority_level=4).priority_level == 4
 
 
 # ═══════════════════════ CreateFromTemplateBody ═══════════════════════
@@ -396,6 +486,18 @@ class TestCreateTemplateBody:
     def test_start_hour_out_of_range_raises(self):
         with pytest.raises(ValidationError):
             CreateTemplateBody(name="Bad", start_hour=24, duration_hours=8)
+
+    @pytest.mark.parametrize("hour", [0, 23])
+    def test_start_hour_valid_bounds(self, hour: int):
+        assert CreateTemplateBody(
+            name="OK", start_hour=hour, duration_hours=8
+        ).start_hour == hour
+
+    @pytest.mark.parametrize("hours", [1, 24])
+    def test_duration_hours_valid_bounds(self, hours: int):
+        assert CreateTemplateBody(
+            name="OK", start_hour=8, duration_hours=hours
+        ).duration_hours == hours
 
     def test_duration_hours_out_of_range_raises(self):
         with pytest.raises(ValidationError):
@@ -560,6 +662,11 @@ class TestCreateInviteRequest:
         with pytest.raises(ValidationError):
             CreateInviteRequest(role="executor", hours=200)
 
+    @pytest.mark.parametrize("hours", [1, 168])
+    def test_hours_valid_bounds(self, hours: int):
+        """Обе границы (1 час и неделя) принимаются, а не только отказы вокруг."""
+        assert CreateInviteRequest(role="executor", hours=hours).hours == hours
+
 
 # ═══════════════════════ CreateInviteResponse ═══════════════════════
 
@@ -587,6 +694,20 @@ class TestCreateEmployeeRequest:
         )
         assert body.status == "approved"
         assert body.specializations == []
+
+    def test_manager_role(self):
+        body = CreateEmployeeRequest(
+            first_name="Anna", last_name="Ivanova",
+            phone="+998901234567", role="manager",
+        )
+        assert body.role == "manager"
+
+    def test_pending_status_accepted(self):
+        body = CreateEmployeeRequest(
+            first_name="Ivan", last_name="Petrov",
+            phone="+998901234567", role="executor", status="pending",
+        )
+        assert body.status == "pending"
 
     def test_invalid_role_raises(self):
         with pytest.raises(ValidationError):

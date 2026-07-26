@@ -52,9 +52,14 @@ logs-db: ## Логи PostgreSQL
 status: ## Статус всех сервисов
 	@$(COMPOSE) ps
 
-test: ## Запустить оба pytest-набора в контейнере бота
+test: ## Быстрая петля: оба набора в ЖИВОМ контейнере (код = момент сборки образа!)
+	@echo "$(YELLOW)Внимание: образ печётся, код в контейнере может отставать от дерева.$(NC)"
+	@echo "$(YELLOW)Эталон перед мержем — make test-ci.$(NC)"
 	@docker exec uk-management-bot pytest -q
 	@docker exec uk-management-bot pytest -q tests/api tests/services
+
+test-ci: ## Канон: прогон, эквивалентный CI-джобе backend-tests (свежая сборка + одноразовые pg/redis)
+	@bash scripts/test-ci-local.sh
 
 test-frontend: ## Запустить vitest
 	@cd frontend && npm test

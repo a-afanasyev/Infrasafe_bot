@@ -3,12 +3,19 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 pytest-mock==3.12.0
+# black остаётся ГЕЙТОМ, а не «форматтером на любителя»: ruff здесь настроен на
+# select=["E","F"] без правила I, а E501 (длина строки) сознательно делегирован
+# black (см. pyproject [tool.ruff]). Убрать black/isort можно только вместе с
+# включением `ruff format` + правила I — это отдельное решение, не гигиена.
 black==23.11.0
-flake8==6.1.0
 ruff==0.15.17
 mypy==1.7.1
 pre-commit==3.6.0
 coverage==7.3.2
-pytest-html==4.1.1
-pytest-xdist==3.5.0
 aiosqlite==0.20.0
+# AUD5-PRAC-9 / AUD5-DEP-1 (2026-07-26): удалены `flake8==6.1.0` (полностью
+# вытеснен ruff — те же E+F, и в CI гейтом стоит именно ruff; в pre-commit
+# flake8 не был подключён ни разу), `pytest-html==4.1.1` и
+# `pytest-xdist==3.5.0` — ни одного упоминания `--html`/`-n auto` в CI,
+# Makefile, pytest-конфиге или скриптах. isort здесь не нужен: он живёт
+# в .pre-commit-config.yaml и подтягивается pre-commit'ом сам.

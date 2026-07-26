@@ -18,7 +18,9 @@
 
 - **Язык общения**: русский, если не указано иное.
 - **Контейнеры**: бот = `uk-management-bot`, API = `uk-management-api`, фронт = `uk-frontend`, БД = `uk-postgres`, кэш = `uk-redis`.
-- **Тесты бота**: только внутри контейнера: `docker exec uk-management-bot pytest`. Два набора (оба в CI): unit/handlers/services — `pytest -q` (testpaths=`uk_management_bot/`); API + интеграция/SSOT-гейты — `pytest -q tests/api tests/services` (sqlite-conftest'ы). Корневой top-level `tests/*.py` удалён (был заброшенный legacy).
+- **Тесты бота**: два набора (оба в CI): unit/handlers/services — `pytest -q` (testpaths=`uk_management_bot/`); API + интеграция/SSOT-гейты — `pytest -q tests/api tests/services` (sqlite-conftest'ы, второй набор гоняется с `INFRASAFE_WEBHOOK_ENABLED=true`). Корневой top-level `tests/*.py` удалён (был заброшенный legacy).
+  - **Эталон перед мержем — `make test-ci`**: свежая сборка образа + одноразовые postgres/redis + оба набора раздельно, один-в-один с CI-джобой `backend-tests` (`scripts/test-ci-local.sh`).
+  - `make test` / `docker exec uk-management-bot pytest` — быстрая петля, НЕ эталон: образ печётся (код = момент сборки), в живой контейнер во время отладки попадают файлы через `docker cp`, и в образе нет `docker-compose*.yml` — SSOT-гейт `test_compose_secret_env_ssot.py` там падает тремя FileNotFoundError при зелёном CI.
 - **Тесты фронта**: `cd frontend && npm test` (или `npx vitest`).
 - **Rebuild бота**: `docker compose build app && docker compose up -d app` (сервис называется `app`; `uk-management-bot` — имя контейнера, build/up по нему не работают).
 - **Локализация бота**: файлы `config/locales/ru.json`, `config/locales/uz.json`. Функция `get_text(key, language=lang)`. Статусы через `utils/status_display.py`. Адреса через `utils/address_helpers.py:localize_address()`.
