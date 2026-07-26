@@ -19,16 +19,16 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **400**
-- закрыто маркером: **314**
-- открыто маркером: **86**
+- закрыто маркером: **315**
+- открыто маркером: **85**
 
-  - `actionable` — **56**
+  - `actionable` — **55**
   - `decision` — **26**
   - `calendar` — **1**
   - `no-pr` — **2**
   - `doc-closed` — **1**
 
-Из них actionable по приоритету: P2=31, P3=25.
+Из них actionable по приоритету: P2=30, P3=25.
 
 Значения `status`:
 
@@ -81,7 +81,6 @@
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | verified-2026-07-26 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером |
 | `PENT-F10` | P3 | actionable | verified-2026-07-26 | П2c | — | — | — | profk чист (600/700 везде); остаток — .105 за ssh-блокером |
-| `AUD5-CODE-7` | P2 | actionable | plan-2026-07-26 | П3a | — | — | — | keyboards/base.py:59 (в бэклоге :54-55 — строки уползли) |
 | `AUD3-12` | P2 | actionable | plan-2026-07-26 | П3b | — | — | — | нужен выбор atomic / partial-success до кода |
 | `AUD3-13` | P2 | actionable | doc-2026-07-14 | П3c | — | — | — |  |
 | `BUG-128` | P2 | actionable | to-verify | П3d | — | — | — |  |

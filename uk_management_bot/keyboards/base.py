@@ -1,8 +1,12 @@
+import logging
+
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.callback_factories import RoleSwitchCB, RatingCB
 from uk_management_bot.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 # Роль-капабилити «полевой контролёр» (ввод показаний в «Учёт ресурсов»). Даёт
 # web_app-кнопку Mini App, но НЕ участвует в переключении active_role.
@@ -29,7 +33,21 @@ def get_contextual_keyboard(roles: list = None, active_role: str = None, languag
 def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     """Получить клавиатуру пользователя, загрузив его роли из БД.
 
-    Если роли не найдены, возвращает базовую клавиатуру.
+    Пользователя нет в БД — легитимный случай (незарегистрированный), отдаём
+    базовую клавиатуру. Любой ДРУГОЙ сбой логируется и пробрасывается.
+
+    AUD5-CODE-7: раньше здесь стоял `except Exception: return get_main_keyboard()`
+    без логирования, и это давало два эффекта разом. Во-первых, сбой БД был
+    невидим: ни строки в логах. Во-вторых — и это хуже — менеджер в момент сбоя
+    получал applicant-клавиатуру, а reply-клавиатура в Telegram ЛИПКАЯ: она
+    остаётся у пользователя, пока её не заменит следующий ответ бота. То есть
+    секундный блип БД оставлял человека с чужим меню надолго после того, как БД
+    выздоровела, и выглядело это как потеря прав.
+
+    Проброс безопасен и даёт лучший исход: глобальный хендлер (`main.py:300`)
+    пишет ERROR со трейсбеком, отправляет пользователю `errors.unexpected` и
+    возвращает True — процесс не падает, а человек видит понятную ошибку и
+    повторяет действие вместо того, чтобы застрять с неверным меню.
     """
     from uk_management_bot.database.session import SessionLocal
     from uk_management_bot.database.models.user import User
@@ -54,10 +72,17 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
                 language=language
             )
 
+        # Незарегистрированный пользователь — не ошибка, ролей просто нет.
+        logger.debug("Клавиатура по умолчанию: пользователь %s не найден в БД", user_id)
         return get_main_keyboard()
 
     except Exception:
-        return get_main_keyboard()
+        logger.error(
+            "Не удалось построить клавиатуру по ролям для пользователя %s — "
+            "проброс вместо подмены applicant-клавиатурой (AUD5-CODE-7)",
+            user_id, exc_info=True,
+        )
+        raise
     finally:
         db.close()
 

@@ -131,8 +131,8 @@ ASSIGNMENT: dict[str, dict] = {
     # честный первый запуск в README), `AUD5-PRAC-7` (23 стухших дока в архив),
     # `AUD5-PRAC-8` (снапшот OpenAPI + CI-гейт).
     # ── П3
-    "AUD5-CODE-7": A(pkg="П3a", status="actionable", method="plan-2026-07-26",
-                     note="keyboards/base.py:59 (в бэклоге :54-55 — строки уползли)"),
+    # П3a (`AUD5-CODE-7`) закрыт 2026-07-26: ERROR+проброс вместо молчаливой
+    # подмены applicant-клавиатурой; фактическая строка была :59, не :54-55.
     "AUD3-12": A(pkg="П3b", status="actionable", method="plan-2026-07-26",
                  note="нужен выбор atomic / partial-success до кода"),
     "AUD3-13": A(pkg="П3c", status="actionable", method="doc-2026-07-14"),
