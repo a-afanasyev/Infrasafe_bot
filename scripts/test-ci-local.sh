@@ -117,4 +117,14 @@ docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
   -e INFRASAFE_WEBHOOK_ENABLED=true \
   --entrypoint sh "$IMAGE" -c 'pytest -q tests/api tests/services'
 
-echo "==> оба сьюта зелёные"
+# Джоба CI `backend-tests` состоит НЕ только из двух прогонов pytest — в ней есть
+# ещё и этот шаг. Без него «локально зелено» значило бы не то же, что в CI, и
+# эталон переставал быть эталоном (ровно так П4 уехал в CI с разошедшимся
+# снапшотом: docstring эндпоинта попал в `description` публичного контракта).
+echo "==> OpenAPI-снапшот (гейт публичного контракта)"
+docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
+  -v "${ROOT}/docs/tech/openapi.json:/app/docs/tech/openapi.json:ro" \
+  -v "${ROOT}/scripts/dump_openapi.py:/app/scripts/dump_openapi.py:ro" \
+  --entrypoint sh "$IMAGE" -c 'python3 scripts/dump_openapi.py --check'
+
+echo "==> оба сьюта и OpenAPI-гейт зелёные"

@@ -11348,6 +11348,7 @@
     },
     "/api/v2/requests/kanban": {
       "get": {
+        "description": "Доска заявок для менеджера, сгруппированная по статусам.\n\nАктивные колонки полны; у терминальных («Принято», «Отменена») отдаётся\nпоследние `TERMINAL_COLUMN_LIMIT` карточек, а `count` показывает настоящее\nчисло заявок в колонке — то есть `count` может быть больше `len(requests)`.",
         "operationId": "get_kanban_api_v2_requests_kanban_get",
         "parameters": [
           {
