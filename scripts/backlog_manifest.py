@@ -135,7 +135,8 @@ ASSIGNMENT: dict[str, dict] = {
     # подмены applicant-клавиатурой; фактическая строка была :59, не :54-55.
     "AUD3-12": A(pkg="П3b", status="actionable", method="plan-2026-07-26",
                  note="нужен выбор atomic / partial-success до кода"),
-    "AUD3-13": A(pkg="П3c", status="actionable", method="doc-2026-07-14"),
+    # П3c (`AUD3-13`) закрыт 2026-07-26: перебор кандидатов с сохранением
+    # границы severity; отчёт получил attempted_executors.
     # П3d закрыт 2026-07-26: `BUG-128` (POST зеркалит planned_*) и `WR-06`
     # (класс unbound `lang`: 4 заявленных + 16 найденных сайтов + AST-гейт).
     # ── П4: доска менеджера

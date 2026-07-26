@@ -556,6 +556,104 @@ class TestAssignSingleShift:
         assert result["success"] is False
         assert "error" in result
 
+    # ── AUD3-13: перебор кандидатов, а не только топового ──────────────────
+
+    @staticmethod
+    def _score(executor_id: int, total: float, name: str = "Ex"):
+        s = MagicMock()
+        s.executor_id = executor_id
+        s.executor_name = name
+        s.total_score = total
+        s.reasons = []
+        return s
+
+    def test_falls_through_to_next_candidate_on_critical_conflict(self):
+        """AUD3-13: топовый по агрегатной оценке может провалить hard-проверку.
+
+        Раньше метод брал `executor_scores[0]`, и при критическом конфликте у
+        него смена оставалась НЕназначенной — при живом втором кандидате без
+        конфликтов. Агрегатный score и hard-конфликты — разные измерения, поэтому
+        «лучший по score» не равно «назначаемый».
+        """
+        service, db = _make_service()
+        shift = _make_shift()
+
+        top, second = self._score(11, 0.9, "Top"), self._score(22, 0.5, "Second")
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(
+            return_value=[second, top]  # намеренно НЕ по порядку: сортирует метод
+        )
+
+        critical = MagicMock()
+        critical.severity = "critical"
+        service.conflict_detector._check_assignment_conflicts = MagicMock(
+            side_effect=lambda sh, eid: [critical] if eid == 11 else []
+        )
+        service.conflict_detector._conflict_to_dict = MagicMock(return_value={})
+        db.add = MagicMock()
+        db.commit = MagicMock()
+
+        result = service._assign_single_shift(shift, [])
+
+        assert result["success"] is True
+        assert result["executor_id"] == 22, "должен быть назначен второй кандидат"
+        assert shift.user_id == 22
+
+    def test_minor_conflicts_do_not_trigger_fallthrough(self):
+        """Границу не сдвигаем: low/medium никогда не блокировали назначение.
+
+        Иначе «перебор» превратился бы в тихое изменение политики — топовый
+        кандидат уступал бы место второму из-за незначительного конфликта.
+        """
+        service, db = _make_service()
+        shift = _make_shift()
+
+        top, second = self._score(11, 0.9), self._score(22, 0.5)
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(
+            return_value=[top, second]
+        )
+        minor = MagicMock()
+        minor.severity = "medium"
+        service.conflict_detector._check_assignment_conflicts = MagicMock(
+            return_value=[minor]
+        )
+        db.add = MagicMock()
+        db.commit = MagicMock()
+
+        result = service._assign_single_shift(shift, [])
+
+        assert result["success"] is True
+        assert result["executor_id"] == 11
+        assert result["minor_conflicts"] == 1
+
+    def test_all_candidates_blocked_reports_every_attempt(self):
+        """Если заблокированы все — отчёт обязан показать ВСЕ попытки.
+
+        Прежний контракт (`attempted_executor` — один id) сохранён для
+        совместимости с `handlers/shift_management/assignment_a.py`, но одного id
+        теперь недостаточно: без списка попыток менеджер не понимает, перебор
+        вообще был или метод сдался на первом.
+        """
+        service, db = _make_service()
+        shift = _make_shift()
+
+        service.scoring_engine._evaluate_executors_for_shift = MagicMock(
+            return_value=[self._score(11, 0.9), self._score(22, 0.5)]
+        )
+        critical = MagicMock()
+        critical.severity = "high"
+        service.conflict_detector._check_assignment_conflicts = MagicMock(
+            return_value=[critical]
+        )
+        service.conflict_detector._conflict_to_dict = MagicMock(return_value={"x": 1})
+
+        result = service._assign_single_shift(shift, [])
+
+        assert result["success"] is False
+        assert result["attempted_executor"] == 11, "контракт для существующего хендлера"
+        assert result["attempted_executors"] == [11, 22]
+        assert result["conflicts"], "конфликты топового кандидата — основная причина"
+        assert shift.user_id is None, "ни один кандидат не должен быть записан"
+
 
 # ---------------------------------------------------------------------------
 # _evaluate_executors_for_shift

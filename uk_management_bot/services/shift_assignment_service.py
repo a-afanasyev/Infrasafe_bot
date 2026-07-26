@@ -1042,18 +1042,54 @@ class ShiftAssignmentService:
             # Сортируем по убыванию оценки
             executor_scores.sort(key=lambda x: x.total_score, reverse=True)
 
-            # Пробуем назначить лучшего исполнителя
-            best_executor = executor_scores[0]
+            # AUD3-13: перебираем кандидатов, а не только топового. Агрегатный
+            # score и hard-конфликты — РАЗНЫЕ измерения: лучший по score может
+            # провалить отдельную проверку (роль, пересечение окон, статус), и
+            # раньше смена в этом случае оставалась НЕназначенной при живом
+            # втором кандидате без конфликтов.
+            #
+            # Границу severity не двигаем: low/medium назначению не мешали и не
+            # мешают — иначе «перебор» стал бы тихим изменением политики, при
+            # котором топовый кандидат уступает место второму из-за пустяка.
+            best_executor = None
+            conflicts = []
+            attempted: List[int] = []
+            first_blocking_conflicts = None
+            for candidate in executor_scores:
+                attempted.append(candidate.executor_id)
+                candidate_conflicts = self.conflict_detector._check_assignment_conflicts(
+                    shift, candidate.executor_id
+                )
+                blocking = bool(candidate_conflicts) and any(
+                    c.severity in ['high', 'critical'] for c in candidate_conflicts
+                )
+                if blocking:
+                    if first_blocking_conflicts is None:
+                        # Причиной отказа считаем конфликты ТОПОВОГО кандидата:
+                        # именно его менеджер ожидал увидеть назначенным.
+                        first_blocking_conflicts = candidate_conflicts
+                    logger.info(
+                        "Смена %s: кандидат %s отклонён hard-конфликтом, пробуем следующего",
+                        shift.id, candidate.executor_id,
+                    )
+                    continue
+                best_executor = candidate
+                conflicts = candidate_conflicts
+                break
 
-            # Проверяем конфликты
-            conflicts = self.conflict_detector._check_assignment_conflicts(shift, best_executor.executor_id)
-
-            if conflicts and any(c.severity in ['high', 'critical'] for c in conflicts):
+            if best_executor is None:
                 return {
                     'success': False,
                     'shift_id': shift.id,
-                    'conflicts': [self.conflict_detector._conflict_to_dict(c) for c in conflicts],
-                    'attempted_executor': best_executor.executor_id
+                    'conflicts': [
+                        self.conflict_detector._conflict_to_dict(c)
+                        for c in (first_blocking_conflicts or [])
+                    ],
+                    # Одиночное поле — прежний контракт (его читает
+                    # handlers/shift_management/assignment_a.py); список нужен,
+                    # чтобы по отчёту было видно, что перебор действительно был.
+                    'attempted_executor': attempted[0] if attempted else None,
+                    'attempted_executors': attempted,
                 }
 
             # Выполняем назначение
