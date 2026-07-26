@@ -691,3 +691,142 @@ class TestEvaluateExecutorsForShift:
 
         result = service.scoring_engine._evaluate_executors_for_shift(shift, [executor])
         assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# reassign_on_absence — AUD3-12
+# ---------------------------------------------------------------------------
+
+
+class TestReassignOnAbsence:
+    """AUD3-12: семантика переназначения при отсутствии исполнителя.
+
+    Дефект был не «нет rollback», а спекулятивная мутация: `shift.user_id = None`
+    ставилось ДО попытки назначения, а `_assign_single_shift` коммитит внутри
+    себя. При неудачной попытке смена оставалась грязной, и **следующий** удачный
+    внутренний commit (для другой смены пачки) записывал это обнуление — смена
+    молча теряла исполнителя, без единой записи в аудите. Внешний `rollback()`
+    тут бесполезен: коммит уже произошёл.
+
+    Решение владельца 2026-07-26: (1) не мутировать до попытки; (2) если замены
+    нет — снимать исполнителя ЯВНО и с аудитом. Итог в БД тот же, что получался
+    случайно, но теперь он решение, а не побочный эффект, и у него есть след.
+    """
+
+    ABSENT = 77
+
+    def _service_with_shift(self, shift):
+        service, db = _make_service()
+        db.query.return_value.filter.return_value.all.return_value = [shift]
+        service._get_available_executors = MagicMock(return_value=[_make_executor(user_id=10)])
+        db.add = MagicMock()
+        db.commit = MagicMock()
+        return service, db
+
+    def test_does_not_clear_executor_before_attempt(self):
+        """Ключевое: на момент попытки смена ещё ЗА отсутствующим исполнителем.
+
+        Иначе неудачная попытка оставляет грязный объект, который запишет чужой
+        commit. Проверяется значением, ВИДИМЫМ внутри `_assign_single_shift`, —
+        именно там раньше уже стоял None.
+        """
+        shift = _make_shift(user_id=self.ABSENT)
+        service, db = self._service_with_shift(shift)
+
+        seen = {}
+
+        def _attempt(sh, executors):
+            seen["user_id_at_attempt"] = sh.user_id
+            sh.user_id = 10
+            return {'success': True, 'shift_id': sh.id, 'executor_id': 10}
+
+        service._assign_single_shift = MagicMock(side_effect=_attempt)
+
+        result = service.reassign_on_absence(self.ABSENT)
+
+        assert seen["user_id_at_attempt"] == self.ABSENT, (
+            "смена обнулена ДО попытки — вернулась спекулятивная мутация AUD3-12"
+        )
+        assert result['reassigned'] == 1
+
+    def test_failed_reassignment_unassigns_explicitly_with_audit(self):
+        """Замены нет → снимаем явно И пишем аудит.
+
+        До фикса смена тоже оказывалась с NULL, но БЕЗ следа: отличие именно в
+        записи аудита, поэтому она и проверяется.
+        """
+        shift = _make_shift(user_id=self.ABSENT)
+        service, db = self._service_with_shift(shift)
+        service._assign_single_shift = MagicMock(return_value={
+            'success': False, 'shift_id': shift.id, 'error': 'Нет подходящих исполнителей',
+        })
+
+        result = service.reassign_on_absence(self.ABSENT, reason="sick-leave")
+
+        assert result['failed'] == 1
+        assert shift.user_id is None, "смена должна остаться явно непокрытой"
+        actions = [
+            call.args[0].action
+            for call in db.add.call_args_list
+            if call.args and hasattr(call.args[0], "action")
+        ]
+        assert "SHIFT_UNASSIGNED_NO_REPLACEMENT" in actions, (
+            "снятие исполнителя без записи в аудит — это и был исходный дефект: "
+            f"в аудит попало только {actions}"
+        )
+
+    def test_absent_executor_excluded_from_candidates(self):
+        """Отсутствующего нельзя предлагать заменой самому себе.
+
+        `_get_available_executors()` отдаёт всех approved-исполнителей, включая
+        отсутствующего, — переназначение на него было бы no-op'ом, замаскированным
+        под успех.
+        """
+        shift = _make_shift(user_id=self.ABSENT)
+        service, db = _make_service()
+        db.query.return_value.filter.return_value.all.return_value = [shift]
+        service._get_available_executors = MagicMock(return_value=[
+            _make_executor(user_id=self.ABSENT), _make_executor(user_id=10),
+        ])
+        db.add = MagicMock()
+        db.commit = MagicMock()
+
+        passed = {}
+
+        def _attempt(sh, executors):
+            passed["ids"] = [e.id for e in executors]
+            sh.user_id = 10
+            return {'success': True, 'shift_id': sh.id, 'executor_id': 10}
+
+        service._assign_single_shift = MagicMock(side_effect=_attempt)
+
+        service.reassign_on_absence(self.ABSENT)
+
+        assert self.ABSENT not in passed["ids"], (
+            "отсутствующий исполнитель остался в списке кандидатов на свою же смену"
+        )
+        assert 10 in passed["ids"]
+
+    def test_no_shifts_returns_message(self):
+        """Регресс: пустой набор смен — не ошибка."""
+        service, db = _make_service()
+        db.query.return_value.filter.return_value.all.return_value = []
+        result = service.reassign_on_absence(self.ABSENT)
+        assert 'message' in result
+
+    def test_exception_rolls_back_session(self):
+        """AUD3-12 (error-path): сбой обязан откатить сессию.
+
+        До этой точки в сессии могут висеть незакоммиченные мутации — явное
+        снятие исполнителя и записи аудита. Без rollback они уедут в БД с первым
+        же commit'ом следующего вызова по этой сессии, то есть тем же механизмом,
+        который и был исходным дефектом.
+        """
+        shift = _make_shift(user_id=self.ABSENT)
+        service, db = self._service_with_shift(shift)
+        service._assign_single_shift = MagicMock(side_effect=Exception("boom"))
+
+        result = service.reassign_on_absence(self.ABSENT)
+
+        assert 'error' in result
+        assert db.rollback.called, "сессия не откатана — грязные мутации уедут с чужим commit'ом"

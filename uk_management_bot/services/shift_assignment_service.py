@@ -1331,11 +1331,25 @@ class ShiftAssignmentService:
             }
 
             for shift in executor_shifts:
-                # Убираем текущего исполнителя
-                shift.user_id = None
-
-                # Пытаемся найти замену
-                available_executors = self._get_available_executors()
+                # AUD3-12: исполнителя НЕ снимаем до попытки. Прежний порядок
+                # («обнулить, потом пытаться») ломался о то, что
+                # `_assign_single_shift` коммитит внутри себя: при неудачной
+                # попытке смена оставалась грязной, и СЛЕДУЮЩИЙ удачный
+                # внутренний commit (для другой смены пачки) записывал это
+                # обнуление — смена молча теряла исполнителя без единой записи в
+                # аудите. Внешний `rollback()` тут бесполезен: коммит уже был.
+                #
+                # Спекулятивная мутация не нужна и технически: overlap-проверка
+                # (`_calculate_availability_score`) исключает саму эту смену
+                # условием `Shift.id != shift.id`, поэтому «занятость» текущим
+                # исполнителем кандидату не мешает.
+                #
+                # Отсутствующего исключаем из кандидатов: `_get_available_executors`
+                # отдаёт всех approved-исполнителей, и без фильтра он мог быть
+                # «назначен» на свою же смену — no-op под видом успеха.
+                available_executors = [
+                    ex for ex in self._get_available_executors() if ex.id != executor_id
+                ]
                 assignment_result = self._assign_single_shift(shift, available_executors)
 
                 if assignment_result['success']:
@@ -1346,11 +1360,29 @@ class ShiftAssignmentService:
                         'status': 'reassigned'
                     })
                 else:
+                    # Замены нет — снимаем исполнителя ЯВНО и со следом в аудите.
+                    # Итог в БД тот же, что раньше получался случайно, но теперь
+                    # это решение: смена видна как непокрытая, и понятно почему.
+                    shift.user_id = None
+                    shift.assigned_at = None
+                    shift.assigned_by_user_id = None
+                    self.db.add(AuditLog(
+                        user_id=executor_id,
+                        action="SHIFT_UNASSIGNED_NO_REPLACEMENT",
+                        details={
+                            "shift_id": shift.id,
+                            "absent_executor_id": executor_id,
+                            "reason": reason,
+                            "assignment_error": assignment_result.get('error'),
+                            "attempted_executors": assignment_result.get('attempted_executors', []),
+                        }
+                    ))
                     results['failed'] += 1
                     results['details'].append({
                         'shift_id': shift.id,
                         'status': 'failed',
-                        'reason': assignment_result.get('error', 'Unknown error')
+                        'reason': assignment_result.get('error', 'Unknown error'),
+                        'unassigned': True,
                     })
 
             # Создаем запись аудита
@@ -1370,6 +1402,16 @@ class ShiftAssignmentService:
             return results
 
         except Exception as e:
+            # AUD3-12: rollback обязателен — до этой точки в сессии могли остаться
+            # незакоммиченные мутации (явное снятие исполнителя, записи аудита).
+            # Без него они уедут в БД с первым же commit'ом любого следующего
+            # вызова по этой сессии, то есть ровно тем механизмом, который и был
+            # исходным дефектом — только на error-path.
+            try:
+                self.db.rollback()
+            except Exception:
+                logger.warning("Не удалось откатить сессию после сбоя переназначения",
+                               exc_info=True)
             logger.error(f"Ошибка переназначения смен для исполнителя {executor_id}: {e}")
             return {'error': str(e)}
 
