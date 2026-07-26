@@ -17,6 +17,12 @@ const MAX_RECONNECT_ATTEMPTS = 5
 const WS_TOKEN_EXPIRED = 4001
 const EXPIRED_REFRESH_MIN_INTERVAL_MS = 30_000
 
+// F-04 (остаток): 4003 — доступ отозван УЖЕ во время сессии: пользователя
+// заблокировали или сняли роль manager. В отличие от 4001 обновлять сессию
+// бессмысленно — новый токен выдадут тому же заблокированному пользователю, и
+// сервер закроет соединение снова. Ведём себя как на 1008: молча стоп.
+const WS_ACCESS_REVOKED = 4003
+
 export function useWebSocket(
   endpoint: 'kanban' | 'shifts' | 'buildings',
   onMessage: (event: { type: string; data: unknown }) => void
@@ -56,8 +62,8 @@ export function useWebSocket(
         refreshSession().then(connect).catch(() => {})
         return
       }
-      if (event.code === 1008) {
-        // Policy violation — auth denied, don't retry
+      if (event.code === 1008 || event.code === WS_ACCESS_REVOKED) {
+        // Policy violation / доступ отозван — ретраи бессмысленны, стоп.
         return
       }
       if (attemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
