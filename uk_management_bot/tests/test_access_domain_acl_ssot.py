@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE = REPO_ROOT / "alembic" / "versions" / "0001_prc05_initial_baseline.py"
 ACL_RECONCILE = REPO_ROOT / "uk_management_bot" / "dbops" / "acl_reconcile.py"
 DBA_TRANSFER = REPO_ROOT / "scripts" / "dba_ownership_transfer.sql"
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def _model_tables() -> set[str]:
@@ -95,4 +96,20 @@ def test_ownership_transfer_excludes_every_access_domain_table(model_tables):
     assert excluded == model_tables, (
         "excluded_tables в dba_ownership_transfer.sql расходится с моделями "
         f"access_control; bulk-грант uk_app_rw заденет: {sorted(model_tables - excluded)}"
+    )
+
+
+def test_ci_sequence_leak_gate_covers_every_access_domain_table(model_tables):
+    """4-я копия того же списка — шаг pg-role-separation в ci.yml.
+
+    Пропущенная там таблица делает CI-гейт на утечку sequences слепым ровно к
+    той таблице, которую забыли: он проверяет только перечисленные имена.
+    """
+    if not CI_WORKFLOW.exists():
+        pytest.skip(f"{CI_WORKFLOW} отсутствует (запуск внутри образа, не чекаут)")
+    excluded = _sql_array(CI_WORKFLOW.read_text(), "excluded_tables")
+    assert excluded == model_tables, (
+        "excluded_tables в .github/workflows/ci.yml расходится с моделями "
+        f"access_control; гейт на утечку sequences не увидит: "
+        f"{sorted(model_tables - excluded)}"
     )
