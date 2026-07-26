@@ -125,8 +125,11 @@ ASSIGNMENT: dict[str, dict] = {
     "PENT-F14": A(pkg="П2b", status="actionable", method="verified-2026-07-26",
                   services="edge владельца (оба домена)",
                   note="артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером"),
-    "PENT-F10": A(pkg="П2c", status="actionable", method="verified-2026-07-26",
-                  note="profk чист (600/700 везде); остаток — .105 за ssh-блокером"),
+    # П2c (`PENT-F10`) закрыт 2026-07-27: оба хоста 600/700. `.105` доступен с
+    # `ssh -o IdentitiesOnly=no` — вывод «хост заблокирован» от 26.07 был неверным.
+    "SEC-131": A(pkg="П10", status="actionable", method="verified-2026-07-27",
+                 services="media-service (.105)",
+                 note="MEDIA_BOT_TOKEN в .env на .105 — второй источник истины, :?-гард не срабатывает"),
     # П2d закрыт целиком 2026-07-26: `AUD5-PRAC-1` (канонический .env.example +
     # честный первый запуск в README), `AUD5-PRAC-7` (23 стухших дока в архив),
     # `AUD5-PRAC-8` (снапшот OpenAPI + CI-гейт).

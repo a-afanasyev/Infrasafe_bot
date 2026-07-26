@@ -18,8 +18,8 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **400**
-- закрыто маркером: **319**
+- пунктов всего (с Priority): **401**
+- закрыто маркером: **320**
 - открыто маркером: **81**
 
   - `actionable` — **51**
@@ -72,6 +72,7 @@
 | `PENT-F05` | P2 | actionable | plan-2026-07-26 | П10 | — | — | — | остаток: Origin до accept() + edge limit_req с burst-тестом |
 | `PENT-F11` | P3 | actionable | doc-2026-07-14 | П10 | — | — | — |  |
 | `SEC-124` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — | prod fail-fast vs dev без пароля — реализации разные |
+| `SEC-131` | P3 | actionable | verified-2026-07-27 | П10 | — | media-service (.105) | — | MEDIA_BOT_TOKEN в .env на .105 — второй источник истины, :?-гард не срабатывает |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
 | `AUD3-26` | P3 | actionable | doc-2026-07-01 | П11 | — | — | — |  |
 | `AUD5-DEP-2` | P3 | actionable | doc-2026-07-21 | П11 | — | — | — |  |
@@ -80,7 +81,6 @@
 | `TEST-068` | P2 | actionable | plan-2026-07-26 | П11 | — | — | — |  |
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | verified-2026-07-26 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером |
-| `PENT-F10` | P3 | actionable | verified-2026-07-26 | П2c | — | — | — | profk чист (600/700 везде); остаток — .105 за ssh-блокером |
 | `AUD5-APIFE-3` | P2 | actionable | plan-2026-07-26 | П4 | — | — | — | сначала retention-решение, иначе колонки опустеют |
 | `AUD5-APIFE-7` | P2 | actionable | plan-2026-07-26 | П4 | — | — | — |  |
 | `AUD5-APIFE-8` | P2 | actionable | plan-2026-07-26 | П4 | — | — | — | AC «активный фильтр» недостижим: useKanban() без фильтров |
