@@ -122,8 +122,9 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П2
     "PENT-F17": A(pkg="П2a", status="actionable", method="plan-2026-07-26",
                   note="/uk/health отдаёт SPA index.html — мониторинг ложно зелёный"),
-    "PENT-F14": A(pkg="П2b", status="actionable", method="plan-2026-07-26",
-                  note="security.txt = SPA-200; вариант 404 = принятый риск, не фикс"),
+    "PENT-F14": A(pkg="П2b", status="actionable", method="verified-2026-07-26",
+                  services="edge владельца (оба домена)",
+                  note="артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером"),
     "PENT-F10": A(pkg="П2c", status="actionable", method="verified-2026-07-26",
                   note="profk чист (600/700 везде); остаток — .105 за ssh-блокером"),
     # П2d закрыт целиком 2026-07-26: `AUD5-PRAC-1` (канонический .env.example +

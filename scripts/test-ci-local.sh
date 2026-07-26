@@ -65,11 +65,13 @@ ENV_ARGS=(
 # нужные: монтирование каталога перекрыло бы код из образа.
 #   docker-compose{,.profk,.media}.yml — tests/services/test_compose_secret_env_ssot.py
 #   frontend/nginx.conf               — tests/api/test_health_contract.py (PENT-F17)
+#   docs/security/security.txt        — tests/services/test_security_txt.py (PENT-F14)
 CONFIG_MOUNTS=(
   -v "${ROOT}/docker-compose.yml:/app/docker-compose.yml:ro"
   -v "${ROOT}/docker-compose.profk.yml:/app/docker-compose.profk.yml:ro"
   -v "${ROOT}/docker-compose.media.yml:/app/docker-compose.media.yml:ro"
   -v "${ROOT}/frontend/nginx.conf:/app/frontend/nginx.conf:ro"
+  -v "${ROOT}/docs/security/security.txt:/app/docs/security/security.txt:ro"
 )
 
 cleanup() {
