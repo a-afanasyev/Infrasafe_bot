@@ -71,13 +71,13 @@ $$;
 -- `permission denied` на КАЖДОЙ уже существующей UK-таблице (users, requests,
 -- shifts и т.д.) сразу после cutover: раньше их обслуживало владение объектом
 -- (uk_bot был owner), а голого GRANT'а этим таблицам никогда не выдавалось.
--- access-domain-таблицы (immut+other, 20 шт.) исключены явно — у них
+-- access-domain-таблицы (immut+other, 22 шт.) исключены явно — у них
 -- собственная ACL-модель из access_app_rw (миграция 0001), uk_app_rw там
 -- доступа иметь не должен. alembic_version тоже исключена — её carve-out
 -- (SELECT-only) применяет uk_management_bot/dbops/acl_reconcile.py.
 --
--- Критично: исключение по ИМЕНИ таблицы недостаточно для sequences — 19 из
--- 20 access-domain таблиц используют identity/serial PK с backing-sequence
+-- Критично: исключение по ИМЕНИ таблицы недостаточно для sequences — 21 из
+-- 22 access-domain таблиц используют identity/serial PK с backing-sequence
 -- (`access_events_id_seq` и т.п.), которая как отдельный объект (`relkind='S'`)
 -- никогда не совпадёт по имени с именем таблицы в exclusion-массиве. Без
 -- явного исключения bulk-грант отдаёт `uk_app_rw` USAGE+SELECT на эти
@@ -92,11 +92,14 @@ DECLARE
   excluded_tables text[] := ARRAY[
     -- immut (4)
     'access_events','access_decisions','manual_openings','access_audit_logs',
-    -- other (16)
+    -- other (18)
     'parking_zones','parking_zone_yards','access_gates','access_cameras',
     'access_barriers','edge_controllers','vehicles','vehicle_apartments','access_rules',
     'access_passes','resident_access_requests','camera_events','controller_sync_events',
-    'barrier_commands','access_entry_confirmations','vehicle_presence_sessions'
+    'barrier_commands','access_entry_confirmations','vehicle_presence_sessions',
+    -- добавлены 2026-07-26 (миграция 0007): были пропущены при PRC-05, из-за чего
+    -- access-api получал `permission denied for table parking_spot_assignments`
+    'parking_spots','parking_spot_assignments'
   ];
   excluded_relnames text[];
   r RECORD;
@@ -108,10 +111,10 @@ BEGIN
   -- КРИТИЧНО: deptype IN ('a', 'i'), НЕ только 'a'. 'a' (auto) — зависимость
   -- классического SERIAL/BIGSERIAL (CREATE SEQUENCE + ALTER SEQUENCE ...
   -- OWNED BY). 'i' (internal) — зависимость нативной identity-колонки
-  -- (GENERATED ... AS IDENTITY), которую использует 17 из 20 access-domain
+  -- (GENERATED ... AS IDENTITY), которую использует 17 из 22 access-domain
   -- таблиц в этой миграции (sa.Identity() в моделях — не autoincrement=True).
   -- Единственный фильтр по 'a' эмпирически проверен и подтверждён неверным:
-  -- находит sequences только у 2 из 20 таблиц (access_entry_confirmations,
+  -- находит sequences только у 4 из 22 таблиц (access_entry_confirmations,
   -- vehicle_presence_sessions — единственные на голом autoincrement=True), и
   -- молча пропускает остальные 17, включая access_events_id_seq — именно ту
   -- sequence, что приведена как пример в комментариях этого файла. С фильтром
