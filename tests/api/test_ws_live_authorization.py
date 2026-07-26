@@ -155,6 +155,65 @@ async def test_db_unavailable_fails_closed(token_ok, monkeypatch):
     assert await ws.authenticate_ws_manager(sock, None) is None
 
 
+# ── Сама _ws_identity_ok, без подмены ────────────────────────────────────
+#
+# Все тесты выше подменяют `_ws_identity_ok` целиком — то есть её собственное
+# тело не исполняется ни в одном из них. Именно поэтому в прод уехал битый
+# импорт (`api_roles_for`, которого нет в `api.dependencies`): CI был зелёный, а
+# на живом хосте первая же попытка менеджера подключиться давала ImportError →
+# fail-closed → 403 на все WS. Эти два теста исполняют функцию по-настоящему.
+
+
+class _FakeSession:
+    """Минимальный async-context вокруг `session.get(User, id)`."""
+
+    def __init__(self, user):
+        self._user = user
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, model, pk):
+        return self._user
+
+
+def _stub_session(monkeypatch, user):
+    import uk_management_bot.database.session as session_mod
+
+    monkeypatch.setattr(session_mod, "AsyncSessionLocal", lambda: _FakeSession(user))
+
+
+class _FakeUser:
+    def __init__(self, roles, status="approved"):
+        self.roles = roles
+        self.status = status
+        self.role = None
+
+
+@pytest.mark.asyncio
+async def test_identity_ok_reads_roles_from_db_row(monkeypatch):
+    """Живой путь функции: manager в `user.roles` → доступ есть."""
+    _stub_session(monkeypatch, _FakeUser('["manager"]'))
+
+    assert await ws._ws_identity_ok(7) is True
+
+
+@pytest.mark.asyncio
+async def test_identity_ok_rejects_blocked_and_non_manager(monkeypatch):
+    """Тот же путь на отказах — блокировка и потеря роли."""
+    _stub_session(monkeypatch, _FakeUser('["manager"]', status="blocked"))
+    assert await ws._ws_identity_ok(7) is False
+
+    _stub_session(monkeypatch, _FakeUser('["applicant"]'))
+    assert await ws._ws_identity_ok(7) is False
+
+    _stub_session(monkeypatch, None)
+    assert await ws._ws_identity_ok(7) is False
+
+
 # ── Стрим: перепроверка и уход клиента ───────────────────────────────────
 
 

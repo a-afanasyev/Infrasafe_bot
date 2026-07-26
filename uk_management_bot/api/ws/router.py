@@ -51,7 +51,7 @@ async def _ws_identity_ok(user_id: int) -> bool:
     стоил прод-инцидента в media-service (сессия жила через сетевой I/O → пул
     выеден → 504). Соединение живёт часами, пул — нет.
     """
-    from uk_management_bot.api.dependencies import api_roles_for
+    from uk_management_bot.api.dependencies import _parse_user_roles
     from uk_management_bot.database.session import AsyncSessionLocal
     from uk_management_bot.database.models.user import User
 
@@ -62,7 +62,7 @@ async def _ws_identity_ok(user_id: int) -> bool:
         user = await session.get(User, user_id)
         if user is None or user.status == "blocked":
             return False
-        return "manager" in api_roles_for(user)
+        return "manager" in _parse_user_roles(user)
 
 
 def _payload_user_id(payload: dict) -> Optional[int]:
