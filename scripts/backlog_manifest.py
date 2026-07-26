@@ -143,11 +143,7 @@ ASSIGNMENT: dict[str, dict] = {
     # П3d закрыт 2026-07-26: `BUG-128` (POST зеркалит planned_*) и `WR-06`
     # (класс unbound `lang`: 4 заявленных + 16 найденных сайтов + AST-гейт).
     # ── П4: доска менеджера
-    "AUD5-APIFE-7": A(pkg="П4", status="actionable", method="plan-2026-07-26"),
-    "AUD5-APIFE-8": A(pkg="П4", status="actionable", method="plan-2026-07-26",
-                      note="AC «активный фильтр» недостижим: useKanban() без фильтров"),
-    "AUD5-APIFE-3": A(pkg="П4", status="actionable", method="plan-2026-07-26",
-                      note="сначала retention-решение, иначе колонки опустеют"),
+    # П4 закрыт целиком 2026-07-27: AUD5-APIFE-3/7/8 (записи в бэклоге).
     # ── П5: расходящиеся копии
     "AUD5-CODE-8": A(pkg="П5a", status="actionable", method="doc-2026-07-21"),
     "AUD5-CODE-9": A(pkg="П5a", status="actionable", method="doc-2026-07-21"),

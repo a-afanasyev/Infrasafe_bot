@@ -6,6 +6,14 @@ cookie → ?token= (DEPRECATED + warning) → первое WS-сообщение
 
 F-04 (аудит 2026-07-11): токен обязан нести числовой exp, стрим живёт не дольше
 exp и закрывается выделенным кодом 4001 (клиент обновляет сессию и возвращается).
+
+⚠️ Уровень этого файла — НАМЕРЕНИЕ хендлера, не провод. `FakeWS` записывает
+аргумент `close(code=...)` даже тогда, когда апгрейда не было и close-кадра на
+проводе не существует: до `accept()` uvicorn отвечает HTTP 403, и код 1008
+никуда не уходит. Поэтому `closed_code == 1008` здесь читается как «хендлер
+отказал», а НЕ как «клиент получил 1008» — ниже это помечено у каждого
+pre-accept случая. Контракт провода живёт отдельно и проверяется живым
+ASGI-сервером: `tests/api/test_ws_wire_protocol.py`.
 """
 import asyncio
 import time
@@ -112,8 +120,8 @@ class TestCookiePath:
         wsk = FakeWS(cookies={"uk_access": "applicant"})
         payload = await ws.authenticate_ws_manager(wsk, None)
         assert payload is None
-        assert wsk.accepted is False  # отклоняем ДО accept
-        assert wsk.closed_code == 1008
+        assert wsk.accepted is False  # отклоняем ДО accept → на проводе HTTP 403
+        assert wsk.closed_code == 1008  # намерение хендлера; клиент увидит 1006
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +144,7 @@ class TestQueryPath:
         wsk = FakeWS()
         payload = await ws.authenticate_ws_manager(wsk, "bad")
         assert payload is None
-        assert wsk.accepted is False
+        assert wsk.accepted is False  # → на проводе HTTP 403, не close-кадр
         assert wsk.closed_code == 1008
 
 
@@ -203,7 +211,7 @@ class TestExpClaim:
         wsk = FakeWS(cookies={"uk_access": "noexp"})
         payload = await ws.authenticate_ws_manager(wsk, None)
         assert payload is None
-        assert wsk.accepted is False  # cookie-путь отклоняет ДО accept
+        assert wsk.accepted is False  # cookie-путь отклоняет ДО accept → HTTP 403
         assert wsk.closed_code == 1008
 
     @pytest.mark.asyncio
