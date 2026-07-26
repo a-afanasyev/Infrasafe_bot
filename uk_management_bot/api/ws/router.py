@@ -27,6 +27,51 @@ _WS_AUTH_MESSAGE_TIMEOUT = 10  # seconds to wait for the first-message token
 # (which deliberately does not import from api routers).
 WS_TOKEN_EXPIRED = 4001
 
+# F-04 (остаток): доступ отозван УЖЕ во время сессии — пользователь заблокирован
+# или лишён роли manager. Отдельный код, а не 4001: реконнект тут не поможет,
+# и клиент не должен трактовать это как «обнови сессию и вернись».
+WS_ACCESS_REVOKED = 4003
+
+# Как часто перепроверять личность в БД во время стрима. Компромисс: окно, в
+# которое заблокированный пользователь ещё получает события, против нагрузки
+# (один короткий SELECT на соединение в минуту).
+_WS_IDENTITY_RECHECK_INTERVAL = 60.0
+
+
+async def _ws_identity_ok(user_id: int) -> bool:
+    """Существует ли пользователь СЕЙЧАС, не заблокирован и всё ещё manager.
+
+    Источник правды — БД, а не `roles` из JWT: токен это слепок на момент
+    выдачи, и до его истечения снятие роли/блокировка иначе не замечались.
+    Предикат намеренно повторяет HTTP-путь (`api/dependencies.get_current_user`
+    + `require_roles("manager")`): одна дверь не должна быть мягче другой.
+
+    Сессия открывается и ЗАКРЫВАЕТСЯ внутри вызова. Это не стилистика: держать
+    сессию открытой на всё время WS-стрима — ровно тот класс бага, что уже
+    стоил прод-инцидента в media-service (сессия жила через сетевой I/O → пул
+    выеден → 504). Соединение живёт часами, пул — нет.
+    """
+    from uk_management_bot.api.dependencies import api_roles_for
+    from uk_management_bot.database.session import AsyncSessionLocal
+    from uk_management_bot.database.models.user import User
+
+    if AsyncSessionLocal is None:
+        raise RuntimeError("async session factory unavailable")
+
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, user_id)
+        if user is None or user.status == "blocked":
+            return False
+        return "manager" in api_roles_for(user)
+
+
+def _payload_user_id(payload: dict) -> Optional[int]:
+    """`sub` как int или None. Без него личность в БД не найти."""
+    try:
+        return int(payload.get("sub"))
+    except (TypeError, ValueError):
+        return None
+
 
 def _token_exp(payload: dict) -> Optional[float]:
     """Numeric ``exp`` claim or None.
@@ -41,14 +86,9 @@ def _token_exp(payload: dict) -> Optional[float]:
     return float(exp)
 
 
-def _extract_roles(payload: dict) -> list:
-    roles = payload.get("roles", [])
-    if isinstance(roles, str):
-        try:
-            roles = _json.loads(roles)
-        except Exception:
-            roles = [r.strip() for r in roles.split(',') if r.strip()]
-    return roles
+# `_extract_roles` удалён вместе с последним его вызовом: роли WS больше не
+# читает из JWT (F-04). Оставлять парсер «на всякий случай» вредно — он бы
+# выглядел рабочим путём авторизации, которым уже не является.
 
 
 def _extract_token_from_message(raw: str) -> Optional[str]:
@@ -114,11 +154,22 @@ async def authenticate_ws_manager(
         )
 
     payload = verify_access_token(token) if token else None
-    if (
-        not payload
-        or "manager" not in _extract_roles(payload)
-        or _token_exp(payload) is None
-    ):
+    user_id = _payload_user_id(payload) if payload else None
+
+    authorized = False
+    if payload and user_id is not None and _token_exp(payload) is not None:
+        # Роль решает БД, не токен (F-04). Любой сбой проверки — отказ:
+        # fail-open здесь означал бы «пускаем всех, пока БД лежит».
+        try:
+            authorized = await _ws_identity_ok(user_id)
+        except Exception:
+            logger.warning(
+                "WS identity check failed for user %s — closing (fail-closed)",
+                user_id, exc_info=True,
+            )
+            authorized = False
+
+    if not authorized:
         if accepted:
             await _safe_close(websocket)
         else:
@@ -130,28 +181,101 @@ async def authenticate_ws_manager(
     return payload
 
 
-async def _relay_until_exp(websocket: WebSocket, payload: dict, pubsub) -> None:
-    """Forward pubsub messages to the client until the JWT expires (F-04).
+async def _pump_pubsub(websocket: WebSocket, pubsub) -> None:
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            await websocket.send_text(message["data"])
 
-    On expiry the socket is closed with WS_TOKEN_EXPIRED (4001) — a normal,
-    expected event (never logged as an error): the client refreshes the session
-    cookie and reconnects.
+
+async def _watch_client(websocket: WebSocket) -> None:
+    """Дождаться ухода клиента (AUD5-APIFE-2).
+
+    Раньше `receive()` не читался вообще, поэтому закрытие сокета клиентом
+    никто не замечал: корутина висела на `pubsub.listen()`, а подписка Redis
+    жила дальше — по одной осиротевшей подписке на каждый ушедший дашборд.
+    Входящие сообщения после аутентификации не осмысленны, поэтому просто
+    сливаем их: важен сам факт разрыва.
+    """
+    while True:
+        await websocket.receive_text()
+
+
+async def _watch_identity(user_id: Optional[int]) -> None:
+    """Периодически сверяться с БД; вернуться, когда доступ отозван (F-04).
+
+    Handshake-проверки мало: соединение живёт до истечения токена, то есть
+    блокировка менеджера иначе вступала бы в силу через часы.
+    """
+    while True:
+        await asyncio.sleep(_WS_IDENTITY_RECHECK_INTERVAL)
+        if user_id is None:
+            return
+        try:
+            if not await _ws_identity_ok(user_id):
+                return
+        except Exception:
+            # Недоступность БД — не повод рвать живую сессию: handshake уже
+            # состоялся, а верхнюю границу всё равно держит exp. Здесь
+            # fail-open осознан и ограничен по времени, в отличие от handshake.
+            logger.warning("WS identity re-check failed for user %s (keeping stream)",
+                           user_id, exc_info=True)
+
+
+async def _relay(websocket: WebSocket, payload: dict, pubsub) -> None:
+    """Гнать события клиенту, пока держится ВСЁ сразу: exp, доступ и сам клиент.
+
+    Четыре условия конкурируют; побеждает наступившее первым:
+      * истёк `exp` → close 4001 (клиент обновит сессию и вернётся);
+      * доступ отозван → close 4003 (возвращаться незачем);
+      * клиент ушёл → тихий выход, `finally` вызывающего снимет подписку;
+      * поток pubsub закончился → тихий выход.
     """
     exp = _token_exp(payload) or 0.0  # auth guarantees numeric exp; 0.0 fails closed
+    user_id = _payload_user_id(payload)
+
+    pump = asyncio.create_task(_pump_pubsub(websocket, pubsub))
+    client = asyncio.create_task(_watch_client(websocket))
+    identity = asyncio.create_task(_watch_identity(user_id))
+    tasks = {pump, client, identity}
+
     try:
-        async with asyncio.timeout(max(0.0, exp - time.time())):
-            async for message in pubsub.listen():
-                if message["type"] == "message":
-                    await websocket.send_text(message["data"])
-    except TimeoutError:
+        done, pending = await asyncio.wait(
+            tasks, timeout=max(0.0, exp - time.time()),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+    finally:
+        for t in tasks:
+            t.cancel()
+        # Дожидаемся отмены — иначе задачи переживут хендлер и продолжат
+        # писать в закрытый сокет.
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    close_code = None
+    if not done:
+        close_code = WS_TOKEN_EXPIRED          # сработал таймаут exp
+    elif identity in done and not identity.cancelled():
+        close_code = WS_ACCESS_REVOKED
+    # client/pump в done — клиент уже ушёл или поток иссяк: закрывать нечего.
+
+    if close_code is not None:
         try:
-            await websocket.close(code=WS_TOKEN_EXPIRED)
+            await websocket.close(code=close_code)
         except RuntimeError:
             pass  # peer already gone
 
 
-@router.websocket("/kanban")
-async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
+# Имя сохранено: на него ссылаются существующие тесты PR-15 (F-04, close 4001).
+_relay_until_exp = _relay
+
+
+async def _serve_ws(websocket: WebSocket, token: Optional[str], subscribe, label: str) -> None:
+    """Общее тело всех трёх WS-эндпоинтов.
+
+    Раньше это были три почти посимвольные копии (AUD5-APIFE-2), различавшиеся
+    только функцией подписки и словом в тексте лога — из-за чего правка вроде
+    чтения `receive()` требовала трёх одинаковых изменений и разъезжалась бы,
+    как уже разъехались карты статусов на фронте.
+    """
     payload = await authenticate_ws_manager(websocket, token)
     if payload is None:
         return
@@ -159,76 +283,37 @@ async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
     pubsub = None
     redis_client = None
     try:
-        pubsub, redis_client = await subscribe_to_requests()
-        await _relay_until_exp(websocket, payload, pubsub)
+        pubsub, redis_client = await subscribe()
+        await _relay(websocket, payload, pubsub)
     except WebSocketDisconnect:
         pass
     except Exception:
-        logger.exception("WebSocket error")
+        logger.exception("%s WebSocket error", label)
     finally:
+        # Снятие подписки и закрытие клиента — обязательно и по отдельности:
+        # сбой первого не должен оставить соединение Redis висеть.
         if pubsub is not None:
             try:
                 await pubsub.unsubscribe()
             except Exception:
-                logger.warning("Failed to unsubscribe from pubsub", exc_info=True)
+                logger.warning("Failed to unsubscribe from %s pubsub", label, exc_info=True)
         if redis_client is not None:
             try:
                 await redis_client.aclose()
             except Exception:
-                logger.warning("Failed to close redis client", exc_info=True)
+                logger.warning("Failed to close redis client (%s)", label, exc_info=True)
+
+
+@router.websocket("/kanban")
+async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
+    await _serve_ws(websocket, token, subscribe_to_requests, "kanban")
 
 
 @router.websocket("/shifts")
 async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
-    payload = await authenticate_ws_manager(websocket, token)
-    if payload is None:
-        return
-
-    pubsub = None
-    redis_client = None
-    try:
-        pubsub, redis_client = await subscribe_to_shifts()
-        await _relay_until_exp(websocket, payload, pubsub)
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        logger.exception("Shifts WebSocket error")
-    finally:
-        if pubsub is not None:
-            try:
-                await pubsub.unsubscribe()
-            except Exception:
-                logger.warning("Failed to unsubscribe from shifts pubsub", exc_info=True)
-        if redis_client is not None:
-            try:
-                await redis_client.aclose()
-            except Exception:
-                logger.warning("Failed to close redis client", exc_info=True)
+    await _serve_ws(websocket, token, subscribe_to_shifts, "shifts")
 
 
 @router.websocket("/buildings")
 async def buildings_ws(websocket: WebSocket, token: str = Query(default=None)):
-    payload = await authenticate_ws_manager(websocket, token)
-    if payload is None:
-        return
-
-    pubsub = None
-    redis_client = None
-    try:
-        pubsub, redis_client = await subscribe_to_buildings()
-        await _relay_until_exp(websocket, payload, pubsub)
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        logger.exception("Buildings WebSocket error")
-    finally:
-        if pubsub is not None:
-            try:
-                await pubsub.unsubscribe()
-            except Exception:
-                logger.warning("Failed to unsubscribe from buildings pubsub", exc_info=True)
-        if redis_client is not None:
-            try:
-                await redis_client.aclose()
-            except Exception:
-                logger.warning("Failed to close redis client", exc_info=True)
+    await _serve_ws(websocket, token, subscribe_to_buildings, "buildings")

@@ -83,3 +83,40 @@ describe('useWebSocket — F-04 token expiry (4001)', () => {
     expect(FakeWebSocket.instances).toHaveLength(1) // редирект на /login — не наша забота
   })
 })
+
+// F-04 (остаток): 4003 — доступ отозван УЖЕ во время сессии (блокировка или
+// снятие роли). В отличие от 4001 обновление сессии тут бессмысленно: новый
+// токен выдадут тому же заблокированному пользователю. Без отдельной ветки код
+// попадал бы в общий реконнект и клиент долбился бы в сервер до отказа.
+describe('useWebSocket — F-04 access revoked (4003)', () => {
+  it('на 4003 не обновляет сессию и не переподключается', async () => {
+    // Фейковые таймеры обязательны: реконнект отложен на 3 с, и без прокрутки
+    // времени тест был бы зелёным независимо от наличия ветки 4003.
+    vi.useFakeTimers()
+    try {
+      renderHook(() => useWebSocket('kanban', () => {}))
+
+      await closeWith(4003)
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+
+      expect(refreshSession).not.toHaveBeenCalled()
+      expect(FakeWebSocket.instances).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('контроль: сетевой обрыв (1006) переподключается — общая ветка жива', async () => {
+    vi.useFakeTimers()
+    try {
+      renderHook(() => useWebSocket('kanban', () => {}))
+
+      await closeWith(1006)
+      await act(async () => { await vi.advanceTimersByTimeAsync(3_500) })
+
+      expect(FakeWebSocket.instances).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

@@ -40,7 +40,12 @@ class FakeWS:
 
 @pytest.fixture
 def manager_token(monkeypatch):
-    """verify_access_token("good") → manager payload; иначе None."""
+    """verify_access_token("good") → manager payload; иначе None.
+
+    Плюс заглушка проверки личности в БД: с F-04 (остаток) роль решает БД, а не
+    токен. Здесь БД «согласна» с токеном — эти тесты про ИСТОЧНИК токена, и
+    расхождение токен↔БД проверяется отдельно, в test_ws_live_authorization.py.
+    """
     def _verify(tok):
         # exp обязателен с F-04 — payload без него отклоняется (см. TestExpClaim).
         if tok == "good":
@@ -49,6 +54,11 @@ def manager_token(monkeypatch):
             return {"sub": "2", "roles": ["applicant"], "exp": time.time() + 3600}
         return None
     monkeypatch.setattr(ws, "verify_access_token", _verify)
+
+    async def _identity_ok(user_id):
+        return user_id == 1  # 1 — менеджер, 2 — заявитель
+
+    monkeypatch.setattr(ws, "_ws_identity_ok", _identity_ok)
 
 
 # ---------------------------------------------------------------------------
@@ -217,9 +227,16 @@ class TestExpClaim:
 
 class TestStreamExpiry:
     @pytest.mark.asyncio
-    async def test_relay_closes_4001_on_token_expiry(self):
-        """Истечение exp во время стрима → close выделенным кодом 4001."""
-        wsk = FakeWS()
+    async def test_relay_closes_4001_on_token_expiry(self, monkeypatch):
+        """Истечение exp во время стрима → close выделенным кодом 4001.
+
+        `hang=True` теперь обязателен: с AUD5-APIFE-2 стрим читает `receive()`,
+        и фейк, мгновенно бросающий WebSocketDisconnect, означал бы «клиент уже
+        ушёл» — тогда закрывать было бы нечего и код не выставлялся бы.
+        Перепроверку личности отодвигаем, чтобы гонку выиграл именно exp.
+        """
+        monkeypatch.setattr(ws, "_WS_IDENTITY_RECHECK_INTERVAL", 3600)
+        wsk = FakeWS(hang=True)
         payload = {"sub": "1", "roles": ["manager"], "exp": time.time() + 0.05}
         await ws._relay_until_exp(wsk, payload, _SilentPubSub())
         assert ws.WS_TOKEN_EXPIRED == 4001
