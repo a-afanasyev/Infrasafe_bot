@@ -12,7 +12,8 @@ default-privilege, а не до него):
    получила бы INSERT/UPDATE/DELETE наравне с обычной прикладной таблицей, и
    runtime (`uk_bot_runtime`/`uk_api_runtime`) мог бы подделать записанную
    ревизию, обойдя ``db_preflight``.
-2. Access-domain (immut+other, 20 таблиц из ``0001_prc05_initial_baseline.py``)
+2. Access-domain (immut+other, 22 таблицы: 20 из ``0001_prc05_initial_baseline.py``
+   + 2 parking из ``0007_parking_spots_acl.py``)
    — явный REVOKE блáнкет-DML у ``uk_app_rw``. На проде (существующая БД)
    default privileges retroactively эти таблицы не задевают (они старше
    ownership-transfer), поэтому там это no-op; на fresh-install без этого шага
@@ -59,26 +60,30 @@ def _validate_identifier(name: str) -> str:
 # Там, где роль обязана быть (REQUIRE_MIGRATION_OWNER=1 — прод migrate-job,
 # новый PostgreSQL least-privilege CI job), отсутствие роли — явная ошибка.
 
-# Те же 20 access-domain таблиц (immut+other), что в
-# alembic/versions/0001_prc05_initial_baseline.py:1298-1337 — только имена,
-# без разбивки на immut/other: обеим подгруппам одинаково не место в
-# блáнкет-гранте uk_app_rw, у них своя ACL через access_app_rw.
+# Те же 22 access-domain таблицы (immut+other), что в
+# alembic/versions/0001_prc05_initial_baseline.py:1298-1337 и
+# alembic/versions/0007_parking_spots_acl.py — только имена, без разбивки на
+# immut/other: обеим подгруппам одинаково не место в блáнкет-гранте uk_app_rw,
+# у них своя ACL через access_app_rw.
+# Список сверяется с `__tablename__` моделей access_control/ гейтом
+# uk_management_bot/tests/test_access_domain_acl_ssot.py — он же сверяет два
+# других дубля этого списка (baseline и scripts/dba_ownership_transfer.sql).
 ACCESS_DOMAIN_TABLES = [
     "access_events", "access_decisions", "manual_openings", "access_audit_logs",
     "parking_zones", "parking_zone_yards", "access_gates", "access_cameras",
     "access_barriers", "edge_controllers", "vehicles", "vehicle_apartments",
     "access_rules", "access_passes", "resident_access_requests", "camera_events",
     "controller_sync_events", "barrier_commands", "access_entry_confirmations",
-    "vehicle_presence_sessions",
+    "vehicle_presence_sessions", "parking_spots", "parking_spot_assignments",
 ]
 
 # Находит backing-sequences access-domain таблиц через pg_depend, а не по
 # имени: устойчиво к любой naming convention и к таблицам без sequence (UUID PK).
 # deptype IN ('a', 'i') — ОБЯЗАТЕЛЬНО оба, не только 'a'. 'a' (auto) — классический
 # SERIAL/BIGSERIAL; 'i' (internal) — нативная identity-колонка (GENERATED ... AS
-# IDENTITY), которую использует 17 из 20 access-domain таблиц в этой миграции.
+# IDENTITY), которую использует 17 из 22 access-domain таблиц в этой миграции.
 # Фильтр только по 'a' эмпирически подтверждён неверным: находит sequences лишь
-# у 2 из 20 таблиц и пропускает access_events_id_seq и ещё 16 — оставляя их
+# у 4 из 22 таблиц и пропускает access_events_id_seq и ещё 16 — оставляя их
 # блáнкет-грант uk_app_rw неотозванным (та самая утечка, которую эта функция
 # должна закрывать).
 _SEQUENCES_FOR_TABLES_SQL = """

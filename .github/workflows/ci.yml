@@ -830,37 +830,62 @@ jobs:
               'parking_zones','parking_zone_yards','access_gates','access_cameras',
               'access_barriers','edge_controllers','vehicles','vehicle_apartments','access_rules',
               'access_passes','resident_access_requests','camera_events','controller_sync_events',
-              'barrier_commands','access_entry_confirmations','vehicle_presence_sessions'
+              'barrier_commands','access_entry_confirmations','vehicle_presence_sessions',
+              'parking_spots','parking_spot_assignments'
             ];
             r RECORD;
             leak_count int := 0;
             seq_count int := 0;
           BEGIN
-            -- deptype IN ('a', 'i'): 'a' = classic SERIAL (2 из 20 таблиц
+            -- deptype IN ('a', 'i'): 'a' = classic SERIAL (4 из 22 таблиц
             -- здесь), 'i' = нативная identity-колонка GENERATED ... AS
-            -- IDENTITY (17 из 20 таблиц здесь). Фильтр только по 'a' — уже
+            -- IDENTITY (17 из 22 таблиц здесь). Фильтр только по 'a' — уже
             -- эмпирически подтверждённая, реально произошедшая регрессия:
             -- находил лишь 2 sequences и MOLча пропускал остальные 17
             -- (включая access_events_id_seq), при этом сам "seq_count = 0"
             -- guard ниже это не ловил (2 <> 0). Порог ужесточён до "< 15" —
-            -- заведомо выше сломанного случая (2), заведомо ниже реального (19).
+            -- заведомо выше сломанного случая (2), заведомо ниже реального (21).
+            --
+            -- uk_access_runtime проверяется ИНАЧЕ, чем bot/api (правка 0007):
+            -- у serial-default таблиц INSERT физически требует USAGE на
+            -- backing-sequence, поэтому для НИХ USAGE у access-api — норма, а не
+            -- утечка (без него `permission denied for sequence` на каждой
+            -- вставке в parking_spots/parking_spot_assignments/
+            -- access_entry_confirmations/vehicle_presence_sessions). У identity-
+            -- таблиц INSERT sequence-привилегий не требует вовсе, поэтому там
+            -- USAGE у access-api — по-прежнему лишнее право и ловится как утечка.
+            -- Для bot/api (uk_app_rw) любая привилегия на любую access-domain
+            -- sequence остаётся утечкой без исключений — это то, ради чего
+            -- шаг и существует.
             FOR r IN
-              SELECT s.relname
+              SELECT s.relname,
+                     (a.attidentity = '') AS serial_default
               FROM pg_class t
               JOIN pg_depend d ON d.refobjid = t.oid AND d.deptype IN ('a', 'i')
               JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
+              JOIN pg_attribute a ON a.attrelid = t.oid AND a.attname = 'id'
               WHERE t.relname = ANY(excluded_tables)
             LOOP
               seq_count := seq_count + 1;
               IF has_sequence_privilege('uk_bot_runtime', r.relname, 'SELECT')
                   OR has_sequence_privilege('uk_api_runtime', r.relname, 'SELECT')
-                  OR has_sequence_privilege('uk_access_runtime', r.relname, 'USAGE') THEN
+                  OR has_sequence_privilege('uk_bot_runtime', r.relname, 'USAGE')
+                  OR has_sequence_privilege('uk_api_runtime', r.relname, 'USAGE') THEN
                 RAISE WARNING 'access-domain sequence % leaked to uk_app_rw', r.relname;
                 leak_count := leak_count + 1;
               END IF;
+              IF NOT r.serial_default
+                  AND has_sequence_privilege('uk_access_runtime', r.relname, 'USAGE') THEN
+                RAISE WARNING 'identity-table sequence % needlessly granted to access_app_rw', r.relname;
+                leak_count := leak_count + 1;
+              END IF;
+              IF r.serial_default
+                  AND NOT has_sequence_privilege('uk_access_runtime', r.relname, 'USAGE') THEN
+                RAISE EXCEPTION 'serial-default access-domain sequence % has no USAGE for access_app_rw — INSERT will fail (миграция 0007)', r.relname;
+              END IF;
             END LOOP;
             IF seq_count < 15 THEN
-              RAISE EXCEPTION 'found only % access-domain sequence(s) via pg_depend (expected ~19) — discovery mechanism is broken, not a real pass', seq_count;
+              RAISE EXCEPTION 'found only % access-domain sequence(s) via pg_depend (expected ~21) — discovery mechanism is broken, not a real pass', seq_count;
             END IF;
             IF leak_count <> 0 THEN
               RAISE EXCEPTION '% of % access-domain sequence(s) leaked to uk_app_rw', leak_count, seq_count;
