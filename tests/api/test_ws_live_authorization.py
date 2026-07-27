@@ -33,6 +33,11 @@ class FakeWS:
 
     def __init__(self, cookies=None, gone=False):
         self.cookies = cookies or {}
+        # PENT-F05: у настоящего WebSocket заголовки есть ВСЕГДА. Дубль без
+        # `headers` ронял Origin-гейт на AttributeError, то есть моделировал
+        # объект, которого не бывает. Пустые заголовки = не-браузерный
+        # клиент — валидный сценарий, гейт его пропускает.
+        self.headers: dict = {}
         self.accepted = False
         self.closed_code = "NOT_CLOSED"
         self.sent: list[str] = []

@@ -272,6 +272,10 @@ class _SilentAuthWS:
 
         self.query_params: dict = {}
         self.cookies: dict = {}
+        # PENT-F05: у настоящего WebSocket заголовки есть ВСЕГДА; дубль без
+        # `headers` ронял Origin-гейт на AttributeError — то есть моделировал
+        # объект, которого не бывает.
+        self.headers: dict = {}
         self.client_state = WebSocketState.CONNECTING
         self.accepted = False
         self.closed_code: int | None = None

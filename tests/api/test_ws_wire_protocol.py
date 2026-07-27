@@ -114,6 +114,52 @@ def manager_auth(monkeypatch):
 # До upgrade: HTTP-статус, а НЕ close-код
 # ---------------------------------------------------------------------------
 
+class TestOriginGate:
+    """PENT-F05: чужой Origin отсекается ДО апгрейда.
+
+    Проверяется на живом сервере, а не на дубле: решение принимается до
+    `accept()`, а это ровно тот путь, на котором `TestClient` врёт (см.
+    docstring модуля).
+    """
+
+    @pytest.mark.asyncio
+    async def test_foreign_origin_is_rejected_before_upgrade(self, ws_server, manager_auth):
+        with pytest.raises(Exception) as exc:
+            async with websockets.connect(
+                f"{ws_server}/ws/v2/kanban",
+                additional_headers={
+                    "Cookie": "uk_access=good",
+                    "Origin": "https://evil.example",
+                },
+            ):
+                pass
+        assert "403" in str(exc.value), (
+            f"чужой Origin должен получать HTTP 403 до апгрейда, получено: {exc.value}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_same_origin_connects(self, ws_server, manager_auth):
+        """SPA живёт на том же домене — Origin совпадает с Host."""
+        host = ws_server.removeprefix("ws://")
+        async with websockets.connect(
+            f"{ws_server}/ws/v2/kanban",
+            additional_headers={
+                "Cookie": "uk_access=good",
+                "Origin": f"http://{host}",
+            },
+        ) as socket:
+            assert socket.state.name == "OPEN"
+
+    @pytest.mark.asyncio
+    async def test_absent_origin_still_connects(self, ws_server, manager_auth):
+        """Не-браузерные клиенты Origin не шлют; у них нет и куки жертвы."""
+        async with websockets.connect(
+            f"{ws_server}/ws/v2/kanban",
+            additional_headers={"Cookie": "uk_access=good"},
+        ) as socket:
+            assert socket.state.name == "OPEN"
+
+
 class TestPreUpgradeRejection:
     @pytest.mark.asyncio
     async def test_invalid_cookie_token_is_http_403_not_close_code(self, ws_server, manager_auth):
