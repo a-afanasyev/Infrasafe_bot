@@ -22,8 +22,8 @@ import argparse
 import logging
 import sys
 import os
-from typing import Dict, List, Optional
-from sqlalchemy import inspect, text, MetaData, Table, Column, String, Integer
+from typing import Dict
+from sqlalchemy import inspect, text, String
 from sqlalchemy.engine import Engine
 
 # Add project root to path for imports
@@ -34,7 +34,10 @@ sys.path.insert(0, PROJECT_ROOT)
 try:
     from uk_management_bot.database.session import engine, Base
     from uk_management_bot.config.settings import settings
-    from uk_management_bot.database.models import *  # Import all models
+    # Импорт со звёздочкой намеренный: он регистрирует ВСЕ модели в
+    # `Base.metadata` до `create_all`. Точечный список пришлось бы
+    # синхронизировать вручную, и забытая модель тихо не создалась бы.
+    from uk_management_bot.database.models import *  # noqa: F401,F403
 except ImportError as e:
     print(f"Error importing project modules: {e}")
     print("Make sure you're running from the project root directory")
@@ -249,7 +252,7 @@ def main():
             logger.info("Running schema validation only...")
             validation = validate_schema(engine)
 
-            print(f"\n=== Validation Results ===")
+            print("\n=== Validation Results ===")
             print(f"Valid: {validation['valid']}")
             print(f"Tables found: {validation['table_count']}")
 
@@ -265,7 +268,7 @@ def main():
         # Run full bootstrap
         result = bootstrap_database(engine, clean=args.clean)
 
-        print(f"\n=== Bootstrap Results ===")
+        print("\n=== Bootstrap Results ===")
         print(f"Tables cleaned: {result['cleaned']}")
         print(f"Tables created/verified: {result['tables_created']}")
         print(f"Indexes created: {result['indexes_created']}")

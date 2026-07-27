@@ -6,7 +6,6 @@ This script tests all 26 auth locale keys in both Russian and Uzbek languages.
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path

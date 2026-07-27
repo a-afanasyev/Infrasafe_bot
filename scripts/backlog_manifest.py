@@ -171,8 +171,7 @@ ASSIGNMENT: dict[str, dict] = {
                  note="выбор: AsyncSession или sync unit-of-work в to_thread"),
     "AUD5-CODE-6": A(pkg="B", status="decision", method="doc-2026-07-21"),
     # ── П7
-    "AUD5-PRAC-11": A(pkg="П7c", status="actionable", method="plan-2026-07-26",
-                      note="127 E/F в scripts, много ручного разбора"),
+    # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
     "REFACTOR-113": A(pkg="П7e", status="actionable", method="doc-2026-06-06"),
     "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",
                      note="локальные venv/db/png — только пофайлово с подтверждения"),

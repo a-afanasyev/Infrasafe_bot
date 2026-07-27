@@ -87,7 +87,7 @@ def main():
         removed = cleanup_locale_file(locale_file, KEYS_TO_REMOVE)
         total_removed += removed
 
-    print(f"\n✅ Cleanup complete!")
+    print("\n✅ Cleanup complete!")
     print(f"📊 Total keys removed: {total_removed}")
     print(f"📁 Files processed: {len([f for f in locale_files if f.exists()])}")
 

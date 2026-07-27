@@ -11,18 +11,17 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from sqlalchemy import create_engine, MetaData
 from sqlalchemy.schema import CreateTable, CreateIndex
 from sqlalchemy.dialects import postgresql
 from uk_management_bot.database.session import Base
-import uk_management_bot.database.models  # Import all models
+# Импорт ради побочного эффекта: регистрирует модели в `Base.metadata`, из
+# которой ниже и генерируется DDL. Без него скрипт молча выдаст пустую схему,
+# поэтому автоудаление «неиспользуемого» импорта здесь недопустимо.
+import uk_management_bot.database.models  # noqa: F401
 
 
 def export_sql_ddl(output_file="database_schema_actual.sql"):
     """Экспортирует SQL DDL из SQLAlchemy моделей"""
-
-    # Используем PostgreSQL диалект
-    engine = create_engine("postgresql://")
 
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("-- " + "=" * 70 + "\n")

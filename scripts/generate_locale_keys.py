@@ -20,9 +20,8 @@ Features:
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List
 from dataclasses import dataclass
-from collections import defaultdict
 
 
 @dataclass
@@ -301,7 +300,6 @@ class LocaleKeyGenerator:
             self.stats['total_processed'] += 1
 
             # Generate key
-            suggested_key = result.get('suggestion', '')
             string_value = result['string_value']
             file_path = result['file_path']
             context = result.get('context', '')
@@ -409,7 +407,7 @@ class LocaleKeyGenerator:
 
     def generate_mapping_file(self, output_path: Path):
         """Generate mapping file for migration reference."""
-        print(f"\n📝 Generating mapping file...")
+        print("\n📝 Generating mapping file...")
 
         mapping = []
         for entry in self.new_entries:

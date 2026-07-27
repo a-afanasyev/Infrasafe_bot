@@ -48,7 +48,7 @@ def clean_duplicate_notes():
         # Убираем лишние пустые строки в конце
         cleaned_notes = cleaned_notes.rstrip('\n')
         
-        print(f"\n🧹 После очистки:")
+        print("\n🧹 После очистки:")
         print(f"📝 Очищенные заметки:\n{cleaned_notes}")
         print(f"📏 Новая длина: {len(cleaned_notes)} символов")
         print(f"📊 Строк после очистки: {len(cleaned_notes.split(chr(10)))}")

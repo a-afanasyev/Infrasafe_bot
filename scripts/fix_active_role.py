@@ -4,7 +4,6 @@
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Добавляем пути для импортов
@@ -39,7 +38,7 @@ try:
             if user.roles:
                 try:
                     roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                except:
+                except (ValueError, TypeError):
                     roles = []
             
             if new_active_role not in roles:

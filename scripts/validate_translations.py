@@ -19,7 +19,7 @@ Features:
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 from dataclasses import dataclass, field
 from collections import defaultdict
 
@@ -119,7 +119,7 @@ class TranslationValidator:
                     severity='error',
                     category='missing_key_uz',
                     key=key,
-                    message=f"Key exists in ru.json but missing in uz.json",
+                    message="Key exists in ru.json but missing in uz.json",
                     details={'ru_value': self.ru_flat[key]}
                 ))
                 self.stats['missing_keys_uz'] += 1
@@ -132,7 +132,7 @@ class TranslationValidator:
                     severity='warning',
                     category='extra_key_uz',
                     key=key,
-                    message=f"Key exists in uz.json but missing in ru.json",
+                    message="Key exists in uz.json but missing in ru.json",
                     details={'uz_value': self.uz_flat[key]}
                 ))
                 self.stats['extra_keys_uz'] += 1
@@ -166,7 +166,7 @@ class TranslationValidator:
                     self.stats['missing_translations'] += 1
 
         if not untranslated:
-            print(f"   ✅ All strings translated")
+            print("   ✅ All strings translated")
         else:
             print(f"   ⚠️  Untranslated: {len(untranslated)} strings")
 
@@ -199,7 +199,7 @@ class TranslationValidator:
                     severity='error',
                     category='format_mismatch',
                     key=key,
-                    message=f"Format string parameters don't match",
+                    message="Format string parameters don't match",
                     details={
                         'ru_params': sorted(ru_params),
                         'uz_params': sorted(uz_params),
@@ -210,7 +210,7 @@ class TranslationValidator:
                 self.stats['format_mismatches'] += 1
 
         if not mismatches:
-            print(f"   ✅ All format strings valid")
+            print("   ✅ All format strings valid")
         else:
             print(f"   ❌ Format mismatches: {len(mismatches)}")
 
@@ -239,7 +239,7 @@ class TranslationValidator:
         else:
             missing = ru_sections - uz_sections
             extra = uz_sections - ru_sections
-            print(f"   ⚠️  Structure mismatch:")
+            print("   ⚠️  Structure mismatch:")
             print(f"       Missing in UZ: {len(missing)}")
             print(f"       Extra in UZ: {len(extra)}")
 
@@ -248,7 +248,7 @@ class TranslationValidator:
                     severity='info',
                     category='structure_mismatch',
                     key=section,
-                    message=f"Section exists in RU but not in UZ",
+                    message="Section exists in RU but not in UZ",
                     details={}
                 ))
 
@@ -286,8 +286,6 @@ class TranslationValidator:
 
     def generate_statistics(self) -> Dict:
         """Generate validation statistics."""
-        total_issues = len(self.issues)
-
         for issue in self.issues:
             if issue.severity == 'error':
                 self.stats['errors'] += 1
@@ -308,7 +306,6 @@ class TranslationValidator:
         for issue in self.issues:
             if issue.category == 'missing_key_uz':
                 key = issue.key
-                ru_value = issue.details['ru_value']
                 self.uz_flat[key] = '[TRANSLATE]'
                 fixed += 1
 
@@ -359,7 +356,7 @@ class TranslationValidator:
 
     def generate_report(self, output_path: Path):
         """Generate validation report."""
-        print(f"\n📝 Generating validation report...")
+        print("\n📝 Generating validation report...")
 
         lines = []
         lines.append("=" * 80)

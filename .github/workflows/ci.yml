@@ -26,10 +26,10 @@ jobs:
 
       # PRAC-01-FU5: WHOLE-SCOPE blocking gate (flipped from the line-scoped gate
       # once the bot/API scope reached 0 over FU-1..FU-4). `ruff check .` resolves
-      # to exactly the in-scope set — pyproject [tool.ruff] extend-exclude keeps
-      # media_service/scripts/docs out (their ~169 E/F tracked by PRAC-01-FU2),
-      # force-exclude makes that hold for the explicit `.` path too. `.` also
-      # covers ci/ + root *.py (which an explicit-path form would miss).
+      # to exactly the in-scope set. `media_service` вернулся в scope в PR #261,
+      # `scripts` — в П7c (AUD5-PRAC-11); в extend-exclude остались только
+      # `docs` и `resource-accounting`. `.` также покрывает ci/ + root *.py
+      # (которые явный список путей пропустил бы).
       # ci/ruff_changed_lines.py is kept in-tree as the documented fallback if a
       # future `select` expansion (I/UP/B/SIM) re-introduces a baseline.
       - name: Ruff (whole scope)

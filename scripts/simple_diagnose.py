@@ -6,8 +6,6 @@
 """
 
 import sys
-import os
-import json
 from pathlib import Path
 
 # Добавляем путь к проекту
@@ -20,7 +18,7 @@ sys.path.append(str(uk_bot_path))
 
 def check_database_connection():
     """Проверить подключение к базе данных"""
-    print(f"\n🗄️ Проверка подключения к базе данных...")
+    print("\n🗄️ Проверка подключения к базе данных...")
     
     try:
         from uk_management_bot.database.session import SessionLocal
@@ -72,7 +70,7 @@ def check_user_simple(telegram_id: int):
 
 def check_settings():
     """Проверить настройки"""
-    print(f"\n⚙️ Проверка настроек...")
+    print("\n⚙️ Проверка настроек...")
     
     try:
         from uk_management_bot.config.settings import settings
@@ -94,7 +92,7 @@ def check_settings():
 
 def check_middleware():
     """Проверить middleware"""
-    print(f"\n🔧 Проверка middleware...")
+    print("\n🔧 Проверка middleware...")
     
     try:
         main_file = uk_bot_path / "main.py"
@@ -128,7 +126,7 @@ def check_middleware():
 
 def suggest_fixes(user):
     """Предложить исправления"""
-    print(f"\n🛠️ Рекомендации по исправлению:")
+    print("\n🛠️ Рекомендации по исправлению:")
     
     if not user:
         print("1. Создайте пользователя в базе данных")

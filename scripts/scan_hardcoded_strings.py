@@ -15,12 +15,11 @@ Features:
 """
 
 import ast
-import os
 import re
 import json
 import csv
 from pathlib import Path
-from typing import Dict, List, Tuple, Set
+from typing import List
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 
@@ -170,9 +169,6 @@ class HardcodedStringScanner(ast.NodeVisitor):
 
         # Generate suggested locale key
         suggestion = self._generate_locale_key(value, string_type)
-
-        # Get context line
-        context_line = self._get_context_line(node.lineno)
 
         finding = HardcodedString(
             file_path=self.file_path,

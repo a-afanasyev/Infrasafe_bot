@@ -4,7 +4,6 @@
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Добавляем пути для импортов
@@ -17,7 +16,9 @@ sys.path.append(str(uk_bot_path))
 try:
     from uk_management_bot.database.session import SessionLocal
     from uk_management_bot.database.models.user import User
-    from uk_management_bot.handlers.admin import open_admin_panel
+    # Импорт и ЕСТЬ проверка: скрипт-смоук убеждается, что хендлер
+    # админ-панели вообще импортируется (ветка except ImportError ниже).
+    from uk_management_bot.handlers.admin import open_admin_panel  # noqa: F401
     from uk_management_bot.keyboards.admin import get_manager_main_keyboard
     from uk_management_bot.utils.helpers import get_text
     import json
@@ -40,7 +41,7 @@ try:
             if user.roles:
                 try:
                     roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                except:
+                except (ValueError, TypeError):
                     roles = []
             
             active_role = user.active_role or "applicant"
@@ -59,7 +60,7 @@ try:
             
             # Тестируем клавиатуру
             try:
-                keyboard = get_manager_main_keyboard()
+                get_manager_main_keyboard()  # смоук: важен сам вызов
                 print("✅ Клавиатура админ панели создана успешно")
             except Exception as e:
                 print(f"❌ Ошибка создания клавиатуры: {e}")
