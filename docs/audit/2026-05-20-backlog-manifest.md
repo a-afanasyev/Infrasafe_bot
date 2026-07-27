@@ -19,16 +19,16 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **403**
-- закрыто маркером: **326**
-- открыто маркером: **77**
+- закрыто маркером: **327**
+- открыто маркером: **76**
 
-  - `actionable` — **45**
+  - `actionable` — **44**
   - `decision` — **28**
   - `calendar` — **1**
   - `no-pr` — **2**
   - `doc-closed` — **1**
 
-Из них actionable по приоритету: P2=21, P3=24.
+Из них actionable по приоритету: P2=20, P3=24.
 
 Значения `status`:
 
@@ -86,7 +86,6 @@
 | `REFACTOR-133` | P3 | decision | verified-2026-07-27 | П5b-fu | — | — | — | пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API |
 | `AUD5-ARCH-7` | P3 | actionable | to-verify | П6 | — | — | — | гонка требует подтверждения до работы |
 | `WR-05` | P3 | actionable | doc-2026-06-20 | П6 | — | — | — |  |
-| `AUD3-08` | P2 | actionable | plan-2026-07-26 | П6a | — | — | — | 6 call-site: 1 publisher + 5 subscriber-фабрик, 5 каналов |
 | `AUD3-09` | P2 | actionable | doc-2026-07-14 | П6b | — | — | — |  |
 | `AUD5-CODE-5` | P2 | actionable | doc-2026-07-21 | П6c | — | — | — |  |
 | `AUD5-CODE-11` | P2 | actionable | doc-2026-07-21 | П6d | — | — | — |  |

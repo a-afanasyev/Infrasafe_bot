@@ -156,8 +156,8 @@ ASSIGNMENT: dict[str, dict] = {
     "REFACTOR-133": A(pkg="П5b-fu", status="decision", method="verified-2026-07-27",
                       note="пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API"),
     # ── П6
-    "AUD3-08": A(pkg="П6a", status="actionable", method="plan-2026-07-26",
-                 note="6 call-site: 1 publisher + 5 subscriber-фабрик, 5 каналов"),
+    # П6a (`AUD3-08`) закрыт 2026-07-27: два профиля таймаутов вместо одного,
+    # шесть from_url сведены к двум — запись в бэклоге.
     "AUD3-09": A(pkg="П6b", status="actionable", method="doc-2026-07-14"),
     "AUD5-CODE-5": A(pkg="П6c", status="actionable", method="doc-2026-07-21"),
     "AUD5-CODE-11": A(pkg="П6d", status="actionable", method="doc-2026-07-21"),
