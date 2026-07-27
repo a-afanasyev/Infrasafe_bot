@@ -194,3 +194,45 @@ def test_live_cards_reference_the_shared_builder():
             f"{module.__name__} больше не подключает строки обсуждения — "
             "вход в комментарии/отчёт снова стал недостижим"
         )
+
+
+class TestReportScreenSpeaksTheUsersLanguage:
+    """Экран отчёта стал достижим 2026-07-28 — и сразу показал сырые значения.
+
+    Пока входа не было, дефект никто не видел: категория выводилась ключом
+    («plumbing» вместо «Сантехника»), а статус — русским текстом прямо из БД,
+    то есть UZ-пользователь читал бы его по-русски. Проверяется наблюдаемое:
+    что именно окажется в тексте у читателя.
+    """
+
+    @staticmethod
+    def _request(status="В работе"):
+        return Request(
+            request_number=NUMBER, user_id=2, category="plumbing", status=status,
+            description="течёт кран", urgency="medium", address="QA Здание 1, кв. 101",
+            completion_report="работа выполнена",
+            created_at=datetime.now(timezone.utc),
+        )
+
+    def test_category_is_not_shown_as_a_raw_key(self):
+        from uk_management_bot.handlers.request_reports import format_report_for_display
+
+        text = format_report_for_display(self._request(), [], "ru")
+
+        assert "plumbing" not in text, f"категория показана ключом: {text!r}"
+        assert "Сантехника" in text
+
+    def test_uzbek_reader_gets_uzbek_status(self):
+        from uk_management_bot.handlers.request_reports import format_report_for_display
+
+        text = format_report_for_display(self._request(), [], "uz")
+
+        assert "В работе" not in text, (
+            f"UZ-читателю статус пришёл по-русски: {text!r}"
+        )
+
+    def test_report_body_itself_is_intact(self):
+        """Локализация не должна съесть сам отчёт — ради него экран и открывают."""
+        from uk_management_bot.handlers.request_reports import format_report_for_display
+
+        assert "работа выполнена" in format_report_for_display(self._request(), [], "ru")
