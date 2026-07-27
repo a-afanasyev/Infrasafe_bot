@@ -6,7 +6,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from uk_management_bot.api.feedback import router as fb_router
 from uk_management_bot.database.models.feedback import Feedback
@@ -48,10 +48,14 @@ async def test_create_no_file_returns_feedback():
     with patch.object(fb_router, "manager_telegram_ids_async", new=AsyncMock(return_value=[])), \
          patch.object(fb_router, "deliver_feedback_to_managers", new=AsyncMock()) as deliver, \
          patch.object(fb_router, "_get_shared_bot", new=MagicMock()):
+        background = BackgroundTasks()
         out = await _create(
-            request=MagicMock(), feedback_type="complaint",
+            request=MagicMock(), background=background, feedback_type="complaint",
             text="Достаточно длинный текст жалобы", file=None, user=_user(), db=db,
         )
+        # AUD3-09: рассылка ушла в фон — здесь исполняем её явно, как это
+        # делает Starlette после отправки ответа.
+        await background()
     assert out.id == 1
     assert out.type == "complaint"
     assert out.status == "new"
@@ -61,14 +65,14 @@ async def test_create_no_file_returns_feedback():
 @pytest.mark.asyncio
 async def test_create_bad_type_422():
     with pytest.raises(HTTPException) as e:
-        await _create(request=MagicMock(), feedback_type="spam", text="x" * 20, file=None, user=_user(), db=_db_for_create())
+        await _create(request=MagicMock(), background=BackgroundTasks(), feedback_type="spam", text="x" * 20, file=None, user=_user(), db=_db_for_create())
     assert e.value.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_create_short_text_422():
     with pytest.raises(HTTPException) as e:
-        await _create(request=MagicMock(), feedback_type="wish", text="кратко", file=None, user=_user(), db=_db_for_create())
+        await _create(request=MagicMock(), background=BackgroundTasks(), feedback_type="wish", text="кратко", file=None, user=_user(), db=_db_for_create())
     assert e.value.status_code == 422
 
 
@@ -79,7 +83,7 @@ async def test_create_non_image_file_422():
     bad.content_type = "image/heic"
     bad.filename = "photo.heic"
     with pytest.raises(HTTPException) as e:
-        await _create(request=MagicMock(), feedback_type="complaint", text="Достаточно длинный текст",
+        await _create(request=MagicMock(), background=BackgroundTasks(), feedback_type="complaint", text="Достаточно длинный текст",
                       file=bad, user=_user(), db=_db_for_create())
     assert e.value.status_code == 422
 

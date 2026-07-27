@@ -12,6 +12,7 @@ from uk_management_bot.api.shifts import service
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
+from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
@@ -251,7 +252,9 @@ async def _notify_many(jobs: list[tuple[int, str]]) -> None:
         return
     for telegram_id, text in jobs:
         try:
-            await bot.send_message(chat_id=telegram_id, text=text)
+            await bot.send_message(
+                chat_id=telegram_id, text=text, request_timeout=SEND_TIMEOUT
+            )
         except Exception as e:
             logger.warning("transfer notify failed for tg %s: %s", telegram_id, e)
 

@@ -77,6 +77,7 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.request_workflow import Action, ActionCommand, PrincipalRef
+from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -424,7 +425,14 @@ class AutoManagerOrchestrator:
                 text = get_text("auto_manager.no_duty_executor", language=manager.language or "ru").format(
                     request_number=req.request_number, specialization=specialization,
                 )
-                await bot.send_message(chat_id=manager.telegram_id, text=text, parse_mode="HTML")
+                # Цикл по получателям: без per-call предела медленный Telegram
+                # растягивает tick на N × session-таймаут (AUD3-09).
+                await bot.send_message(
+                    chat_id=manager.telegram_id,
+                    text=text,
+                    parse_mode="HTML",
+                    request_timeout=SEND_TIMEOUT,
+                )
             except Exception as e:  # best-effort per-recipient
                 logger.warning("[AUTO_MANAGER] уведомление менеджеру %s (заявка %s) не отправлено: %s",
                               manager.id, req.request_number, e)

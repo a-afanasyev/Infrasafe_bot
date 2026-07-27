@@ -108,15 +108,10 @@ async def lifespan(app: FastAPI):
     # HTML bot on the uvicorn loop and close it on shutdown.
     api_bot = None
     try:
-        from aiogram import Bot
-        from aiogram.client.default import DefaultBotProperties
-        from aiogram.enums import ParseMode
         from uk_management_bot.services.notification_service import set_shared_bot
+        from uk_management_bot.utils.telegram_client import build_bot
 
-        api_bot = Bot(
-            token=settings.BOT_TOKEN,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-        )
+        api_bot = build_bot(settings.BOT_TOKEN)
         set_shared_bot(api_bot)
         app.state.notification_bot = api_bot
         _logger.info("API notification bot registered")

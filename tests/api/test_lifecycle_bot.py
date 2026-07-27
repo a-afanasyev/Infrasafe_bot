@@ -23,7 +23,10 @@ def test_lifespan_registers_and_closes_notification_bot():
 
     with patch("uk_management_bot.api.lifecycle.rate_limit_backend_status", new=rl_ok), \
             patch.object(app_settings, "INFRASAFE_WEBHOOK_ENABLED", False), \
-            patch("aiogram.Bot", return_value=fake_bot), \
+            patch(
+                "uk_management_bot.utils.telegram_client.build_bot",
+                return_value=fake_bot,
+            ), \
             patch("uk_management_bot.services.notification_service.set_shared_bot") as mock_set:
         with TestClient(app):
             # startup выполнился → shared bot зарегистрирован фейковым ботом

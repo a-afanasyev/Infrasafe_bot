@@ -158,7 +158,8 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П6
     # П6a (`AUD3-08`) закрыт 2026-07-27: два профиля таймаутов вместо одного,
     # шесть from_url сведены к двум — запись в бэклоге.
-    "AUD3-09": A(pkg="П6b", status="actionable", method="doc-2026-07-14"),
+    # П6b (`AUD3-09`) закрыт 2026-07-27: единая фабрика Bot + три профиля
+    # (сессия/рассылка/загрузка); «глобальной защиты нет» опровергнуто замером.
     "AUD5-CODE-5": A(pkg="П6c", status="actionable", method="doc-2026-07-21"),
     "AUD5-CODE-11": A(pkg="П6d", status="actionable", method="doc-2026-07-21"),
     "WR-05": A(pkg="П6", status="actionable", method="doc-2026-06-20"),

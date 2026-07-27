@@ -12,7 +12,17 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,10 +91,26 @@ def _media_headers() -> dict:
     return {"X-API-Key": settings.MEDIA_SERVICE_API_KEY} if settings.MEDIA_SERVICE_API_KEY else {}
 
 
+async def _deliver_feedback_safely(fid: int, ids, notify_text: str, photo) -> None:
+    """Рассылка обращения менеджерам вне цикла запроса.
+
+    ВСЁ под try, включая получение бота: исключение из BackgroundTask
+    пробрасывается Starlette и завалило бы уже сформированный ответ
+    (в CI — например, на невалидном токене).
+    """
+    try:
+        await deliver_feedback_to_managers(
+            _get_shared_bot(), telegram_ids=ids, text=notify_text, photo=photo
+        )
+    except Exception as e:
+        logger.warning("feedback %s manager notify failed: %s", fid, e)
+
+
 @router.post("", response_model=FeedbackOut)
 @limiter.limit("10/minute")
 async def create_feedback(
     request: Request,
+    background: BackgroundTasks,
     feedback_type: str = Form(..., alias="type"),
     text: str = Form(...),
     file: Optional[UploadFile] = File(None),
@@ -146,7 +172,12 @@ async def create_feedback(
         except Exception as e:
             logger.warning("feedback %s media upload failed: %s", fb.id, e)
 
-    # 5) Уведомление менеджерам (best-effort)
+    # 5) Уведомление менеджерам (best-effort).
+    # AUD3-09: рассылка идёт ПОСЛЕ ответа фоновой задачей — она последовательна
+    # по получателям, и inline-await подвешивал POST жителя на всю её длину.
+    # Так же уже сделано в `api/shifts/executor_router._notify_many`; здесь
+    # довели до того же вида. Данные для рассылки (БД) считаются до ответа —
+    # в фоновую задачу уходит готовый DTO, сессия туда не утекает.
     try:
         ids = await manager_telegram_ids_async(db)
         notify_text = build_manager_notify_text(
@@ -156,9 +187,7 @@ async def create_feedback(
         # Отдаём telegram_file_id от media-service (без повторной загрузки в Telegram);
         # bytes-fallback только если media-service недоступен.
         photo = tg_fid if tg_fid else (photo_bytes if photo_bytes else None)
-        await deliver_feedback_to_managers(
-            _get_shared_bot(), telegram_ids=ids, text=notify_text, photo=photo
-        )
+        background.add_task(_deliver_feedback_safely, fb.id, ids, notify_text, photo)
     except Exception as e:
         logger.warning("feedback %s manager notify failed: %s", fb.id, e)
 
