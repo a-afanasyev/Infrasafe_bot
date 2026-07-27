@@ -656,7 +656,10 @@
     "error": "Неверные учётные данные",
     "telegramError": "Аккаунт не найден или не одобрен",
     "loginError": "Ошибка входа",
-    "or": "или"
+    "or": "или",
+    "otpInvalid": "Неверный код",
+    "otpResent": "Код отправлен повторно",
+    "otpResendFailed": "Не удалось отправить код"
   },
   "register": {
     "title": "Регистрация жителя",
@@ -844,7 +847,6 @@
   "kanban": {
     "createByCall": "Создать по звонку",
     "emptyColumn": "Нет заявок",
-    "truncatedColumn": "Показаны {{shown}} из {{total}}",
     "confirmed": "Подтверждено",
     "onShift": "На смене",
     "transitionTo": "Перевод в \"{{status}}\"",

@@ -55,7 +55,10 @@ def _make_apartment(aid: int, num: str = "42", is_active: bool = True) -> MagicM
     a.apartment_number = num
     a.is_active = is_active
     del a.residents_count
-    del a.full_address
+    # FS-11: `full_address` — property модели, у настоящей квартиры она есть
+    # ВСЕГДА. Раньше дубль её удалял и тем самым проверял ветку-фолбэк,
+    # недостижимую в проде; теперь дубль ведёт себя как реальный объект.
+    a.full_address = f"ул. Тестовая 1, кв. {num}"
     return a
 
 
@@ -260,13 +263,16 @@ class TestGetApartmentsListKeyboard:
             result = get_apartments_list_keyboard(apartments=[], building_id=10)
         assert any("addr_building_view:10" in c for c in _all_callbacks(result))
 
-    def test_apartment_with_full_address_attribute(self):
+    def test_uzbek_keyboard_shows_localized_apartment_prefix(self):
+        """FS-11: в UZ-клавиатуре адрес не должен нести русское «кв.»."""
         apt = _make_apartment(99)
-        apt.full_address = "ул. Пушкина, д.1, кв.99"
+        apt.full_address = "ул. Пушкина, д. 1, кв. 99"
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.address_management import get_apartments_list_keyboard
-            result = get_apartments_list_keyboard(apartments=[apt])
-        assert isinstance(result, InlineKeyboardMarkup)
+            result = get_apartments_list_keyboard(apartments=[apt], language="uz")
+        labels = [b.text for b in _all_inline_buttons(result)]
+        assert any("xon." in text for text in labels), labels
+        assert not any("кв." in text for text in labels), labels
 
 
 # ---------------------------------------------------------------------------

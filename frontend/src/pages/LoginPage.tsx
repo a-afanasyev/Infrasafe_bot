@@ -137,10 +137,13 @@ export default function LoginPage() {
         code: otpCode,
       })
       await login()
-      navigate('/dashboard')
+      // AUD5-APIFE-17: MFA-путь терял deep-link — после ввода кода бросало на
+      // дашборд, даже если пользователь пришёл по ?next=. Идём туда же, куда
+      // и обычный вход.
+      navigate(next)
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || 'Invalid code')
+      setError(detail || t('login.otpInvalid'))
     } finally {
       setLoading(false)
     }
@@ -153,9 +156,9 @@ export default function LoginPage() {
       setCanResend(false)
       setOtpTimer(300)
       setTimeout(() => setCanResend(true), 60000)
-      toast.success('Код отправлен повторно')
+      toast.success(t('login.otpResent'))
     } catch {
-      setError('Не удалось отправить код')
+      setError(t('login.otpResendFailed'))
     }
   }
 

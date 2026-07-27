@@ -76,3 +76,21 @@ def localize_address(address: str, language: str) -> str:
     )
 
     return address
+
+
+def apartment_address(apartment, language: str) -> str:
+    """Адрес квартиры для ПОКАЗА пользователю, на его языке.
+
+    FS-11: `Apartment.full_address` — канонический RU-формат («…, кв. 5»), он
+    же уезжает в БД и в поиск, поэтому языка знать не должен. Локализацией
+    занимается показ. Раньше её просто не делали: `localize_address`
+    использовался только в рендере заявок, а профиль, выбор квартиры и
+    клавиатуры адресов показывали канон как есть — UZ-пользователь видел «кв.».
+
+    Отдельная функция, а не `localize_address(apt.full_address, lang)` по месту:
+    call-site'ов шесть, и деферрал пункта прямо назывался причиной «точечный
+    фикс хрупок». Здесь же снят и мёртвый фолбэк: `full_address` — property
+    модели, `hasattr` на ней истинен всегда, поэтому ветки
+    `else get_text("…apartment_label")` были недостижимы.
+    """
+    return localize_address(apartment.full_address, language)

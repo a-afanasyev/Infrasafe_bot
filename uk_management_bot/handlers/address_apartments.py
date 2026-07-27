@@ -20,7 +20,7 @@ from uk_management_bot.database.session import session_scope
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.address_helpers import localize_address_error
+from uk_management_bot.utils.address_helpers import apartment_address, localize_address_error
 from uk_management_bot.keyboards.address_management import (
     get_apartments_list_keyboard,
     get_apartment_details_keyboard,
@@ -761,7 +761,7 @@ async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "r
             if residents_count > 0:
                 warning = "\n\n" + get_text("address_apartments.handlers.delete_warning_residents", language=lang).format(count=residents_count)
 
-            full_address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("address_apartments.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
+            full_address = apartment_address(apartment, lang)
 
             await callback.message.edit_text(
                 get_text("address_apartments.handlers.delete_confirm", language=lang).format(

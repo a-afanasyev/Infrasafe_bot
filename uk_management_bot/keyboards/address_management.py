@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from uk_management_bot.database.models import Yard, Building, Apartment, UserApartment
+from uk_management_bot.utils.address_helpers import apartment_address
 from uk_management_bot.utils.helpers import get_text
 
 
@@ -357,11 +358,10 @@ def get_apartments_list_keyboard(
         if hasattr(apartment, 'residents_count'):
             residents_info = f" ({apartment.residents_count} {get_text('address.keyboards.residents_short', language=language)})"
 
-        # Полный адрес или короткий
-        if hasattr(apartment, 'full_address'):
-            address = apartment.full_address[:50] + "..." if len(apartment.full_address) > 50 else apartment.full_address
-        else:
-            address = get_text("address.keyboards.apartment_label", language=language).format(number=apartment.apartment_number)
+        # FS-11: адрес показывается на языке пользователя (канон — RU).
+        address = apartment_address(apartment, language)
+        if len(address) > 50:
+            address = address[:50] + "..."
 
         builder.row(
             InlineKeyboardButton(
@@ -621,7 +621,7 @@ def get_my_apartments_keyboard(user_apartments: List[UserApartment], language: s
         primary_icon = '⭐' if ua.is_primary else ''
         owner_icon = '👑' if ua.is_owner else ''
 
-        text = f"{status_icon}{primary_icon}{owner_icon} {ua.apartment.full_address if hasattr(ua.apartment, 'full_address') else get_text('address.keyboards.apartment_label', language=language).format(number=ua.apartment.apartment_number)}"
+        text = f"{status_icon}{primary_icon}{owner_icon} {apartment_address(ua.apartment, language)}"
 
         builder.row(
             InlineKeyboardButton(
