@@ -210,6 +210,8 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-ARCH-4": A(pkg="A7", status="actionable", method="verified-2026-07-27",
                      note="решение: contract-слой + AST-гейт (S); полная развязка отклонена"),
     # ── Решения владельца (кодовой работы до решения нет)
+    "DEAD-134": A(pkg="—", status="decision", method="verified-2026-07-28",
+                  note="хендлеры отчётов/комментариев зарегистрированы, но входа из UI нет — 6 билдеров с 0 ссылок; подключить или удалить"),
     "AUD5-DEAD-3": A(pkg="—", status="decision", method="verified-2026-07-27",
                     note="ФОРМУЛИРОВКА ОПРОВЕРГНУТА: edge/ — device-сторона ЖИВЫХ роутеров; вопрос стал «ретайрить ли pull-модель целиком»"),
     "ARCH-116": A(pkg="—", status="actionable", method="verified-2026-07-27",
