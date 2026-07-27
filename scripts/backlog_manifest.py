@@ -160,7 +160,8 @@ ASSIGNMENT: dict[str, dict] = {
     # шесть from_url сведены к двум — запись в бэклоге.
     # П6b (`AUD3-09`) закрыт 2026-07-27: единая фабрика Bot + три профиля
     # (сессия/рассылка/загрузка); «глобальной защиты нет» опровергнуто замером.
-    "AUD5-CODE-5": A(pkg="П6c", status="actionable", method="doc-2026-07-21"),
+    # П6c (`AUD5-CODE-5`) закрыт 2026-07-27: db-фаза job'ов в рабочем потоке
+    # (сессия создаётся и закрывается там же), сетевая — на своей сессии.
     "AUD5-CODE-11": A(pkg="П6d", status="actionable", method="doc-2026-07-21"),
     "WR-05": A(pkg="П6", status="actionable", method="doc-2026-06-20"),
     "AUD5-ARCH-7": A(pkg="П6", status="actionable", method="to-verify",

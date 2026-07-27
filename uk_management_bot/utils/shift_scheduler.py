@@ -2,9 +2,11 @@
 Планировщик задач для системы смен - автоматическое выполнение фоновых операций
 """
 
+import asyncio
 import logging
-from datetime import timedelta, date
-from typing import Optional, Dict, Any
+from dataclasses import dataclass
+from datetime import datetime, timedelta, date
+from typing import Optional, Dict, Any, List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -18,6 +20,19 @@ from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _ShiftReminder:
+    """Готовое напоминание — плоские значения, без ORM-объектов.
+
+    Из рабочего потока наружу отдаём только такие DTO: ORM-объект пережил бы
+    `close()` своей сессии лишь до первого обращения к незагруженному полю, и
+    падение вылезло бы уже в сетевой фазе, далеко от причины.
+    """
+    executor_id: int
+    start_time: datetime
+    time_until: str
 
 
 class ShiftScheduler:
@@ -58,6 +73,26 @@ class ShiftScheduler:
         if self.notification_service is not None:
             return self.notification_service
         return NotificationService(db, bot=self._bot)
+
+    async def _notify_managers(self, title: str, body: str) -> None:
+        """Сетевая фаза job'а: ПОСЛЕ db-фазы и на СВОЕЙ короткой сессии.
+
+        Сессия рабочего потока сюда не приезжает намеренно (AUD5-CODE-5):
+        `Session` не рассчитана на использование из двух потоков, а «открыли в
+        потоке — дописали в event loop» выглядит именно так. Оставшийся здесь
+        sync-запрос один и маленький (telegram_id менеджеров) — на фоне
+        пакетов планирования он не считается.
+        """
+        if not self._notifications_enabled:
+            return
+        if self.notification_service is not None:
+            await self.notification_service.send_manager_notification(title, body)
+            return
+        db = SessionLocal()
+        try:
+            await NotificationService(db, bot=self._bot).send_manager_notification(title, body)
+        finally:
+            db.close()
 
     def setup_jobs(self):
         """Настройка всех задач планировщика"""
@@ -234,37 +269,56 @@ class ShiftScheduler:
             'stats': self.task_stats
         }
 
+    def _auto_create_shifts_sync(self) -> int:
+        """DB-фаза целиком в рабочем потоке: сессия и создаётся, и закрывается тут."""
+        db = SessionLocal()
+        try:
+            result = ShiftPlanningService(db).auto_create_shifts(days_ahead=7)
+            return int(result['total_created'])
+        finally:
+            db.close()
+
     async def _auto_create_shifts(self):
         """Автоматическое создание смен на ближайшие дни"""
         task_name = 'auto_create_shifts'
         try:
             logger.info("Запуск автосоздания смен...")
 
-            db = SessionLocal()
-            try:
-                planning_service = ShiftPlanningService(db)
+            total_created = await asyncio.to_thread(self._auto_create_shifts_sync)
 
-                # Создаем смены на следующие 7 дней
-                result = planning_service.auto_create_shifts(days_ahead=7)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
 
-                self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = utc_now()
+            logger.info(f"Автосоздание смен завершено: {total_created} смен создано")
 
-                logger.info(f"Автосоздание смен завершено: {result['total_created']} смен создано")
-
-                # Отправляем уведомление если создано много смен
-                if self._notifications_enabled and result['total_created'] > 10:
-                    await self._notifier(db).send_manager_notification(
-                        "🏗️ Автосоздание смен завершено",
-                        f"Создано {result['total_created']} новых смен на ближайшие 7 дней"
-                    )
-            finally:
-                db.close()
+            # Отправляем уведомление если создано много смен
+            if total_created > 10:
+                await self._notify_managers(
+                    "🏗️ Автосоздание смен завершено",
+                    f"Создано {total_created} новых смен на ближайшие 7 дней"
+                )
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка автосоздания смен: {e}")
+
+    def _rebalance_daily_assignments_sync(self) -> int:
+        db = SessionLocal()
+        try:
+            planning_service = ShiftPlanningService(db)
+
+            # Перебалансируем назначения на сегодня и завтра
+            today = date.today()
+            tomorrow = today + timedelta(days=1)
+
+            results = [
+                planning_service.rebalance_daily_assignments(target_date)
+                for target_date in (today, tomorrow)
+            ]
+            return sum(r.get('rebalanced_shifts', 0) for r in results)
+        finally:
+            db.close()
 
     async def _rebalance_daily_assignments(self):
         """Ежедневная перебалансировка назначений"""
@@ -272,26 +326,12 @@ class ShiftScheduler:
         try:
             logger.info("Запуск перебалансировки назначений...")
 
-            db = SessionLocal()
-            try:
-                planning_service = ShiftPlanningService(db)
+            total_rebalanced = await asyncio.to_thread(self._rebalance_daily_assignments_sync)
 
-                # Перебалансируем назначения на сегодня и завтра
-                today = date.today()
-                tomorrow = today + timedelta(days=1)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
 
-                results = []
-                for target_date in [today, tomorrow]:
-                    result = planning_service.rebalance_daily_assignments(target_date)
-                    results.append(result)
-
-                self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = utc_now()
-
-                total_rebalanced = sum(r.get('rebalanced_shifts', 0) for r in results)
-                logger.info(f"Перебалансировка завершена: {total_rebalanced} назначений изменено")
-            finally:
-                db.close()
+            logger.info(f"Перебалансировка завершена: {total_rebalanced} назначений изменено")
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
@@ -299,7 +339,15 @@ class ShiftScheduler:
             logger.error(f"Ошибка перебалансировки назначений: {e}")
 
     async def _process_expired_transfers(self):
-        """Обработка истекших передач смен"""
+        """Обработка истекших передач смен.
+
+        Единственный job, оставшийся на event loop: `process_expired_transfers`
+        — async-метод сервиса, он сам чередует db-фазу и рассылку (BUG-BOT-036:
+        уведомления строго после commit). Затолкать его в поток нельзя, а
+        разделять публичный контракт сервиса — задача другого пункта. Запрос
+        здесь один и по узкому окну (pending/assigned старше 24 ч), в отличие от
+        пакетов планирования.
+        """
         task_name = 'process_transfers'
         try:
             logger.info("Обработка истекших передач...")
@@ -314,22 +362,44 @@ class ShiftScheduler:
                 self.task_stats[task_name]['success'] += 1
                 self.task_stats[task_name]['last_run'] = utc_now()
 
-                if result['processed_count'] > 0:
-                    logger.info(f"Обработано {result['processed_count']} истекших передач")
-
-                    # Уведомляем менеджеров
-                    if self._notifications_enabled:
-                        await self._notifier(db).send_manager_notification(
-                            "⏰ Обработка истекших передач",
-                            f"Автоматически обработано {result['processed_count']} передач"
-                        )
+                processed = result['processed_count']
             finally:
                 db.close()
+
+            if processed > 0:
+                logger.info(f"Обработано {processed} истекших передач")
+                await self._notify_managers(
+                    "⏰ Обработка истекших передач",
+                    f"Автоматически обработано {processed} передач"
+                )
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка обработки истекших передач: {e}")
+
+    def _cleanup_expired_data_sync(self) -> int:
+        db = SessionLocal()
+        try:
+            # Удаляем завершенные передачи старше 30 дней
+            cutoff_date = utc_now() - timedelta(days=30)
+
+            from uk_management_bot.database.models.shift_transfer import ShiftTransfer
+            expired_transfers = db.query(ShiftTransfer).filter(
+                ShiftTransfer.status.in_(['completed', 'cancelled']),
+                ShiftTransfer.completed_at < cutoff_date
+            ).count()
+
+            # Удаляем (или помечаем как архивные)
+            db.query(ShiftTransfer).filter(
+                ShiftTransfer.status.in_(['completed', 'cancelled']),
+                ShiftTransfer.completed_at < cutoff_date
+            ).delete()
+
+            db.commit()
+            return expired_transfers
+        finally:
+            db.close()
 
     async def _cleanup_expired_data(self):
         """Очистка устаревших данных"""
@@ -337,36 +407,51 @@ class ShiftScheduler:
         try:
             logger.info("Запуск очистки устаревших данных...")
 
-            db = SessionLocal()
-            try:
-                # Удаляем завершенные передачи старше 30 дней
-                cutoff_date = utc_now() - timedelta(days=30)
+            expired_transfers = await asyncio.to_thread(self._cleanup_expired_data_sync)
 
-                from uk_management_bot.database.models.shift_transfer import ShiftTransfer
-                expired_transfers = db.query(ShiftTransfer).filter(
-                    ShiftTransfer.status.in_(['completed', 'cancelled']),
-                    ShiftTransfer.completed_at < cutoff_date
-                ).count()
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
 
-                # Удаляем (или помечаем как архивные)
-                db.query(ShiftTransfer).filter(
-                    ShiftTransfer.status.in_(['completed', 'cancelled']),
-                    ShiftTransfer.completed_at < cutoff_date
-                ).delete()
-
-                db.commit()
-
-                self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = utc_now()
-
-                logger.info(f"Очистка завершена: удалено {expired_transfers} записей передач")
-            finally:
-                db.close()
+            logger.info(f"Очистка завершена: удалено {expired_transfers} записей передач")
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка очистки данных: {e}")
+
+    def _collect_upcoming_reminders(self) -> List[_ShiftReminder]:
+        """DB-фаза: подобрать смены и СРАЗУ свернуть их в плоские DTO."""
+        db = SessionLocal()
+        try:
+            from uk_management_bot.database.models.shift import Shift
+            from uk_management_bot.database.models.user import User
+
+            # Ищем смены, которые начинаются в течение следующих 2 часов
+            # QA-04: tz-aware now — Shift.start_time это timestamptz; naive
+            # now ронял `shift.start_time - now` ("can't subtract offset-naive
+            # and offset-aware datetimes") → уведомления не уходили.
+            now = utc_now()
+            upcoming_threshold = now + timedelta(hours=2)
+
+            upcoming_shifts = db.query(Shift).join(User).filter(
+                Shift.start_time.between(now, upcoming_threshold),
+                Shift.status == 'planned',
+                Shift.user_id.isnot(None)
+            ).all()
+
+            reminders = []
+            for shift in upcoming_shifts:
+                left = shift.start_time - now
+                hours = int(left.total_seconds() / 3600)
+                minutes = int((left.total_seconds() % 3600) / 60)
+                reminders.append(_ShiftReminder(
+                    executor_id=shift.user_id,
+                    start_time=shift.start_time,
+                    time_until=f"{hours}ч {minutes}м",
+                ))
+            return reminders
+        finally:
+            db.close()
 
     async def _notify_upcoming_shifts(self):
         """Уведомления о предстоящих сменах"""
@@ -375,113 +460,126 @@ class ShiftScheduler:
             if not self._notifications_enabled:
                 return
 
-            db = SessionLocal()
-            try:
-                from uk_management_bot.database.models.shift import Shift
-                from uk_management_bot.database.models.user import User
+            reminders = await asyncio.to_thread(self._collect_upcoming_reminders)
 
-                # Ищем смены, которые начинаются в течение следующих 2 часов
-                # QA-04: tz-aware now — Shift.start_time это timestamptz; naive
-                # now ронял `shift.start_time - now` ("can't subtract offset-naive
-                # and offset-aware datetimes") → уведомления не уходили.
-                now = utc_now()
-                upcoming_threshold = now + timedelta(hours=2)
+            notifications_sent = 0
+            if reminders:
+                db = None if self.notification_service is not None else SessionLocal()
+                notifier = self._notifier(db)
+                try:
+                    for reminder in reminders:
+                        try:
+                            # Сервис читает у `shift` только `start_time`, поэтому
+                            # сюда уходит DTO, а не ORM-объект закрытой сессии.
+                            await notifier.send_shift_reminder(
+                                executor_id=reminder.executor_id,
+                                shift=reminder,
+                                time_until=reminder.time_until,
+                            )
+                            notifications_sent += 1
+                        except Exception as e:
+                            logger.error(
+                                f"Ошибка отправки уведомления исполнителю "
+                                f"{reminder.executor_id}: {e}"
+                            )
+                finally:
+                    if db is not None:
+                        db.close()
 
-                upcoming_shifts = db.query(Shift).join(User).filter(
-                    Shift.start_time.between(now, upcoming_threshold),
-                    Shift.status == 'planned',
-                    Shift.user_id.isnot(None)
-                ).all()
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
 
-                notifications_sent = 0
-                for shift in upcoming_shifts:
-                    try:
-                        time_until = shift.start_time - now
-                        hours = int(time_until.total_seconds() / 3600)
-                        minutes = int((time_until.total_seconds() % 3600) / 60)
-
-                        await self._notifier(db).send_shift_reminder(
-                            executor_id=shift.user_id,
-                            shift=shift,
-                            time_until=f"{hours}ч {minutes}м"
-                        )
-                        notifications_sent += 1
-
-                    except Exception as e:
-                        logger.error(f"Ошибка отправки уведомления для смены {shift.id}: {e}")
-
-                self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = utc_now()
-
-                if notifications_sent > 0:
-                    logger.info(f"Отправлено {notifications_sent} уведомлений о предстоящих сменах")
-            finally:
-                db.close()
+            if notifications_sent > 0:
+                logger.info(f"Отправлено {notifications_sent} уведомлений о предстоящих сменах")
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка отправки уведомлений: {e}")
 
+    def _auto_assign_empty_shifts_sync(self) -> int:
+        db = SessionLocal()
+        try:
+            from uk_management_bot.database.models.shift import Shift
+
+            # Ищем смены без исполнителей, которые начинаются в течение 48 часов
+            # AUD5-CODE-3: Shift.start_time — timestamptz; naive now мис-сравнивался.
+            now = utc_now()
+            assignment_threshold = now + timedelta(hours=48)
+
+            empty_shifts = db.query(Shift).filter(
+                Shift.user_id.is_(None),
+                Shift.status == 'planned',
+                Shift.start_time.between(now, assignment_threshold)
+            ).limit(10).all()  # Ограничиваем количество для производительности
+
+            if not empty_shifts:
+                return 0
+
+            result = ShiftAssignmentService(db).auto_assign_executors_to_shifts(
+                shifts=empty_shifts,
+                force_reassign=False
+            )
+            return int(result['stats']['assigned'])
+        finally:
+            db.close()
+
     async def _auto_assign_empty_shifts(self):
         """Автоназначение исполнителей на пустые смены"""
         try:
-            db = SessionLocal()
-            try:
-                from uk_management_bot.database.models.shift import Shift
-
-                # Ищем смены без исполнителей, которые начинаются в течение 48 часов
-                # AUD5-CODE-3: Shift.start_time — timestamptz; naive now мис-сравнивался.
-                now = utc_now()
-                assignment_threshold = now + timedelta(hours=48)
-
-                empty_shifts = db.query(Shift).filter(
-                    Shift.user_id.is_(None),
-                    Shift.status == 'planned',
-                    Shift.start_time.between(now, assignment_threshold)
-                ).limit(10).all()  # Ограничиваем количество для производительности
-
-                if empty_shifts:
-                    assignment_service = ShiftAssignmentService(db)
-                    result = assignment_service.auto_assign_executors_to_shifts(
-                        shifts=empty_shifts,
-                        force_reassign=False
-                    )
-
-                    if result['stats']['assigned'] > 0:
-                        logger.info(f"Автоназначено {result['stats']['assigned']} исполнителей на пустые смены")
-            finally:
-                db.close()
+            assigned = await asyncio.to_thread(self._auto_assign_empty_shifts_sync)
+            if assigned > 0:
+                logger.info(f"Автоназначено {assigned} исполнителей на пустые смены")
 
         except Exception as e:
             logger.error(f"Ошибка автоназначения на пустые смены: {e}")
+
+    def _weekly_planning_sync(self) -> int:
+        db = SessionLocal()
+        try:
+            # Планируем следующую неделю
+            next_monday = date.today() + timedelta(days=7 - date.today().weekday())
+            result = ShiftPlanningService(db).plan_weekly_schedule(next_monday)
+            return int(result['statistics']['total_shifts'])
+        finally:
+            db.close()
 
     async def _weekly_planning(self):
         """Еженедельное планирование смен"""
         try:
             logger.info("Запуск еженедельного планирования...")
 
-            db = SessionLocal()
-            try:
-                planning_service = ShiftPlanningService(db)
+            total_shifts = await asyncio.to_thread(self._weekly_planning_sync)
 
-                # Планируем следующую неделю
-                next_monday = date.today() + timedelta(days=7 - date.today().weekday())
-                result = planning_service.plan_weekly_schedule(next_monday)
+            logger.info(f"Еженедельное планирование завершено: {total_shifts} смен запланировано")
 
-                logger.info(f"Еженедельное планирование завершено: {result['statistics']['total_shifts']} смен запланировано")
-
-                # Уведомляем менеджеров о результатах планирования
-                if self._notifications_enabled and result['statistics']['total_shifts'] > 0:
-                    await self._notifier(db).send_manager_notification(
-                        "📅 Еженедельное планирование",
-                        f"Запланировано {result['statistics']['total_shifts']} смен на следующую неделю"
-                    )
-            finally:
-                db.close()
+            # Уведомляем менеджеров о результатах планирования
+            if total_shifts > 0:
+                await self._notify_managers(
+                    "📅 Еженедельное планирование",
+                    f"Запланировано {total_shifts} смен на следующую неделю"
+                )
 
         except Exception as e:
             logger.error(f"Ошибка еженедельного планирования: {e}")
+
+    def _auto_assign_requests_sync(self) -> int:
+        db = SessionLocal()
+        try:
+            assignment_service = ShiftAssignmentService(db)
+
+            # Назначаем заявки на сегодня и завтра
+            today = date.today()
+            tomorrow = today + timedelta(days=1)
+
+            total_assigned = 0
+            for target_date in (today, tomorrow):
+                result = assignment_service.auto_assign_requests_to_shift_executors(target_date)
+                if result['status'] == 'success':
+                    total_assigned += result.get('assigned_requests', 0)
+            return total_assigned
+        finally:
+            db.close()
 
     async def _auto_assign_requests_to_executors(self):
         """Автоматическое назначение заявок исполнителям смен"""
@@ -489,40 +587,43 @@ class ShiftScheduler:
         try:
             logger.info("Запуск автоназначения заявок исполнителям...")
 
-            db = SessionLocal()
-            try:
-                assignment_service = ShiftAssignmentService(db)
+            total_assigned = await asyncio.to_thread(self._auto_assign_requests_sync)
 
-                # Назначаем заявки на сегодня и завтра
-                today = date.today()
-                tomorrow = today + timedelta(days=1)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
 
-                total_assigned = 0
-                for target_date in [today, tomorrow]:
-                    result = assignment_service.auto_assign_requests_to_shift_executors(target_date)
+            if total_assigned > 0:
+                logger.info(f"Автоназначение заявок завершено: {total_assigned} заявок назначено")
 
-                    if result['status'] == 'success':
-                        total_assigned += result.get('assigned_requests', 0)
-
-                self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = utc_now()
-
-                if total_assigned > 0:
-                    logger.info(f"Автоназначение заявок завершено: {total_assigned} заявок назначено")
-
-                    # Уведомляем менеджеров о значительных назначениях
-                    if self._notifications_enabled and total_assigned > 5:
-                        await self._notifier(db).send_manager_notification(
-                            "📋 Автоназначение заявок",
-                            f"Автоматически назначено {total_assigned} заявок исполнителям смен"
-                        )
-            finally:
-                db.close()
+                # Уведомляем менеджеров о значительных назначениях
+                if total_assigned > 5:
+                    await self._notify_managers(
+                        "📋 Автоназначение заявок",
+                        f"Автоматически назначено {total_assigned} заявок исполнителям смен"
+                    )
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка автоназначения заявок: {e}")
+
+    def _sync_request_assignments_sync(self) -> int:
+        db = SessionLocal()
+        try:
+            assignment_service = ShiftAssignmentService(db)
+
+            # Синхронизируем на сегодня и завтра
+            today = date.today()
+            tomorrow = today + timedelta(days=1)
+
+            total_reassigned = 0
+            for target_date in (today, tomorrow):
+                result = assignment_service.sync_request_assignments_with_shifts(target_date)
+                if result['status'] == 'success':
+                    total_reassigned += result.get('reassigned', 0)
+            return total_reassigned
+        finally:
+            db.close()
 
     async def _sync_request_assignments(self):
         """Синхронизация назначений заявок со сменами"""
@@ -530,35 +631,19 @@ class ShiftScheduler:
         try:
             logger.info("Запуск синхронизации назначений...")
 
-            db = SessionLocal()
-            try:
-                assignment_service = ShiftAssignmentService(db)
+            total_reassigned = await asyncio.to_thread(self._sync_request_assignments_sync)
 
-                # Синхронизируем на сегодня и завтра
-                today = date.today()
-                tomorrow = today + timedelta(days=1)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
 
-                total_reassigned = 0
-                for target_date in [today, tomorrow]:
-                    result = assignment_service.sync_request_assignments_with_shifts(target_date)
+            if total_reassigned > 0:
+                logger.info(f"Синхронизация завершена: {total_reassigned} переназначений")
 
-                    if result['status'] == 'success':
-                        total_reassigned += result.get('reassigned', 0)
-
-                self.task_stats[task_name]['success'] += 1
-                self.task_stats[task_name]['last_run'] = utc_now()
-
-                if total_reassigned > 0:
-                    logger.info(f"Синхронизация завершена: {total_reassigned} переназначений")
-
-                    # Уведомляем менеджеров о переназначениях
-                    if self._notifications_enabled and total_reassigned > 0:
-                        await self._notifier(db).send_manager_notification(
-                            "🔄 Синхронизация назначений",
-                            f"Переназначено {total_reassigned} заявок в соответствии со сменами"
-                        )
-            finally:
-                db.close()
+                # Уведомляем менеджеров о переназначениях
+                await self._notify_managers(
+                    "🔄 Синхронизация назначений",
+                    f"Переназначено {total_reassigned} заявок в соответствии со сменами"
+                )
 
         except Exception as e:
             self.task_stats[task_name]['failed'] += 1
