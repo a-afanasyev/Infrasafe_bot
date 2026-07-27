@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Аналитика</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .donut { width:150px; height:150px; border-radius:50%; flex-shrink:0;
+    background:conic-gradient(#44c24a 0 34%, #5bc0de 34% 57%, #f0ad4e 57% 74%, #8a929c 74% 88%, #cdd4d0 88% 100%);
+    display:flex; align-items:center; justify-content:center; position:relative; }
+  .donut::after { content:""; position:absolute; width:92px; height:92px; background:#fff; border-radius:50%; }
+  .donut .cn { position:relative; z-index:1; text-align:center; font-family:var(--font-display); }
+  .donut .cn b { display:block; font-size:26px; font-weight:800; } .donut .cn s { font-size:11px; color:var(--text-muted); }
+  .prog { height:7px; border-radius:4px; background:var(--bg-2); overflow:hidden; margin-top:5px; }
+  .prog i { display:block; height:100%; background:var(--accent); }
+  .rank { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border-soft); }
+  .rank:last-child{border:none}
+</style>
+</head>
+<body data-nav="analytics" data-title="Аналитика" data-actions='<a class="btn btn-outline btn-sm" href="index.html">← Все экраны</a><span class="chip">7 дней</span><span class="chip active">30 дней</span><span class="chip">90 дней</span>'>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <header id="topbar"></header>
+    <div class="content">
+
+      <div class="grid mb16" style="grid-template-columns:repeat(4,1fr)">
+        <div class="card card-pad stat"><span class="l">Всего заявок</span><span class="v" style="color:var(--accent)">248</span><span class="d up">▲ 12% к прошлому периоду</span></div>
+        <div class="card card-pad stat"><span class="l">Среднее время (ч)</span><span class="v" style="color:var(--warning)">6.4</span><span class="d down">▼ 0.8 ч</span></div>
+        <div class="card card-pad stat"><span class="l">Удовлетворённость</span><span class="v" style="color:#8b5cf6">4.7</span><span class="d up">▲ из 5.0</span></div>
+        <div class="card card-pad stat"><span class="l">На смене сейчас</span><span class="v" style="color:var(--accent)">7</span><span class="d mut">исполнителей</span></div>
+      </div>
+
+      <div class="grid mb16" style="grid-template-columns:1.4fr 1fr">
+        <div class="card card-pad">
+          <div class="card-title">Заявки по дням</div>
+          <div class="legend mb16"><span><i style="background:var(--accent)"></i>Создано</span><span><i style="background:#9bd7f0"></i>Закрыто</span></div>
+          <div class="bars">
+            <div class="b" style="height:60%"><span>Пн</span></div><div class="b alt" style="height:48%"></div>
+            <div class="b" style="height:80%"><span>Вт</span></div><div class="b alt" style="height:66%"></div>
+            <div class="b" style="height:52%"><span>Ср</span></div><div class="b alt" style="height:50%"></div>
+            <div class="b" style="height:90%"><span>Чт</span></div><div class="b alt" style="height:72%"></div>
+            <div class="b" style="height:70%"><span>Пт</span></div><div class="b alt" style="height:64%"></div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title mb16">По категориям</div>
+          <div class="flex center gap16">
+            <div class="donut"><div class="cn"><b>248</b><s>заявок</s></div></div>
+            <div style="flex:1;font-size:13px">
+              <div class="flex between mb8"><span><i class="legend"></i>🟢 Сантехника</span><b>84</b></div>
+              <div class="flex between mb8"><span>🔵 Электрика</span><b>57</b></div>
+              <div class="flex between mb8"><span>🟠 Отопление</span><b>42</b></div>
+              <div class="flex between mb8"><span>⚫ Уборка</span><b>35</b></div>
+              <div class="flex between"><span>⚪ Прочее</span><b>30</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="card card-pad">
+          <div class="card-title mb16">По статусам</div>
+          <div style="font-size:13.5px">
+            <div class="flex between"><span>В работе</span><span class="mut" style="font-family:var(--font-mono)">62</span></div><div class="prog"><i style="width:62%"></i></div>
+            <div class="flex between mt16"><span>Исполнено</span><span class="mut" style="font-family:var(--font-mono)">48</span></div><div class="prog"><i style="width:48%;background:#5bc0de"></i></div>
+            <div class="flex between mt16"><span>Принято</span><span class="mut" style="font-family:var(--font-mono)">120</span></div><div class="prog"><i style="width:88%"></i></div>
+            <div class="flex between mt16"><span>Отменена</span><span class="mut" style="font-family:var(--font-mono)">18</span></div><div class="prog"><i style="width:14%;background:var(--text-muted)"></i></div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title mb16">Топ исполнителей</div>
+          <div class="rank"><span>🥇</span><div class="mini-av" style="width:30px;height:30px">АР</div><div style="flex:1"><b style="font-family:var(--font-display);font-size:14px">Алишер Р.</b><div class="mut" style="font-size:12px">52 заявки · 310 ч</div></div><span style="font-family:var(--font-mono);color:var(--accent);font-weight:700">98</span></div>
+          <div class="rank"><span>🥈</span><div class="mini-av" style="width:30px;height:30px">СК</div><div style="flex:1"><b style="font-family:var(--font-display);font-size:14px">Сардор К.</b><div class="mut" style="font-size:12px">47 заявок · 288 ч</div></div><span style="font-family:var(--font-mono);color:var(--accent);font-weight:700">91</span></div>
+          <div class="rank"><span>🥉</span><div class="mini-av" style="width:30px;height:30px">ДТ</div><div style="flex:1"><b style="font-family:var(--font-display);font-size:14px">Дилноза Т.</b><div class="mut" style="font-size:12px">39 заявок · 240 ч</div></div><span style="font-family:var(--font-mono);color:var(--accent);font-weight:700">85</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

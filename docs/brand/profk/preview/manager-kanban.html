@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Заявки (канбан)</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+</head>
+<body data-nav="requests" data-title="Заявки" data-actions='<a class="btn btn-outline btn-sm" href="index.html">← Все экраны</a><button class="btn btn-primary btn-sm">📞 Создать по звонку</button>'>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <header id="topbar"></header>
+    <div class="content">
+      <div class="kanban">
+
+        <div class="kcol">
+          <div class="kcol-head"><span class="t">Новая</span><span class="c">3</span></div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260709-018</span><span>📱</span></div>
+            <div class="rtitle">Электрика</div>
+            <div class="rmeta">🏠 Кв. 42, д.12А</div>
+            <div class="rfoot"><span class="urg urg-high">Срочная</span><span class="mut" style="font-size:11px">12:04</span></div>
+          </div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260709-017</span><span>🤖</span></div>
+            <div class="rtitle">Уборка</div>
+            <div class="rmeta">🏢 Подъезд 2</div>
+            <div class="rfoot"><span class="urg urg-low">Обычная</span><span class="mut" style="font-size:11px">11:30</span></div>
+          </div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260709-015</span><span>🚶</span></div>
+            <div class="rtitle">Благоустройство</div>
+            <div class="rmeta">🏘️ Двор А</div>
+            <div class="rfoot"><span class="urg urg-med">Средняя</span><span class="mut" style="font-size:11px">10:50</span></div>
+          </div>
+        </div>
+
+        <div class="kcol accent">
+          <div class="kcol-head"><span class="t">В работе</span><span class="c">2</span></div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260709-014</span><span>📱</span></div>
+            <div class="rtitle">Сантехника</div>
+            <div class="rmeta">🏠 Кв. 42, д.12А</div>
+            <div class="rfoot"><span class="mini-av">АР</span><span class="mut" style="font-size:11px">Алишер Р.</span></div>
+          </div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260708-011</span><span>🌐</span></div>
+            <div class="rtitle">Отопление</div>
+            <div class="rmeta">🏠 Кв. 17, д.8</div>
+            <div class="rfoot"><span class="mini-av">СК</span><span class="mut" style="font-size:11px">Сардор К.</span></div>
+          </div>
+        </div>
+
+        <div class="kcol">
+          <div class="kcol-head"><span class="t">Закуп</span><span class="c">1</span></div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260708-006</span><span>📱</span></div>
+            <div class="rtitle">Электрика</div>
+            <div class="rmeta">🏠 Кв. 5, д.12А</div>
+            <div class="rfoot"><span class="badge badge-purchase">Закуп</span><span class="mut" style="font-size:11px">08.07</span></div>
+          </div>
+        </div>
+
+        <div class="kcol">
+          <div class="kcol-head"><span class="t">Уточнение</span><span class="c">1</span></div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260708-002</span><span>📞</span></div>
+            <div class="rtitle">Отопление</div>
+            <div class="rmeta">🏠 Кв. 33, д.8</div>
+            <div class="rfoot"><span class="badge badge-clarify">Уточнение</span><span class="mut" style="font-size:11px">08.07</span></div>
+          </div>
+        </div>
+
+        <div class="kcol">
+          <div class="kcol-head"><span class="t">Исполнено</span><span class="c">2</span></div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260707-009</span><span>📱</span></div>
+            <div class="rtitle">Электрика</div>
+            <div class="rmeta">🏠 Кв. 21, д.12А</div>
+            <div class="rfoot"><span class="badge badge-done">Ожидает приёмки</span></div>
+          </div>
+          <div class="rcard">
+            <div class="flex between center"><span class="rnum">260706-003</span><span>🤖</span></div>
+            <div class="rtitle">Уборка</div>
+            <div class="rmeta">🏢 Подъезд 1</div>
+            <div class="rfoot"><span class="badge badge-accepted">Принято</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

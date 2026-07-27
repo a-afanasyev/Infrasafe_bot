@@ -12,6 +12,7 @@ from typing import Dict
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.database.models.user_verification import DocumentType
 
 
@@ -418,15 +419,8 @@ def get_cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 # ═══ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ═══
 
 def _format_user_name(user) -> str:
-    """Форматировать имя пользователя для отображения"""
-    if user.first_name and user.last_name:
-        return f"{user.first_name} {user.last_name}"
-    elif user.first_name:
-        return user.first_name
-    elif user.username:
-        return f"@{user.username}"
-    else:
-        return f"User {user.id}"
+    """Подпись пользователя — общий канон (REFACTOR-133)."""
+    return display_name(user)
 
 
 def _get_verification_status_emoji(status: str) -> str:

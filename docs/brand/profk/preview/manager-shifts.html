@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Смены</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .toggle { display:inline-flex; background:var(--bg-2); border-radius:999px; padding:3px; }
+  .toggle button { border:none; background:none; padding:6px 14px; border-radius:999px; font-family:var(--font-display); font-weight:600; font-size:13px; color:var(--text-2); cursor:pointer; }
+  .toggle button.active { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(51,51,51,.1); }
+  .shift-bar { border-radius:6px; padding:6px 8px; font-size:11.5px; font-family:var(--font-display); font-weight:600; color:#2f5c3a; background:var(--accent-dim); margin-bottom:4px; border-left:3px solid var(--accent); }
+</style>
+</head>
+<body data-nav="shifts" data-title="Смены" data-actions='<a class="btn btn-outline btn-sm" href="index.html">← Все экраны</a><span class="toggle"><button>День</button><button class="active">Неделя</button><button>Месяц</button></span><button class="btn btn-primary btn-sm">＋ Создать смену</button>'>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <header id="topbar"></header>
+    <div class="content">
+
+      <div class="grid mb16" style="grid-template-columns:repeat(5,1fr)">
+        <div class="card card-pad stat"><span class="l">На смене</span><span class="v" style="font-size:26px">7</span></div>
+        <div class="card card-pad stat"><span class="l">Покрытие</span><span class="v" style="font-size:26px;color:var(--accent)">86%</span></div>
+        <div class="card card-pad stat"><span class="l">По спец.</span><span class="v" style="font-size:26px">78%</span></div>
+        <div class="card card-pad stat"><span class="l">Передачи</span><span class="v" style="font-size:26px;color:var(--warning)">2</span></div>
+        <div class="card card-pad stat"><span class="l">Загрузка</span><span class="v" style="font-size:26px">64%</span></div>
+      </div>
+
+      <div class="card card-pad mb16">
+        <div class="card-title mb16">Расписание смен · Неделя 06–12 июля</div>
+        <div class="heat" style="grid-template-columns:56px repeat(7,1fr)">
+          <div class="hh"></div>
+          <div class="hh" style="justify-content:center">Пн</div><div class="hh" style="justify-content:center">Вт</div><div class="hh" style="justify-content:center">Ср</div><div class="hh" style="justify-content:center">Чт</div><div class="hh" style="justify-content:center">Пт</div><div class="hh" style="justify-content:center">Сб</div><div class="hh" style="justify-content:center">Вс</div>
+
+          <div class="hh">Алишер</div>
+          <div style="grid-column:2 / span 5"><div class="shift-bar">09:00–18:00 · Сантехник</div></div>
+
+          <div class="hh">Сардор</div>
+          <div style="grid-column:2"></div>
+          <div style="grid-column:3 / span 4"><div class="shift-bar" style="background:rgba(91,192,222,.16);border-left-color:#5bc0de;color:#2b6a80">10:00–19:00 · Электрик</div></div>
+
+          <div class="hh">Дилноза</div>
+          <div style="grid-column:4 / span 3"><div class="shift-bar" style="background:rgba(240,173,78,.16);border-left-color:#f0ad4e;color:#8a6415">08:00–16:00 · Уборка</div></div>
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="card card-pad">
+          <div class="card-title mb16">Тепловая карта покрытия · по часам</div>
+          <div class="heat" id="heat"></div>
+          <div class="legend mt16">
+            <span><i style="background:rgba(68,194,74,.18)"></i>1–2</span>
+            <span><i style="background:rgba(68,194,74,.38)"></i>3–4</span>
+            <span><i style="background:rgba(68,194,74,.65)"></i>5+</span>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title mb16">Запросы на передачу <span class="badge badge-purchase" style="margin-left:6px">2</span></div>
+          <div class="tw-card" style="box-shadow:none;border:1px solid var(--border-soft)">
+            <div class="flex between center"><b style="font-family:var(--font-display);font-size:14px">Алишер Р. → Сардор К.</b><button class="btn btn-outline btn-sm">Смотреть</button></div>
+            <div class="mut" style="font-size:12.5px;margin-top:4px">Смена 09.07 · причина: болезнь</div>
+          </div>
+          <div class="tw-card" style="box-shadow:none;border:1px solid var(--border-soft);margin-bottom:0">
+            <div class="flex between center"><b style="font-family:var(--font-display);font-size:14px">Дилноза Т. → пул</b><button class="btn btn-outline btn-sm">Смотреть</button></div>
+            <div class="mut" style="font-size:12.5px;margin-top:4px">Смена 10.07 · причина: отпуск</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+<script>
+  // тепловая карта: часы 08–20 × дни недели, зелёная плотность на --accent-rgb
+  const days=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const hours=[8,10,12,14,16,18];
+  const el=document.getElementById('heat');
+  el.style.gridTemplateColumns='56px repeat(7,1fr)';
+  let html='<div class="hh"></div>'+days.map(d=>`<div class="hh" style="justify-content:center">${d}</div>`).join('');
+  const lvl=[.18,.38,.65];
+  hours.forEach((h,i)=>{
+    html+=`<div class="hh">${String(h).padStart(2,'0')}:00</div>`;
+    days.forEach((d,j)=>{
+      const seed=(i*7+j*3)%5; const n = seed>=4?3 : seed>=2?2 : seed>=1?1:0;
+      const a = n===0?0.06:lvl[n-1];
+      html+=`<div class="hc" style="background:rgba(68,194,74,${a})">${n?(n===3?'5+':n*2):''}</div>`;
+    });
+  });
+  el.innerHTML=html;
+</script>
+</body>
+</html>

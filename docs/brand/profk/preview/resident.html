@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Житель (мини-приложение)</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .hd { max-width:1280px; margin:0 auto; padding:30px 24px 6px; }
+  .backlink { font-family:var(--font-display); font-weight:600; font-size:13px; }
+  .wrap { padding: 20px; }
+  .seg { display:flex; gap:6px; background:var(--bg-2); padding:4px; border-radius:999px; margin-bottom:14px; }
+  .seg button { flex:1; border:none; background:none; padding:7px; border-radius:999px; font-family:var(--font-display); font-weight:600; font-size:12.5px; color:var(--text-2); cursor:pointer; }
+  .seg button.active { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(51,51,51,.1); }
+  .step { display:flex; gap:5px; margin-bottom:16px; }
+  .step i { flex:1; height:5px; border-radius:3px; background:var(--border); }
+  .step i.on { background:var(--accent); }
+  .stars { color:var(--accent); font-size:22px; letter-spacing:3px; }
+  .stars .off { color:#d7dcd8; }
+  .kv { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px dashed var(--border); font-size:14px; }
+  .kv:last-child{border:none} .kv b{font-family:var(--font-display);font-weight:600}
+  .ic { color:var(--accent); flex-shrink:0; }
+  .msg { max-width:80%; padding:8px 11px; border-radius:12px; font-size:13px; margin-bottom:8px; }
+  .msg.them { background:var(--bg-2); border-bottom-left-radius:3px; }
+  .msg.me { background:var(--accent-dim); margin-left:auto; border-bottom-right-radius:3px; }
+</style>
+</head>
+<body>
+<div class="hd">
+  <a class="backlink" href="index.html">← Все экраны</a>
+  <h1 style="margin-top:12px">Житель · мини-приложение (TWA)</h1>
+  <p class="mut">Роль «заявитель» — Telegram Mini App. Нижняя навигация: Главная · Заявки · Создать · Приёмка · Доступ · Профиль</p>
+</div>
+
+<div class="phone-wrap" style="padding:16px 24px 70px">
+
+  <!-- 1. HOME -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">✕</span>Информация</div>
+    <div class="screen">
+      <div class="tw-card" style="border-left:3px solid var(--accent)">
+        <div class="tw-row"><b style="font-family:var(--font-display)">🔔 Плановое отключение воды</b></div>
+        <p class="mut" style="margin:6px 0 0;font-size:13px">Завтра 10:00–14:00 в 3-м подъезде. Приносим извинения за неудобства.</p>
+      </div>
+      <div class="tw-card">
+        <div class="tw-row"><b style="font-family:var(--font-display)">☎️ Контакты диспетчерской</b></div>
+        <p class="mut" style="margin:6px 0 0;font-size:13px">+998 71 200-00-00 · Круглосуточно</p>
+      </div>
+      <div class="tw-card" style="background:var(--accent-dim);border-color:transparent">
+        <div class="flex center gap12">
+          <svg class="ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <div><div style="font-family:var(--font-display);font-weight:700;font-size:13px;color:#2f8f37">Часы работы</div>
+          <div style="font-size:14px">Пн–Пт 9:00–18:00, Сб 10:00–15:00</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="tabbar" data-active="home"></div>
+  </div>
+
+  <!-- 2. REQUESTS -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">✕</span>Мои заявки</div>
+    <div class="screen">
+      <div class="seg"><button class="active">Активные</button><button>Архив</button></div>
+
+      <div class="tw-card">
+        <div class="tw-row"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted);font-size:12px">260709-014</span><span class="badge badge-progress">В работе</span></div>
+        <div style="font-family:var(--font-display);font-weight:700;margin:6px 0 2px">Сантехника</div>
+        <p class="mut" style="margin:0;font-size:13px">Течёт кран на кухне, вода капает постоянно…</p>
+        <div class="mut" style="font-size:12px;margin-top:8px">Исполнитель: Алишер Р. · 09.07 11:20</div>
+      </div>
+
+      <div class="tw-card">
+        <div class="tw-row"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted);font-size:12px">260708-006</span><span class="badge badge-purchase">Закуп</span></div>
+        <div style="font-family:var(--font-display);font-weight:700;margin:6px 0 2px">Электрика</div>
+        <p class="mut" style="margin:0;font-size:13px">Не работает розетка в комнате…</p>
+        <div class="mut" style="font-size:12px;margin-top:8px">08.07 16:04</div>
+      </div>
+
+      <div class="tw-card">
+        <div class="tw-row"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted);font-size:12px">260708-002</span><span class="badge badge-clarify">Уточнение</span></div>
+        <div style="font-family:var(--font-display);font-weight:700;margin:6px 0 2px">Отопление</div>
+        <p class="mut" style="margin:0;font-size:13px">Холодная батарея в спальне…</p>
+        <div class="mut" style="font-size:12px;margin-top:8px">08.07 09:15</div>
+      </div>
+    </div>
+    <div class="tabbar" data-active="requests"></div>
+  </div>
+
+  <!-- 3. CREATE -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">✕</span>Новая заявка</div>
+    <div class="screen">
+      <div class="step"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <div class="tw-title" style="font-size:19px">Подтверждение</div>
+      <div class="tw-card">
+        <div class="kv"><span class="mut">Категория</span><b>Сантехника</b></div>
+        <div class="kv"><span class="mut">Адрес</span><b>🏠 Кв. 42, дом 12А</b></div>
+        <div class="kv"><span class="mut">Описание</span><b style="max-width:60%;text-align:right">Течёт кран на кухне</b></div>
+        <div class="kv"><span class="mut">Срочность</span><span class="urg urg-med">Средняя</span></div>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg mt8">Отправить заявку</button>
+      <button class="btn btn-text btn-block mt8">← Назад</button>
+    </div>
+    <div class="tabbar" data-active="create"></div>
+  </div>
+
+  <!-- 4. REQUEST DETAIL -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">←</span>Заявка</div>
+    <div class="screen">
+      <div class="tw-card">
+        <div class="tw-row"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted);font-size:12px">260709-014</span><span class="badge badge-progress">В работе</span></div>
+        <div style="font-family:var(--font-display);font-weight:800;font-size:18px;margin:8px 0 4px">Сантехника</div>
+        <p style="margin:0;font-size:14px">Течёт кран на кухне, вода капает постоянно, нужно заменить прокладку или смеситель.</p>
+      </div>
+      <div class="tw-card">
+        <div class="flex center gap8" style="margin-bottom:8px"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span style="font-size:14px">Кв. 42, дом 12А</span></div>
+        <div class="flex center gap8" style="margin-bottom:8px"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg><span style="font-size:14px">09.07.2026 11:20</span></div>
+        <div class="flex center gap8"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span style="font-size:14px">Исполнитель: Алишер Р.</span></div>
+      </div>
+      <div style="font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--text-muted);letter-spacing:1px;margin:6px 2px">ДИАЛОГ</div>
+      <div class="msg them">Здравствуйте! Приеду сегодня после 14:00, подойдёт?</div>
+      <div class="msg me">Да, буду дома 👍</div>
+      <div class="input-icon"><input class="input" placeholder="Написать сообщение…">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
+    </div>
+    <div class="tabbar" data-active="requests"></div>
+  </div>
+
+  <!-- 5. ACCEPTANCE -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">✕</span>Приёмка работ</div>
+    <div class="screen">
+      <div class="tw-card" style="border:1.5px solid var(--accent)">
+        <div class="tw-row"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted);font-size:12px">260707-009</span><span class="badge badge-done">Выполнена</span></div>
+        <div style="font-family:var(--font-display);font-weight:700;margin:6px 0 2px">Электрика</div>
+        <p class="mut" style="margin:0 0 12px;font-size:13px">Заменил автомат в щитке, проверил розетки.</p>
+        <div style="font-family:var(--font-display);font-weight:600;font-size:13px;margin-bottom:6px">Оцените качество работы</div>
+        <div class="stars mb16">★★★★<span class="off">★</span></div>
+        <div class="flex gap8">
+          <button class="btn btn-primary" style="flex:1;justify-content:center">Принять</button>
+          <button class="btn btn-outline" style="flex:1;justify-content:center">Вернуть</button>
+        </div>
+      </div>
+      <div class="tw-card">
+        <div class="tw-row"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted);font-size:12px">260706-003</span><span class="badge badge-done">Выполнена</span></div>
+        <div style="font-family:var(--font-display);font-weight:700;margin:6px 0 2px">Уборка</div>
+        <p class="mut" style="margin:0;font-size:13px">Убрана лестничная площадка…</p>
+      </div>
+    </div>
+    <div class="tabbar" data-active="acceptance"></div>
+  </div>
+
+  <!-- 6. ACCESS -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">✕</span>Контроль доступа</div>
+    <div class="screen">
+      <div class="seg"><button>Авто</button><button>Место</button><button class="active">Пропуска</button><button>Проезды</button></div>
+      <button class="btn btn-primary btn-block mb16">＋ Заказать пропуск</button>
+      <div class="tw-card">
+        <div class="tw-row"><b style="font-family:var(--font-display)">🚕 Такси</b><span class="badge badge-progress">Активен</span></div>
+        <div class="kv" style="border-top:1px dashed var(--border);margin-top:8px"><span class="mut">Проезды</span><b>2 из 3</b></div>
+        <div class="kv"><span class="mut">Действует до</span><b>10.07 23:59</b></div>
+        <button class="btn btn-outline btn-sm mt8">Отменить</button>
+      </div>
+      <div class="tw-card">
+        <div class="tw-row"><b style="font-family:var(--font-display)">📦 Доставка</b><span class="badge badge-accepted">Использован</span></div>
+        <div class="kv" style="border-top:1px dashed var(--border);margin-top:8px"><span class="mut">Действовал до</span><b>08.07 20:00</b></div>
+      </div>
+    </div>
+    <div class="tabbar" data-active="access"></div>
+  </div>
+
+  <!-- 7. PROFILE -->
+  <div class="phone">
+    <div class="tg-head"><span class="close">✕</span>Профиль</div>
+    <div class="screen">
+      <div class="tw-card flex center gap12">
+        <div class="avatar" style="width:52px;height:52px;font-size:18px">ИИ</div>
+        <div><div style="font-family:var(--font-display);font-weight:800;font-size:17px">Иван Иванов</div>
+        <div class="mut" style="font-size:13px">+998 •• ••• •• ••</div></div>
+      </div>
+      <button class="btn btn-outline btn-block mb16">Перейти в режим исполнителя</button>
+      <div class="tw-card">
+        <div class="flex center gap8 mb8"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><b style="font-family:var(--font-display);font-size:14px">Мои адреса</b></div>
+        <div class="list-item" style="padding:8px 0">🏠 Кв. 42, дом 12А</div>
+        <div class="list-item" style="padding:8px 0">🏢 Паркинг, место B-14</div>
+      </div>
+      <div class="tw-card">
+        <div class="flex center gap8 mb8"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--info)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 2.5 15 0 18M12 3c-2.5 3-2.5 15 0 18"/></svg><b style="font-family:var(--font-display);font-size:14px">Язык</b></div>
+        <div class="flex gap8"><span class="chip active">Русский</span><span class="chip">O'zbek</span></div>
+      </div>
+      <div class="tw-card tw-row"><span class="flex center gap8"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--warning)" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><b style="font-family:var(--font-display);font-size:14px">Обратная связь</b></span><span class="mut">›</span></div>
+    </div>
+    <div class="tabbar" data-active="profile"></div>
+  </div>
+
+</div>
+
+<script>
+  // общий нижний таб-бар (6 вкладок) для всех телефонов
+  const TABS = [
+    ['home','Главная','<circle cx="12" cy="12" r="0"/><path d="M3 11l9-8 9 8M5 10v10h14V10"/>'],
+    ['requests','Заявки','<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>'],
+    ['create','Создать','<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'],
+    ['acceptance','Приёмка','<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'],
+    ['access','Доступ','<rect x="3" y="11" width="18" height="7" rx="2"/><path d="M6 11l2-5h8l2 5M7 18v2M17 18v2"/>'],
+    ['profile','Профиль','<circle cx="12" cy="9" r="3.5"/><circle cx="12" cy="12" r="9"/><path d="M6 19c1.5-3 10.5-3 12 0"/>'],
+  ];
+  document.querySelectorAll('.tabbar').forEach(bar => {
+    const act = bar.dataset.active;
+    bar.innerHTML = TABS.map(([id,label,path]) =>
+      `<div class="tab ${id===act?'active':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg><span>${label}</span></div>`
+    ).join('');
+  });
+</script>
+</body>
+</html>

@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **403**
-- закрыто маркером: **348**
-- открыто маркером: **55**
+- закрыто маркером: **365**
+- открыто маркером: **38**
 
-  - `actionable` — **21**
-  - `decision` — **31**
+  - `actionable` — **29**
+  - `decision` — **3**
   - `calendar` — **1**
   - `no-pr` — **2**
 
-Из них actionable по приоритету: P2=9, P3=12.
+Из них actionable по приоритету: P2=12, P3=17.
 
 Значения `status`:
 
@@ -52,57 +52,40 @@
 | `AUD3-07` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — | 168 .query( = 159 db.query + 9 db_local.query |
 | `AUD5-ARCH-1` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — |  |
 | `AUD3-06` | P2 | actionable | doc-2026-07-14 | A3 | — | — | — |  |
-| `AUD5-ARCH-3` | P2 | decision | plan-2026-07-26 | A3 | — | — | — | scope: core-15 / +access_control 17 / +media 19; иначе respec |
+| `AUD5-ARCH-3` | P2 | actionable | verified-2026-07-27 | A3 | — | — | — | scope: core-15 / +access_control 17 / +media 19; иначе respec |
 | `AUD3-27` | P3 | actionable | plan-2026-07-26 | A4 | — | — | — | политика, а не точечный баг: ещё и shift_planning_service.py |
 | `AUD5-ARCH-5` | P2 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-10` | P3 | actionable | doc-2026-07-21 | A5 | — | — | — |  |
 | `AUD3-15` | P2 | actionable | doc-2026-07-01 | A6 | — | — | — |  |
-| `AUD5-ARCH-4` | P2 | decision | doc-2026-07-21 | A7 | — | — | — | нужна целевая архитектура границы |
-| `AUD3-37` | P3 | decision | doc-2026-07-14 | B | — | — | — | выбор: AsyncSession или sync unit-of-work в to_thread |
-| `AUD5-CODE-6` | P2 | decision | doc-2026-07-21 | B | — | — | — |  |
+| `AUD5-ARCH-4` | P2 | actionable | verified-2026-07-27 | A7 | — | — | — | решение: contract-слой + AST-гейт (S); полная развязка отклонена |
+| `AUD3-37` | P3 | actionable | verified-2026-07-27 | B | — | — | — | решение: вариант (б) — sync unit-of-work в to_thread |
+| `AUD5-CODE-6` | P2 | actionable | verified-2026-07-27 | B | — | — | — | закрывается вместе с AUD3-37 вариантом (б) |
 | `AUD3-35` | P3 | decision | verified-2026-07-27 | П10 | — | edge/.env обоих продов | — | тот же остаток, что у PENT-F11: код готов, RATE_LIMIT_TRUSTED_PROXIES не выставлен |
 | `AUD5-ARCH-6` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — |  |
-| `AUD5-SEC-NEW-4` | P3 | actionable | to-verify | П10 | — | — | — |  |
-| `PENT-F05` | P2 | actionable | plan-2026-07-26 | П10 | — | — | — | остаток: Origin до accept() + edge limit_req с burst-тестом |
 | `PENT-F11` | P3 | decision | verified-2026-07-27 | П10 | — | edge/.env обоих продов | — | код с CIDR готов (П10); RATE_LIMIT_TRUSTED_PROXIES не выставлен ни на одном проде — правка .env |
 | `SEC-131` | P3 | actionable | verified-2026-07-27 | П10 | — | media-service (.105) | — | MEDIA_BOT_TOKEN в .env на .105 — второй источник истины, :?-гард не срабатывает |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
 | `AUD3-26` | P3 | actionable | doc-2026-07-01 | П11 | — | — | — |  |
 | `AUD5-DEP-2` | P3 | actionable | doc-2026-07-21 | П11 | — | — | — |  |
-| `AUD5-PRAC-4` | P3 | decision | doc-2026-07-21 | П11 | — | — | — | nightly/stage или «ручной инструмент» |
 | `AUD5-PRAC-6` | P3 | actionable | plan-2026-07-26 | П11 | — | — | — | floors 40/38/29/30; TWA-тесты есть, floor'а нет |
 | `TEST-068` | P2 | actionable | plan-2026-07-26 | П11 | — | — | — |  |
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | verified-2026-07-26 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером |
 | `AUD5-CODE-8` | P2 | actionable | doc-2026-07-21 | П5a | — | — | — | сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4 |
-| `BUG-132` | P2 | decision | verified-2026-07-27 | П5b-fu | — | api + media-service | — | таблицы сигнатур UK и media разошлись: webp/heic недостижимы, .mov трактуется по-разному |
-| `REFACTOR-133` | P3 | decision | verified-2026-07-27 | П5b-fu | — | — | — | пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API |
 | `AUD5-JUNK-5` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения |
 | `AUD5-PRAC-10` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — |  |
-| `REFACTOR-113` | P3 | decision | verified-2026-07-27 | П7e | — | — | — | 1517 сайтов (в пункте «≥50»), автофикса у G004 нет; рост закрыт ratchet'ом, массовая переписка — решение владельца |
-| `AUD5-JUNK-2` | P3 | decision | doc-2026-07-21 | П9b | — | — | — | channels.json — решение владельца |
-| `ARCH-06` | P2 | decision | doc-2026-06-12 | — | — | — | — |  |
-| `ARCH-107` | P2 | decision | doc-2026-06-12 | — | — | — | — |  |
-| `ARCH-116` | P3 | decision | doc-2026-07-01 | — | — | — | — |  |
-| `AUD3-32` | P3 | decision | doc-2026-07-14 | — | — | — | — | дефферал устарел: публичный /announcements без auth |
-| `AUD3-33` | P3 | decision | plan-2026-07-26 | — | — | — | — | сформулирован как принятый риск — подтвердить, не «чинить» |
-| `AUD3-38` | P3 | decision | doc-2026-07-01 | — | — | — | — | дубль AUD5-PRAC-3 |
-| `AUD5-DEAD-3` | P2 | decision | doc-2026-07-21 | — | — | — | — |  |
-| `AUD5-JUNK-3` | P3 | decision | doc-2026-07-21 | — | — | — | — |  |
-| `AUD5-JUNK-4` | P3 | decision | doc-2026-07-21 | — | — | — | — |  |
-| `AUD5-PRAC-3` | P2 | decision | doc-2026-07-21 | — | — | — | — | дубль AUD3-38 — закрывать парой |
-| `AUD5-YAGNI-1` | P2 | decision | doc-2026-07-21 | — | — | — | — |  |
-| `DB-049` | P2 | decision | doc-2026-06-12 | — | — | — | — |  |
-| `FS-08` | P3 | decision | doc-2026-07-14 | — | — | — | — | needs-prod-data |
-| `FS-14` | P3 | decision | doc-2026-06-20 | — | — | — | — | needs-repro |
+| `ARCH-06` | P2 | deferred | verified-2026-07-27 | — | — | — | — | возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
+| `ARCH-107` | P2 | actionable | verified-2026-07-27 | — | — | — | — | решение: делать; форма — как у webhook *_NEXT |
+| `ARCH-116` | P3 | actionable | verified-2026-07-27 | — | — | — | — | решение: вводить бизнес-TZ на слое показа, БД остаётся UTC |
+| `AUD5-DEAD-3` | P2 | decision | verified-2026-07-27 | — | — | — | — | ФОРМУЛИРОВКА ОПРОВЕРГНУТА: edge/ — device-сторона ЖИВЫХ роутеров; вопрос стал «ретайрить ли pull-модель целиком» |
+| `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
 | `PENT-F04` | P2 | calendar | plan-2026-07-26 | — | — | — | — | остаток — снятие ?token= после 2026-09-01 |
-| `PENT-F12` | P3 | decision | doc-2026-07-24 | — | — | — | — |  |
-| `PENT-F13` | P3 | decision | doc-2026-07-24 | — | — | — | — |  |
-| `PENT-F15` | P3 | decision | doc-2026-07-24 | — | — | — | — |  |
-| `PENT-F16` | P3 | decision | doc-2026-07-24 | — | — | — | — |  |
-| `QA22-04` | P3 | decision | doc-2026-06-22 | — | — | — | — |  |
-| `SEC-115` | P3 | decision | doc-2026-06-12 | — | — | — | — |  |
+| `PENT-F12` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
+| `PENT-F13` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
+| `PENT-F15` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
+| `PENT-F16` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
+| `SEC-115` | P3 | deferred | verified-2026-07-27 | — | — | — | — | фикс на стороне InfraSafe; в повестку следующего разговора |
 
 ## Спорные пункты, разведённые явно
 

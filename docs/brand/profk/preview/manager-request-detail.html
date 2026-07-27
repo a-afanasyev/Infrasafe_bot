@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Карточка заявки</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .overlay { position:fixed; inset:0; background:rgba(51,51,51,.45); display:flex; align-items:center; justify-content:center; padding:24px; z-index:50; }
+  .modal { width:100%; max-width:560px; max-height:88vh; background:#fff; border-radius:16px; box-shadow:var(--shadow-pop); display:flex; flex-direction:column; overflow:hidden; }
+  .modal-head { padding:18px 22px; border-bottom:1px solid var(--border-soft); }
+  .modal-body { padding:20px 22px; overflow:auto; }
+  .modal-foot { padding:16px 22px; border-top:1px solid var(--border-soft); display:flex; gap:10px; background:#fafbfb; }
+  .ctx { border-radius:var(--radius); padding:11px 13px; font-size:13.5px; margin-bottom:12px; }
+  .ctx.purchase { background:#fff5e6; color:#8a6415; }
+  .ctx.report   { background:#e8f6e9; color:#2b7a33; }
+  .sec-label { font-family:var(--font-display); font-weight:700; font-size:11.5px; letter-spacing:1.2px; color:var(--text-muted); margin:16px 0 8px; }
+  .thumb { width:74px; height:74px; border-radius:8px; background:var(--bg-2); display:inline-flex; align-items:center; justify-content:center; color:var(--text-muted); margin-right:8px; }
+  .meta-line { display:flex; gap:8px; font-size:13.5px; margin-bottom:6px; }
+  .meta-line b { font-family:var(--font-display); font-weight:600; color:var(--text-2); min-width:96px; }
+  .cmt { padding:10px 12px; border-radius:8px; font-size:13.5px; margin-bottom:8px; }
+  .cmt.int { background:#fff5e6; } .cmt.ext { background:var(--bg-2); }
+</style>
+</head>
+<body data-nav="requests" data-title="Заявки" data-actions='<a class="btn btn-outline btn-sm" href="index.html">← Все экраны</a>'>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <header id="topbar"></header>
+    <div class="content" style="filter:blur(1px)">
+      <div class="kanban">
+        <div class="kcol"><div class="kcol-head"><span class="t">Новая</span><span class="c">3</span></div><div class="rcard"><div class="rnum">260709-018</div><div class="rtitle">Электрика</div></div></div>
+        <div class="kcol accent"><div class="kcol-head"><span class="t">В работе</span><span class="c">2</span></div><div class="rcard"><div class="rnum">260709-014</div><div class="rtitle">Сантехника</div></div></div>
+        <div class="kcol"><div class="kcol-head"><span class="t">Закуп</span><span class="c">1</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="flex between center">
+        <div class="flex center gap8"><span class="rnum" style="font-family:var(--font-mono);color:var(--text-muted)">260709-014</span><span>📱</span></div>
+        <span class="mut" style="cursor:pointer;font-size:20px">✕</span>
+      </div>
+      <h2 style="margin:8px 0 10px">Сантехника</h2>
+      <div class="flex gap8 center">
+        <span class="badge badge-progress">В работе ▾</span>
+        <span class="urg urg-med">Средняя ▾</span>
+        <span class="badge badge-plain" style="background:var(--accent-dim);color:#2f8f37">✓ Подтверждено</span>
+      </div>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14.5px">Течёт кран на кухне, вода капает постоянно. Нужно заменить прокладку или смеситель целиком.</p>
+
+      <div class="sec-label">ФОТО</div>
+      <div><span class="thumb">🖼</span><span class="thumb">🖼</span><span class="thumb">▶</span></div>
+
+      <div class="sec-label">ИНФОРМАЦИЯ</div>
+      <div class="meta-line"><b>Создана:</b><span>09.07.2026 11:20</span></div>
+      <div class="meta-line"><b>Исполнитель:</b><span>Алишер Рахимов</span></div>
+      <div class="meta-line"><b>Адрес:</b><span>Кв. 42, дом 12А, подъезд 1</span></div>
+
+      <div class="ctx purchase" style="margin-top:14px"><b style="font-family:var(--font-display)">Закуп:</b> смеситель Grohe, прокладки — 2 шт</div>
+
+      <div class="sec-label">ИСТОРИЯ</div>
+      <div class="cmt ext">Приеду сегодня после 14:00 — резидент подтвердил. <div class="mut" style="font-size:11px;margin-top:4px">09.07 11:40</div></div>
+      <div class="cmt int">Заметка менеджера: уточнить наличие смесителя на складе. <div class="mut" style="font-size:11px;margin-top:4px">09.07 11:52</div></div>
+
+      <div class="sec-label">ЗАМЕТКА МЕНЕДЖЕРА</div>
+      <div class="input-icon"><input class="input" placeholder="Добавить заметку…">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" style="flex:1;justify-content:center">✓ Подтвердить выполнение</button>
+      <button class="btn btn-outline" style="flex:1;justify-content:center">↩ Вернуть в работу</button>
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

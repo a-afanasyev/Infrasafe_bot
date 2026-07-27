@@ -229,8 +229,8 @@ jobs:
 
       # БД не нужна: conftest.py поднимает файловый sqlite и мокает Telegram,
       # окружение выставляет сам (os.environ.setdefault — см. его докстринг).
-      # `test_upload.py`/`test_frontend.py` исключены в pytest.ini: они ходят в
-      # живой стек и «проходят» всегда (см. комментарий там же).
+      # `test_upload.py` исключён в pytest.ini: он ходит в живой стек и
+      # «проходит» всегда (см. комментарий там же).
       - name: Run tests
         run: pytest -q
 

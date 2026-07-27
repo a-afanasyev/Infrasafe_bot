@@ -29,7 +29,10 @@ from uk_management_bot.integrations.http_retry import (
 from uk_management_bot.services.request_number_service import (
     REQUEST_NUMBER_PATTERN as _REQUEST_NUMBER_PATTERN_STR,
 )
-from uk_management_bot.utils.media_sniff import sniff_media_mime
+from uk_management_bot.utils.media_sniff import (
+    MEDIA_SERVICE_ACCEPTED_TYPES,
+    sniff_media_mime,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -109,7 +112,11 @@ async def proxy_media_upload(
     if len(file_bytes) > _MEDIA_MAX_BYTES:
         raise HTTPException(status_code=422, detail="File too large (max 50MB)")
     sniffed_ct = _sniff_media_mime(file_bytes)
-    if sniffed_ct is None:
+    # Распознали ≠ принимаем (BUG-132): webp/heic сниффер знает, но media-service
+    # их не хранит. Отказываем здесь и по-человечески, а не отправляем файл
+    # дальше ради 422 от чужого сервиса — и, что важнее, heic больше не уезжает
+    # туда под видом mp4.
+    if sniffed_ct not in MEDIA_SERVICE_ACCEPTED_TYPES:
         raise HTTPException(
             status_code=422,
             detail="Unsupported file content (allowed: JPEG, PNG, GIF, MP4, MOV)",

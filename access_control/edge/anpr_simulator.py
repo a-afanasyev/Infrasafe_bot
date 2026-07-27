@@ -33,7 +33,12 @@ class AnprSimulator:
 
     ``client`` — HTTP-клиент (TestClient/прод-edge), ``controller_uid`` — идентичность
     устройства device-auth, остальное — топология пилотной точки (зона/точка/камера/
-    шлагбаум). ``api_key`` по умолчанию — пилотный ключ устройства.
+    шлагбаум).
+
+    ``api_key`` обязателен и дефолта не имеет (AUD5-SEC-NEW-4): раньше здесь стоял
+    зашитый ``"pilot-test-device-key"``, и симулятор, запущенный против живого
+    стенда, молча слал бы этот ключ — то есть значение из репозитория работало бы
+    как учётные данные. Отсутствие дефолта делает такой запуск невозможным.
     """
 
     def __init__(
@@ -45,7 +50,7 @@ class AnprSimulator:
         gate_id: int,
         camera_id: int,
         barrier_id: int,
-        api_key: str = "pilot-test-device-key",
+        api_key: str,
         seed: int | None = None,
     ) -> None:
         self._client = client

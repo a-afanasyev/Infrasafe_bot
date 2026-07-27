@@ -16,7 +16,8 @@
 > $D $C build api access-api app migrate
 > $D $C run --rm --no-deps --name uk-migrate migrate     # ОБЯЗАТЕЛЕН перед up
 > $D $C up -d --no-deps --wait --wait-timeout 120 api access-api app
-> #  НИКОГДА не добавлять --remove-orphans (снесёт uk-caddy/uk-media-service)
+> #  НИКОГДА не добавлять --remove-orphans (снесёт uk-media-service — он
+> #  подключается overlay-файлом, и без обоих -f Compose считает его лишним)
 > ```
 > ⚠️ Устаревшее утверждение «миграции применяет сам `api` на старте» больше НЕ верно:
 > после PR-7 entrypoint делает только read-only preflight и падает `exit 1` при schema

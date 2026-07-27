@@ -2,6 +2,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.status_display import STATUS_EMOJI
 
 
@@ -292,9 +293,7 @@ def get_executors_by_category_keyboard(request_number: str, category: str, execu
     else:
         for executor in executors:
             # Формируем текст кнопки с информацией об исполнителе
-            name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
-            if not name:
-                name = f"@{executor.username}" if executor.username else f"ID{executor.id}"
+            name = display_name(executor)
 
             # Добавляем статус смены если есть
             status_icon = "🟢" if hasattr(executor, 'on_shift') and executor.on_shift else "⚪"

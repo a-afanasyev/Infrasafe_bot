@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Дизайн-превью</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+</head>
+<body>
+<div class="gallery">
+  <div class="gallery-head">
+    <img src="assets/profk-logo.svg" alt="PROFK" style="width:auto;height:56px">
+  </div>
+  <p class="mut" style="max-width:620px;margin-top:6px">
+    Дизайн-превью фронтенда <b>PROFK</b> по брендбуку — светлая «инженерная» тема, зелёный акцент, Montserrat + Open Sans.
+    Это статичные макеты для приёмки (не рабочее приложение). После утверждения тема применяется параллельно с InfraSafe
+    через сборку <code style="font-family:var(--font-mono)">VITE_BRAND=profk</code>.
+  </p>
+
+  <div class="section-label">Бренд</div>
+  <div class="g-grid">
+    <a class="g-card" href="styleguide.html">
+      <div class="thumb"><img src="assets/profk-mark.svg" alt="" style="width:56px;height:56px"></div>
+      <div class="cap"><div class="t">UI Kit</div><div class="s">Логотип, палитра, типографика, компоненты</div></div>
+    </a>
+  </div>
+
+  <div class="section-label">Житель · мини-приложение (TWA)</div>
+  <div class="g-grid">
+    <a class="g-card" href="resident.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg></div>
+      <div class="cap"><div class="t">Все 7 экранов жителя</div><div class="s">Главная · Заявки · Создать · Карточка · Приёмка · Доступ · Профиль</div></div>
+    </a>
+  </div>
+
+  <div class="section-label">Табло жителей (публичная витрина)</div>
+  <div class="g-grid">
+    <a class="g-card" href="resident-board.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M6 8h6M6 11h9"/></svg></div>
+      <div class="cap"><div class="t">Табло жителей</div><div class="s">Лобби-дисплей: бегущая строка, заявки, объявления, рейтинг, часы</div></div>
+    </a>
+  </div>
+
+  <div class="section-label">Консоль менеджера</div>
+  <div class="g-grid">
+    <a class="g-card" href="manager-login.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V8a5 5 0 0110 0v3"/></svg></div>
+      <div class="cap"><div class="t">Вход</div><div class="s">Логин, Telegram + email</div></div>
+    </a>
+    <a class="g-card" href="manager-kanban.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="16" rx="1"/></svg></div>
+      <div class="cap"><div class="t">Заявки — канбан</div><div class="s">Доска по статусам</div></div>
+    </a>
+    <a class="g-card" href="manager-request-detail.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6"/></svg></div>
+      <div class="cap"><div class="t">Карточка заявки</div><div class="s">Модалка + действия менеджера</div></div>
+    </a>
+    <a class="g-card" href="manager-analytics.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+      <div class="cap"><div class="t">Аналитика</div><div class="s">KPI, графики, топ исполнителей</div></div>
+    </a>
+    <a class="g-card" href="manager-shifts.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      <div class="cap"><div class="t">Смены</div><div class="s">Расписание + тепловая карта</div></div>
+    </a>
+    <a class="g-card" href="manager-employees.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 010 5"/></svg></div>
+      <div class="cap"><div class="t">Сотрудники</div><div class="s">Таблица, фильтры, статусы</div></div>
+    </a>
+    <a class="g-card" href="manager-access.html">
+      <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+      <div class="cap"><div class="t">Контроль доступа</div><div class="s">Live-лента, история проездов</div></div>
+    </a>
+  </div>
+
+  <div style="margin-top:40px;padding:16px 18px;border-radius:var(--radius);background:var(--accent-dim);color:#2f6b34;font-size:13.5px">
+    Логотип собран из брендбука как рабочий вариант — заменится официальным вектором, когда будет готов.
+  </div>
+</div>
+</body>
+</html>
