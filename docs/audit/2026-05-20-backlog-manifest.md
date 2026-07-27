@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **403**
-- закрыто маркером: **347**
-- открыто маркером: **56**
+- закрыто маркером: **348**
+- открыто маркером: **55**
 
-  - `actionable` — **22**
+  - `actionable` — **21**
   - `decision` — **31**
   - `calendar` — **1**
   - `no-pr` — **2**
 
-Из них actionable по приоритету: P2=9, P3=13.
+Из них actionable по приоритету: P2=9, P3=12.
 
 Значения `status`:
 
@@ -66,7 +66,6 @@
 | `AUD5-SEC-NEW-4` | P3 | actionable | to-verify | П10 | — | — | — |  |
 | `PENT-F05` | P2 | actionable | plan-2026-07-26 | П10 | — | — | — | остаток: Origin до accept() + edge limit_req с burst-тестом |
 | `PENT-F11` | P3 | decision | verified-2026-07-27 | П10 | — | edge/.env обоих продов | — | код с CIDR готов (П10); RATE_LIMIT_TRUSTED_PROXIES не выставлен ни на одном проде — правка .env |
-| `SEC-124` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — | prod fail-fast vs dev без пароля — реализации разные |
 | `SEC-131` | P3 | actionable | verified-2026-07-27 | П10 | — | media-service (.105) | — | MEDIA_BOT_TOKEN в .env на .105 — второй источник истины, :?-гард не срабатывает |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
 | `AUD3-26` | P3 | actionable | doc-2026-07-01 | П11 | — | — | — |  |

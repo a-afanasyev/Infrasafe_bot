@@ -312,6 +312,22 @@ class Settings:
             raise ValueError("JWT_SECRET and INVITE_SECRET must be different in production")
         if not REDIS_URL or "redis://" not in REDIS_URL:
             raise ValueError("Valid REDIS_URL required in production")
+        # SEC-124: проверять НАЛИЧИЕ пароля, а не только валидность URL.
+        # `REDIS_PASSWORD` опционален по построению — в compose он подставляется
+        # как `${REDIS_PASSWORD:+--requirepass ...}`, чтобы локальная разработка
+        # шла без пароля. Обратная сторона: если значение выпадет из конфига,
+        # redis тихо поднимется БЕЗ auth, а приложение так же тихо подключится
+        # по `redis://redis:6379/0` — ни одна проверка не сработает. Здесь и
+        # ловим: в проде URI обязан нести credentials.
+        # Проверено на проде 2026-07-27: пароль есть (64 символа в URI на обоих
+        # хостах), то есть гейт ничего не ломает и включается «на будущее».
+        _redis_authority = REDIS_URL.split("://", 1)[1].split("/", 1)[0]
+        if "@" not in _redis_authority:
+            raise ValueError(
+                "REDIS_URL must carry credentials in production "
+                "(redis://:<password>@host:port/db) — empty REDIS_PASSWORD "
+                "silently yields an unauthenticated redis"
+            )
         # SEC-063: outbound InfraSafe URLs (signed webhook target + buildings
         # metrics share INFRASAFE_WEBHOOK_URL; reconciliation inventory uses
         # INFRASAFE_REQUESTS_INVENTORY_URL) must be http(s) with a host, and
