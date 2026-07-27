@@ -19,7 +19,7 @@ update_status_by_actor, метрики). Resident/executor-view-запросы �
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from sqlalchemy import case, false, or_
 from sqlalchemy.orm import Session, aliased
@@ -229,14 +229,16 @@ class RequestHandlerService:
         query = self._apply_status_filter(query, active_status, is_executor)
         return self._order_my_requests(query, active_role, active_status).all()
 
-    def list_pagination_requests(
+    def _pagination_requests_query(
         self, user: User, active_role: str, active_status: Optional[str]
-    ) -> List[Request]:
-        """Список для handle_pagination — дословная семантика исходного хендлера.
+    ):
+        """Запрос для handle_pagination — дословная семантика исходного хендлера.
 
-        Отличается от ``list_my_requests``: status-фильтр БЕЗ executor-специфики
-        и сортировка ВСЕГДА по created_at desc (без case-приоритета). Поведение
-        сохранено как было.
+        Отличается от ``list_my_requests`` и от соседнего
+        ``paginate_back_to_list``: status-фильтр применяется для ОБЕИХ ролей
+        (у соседа — только для не-executor), а сортировка ВСЕГДА по
+        created_at desc, без case-приоритета для «all». Различие намеренное —
+        не сводить к соседу «за компанию».
         """
         if active_role == "executor":
             query = self.get_executor_requests_query(user)
@@ -246,7 +248,26 @@ class RequestHandlerService:
             query = query.filter(Request.status.in_(ACTIVE_STATUSES))
         elif active_status == "archive":
             query = query.filter(Request.status.in_(ARCHIVE_STATUSES))
-        return query.order_by(Request.created_at.desc()).all()
+        return query.order_by(Request.created_at.desc())
+
+    def paginate_pagination_requests(
+        self,
+        user: User,
+        active_role: str,
+        active_status: Optional[str],
+        offset: int,
+        limit: int,
+    ) -> Tuple[int, List[Request]]:
+        """(total_count, page_items) для handle_pagination — БД-пагинация.
+
+        AUD5-CODE-11: раньше сюда приезжали ВСЕ заявки пользователя, а срез
+        делался в Python. Фильтры и сортировка не изменились — изменилось
+        только то, кто режет страницу.
+        """
+        query = self._pagination_requests_query(user, active_role, active_status)
+        total = query.count()
+        page = query.offset(offset).limit(limit).all()
+        return total, page
 
     def list_applicant_requests_filtered(
         self, user_id: int, choice: Optional[str]
