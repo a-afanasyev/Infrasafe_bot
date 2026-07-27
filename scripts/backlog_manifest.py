@@ -145,9 +145,8 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П4: доска менеджера
     # П4 закрыт целиком 2026-07-27: AUD5-APIFE-3/7/8 (записи в бэклоге).
     # ── П5: расходящиеся копии
-    "AUD5-CODE-8": A(pkg="П5a", status="actionable", method="doc-2026-07-21"),
-    "AUD5-CODE-9": A(pkg="П5a", status="actionable", method="doc-2026-07-21"),
-    "AUD3-14": A(pkg="П5a", status="actionable", method="doc-2026-07-14"),
+    "AUD5-CODE-8": A(pkg="П5a", status="actionable", method="doc-2026-07-21",
+                     note="сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4"),
     "AUD5-APIFE-13": A(pkg="П5b", status="actionable", method="doc-2026-07-21"),
     # ── П6
     "AUD3-08": A(pkg="П6a", status="actionable", method="plan-2026-07-26",

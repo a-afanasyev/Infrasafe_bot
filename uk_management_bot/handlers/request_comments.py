@@ -13,14 +13,16 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.states.request_comments import RequestCommentStates
 from uk_management_bot.services.comment_service import CommentService
+from uk_management_bot.services.request_access import has_request_access_sync
 from uk_management_bot.keyboards.request_comments import (
     get_comment_type_keyboard,
     get_comment_confirmation_keyboard,
     get_comments_list_keyboard
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.constants import (
-    ROLE_MANAGER, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT
+    COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT
 )
 
 router = Router()
@@ -41,30 +43,32 @@ async def handle_add_comment_start(callback: CallbackQuery, state: FSMContext, d
             await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем права доступа
-        user_id = callback.from_user.id
-        user = db.query(User).filter(User.id == user_id).first()
+        # Пользователь ищется по telegram_id, а НЕ по id: `callback.from_user.id`
+        # это Telegram-идентификатор, а `users.id` — обычный serial. Прежний
+        # `User.id == callback.from_user.id` не находил никого, и хендлер всегда
+        # отвечал «пользователь не найден» (тестами не покрыт).
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
         if not user:
             await callback.answer(get_text("comments.user_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем, что пользователь имеет отношение к заявке
-        user_roles = user.roles if user.roles else []
-        has_access = (
-            request.user_id == user_id or  # Заявитель
-            request.executor_id == user_id or  # Исполнитель
-            ROLE_MANAGER in user_roles  # Менеджер
-        )
+        # Права — канон `utils/request_access` (П5). В прежней копии правил
+        # `request.user_id` сравнивался с Telegram-id, роль проверялась
+        # подстрокой по JSON-тексту `user.roles`, а назначения через
+        # RequestAssignment не учитывались вовсе.
+        has_access = has_request_access_sync(db, user, request)
 
         if not has_access:
             await callback.answer(get_text("comments.no_permission_to_add", language=lang), show_alert=True)
             return
 
-        # Сохраняем данные в состоянии
+        # Сохраняем данные в состоянии. Роли — через канон-парсер: раньше сюда
+        # клался сырой JSON-текст `user.roles`, потому что проверка прав рядом
+        # тоже работала с ним как со строкой.
         await state.update_data(
             request_number=request_number,
-            user_roles=user_roles
+            user_roles=parse_roles_safe(user.roles),
         )
 
         # Показываем выбор типа комментария
@@ -240,21 +244,21 @@ async def handle_view_comments(callback: CallbackQuery, state: FSMContext, db: S
             await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем права доступа
-        user_id = callback.from_user.id
-        user = db.query(User).filter(User.id == user_id).first()
+        # Пользователь ищется по telegram_id, а НЕ по id: `callback.from_user.id`
+        # это Telegram-идентификатор, а `users.id` — обычный serial. Прежний
+        # `User.id == callback.from_user.id` не находил никого, и хендлер всегда
+        # отвечал «пользователь не найден» (тестами не покрыт).
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
 
         if not user:
             await callback.answer(get_text("comments.user_not_found", language=lang), show_alert=True)
             return
 
-        # Проверяем, что пользователь имеет отношение к заявке
-        user_roles = user.roles if user.roles else []
-        has_access = (
-            request.user_id == user_id or  # Заявитель
-            request.executor_id == user_id or  # Исполнитель
-            ROLE_MANAGER in user_roles  # Менеджер
-        )
+        # Права — канон `utils/request_access` (П5). В прежней копии правил
+        # `request.user_id` сравнивался с Telegram-id, роль проверялась
+        # подстрокой по JSON-тексту `user.roles`, а назначения через
+        # RequestAssignment не учитывались вовсе.
+        has_access = has_request_access_sync(db, user, request)
 
         if not has_access:
             await callback.answer(get_text("comments.no_permission_to_view", language=lang), show_alert=True)

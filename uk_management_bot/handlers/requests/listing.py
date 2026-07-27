@@ -20,6 +20,9 @@ from uk_management_bot.services.request_service import RequestService
 # Localization imports - TASK 17 Phase 2
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.services.request_access import has_request_access_sync
+from uk_management_bot.utils.specializations import parse_specializations
+from uk_management_bot.utils.shifts import is_on_shift_now_sync
 from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, STATUS_EMOJI
 # Single Source of Truth for button texts - TASK 17 Entry Handler Fix
 
@@ -211,51 +214,19 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 await callback.answer(get_text("common.user_not_found", language=lang), show_alert=True)
                 return
 
-            # Определяем роль пользователя (COD-01: канонический парсер, JSON+CSV)
+            # ВАЖНО: `active_role` — это режим интерфейса («что показать»), а не
+            # право («можно ли смотреть»). Раньше он решал и то, и другое, и
+            # именно отсюда росли расхождения с API.
             user_roles = parse_roles_safe(user.roles)
-
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
-            # Проверяем права доступа в зависимости от роли
-            has_access = False
-
-            if active_role == "executor":
-                # BUG-BOT-004: прямое назначение через Request.executor_id (FK)
-                # имеет приоритет — если исполнитель назначен напрямую, он видит заявку
-                # независимо от наличия записей в RequestAssignment.
-                if request.executor_id == user.id:
-                    has_access = True
-
-                # Для исполнителей: проверяем назначение
-                assignment = service.get_active_assignment(request.request_number)
-
-                if not has_access and assignment:
-                    # Индивидуальное назначение
-                    if assignment.executor_id == user.id:
-                        has_access = True
-                    # Групповое назначение по специализациям
-                    elif assignment.assignment_type == "group":
-                        # Получаем ВСЕ специализации исполнителя
-                        executor_specializations = []
-                        if user.specialization:
-                            try:
-                                if isinstance(user.specialization, str) and user.specialization.startswith('['):
-                                    executor_specializations = json.loads(user.specialization)
-                                else:
-                                    executor_specializations = [user.specialization]
-                            except (json.JSONDecodeError, TypeError):
-                                executor_specializations = [user.specialization] if user.specialization else []
-
-                        # Проверяем, есть ли совпадение с хотя бы одной специализацией
-                        if assignment.group_specialization in executor_specializations:
-                            has_access = True
-            else:
-                # Для заявителей и других ролей: проверяем владение заявкой или квартиры
-                if request.user_id == user.id:
-                    has_access = True
-                elif request.apartment_id:
-                    if service.is_apartment_resident(user.id, request.apartment_id):
-                        has_access = True
+            # Права — канон `utils/request_access` (П5, AUD3-14). Здесь была своя
+            # копия правил, расходившаяся с API в трёх местах: ветки менеджера не
+            # было вовсе; ветка выбиралась по `active_role` через if/else, поэтому
+            # multi-role исполнитель с временно другой активной ролью терял доступ
+            # к своему назначению; сосед по квартире пускался на заявку любого
+            # статуса, тогда как канон пускает только на «Исполнено».
+            has_access = has_request_access_sync(db_session, user, request)
 
             if not has_access:
                 await callback.answer(get_text("requests.no_access_to_request", language=lang), show_alert=True)
@@ -298,7 +269,6 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 # WR-04: показываем «Взять» только дежурным (on-shift) — иначе
                 # не-дежурный жал бы кнопку и получал NotAuthorized («уже взяли»),
                 # хотя реальная причина — вне смены. Вне смены кнопок действий нет.
-                from uk_management_bot.utils.shifts import is_on_shift_now_sync
                 if is_on_shift_now_sync(db_session, user.id):
                     claim_text = get_text("requests.executor_claim_button", language=lang) or "🙋 Взять в работу"
                     rows.append([InlineKeyboardButton(text=claim_text, callback_data=f"claim_request_{request.request_number}")])
@@ -401,22 +371,17 @@ async def handle_back_to_list(callback: CallbackQuery, state: FSMContext):
             has_active_shift = False
             executor_specializations = []
             if active_role == "executor":
-                from datetime import datetime
+                # AUD5-CODE-8: разбор `User.specialization` был здесь копией —
+                # канон-парсер понимает все три исторические кодировки поля
+                # (JSON-список, CSV, скаляр), а копия ломалась на CSV.
+                executor_specializations = sorted(parse_specializations(user))
 
-                # Получаем специализации исполнителя (может быть несколько)
-                if user.specialization:
-                    try:
-                        if isinstance(user.specialization, str) and user.specialization.startswith('['):
-                            executor_specializations = json.loads(user.specialization)
-                        else:
-                            executor_specializations = [user.specialization]
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"Ошибка парсинга специализации пользователя {user.id}: {e}")
-                        executor_specializations = [user.specialization] if user.specialization else []
-
-                # Проверяем, есть ли активная смена
-                now = datetime.now()
-                has_active_shift = service.get_active_shift(user.id, now) is not None
+                # AUD5-CODE-9: вторая реализация предиката «на смене сейчас» в
+                # этом же файле (:271 уже звал канон). Условия совпадали слово в
+                # слово, включая наивный `datetime.now()` — он в каноне выбран
+                # осознанно, чтобы окно смены совпадало с прод-поведением UI,
+                # так что «наивность» отличием не была.
+                has_active_shift = is_on_shift_now_sync(db_session, user.id)
 
             # Подсчёт + БД-пагинация (ORM-логика в сервисе)
             ITEMS_PER_PAGE = 5
