@@ -147,7 +147,14 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П5: расходящиеся копии
     "AUD5-CODE-8": A(pkg="П5a", status="actionable", method="doc-2026-07-21",
                      note="сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4"),
-    "AUD5-APIFE-13": A(pkg="П5b", status="actionable", method="doc-2026-07-21"),
+    # П5b (`AUD5-APIFE-13`) закрыт 2026-07-27: сниффер и имя разведены на канон
+    # (детекция) и политику (allowlist/фолбэк) — запись в бэклоге. Два хвоста
+    # заведены отдельными пунктами, оба ждут решения владельца.
+    "BUG-132": A(pkg="П5b-fu", status="decision", method="verified-2026-07-27",
+                 services="api + media-service",
+                 note="таблицы сигнатур UK и media разошлись: webp/heic недостижимы, .mov трактуется по-разному"),
+    "REFACTOR-133": A(pkg="П5b-fu", status="decision", method="verified-2026-07-27",
+                      note="пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API"),
     # ── П6
     "AUD3-08": A(pkg="П6a", status="actionable", method="plan-2026-07-26",
                  note="6 call-site: 1 publisher + 5 subscriber-фабрик, 5 каналов"),

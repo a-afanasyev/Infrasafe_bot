@@ -26,6 +26,7 @@ from uk_management_bot.integrations.http_retry import get_with_retries
 from uk_management_bot.services.request_number_service import (
     REQUEST_NUMBER_PATTERN as _REQUEST_NUMBER_PATTERN_STR,
 )
+from uk_management_bot.utils.media_sniff import sniff_media_mime
 
 _logger = logging.getLogger(__name__)
 
@@ -57,19 +58,9 @@ class FileCategories(str, Enum):
 _MEDIA_MAX_BYTES = 50 * 1024 * 1024  # mirrors media_service max_file_size
 
 
-def _sniff_media_mime(data: bytes) -> "str | None":
-    """Return a server-trusted MIME from magic bytes, or None if the content is
-    not an allowed media type."""
-    if data[:3] == b"\xff\xd8\xff":
-        return "image/jpeg"
-    if data[:8] == b"\x89PNG\r\n\x1a\n":
-        return "image/png"
-    if data[:6] in (b"GIF87a", b"GIF89a"):
-        return "image/gif"
-    # ISO BMFF (mp4 / mov): 'ftyp' box at bytes 4..8, brand at 8..12.
-    if len(data) >= 12 and data[4:8] == b"ftyp":
-        return "video/mov" if data[8:10] == b"qt" else "video/mp4"
-    return None
+# AUD5-APIFE-13: детекция — канон `utils/media_sniff`, здесь остаётся только
+# политика этой точки (прокси принимает и изображения, и видео).
+_sniff_media_mime = sniff_media_mime
 
 
 @router.post("/api/v2/media/upload")

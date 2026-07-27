@@ -39,6 +39,8 @@ from uk_management_bot.services.notification_service import (
     deliver_feedback_to_managers,
     send_feedback_reply_to_user,
 )
+from uk_management_bot.utils.media_sniff import sniff_media_mime
+from uk_management_bot.utils.user_names import full_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,15 +49,10 @@ MAX_PHOTO_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif"}  # media-service allowlist (HEIC не входит)
 
 
-def _sniff_image_mime(data: bytes) -> Optional[str]:
-    """Определяет MIME по магическим байтам (client content_type подделываем)."""
-    if data[:3] == b"\xff\xd8\xff":
-        return "image/jpeg"
-    if data[:8] == b"\x89PNG\r\n\x1a\n":
-        return "image/png"
-    if data[:6] in (b"GIF87a", b"GIF89a"):
-        return "image/gif"
-    return None
+# AUD5-APIFE-13: детекция — канон `utils/media_sniff` (он знает и видео);
+# политика этой точки — только изображения, её держит ALLOWED_IMAGE_TYPES ниже,
+# поэтому распознанное видео здесь по-прежнему отвергается.
+_sniff_image_mime = sniff_media_mime
 _MIN_TEXT_LEN = 10
 _MAX_TEXT_LEN = 4000
 _STATUSES = {"new", "in_review", "resolved"}
@@ -68,10 +65,12 @@ _TRANSITIONS = {
 
 
 def _author_name(user: Optional[User]) -> Optional[str]:
+    """Имя с фолбэком (AUD5-APIFE-13: базу считает канон, фолбэк — прежний)."""
     if not user:
         return None
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return name or (f"@{user.username}" if user.username else f"id{user.telegram_id}")
+    return full_name(user) or (
+        f"@{user.username}" if user.username else f"id{user.telegram_id}"
+    )
 
 
 def _media_base() -> str:

@@ -18,17 +18,17 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **401**
-- закрыто маркером: **325**
-- открыто маркером: **76**
+- пунктов всего (с Priority): **403**
+- закрыто маркером: **326**
+- открыто маркером: **77**
 
-  - `actionable` — **46**
-  - `decision` — **26**
+  - `actionable` — **45**
+  - `decision` — **28**
   - `calendar` — **1**
   - `no-pr` — **2**
   - `doc-closed` — **1**
 
-Из них actionable по приоритету: P2=22, P3=24.
+Из них actionable по приоритету: P2=21, P3=24.
 
 Значения `status`:
 
@@ -82,7 +82,8 @@
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | verified-2026-07-26 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером |
 | `AUD5-CODE-8` | P2 | actionable | doc-2026-07-21 | П5a | — | — | — | сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4 |
-| `AUD5-APIFE-13` | P2 | actionable | doc-2026-07-21 | П5b | — | — | — |  |
+| `BUG-132` | P2 | decision | verified-2026-07-27 | П5b-fu | — | api + media-service | — | таблицы сигнатур UK и media разошлись: webp/heic недостижимы, .mov трактуется по-разному |
+| `REFACTOR-133` | P3 | decision | verified-2026-07-27 | П5b-fu | — | — | — | пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API |
 | `AUD5-ARCH-7` | P3 | actionable | to-verify | П6 | — | — | — | гонка требует подтверждения до работы |
 | `WR-05` | P3 | actionable | doc-2026-06-20 | П6 | — | — | — |  |
 | `AUD3-08` | P2 | actionable | plan-2026-07-26 | П6a | — | — | — | 6 call-site: 1 publisher + 5 subscriber-фабрик, 5 каналов |

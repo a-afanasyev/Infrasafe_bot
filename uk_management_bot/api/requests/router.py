@@ -56,6 +56,7 @@ from uk_management_bot.utils.workflow_predicates import (
 )
 from uk_management_bot.utils import constants as C
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +79,9 @@ _TERMINAL_STATUSES = TERMINAL_STATUSES
 TERMINAL_COLUMN_LIMIT = 100
 
 
-def _format_executor_name(user) -> Optional[str]:
-    """Format executor's display name from User ORM object."""
-    if user is None:
-        return None
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return name or None
+# AUD5-APIFE-13: одна из трёх копий; карточка API отсутствие имени показывает
+# как null — фолбэка здесь быть не должно.
+_format_executor_name = full_name
 
 
 def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
