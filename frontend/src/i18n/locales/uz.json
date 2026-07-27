@@ -844,6 +844,7 @@
   "kanban": {
     "createByCall": "Qo'ng'iroq orqali yaratish",
     "emptyColumn": "Arizalar yo'q",
+    "truncatedColumn": "{{total}} dan {{shown}} tasi ko'rsatilgan",
     "confirmed": "Tasdiqlangan",
     "onShift": "Smenada",
     "transitionTo": "\"{{status}}\" ga o'tkazish",

@@ -64,6 +64,29 @@ def awaiting_applicant_clause() -> ColumnElement:
     )
 
 
+def terminal_status_clause() -> ColumnElement:
+    """SQL-форма `request_workflow.is_terminal` — заявка финализирована.
+
+    Python-форма живёт в `utils/request_workflow.py` (`is_terminal` +
+    `TERMINAL_STATUSES`); здесь только её SQL-пара, чтобы набор статусов не
+    появился в запросах третьей рукописной копией (AUD5-APIFE-3).
+
+    Нормализацию (`normalize_status`) воспроизводить не нужно: она не делает
+    терминальный статус из нетерминального и не превращает терминальный в
+    другой, поэтому предикат по колонке совпадает с канон-разбиением точно.
+    """
+    from uk_management_bot.utils.request_workflow import TERMINAL_STATUSES
+
+    return Request.status.in_(TERMINAL_STATUSES)
+
+
+def active_status_clause() -> ColumnElement:
+    """Дополнение `terminal_status_clause`: работа ещё в процессе."""
+    from uk_management_bot.utils.request_workflow import TERMINAL_STATUSES
+
+    return Request.status.notin_(TERMINAL_STATUSES)
+
+
 def get_approved_apartment_ids(db: Session, user_id: int) -> frozenset[int]:
     """ID квартир, по которым у пользователя одобрено соседство (UserApartment)."""
     from uk_management_bot.database.models.user_apartment import UserApartment

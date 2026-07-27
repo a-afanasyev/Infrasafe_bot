@@ -123,7 +123,11 @@ def collect_read_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 # ---------------------------------------------------------------------------
 
 BASELINE: set[tuple[str, str, str]] = {
-    ('uk_management_bot/api/dependencies_access.py', 'cmp:request', 'status'),
+    # П5 (2026-07-27): запись `dependencies_access.py cmp:request status` УБРАНА —
+    # правило «сосед по квартире только на «Исполнено»» переехало в канон-предикат
+    # `utils/request_access`, где статус сравнивается уже с полем фактов, а не с
+    # колонкой заявки. Это был последний из пяти рукописных экземпляров правил
+    # доступа к заявке.
     # ARCH-010 (2026-07-23): change-детектор версионирования в _apply_sync/_apply_async
     # (`req.status != old_status` → bump status_version) — НЕ transition-guard,
     # решение о переходе уже принято чистым _decide; предикат здесь неуместен.

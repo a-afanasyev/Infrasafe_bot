@@ -5,8 +5,10 @@ Tests that keyboard builder functions return correct markup types and
 contain buttons driven by role/status logic, without relying on specific
 locale strings.
 """
+import logging
 from unittest.mock import patch, MagicMock
 
+import pytest
 from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup
 
 
@@ -376,16 +378,49 @@ class TestGetUserContextualKeyboard:
 
         assert isinstance(result, ReplyKeyboardMarkup)
 
-    def test_db_exception_returns_default_keyboard(self):
+    def test_db_exception_propagates_and_is_logged(self, caplog):
+        """AUD5-CODE-7: сбой БД не подменяется applicant-клавиатурой.
+
+        Прежний тест фиксировал ровно обратное («вернуть клавиатуру по
+        умолчанию») и потому был зелёным на дефекте. Подмена вредна вдвойне:
+        сбой не попадал в логи, а reply-клавиатура в Telegram липкая — менеджер
+        оставался с чужим меню и после того, как БД выздоровела.
+
+        Мокается уровень НИЖЕ предмета (фабрика сессий), а не сама функция:
+        иначе тест проверял бы мок вместо кода.
+        """
         mock_db = MagicMock()
         mock_db.query.side_effect = Exception("DB failure")
 
         with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
              patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-            result = get_user_contextual_keyboard(user_id=0)
+            with caplog.at_level(logging.ERROR, logger="uk_management_bot.keyboards.base"):
+                with pytest.raises(Exception, match="DB failure"):
+                    get_user_contextual_keyboard(user_id=0)
+
+        assert any(r.levelno >= logging.ERROR for r in caplog.records), \
+            "сбой обязан попасть в лог уровня ERROR, иначе он снова невидим"
+        assert mock_db.close.called, "сессия должна закрываться и на ошибке (finally)"
+
+    def test_user_not_found_is_not_treated_as_failure(self, caplog):
+        """Отсутствие пользователя — легитимный случай, не ERROR.
+
+        Граница важна: если бы «нет пользователя» тоже логировалось ошибкой,
+        логи заполнились бы шумом от незарегистрированных, и настоящий сбой БД
+        снова стало бы не видно.
+        """
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
+             patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
+            from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+            with caplog.at_level(logging.DEBUG, logger="uk_management_bot.keyboards.base"):
+                result = get_user_contextual_keyboard(user_id=999)
 
         assert isinstance(result, ReplyKeyboardMarkup)
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
     def test_user_with_no_roles_but_legacy_role(self):
         """Falls back to user.role when user.roles is empty."""

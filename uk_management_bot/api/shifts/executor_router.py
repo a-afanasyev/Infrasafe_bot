@@ -12,6 +12,7 @@ from uk_management_bot.api.shifts import service
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
+from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +195,15 @@ async def end_shift(
 # ---------------------------------------------------------------------------
 
 def _executor_name(user: Optional[User]) -> Optional[str]:
+    """Имя с фолбэком: подпись в TransferOut пустой быть не может.
+
+    AUD5-APIFE-13: «Имя Фамилия» считает канон, а фолбэк остаётся здесь и
+    прежним — он уходит в ответ API, и менять видимую строку заодно с
+    технической правкой нельзя.
+    """
     if user is None:
         return None
-    name = " ".join(p for p in (user.first_name, user.last_name) if p).strip()
-    return name or (user.username or f"#{user.id}")
+    return full_name(user) or user.username or f"#{user.id}"
 
 
 def _transfer_out(

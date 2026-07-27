@@ -844,6 +844,7 @@
   "kanban": {
     "createByCall": "Создать по звонку",
     "emptyColumn": "Нет заявок",
+    "truncatedColumn": "Показаны {{shown}} из {{total}}",
     "confirmed": "Подтверждено",
     "onShift": "На смене",
     "transitionTo": "Перевод в \"{{status}}\"",

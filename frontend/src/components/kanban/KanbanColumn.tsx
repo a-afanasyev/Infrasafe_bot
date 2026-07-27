@@ -169,6 +169,17 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
               {t('kanban.emptyColumn')}
             </div>
           )}
+          {/* AUD5-APIFE-3: у терминальных колонок count — настоящее число заявок,
+              а показывается верхушка. Без этой строки счётчик в шапке выглядел бы
+              рассогласованным со списком. */}
+          {column.count > column.requests.length && (
+            <div className="flex items-center justify-center py-3 text-[11px] text-text-muted select-none">
+              {t('kanban.truncatedColumn', {
+                shown: column.requests.length,
+                total: column.count,
+              })}
+            </div>
+          )}
         </SortableContext>
       </div>
     </div>

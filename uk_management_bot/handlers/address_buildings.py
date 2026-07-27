@@ -126,6 +126,10 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru"):
     """Показать здания конкретного двора"""
     yard_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             lang = language
@@ -160,6 +164,10 @@ async def show_building_details(callback: CallbackQuery, language: str = "ru"):
     """Показать детальную информацию о здании"""
     building_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             lang = language
@@ -205,6 +213,10 @@ async def start_building_creation(callback: CallbackQuery, state: FSMContext, la
     """Начать создание нового здания - выбор двора"""
     await state.clear()
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             yards = AddressService.get_all_yards(db, only_active=True)
@@ -461,6 +473,10 @@ async def toggle_building_status(callback: CallbackQuery, language: str = "ru"):
     """Переключить активность здания"""
     building_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             lang = language
@@ -500,6 +516,10 @@ async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru
     """Подтверждение удаления здания"""
     building_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             lang = language

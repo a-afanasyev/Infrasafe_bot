@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
@@ -47,10 +47,16 @@ from uk_management_bot.utils.request_workflow import (
     PayloadInvalid,
     EditForbidden,
     WorkflowError,
+    TERMINAL_STATUSES,
     normalize_status,
+)
+from uk_management_bot.utils.workflow_predicates import (
+    active_status_clause,
+    terminal_status_clause,
 )
 from uk_management_bot.utils import constants as C
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +67,21 @@ KANBAN_STATUSES = ["Новая", "В работе", "Закуп", "Уточне�
 # Терминальные (финализированные) статусы — заявка заморожена для urgency-правок.
 # (PR2b: статус-переходы валидирует канон ACTION_TABLE через run_command; прежняя
 # матрица _REQUEST_VALID_TRANSITIONS удалена — единый источник правды в request_workflow.)
-_TERMINAL_STATUSES = {"Принято", "Отменена"}
+# Здесь была рукописная копия `{"Принято", "Отменена"}`; убрана в пользу канона
+# (AUD5-APIFE-3 добавляет второе использование набора, и держать две копии значит
+# заводить расхождение — этот класс уже давал прод-дефекты).
+_TERMINAL_STATUSES = TERMINAL_STATUSES
+
+# AUD5-APIFE-3: сколько карточек показывать в терминальной колонке. Активные
+# статусы не ограничиваются вовсе — их немного по определению, и терять их
+# нельзя. `count` терминальной колонки при этом остаётся НАСТОЯЩИМ (отдельный
+# агрегат), поэтому клиент видит и «сколько всего», и «что показано».
+TERMINAL_COLUMN_LIMIT = 100
 
 
-def _format_executor_name(user) -> Optional[str]:
-    """Format executor's display name from User ORM object."""
-    if user is None:
-        return None
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return name or None
+# AUD5-APIFE-13: одна из трёх копий; карточка API отсутствие имени показывает
+# как null — фолбэка здесь быть не должно.
+_format_executor_name = full_name
 
 
 def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
@@ -145,6 +157,26 @@ async def _latest_accepted_inbox(db: AsyncSession, request_number: str) -> Webho
     )
 
 
+# AUD5-APIFE-3 — почему выборка разделена на две части.
+#
+# Раньше это был ОДИН запрос `ORDER BY created_at DESC LIMIT 500` на всю доску.
+# «Принято»/«Отменена» копятся вечно, поэтому после 500 строк с доски пропадали
+# самые старые АКТИВНЫЕ карточки — ровно та работа, которую менеджер обязан
+# видеть, — а `count` считался по обрезанному набору и врал.
+#
+# Теперь активные статусы отдаются целиком, каждая терминальная колонка —
+# верхушкой в `TERMINAL_COLUMN_LIMIT` карточек, но с НАСТОЯЩИМ `count` из
+# отдельного агрегата.
+#
+# Разбиение делается предикатом по `Request.status`, и это корректно, а не
+# приблизительно: `normalize_status` не производит терминальный статус из
+# нетерминального и не превращает терминальный в другой (её правила касаются
+# только «Выполнена»+manager_confirmed и «Исполнено»+is_returned), поэтому
+# дублировать нормализацию в SQL не требуется.
+#
+# Обоснование живёт в комментарии, а НЕ в docstring: FastAPI кладёт docstring в
+# `description` эндпоинта, то есть в публичный контракт API — внутренней
+# археологии там быть не должно (поймано гейтом OpenAPI-снапшота).
 @router.get("/kanban", response_model=KanbanResponse)
 async def get_kanban(
     executor_id: Optional[int] = Query(None),
@@ -152,27 +184,71 @@ async def get_kanban(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    ExecutorUser = aliased(User)
-    query = (
-        select(RequestModel, ExecutorUser)
-        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
-    )
-    if executor_id:
-        query = query.filter(RequestModel.executor_id == executor_id)
-    if category:
-        query = query.filter(RequestModel.category == category)
+    """Доска заявок для менеджера, сгруппированная по статусам.
 
-    result = await db.execute(query.order_by(RequestModel.created_at.desc()).limit(500))
-    rows = result.all()
+    Активные колонки полны; у терминальных («Принято», «Отменена») отдаётся
+    последние `TERMINAL_COLUMN_LIMIT` карточек, а `count` показывает настоящее
+    число заявок в колонке — то есть `count` может быть больше `len(requests)`.
+    """
+    ExecutorUser = aliased(User)
+
+    def _scoped(stmt):
+        """Фильтры запроса — одни и те же для всех частей выборки и агрегата."""
+        if executor_id:
+            stmt = stmt.filter(RequestModel.executor_id == executor_id)
+        if category:
+            stmt = stmt.filter(RequestModel.category == category)
+        return stmt
+
+    def _cards_query():
+        return _scoped(
+            select(RequestModel, ExecutorUser)
+            .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
+        # Tiebreak по PK обязателен именно из-за обрезки: у заявок, созданных в
+        # одну секунду, порядок по created_at не определён, и «верхушка» в
+        # терминальной колонке зависела бы от порядка сканирования. У Request PK
+        # это `request_number` формата YYMMDD-NNN — лексикографический порядок
+        # совпадает с хронологическим.
+        ).order_by(RequestModel.created_at.desc(), RequestModel.request_number.desc())
+
+    active_rows = (await db.execute(_cards_query().where(active_status_clause()))).all()
+
+    # По одному запросу на терминальный статус: общий лимит на всю терминальную
+    # часть отдал бы весь бюджет одному статусу (сортировка по дате), и «Отменена»
+    # голодала бы при большом числе «Принято».
+    terminal_rows: list = []
+    for st in _TERMINAL_STATUSES:
+        terminal_rows.extend(
+            (
+                await db.execute(
+                    _cards_query()
+                    .where(RequestModel.status == st)
+                    .limit(TERMINAL_COLUMN_LIMIT)
+                )
+            ).all()
+        )
+
+    terminal_totals = dict(
+        (
+            await db.execute(
+                _scoped(
+                    select(RequestModel.status, func.count())
+                    .where(terminal_status_clause())
+                ).group_by(RequestModel.status)
+            )
+        ).all()
+    )
 
     # Карты несут канон-статус (PR7: _make_request_card нормализует, не
     # проецирует), поэтому группируем по card.status: канон-«Возвращена»
     # попадает в одноимённую колонку, а не сворачивается в «Исполнено».
-    all_cards = [_make_request_card(r, eu) for r, eu in rows]
+    all_cards = [_make_request_card(r, eu) for r, eu in [*active_rows, *terminal_rows]]
     columns = []
     for st in KANBAN_STATUSES:
         st_cards = [c for c in all_cards if c.status == st]
-        columns.append(KanbanColumn(status=st, count=len(st_cards), requests=st_cards))
+        # Для активных колонок выборка полная, поэтому len — и есть правда.
+        count = terminal_totals.get(st, len(st_cards)) if st in _TERMINAL_STATUSES else len(st_cards)
+        columns.append(KanbanColumn(status=st, count=count, requests=st_cards))
     return KanbanResponse(columns=columns)
 
 

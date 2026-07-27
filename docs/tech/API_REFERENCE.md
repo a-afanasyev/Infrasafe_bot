@@ -7,7 +7,8 @@
 **Источник истины:** роутеры `uk_management_bot/api/**/router.py` + `api/main.py` + `api/dependencies.py`.
 **Дата:** 2026-07-06.
 
-> В прод interactive-docs выключены (`docs_url/redoc_url/openapi_url = None` при `DEBUG=False`, `main.py:58`). OpenAPI-схема доступна только в dev.
+> В прод interactive-docs выключены (`docs_url/redoc_url/openapi_url = None` при `DEBUG=False`, `main.py:58`) — публичная схема увеличивает поверхность для скрейпа.
+> Взамен схема лежит в репозитории: [`openapi.json`](openapi.json) (AUD5-PRAC-8, 2026-07-26). Генерируется `python3 scripts/dump_openapi.py`, сверяется CI-шагом `OpenAPI snapshot gate` — изменение публичного контракта обязано быть видно в диффе PR, а не обнаруживаться потребителем в проде.
 > Всего насчитано **~120 эндпоинтов** (включая WebSocket, health/metrics, media-proxy) в **18 подключаемых роутерах** (`main.py:120`).
 
 ---
@@ -296,4 +297,4 @@ POST /login/resend-otp {mfa_token}  → {ok:true}   (3/min)
 
 ## 6. Домен access_control — отдельный сервис
 
-Эндпоинты СКУД/ANPR/шлагбаумов (allow-путь, заявки на доступ, приёмка кода охраной, въезд/выезд) обслуживаются **отдельным сервисом** (образ `Dockerfile.access`), их **нет** в этом FastAPI-приложении (`api/main.py`). Данные — 22 таблицы домена access_control (см. [DATABASE_SCHEMA_ACTUAL.md §1.2](../DATABASE_SCHEMA_ACTUAL.md)).
+Эндпоинты СКУД/ANPR/шлагбаумов (allow-путь, заявки на доступ, приёмка кода охраной, въезд/выезд) обслуживаются **отдельным сервисом** (образ `Dockerfile.access`), их **нет** в этом FastAPI-приложении (`api/main.py`). Данные — 22 таблицы домена access_control (см. [DATABASE_SCHEMA_ACTUAL.md §1.2](../Archive/2026-07-26-stale-docs/DATABASE_SCHEMA_ACTUAL.md)).

@@ -79,6 +79,10 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext, lan
     """Обработка выбора двора пользователем"""
     yard_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             yard = AddressService.get_yard_by_id(db, yard_id)
@@ -126,6 +130,10 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext,
     """Обработка выбора здания пользователем"""
     building_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             building = AddressService.get_building_by_id(db, building_id, include_yard=True)
@@ -178,6 +186,10 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
     """Обработка финального выбора квартиры - показать подтверждение"""
     apartment_id = int(callback.data.split(":")[1])
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             # Получаем user.id из базы данных (не telegram_id!)
@@ -445,6 +457,10 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
     await state.update_data(entry_from="profile")
     await state.set_state(OnboardingStates.waiting_for_yard_selection)
 
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         with session_scope() as db:
             yards = AddressService.get_all_yards(db, only_active=True)

@@ -134,6 +134,10 @@ async def handle_edit_phone(callback: CallbackQuery, state: FSMContext, db: Sess
 @router.message(ProfileEditingStates.waiting_for_phone)
 async def handle_phone_input(message: Message, state: FSMContext, db: Session):
     """Обработка ввода телефона"""
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         lang = get_user_language(db, message.from_user.id)
         phone = message.text.strip()
@@ -319,6 +323,10 @@ async def handle_edit_first_name(callback: CallbackQuery, state: FSMContext, db:
 @router.message(ProfileEditingStates.waiting_for_first_name)
 async def handle_first_name_input(message: Message, state: FSMContext, db: Session):
     """Обработка ввода имени"""
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         lang = get_user_language(db, message.from_user.id)
         first_name = message.text.strip()
@@ -373,6 +381,10 @@ async def handle_edit_last_name(callback: CallbackQuery, state: FSMContext, db: 
 @router.message(ProfileEditingStates.waiting_for_last_name)
 async def handle_last_name_input(message: Message, state: FSMContext, db: Session):
     """Обработка ввода фамилии"""
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
+    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # на несвязанное имя → NameError вместо сообщения об ошибке.
+    lang = "ru"
     try:
         lang = get_user_language(db, message.from_user.id)
         last_name = message.text.strip()

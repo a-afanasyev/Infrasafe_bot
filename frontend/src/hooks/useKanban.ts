@@ -27,20 +27,35 @@ export interface KanbanColumn {
   requests: RequestCard[]
 }
 
+/** Префикс кэша канбана. Инвалидация по нему накрывает все варианты фильтров. */
+export const KANBAN_QUERY_PREFIX = ['kanban'] as const
+
+/** Единственный способ собрать ключ кэша канбана.
+ *
+ * AUD5-APIFE-8: `KanbanBoard` писал оптимистичное обновление в захардкоженный
+ * `['kanban', {}]`, который совпадает с реальным ключом только пока фильтров
+ * нет. Фабрика + возврат `queryKey` из хука убирают возможность такого
+ * расхождения в принципе — писать и читать больше нечем.
+ */
+export function kanbanQueryKey(filters: Record<string, string | undefined> = {}) {
+  return [...KANBAN_QUERY_PREFIX, filters] as const
+}
+
 export function useKanban(filters: Record<string, string | undefined> = {}) {
   const queryClient = useQueryClient()
+  const queryKey = kanbanQueryKey(filters)
 
   const { data, isLoading, isError } = useQuery<{ columns: KanbanColumn[] }>({
-    queryKey: ['kanban', filters],
+    queryKey,
     queryFn: () => apiClient.get('/api/v2/requests/kanban', { params: filters }).then((r) => r.data),
     staleTime: 30_000,
   })
 
   useWebSocket('kanban', (event) => {
     if (['request.created', 'request.status_changed', 'request.assigned', 'request.updated'].includes(event.type)) {
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      queryClient.invalidateQueries({ queryKey: KANBAN_QUERY_PREFIX })
     }
   })
 
-  return { columns: data?.columns ?? [], isLoading, isError }
+  return { columns: data?.columns ?? [], isLoading, isError, queryKey }
 }

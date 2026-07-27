@@ -4,7 +4,7 @@
 
 **Назначение:** обзор доменов данных, ERD по доменам, ключевые связи и инварианты.
 **Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (head = `036`).
-**Полный дамп колонок:** см. [DATABASE_SCHEMA_ACTUAL.md](../DATABASE_SCHEMA_ACTUAL.md).
+**Полный дамп колонок:** см. [DATABASE_SCHEMA_ACTUAL.md](../Archive/2026-07-26-stale-docs/DATABASE_SCHEMA_ACTUAL.md).
 **Дата:** 2026-07-06.
 
 ---
@@ -354,7 +354,7 @@ erDiagram
 
 ## 8. Домен access_control (СКУД/ANPR) — вне основной ORM
 
-22 таблицы (`parking_zones`, `edge_controllers`, `access_gates`, `access_cameras`, `access_barriers`, `vehicles`, `vehicle_apartments`, `access_rules`, `access_passes`, `resident_access_requests`, `camera_events`, `access_decisions`, `access_events`, `controller_sync_events`, `barrier_commands`, `manual_openings`, `access_audit_logs`, `parking_spots`, `parking_spot_assignments`, `access_entry_confirmations`, `vehicle_presence_sessions`). DDL — raw-миграции 025–035; ORM-моделей в `database/models/` нет (домен обслуживает отдельный сервис, образ `Dockerfile.access`). Перечень — в [DATABASE_SCHEMA_ACTUAL.md §1.2](../DATABASE_SCHEMA_ACTUAL.md).
+22 таблицы (`parking_zones`, `edge_controllers`, `access_gates`, `access_cameras`, `access_barriers`, `vehicles`, `vehicle_apartments`, `access_rules`, `access_passes`, `resident_access_requests`, `camera_events`, `access_decisions`, `access_events`, `controller_sync_events`, `barrier_commands`, `manual_openings`, `access_audit_logs`, `parking_spots`, `parking_spot_assignments`, `access_entry_confirmations`, `vehicle_presence_sessions`). DDL — raw-миграции 025–035; ORM-моделей в `database/models/` нет (домен обслуживает отдельный сервис, образ `Dockerfile.access`). Перечень — в [DATABASE_SCHEMA_ACTUAL.md §1.2](../Archive/2026-07-26-stale-docs/DATABASE_SCHEMA_ACTUAL.md).
 
 ---
 

@@ -15,7 +15,7 @@ import { useKanban, type RequestCard as TCard } from '../../hooks/useKanban'
 import KanbanColumn from './KanbanColumn'
 import RequestCard from './RequestCard'
 import TransitionModal, { type TransitionData } from './TransitionModal'
-import { apiClient } from '../../api/client'
+import { commitTransition as doCommitTransition } from './commitTransition'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   MODAL_STATUSES,
@@ -36,7 +36,7 @@ interface Props {
 
 export default function KanbanBoard({ onCardClick }: Props) {
   const { t } = useTranslation()
-  const { columns, isLoading, isError } = useKanban()
+  const { columns, isLoading, isError, queryKey } = useKanban()
   const queryClient = useQueryClient()
   const [activeDragStatus, setActiveDragStatus] = useState<string | null>(null)
   const [activeCard, setActiveCard] = useState<TCard | null>(null)
@@ -108,43 +108,19 @@ export default function KanbanBoard({ onCardClick }: Props) {
     }
   }
 
-  const commitTransition = async (requestNumber: string, data: TransitionData) => {
-    // Optimistic update
-    queryClient.setQueryData(
-      ['kanban', {}],
-      (old: { columns: typeof columns } | undefined) => {
-        if (!old) return old
-        const card = old.columns
-          .flatMap(c => c.requests)
-          .find(r => r.request_number === requestNumber)
-        if (!card) return old
-        const newStatus = data.status
-        return {
-          columns: old.columns.map((col) => ({
-            ...col,
-            requests:
-              col.status === newStatus
-                ? [...col.requests, { ...card, status: newStatus }]
-                : col.requests.filter(r => r.request_number !== requestNumber),
-            count:
-              col.status === newStatus
-                ? col.count + 1
-                : col.requests.some(r => r.request_number === requestNumber)
-                  ? col.count - 1
-                  : col.count,
-          })),
-        }
+  const commitTransition = (requestNumber: string, data: TransitionData) =>
+    // Тело вынесено в модуль (AUD5-APIFE-8): внутри компонента оно достигалось
+    // только симуляцией drag&drop и потому оставалось непокрытым.
+    doCommitTransition({
+      queryClient,
+      queryKey,
+      requestNumber,
+      data,
+      onError: () => {
+        setTransitionError(t('errors.transitionFailed'))
+        setTimeout(() => setTransitionError(null), 4000)
       },
-    )
-
-    try {
-      await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
-    } catch {
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      setTransitionError(t('errors.transitionFailed'))
-      setTimeout(() => setTransitionError(null), 4000)
-    }
-  }
+    })
 
   const handleTransitionConfirm = (data: TransitionData) => {
     if (pendingTransition) {

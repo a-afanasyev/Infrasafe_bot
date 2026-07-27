@@ -1,0 +1,5 @@
+Contact: https://t.me/infrasafe
+Expires: 2027-07-01T00:00:00.000Z
+Preferred-Languages: ru, uz, en
+Canonical: https://profk.uz/.well-known/security.txt
+Canonical: https://infrasafe.uz/.well-known/security.txt

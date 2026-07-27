@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 @require_role(['admin', 'manager'])
 async def cmd_shifts(message: Message, state: FSMContext, db=None):
     """Главное меню управления сменами"""
+    # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
+    # `with _db_scope(...)`, и если БД/`get_user_language` бросят, `except` ниже
+    # сошлётся на несуществующее имя → NameError вместо сообщения об ошибке,
+    # то есть пользователь не получит вообще ничего. Дефолт ДО try, а не
+    # переприсваивание внутри `except` (канон `handlers/requests/`): так
+    # реальный язык пользователя сохраняется, если он уже был определён.
+    lang = "ru"
     try:
         with _db_scope(db) as db:
             lang = get_user_language(message.from_user.id, db)
@@ -48,6 +55,13 @@ async def cmd_shifts(message: Message, state: FSMContext, db=None):
 @require_role(['admin', 'manager'])
 async def handle_shift_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Меню планирования смен"""
+    # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
+    # `with _db_scope(...)`, и если БД/`get_user_language` бросят, `except` ниже
+    # сошлётся на несуществующее имя → NameError вместо сообщения об ошибке,
+    # то есть пользователь не получит вообще ничего. Дефолт ДО try, а не
+    # переприсваивание внутри `except` (канон `handlers/requests/`): так
+    # реальный язык пользователя сохраняется, если он уже был определён.
+    lang = "ru"
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -70,6 +84,13 @@ async def handle_shift_planning(callback: CallbackQuery, state: FSMContext, db=N
 @require_role(['admin', 'manager'])
 async def handle_auto_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Автоматическое планирование смен"""
+    # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
+    # `with _db_scope(...)`, и если БД/`get_user_language` бросят, `except` ниже
+    # сошлётся на несуществующее имя → NameError вместо сообщения об ошибке,
+    # то есть пользователь не получит вообще ничего. Дефолт ДО try, а не
+    # переприсваивание внутри `except` (канон `handlers/requests/`): так
+    # реальный язык пользователя сохраняется, если он уже был определён.
+    lang = "ru"
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)

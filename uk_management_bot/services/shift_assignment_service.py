@@ -1042,18 +1042,54 @@ class ShiftAssignmentService:
             # Сортируем по убыванию оценки
             executor_scores.sort(key=lambda x: x.total_score, reverse=True)
 
-            # Пробуем назначить лучшего исполнителя
-            best_executor = executor_scores[0]
+            # AUD3-13: перебираем кандидатов, а не только топового. Агрегатный
+            # score и hard-конфликты — РАЗНЫЕ измерения: лучший по score может
+            # провалить отдельную проверку (роль, пересечение окон, статус), и
+            # раньше смена в этом случае оставалась НЕназначенной при живом
+            # втором кандидате без конфликтов.
+            #
+            # Границу severity не двигаем: low/medium назначению не мешали и не
+            # мешают — иначе «перебор» стал бы тихим изменением политики, при
+            # котором топовый кандидат уступает место второму из-за пустяка.
+            best_executor = None
+            conflicts = []
+            attempted: List[int] = []
+            first_blocking_conflicts = None
+            for candidate in executor_scores:
+                attempted.append(candidate.executor_id)
+                candidate_conflicts = self.conflict_detector._check_assignment_conflicts(
+                    shift, candidate.executor_id
+                )
+                blocking = bool(candidate_conflicts) and any(
+                    c.severity in ['high', 'critical'] for c in candidate_conflicts
+                )
+                if blocking:
+                    if first_blocking_conflicts is None:
+                        # Причиной отказа считаем конфликты ТОПОВОГО кандидата:
+                        # именно его менеджер ожидал увидеть назначенным.
+                        first_blocking_conflicts = candidate_conflicts
+                    logger.info(
+                        "Смена %s: кандидат %s отклонён hard-конфликтом, пробуем следующего",
+                        shift.id, candidate.executor_id,
+                    )
+                    continue
+                best_executor = candidate
+                conflicts = candidate_conflicts
+                break
 
-            # Проверяем конфликты
-            conflicts = self.conflict_detector._check_assignment_conflicts(shift, best_executor.executor_id)
-
-            if conflicts and any(c.severity in ['high', 'critical'] for c in conflicts):
+            if best_executor is None:
                 return {
                     'success': False,
                     'shift_id': shift.id,
-                    'conflicts': [self.conflict_detector._conflict_to_dict(c) for c in conflicts],
-                    'attempted_executor': best_executor.executor_id
+                    'conflicts': [
+                        self.conflict_detector._conflict_to_dict(c)
+                        for c in (first_blocking_conflicts or [])
+                    ],
+                    # Одиночное поле — прежний контракт (его читает
+                    # handlers/shift_management/assignment_a.py); список нужен,
+                    # чтобы по отчёту было видно, что перебор действительно был.
+                    'attempted_executor': attempted[0] if attempted else None,
+                    'attempted_executors': attempted,
                 }
 
             # Выполняем назначение
@@ -1295,11 +1331,25 @@ class ShiftAssignmentService:
             }
 
             for shift in executor_shifts:
-                # Убираем текущего исполнителя
-                shift.user_id = None
-
-                # Пытаемся найти замену
-                available_executors = self._get_available_executors()
+                # AUD3-12: исполнителя НЕ снимаем до попытки. Прежний порядок
+                # («обнулить, потом пытаться») ломался о то, что
+                # `_assign_single_shift` коммитит внутри себя: при неудачной
+                # попытке смена оставалась грязной, и СЛЕДУЮЩИЙ удачный
+                # внутренний commit (для другой смены пачки) записывал это
+                # обнуление — смена молча теряла исполнителя без единой записи в
+                # аудите. Внешний `rollback()` тут бесполезен: коммит уже был.
+                #
+                # Спекулятивная мутация не нужна и технически: overlap-проверка
+                # (`_calculate_availability_score`) исключает саму эту смену
+                # условием `Shift.id != shift.id`, поэтому «занятость» текущим
+                # исполнителем кандидату не мешает.
+                #
+                # Отсутствующего исключаем из кандидатов: `_get_available_executors`
+                # отдаёт всех approved-исполнителей, и без фильтра он мог быть
+                # «назначен» на свою же смену — no-op под видом успеха.
+                available_executors = [
+                    ex for ex in self._get_available_executors() if ex.id != executor_id
+                ]
                 assignment_result = self._assign_single_shift(shift, available_executors)
 
                 if assignment_result['success']:
@@ -1310,11 +1360,29 @@ class ShiftAssignmentService:
                         'status': 'reassigned'
                     })
                 else:
+                    # Замены нет — снимаем исполнителя ЯВНО и со следом в аудите.
+                    # Итог в БД тот же, что раньше получался случайно, но теперь
+                    # это решение: смена видна как непокрытая, и понятно почему.
+                    shift.user_id = None
+                    shift.assigned_at = None
+                    shift.assigned_by_user_id = None
+                    self.db.add(AuditLog(
+                        user_id=executor_id,
+                        action="SHIFT_UNASSIGNED_NO_REPLACEMENT",
+                        details={
+                            "shift_id": shift.id,
+                            "absent_executor_id": executor_id,
+                            "reason": reason,
+                            "assignment_error": assignment_result.get('error'),
+                            "attempted_executors": assignment_result.get('attempted_executors', []),
+                        }
+                    ))
                     results['failed'] += 1
                     results['details'].append({
                         'shift_id': shift.id,
                         'status': 'failed',
-                        'reason': assignment_result.get('error', 'Unknown error')
+                        'reason': assignment_result.get('error', 'Unknown error'),
+                        'unassigned': True,
                     })
 
             # Создаем запись аудита
@@ -1334,6 +1402,16 @@ class ShiftAssignmentService:
             return results
 
         except Exception as e:
+            # AUD3-12: rollback обязателен — до этой точки в сессии могли остаться
+            # незакоммиченные мутации (явное снятие исполнителя, записи аудита).
+            # Без него они уедут в БД с первым же commit'ом любого следующего
+            # вызова по этой сессии, то есть ровно тем механизмом, который и был
+            # исходным дефектом — только на error-path.
+            try:
+                self.db.rollback()
+            except Exception:
+                logger.warning("Не удалось откатить сессию после сбоя переназначения",
+                               exc_info=True)
             logger.error(f"Ошибка переназначения смен для исполнителя {executor_id}: {e}")
             return {'error': str(e)}
 
