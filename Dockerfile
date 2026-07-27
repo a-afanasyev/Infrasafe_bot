@@ -26,7 +26,6 @@ RUN apt-get update && apt-get install -y \
 # Копируем файлы зависимостей
 # Сначала копируем requirements.txt для оптимизации кэширования Docker слоев
 COPY requirements.txt .
-COPY uk_management_bot/requirements.txt ./uk_management_bot/
 COPY requirements-dev.txt .
 
 # OPS-117 — dev-deps по умолчанию включены: образ используется для тестов
@@ -46,7 +45,6 @@ ENV PIP_RETRIES=10 \
 # --upgrade обновляет пакеты до последних версий
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r uk_management_bot/requirements.txt && \
     if [ "$INSTALL_DEV" = "true" ]; then \
         pip install --no-cache-dir -r requirements-dev.txt; \
     fi

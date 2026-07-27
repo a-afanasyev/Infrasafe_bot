@@ -108,14 +108,23 @@ docker run --rm --network "$NET" -v "${ROOT}/alembic:/app/alembic:ro" \
   "${ENV_ARGS[@]}" --entrypoint sh "$IMAGE" -c \
   'python -m alembic upgrade head >/dev/null && python -m alembic check'
 
+# В CI оба прогона идут в одном workspace и копят покрытие в общий `.coverage`
+# (второй — с `-a`). Здесь прогоны в РАЗНЫХ контейнерах, поэтому файл данных
+# выносится на смонтированный том — иначе шаг ratchet ниже видел бы только
+# половину покрытия и «локально зелено» опять значило бы не то же, что в CI.
+COVDIR="$(mktemp -d)"
+chmod 777 "$COVDIR"
+trap 'rm -rf "$COVDIR"' EXIT
+COV_ARGS=(-v "${COVDIR}:/covdata" -e COVERAGE_FILE=/covdata/.coverage)
+
 echo "==> сьют 1/2: pytest -q (uk_management_bot, postgres)"
-docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
-  --entrypoint sh "$IMAGE" -c 'pytest -q'
+docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" "${COV_ARGS[@]}" \
+  --entrypoint sh "$IMAGE" -c 'coverage run -m pytest -q'
 
 echo "==> сьют 2/2: pytest -q tests/api tests/services (sqlite-conftest'ы)"
-docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
+docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" "${COV_ARGS[@]}" \
   -e INFRASAFE_WEBHOOK_ENABLED=true \
-  --entrypoint sh "$IMAGE" -c 'pytest -q tests/api tests/services'
+  --entrypoint sh "$IMAGE" -c 'coverage run -a -m pytest -q tests/api tests/services'
 
 # Джоба CI `backend-tests` состоит НЕ только из двух прогонов pytest — в ней есть
 # ещё и этот шаг. Без него «локально зелено» значило бы не то же, что в CI, и
@@ -127,4 +136,19 @@ docker run --rm --network "$NET" "${ENV_ARGS[@]}" "${CONFIG_MOUNTS[@]}" \
   -v "${ROOT}/scripts/dump_openapi.py:/app/scripts/dump_openapi.py:ro" \
   --entrypoint sh "$IMAGE" -c 'python3 scripts/dump_openapi.py --check'
 
-echo "==> оба сьюта и OpenAPI-гейт зелёные"
+# Второй шаг джобы `backend-tests`, которого здесь не хватало. Поймано в П7:
+# удаление ~980 строк мёртвого кода двигает знаменатель покрытия, и без этого
+# шага изменение уехало бы в CI вслепую.
+echo "==> coverage floor (ratchet: core / handlers)"
+docker run --rm "${ENV_ARGS[@]}" "${COV_ARGS[@]}" --entrypoint sh "$IMAGE" -c '
+  # именно строка TOTAL: последней в выводе идёт «N empty files skipped.»
+  core=$(coverage report --omit="uk_management_bot/handlers/*" | awk "/^TOTAL/{print \$NF}")
+  hnd=$(coverage report --include="uk_management_bot/handlers/*" | awk "/^TOTAL/{print \$NF}")
+  echo "core=${core} (floor 69%) · handlers=${hnd} (floor 27.5%)"
+  coverage report --omit="uk_management_bot/handlers/*" --fail-under=69 >/dev/null \
+    || { echo "core ниже floor 69%"; exit 1; }
+  coverage report --include="uk_management_bot/handlers/*" --fail-under=27.5 >/dev/null \
+    || { echo "handlers ниже floor 27.5%"; exit 1; }
+  echo "оба floor пройдены"'
+
+echo "==> оба сьюта, OpenAPI-гейт и coverage-floor зелёные"

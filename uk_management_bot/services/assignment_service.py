@@ -21,16 +21,13 @@ from uk_management_bot.utils.constants import (
     AUDIT_ACTION_REQUEST_ASSIGNED
 )
 from uk_management_bot.services.notification_service import NotificationService
+# AUD5-DEAD-4: импорт был под `try/except ImportError` с флагом
+# ADVANCED_ASSIGNMENT_AVAILABLE. Модуль свой, его зависимости — stdlib,
+# SQLAlchemy и модели проекта: при их отсутствии не поднимется вообще ничего.
+# Флаг всегда был True, ветка «недоступно» — недостижимой.
+from uk_management_bot.services.smart_dispatcher import SmartDispatcher
 
 logger = logging.getLogger(__name__)
-
-# Интеграция с новыми сервисами ЭТАПА 3
-try:
-    from uk_management_bot.services.smart_dispatcher import SmartDispatcher
-    ADVANCED_ASSIGNMENT_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Расширенные сервисы назначения недоступны: {e}")
-    ADVANCED_ASSIGNMENT_AVAILABLE = False
 
 
 def apply_executor_reassign(
@@ -391,10 +388,6 @@ class AssignmentService:
         Returns:
             Optional[RequestAssignment]: Созданное назначение или None
         """
-        if not ADVANCED_ASSIGNMENT_AVAILABLE:
-            logger.warning("Умное назначение недоступно, используем базовый метод")
-            return None
-        
         try:
             request = self._get_request_by_number(request_number)
             if not request:

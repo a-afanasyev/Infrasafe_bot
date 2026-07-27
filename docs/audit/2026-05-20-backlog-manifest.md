@@ -19,16 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **403**
-- закрыто маркером: **332**
-- открыто маркером: **71**
+- закрыто маркером: **338**
+- открыто маркером: **65**
 
-  - `actionable` — **39**
+  - `actionable` — **34**
   - `decision` — **28**
   - `calendar` — **1**
   - `no-pr` — **2**
-  - `doc-closed` — **1**
 
-Из них actionable по приоритету: P2=17, P3=22.
+Из них actionable по приоритету: P2=13, P3=21.
 
 Значения `status`:
 
@@ -84,15 +83,9 @@
 | `AUD5-CODE-8` | P2 | actionable | doc-2026-07-21 | П5a | — | — | — | сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4 |
 | `BUG-132` | P2 | decision | verified-2026-07-27 | П5b-fu | — | api + media-service | — | таблицы сигнатур UK и media разошлись: webp/heic недостижимы, .mov трактуется по-разному |
 | `REFACTOR-133` | P3 | decision | verified-2026-07-27 | П5b-fu | — | — | — | пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API |
-| `AUD5-DEAD-6` | P3 | doc-closed | plan-2026-07-26 | П7 | — | — | — | каталога нет в git — закрывается текстом |
 | `AUD5-JUNK-5` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения |
 | `AUD5-PRAC-10` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — |  |
-| `AUD5-DEAD-1` | P2 | actionable | doc-2026-07-21 | П7a | — | — | — |  |
-| `AUD5-DEAD-2` | P2 | actionable | doc-2026-07-21 | П7a | — | — | — |  |
-| `AUD5-DEAD-4` | P2 | actionable | doc-2026-07-21 | П7a | — | — | — |  |
-| `AUD5-DEAD-5` | P2 | actionable | doc-2026-07-21 | П7b | — | — | — |  |
 | `AUD5-PRAC-11` | P2 | actionable | plan-2026-07-26 | П7c | — | — | — | 127 E/F в scripts, много ручного разбора |
-| `AUD5-JUNK-1` | P3 | actionable | doc-2026-07-21 | П7d | — | — | — |  |
 | `REFACTOR-113` | P3 | actionable | doc-2026-06-06 | П7e | — | — | — |  |
 | `AUD5-APIFE-17` | P2 | actionable | plan-2026-07-26 | П8 | — | — | — | остался только LoginPage.tsx:140 (OTP) |
 | `AUD5-CODE-12` | P2 | actionable | plan-2026-07-26 | П8 | — | — | — | остался только user_apartment_selection.py:407 |

@@ -219,8 +219,9 @@ BASELINE: set[tuple[str, str, str]] = {
     # чтения осознанны.
     ('uk_management_bot/services/material_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/request_handler_service.py', 'cmp:request', 'status'),
-    ('uk_management_bot/services/metrics_manager.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/services/recommendation_engine.py', 'cmp:Request', 'status'),
+    # П7a (AUD5-DEAD-1/DEAD-2, 2026-07-27): записи `metrics_manager.py` и
+    # `recommendation_engine.py` убраны — сырые чтения жили в методах, до
+    # которых не было ни одного вызова; вместе с методами исчезли и они.
     # PR-29.2 (ARCH-01): ORM resident/executor-хендлера заявок вынесен сюда из
     # handlers/requests.py — `Request.status.in_([...])` в list/pagination/pool
     # запросах. Это status-фильтры (NEW/active/archive-наборы), НЕ затрагиваемые
