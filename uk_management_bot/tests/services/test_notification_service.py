@@ -22,6 +22,7 @@ from uk_management_bot.services.notification_service import (
     async_notify_shift_ended,
     NotificationService,
 )
+from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +321,9 @@ class TestSendToChannel:
         ) as mock_settings:
             mock_settings.TELEGRAM_CHANNEL_ID = "-100123456789"
             await send_to_channel(bot, "Hello channel")
-        bot.send_message.assert_called_once_with("-100123456789", "Hello channel")
+        bot.send_message.assert_called_once_with(
+            "-100123456789", "Hello channel", request_timeout=SEND_TIMEOUT
+        )
 
     @pytest.mark.asyncio
     async def test_skips_when_no_channel_id(self):
@@ -348,7 +351,10 @@ class TestSendToUser:
     async def test_sends_to_user_telegram_id(self):
         bot = AsyncMock()
         await send_to_user(bot, 12345, "Hello user")
-        bot.send_message.assert_called_once_with(12345, "Hello user")
+        # AUD3-09: рассылочный путь несёт свой per-call предел.
+        bot.send_message.assert_called_once_with(
+            12345, "Hello user", request_timeout=SEND_TIMEOUT
+        )
 
     @pytest.mark.asyncio
     async def test_does_not_raise_on_bot_exception(self):
@@ -1048,7 +1054,8 @@ class TestSharedBotRegistry:
         from uk_management_bot.services import notification_service as ns
         ns.set_shared_bot(None)
         try:
-            with patch("aiogram.Bot", return_value="lazy-bot") as MockBot:
+            # Ленивый fallback идёт через единственную фабрику ботов.
+            with patch.object(ns, "build_bot", return_value="lazy-bot") as MockBot:
                 got = ns._get_shared_bot()
             assert got == "lazy-bot"
             MockBot.assert_called_once()

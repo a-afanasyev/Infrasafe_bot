@@ -10,6 +10,11 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.telegram_client import (
+    SEND_TIMEOUT,
+    UPLOAD_TIMEOUT,
+    build_bot,
+)
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -98,7 +103,7 @@ async def send_to_channel(bot, text: str) -> None:
         channel_id = _resolve_channel_id()
         if not channel_id:
             return
-        await bot.send_message(channel_id, text)
+        await bot.send_message(channel_id, text, request_timeout=SEND_TIMEOUT)
     except Exception as e:
         logger.warning(f"Не удалось отправить сообщение в канал: {e}")
 
@@ -108,7 +113,7 @@ async def send_to_user(bot, user_telegram_id: int, text: str) -> bool:
     False при ошибке (Telegram 403/400, network) — BUG-BOT-036: caller'ы должны
     различать фактическую доставку и проглоченный сбой."""
     try:
-        await bot.send_message(user_telegram_id, text)
+        await bot.send_message(user_telegram_id, text, request_timeout=SEND_TIMEOUT)
         return True
     except Exception as e:
         logger.warning(f"Не удалось отправить сообщение пользователю {user_telegram_id}: {e}")
@@ -229,8 +234,9 @@ def _get_shared_bot():
     """
     global _shared_bot
     if _shared_bot is None:
-        from aiogram import Bot
-        _shared_bot = Bot(token=settings.BOT_TOKEN)
+        # html=False сохраняет прежнее поведение fallback'а: его получатели
+        # (``send_to_user``) шлют сырой текст — см. utils/telegram_client.
+        _shared_bot = build_bot(settings.BOT_TOKEN, html=False)
     return _shared_bot
 
 
@@ -281,7 +287,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление о запросе информации отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -310,7 +316,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об одобрении верификации отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -339,7 +345,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об отклонении верификации отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -371,7 +377,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об одобрении документа отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -409,7 +415,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об отклонении документа отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -445,7 +451,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление о предоставлении прав доступа отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -481,7 +487,7 @@ class NotificationService:
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message)
+            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об отзыве прав доступа отправлено пользователю {user_id}")
                 
         except Exception as e:
@@ -779,14 +785,23 @@ async def deliver_feedback_to_managers(bot, *, telegram_ids, text: str, photo=No
     for chat_id in targets:
         try:
             if photo is None:
-                await bot.send_message(chat_id, text, parse_mode="HTML")
+                await bot.send_message(
+                    chat_id, text, parse_mode="HTML", request_timeout=SEND_TIMEOUT
+                )
             else:
                 if isinstance(photo, (bytes, bytearray)):
                     from aiogram.types import BufferedInputFile
                     media = BufferedInputFile(bytes(photo), filename="feedback.jpg")
                 else:
                     media = photo  # уже telegram file_id (str)
-                msg = await bot.send_photo(chat_id, media, caption=text, parse_mode="HTML")
+                # Загрузка байтов легитимно дольше текста — свой профиль.
+                msg = await bot.send_photo(
+                    chat_id,
+                    media,
+                    caption=text,
+                    parse_mode="HTML",
+                    request_timeout=UPLOAD_TIMEOUT,
+                )
                 fid = msg.photo[-1].file_id if getattr(msg, "photo", None) else None
                 captured = captured or fid
                 # После первой загрузки байтов переключаемся на file_id, чтобы
@@ -803,7 +818,9 @@ async def send_feedback_reply_to_user(bot, *, telegram_id: int, reply_text: str,
     try:
         import html
         body = get_text("feedback.reply_to_user", language=lang, reply=html.escape(reply_text))
-        await bot.send_message(telegram_id, body, parse_mode="HTML")
+        await bot.send_message(
+            telegram_id, body, parse_mode="HTML", request_timeout=SEND_TIMEOUT
+        )
     except Exception as e:
         logger.warning(f"Не удалось отправить ответ на обращение пользователю {telegram_id}: {e}")
 

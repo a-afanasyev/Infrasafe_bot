@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.telegram_client import SEND_TIMEOUT, build_bot
 
 # Sentry error tracking (optional — only if SENTRY_DSN is configured)
 if settings.SENTRY_DSN:
@@ -144,7 +145,9 @@ async def send_startup_notification(bot: Bot):
         if settings.ADMIN_USER_IDS:
             for admin_id in settings.ADMIN_USER_IDS:
                 try:
-                    await bot.send_message(admin_id, startup_message)
+                    await bot.send_message(
+                        admin_id, startup_message, request_timeout=SEND_TIMEOUT
+                    )
                     logger.info(f"Уведомление о запуске отправлено администратору {admin_id}")
                 except Exception as e:
                     logger.warning(f"Не удалось отправить уведомление администратору {admin_id}: {e}")
@@ -183,13 +186,8 @@ async def main():
 
     # Инициализируем бота и диспетчер
     # ВАЖНО: parse_mode="HTML" позволяет использовать HTML теги (<b>, <i>, <code> и т.д.)
-    from aiogram.client.default import DefaultBotProperties
-    from aiogram.enums import ParseMode
-
-    bot = Bot(
-        token=settings.BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-    )
+    # AUD3-09: сессия с явным таймаутом — см. utils/telegram_client.
+    bot = build_bot(settings.BOT_TOKEN)
 
     # COD-03: регистрируем ЕДИНЫЙ диспетчерский бот как shared-bot для всех
     # notification-путей (планировщик, notify_user) → нет второго aiogram Bot
