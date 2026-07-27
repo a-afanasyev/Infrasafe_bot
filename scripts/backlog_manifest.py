@@ -181,7 +181,6 @@ ASSIGNMENT: dict[str, dict] = {
     # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
     # ── П9
-    "AUD5-APIFE-15": A(pkg="П9a", status="actionable", method="doc-2026-07-21"),
     "AUD5-JUNK-2": A(pkg="П9b", status="decision", method="doc-2026-07-21",
                      note="channels.json — решение владельца"),
     # ── П10: security-программа
