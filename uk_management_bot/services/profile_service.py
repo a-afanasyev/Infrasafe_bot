@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.address_helpers import localize_address
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,9 @@ class ProfileService:
                     if ua.status == 'approved' and ua.apartment:
                         apartment_info = {
                             'id': ua.apartment.id,
-                            'address': ua.apartment.full_address if hasattr(ua.apartment, 'full_address') else f"Квартира {ua.apartment.apartment_number}",
+                            # FS-11: канон (RU) — локализуется в format_profile_text,
+                            # где известен язык читателя. Данные языка не знают.
+                            'address': ua.apartment.full_address,
                             'is_primary': ua.is_primary,
                             'is_owner': ua.is_owner
                         }
@@ -212,7 +215,8 @@ class ProfileService:
             for apt in apartments:
                 primary_marker = " ⭐" if apt.get('is_primary') else ""
                 owner_marker = f" ({get_text('profile.owner', language=language)})" if apt.get('is_owner') else ""
-                text_parts.append(f"  {apt['address']}{primary_marker}{owner_marker}")
+                address = localize_address(apt['address'], language)
+            text_parts.append(f"  {address}{primary_marker}{owner_marker}")
             logger.info(f"Форматирование адресов квартир: {len(apartments)} квартир")
         else:
             text_parts.append(f"  {get_text('profile.no_addresses', language=language)}")

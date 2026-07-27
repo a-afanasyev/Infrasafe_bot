@@ -29,6 +29,7 @@ from uk_management_bot.states.user_verification import UserVerificationStates
 from uk_management_bot.database.models.user_verification import (
     VerificationStatus
 )
+from uk_management_bot.utils.address_helpers import apartment_address
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
@@ -127,7 +128,7 @@ async def show_user_verification(callback: CallbackQuery, db: Session, roles: li
                     apartment = ua.apartment
                     primary_marker = " ⭐" if ua.is_primary else ""
                     owner_marker = " (" + get_text("user_verification.handlers.owner", language=lang) + ")" if ua.is_owner else ""
-                    address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("user_verification.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
+                    address = apartment_address(apartment, lang)
                     user_info += f"• {address}{primary_marker}{owner_marker}\n"
             else:
                 user_info += "\n• " + get_text("user_verification.handlers.addresses_pending", language=lang) + "\n"

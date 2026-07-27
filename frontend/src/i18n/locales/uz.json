@@ -656,7 +656,10 @@
     "error": "Noto'g'ri hisob ma'lumotlari",
     "telegramError": "Hisob topilmadi yoki tasdiqlanmagan",
     "loginError": "Kirish xatosi",
-    "or": "yoki"
+    "or": "yoki",
+    "otpInvalid": "Noto'g'ri kod",
+    "otpResent": "Kod qayta yuborildi",
+    "otpResendFailed": "Kodni yuborib bo'lmadi"
   },
   "register": {
     "title": "Aholini ro'yxatdan o'tkazish",
@@ -844,7 +847,6 @@
   "kanban": {
     "createByCall": "Qo'ng'iroq orqali yaratish",
     "emptyColumn": "Arizalar yo'q",
-    "truncatedColumn": "{{total}} dan {{shown}} tasi ko'rsatilgan",
     "confirmed": "Tasdiqlangan",
     "onShift": "Smenada",
     "transitionTo": "\"{{status}}\" ga o'tkazish",

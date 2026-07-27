@@ -177,12 +177,9 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",
                      note="локальные venv/db/png — только пофайлово с подтверждения"),
     "AUD5-PRAC-10": A(pkg="П7", status="no-pr", method="plan-2026-07-26"),
+    # П8 закрыт целиком 2026-07-27: `AUD5-CODE-12` (язык каждого админа),
+    # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
-    "AUD5-CODE-12": A(pkg="П8", status="actionable", method="plan-2026-07-26",
-                      note="остался только user_apartment_selection.py:407"),
-    "FS-11": A(pkg="П8", status="actionable", method="doc-2026-07-14"),
-    "AUD5-APIFE-17": A(pkg="П8", status="actionable", method="plan-2026-07-26",
-                       note="остался только LoginPage.tsx:140 (OTP)"),
     # ── П9
     "AUD5-APIFE-15": A(pkg="П9a", status="actionable", method="doc-2026-07-21"),
     "AUD5-JUNK-2": A(pkg="П9b", status="decision", method="doc-2026-07-21",

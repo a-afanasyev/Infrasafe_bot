@@ -26,20 +26,37 @@ function makeQueryClient() {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- тест-утилита, не рантайм-компонент
-function AllProviders({ children }: { children: ReactNode }) {
+function AllProviders({
+  children,
+  routerEntries,
+}: {
+  children: ReactNode
+  routerEntries?: string[]
+}) {
   // Fresh QueryClient per mount so cache never leaks between tests.
   const queryClient = makeQueryClient()
   return (
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={testI18n}>
-        <MemoryRouter>{children}</MemoryRouter>
+        <MemoryRouter initialEntries={routerEntries}>{children}</MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>
   )
 }
 
-function customRender(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
-  return render(ui, { wrapper: AllProviders, ...options })
+// `routerEntries` нужен там, где проверяется НАВИГАЦИЯ: без стартового URL с
+// query-параметром нельзя воспроизвести deep-link (`/login?next=…`), а без
+// маршрутов — увидеть, куда именно увело.
+type CustomRenderOptions = Omit<RenderOptions, 'wrapper'> & { routerEntries?: string[] }
+
+function customRender(ui: ReactElement, options?: CustomRenderOptions) {
+  const { routerEntries, ...rest } = options ?? {}
+  return render(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <AllProviders routerEntries={routerEntries}>{children}</AllProviders>
+    ),
+    ...rest,
+  })
 }
 
 function customRenderHook<R>(callback: () => R) {

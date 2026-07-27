@@ -20,6 +20,8 @@ from uk_management_bot.keyboards.address_management import (
     get_user_apartment_selection_keyboard,
     get_confirmation_keyboard
 )
+from uk_management_bot.utils.address_helpers import apartment_address
+from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
@@ -301,7 +303,7 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, 
 
             # Получаем данные для уведомления
             apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
-            full_address = apartment.full_address if hasattr(apartment, 'full_address') else get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
+            full_address = apartment_address(apartment, lang)
 
             await callback.message.edit_text(
                 get_text("user_apt_selection.handlers.request_sent_success", language=lang).format(address=full_address)
@@ -316,7 +318,10 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, 
             await send_apartment_request_notification(
                 user_apartment_id=user_apartment.id,
                 user_id=user.telegram_id,  # ИСПРАВЛЕНО: используем user.telegram_id для Telegram API
-                apartment_address=full_address,
+                # AUD5-CODE-12: передаём ID, а не готовую строку. Уведомление
+                # читает ДРУГОЙ человек, и адрес в нём должен быть на его языке —
+                # значит и достаёт, и локализует его сама функция.
+                apartment_id=apartment_id,
                 bot=callback.bot
             )
 
@@ -379,7 +384,7 @@ async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext, l
 async def send_apartment_request_notification(
     user_apartment_id: int,
     user_id: int,
-    apartment_address: str,
+    apartment_id: int,
     bot=None
 ):
     """
@@ -388,12 +393,14 @@ async def send_apartment_request_notification(
     Args:
         user_apartment_id: ID записи UserApartment
         user_id: Telegram ID пользователя
-        apartment_address: Полный адрес квартиры
+        apartment_id: ID квартиры — адрес достаётся и локализуется здесь, под
+            язык каждого администратора (получатель — не заявитель)
     """
     try:
         from uk_management_bot.config.settings import settings
         from uk_management_bot.database.session import SessionLocal
         from uk_management_bot.database.models import User
+        from uk_management_bot.database.models.apartment import Apartment
         from sqlalchemy import select
 
         if not settings.ADMIN_USER_IDS:
@@ -416,16 +423,37 @@ async def send_apartment_request_notification(
 
             username = f"@{user.username}" if user.username else "N/A"
 
-            notification_text = get_text("user_apt_selection.handlers.admin_new_apartment_request", language='ru').format(
-                user_name=user_name, username=username,
-                telegram_id=user.telegram_id, apartment_address=apartment_address
-            )
+            apartment = db.get(Apartment, apartment_id)
 
-            # bot передаётся как параметр
+            # AUD5-CODE-12: язык РАЗНЫЙ у разных админов — раньше здесь стоял
+            # хардкод `language='ru'`, и UZ-администратор получал русский экран.
+            # Один запрос на всех получателей вместо запроса на каждого.
+            admin_languages = {
+                row[0]: row[1]
+                for row in db.execute(
+                    select(User.telegram_id, User.language).where(
+                        User.telegram_id.in_(settings.ADMIN_USER_IDS)
+                    )
+                ).all()
+            }
 
             for admin_id in settings.ADMIN_USER_IDS:
+                admin_lang = admin_languages.get(admin_id) or "ru"
+                notification_text = get_text(
+                    "user_apt_selection.handlers.admin_new_apartment_request",
+                    language=admin_lang,
+                ).format(
+                    user_name=user_name, username=username,
+                    telegram_id=user.telegram_id,
+                    apartment_address=(
+                        apartment_address(apartment, admin_lang) if apartment else "—"
+                    ),
+                )
                 try:
-                    await bot.send_message(admin_id, notification_text)
+                    # AUD3-09: цикл по получателям — per-call предел.
+                    await bot.send_message(
+                        admin_id, notification_text, request_timeout=SEND_TIMEOUT
+                    )
                     logger.info(f"Уведомление о заявке {user_apartment_id} отправлено админу {admin_id}")
                 except Exception as e:
                     logger.warning(f"Не удалось отправить уведомление админу {admin_id}: {e}")
