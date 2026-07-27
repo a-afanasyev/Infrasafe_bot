@@ -35,14 +35,23 @@ def effective_shift_time():
     return func.coalesce(Shift.planned_start_time, Shift.start_time)
 
 
-def _on_shift_filter(user_id: int, now: datetime):
-    """Общее условие активной смены в момент `now` (для sync и async)."""
+def on_shift_window(now: datetime):
+    """«Смена активна в момент `now`» БЕЗ привязки к исполнителю.
+
+    Вынесено отдельно, чтобы вопрос «кто сейчас на смене» решался ОДНИМ
+    запросом. Раньше на него отвечали циклом `is_on_shift_now_sync` по каждому
+    пользователю — то же условие, но N запросов (WR-05).
+    """
     return (
-        (Shift.user_id == user_id)
-        & (Shift.status == SHIFT_STATUS_ACTIVE)
+        (Shift.status == SHIFT_STATUS_ACTIVE)
         & (Shift.start_time <= now)
         & or_(Shift.end_time.is_(None), Shift.end_time >= now)
     )
+
+
+def _on_shift_filter(user_id: int, now: datetime):
+    """Общее условие активной смены в момент `now` (для sync и async)."""
+    return (Shift.user_id == user_id) & on_shift_window(now)
 
 
 def is_on_shift_now_sync(db: Session, user_id: int,

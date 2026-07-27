@@ -19,6 +19,7 @@ update_status_by_actor, метрики). Resident/executor-view-запросы �
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 from sqlalchemy import case, false, or_
@@ -381,6 +382,35 @@ class RequestHandlerService:
 
     def list_approved_users(self) -> List[User]:
         return self.db.query(User).filter(User.status == "approved").all()
+
+    def list_on_shift_notify_candidates(self, now=None) -> List[User]:
+        """Approved-пользователи, у которых СЕЙЧАС активная смена.
+
+        WR-05: рассылка «заявку взял другой» раньше тянула ВСЕХ approved и
+        фильтровала циклом, дёргая `is_on_shift_now_sync` на каждого — то есть
+        полный скан плюс N запросов. Оба условия выражаются в SQL и уезжают в
+        один запрос.
+
+        Роль и специализация НАМЕРЕННО остаются на вызывающем: они лежат в
+        строковых полях (`roles` — JSON-строка, `specialization` — список
+        через разделитель), и фильтр `LIKE` по ним отличался бы от канон-
+        парсеров (`parse_roles_safe`, `parse_specializations`) на кривых
+        данных — тихо теряя получателей. Смена уже сужает выборку до единиц.
+
+        `telegram_id` в SQL не проверяется: колонка NOT NULL, такой фильтр был
+        бы недостижимой веткой. Прежний guard `if not ex.telegram_id` остался
+        у вызывающего — он ловит falsy-значение (0), а не NULL.
+        """
+        from uk_management_bot.utils.shifts import on_shift_window
+
+        now = now or datetime.now()
+        return (
+            self.db.query(User)
+            .join(Shift, Shift.user_id == User.id)
+            .filter(User.status == "approved", on_shift_window(now))
+            .distinct()
+            .all()
+        )
 
 
 # ── Складской учёт: guard и атомарное списание для бот-хендлера ──────
