@@ -31,6 +31,7 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from access_control.services.event_broadcaster import get_broker
 from uk_management_bot.api.auth.service import verify_access_token
+from uk_management_bot.api.ws.router import _origin_allowed
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 router = APIRouter()
@@ -108,6 +109,17 @@ async def _safe_close(websocket: WebSocket, code: int = 1000) -> None:
 @router.websocket("/ws/v1/access/security")
 async def ws_security(websocket: WebSocket) -> None:
     """WS-панель охраны: аутентификация (§9.6) + live-поток событий (§15.13)."""
+    # PENT-F05: чужой Origin отклоняем ДО accept, тем же правилом, что и на
+    # WS дашборда (`uk_management_bot.api.ws.router._origin_allowed`) — здесь
+    # такая же cookie-аутентификация, и расходиться этим двум гейтам нельзя.
+    if not _origin_allowed(websocket):
+        logger.warning(
+            "WS охраны отклонён по Origin %r (host %r)",
+            websocket.headers.get("origin"), websocket.headers.get("host"),
+        )
+        await _safe_close(websocket, code=WS_POLICY_VIOLATION)
+        return
+
     # §9.6: JWT в query string запрещён — отклоняем ДО accept.
     if _has_query_token(websocket):
         await _safe_close(websocket, code=WS_POLICY_VIOLATION)

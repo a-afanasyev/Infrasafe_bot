@@ -11,7 +11,8 @@
     ├───────────────────────────────┼──────────────────┼────────────────────────┤
     │ cookie/query-токен есть, но   │ HTTP 403,        │ onerror + onclose 1006,│
     │ невалиден / без exp / роль не │ апгрейда нет     │ onopen НЕ вызывался    │
-    │ manager / БД отказала         │                  │                        │
+    │ manager / БД отказала /       │                  │                        │
+    │ чужой Origin (PENT-F05)       │                  │                        │
     ├───────────────────────────────┼──────────────────┼────────────────────────┤
     │ first-message auth не прошёл  │ close-кадр 1008  │ onclose 1008           │
     │ (нет токена за 10 с, мусор,   │                  │                        │
@@ -45,9 +46,11 @@ import json as _json
 import logging
 import time
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from uk_management_bot.api.auth.service import verify_access_token
+from uk_management_bot.config.settings import settings
 from uk_management_bot.services.redis_pubsub import (
     subscribe_to_requests, subscribe_to_shifts, subscribe_to_buildings,
 )
@@ -157,6 +160,37 @@ async def _safe_close(websocket: WebSocket) -> None:
         pass  # socket already closed by the peer
 
 
+def _origin_allowed(websocket: WebSocket) -> bool:
+    """PENT-F05: Origin-гейт ДО `accept()`.
+
+    Браузер НЕ применяет CORS к WebSocket: страница злоумышленника может
+    открыть сокет к нашему домену, и браузер приложит куки жертвы. Куки здесь
+    `SameSite=Strict`, что этот вектор уже закрывает, — Origin-гейт стоит
+    вторым рубежом и страхует от тихой регрессии настройки куки (переключение
+    на `lax`/`none` ради какого-нибудь кросс-поддоменного сценария не должно
+    молча открывать WS всему интернету).
+
+    Правило:
+      * заголовка нет → пускаем. Его не шлют не-браузерные клиенты (бот, CLI,
+        тесты), а у не-браузерного атакующего нет и куки жертвы — подделка
+        Origin ему ничего не даёт;
+      * есть → должен совпасть с origin'ом самого запроса (SPA живёт на том же
+        домене, что и API: edge отдаёт `Host: profk.uz`) либо входить в
+        `CORS_ORIGINS` (кросс-origin исключения вроде web.telegram.org).
+
+    Именно «свой origin», а не только `CORS_ORIGINS`: список CORS перечисляет
+    ИСКЛЮЧЕНИЯ, и `profk.uz` в нём нет — SPA ходит same-origin. Гейт только на
+    нём отрезал бы живой дашборд profk.
+    """
+    origin = websocket.headers.get("origin")
+    if not origin:
+        return True
+    if origin in settings.CORS_ORIGINS:
+        return True
+    host = websocket.headers.get("host")
+    return bool(host) and urlsplit(origin).netloc == host
+
+
 async def authenticate_ws_manager(
     websocket: WebSocket, query_token: Optional[str]
 ) -> Optional[dict]:
@@ -169,6 +203,14 @@ async def authenticate_ws_manager(
       3. ``?token=`` query param (DEPRECATED — SEC-03, logs a warning);
       4. first WS message (secure path for cookieless/token clients).
     """
+    if not _origin_allowed(websocket):
+        logger.warning(
+            "WS отклонён по Origin %r (host %r)",
+            websocket.headers.get("origin"), websocket.headers.get("host"),
+        )
+        await _safe_close(websocket)
+        return None
+
     token = websocket.cookies.get("uk_access") or websocket.cookies.get("access_token")
     via_query = False
     if not token and query_token:

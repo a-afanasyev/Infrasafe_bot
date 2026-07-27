@@ -26,6 +26,11 @@ from uk_management_bot.api.ws import router as ws
 
 class FakeWS:
     def __init__(self, cookies=None, messages=None, hang=False):
+        # PENT-F05: у настоящего WebSocket заголовки есть ВСЕГДА. Дубль без
+        # `headers` ронял Origin-гейт на AttributeError, то есть моделировал
+        # объект, которого не бывает. Пустые заголовки = не-браузерный
+        # клиент — валидный сценарий, гейт его пропускает.
+        self.headers: dict = {}
         self.cookies = cookies or {}
         self._messages = list(messages or [])
         self._hang = hang
