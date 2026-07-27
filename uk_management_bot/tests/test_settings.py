@@ -58,7 +58,9 @@ def _reload_prod(monkeypatch: pytest.MonkeyPatch, admin_password: str):
     monkeypatch.setenv("DEBUG", "False")
     monkeypatch.setenv("BOT_TOKEN", "123:test-bot-token")
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@postgres:5432/db")
-    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    # SEC-124: в прод-режиме URI обязан нести credentials — прежнее значение
+    # было беспарольным, ровно тот случай, который гейт и ловит.
+    monkeypatch.setenv("REDIS_URL", "redis://:test-redis-password@redis:6379/0")
     monkeypatch.setenv("INVITE_SECRET", "invite-secret-aaaaaaaaaaaaaaaa")
     # AUD5-SEC-NEW-3: в прод-режиме секрет короче 32 символов больше не
     # принимается — прежнее значение было 31-символьным.
@@ -103,7 +105,9 @@ def _reload_prod_outbox(monkeypatch: pytest.MonkeyPatch, source_instance: str | 
     monkeypatch.setenv("DEBUG", "False")
     monkeypatch.setenv("BOT_TOKEN", "123:test-bot-token")
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@postgres:5432/db")
-    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    # SEC-124: в прод-режиме URI обязан нести credentials — прежнее значение
+    # было беспарольным, ровно тот случай, который гейт и ловит.
+    monkeypatch.setenv("REDIS_URL", "redis://:test-redis-password@redis:6379/0")
     monkeypatch.setenv("INVITE_SECRET", "invite-secret-aaaaaaaaaaaaaaaa")
     # AUD5-SEC-NEW-3: в прод-режиме секрет короче 32 символов больше не
     # принимается — прежнее значение было 31-символьным.

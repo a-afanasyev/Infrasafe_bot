@@ -191,8 +191,6 @@ ASSIGNMENT: dict[str, dict] = {
                  services="edge/.env обоих продов",
                  note="тот же остаток, что у PENT-F11: код готов, RATE_LIMIT_TRUSTED_PROXIES не выставлен"),
     "AUD5-SEC-NEW-4": A(pkg="П10", status="actionable", method="to-verify"),
-    "SEC-124": A(pkg="П10", status="actionable", method="doc-2026-07-21",
-                 note="prod fail-fast vs dev без пароля — реализации разные"),
     "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="doc-2026-07-21"),
     "PENT-F05": A(pkg="П10", status="actionable", method="plan-2026-07-26",
                   note="остаток: Origin до accept() + edge limit_req с burst-тестом"),

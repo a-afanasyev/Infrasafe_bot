@@ -31,7 +31,8 @@ def _prod_env(*, jwt_secret):
         "DEBUG": "False",
         "BOT_TOKEN": "123:test-bot-token",
         "DATABASE_URL": "postgresql://u:p@postgres:5432/db",
-        "REDIS_URL": "redis://redis:6379/0",
+        # SEC-124: прод-режим требует credentials в URI.
+        "REDIS_URL": "redis://:test-redis-password@redis:6379/0",
         "INVITE_SECRET": "invite-secret-aaaaaaaaaaaaaaaa",
         "ADMIN_PASSWORD": "Abc123Xyz789Qwer",  # strong, 16 chars
         "OUTBOX_SOURCE_INSTANCE": "profk",  # ARCH-010: обязателен при DEBUG=False
