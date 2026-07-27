@@ -6,7 +6,7 @@
 
 **Goal:** Отправлять подписанные HMAC-SHA256 webhook-уведомления о building событиях из UK в InfraSafe.
 
-**Source spec:** `UK-WEBHOOK-SENDER-SERVICE-TZ.md`
+**Source spec:** `docs/integrations/UK-WEBHOOK-SENDER-SERVICE-TZ.md`
 
 **Scope:** Phase 1 — building CRUD webhooks only. Out of scope (Phase 2):
 - Request webhooks (`request.created`, `request.status_changed`) — requires separate router wiring and payload design
@@ -14,7 +14,7 @@
 
 ### Architecture Decision: Outbox vs Redis Pub/Sub transport
 
-ТЗ (`UK-WEBHOOK-SENDER-SERVICE-TZ.md`, sections 2.1, 4.1) задаёт схему `router → Redis Pub/Sub → webhook-sender → InfraSafe`. План **сознательно** заменяет Redis-транспорт на **Transactional Outbox** по следующим причинам:
+ТЗ (`docs/integrations/UK-WEBHOOK-SENDER-SERVICE-TZ.md`, sections 2.1, 4.1) задаёт схему `router → Redis Pub/Sub → webhook-sender → InfraSafe`. План **сознательно** заменяет Redis-транспорт на **Transactional Outbox** по следующим причинам:
 
 1. **Гарантия доставки**: Redis Pub/Sub — fire-and-forget. При рестарте webhook-sender события теряются. Outbox хранит pending записи в PostgreSQL — ничего не теряется.
 2. **Атомарность**: Outbox-запись создаётся в той же транзакции что и building CRUD. Redis publish — отдельная операция вне транзакции.
@@ -22,7 +22,7 @@
 
 Redis Pub/Sub `buildings:updates` **остаётся** — но только для WebSocket push во фронтенд (как `requests:updates` и `shifts:updates`).
 
-> **TODO:** После реализации — обновить ТЗ (`UK-WEBHOOK-SENDER-SERVICE-TZ.md`), чтобы описание архитектуры соответствовало фактической реализации.
+> **TODO:** После реализации — обновить ТЗ (`docs/integrations/UK-WEBHOOK-SENDER-SERVICE-TZ.md`), чтобы описание архитектуры соответствовало фактической реализации.
 
 ### Decision: event_id при retry
 
@@ -460,7 +460,7 @@ async def process_outbox() -> None:
     Poll webhook_outbox for pending records, send them, mark as sent/failed.
     Called by lifespan background task every 10 seconds.
 
-    Retry logic per spec (UK-WEBHOOK-SENDER-SERVICE-TZ.md section 8.1):
+    Retry logic per spec (docs/integrations/UK-WEBHOOK-SENDER-SERVICE-TZ.md section 8.1):
     - Exponential backoff: 2s, 4s, 8s between attempts
     - HTTP 429: respect Retry-After header, default 60s
     - HTTP 400/401/403/503: permanent failure, don't retry

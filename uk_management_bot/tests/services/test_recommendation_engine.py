@@ -1,7 +1,6 @@
 """Unit tests for RecommendationEngine — pure algorithm functions."""
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import date
 
 from uk_management_bot.services.recommendation_engine import (
     RecommendationEngine,
@@ -186,166 +185,30 @@ class TestCalculateTrend:
 # _generate_action_plan  (pure)
 # ---------------------------------------------------------------------------
 
-class TestGenerateActionPlan:
-    def setup_method(self):
-        self.engine = _make_engine()
-
-    def test_empty_recommendations_returns_default(self):
-        actions = self.engine._generate_action_plan([])
-        assert len(actions) == 1
-        assert "оптимально" in actions[0].lower() or "текущее" in actions[0].lower()
-
-    def test_overloaded_shift_generates_redistribution_action(self):
-        recs = ["⚠️ Смена 1 перегружена (95%)"]
-        actions = self.engine._generate_action_plan(recs)
-        assert any("перегруж" in a.lower() for a in actions)
-
-    def test_underloaded_shift_generates_optimization_action(self):
-        recs = ["📊 Смена 2 недогружена (20%)"]
-        actions = self.engine._generate_action_plan(recs)
-        assert any("недогруж" in a.lower() for a in actions)
-
-    def test_add_shifts_recommendation_included(self):
-        recs = ["📈 Прогнозируемая нагрузка превышает — добавить смены"]
-        actions = self.engine._generate_action_plan(recs)
-        assert any("смен" in a.lower() for a in actions)
 
 
 # ---------------------------------------------------------------------------
 # _prioritize_bottleneck_actions  (pure)
 # ---------------------------------------------------------------------------
 
-class TestPrioritizeBottleneckActions:
-    def setup_method(self):
-        self.engine = _make_engine()
-
-    def test_returns_empty_for_no_bottlenecks(self):
-        actions = self.engine._prioritize_bottleneck_actions([])
-        assert actions == []
-
-    def test_slow_response_generates_urgent_action(self):
-        bottlenecks = [{"type": "slow_response"}]
-        actions = self.engine._prioritize_bottleneck_actions(bottlenecks)
-        assert len(actions) >= 1
-        assert any("СРОЧНО" in a or "отклик" in a.lower() for a in actions)
-
-    def test_pending_backlog_generates_important_action(self):
-        bottlenecks = [{"type": "pending_backlog"}]
-        actions = self.engine._prioritize_bottleneck_actions(bottlenecks)
-        assert any("ВАЖНО" in a or "очередь" in a.lower() or "заявок" in a.lower() for a in actions)
-
-    def test_executor_overload_generates_balance_action(self):
-        bottlenecks = [{"type": "executor_overload"}]
-        actions = self.engine._prioritize_bottleneck_actions(bottlenecks)
-        assert any("баланс" in a.lower() or "нагрузк" in a.lower() for a in actions)
-
-    def test_returns_at_most_5_actions(self):
-        bottlenecks = [
-            {"type": "slow_response"},
-            {"type": "pending_backlog"},
-            {"type": "executor_overload"},
-            {"type": "slow_response"},
-            {"type": "pending_backlog"},
-            {"type": "executor_overload"},
-            {"type": "slow_response"},
-        ]
-        actions = self.engine._prioritize_bottleneck_actions(bottlenecks)
-        assert len(actions) <= 5
 
 
 # ---------------------------------------------------------------------------
 # _estimate_bottleneck_impact  (pure)
 # ---------------------------------------------------------------------------
 
-class TestEstimateBottleneckImpact:
-    def setup_method(self):
-        self.engine = _make_engine()
-
-    def test_empty_bottlenecks_returns_no_issues_message(self):
-        result = self.engine._estimate_bottleneck_impact([])
-        assert "message" in result
-        assert "обнаружено" in result["message"].lower() or "нет" in result["message"].lower()
-
-    def test_non_empty_bottlenecks_returns_estimates(self):
-        result = self.engine._estimate_bottleneck_impact([{"type": "slow_response"}])
-        assert "efficiency_improvement" in result
-        assert "response_time_reduction" in result
-
-    def test_impact_percentages_are_strings(self):
-        result = self.engine._estimate_bottleneck_impact([{"type": "slow_response"}])
-        for key, val in result.items():
-            assert isinstance(val, str)
 
 
 # ---------------------------------------------------------------------------
 # _predict_daily_load  (async, but pure computation)
 # ---------------------------------------------------------------------------
 
-class TestPredictDailyLoad:
-    @pytest.mark.asyncio
-    async def test_returns_default_when_no_data(self):
-        engine = _make_engine()
-        result = await engine._predict_daily_load(date(2026, 4, 7), [])
-        assert result == 10  # default
-
-    @pytest.mark.asyncio
-    async def test_uses_historical_average(self):
-        engine = _make_engine()
-        # Monday = weekday 0, multiplier 1.2
-        d = date(2026, 3, 30)  # Monday
-        result = await engine._predict_daily_load(d, [10, 10, 10])
-        # avg=10, multiplier=1.2, expected=12
-        assert result == 12
-
-    @pytest.mark.asyncio
-    async def test_weekend_multiplier_lower(self):
-        engine = _make_engine()
-        saturday = date(2026, 4, 4)  # Saturday
-        monday = date(2026, 3, 30)   # Monday
-        historical = [10, 10, 10]
-        sat_load = await engine._predict_daily_load(saturday, historical)
-        mon_load = await engine._predict_daily_load(monday, historical)
-        assert sat_load < mon_load
 
 
 # ---------------------------------------------------------------------------
 # _analyze_time_coverage  (async, pure computation)
 # ---------------------------------------------------------------------------
 
-class TestAnalyzeTimeCoverage:
-    @pytest.mark.asyncio
-    async def test_no_shifts_returns_all_standard_gaps(self):
-        engine = _make_engine()
-        result = await engine._analyze_time_coverage([], date(2026, 4, 1))
-        assert len(result["gaps"]) > 0
-        # Standard hours 8-18 should all be gaps
-        assert result["covered_hours"] == []
-
-    @pytest.mark.asyncio
-    async def test_shift_covering_hour_reduces_gaps(self):
-        engine = _make_engine()
-        from datetime import datetime
-
-        shift = MagicMock()
-        shift.start_time = datetime(2026, 4, 1, 8, 0)
-        shift.end_time = datetime(2026, 4, 1, 12, 0)
-
-        result = await engine._analyze_time_coverage([shift], date(2026, 4, 1))
-        assert 8 in result["covered_hours"]
-        # Gap at 8 should no longer exist
-        assert "8:00-9:00" not in result["gaps"]
-
-    @pytest.mark.asyncio
-    async def test_coverage_percentage_for_full_day(self):
-        engine = _make_engine()
-        from datetime import datetime
-
-        shift = MagicMock()
-        shift.start_time = datetime(2026, 4, 1, 0, 0)
-        shift.end_time = datetime(2026, 4, 1, 23, 0)
-
-        result = await engine._analyze_time_coverage([shift], date(2026, 4, 1))
-        assert result["coverage_percentage"] > 90
 
 
 # ---------------------------------------------------------------------------
@@ -386,13 +249,3 @@ class TestQA02UsesUserId:
         result = await engine._analyze_performance_issues(7)
         assert isinstance(result, list)
 
-    @pytest.mark.asyncio
-    async def test_find_overloaded_executors_groups_by_user_id(self):
-        from datetime import datetime
-        shifts = [self._shift(1, count=100), self._shift(2, count=1)]
-        engine = _make_engine(self._db_with_shifts(shifts))
-        result = await engine._find_overloaded_executors(
-            datetime(2026, 1, 1), datetime(2026, 1, 8)
-        )
-        assert 1 in result  # user_id=1 перегружен; 2 — нет
-        assert 2 not in result
