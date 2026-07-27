@@ -8,7 +8,6 @@ import sqlite3
 import psycopg2
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List
 
 # Настройка логирования
@@ -153,14 +152,14 @@ def migrate_requests(sqlite_conn, postgres_conn):
             if media_files and isinstance(media_files, str):
                 try:
                     media_files = json.loads(media_files)
-                except:
+                except (ValueError, TypeError):
                     media_files = []
             
             completion_media = request.get('completion_media')
             if completion_media and isinstance(completion_media, str):
                 try:
                     completion_media = json.loads(completion_media)
-                except:
+                except (ValueError, TypeError):
                     completion_media = []
             
             cursor.execute("""
@@ -326,7 +325,7 @@ def migrate_audit_logs(sqlite_conn, postgres_conn):
             if details and isinstance(details, str):
                 try:
                     details = json.loads(details)
-                except:
+                except (ValueError, TypeError):
                     details = None
             
             cursor.execute("""

@@ -9,7 +9,6 @@
 """
 
 import sys
-import os
 import json
 from pathlib import Path
 
@@ -46,15 +45,15 @@ def fix_user_permissions(telegram_id: int):
         
         # Устанавливаем активную роль
         user.active_role = "admin"
-        print(f"✅ Активная роль установлена: admin")
+        print("✅ Активная роль установлена: admin")
         
         # Устанавливаем статус
         user.status = "approved"
-        print(f"✅ Статус установлен: approved")
+        print("✅ Статус установлен: approved")
         
         # Сохраняем изменения
         db.commit()
-        print(f"✅ Изменения сохранены в базе данных")
+        print("✅ Изменения сохранены в базе данных")
         
         return True
         
@@ -77,7 +76,7 @@ def verify_user_permissions(telegram_id: int):
             print(f"❌ Пользователь {telegram_id} не найден")
             return
         
-        print(f"📋 Информация о пользователе:")
+        print("📋 Информация о пользователе:")
         print(f"   ID: {user.id}")
         print(f"   Имя: {user.first_name} {user.last_name}")
         print(f"   Username: {user.username}")
@@ -126,7 +125,7 @@ def main():
         return
     
     # Проверяем текущие права
-    print(f"\n🔍 Проверка текущих прав...")
+    print("\n🔍 Проверка текущих прав...")
     verify_user_permissions(telegram_id)
     
     # Спрашиваем подтверждение
@@ -140,13 +139,13 @@ def main():
     
     if success:
         # Проверяем результат
-        print(f"\n🔍 Проверка результата...")
+        print("\n🔍 Проверка результата...")
         verify_user_permissions(telegram_id)
         
-        print(f"\n✅ Права пользователя исправлены!")
-        print(f"🔄 Перезапустите бота для применения изменений")
+        print("\n✅ Права пользователя исправлены!")
+        print("🔄 Перезапустите бота для применения изменений")
     else:
-        print(f"\n❌ Не удалось исправить права пользователя")
+        print("\n❌ Не удалось исправить права пользователя")
 
 if __name__ == "__main__":
     main()

@@ -53,7 +53,7 @@ target-version = "py311"
 # отложенным (AUD5-PRAC-11: правки там трогают одноразовые ops-скрипты, и это
 # отдельный разговор).
 # force-exclude makes these apply even when paths are passed explicitly (CI / pre-commit).
-extend-exclude = ["scripts", "docs", "resource-accounting"]
+extend-exclude = ["docs", "resource-accounting"]
 force-exclude = true
 
 [tool.ruff.lint]
@@ -70,3 +70,15 @@ ignore = ["E203", "E501"]
 #   they must stay below it.
 "uk_management_bot/api/main.py" = ["E402"]
 "uk_management_bot/database/init_admin.py" = ["E402"]
+# П7c (AUD5-PRAC-11): `scripts` возвращён в scope. Оставшиеся E402 — не
+# небрежность, а устройство standalone-скриптов: они запускаются вне пакета и
+# обязаны сначала выполнить `sys.path.insert/append(project_root)`, иначе
+# импорт `uk_management_bot.*` не разрешится. Перечислены пофайлово, а не
+# глобом по `scripts/*`: новый скрипт со сползшими импортами должен ловиться
+# гейтом, а не молча наследовать послабление.
+"scripts/apply_verification_migration.py" = ["E402"]
+"scripts/check_and_fix_db.py" = ["E402"]
+"scripts/diagnose_auth_issues.py" = ["E402"]
+"scripts/export_schema.py" = ["E402"]
+"scripts/fix_user_permissions.py" = ["E402"]
+"scripts/test_phase1_tools.py" = ["E402"]

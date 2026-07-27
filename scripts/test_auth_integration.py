@@ -8,13 +8,12 @@ Tests that auth.py handlers properly use get_text() with language detection.
 import sys
 import asyncio
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, MagicMock
+from unittest.mock import Mock
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.language_helpers import get_language_for_user
 
 
 async def test_language_detection():
@@ -29,7 +28,6 @@ async def test_language_detection():
     print()
 
     # Test Russian language detection
-    mock_session = Mock()
     mock_message_ru = Mock()
     mock_message_ru.from_user.language_code = "ru"
     mock_message_ru.from_user.id = 12345

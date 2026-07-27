@@ -4,7 +4,6 @@
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Добавляем пути для импортов
@@ -41,7 +40,7 @@ try:
             if user.roles:
                 try:
                     roles = json.loads(user.roles) if isinstance(user.roles, str) else user.roles
-                except:
+                except (ValueError, TypeError):
                     roles = []
             
             print(f"📋 Парсированные роли: {roles}")
@@ -86,7 +85,7 @@ try:
             print(f"✅ role_mode_middleware результат: {result}")
             
             # Проверяем финальные данные
-            print(f"\n📊 Финальные данные:")
+            print("\n📊 Финальные данные:")
             print(f"user: {data.get('user')}")
             print(f"user_status: {data.get('user_status')}")
             print(f"roles: {data.get('roles')}")

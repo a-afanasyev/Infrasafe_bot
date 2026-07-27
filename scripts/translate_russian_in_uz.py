@@ -9,7 +9,7 @@ import re
 import argparse
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Set
+from typing import Dict, Any, List, Tuple
 import logging
 
 # Попытка импортировать googletrans
@@ -190,7 +190,7 @@ def main():
         print(f"❌ ОШИБКА: {uz_locale_path} не найден")
         return 1
 
-    print(f"📖 Загрузка файлов локализации...")
+    print("📖 Загрузка файлов локализации...")
     with open(ru_locale_path, 'r', encoding='utf-8') as f:
         ru_locale = json.load(f)
 
@@ -198,7 +198,7 @@ def main():
         uz_locale = json.load(f)
 
     # Находим русские значения
-    print(f"🔍 Поиск значений с кириллицей...")
+    print("🔍 Поиск значений с кириллицей...")
     russian_values = find_russian_values(uz_locale, ru_locale)
 
     if not russian_values:

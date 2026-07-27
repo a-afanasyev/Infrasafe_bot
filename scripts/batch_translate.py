@@ -96,7 +96,7 @@ def batch_translate_google(texts: List[str], src: str = 'ru', dest: str = 'uz') 
     """
     if not TRANSLATOR_AVAILABLE:
         logger.error("Google Translator not available")
-        return [f"[ERROR: Translator not available]" for _ in texts]
+        return ["[ERROR: Translator not available]" for _ in texts]
 
     translator = Translator()
     translations = []
@@ -166,7 +166,7 @@ def main():
         print(f"❌ ERROR: {uz_locale_path} not found")
         return 1
 
-    print(f"📖 Loading locale files...")
+    print("📖 Loading locale files...")
     with open(ru_locale_path, 'r', encoding='utf-8') as f:
         ru_locale = json.load(f)
 
@@ -174,11 +174,10 @@ def main():
         uz_locale = json.load(f)
 
     # Flatten locales
-    ru_flat = flatten_dict(ru_locale)
     uz_flat = flatten_dict(uz_locale)
 
     # Find all [TRANSLATE] markers
-    print(f"🔍 Finding [TRANSLATE] markers...")
+    print("🔍 Finding [TRANSLATE] markers...")
     to_translate = find_translate_markers(uz_locale, ru_locale)
 
     if not to_translate:

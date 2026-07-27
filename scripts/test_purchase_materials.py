@@ -4,7 +4,6 @@
 """
 
 import sys
-import os
 import logging
 
 # Добавляем корневую директорию в path для контейнера

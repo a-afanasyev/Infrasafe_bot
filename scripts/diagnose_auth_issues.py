@@ -11,7 +11,6 @@
 """
 
 import sys
-import os
 import json
 from pathlib import Path
 
@@ -55,7 +54,7 @@ def check_user_in_database(telegram_id: int):
 
 def check_user_roles(user: User):
     """Проверить роли пользователя"""
-    print(f"\n🔑 Проверка ролей пользователя...")
+    print("\n🔑 Проверка ролей пользователя...")
     
     try:
         # Проверяем поле roles (JSON)
@@ -90,7 +89,7 @@ def check_user_roles(user: User):
 
 def check_admin_settings():
     """Проверить настройки администраторов"""
-    print(f"\n⚙️ Проверка настроек администраторов...")
+    print("\n⚙️ Проверка настроек администраторов...")
     
     try:
         admin_ids = settings.ADMIN_USER_IDS
@@ -110,7 +109,7 @@ def check_admin_settings():
 
 def check_database_connection():
     """Проверить подключение к базе данных"""
-    print(f"\n🗄️ Проверка подключения к базе данных...")
+    print("\n🗄️ Проверка подключения к базе данных...")
     
     try:
         db = SessionLocal()
@@ -127,7 +126,7 @@ def check_database_connection():
 
 def check_middleware_registration():
     """Проверить регистрацию middleware в main.py"""
-    print(f"\n🔧 Проверка регистрации middleware...")
+    print("\n🔧 Проверка регистрации middleware...")
     
     try:
         main_file = uk_bot_path / "main.py"
@@ -161,7 +160,7 @@ def check_middleware_registration():
 
 def suggest_fixes(user: User, roles_list: list):
     """Предложить исправления"""
-    print(f"\n🛠️ Рекомендации по исправлению:")
+    print("\n🛠️ Рекомендации по исправлению:")
     
     if not user:
         print("1. Создайте пользователя в базе данных")

@@ -10,7 +10,6 @@
 """
 
 import sys
-import os
 
 # Добавляем путь к проекту
 sys.path.insert(0, '/app')
@@ -22,11 +21,6 @@ def test_button_texts_module():
     print("=" * 60)
     
     try:
-        from uk_management_bot.utils.button_texts import (
-            get_create_request_texts,
-            BUTTON_TEXTS,
-            get_button_texts_for_all_languages
-        )
         print("✅ Модуль button_texts импортирован успешно")
         return True
     except Exception as e:
@@ -46,7 +40,7 @@ def test_create_request_texts():
         
         texts = get_create_request_texts()
         
-        print(f"✅ Функция выполнена успешно")
+        print("✅ Функция выполнена успешно")
         print(f"   Поддерживаемые языки: {SUPPORTED_LANGUAGES}")
         print(f"   Загружено текстов: {len(texts)}")
         print(f"   Тексты: {texts}")

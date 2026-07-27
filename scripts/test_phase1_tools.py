@@ -15,7 +15,6 @@ Usage:
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -24,7 +23,6 @@ sys.path.insert(0, str(project_root))
 
 from uk_management_bot.utils.helpers import get_text, _get_russian_plural_key, _get_uzbek_plural_key
 from uk_management_bot.utils.language_helpers import (
-    get_language_from_message,
     validate_language_code,
     get_available_languages,
     format_number_with_locale,
@@ -79,9 +77,9 @@ def test_language_helpers():
 
     # Test language validation
     print("   Testing validate_language_code()...")
-    assert validate_language_code('ru') == True
-    assert validate_language_code('uz') == True
-    assert validate_language_code('en') == False
+    assert validate_language_code('ru')
+    assert validate_language_code('uz')
+    assert not validate_language_code('en')
     print("   ✅ validate_language_code() works")
 
     # Test available languages
@@ -186,7 +184,7 @@ def run_scanner_test():
 
         if result.returncode == 0:
             lines = result.stdout.split('\n')
-            findings_line = [l for l in lines if 'Scan complete' in l]
+            findings_line = [line for line in lines if 'Scan complete' in line]
             if findings_line:
                 print(f"   ✅ Scanner works: {findings_line[0]}")
             else:
