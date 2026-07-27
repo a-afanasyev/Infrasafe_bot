@@ -1092,6 +1092,44 @@ class ShiftAssignmentService:
                     'attempted_executors': attempted,
                 }
 
+            # AUD5-ARCH-7: между выборкой смены и этой записью менеджер мог
+            # назначить исполнителя вручную. API-путь держит строку под
+            # `FOR UPDATE` (`api/shifts/service.get_shift_for_update`), а
+            # планировщик читал `user_id IS NULL` без блокировки и писал
+            # безусловно — ручное назначение молча затиралось системным, без
+            # следа в аудите. Поэтому compare-and-set: перечитываем строку под
+            # блокировкой и пишем, только если она в том же состоянии, в каком
+            # мы её выбрали. `populate_existing()` обязателен — иначе Query
+            # вернёт объект из identity map с прежним (устаревшим) `user_id`.
+            expected_user_id = shift.user_id
+            locked = (
+                self.db.query(Shift)
+                .filter(Shift.id == shift.id)
+                .populate_existing()
+                .with_for_update()
+                .first()
+            )
+            if locked is None or locked.user_id != expected_user_id:
+                self.db.rollback()
+                logger.info(
+                    "Смена %s изменилась во время подбора (было %s, стало %s) — "
+                    "автоназначение отменено",
+                    shift.id, expected_user_id,
+                    None if locked is None else locked.user_id,
+                )
+                return {
+                    'success': False,
+                    'shift_id': shift.id,
+                    'error': 'shift_changed_meanwhile',
+                    'attempted_executor': best_executor.executor_id,
+                    'attempted_executors': attempted,
+                }
+
+            # Дальше работаем с перечитанной строкой: обычно это тот же объект,
+            # что и `shift` (identity map), но если вызывающий передал
+            # отсоединённый объект — правка ушла бы в никуда.
+            shift = locked
+
             # Выполняем назначение
             shift.user_id = best_executor.executor_id
             shift.assigned_at = datetime.now(timezone.utc)

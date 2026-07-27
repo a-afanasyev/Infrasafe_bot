@@ -209,7 +209,6 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
         from uk_management_bot.services.notification_service import _get_shared_bot
         from uk_management_bot.utils.auth_helpers import get_user_roles
         from uk_management_bot.utils.constants import ROLE_EXECUTOR
-        from uk_management_bot.utils.shifts import is_on_shift_now_sync
         from uk_management_bot.utils.specializations import parse_specializations
 
         service = RequestHandlerService(db_session)
@@ -221,14 +220,15 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
         if bot is None:
             return
         claimer_name = claimer.first_name or str(claimer.id)
-        for ex in service.list_approved_users():
+        # WR-05: «approved + на смене + есть telegram_id» считает БД одним
+        # запросом. Роль и специализация — строковые поля, их разбирают
+        # канон-парсеры, поэтому остаются здесь (см. docstring метода).
+        for ex in service.list_on_shift_notify_candidates():
             if ex.id == claimer.id or not ex.telegram_id:
                 continue
             if ROLE_EXECUTOR not in get_user_roles(ex):
                 continue
             if spec not in parse_specializations(ex):
-                continue
-            if not is_on_shift_now_sync(db_session, ex.id):
                 continue
             text = get_text("requests.claimed_by_other_notify",
                             language=(ex.language or "ru")).format(

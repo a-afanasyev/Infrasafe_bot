@@ -58,6 +58,18 @@ def _make_executor(
     return user
 
 
+def _row_unchanged(db, shift):
+    """AUD5-ARCH-7: перед записью сервис перечитывает строку под блокировкой.
+
+    Здесь дубль-БД возвращает ТУ ЖЕ смену — сценарий «строку никто не трогал».
+    Реальная гонка (другое соединение меняет строку) проверяется на настоящей
+    БД в tests/services/test_shift_assign_race.py; мок такое не воспроизводит.
+    """
+    (db.query.return_value.filter.return_value
+       .populate_existing.return_value
+       .with_for_update.return_value.first.return_value) = shift
+
+
 def _make_service():
     """Build service with all dependencies mocked."""
     db = MagicMock()
@@ -516,6 +528,7 @@ class TestAssignSingleShift:
         service.conflict_detector._check_assignment_conflicts = MagicMock(return_value=[])
         db.add = MagicMock()
         db.commit = MagicMock()
+        _row_unchanged(db, shift)
 
         result = service._assign_single_shift(shift, [executor])
 
@@ -591,6 +604,7 @@ class TestAssignSingleShift:
         service.conflict_detector._conflict_to_dict = MagicMock(return_value={})
         db.add = MagicMock()
         db.commit = MagicMock()
+        _row_unchanged(db, shift)
 
         result = service._assign_single_shift(shift, [])
 
@@ -618,6 +632,7 @@ class TestAssignSingleShift:
         )
         db.add = MagicMock()
         db.commit = MagicMock()
+        _row_unchanged(db, shift)
 
         result = service._assign_single_shift(shift, [])
 

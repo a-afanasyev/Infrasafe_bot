@@ -164,9 +164,8 @@ ASSIGNMENT: dict[str, dict] = {
     # (сессия создаётся и закрывается там же), сетевая — на своей сессии.
     # П6d (`AUD5-CODE-11`) закрыт 2026-07-27: срез страницы отдан БД; семантика
     # соседнего paginate_back_to_list сознательно НЕ унифицирована.
-    "WR-05": A(pkg="П6", status="actionable", method="doc-2026-06-20"),
-    "AUD5-ARCH-7": A(pkg="П6", status="actionable", method="to-verify",
-                     note="гонка требует подтверждения до работы"),
+    # Хвост П6 закрыт 2026-07-27: `WR-05` (N+1 в рассылке claim → один JOIN) и
+    # `AUD5-ARCH-7` (гонка ПОДТВЕРЖДЕНА, закрыта compare-and-set перед записью).
     # ── Программа B: sync-ORM в async-контуре
     "AUD3-37": A(pkg="B", status="decision", method="doc-2026-07-14",
                  note="выбор: AsyncSession или sync unit-of-work в to_thread"),
