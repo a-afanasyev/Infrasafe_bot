@@ -488,10 +488,55 @@ def get_pagination_keyboard(current_page: int, total_pages: int, request_number:
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+def get_discussion_rows(
+    request_number: str, *, has_report: bool = False, language: str = "ru"
+) -> List[List[InlineKeyboardButton]]:
+    """Строки «обсуждение заявки»: комментарии и отчёт (DEAD-134).
+
+    Хендлеры `view_comments_` / `add_comment_` / `view_report_` были написаны
+    целиком, но ни одна живая клавиатура их не предлагала: кнопки объявлялись
+    только в билдерах с нулём вызовов. Это единственный источник этих строк —
+    именно чтобы шестая копия не разошлась с остальными, как разошлись пять
+    фолбэков имени (REFACTOR-133).
+
+    Возвращаются СТРОКИ, а не готовая клавиатура: карточки заявки собираются
+    по-разному в трёх местах, и каждой нужно вставить их в своё место
+    (перед «Назад к списку»).
+
+    `has_report` — показывать ли просмотр отчёта. Кнопка «на всякий случай»
+    здесь вредна: хендлер на заявке без отчёта отвечает алертом «отчёта пока
+    нет», то есть кнопка обещает то, чего не будет.
+
+    Права НЕ проверяются здесь: их проверяет сам хендлер каноном
+    `utils/request_access`. Клавиатура о правах ничего не знает — иначе
+    появилась бы вторая, расходящаяся, копия правил доступа.
+    """
+    rows: List[List[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=get_text("request_assignment.keyboards.view_comments", language=language),
+                callback_data=f"view_comments_{request_number}",
+            ),
+            InlineKeyboardButton(
+                text=get_text("request_assignment.keyboards.add_comment", language=language),
+                callback_data=f"add_comment_{request_number}",
+            ),
+        ]
+    ]
+    if has_report:
+        rows.append([
+            InlineKeyboardButton(
+                text=get_text("request_status.keyboards.view_report", language=language),
+                callback_data=f"view_report_{request_number}",
+            )
+        ])
+    return rows
+
+
 def get_request_actions_keyboard(request_number: str, language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура действий с заявкой
-    
+
     TASK 17 Этап C: Локализованные кнопки действий
     
     Args:

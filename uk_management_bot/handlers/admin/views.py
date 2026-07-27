@@ -13,9 +13,15 @@ from uk_management_bot.utils.workflow_predicates import (
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.status_display import get_status_display
-from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
+from uk_management_bot.keyboards.requests import (
+    get_category_display,
+    get_discussion_rows,
+    get_urgency_display,
+    resolve_category_key,
+)
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.user_names import display_name
 
 from ._router import router
 
@@ -88,9 +94,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
                 # Индивидуальное назначение конкретному исполнителю
                 assigned_executor = svc.get_user_by_id(active_assignment.executor_id)
                 if assigned_executor:
-                    executor_name = f"{assigned_executor.first_name or ''} {assigned_executor.last_name or ''}".strip()
-                    if not executor_name:
-                        executor_name = f"@{assigned_executor.username}" if assigned_executor.username else f"ID{assigned_executor.id}"
+                    executor_name = display_name(assigned_executor)
                     message_text += get_text("admin.handlers.assigned_executor", language=lang).format(executor_name=executor_name) + "\n"
 
         if request.notes:
@@ -139,6 +143,11 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             if has_media:
                 # Вставляем кнопку медиа перед кнопкой "Назад к списку"
                 rows.insert(-1, [InlineKeyboardButton(text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{request.request_number}")])
+            rows.extend(get_discussion_rows(
+                request.request_number,
+                has_report=bool(request.completion_report),
+                language=lang,
+            ))
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
         # Для заявок, ожидающих подтверждения менеджером - специальная клавиатура
@@ -149,6 +158,11 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             rows = list(actions_kb.inline_keyboard)
             if has_media:
                 rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{request.request_number}")])
+            rows.extend(get_discussion_rows(
+                request.request_number,
+                has_report=bool(request.completion_report),
+                language=lang,
+            ))
             rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=f"mreq_back_{request.request_number}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         else:
@@ -157,6 +171,11 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
             # Добавляем кнопку "Назад к списку"
             rows = list(actions_kb.inline_keyboard)
+            rows.extend(get_discussion_rows(
+                request.request_number,
+                has_report=bool(request.completion_report),
+                language=lang,
+            ))
             rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=f"mreq_back_{request.request_number}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 

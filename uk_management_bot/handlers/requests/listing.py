@@ -316,6 +316,17 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
                 view_media_text = get_text("buttons.view_media", language=lang) or "📎 Просмотр медиа"
                 rows.append([InlineKeyboardButton(text=view_media_text, callback_data=f"view_request_media_{request.request_number}")])
 
+        # Обсуждение заявки — одинаково для всех ролей (DEAD-134). Кто именно
+        # вправе читать и писать, решает канон `utils/request_access` в самих
+        # хендлерах; дублировать правила в клавиатуре нельзя — это была бы
+        # восьмая копия предиката доступа.
+        from uk_management_bot.keyboards.requests import get_discussion_rows
+        rows.extend(get_discussion_rows(
+            request.request_number,
+            has_report=bool(request.completion_report),
+            language=lang,
+        ))
+
         # Добавляем кнопку "Назад к списку"
         # TASK 17 Этап C: Локализованная кнопка
         data = await state.get_data()
