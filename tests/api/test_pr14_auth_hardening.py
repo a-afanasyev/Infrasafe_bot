@@ -60,7 +60,9 @@ def test_sec02_jwt_secret_required_in_prod_no_invite_fallback():
 
 
 def test_sec02_jwt_secret_present_in_prod_loads():
-    result = _import_settings_subprocess(_prod_env(jwt_secret="jwt-secret-bbbbbbbbbbbbbbbbbbbb"))
+    # AUD5-SEC-NEW-3: прежнее значение было 31-символьным и с новым гейтом
+    # длины больше не проходит — это и есть работа гейта, а не поломка теста.
+    result = _import_settings_subprocess(_prod_env(jwt_secret="jwt-secret-bbbbbbbbbbbbbbbbbbbbbbbb"))
     assert result.returncode == 0, result.stderr
 
 

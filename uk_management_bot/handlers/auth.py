@@ -158,11 +158,15 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
             spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
             invite_info += "\n\n🛠️ " + get_text("auth.handlers.specialization_label", language=lang) + ": " + ", ".join(spec_names)
         
-        # Создаем короткий хеш токена для идентификации (не криптография —
-        # усечённый идентификатор для логов/состояния, usedforsecurity=False
-        # отражает это явно и убирает bandit B324/FIPS-предупреждение).
+        # Короткий идентификатор токена для логов/FSM-состояния (не
+        # криптография — верификация инвайта идёт по HMAC в invite_service).
+        # AUD5-SEC-NEW-2: sha256 вместо md5. Смысл не в стойкости этого
+        # усечённого значения, а в том, чтобы md5 не всплывал в SAST-отчётах и
+        # не приходилось каждый раз доказывать, что здесь он безобиден.
+        # Значение живёт только в FSM-состоянии, никуда не сохраняется —
+        # смена алгоритма ничего не ломает.
         import hashlib
-        token_hash = hashlib.md5(token.encode(), usedforsecurity=False).hexdigest()[:16]
+        token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
         
         # Сохраняем данные в состоянии
         await state.update_data(

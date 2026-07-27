@@ -113,6 +113,17 @@ class Settings:
             "JWT_SECRET must be set in production environment "
             "(separate from INVITE_SECRET — no fallback)"
         )
+    # AUD5-SEC-NEW-3: наличия мало. HS256 подписывает секретом произвольной
+    # длины, и короткий брутфорсится оффлайн по перехваченному токену — жертве
+    # для этого ничего делать не нужно. 32 символа — тот же порог, что уже
+    # применён к ADMIN_PASSWORD ниже. На обоих продах секрет 64 символа
+    # (проверено 2026-07-27), так что гейт ничего не ломает.
+    JWT_SECRET_MIN_LENGTH = 32
+    if JWT_SECRET and not DEBUG and len(JWT_SECRET) < JWT_SECRET_MIN_LENGTH:
+        raise ValueError(
+            f"JWT_SECRET too short ({len(JWT_SECRET)} chars): "
+            f"minimum {JWT_SECRET_MIN_LENGTH} in production"
+        )
 
     # ARCH-010: неизменяемый идентификатор инсталляции — левая часть UUIDv5-name
     # исходящих вебхуков (services/webhook_sender.py). Менять НЕЛЬЗЯ: смена

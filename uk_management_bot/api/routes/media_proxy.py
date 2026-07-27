@@ -127,7 +127,9 @@ async def proxy_media_upload(
             },
         )
         if resp.status_code != 200 and resp.status_code != 201:
-            _logger.error("Media service upload error %s: %s", resp.status_code, resp.text[:200])
+            # AUD3-34: статус — да, тело downstream — нет. В ответе media-service
+            # может оказаться что угодно, включая эхо загруженного контента.
+            _logger.error("Media service upload error %s for %s", resp.status_code, request_number)
             raise HTTPException(status_code=resp.status_code, detail="Media service error")
         return resp.json()
 

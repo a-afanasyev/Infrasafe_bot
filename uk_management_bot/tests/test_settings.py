@@ -60,7 +60,9 @@ def _reload_prod(monkeypatch: pytest.MonkeyPatch, admin_password: str):
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@postgres:5432/db")
     monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
     monkeypatch.setenv("INVITE_SECRET", "invite-secret-aaaaaaaaaaaaaaaa")
-    monkeypatch.setenv("JWT_SECRET", "jwt-secret-bbbbbbbbbbbbbbbbbbbb")
+    # AUD5-SEC-NEW-3: в прод-режиме секрет короче 32 символов больше не
+    # принимается — прежнее значение было 31-символьным.
+    monkeypatch.setenv("JWT_SECRET", "jwt-secret-bbbbbbbbbbbbbbbbbbbbbbbb")
     monkeypatch.setenv("OUTBOX_SOURCE_INSTANCE", "profk")  # ARCH-010: обязателен в prod
     monkeypatch.setenv("ADMIN_PASSWORD", admin_password)
     mod_name = "uk_management_bot.config.settings"
@@ -103,7 +105,9 @@ def _reload_prod_outbox(monkeypatch: pytest.MonkeyPatch, source_instance: str | 
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@postgres:5432/db")
     monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
     monkeypatch.setenv("INVITE_SECRET", "invite-secret-aaaaaaaaaaaaaaaa")
-    monkeypatch.setenv("JWT_SECRET", "jwt-secret-bbbbbbbbbbbbbbbbbbbb")
+    # AUD5-SEC-NEW-3: в прод-режиме секрет короче 32 символов больше не
+    # принимается — прежнее значение было 31-символьным.
+    monkeypatch.setenv("JWT_SECRET", "jwt-secret-bbbbbbbbbbbbbbbbbbbbbbbb")
     monkeypatch.setenv("ADMIN_PASSWORD", "Abc123Xyz789Qwer")
     if source_instance is None:
         monkeypatch.delenv("OUTBOX_SOURCE_INSTANCE", raising=False)
