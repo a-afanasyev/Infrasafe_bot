@@ -5,6 +5,8 @@ module-level ``limiter`` (possibly Redis-backed) at import time. The web app
 (``web/limiter.py``) only needs the key function and must not trigger
 construction of the API limiter just by importing it.
 """
+import ipaddress
+import logging
 import os
 
 from slowapi.util import get_remote_address
@@ -19,11 +21,45 @@ from starlette.requests import Request
 # per-IP limit. When the allowlist is unset the original behavior is preserved
 # (the documented invariant is that nginx overwrites the header and the api
 # container exposes no host port).
-_TRUSTED_PROXIES = frozenset(
-    p.strip()
-    for p in os.getenv("RATE_LIMIT_TRUSTED_PROXIES", "").split(",")
-    if p.strip()
-)
+# PENT-F11/AUD3-35: раньше это был `frozenset` строк и сравнение `peer in set`,
+# то есть ТОЧНОЕ совпадение IP. Адрес edge не статичен (ровно поэтому
+# `FORWARDED_ALLOW_IPS` в PENT-F03 задан подсетью), и строка вида
+# `172.19.0.0/16` в такой набор просто не сматчилась бы никогда — allowlist
+# выглядел бы настроенным и молча не работал. Теперь принимаются и одиночные
+# адреса, и подсети: одиночный IP — это /32 (или /128), частный случай сети.
+logger = logging.getLogger(__name__)
+
+
+def _parse_trusted(raw: str) -> tuple[ipaddress._BaseNetwork, ...]:
+    networks = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            # Мусорная запись не должна ронять API, но и молчать нельзя:
+            # незамеченная опечатка означает «прокси не доверен» и внезапную
+            # смену бакетов на peer-IP.
+            logger.error(
+                "RATE_LIMIT_TRUSTED_PROXIES: запись %r не является IP или "
+                "подсетью — игнорируется", item,
+            )
+    return tuple(networks)
+
+
+_TRUSTED_PROXIES = _parse_trusted(os.getenv("RATE_LIMIT_TRUSTED_PROXIES", ""))
+
+
+def _is_trusted_peer(peer: str | None) -> bool:
+    if peer is None:
+        return False
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(address in network for network in _TRUSTED_PROXIES)
 
 
 def client_ip_key(request: Request) -> str:
@@ -51,6 +87,6 @@ def client_ip_key(request: Request) -> str:
     real_ip = request.headers.get("X-Real-IP")
     if real_ip and real_ip.strip():
         peer = request.client.host if request.client else None
-        if not _TRUSTED_PROXIES or (peer is not None and peer in _TRUSTED_PROXIES):
+        if not _TRUSTED_PROXIES or _is_trusted_peer(peer):
             return real_ip.strip()
     return get_remote_address(request)
