@@ -126,3 +126,16 @@ class TestRedisMustBeAuthenticated:
         result = _import_settings(debug="true", REDIS_URL="redis://localhost:6379/0")
 
         assert result.returncode == 0, result.stderr[-400:]
+
+    def test_localhost_default_passes_in_production_too(self):
+        """Джоба `migrate` намеренно не получает REDIS_URL и живёт на дефолте.
+
+        В compose это записано прямым текстом («migrate не трогает Redis»).
+        Первая версия гейта этого не учла и уронила обязательный migrate-шаг
+        деплоя — прод не пострадал только потому, что migrate идёт ДО `up`.
+        Беспарольный redis на loopback внутри контейнера — не разделяемый
+        ресурс; предмет пункта — общий redis по имени сервиса.
+        """
+        result = _import_settings(debug="false", REDIS_URL="redis://localhost:6379/0")
+
+        assert result.returncode == 0, result.stderr[-400:]

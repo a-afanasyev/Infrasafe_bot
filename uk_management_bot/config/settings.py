@@ -321,8 +321,17 @@ class Settings:
         # ловим: в проде URI обязан нести credentials.
         # Проверено на проде 2026-07-27: пароль есть (64 символа в URI на обоих
         # хостах), то есть гейт ничего не ломает и включается «на будущее».
+        # Требование credentials применяется только к ОБЩЕМУ redis. Джоба
+        # `migrate` намеренно не получает REDIS_URL (в compose это записано
+        # явно: «migrate не трогает Redis, а settings.redis_url имеет
+        # безопасный дефолт») и остаётся на localhost-дефолте — требовать от
+        # неё пароль значило бы ломать деплой ради сервиса, который к redis не
+        # подключается. Беспарольный redis на loopback внутри контейнера не
+        # разделяемый ресурс; беспарольный по имени сервиса — ровно тот
+        # молчаливый сценарий, ради которого пункт и заведён.
         _redis_authority = REDIS_URL.split("://", 1)[1].split("/", 1)[0]
-        if "@" not in _redis_authority:
+        _redis_host = _redis_authority.rsplit("@", 1)[-1].rsplit(":", 1)[0].strip("[]")
+        if _redis_host not in ("localhost", "127.0.0.1", "::1") and "@" not in _redis_authority:
             raise ValueError(
                 "REDIS_URL must carry credentials in production "
                 "(redis://:<password>@host:port/db) — empty REDIS_PASSWORD "
