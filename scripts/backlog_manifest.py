@@ -172,7 +172,8 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-CODE-6": A(pkg="B", status="decision", method="doc-2026-07-21"),
     # ── П7
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
-    "REFACTOR-113": A(pkg="П7e", status="actionable", method="doc-2026-06-06"),
+    "REFACTOR-113": A(pkg="П7e", status="decision", method="verified-2026-07-27",
+                      note="1517 сайтов (в пункте «≥50»), автофикса у G004 нет; рост закрыт ratchet'ом, массовая переписка — решение владельца"),
     "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",
                      note="локальные venv/db/png — только пофайлово с подтверждения"),
     "AUD5-PRAC-10": A(pkg="П7", status="no-pr", method="plan-2026-07-26"),

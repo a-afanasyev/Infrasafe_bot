@@ -22,12 +22,12 @@
 - закрыто маркером: **339**
 - открыто маркером: **64**
 
-  - `actionable` — **33**
-  - `decision` — **28**
+  - `actionable` — **32**
+  - `decision` — **29**
   - `calendar` — **1**
   - `no-pr` — **2**
 
-Из них actionable по приоритету: P2=12, P3=21.
+Из них actionable по приоритету: P2=12, P3=20.
 
 Значения `status`:
 
@@ -85,7 +85,7 @@
 | `REFACTOR-133` | P3 | decision | verified-2026-07-27 | П5b-fu | — | — | — | пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API |
 | `AUD5-JUNK-5` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения |
 | `AUD5-PRAC-10` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — |  |
-| `REFACTOR-113` | P3 | actionable | doc-2026-06-06 | П7e | — | — | — |  |
+| `REFACTOR-113` | P3 | decision | verified-2026-07-27 | П7e | — | — | — | 1517 сайтов (в пункте «≥50»), автофикса у G004 нет; рост закрыт ratchet'ом, массовая переписка — решение владельца |
 | `AUD5-APIFE-17` | P2 | actionable | plan-2026-07-26 | П8 | — | — | — | остался только LoginPage.tsx:140 (OTP) |
 | `AUD5-CODE-12` | P2 | actionable | plan-2026-07-26 | П8 | — | — | — | остался только user_apartment_selection.py:407 |
 | `FS-11` | P3 | actionable | doc-2026-07-14 | П8 | — | — | — |  |

@@ -35,6 +35,16 @@ jobs:
       - name: Ruff (whole scope)
         run: ruff check .
 
+      # REFACTOR-113: eager-f-string в логах. Содержание advisory (переписывать
+      # 1517 сайтов разом — отдельное решение владельца, автофикса у G004 НЕТ),
+      # но количество под ratchet: без гейта «отложено» означает «растёт
+      # незаметно» — ровно это и случилось с самим пунктом, заведённым как
+      # «≥50 вхождений». Логика и обе ветви — ci/logging_fstring_ratchet.py.
+      - name: Logging f-string ratchet (advisory content, gate on count)
+        run: |
+          ruff check --no-cache --select G004 --exit-zero --output-format=concise . \
+            | python3 ci/logging_fstring_ratchet.py
+
       # Манифест бэклога: агрегаты и распределение по пакетам расходились с
       # документом дважды (метод счёта не был зафиксирован; пункты закрывались
       # кодом без закрытия текстом). Гейт держит один инвариант — у каждого
