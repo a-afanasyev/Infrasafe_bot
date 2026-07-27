@@ -12,14 +12,17 @@ from enum import Enum
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.api.dependencies_access import check_request_access
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
-from uk_management_bot.integrations.http_retry import get_with_retries
+from uk_management_bot.integrations.http_retry import (
+    get_with_retries,
+    stream_with_retries,
+)
 
 # BUG-122: compile the shared request-number pattern (\d{6}-\d{3,}) instead of
 # a hardcoded 3-digit shape, so `260524-1000` (>999/day rollover) isn't rejected.
@@ -197,9 +200,11 @@ async def proxy_media_file(
     # ARCH-03: оба обращения — идемпотентные GET, ретраим транзиентные сбои.
     # Явная деградация: при исчерпании попыток (transport error) → 503, а не
     # необработанное исключение/500.
+    #
+    # 1-2) Метаданные и гейт доступа — короткие буферизуемые вызовы, их клиент
+    # живёт ровно в этом блоке.
     async with httpx.AsyncClient(timeout=60) as client:
         try:
-            # 1) Resolve media_id → request_number (cheap metadata call).
             meta_resp = await get_with_retries(
                 client,
                 f"{media_url}/api/v1/media/{media_id}",
@@ -214,26 +219,62 @@ async def proxy_media_file(
         if not request_number:
             raise HTTPException(status_code=404, detail="Media has no associated request")
 
-        # 2) Authorization gate — raises 403/404 if the user can't see it.
+        # Authorization gate — raises 403/404 if the user can't see it.
         await check_request_access(request_number, db, user)
 
-        # 3) Stream the bytes. 60s — Telegram CDN can be slow on first hit.
-        try:
-            resp = await get_with_retries(
-                client,
-                f"{media_url}/api/v1/media/{media_id}/file",
-                headers=headers,
-            )
-        except httpx.TransportError as exc:
-            _logger.warning("Media service unreachable for file %s: %s", media_id, exc)
-            raise HTTPException(status_code=503, detail="Media service unavailable")
-        if resp.status_code != 200:
-            _logger.error("Media service file error %s: %s", resp.status_code, resp.text[:200])
-            raise HTTPException(status_code=resp.status_code, detail="Media service error")
-        return Response(
-            content=resp.content,
-            media_type=resp.headers.get("content-type", "application/octet-stream"),
-            # Short-lived cache: photo bytes are immutable per media_id, but
-            # we don't want indefinite caching in case of moderation/archive.
-            headers={"Cache-Control": "private, max-age=300"},
+    # 3) AUD5-APIFE-15: байты отдаются ПОТОКОМ, а не через `resp.content`.
+    # Раньше файл (до 50 МБ) целиком поднимался в память API-процесса на каждый
+    # <img>; при нескольких параллельных просмотрах это прямой путь к OOM.
+    #
+    # Клиент здесь НЕ в `async with`: тело дренит Starlette уже ПОСЛЕ возврата
+    # из функции, поэтому соединение обязано пережить её область видимости.
+    # Закрывает его `finally` генератора — то есть и при обрыве клиента тоже
+    # (Starlette бросает в генератор при disconnect). Форма скопирована с
+    # `api/work_reports/public_router.py`, где этот вывод уже сделан.
+    client = httpx.AsyncClient(timeout=60)
+
+    async def _close() -> None:
+        await upstream.aclose()
+        await client.aclose()
+
+    try:
+        upstream = await stream_with_retries(
+            client,
+            f"{media_url}/api/v1/media/{media_id}/file",
+            headers=headers,
         )
+    except httpx.TransportError as exc:
+        await client.aclose()
+        _logger.warning("Media service unreachable for file %s: %s", media_id, exc)
+        raise HTTPException(status_code=503, detail="Media service unavailable")
+
+    if upstream.status_code != 200:
+        status = upstream.status_code
+        await _close()
+        _logger.error("Media service file error %s for media %s", status, media_id)
+        raise HTTPException(status_code=status, detail="Media service error")
+
+    async def body():
+        sent = 0
+        try:
+            async for chunk in upstream.aiter_bytes():
+                sent += len(chunk)
+                if sent > _MEDIA_MAX_BYTES:
+                    # Лимит апстрима — обещание, а не гарантия: media-service
+                    # мог быть перенастроен, а размер в метаданных — заявленный.
+                    _logger.warning(
+                        "media %s exceeded %d bytes mid-stream, aborting",
+                        media_id, _MEDIA_MAX_BYTES,
+                    )
+                    break
+                yield chunk
+        finally:
+            await _close()
+
+    return StreamingResponse(
+        body(),
+        media_type=upstream.headers.get("content-type", "application/octet-stream"),
+        # Short-lived cache: photo bytes are immutable per media_id, but
+        # we don't want indefinite caching in case of moderation/archive.
+        headers={"Cache-Control": "private, max-age=300"},
+    )

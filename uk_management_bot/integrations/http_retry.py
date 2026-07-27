@@ -75,3 +75,63 @@ async def get_with_retries(
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("get_with_retries exhausted without a response")
+
+
+async def stream_with_retries(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    retries: int = DEFAULT_RETRIES,
+    backoff_base: float = DEFAULT_BACKOFF_BASE,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Как `get_with_retries`, но открывает ПОТОК и возвращает его незакрытым.
+
+    AUD5-APIFE-15. Ключевое отличие не в способе чтения, а в **границе
+    ретрая**: повторить можно только то, что не начало отдаваться клиенту.
+    Здесь ретраится исключительно фаза заголовков — до первого прочитанного
+    байта тела. Сбой в середине тела не ретраится и не может: часть байтов уже
+    ушла вниз по проводу, и повтор склеил бы битый файл из двух попыток.
+
+    Ответ возвращается ОТКРЫТЫМ — закрыть обязан вызывающий (обычно в
+    `finally` генератора тела). Неудачные попытки закрываются здесь.
+    """
+    if retries < 1:
+        raise ValueError("retries must be >= 1")
+
+    last_exc: Optional[httpx.TransportError] = None
+    for attempt in range(retries):
+        request = client.build_request("GET", url, **kwargs)
+        try:
+            resp = await client.send(request, stream=True)
+        except httpx.TransportError as exc:
+            last_exc = exc
+            if attempt == retries - 1:
+                logger.warning(
+                    "media STREAM %s failed after %d attempts: %s", url, retries, exc
+                )
+                raise
+            delay = backoff_base * (2 ** attempt)
+            logger.info(
+                "media STREAM %s transport error (attempt %d/%d), retry in %.1fs: %s",
+                url, attempt + 1, retries, delay, exc,
+            )
+            await asyncio.sleep(delay)
+            continue
+
+        if resp.status_code in _RETRYABLE_STATUS and attempt < retries - 1:
+            # Тело этой попытки не понадобится — закрываем, иначе соединение
+            # останется висеть до сборки мусора.
+            await resp.aclose()
+            delay = backoff_base * (2 ** attempt)
+            logger.info(
+                "media STREAM %s -> %d (attempt %d/%d), retry in %.1fs",
+                url, resp.status_code, attempt + 1, retries, delay,
+            )
+            await asyncio.sleep(delay)
+            continue
+        return resp
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("stream_with_retries exhausted without a response")
