@@ -91,22 +91,23 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             user_roles = parse_roles_safe(user.roles)
             active_role = user.active_role or (user_roles[0] if user_roles else "applicant")
 
-            # Получаем заявки в зависимости от роли + status-фильтр (ORM в сервисе)
-            user_requests = service.list_pagination_requests(user, active_role, active_status)
+            # AUD5-CODE-11: страницу режет БД, а не Python — раньше сюда
+            # приезжали ВСЕ заявки пользователя ради пяти строк экрана.
+            requests_per_page = 5
+            total_requests, page_requests = service.paginate_pagination_requests(
+                user,
+                active_role,
+                active_status,
+                offset=max(0, (current_page - 1) * requests_per_page),
+                limit=requests_per_page,
+            )
 
         # Вычисляем общее количество страниц
-        total_requests = len(user_requests)
-        requests_per_page = 5
         total_pages = max(1, (total_requests + requests_per_page - 1) // requests_per_page)
 
         if current_page < 1 or current_page > total_pages:
             await callback.answer(get_text("requests.page_not_found", language=lang), show_alert=True)
             return
-
-        # Получаем заявки для текущей страницы
-        start_idx = (current_page - 1) * requests_per_page
-        end_idx = start_idx + requests_per_page
-        page_requests = user_requests[start_idx:end_idx]
 
         # BUG-BOT-008: Унифицированный заголовок (см. format_requests_list_header).
         # Использует единый шаблон для Page1/Page2/Активные/Архив.
