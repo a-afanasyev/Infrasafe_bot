@@ -19,6 +19,12 @@ from uk_management_bot.keyboards.request_reports import (
     get_report_actions_keyboard
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.status_display import get_status_display
+from uk_management_bot.utils.address_helpers import localize_address
+from uk_management_bot.keyboards.requests import (
+    get_category_display,
+    resolve_category_key,
+)
 from uk_management_bot.utils.auth_helpers import check_user_role
 from uk_management_bot.utils.workflow_predicates import is_awaiting_applicant
 from uk_management_bot.utils.constants import (
@@ -365,10 +371,18 @@ def format_report_for_display(request: Request, report_comments: list, language:
     try:
         # Основная информация о заявке
         report_text = f"📋 **{get_text('request_reports.handlers.report_title', language=language)} #{request.request_number}**\n\n"
-        report_text += f"🏷️ **{get_text('request_reports.handlers.category', language=language)}**: {request.category}\n"
-        report_text += f"📍 **{get_text('request_reports.handlers.address', language=language)}**: {request.address}\n"
+        # Категория и статус — через канонические хелперы показа, а не сырыми
+        # значениями из БД. Экран отчёта до 2026-07-28 был недостижим из UI
+        # (DEAD-134), поэтому дефект никто не видел: категория выводилась ключом
+        # («plumbing» вместо «Сантехника»), а статус — русским текстом из БД,
+        # то есть UZ-пользователь читал бы его по-русски.
+        category_display = get_category_display(
+            resolve_category_key(request.category), language=language
+        )
+        report_text += f"🏷️ **{get_text('request_reports.handlers.category', language=language)}**: {category_display}\n"
+        report_text += f"📍 **{get_text('request_reports.handlers.address', language=language)}**: {localize_address(request.address, language)}\n"
         report_text += f"📝 **{get_text('request_reports.handlers.description', language=language)}**: {request.description}\n"
-        report_text += f"📊 **{get_text('request_reports.handlers.status', language=language)}**: {request.status}\n"
+        report_text += f"📊 **{get_text('request_reports.handlers.status', language=language)}**: {get_status_display(request.status, language=language)}\n"
 
         # Информация о выполнении
         if request.completed_at:
