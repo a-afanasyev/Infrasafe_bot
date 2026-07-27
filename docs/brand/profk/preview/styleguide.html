@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — UI Kit</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .sg { max-width: 1080px; margin: 0 auto; padding: 34px 24px 80px; }
+  .sg section { margin-top: 40px; }
+  .sg h2 { margin-bottom: 4px; }
+  .sg .hint { color: var(--text-muted); font-size: 13px; margin-bottom: 18px; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap: 14px; }
+  .sw { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-soft); background:#fff; }
+  .sw .box { height: 64px; } .sw .meta { padding: 8px 10px; font-size: 12px; }
+  .sw .meta b { font-family: var(--font-display); display:block; font-size:12.5px; }
+  .sw .meta code { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .type-spec { color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; }
+  .backlink { font-family: var(--font-display); font-weight:600; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="sg">
+  <a class="backlink" href="index.html">← Все экраны</a>
+  <div class="gallery-head" style="margin-top:14px">
+    <img src="assets/profk-mark.svg" alt="PROFK">
+    <div>
+      <h1>PROFK · UI Kit</h1>
+      <div class="hint">Реализация брендбука для оценки палитры, типографики и логотипа</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Логотип</h2>
+    <div class="hint">Полный горизонтальный, значок и фавикон</div>
+    <div class="card card-pad row" style="gap:36px">
+      <img src="assets/profk-logo.svg" alt="PROFK — Pro Facility Kommunal" style="height:64px">
+      <img src="assets/profk-mark.svg" alt="mark" style="width:64px;height:64px">
+      <img src="assets/profk-favicon.svg" alt="favicon" style="width:44px;height:44px">
+      <div class="row" style="background:var(--charcoal);padding:16px 22px;border-radius:var(--radius)">
+        <img src="assets/profk-mark.svg" alt="mark on dark" style="width:48px;height:48px">
+        <span style="color:#fff;font-family:var(--font-display);font-weight:800;font-size:20px;letter-spacing:.5px">PROFK</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Цветовая палитра</h2>
+    <div class="hint">Основные и статусные цвета</div>
+    <div class="swatches">
+      <div class="sw"><div class="box" style="background:#44c24a"></div><div class="meta"><b>Accent</b><code>#44c24a</code></div></div>
+      <div class="sw"><div class="box" style="background:#333333"></div><div class="meta"><b>Charcoal / Text</b><code>#333333</code></div></div>
+      <div class="sw"><div class="box" style="background:#f5f5f5;border-bottom:1px solid #eee"></div><div class="meta"><b>Background</b><code>#f5f5f5</code></div></div>
+      <div class="sw"><div class="box" style="background:#ffffff;border-bottom:1px solid #eee"></div><div class="meta"><b>Surface</b><code>#ffffff</code></div></div>
+      <div class="sw"><div class="box" style="background:#44c24a"></div><div class="meta"><b>Success</b><code>#44c24a</code></div></div>
+      <div class="sw"><div class="box" style="background:#d9534f"></div><div class="meta"><b>Error</b><code>#d9534f</code></div></div>
+      <div class="sw"><div class="box" style="background:#f0ad4e"></div><div class="meta"><b>Warning</b><code>#f0ad4e</code></div></div>
+      <div class="sw"><div class="box" style="background:#5bc0de"></div><div class="meta"><b>Info</b><code>#5bc0de</code></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Типографика</h2>
+    <div class="hint">Montserrat — заголовки, Open Sans — текст</div>
+    <div class="card card-pad">
+      <h1>Заголовок H1 <span class="type-spec">Montserrat 800 · 32px</span></h1>
+      <h2 style="margin-top:14px">Заголовок H2 <span class="type-spec">Montserrat 700 · 24px</span></h2>
+      <h3 style="margin-top:14px">Заголовок H3 <span class="type-spec">Montserrat 700 · 18px</span></h3>
+      <p style="margin-top:14px">Основной текст — Open Sans 16px с межстрочным интервалом 1.5. Жители подают заявки,
+      исполнители выполняют, менеджеры контролируют. <span class="type-spec">Open Sans 400 · 16px</span></p>
+      <div class="type-spec" style="font-family:var(--font-mono)">260709-014 · моноширинный IBM Plex Mono для номеров заявок</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Кнопки</h2>
+    <div class="card card-pad">
+      <div class="row">
+        <button class="btn btn-primary">Основная</button>
+        <button class="btn btn-secondary">Вторичная</button>
+        <button class="btn btn-outline">Контурная</button>
+        <button class="btn btn-text">Текстовая ссылка</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn btn-primary btn-lg">Отправить заявку</button>
+        <button class="btn btn-outline btn-sm">Отмена</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Поля ввода</h2>
+    <div class="card card-pad grid" style="grid-template-columns:1fr 1fr;max-width:640px">
+      <div class="field"><label class="label">Пустое поле</label><input class="input" placeholder="admin@example.com"></div>
+      <div class="field"><label class="label">С фокусом</label><input class="input" value="Фокус" style="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)"></div>
+      <div class="field"><label class="label">Выпадающий список</label>
+        <select class="select"><option>Электрика</option><option>Сантехника</option></select></div>
+      <div class="field"><label class="label">С иконкой</label>
+        <div class="input-icon"><input class="input" placeholder="Поиск">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Статусы заявок и срочность</h2>
+    <div class="card card-pad">
+      <div class="row mb16">
+        <span class="badge badge-new">Новая</span>
+        <span class="badge badge-progress">В работе</span>
+        <span class="badge badge-purchase">Закуп</span>
+        <span class="badge badge-clarify">Уточнение</span>
+        <span class="badge badge-done">Выполнена</span>
+        <span class="badge badge-accepted">Принята</span>
+        <span class="badge badge-plain">Отменена</span>
+      </div>
+      <div class="row">
+        <span class="urg urg-low">Обычная</span>
+        <span class="urg urg-med">Средняя</span>
+        <span class="urg urg-high">Срочная</span>
+        <span class="urg urg-crit">Критическая</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Уведомления</h2>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;max-width:720px">
+      <div class="alert alert-success">✓ Заявка успешно отправлена</div>
+      <div class="alert alert-error">! Неверный код подтверждения</div>
+      <div class="alert alert-warning">⚠ Требуется уточнение по заявке</div>
+      <div class="alert alert-info">ℹ Часы работы диспетчерской: Пн–Пт 9:00–18:00</div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

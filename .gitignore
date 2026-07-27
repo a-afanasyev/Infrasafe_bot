@@ -205,3 +205,17 @@ tests/e2e/html-report/
 tests/e2e/playwright-report/
 tests/e2e/test-results/
 tests/e2e/artifacts/
+
+# Agent state других инструментов (AUD5-JUNK-4, решение 2026-07-27): не VCS.
+.codex/
+.agents/
+# AGENTS.md не трекается сознательно: второй файл инструкций рядом с CLAUDE.md
+# разошёлся бы с ним молча. Канон один — CLAUDE.md.
+/AGENTS.md
+# Растровые мастера бренда — см. docs/brand/profk/README.md (в git только брендбук).
+/ProFK/
+# Исключение из общего `*.png` выше: компактный логотип бренда — часть брендбука.
+# Без этой строки он молча не попадал бы в коммит.
+!docs/brand/profk/*.png
+# PDF-экспорты руководств: исходники — соседние .md, PDF пересобирается из них.
+docs/user-guide/*.pdf

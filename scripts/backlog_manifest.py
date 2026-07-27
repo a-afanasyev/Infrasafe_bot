@@ -108,6 +108,9 @@ def classify(title: str) -> str:
 #   doc-closed   — по коду закрыт, открыт только в документе (закрывается текстом)
 #   calendar     — работа определена, но по календарю (срок депрекации)
 #   no-pr        — работа вне PR (локальные файлы, потенциально деструктивно)
+#   deferred     — решение принято и оно «не делать сейчас»; пункт остаётся
+#                  открытым как трекер, работы от него не ждём. Отличать от
+#                  `decision`: там решения ещё НЕТ.
 #
 # method — ЧЕМ установлен статус. Не приукрашивать: `doc-<дата>` означает, что
 # статус взят из code-verified записи бэклога той даты, а не перепроверен сейчас.
@@ -150,11 +153,6 @@ ASSIGNMENT: dict[str, dict] = {
     # П5b (`AUD5-APIFE-13`) закрыт 2026-07-27: сниффер и имя разведены на канон
     # (детекция) и политику (allowlist/фолбэк) — запись в бэклоге. Два хвоста
     # заведены отдельными пунктами, оба ждут решения владельца.
-    "BUG-132": A(pkg="П5b-fu", status="decision", method="verified-2026-07-27",
-                 services="api + media-service",
-                 note="таблицы сигнатур UK и media разошлись: webp/heic недостижимы, .mov трактуется по-разному"),
-    "REFACTOR-133": A(pkg="П5b-fu", status="decision", method="verified-2026-07-27",
-                      note="пять фолбэков имени; формат — видимая строка, в т.ч. в ответе API"),
     # ── П6
     # П6a (`AUD3-08`) закрыт 2026-07-27: два профиля таймаутов вместо одного,
     # шесть from_url сведены к двум — запись в бэклоге.
@@ -167,13 +165,12 @@ ASSIGNMENT: dict[str, dict] = {
     # Хвост П6 закрыт 2026-07-27: `WR-05` (N+1 в рассылке claim → один JOIN) и
     # `AUD5-ARCH-7` (гонка ПОДТВЕРЖДЕНА, закрыта compare-and-set перед записью).
     # ── Программа B: sync-ORM в async-контуре
-    "AUD3-37": A(pkg="B", status="decision", method="doc-2026-07-14",
-                 note="выбор: AsyncSession или sync unit-of-work в to_thread"),
-    "AUD5-CODE-6": A(pkg="B", status="decision", method="doc-2026-07-21"),
+    "AUD3-37": A(pkg="B", status="actionable", method="verified-2026-07-27",
+                 note="решение: вариант (б) — sync unit-of-work в to_thread"),
+    "AUD5-CODE-6": A(pkg="B", status="actionable", method="verified-2026-07-27",
+                 note="закрывается вместе с AUD3-37 вариантом (б)"),
     # ── П7
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
-    "REFACTOR-113": A(pkg="П7e", status="decision", method="verified-2026-07-27",
-                      note="1517 сайтов (в пункте «≥50»), автофикса у G004 нет; рост закрыт ratchet'ом, массовая переписка — решение владельца"),
     "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",
                      note="локальные venv/db/png — только пофайлово с подтверждения"),
     "AUD5-PRAC-10": A(pkg="П7", status="no-pr", method="plan-2026-07-26"),
@@ -181,8 +178,6 @@ ASSIGNMENT: dict[str, dict] = {
     # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
     # ── П9
-    "AUD5-JUNK-2": A(pkg="П9b", status="decision", method="doc-2026-07-21",
-                     note="channels.json — решение владельца"),
     # ── П10: security-программа
     "PENT-F11": A(pkg="П10", status="decision", method="verified-2026-07-27",
                   services="edge/.env обоих продов",
@@ -190,16 +185,11 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD3-35": A(pkg="П10", status="decision", method="verified-2026-07-27",
                  services="edge/.env обоих продов",
                  note="тот же остаток, что у PENT-F11: код готов, RATE_LIMIT_TRUSTED_PROXIES не выставлен"),
-    "AUD5-SEC-NEW-4": A(pkg="П10", status="actionable", method="to-verify"),
     "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="doc-2026-07-21"),
-    "PENT-F05": A(pkg="П10", status="actionable", method="plan-2026-07-26",
-                  note="остаток: Origin до accept() + edge limit_req с burst-тестом"),
     # ── П11: тесты и покрытие
     "AUD5-PRAC-6": A(pkg="П11", status="actionable", method="plan-2026-07-26",
                      note="floors 40/38/29/30; TWA-тесты есть, floor'а нет"),
     "TEST-068": A(pkg="П11", status="actionable", method="plan-2026-07-26"),
-    "AUD5-PRAC-4": A(pkg="П11", status="decision", method="doc-2026-07-21",
-                     note="nightly/stage или «ручной инструмент»"),
     "AUD3-25": A(pkg="П11", status="actionable", method="doc-2026-07-14"),
     "AUD3-26": A(pkg="П11", status="actionable", method="doc-2026-07-01"),
     "AUD5-DEP-2": A(pkg="П11", status="actionable", method="doc-2026-07-21"),
@@ -208,7 +198,7 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD3-07": A(pkg="A2", status="actionable", method="plan-2026-07-26",
                  note="168 .query( = 159 db.query + 9 db_local.query"),
     "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
-    "AUD5-ARCH-3": A(pkg="A3", status="decision", method="plan-2026-07-26",
+    "AUD5-ARCH-3": A(pkg="A3", status="actionable", method="verified-2026-07-27",
                      note="scope: core-15 / +access_control 17 / +media 19; иначе respec"),
     "AUD3-06": A(pkg="A3", status="actionable", method="doc-2026-07-14"),
     "AUD5-ARCH-5": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
@@ -217,35 +207,34 @@ ASSIGNMENT: dict[str, dict] = {
                  note="политика, а не точечный баг: ещё и shift_planning_service.py"),
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
     "AUD3-15": A(pkg="A6", status="actionable", method="doc-2026-07-01"),
-    "AUD5-ARCH-4": A(pkg="A7", status="decision", method="doc-2026-07-21",
-                     note="нужна целевая архитектура границы"),
+    "AUD5-ARCH-4": A(pkg="A7", status="actionable", method="verified-2026-07-27",
+                     note="решение: contract-слой + AST-гейт (S); полная развязка отклонена"),
     # ── Решения владельца (кодовой работы до решения нет)
-    "AUD5-DEAD-3": A(pkg="—", status="decision", method="doc-2026-07-21"),
-    "AUD5-JUNK-3": A(pkg="—", status="decision", method="doc-2026-07-21"),
-    "AUD5-JUNK-4": A(pkg="—", status="decision", method="doc-2026-07-21"),
-    "AUD3-32": A(pkg="—", status="decision", method="doc-2026-07-14",
-                 note="дефферал устарел: публичный /announcements без auth"),
-    "AUD3-33": A(pkg="—", status="decision", method="plan-2026-07-26",
-                 note="сформулирован как принятый риск — подтвердить, не «чинить»"),
-    "ARCH-116": A(pkg="—", status="decision", method="doc-2026-07-01"),
-    "AUD5-YAGNI-1": A(pkg="—", status="decision", method="doc-2026-07-21"),
-    "SEC-115": A(pkg="—", status="decision", method="doc-2026-06-12"),
-    "ARCH-107": A(pkg="—", status="decision", method="doc-2026-06-12"),
-    "DB-049": A(pkg="—", status="decision", method="doc-2026-06-12"),
-    "ARCH-06": A(pkg="—", status="decision", method="doc-2026-06-12"),
-    "AUD5-PRAC-3": A(pkg="—", status="decision", method="doc-2026-07-21",
-                     note="дубль AUD3-38 — закрывать парой"),
-    "AUD3-38": A(pkg="—", status="decision", method="doc-2026-07-01",
-                 note="дубль AUD5-PRAC-3"),
-    "PENT-F12": A(pkg="—", status="decision", method="doc-2026-07-24"),
-    "PENT-F13": A(pkg="—", status="decision", method="doc-2026-07-24"),
-    "PENT-F15": A(pkg="—", status="decision", method="doc-2026-07-24"),
-    "PENT-F16": A(pkg="—", status="decision", method="doc-2026-07-24"),
-    "FS-08": A(pkg="—", status="decision", method="doc-2026-07-14",
-               note="needs-prod-data"),
-    "FS-14": A(pkg="—", status="decision", method="doc-2026-06-20",
-               note="needs-repro"),
-    "QA22-04": A(pkg="—", status="decision", method="doc-2026-06-22"),
+    "AUD5-DEAD-3": A(pkg="—", status="decision", method="verified-2026-07-27",
+                    note="ФОРМУЛИРОВКА ОПРОВЕРГНУТА: edge/ — device-сторона ЖИВЫХ роутеров; вопрос стал «ретайрить ли pull-модель целиком»"),
+    "ARCH-116": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                  note="решение: вводить бизнес-TZ на слое показа, БД остаётся UTC"),
+    "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                  note="решение: делать; форма — как у webhook *_NEXT"),
+    "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                 services="edge владельца (profk.uz)",
+                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
+    "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                 services="edge владельца (profk.uz)",
+                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
+    "PENT-F15": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                 services="edge владельца (profk.uz)",
+                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
+    "PENT-F16": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                 services="edge владельца (profk.uz)",
+                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
+    # ── Деферралы, подтверждённые решением владельца 2026-07-27
+    "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-07-27",
+                 note="возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
+    "DB-049": A(pkg="—", status="deferred", method="verified-2026-07-27",
+                note="jsonb+GIN — когда появится запрос по ролям, которому нужен индекс"),
+    "SEC-115": A(pkg="—", status="deferred", method="verified-2026-07-27",
+                 note="фикс на стороне InfraSafe; в повестку следующего разговора"),
     # ── Календарь
     "PENT-F04": A(pkg="—", status="calendar", method="plan-2026-07-26",
                   note="остаток — снятие ?token= после 2026-09-01"),

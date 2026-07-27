@@ -72,6 +72,12 @@ CONFIG_MOUNTS=(
   -v "${ROOT}/docker-compose.media.yml:/app/docker-compose.media.yml:ro"
   -v "${ROOT}/frontend/nginx.conf:/app/frontend/nginx.conf:ro"
   -v "${ROOT}/docs/security/security.txt:/app/docs/security/security.txt:ro"
+  # BUG-132: контрактный тест сниффера читает ФАЙЛЫ соседнего сервиса — общий
+  # модуль невозможен, media отдельный контейнер. В образе бота media_service нет,
+  # а в CI-джобе `backend-tests` есть полный чекаут, поэтому без этих двух строк
+  # эталон расходился бы с CI ровно наоборот обычного: локально красно, в CI зелено.
+  -v "${ROOT}/media_service/app/api/v1/media.py:/app/media_service/app/api/v1/media.py:ro"
+  -v "${ROOT}/media_service/app/core/config.py:/app/media_service/app/core/config.py:ro"
 )
 
 cleanup() {

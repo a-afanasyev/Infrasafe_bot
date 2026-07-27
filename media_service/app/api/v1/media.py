@@ -28,9 +28,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/media", tags=["media"])
 
 
+#: Бренды ISO BMFF, означающие HEIC/HEIF-картинку, а не видео.
+_HEIF_BRANDS = (b"heic", b"heix", b"heim", b"heis", b"mif1", b"msf1")
+
+
 def _sniff_image_mime(data: bytes) -> Optional[str]:
     """Detect content type from magic bytes (first ~12 bytes). Returns None
-    if not a recognised image/video signature so the caller can fall back."""
+    if not a recognised image/video signature so the caller can fall back.
+
+    Таблица сигнатур обязана совпадать с `uk_management_bot/utils/media_sniff.py`
+    (BUG-132): UK-граница выводит server-derived тип и передаёт его сюда, поэтому
+    разные ответы на одни и те же байты означают, что один сервис уже отказал, а
+    другой ещё считает файл валидным. Общий модуль невозможен — media отдельный
+    контейнер со своим деревом зависимостей, — поэтому равенство держит
+    контрактный тест `tests/services/test_media_sniff_contract.py`, который
+    исполняет обе реализации на одном наборе байтов.
+    """
     if not data:
         return None
     if data.startswith(b"\xFF\xD8\xFF"):
@@ -42,16 +55,15 @@ def _sniff_image_mime(data: bytes) -> Optional[str]:
     # WEBP: "RIFF????WEBP"
     if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"
-    # HEIC/HEIF: bytes 4..12 contain "ftypheic" / "ftypheix" / "ftypmif1" / "ftypheis"
+    # ISO BMFF: heic/heif → картинка, бренд "qt" → mov, остальное → mp4.
+    # Раньше список брендов mp4 был закрытым (mp42/isom/avc1/mp41), и .mov, уже
+    # прошедший UK-границу как video/mov, здесь давал None; экзотические бренды
+    # mp4 — тоже.
     if len(data) >= 12 and data[4:8] == b"ftyp":
         brand = data[8:12]
-        if brand in (b"heic", b"heix", b"heim", b"heis", b"mif1", b"msf1"):
+        if brand in _HEIF_BRANDS:
             return "image/heic"
-    # MP4: ftyp box with mp4* / isom / avc1 brands
-    if len(data) >= 12 and data[4:8] == b"ftyp":
-        brand = data[8:12]
-        if brand in (b"mp42", b"isom", b"avc1", b"mp41"):
-            return "video/mp4"
+        return "video/mov" if brand[:2] == b"qt" else "video/mp4"
     return None
 
 

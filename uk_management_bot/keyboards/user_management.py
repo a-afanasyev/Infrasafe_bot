@@ -12,6 +12,7 @@ from typing import Dict, List
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 # from uk_management_bot.database.models.user import User  # временно отключен
 
 
@@ -476,16 +477,8 @@ def get_specialization_stats_keyboard(language: str = 'ru') -> InlineKeyboardMar
 # ═══ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ═══
 
 def _format_user_name(user) -> str:
-    """Форматировать имя пользователя для отображения"""
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    if not name:
-        name = user.username or f"ID{user.telegram_id}"
-    
-    # Ограничиваем длину для красивого отображения
-    if len(name) > 25:
-        name = name[:22] + "..."
-    
-    return name
+    """Подпись пользователя — общий канон (REFACTOR-133), с прежним пределом."""
+    return display_name(user, max_len=25)
 
 
 def _get_status_emoji(status: str) -> str:

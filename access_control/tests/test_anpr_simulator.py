@@ -8,9 +8,14 @@ PostgreSQL-only.
 """
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
 from access_control.app.main import create_app
+from access_control.edge import anpr_simulator
 from access_control.edge.anpr_simulator import AnprSimulator
 from access_control.tests.conftest import PilotFixture, seed_permanent_vehicle
 
@@ -23,6 +28,7 @@ def _simulator(pilot: PilotFixture) -> AnprSimulator:
         gate_id=pilot.gate_id,
         camera_id=pilot.camera_id,
         barrier_id=pilot.barrier_id,
+        api_key=pilot.api_key,
     )
 
 
@@ -64,3 +70,51 @@ def test_simulator_build_event_shape(pg_db, pilot: PilotFixture) -> None:
     assert event["event_id"] == "sim-3"
     assert event["plate_number"] == "01A001AA"
     assert "captured_at" in event
+
+
+class TestApiKeyHasNoBakedDefault:
+    """AUD5-SEC-NEW-4: ключ устройства не должен приезжать из репозитория.
+
+    Раньше конструктор нёс `api_key="pilot-test-device-key"`. Само по себе это
+    значение эксплуатируемо только если симулятор запущен против стенда, где
+    такой ключ провижинен, — но именно поэтому дефолт и опасен: запуск против
+    живого контура выглядел бы штатным, а ключ брался бы из исходников.
+
+    Проверяется наблюдаемое следствие (конструктор не собирается без ключа), а
+    не форма записи — переименование параметра тест не обманет.
+    """
+
+    def test_construction_without_api_key_fails(self) -> None:
+        with pytest.raises(TypeError):
+            AnprSimulator(
+                object(),
+                controller_uid="ctrl-1",
+                zone_id=1,
+                gate_id=1,
+                camera_id=1,
+                barrier_id=1,
+            )
+
+    def test_module_carries_no_key_literal_in_code(self) -> None:
+        """Дефолт не должен вернуться и в виде модульной константы.
+
+        Проверка по AST, а не по подстроке: docstring этого же класса объясняет,
+        какое именно значение было зашито, и наивный поиск ловил бы объяснение
+        вместо кода — ровно тот ложный сигнал, из-за которого «гейт сработал»
+        и «гейт поймал сам себя» неразличимы.
+        """
+        tree = ast.parse(Path(anpr_simulator.__file__).read_text(encoding="utf-8"))
+        docstrings = {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+        }
+        offenders = [
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and node not in docstrings
+            and isinstance(node.value, str)
+            and "device-key" in node.value
+        ]
+        assert not offenders, f"ключ устройства снова зашит в код, строки: {offenders}"

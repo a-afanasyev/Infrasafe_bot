@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Контроль доступа</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:18px; }
+  .tabs button { border:none; background:none; padding:11px 16px; font-family:var(--font-display); font-weight:600; font-size:14px; color:var(--text-2); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1px; }
+  .tabs button.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .dir-in { color:#2f8f37; font-weight:600; } .dir-out { color:#8a929c; font-weight:600; }
+</style>
+</head>
+<body data-nav="access" data-title="Контроль доступа" data-actions='<a class="btn btn-outline btn-sm" href="index.html">← Все экраны</a><button class="btn btn-primary btn-sm">🔑 Проверить код гостя</button>'>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <header id="topbar"></header>
+    <div class="content">
+
+      <div class="flex center gap12 mb16">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <div><h2>Контроль доступа</h2><div class="mut" style="font-size:13px">Лента событий охраны в реальном времени</div></div>
+      </div>
+
+      <div class="tabs"><button class="active">Live-лента</button><button>Очередь проверки <span class="badge badge-purchase" style="margin-left:4px">1</span></button><button>История</button></div>
+
+      <div class="toolbar mb16">
+        <div class="input-icon" style="width:220px"><input class="input" placeholder="Поиск по номеру">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div>
+        <select class="select" style="width:auto"><option>Все решения</option></select>
+        <select class="select" style="width:auto"><option>Все статусы</option></select>
+        <button class="btn btn-outline btn-sm">Сбросить</button>
+      </div>
+
+      <table class="table">
+        <thead><tr><th>Время</th><th>Решение</th><th>Причина</th><th>Место</th><th>Направление</th><th>Номер</th><th>Статус</th><th>Источник</th></tr></thead>
+        <tbody>
+          <tr><td class="mut" style="font-family:var(--font-mono);font-size:13px">12:41:08</td><td><span class="badge badge-done">Разрешён</span></td><td>Резидент, авто в списке</td><td>КПП-1</td><td class="dir-in">↓ Въезд</td><td style="font-family:var(--font-mono)">01 A 777 AA</td><td><span class="badge badge-accepted">Закрыто</span></td><td>📷 ANPR</td></tr>
+          <tr><td class="mut" style="font-family:var(--font-mono);font-size:13px">12:38:52</td><td><span class="badge badge-accepted">Разрешён</span></td><td>Пропуск «Такси»</td><td>КПП-1</td><td class="dir-out">↑ Выезд</td><td style="font-family:var(--font-mono)">01 B 512 BC</td><td><span class="badge badge-accepted">Закрыто</span></td><td>📷 ANPR</td></tr>
+          <tr><td class="mut" style="font-family:var(--font-mono);font-size:13px">12:35:19</td><td><span class="badge badge-clarify">Ручная проверка</span></td><td>Номер не распознан</td><td>КПП-2</td><td class="dir-in">↓ Въезд</td><td style="font-family:var(--font-mono)">— — —</td><td><span class="badge badge-purchase">В очереди</span></td><td>📷 ANPR</td></tr>
+          <tr><td class="mut" style="font-family:var(--font-mono);font-size:13px">12:30:04</td><td><span class="badge badge-plain" style="background:#fdeceb;color:#c0433e">Отказано</span></td><td>Нет в списке доступа</td><td>КПП-1</td><td class="dir-in">↓ Въезд</td><td style="font-family:var(--font-mono)">01 C 048 KX</td><td><span class="badge badge-accepted">Закрыто</span></td><td>📷 ANPR</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

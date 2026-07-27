@@ -50,7 +50,7 @@ from uk_management_bot.services.notification_service import (
     send_feedback_reply_to_user,
 )
 from uk_management_bot.utils.media_sniff import sniff_media_mime
-from uk_management_bot.utils.user_names import full_name
+from uk_management_bot.utils.user_names import display_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -75,12 +75,8 @@ _TRANSITIONS = {
 
 
 def _author_name(user: Optional[User]) -> Optional[str]:
-    """Имя с фолбэком (AUD5-APIFE-13: базу считает канон, фолбэк — прежний)."""
-    if not user:
-        return None
-    return full_name(user) or (
-        f"@{user.username}" if user.username else f"id{user.telegram_id}"
-    )
+    """Имя с общим фолбэком (REFACTOR-133)."""
+    return display_name(user)
 
 
 def _media_base() -> str:

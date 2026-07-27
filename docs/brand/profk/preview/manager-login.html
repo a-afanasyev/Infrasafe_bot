@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Вход</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; position:relative; overflow:hidden; }
+  .glow { position:absolute; top:16%; left:50%; transform:translateX(-50%); width:620px; height:320px;
+          background:radial-gradient(ellipse, rgba(68,194,74,.10) 0%, transparent 70%); pointer-events:none; }
+  .login-card { width:100%; max-width:400px; position:relative; }
+  .brand-mark { display:flex; flex-direction:column; align-items:center; margin-bottom:26px; }
+  .brand-mark img { width:56px; height:56px; margin-bottom:12px; }
+  .brand-mark .t { font-family:var(--font-display); font-weight:800; font-size:22px; letter-spacing:.3px; }
+  .brand-mark .s { font-size:12.5px; color:var(--text-muted); margin-top:3px; }
+  .card-auth { background:#fff; border:1px solid var(--border); border-radius:16px; padding:30px 28px;
+               box-shadow:0 8px 32px rgba(51,51,51,.08), 0 0 0 1px #ececec; }
+  .tg-btn { width:100%; background:#2f9fdc; color:#fff; border:none; border-radius:10px; padding:12px;
+            font-family:var(--font-display); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; }
+  .divider { display:flex; align-items:center; gap:12px; margin:18px 0; }
+  .divider i { flex:1; height:1px; background:var(--border); }
+  .divider span { font-size:11px; color:var(--text-muted); letter-spacing:1.5px; }
+  .backlink { position:absolute; top:20px; left:22px; font-family:var(--font-display); font-weight:600; font-size:13px; }
+</style>
+</head>
+<body>
+<a class="backlink" href="index.html">← Все экраны</a>
+<div class="login-wrap">
+  <div class="glow"></div>
+  <div class="login-card">
+    <div class="brand-mark">
+      <img src="assets/profk-mark.svg" alt="PROFK">
+      <div class="t">Сервисная панель</div>
+      <div class="s">PRO FACILITY KOMMUNAL</div>
+    </div>
+    <div class="card-auth">
+      <button class="tg-btn">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M22 3L2 11l6 2 2 6 3-4 5 4 4-16z" stroke="#fff" stroke-width="0"/></svg>
+        Войти через Telegram
+      </button>
+      <div class="divider"><i></i><span>ИЛИ</span><i></i></div>
+      <div class="field"><label class="label">EMAIL</label><input class="input" placeholder="admin@example.com"></div>
+      <div class="field"><label class="label">ПАРОЛЬ</label><input class="input" type="password" placeholder="••••••••"></div>
+      <button class="btn btn-primary btn-block btn-lg" style="margin-top:6px">Войти</button>
+    </div>
+    <div style="text-align:center;margin-top:16px;font-size:13px" class="mut">Нет доступа? Обратитесь к администратору</div>
+  </div>
+</div>
+</body>
+</html>

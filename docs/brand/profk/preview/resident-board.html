@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Табло жителей</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+<style>
+  body { background:#f5f5f5; }
+  .board { max-width:1600px; margin:0 auto; }
+  .mono { font-family:var(--font-mono); }
+  .rb-ticker { background:var(--accent); color:#fff; padding:11px 0; overflow:hidden; white-space:nowrap; }
+  .rb-ticker span.run { display:inline-block; animation:ticker 34s linear infinite; font-weight:600; font-size:.92rem; }
+  @keyframes ticker { 0%{transform:translateX(100vw)} 100%{transform:translateX(-100%)} }
+  .dot { display:inline-block; width:6px; height:6px; background:rgba(255,255,255,.5); border-radius:50%; margin:0 30px; vertical-align:middle; }
+  .rb-head { background:#fff; border-bottom:1px solid var(--border-soft); padding:22px 48px; display:flex; align-items:center; gap:22px;
+             box-shadow:0 1px 3px rgba(51,51,51,.05); position:sticky; top:0; z-index:50; }
+  .rb-head .mark { width:54px; height:54px; flex-shrink:0; }
+  .rb-org { font-family:var(--font-display); font-weight:800; font-size:1.4rem; letter-spacing:-.02em; }
+  .rb-org-sub { font-size:.85rem; color:var(--text-muted); margin-top:2px; }
+  .rb-clock { font-family:var(--font-mono); font-weight:700; font-size:2rem; letter-spacing:-.02em; line-height:1; }
+  .rb-date { font-size:.85rem; color:var(--text-2); margin-top:4px; }
+  .rb-body { padding:30px 48px; display:flex; flex-direction:column; gap:22px; }
+  .rb-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  .rb-tile { background:#fff; border:1px solid var(--border-soft); border-radius:16px; padding:22px 26px; display:flex; align-items:center; gap:18px; box-shadow:var(--shadow-card); }
+  .rb-tile .ic { width:54px; height:54px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; flex-shrink:0; }
+  .rb-tile .num { font-family:var(--font-mono); font-weight:700; font-size:1.9rem; line-height:1; letter-spacing:-.03em; }
+  .rb-tile .lbl { font-size:.85rem; color:var(--text-2); margin-top:5px; font-weight:600; }
+  .rb-card { background:#fff; border:1px solid var(--border-soft); border-radius:16px; box-shadow:var(--shadow-card); overflow:hidden; }
+  .rb-ch { padding:18px 26px; border-bottom:1px solid var(--border-soft); background:#f7f8f7; display:flex; align-items:center; justify-content:space-between; }
+  .rb-ch .t { font-family:var(--font-display); font-weight:700; font-size:1.05rem; }
+  .rb-ch .tag { font-family:var(--font-mono); font-size:.72rem; font-weight:700; padding:4px 12px; border-radius:20px; }
+  .pipe { display:flex; align-items:center; gap:4px; margin-bottom:18px; }
+  .pipe .cell { flex:1; text-align:center; padding:13px 6px; border-radius:10px; }
+  .pipe .cell .n { font-family:var(--font-mono); font-size:1.35rem; font-weight:700; display:block; margin-bottom:3px; }
+  .pipe .cell .s { font-size:.7rem; font-weight:700; opacity:.85; }
+  .pipe .arr { color:#c2c9c4; font-size:1.1rem; flex-shrink:0; }
+  .cols { display:grid; grid-template-columns:repeat(6,1fr); }
+  .col { padding:0 10px; border-right:1px solid rgba(51,51,51,.07); }
+  .col:last-child { border-right:none; }
+  .req { padding:9px 11px; border-radius:8px; border:1px solid var(--border-soft); margin-bottom:8px; }
+  .req .c { font-size:.84rem; font-weight:600; line-height:1.3; }
+  .req .e { font-family:var(--font-mono); font-size:.72rem; color:var(--text-muted); margin-top:4px; }
+  .empty { text-align:center; padding:12px 4px; color:#cbd5cf; }
+  .two { display:grid; grid-template-columns:1.15fr 1fr; gap:22px; }
+  .ann { display:flex; gap:14px; padding:16px 18px; border-radius:10px; border:1px solid var(--border-soft); margin-bottom:12px; }
+  .ann .ic { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.25rem; flex-shrink:0; }
+  .ann .ti { font-family:var(--font-display); font-weight:700; font-size:.95rem; margin-bottom:3px; }
+  .ann .tx { font-size:.85rem; color:var(--text-2); line-height:1.5; }
+  .ann .pub { font-family:var(--font-mono); font-size:.72rem; color:var(--text-muted); margin-top:6px; }
+  .rate { padding:24px 26px; text-align:center; }
+  .rate .v { font-family:var(--font-mono); font-weight:800; font-size:3.4rem; color:var(--accent-hover); letter-spacing:-.04em; line-height:1; }
+  .rate .stars { font-size:1.5rem; margin:8px 0; letter-spacing:4px; color:var(--accent); }
+  .rate .bar { width:80%; margin:16px auto 0; height:8px; background:var(--bg-2); border-radius:4px; overflow:hidden; }
+  .rate .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--accent-hover),var(--accent)); }
+  .hours { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; text-align:center; padding:20px 26px 6px; }
+  .hours .d { font-family:var(--font-display); font-weight:700; font-size:.78rem; color:var(--text-2); margin-bottom:6px; }
+  .hours .h { font-family:var(--font-mono); font-size:.75rem; font-weight:600; padding:8px 4px; border-radius:8px; background:var(--bg-2); border:2px solid transparent; }
+  .hours .today .d { color:var(--accent-hover); }
+  .hours .today .h { background:var(--accent-dim); color:var(--accent-hover); border-color:var(--accent); }
+  .emerg { margin:12px 26px 0; padding:11px; background:#fdeceb; border-radius:10px; text-align:center; font-size:.85rem; font-weight:600; color:var(--error); }
+  .botline { text-align:center; margin:10px 0 20px; font-size:.82rem; color:var(--text-2); }
+  .rb-foot { padding:18px 48px; text-align:center; color:var(--text-muted); font-size:.82rem; border-top:1px solid var(--border-soft); background:#fff; }
+  .pulse { width:8px; height:8px; border-radius:50%; background:var(--accent); display:inline-block; margin-right:6px; animation:pulse 2s ease-in-out infinite; vertical-align:middle; }
+  @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(68,194,74,.4)} 50%{opacity:.6;box-shadow:0 0 0 6px rgba(68,194,74,0)} }
+  .backlink { position:fixed; top:64px; left:14px; z-index:60; font-family:var(--font-display); font-weight:600; font-size:12px; background:#fff; padding:5px 10px; border-radius:8px; box-shadow:var(--shadow-card); }
+</style>
+</head>
+<body>
+<a class="backlink" href="index.html">← Все экраны</a>
+<div class="board">
+
+  <div class="rb-ticker"><span class="run">
+    📋 Новых заявок сегодня: 8 <span class="dot"></span>
+    🔧 Специалистов работает: 7 <span class="dot"></span>
+    ✅ Выполнено за месяц: 120 <span class="dot"></span>
+    📞 Диспетчерская: +998 71 200-00-00 <span class="dot"></span>
+    📱 Бот: @profkbot <span class="dot"></span>
+    📋 Новых заявок сегодня: 8 <span class="dot"></span>
+  </span></div>
+
+  <header class="rb-head">
+    <img class="mark" src="assets/profk-favicon.svg" alt="PROFK">
+    <div style="flex:1">
+      <div class="rb-org">ЖК «Ботаника»</div>
+      <div class="rb-org-sub">Управляющая компания PROFK · Pro Facility Kommunal</div>
+    </div>
+    <div style="text-align:right">
+      <div class="rb-clock" id="clock">14:32</div>
+      <div class="rb-date" id="date">Четверг, 9 июля 2026</div>
+    </div>
+  </header>
+
+  <div class="rb-body">
+
+    <!-- STATS -->
+    <div class="rb-stats">
+      <div class="rb-tile"><div class="ic" style="background:#e7f0fb">📋</div><div><span class="num" style="color:#2f74c0">12</span><div class="lbl">Активных заявок</div></div></div>
+      <div class="rb-tile"><div class="ic" style="background:#e8f6e9">✅</div><div><span class="num" style="color:var(--accent-hover)">120</span><div class="lbl">Выполнено за месяц</div></div></div>
+      <div class="rb-tile"><div class="ic" style="background:#fff2df">⏱</div><div><span class="num" style="color:#b9791f">6.4<span style="font-size:1rem;color:#b0b6bd">ч</span></span><div class="lbl">Среднее время</div></div></div>
+      <div class="rb-tile"><div class="ic" style="background:#efeafd">👥</div><div><span class="num" style="color:#7c4fd4">7</span><div class="lbl">Специалистов на смене</div></div></div>
+    </div>
+
+    <!-- REQUESTS PIPELINE -->
+    <div class="rb-card">
+      <div class="rb-ch"><span class="t">Текущие заявки</span><span class="tag" style="background:#e7f0fb;color:#2f74c0">Активных: 12</span></div>
+      <div style="padding:20px 26px">
+        <div class="pipe">
+          <div class="cell" style="background:#eff3ff;color:#2563eb"><span class="n">3</span><span class="s">Новая</span></div><span class="arr">→</span>
+          <div class="cell" style="background:#f3f0ff;color:#7c3aed"><span class="n">5</span><span class="s">В работе</span></div><span class="arr">→</span>
+          <div class="cell" style="background:#fef9e7;color:#d97706"><span class="n">2</span><span class="s">Закуп</span></div><span class="arr">→</span>
+          <div class="cell" style="background:#ecfeff;color:#0891b2"><span class="n">1</span><span class="s">Уточнение</span></div><span class="arr">→</span>
+          <div class="cell" style="background:#ecfdf5;color:#059669"><span class="n">4</span><span class="s">Выполнена</span></div><span class="arr">→</span>
+          <div class="cell" style="background:#f0fdf4;color:var(--accent-hover)"><span class="n">8</span><span class="s">Принято</span></div>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <div class="req" style="border-left:3px solid #2563eb"><div class="c">🔧 Сантехника</div><div class="e">12 мин назад</div></div>
+            <div class="req" style="border-left:3px solid #2563eb"><div class="c">🧹 Уборка</div><div class="e">40 мин назад</div></div>
+            <div class="req" style="border-left:3px solid #2563eb"><div class="c">🌿 Благоустройство</div><div class="e">1 ч назад</div></div>
+          </div>
+          <div class="col">
+            <div class="req" style="border-left:3px solid #7c3aed"><div class="c">⚡ Электрика</div><div class="e">2 ч назад</div></div>
+            <div class="req" style="border-left:3px solid #7c3aed"><div class="c">🔥 Отопление</div><div class="e">3 ч назад</div></div>
+          </div>
+          <div class="col">
+            <div class="req" style="border-left:3px solid #d97706"><div class="c">⚡ Электрика</div><div class="e">5 ч назад</div></div>
+          </div>
+          <div class="col">
+            <div class="req" style="border-left:3px solid #0891b2"><div class="c">🔥 Отопление</div><div class="e">1 д назад</div></div>
+          </div>
+          <div class="col">
+            <div class="req" style="border-left:3px solid #059669"><div class="c">🔧 Сантехника</div><div class="e">6 ч назад</div></div>
+            <div class="req" style="border-left:3px solid #059669"><div class="c">🚿 Сантехника</div><div class="e">8 ч назад</div></div>
+          </div>
+          <div class="col">
+            <div class="req" style="border-left:3px solid var(--accent)"><div class="c">🧹 Уборка</div><div class="e">1 д назад</div></div>
+            <div class="empty">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="two">
+      <!-- ANNOUNCEMENTS -->
+      <div class="rb-card">
+        <div class="rb-ch"><span class="t">Объявления</span><span class="tag" style="background:#fff2df;color:#b9791f">Важное</span></div>
+        <div style="padding:18px 26px">
+          <div class="ann">
+            <div class="ic" style="background:#fdeceb">🚱</div>
+            <div style="flex:1"><div class="ti">Плановое отключение воды</div>
+            <div class="tx">Завтра, 10 июля, с 10:00 до 14:00 в 3-м подъезде. Приносим извинения за неудобства.</div>
+            <div class="pub">Опубликовано 09.07, 09:00</div></div>
+          </div>
+          <div class="ann">
+            <div class="ic" style="background:#e7f0fb">🅿️</div>
+            <div style="flex:1"><div class="ti">Разметка парковки</div>
+            <div class="tx">12 июля наносим новую разметку на гостевой парковке. Просьба освободить места до 08:00.</div>
+            <div class="pub">Опубликовано 08.07, 17:20</div></div>
+          </div>
+          <div class="ann">
+            <div class="ic" style="background:#e8f6e9">🌿</div>
+            <div style="flex:1"><div class="ti">Субботник во дворе</div>
+            <div class="tx">Приглашаем жителей 13 июля в 10:00 на озеленение двора. Инвентарь предоставим.</div>
+            <div class="pub">Опубликовано 07.07, 12:00</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RATING + HOURS -->
+      <div style="display:flex;flex-direction:column;gap:22px">
+        <div class="rb-card">
+          <div class="rb-ch"><span class="t">Оценка жителей</span></div>
+          <div class="rate">
+            <div class="v">4.7</div>
+            <div class="stars">★★★★★</div>
+            <div class="lbl" style="color:var(--text-2);font-weight:600;font-size:.85rem">Эффективность за период</div>
+            <div class="bar"><i style="width:94%"></i></div>
+          </div>
+        </div>
+        <div class="rb-card">
+          <div class="rb-ch"><span class="t">Часы работы</span></div>
+          <div class="hours">
+            <div><div class="d">Пн</div><div class="h">09–18</div></div>
+            <div><div class="d">Вт</div><div class="h">09–18</div></div>
+            <div><div class="d">Ср</div><div class="h">09–18</div></div>
+            <div class="today"><div class="d">Чт</div><div class="h">09–18</div></div>
+            <div><div class="d">Пт</div><div class="h">09–18</div></div>
+            <div><div class="d">Сб</div><div class="h">10–15</div></div>
+            <div><div class="d">Вс</div><div class="h">—</div></div>
+          </div>
+          <div class="emerg">📞 Аварийная служба: +998 71 200-00-01 (круглосуточно)</div>
+          <div class="botline">📱 Telegram-бот: @profkbot</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="rb-foot"><span class="pulse"></span>Обновляется в реальном времени · 14:32:07</footer>
+</div>
+
+<script>
+  function tick(){
+    const d=new Date();
+    const p=n=>String(n).padStart(2,'0');
+    document.getElementById('clock').textContent=`${p(d.getHours())}:${p(d.getMinutes())}`;
+    const days=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+    const mon=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+    document.getElementById('date').textContent=`${days[d.getDay()]}, ${d.getDate()} ${mon[d.getMonth()]} ${d.getFullYear()}`;
+    document.querySelector('.rb-foot').innerHTML=`<span class="pulse"></span>Обновляется в реальном времени · ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+  tick(); setInterval(tick,1000);
+</script>
+</body>
+</html>

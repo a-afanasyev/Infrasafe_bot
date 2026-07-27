@@ -322,6 +322,7 @@ def test_simulator_can_send_synthetic_photos(pg_db, pilot) -> None:
         gate_id=pilot.gate_id,
         camera_id=pilot.camera_id,
         barrier_id=pilot.barrier_id,
+        api_key=pilot.api_key,
     )
     resp = sim.send_photos(
         event_id="ev-sim", plate_bytes=b"SIMPLATE", overview_bytes=b"SIMOVER"

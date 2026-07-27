@@ -13,7 +13,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
-from uk_management_bot.utils.user_names import full_name
+from uk_management_bot.utils.user_names import display_name
 
 logger = logging.getLogger(__name__)
 
@@ -198,13 +198,11 @@ async def end_shift(
 def _executor_name(user: Optional[User]) -> Optional[str]:
     """Имя с фолбэком: подпись в TransferOut пустой быть не может.
 
-    AUD5-APIFE-13: «Имя Фамилия» считает канон, а фолбэк остаётся здесь и
-    прежним — он уходит в ответ API, и менять видимую строку заодно с
-    технической правкой нельзя.
+    REFACTOR-133: фолбэк теперь общий (`@username`, иначе `ID{telegram_id}`).
+    Строка видима в ответе API (`TransferOut`), поэтому менялась отдельным
+    решением, а не заодно с технической правкой.
     """
-    if user is None:
-        return None
-    return full_name(user) or user.username or f"#{user.id}"
+    return display_name(user)
 
 
 def _transfer_out(

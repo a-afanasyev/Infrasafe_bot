@@ -29,7 +29,6 @@ services:
       - media_uploads:/app/data/uploads
       # Кэш превью публичной витрины — томом, чтобы рестарт его не сбрасывал.
       - media_preview_cache:/app/.preview-cache
-      - ./media_service/channels.json:/app/data/channels.json:ro
     depends_on:
       postgres:
         condition: service_healthy

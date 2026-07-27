@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROFK — Сотрудники</title>
+<link rel="icon" href="assets/profk-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="profk.css">
+</head>
+<body data-nav="employees" data-title="Сотрудники" data-actions='<a class="btn btn-outline btn-sm" href="index.html">← Все экраны</a><button class="btn btn-outline btn-sm">Экспорт</button><button class="btn btn-primary btn-sm">＋ Добавить</button>'>
+<div class="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <header id="topbar"></header>
+    <div class="content">
+
+      <div class="grid mb16" style="grid-template-columns:repeat(4,1fr)">
+        <div class="card card-pad stat"><span class="l">👥 Всего сотрудников</span><span class="v" style="font-size:26px">24</span></div>
+        <div class="card card-pad stat"><span class="l">🟢 На смене сейчас</span><span class="v" style="font-size:26px;color:var(--accent)">7</span></div>
+        <div class="card card-pad stat"><span class="l">⏳ Ожидают одобрения</span><span class="v" style="font-size:26px;color:var(--warning)">3</span></div>
+        <div class="card card-pad stat"><span class="l">✓ Верифицированы</span><span class="v" style="font-size:26px">19</span></div>
+      </div>
+
+      <div class="toolbar mb16">
+        <div class="input-icon" style="width:280px"><input class="input" placeholder="Поиск сотрудника…">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div>
+        <span class="chip active">Все роли</span><span class="chip">Исполнитель</span><span class="chip">Менеджер</span>
+        <span style="width:1px;height:22px;background:var(--border)"></span>
+        <span class="chip">На смене</span><span class="chip">Верифицированы</span>
+      </div>
+
+      <table class="table">
+        <thead><tr><th>Сотрудник</th><th>Специализация</th><th>Верификация</th><th>Статус</th><th>Смена</th><th>Действия</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="flex center gap12"><div class="mini-av" style="width:32px;height:32px">АР</div><div><b style="font-family:var(--font-display)">Алишер Рахимов</b><div class="mut" style="font-size:12px">Исполнитель</div></div></div></td>
+            <td><span class="chip" style="cursor:default">Сантехник</span></td>
+            <td><span class="badge badge-done">Верифицирован</span></td>
+            <td><span style="color:var(--accent);font-weight:600">● Активен</span></td>
+            <td><span class="badge badge-progress">На смене</span></td>
+            <td><button class="btn btn-outline btn-sm">Профиль</button></td>
+          </tr>
+          <tr>
+            <td><div class="flex center gap12"><div class="mini-av" style="width:32px;height:32px">СК</div><div><b style="font-family:var(--font-display)">Сардор Каримов</b><div class="mut" style="font-size:12px">Исполнитель</div></div></div></td>
+            <td><span class="chip" style="cursor:default">Электрик</span></td>
+            <td><span class="badge badge-done">Верифицирован</span></td>
+            <td><span style="color:var(--accent);font-weight:600">● Активен</span></td>
+            <td><span class="badge badge-progress">На смене</span></td>
+            <td><button class="btn btn-outline btn-sm">Профиль</button></td>
+          </tr>
+          <tr>
+            <td><div class="flex center gap12"><div class="mini-av" style="width:32px;height:32px">ДТ</div><div><b style="font-family:var(--font-display)">Дилноза Турсунова</b><div class="mut" style="font-size:12px">Исполнитель</div></div></div></td>
+            <td><span class="chip" style="cursor:default">Уборка</span></td>
+            <td><span class="badge badge-clarify">На проверке</span></td>
+            <td><span class="mut">○ Не на смене</span></td>
+            <td><span class="mut">—</span></td>
+            <td><button class="btn btn-outline btn-sm">Профиль</button></td>
+          </tr>
+          <tr>
+            <td><div class="flex center gap12"><div class="mini-av" style="width:32px;height:32px">МД</div><div><b style="font-family:var(--font-display)">Мурод Достонов</b><div class="mut" style="font-size:12px">Менеджер</div></div></div></td>
+            <td><span class="mut">—</span></td>
+            <td><span class="badge badge-done">Верифицирован</span></td>
+            <td><span style="color:var(--accent);font-weight:600">● Активен</span></td>
+            <td><span class="mut">—</span></td>
+            <td><button class="btn btn-outline btn-sm">Профиль</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>
