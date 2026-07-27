@@ -11,10 +11,18 @@ HS256 подписывает секретом произвольной длин�
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+# Корень репозитория выводится из расположения файла, а НЕ зашит как «/app»:
+# `make test-ci` гоняет сьют внутри контейнера (там код в /app), а CI-джоба —
+# прямо на раннере, где такого пути нет. Зашитый путь давал зелёный локальный
+# прогон и FileNotFoundError в CI.
+ROOT = Path(__file__).resolve().parents[2]
 
 BASE_ENV = {
     "BOT_TOKEN": "123:dummy",
@@ -26,15 +34,20 @@ BASE_ENV = {
     # Прод-режим отвергает sqlite отдельной проверкой — даём валидный DSN,
     # чтобы падение было именно на длине секрета, а не раньше.
     "DATABASE_URL": "postgresql://u:p@db:5432/uk",
-    "PYTHONPATH": "/app",
+    "PYTHONPATH": str(ROOT),
 }
 
 
 def _import_settings(*, debug: str, jwt_secret: str) -> subprocess.CompletedProcess:
-    env = {**BASE_ENV, "DEBUG": debug, "JWT_SECRET": jwt_secret, "PATH": "/usr/local/bin:/usr/bin:/bin"}
+    env = {
+        **BASE_ENV,
+        "DEBUG": debug,
+        "JWT_SECRET": jwt_secret,
+        "PATH": os.environ.get("PATH", ""),
+    }
     return subprocess.run(
         [sys.executable, "-c", "import uk_management_bot.config.settings"],
-        env=env, capture_output=True, text=True, cwd="/app",
+        env=env, capture_output=True, text=True, cwd=str(ROOT),
     )
 
 
