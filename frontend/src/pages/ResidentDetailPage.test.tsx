@@ -11,9 +11,22 @@ const { detailQuery } = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('../hooks/useResidents', () => ({
-  useResident: () => detailQuery,
-}))
+// vi.mock поднимается наверх файла, поэтому фабрика не имеет права ссылаться
+// на переменные модуля — хелпер объявляется прямо внутри неё.
+vi.mock('../hooks/useResidents', () => {
+  const noop = () => ({ mutate: vi.fn(), isPending: false })
+  return {
+    useResident: () => detailQuery,
+    useApproveResident: noop,
+    useBlockResident: noop,
+    useUnblockResident: noop,
+    useAttachApartment: noop,
+    useApproveBinding: noop,
+    useRejectBinding: noop,
+    useUpdateBinding: noop,
+    useRemoveBinding: noop,
+  }
+})
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual<typeof import('react-router')>('react-router')

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
   usePendingModeration,
@@ -100,6 +101,15 @@ export default function ModerationPanel() {
           <div className="text-[13px] text-text-secondary font-[family-name:var(--font-display)] leading-relaxed">
             {buildAddress(item)}
           </div>
+
+          {/* Ссылка в карточку: очередь показывает заявку, а решение часто
+              требует контекста — других квартир жителя, статуса верификации. */}
+          <Link
+            to={`/dashboard/residents/${item.user_id}`}
+            className="text-[12px] text-accent no-underline hover:underline w-fit"
+          >
+            {t('moderationPanel.openResident')}
+          </Link>
 
           {/* Date */}
           {item.requested_at && (
