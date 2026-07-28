@@ -39,6 +39,7 @@ from uk_management_bot.api.shifts.router import router as shifts_router
 from uk_management_bot.api.shifts.executor_router import router as executor_shifts_router
 from uk_management_bot.api.requests.stats_router import router as requests_stats_router
 from uk_management_bot.api.addresses.router import router as addresses_router
+from uk_management_bot.api.residents.router import router as residents_router
 from uk_management_bot.api.public.router import router as public_router
 from uk_management_bot.api.board_config.router import router as board_config_router
 from uk_management_bot.api.work_reports.router import router as work_reports_router
@@ -83,6 +84,12 @@ from uk_management_bot.api.addresses.exception_handlers import (
     register_address_exception_handlers,
 )
 register_address_exception_handlers(app)
+
+# Residents-domain exceptions → HTTP 404/409/422
+from uk_management_bot.api.residents.exception_handlers import (
+    register_resident_exception_handlers,
+)
+register_resident_exception_handlers(app)
 
 # CORS — origins come from settings.CORS_ORIGINS (env CORS_ORIGINS, plan §4.1, §7.1).
 # allow_credentials=True forbids wildcard "*", so we always pass an explicit list.
@@ -132,6 +139,7 @@ app.include_router(profile_router, prefix="/api/v2/profile", tags=["profile"])
 app.include_router(ws_router, prefix="/ws/v2", tags=["websocket"])
 app.include_router(shifts_router, prefix="/api/v2/shifts", tags=["shifts"])
 app.include_router(addresses_router, prefix="/api/v2/addresses", tags=["addresses"])
+app.include_router(residents_router, prefix="/api/v2/residents", tags=["residents"])
 app.include_router(executor_shifts_router, prefix="/api/v2/executor/shifts", tags=["executor-shifts"])
 app.include_router(public_router, prefix="/api/v2/public", tags=["public"])
 app.include_router(work_reports_public_router, prefix="/api/v2/public", tags=["public"])
