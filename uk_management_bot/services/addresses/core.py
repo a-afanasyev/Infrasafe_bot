@@ -546,29 +546,62 @@ async def request_apartment(
     return ua
 
 
+async def _review_apartment_request(
+    db: AsyncSession,
+    *,
+    user_apartment_id: int,
+    reviewer_id: int,
+    comment: str | None,
+    approve: bool,
+    commit: bool,
+):
+    """Общее тело approve/reject — различаются только методом и событием."""
+    event = "apartment_request.approved" if approve else "apartment_request.rejected"
+
+    ua = await _get_user_apartment_or_raise(db, user_apartment_id)
+    if ua.status != "pending":
+        raise AddressConflict(f"Заявка уже обработана (статус: {ua.status})")
+
+    (ua.approve if approve else ua.reject)(reviewer_id, comment)
+    await db.flush()
+
+    apartment = await db.get(Apartment, ua.apartment_id)
+    data = build_apartment_event_data(apartment) if apartment else {"id": ua.apartment_id}
+
+    if not commit:
+        # Т1: владелец транзакции снаружи — ни outbox, ни commit, ни Redis.
+        return {"entity": ua, "event": event, "payload": data}
+
+    await enqueue_outbox(db, event=event, data=data)
+    await db.commit()
+    await db.refresh(ua)
+    await publish_realtime_after_commit(event, data)
+    logger.info("Заявка %s %s администратором %s", user_apartment_id,
+                "подтверждена" if approve else "отклонена", reviewer_id)
+    return ua
+
+
 async def approve_apartment_request(
     db: AsyncSession,
     *,
     user_apartment_id: int,
     reviewer_id: int,
     comment: str | None = None,
-) -> UserApartment:
-    ua = await _get_user_apartment_or_raise(db, user_apartment_id)
-    if ua.status != "pending":
-        raise AddressConflict(f"Заявка уже обработана (статус: {ua.status})")
+    commit: bool = True,
+) -> UserApartment | dict:
+    """Подтвердить заявку на привязку.
 
-    ua.approve(reviewer_id, comment)
-    await db.flush()
-
-    apartment = await db.get(Apartment, ua.apartment_id)
-    data = build_apartment_event_data(apartment) if apartment else {"id": ua.apartment_id}
-    await enqueue_outbox(db, event="apartment_request.approved", data=data)
-    await db.commit()
-    await db.refresh(ua)
-    await publish_realtime_after_commit("apartment_request.approved", data)
-    logger.info("Заявка %s подтверждена администратором %s",
-                user_apartment_id, reviewer_id)
-    return ua
+    `commit=False` (Т1) — режим для вызывающего, который владеет транзакцией
+    (раздел «Жители»): функция ТОЛЬКО мутирует и делает flush, возвращая
+    `{entity, event, payload}`; outbox, commit и Redis-публикация остаются на
+    вызывающем, чтобы мутация, AuditLog и строка outbox легли одним коммитом,
+    а событие ушло ровно один раз. При `commit=True` (путь бота) поведение
+    прежнее бит-в-бит.
+    """
+    return await _review_apartment_request(
+        db, user_apartment_id=user_apartment_id, reviewer_id=reviewer_id,
+        comment=comment, approve=True, commit=commit,
+    )
 
 
 async def reject_apartment_request(
@@ -577,29 +610,36 @@ async def reject_apartment_request(
     user_apartment_id: int,
     reviewer_id: int,
     comment: str | None = None,
-) -> UserApartment:
-    ua = await _get_user_apartment_or_raise(db, user_apartment_id)
-    if ua.status != "pending":
-        raise AddressConflict(f"Заявка уже обработана (статус: {ua.status})")
-
-    ua.reject(reviewer_id, comment)
-    await db.flush()
-
-    apartment = await db.get(Apartment, ua.apartment_id)
-    data = build_apartment_event_data(apartment) if apartment else {"id": ua.apartment_id}
-    await enqueue_outbox(db, event="apartment_request.rejected", data=data)
-    await db.commit()
-    await db.refresh(ua)
-    await publish_realtime_after_commit("apartment_request.rejected", data)
-    logger.info("Заявка %s отклонена администратором %s",
-                user_apartment_id, reviewer_id)
-    return ua
+    commit: bool = True,
+) -> UserApartment | dict:
+    """Отклонить заявку на привязку. Про `commit=False` — см. approve."""
+    return await _review_apartment_request(
+        db, user_apartment_id=user_apartment_id, reviewer_id=reviewer_id,
+        comment=comment, approve=False, commit=commit,
+    )
 
 
-async def remove_user_from_apartment(db: AsyncSession, *, user_apartment_id: int) -> None:
-    """Hard-delete a user↔apartment link. No event emitted (parity with legacy)."""
+async def remove_user_from_apartment(
+    db: AsyncSession, *, user_apartment_id: int, commit: bool = True,
+) -> None | dict:
+    """Hard-delete связи пользователь↔квартира.
+
+    `commit=True` (путь бота) — событий НЕ эмитит, parity с legacy.
+    `commit=False` (Т1) — возвращает `apartment_request.removed`: веб-дашбордам
+    нужно увидеть исчезновение привязки, а не только её появление. Само событие
+    отправляет вызывающий, после своего commit.
+    """
     ua = await _get_user_apartment_or_raise(db, user_apartment_id)
     user_id, apartment_id = ua.user_id, ua.apartment_id
+
+    if not commit:
+        apartment = await db.get(Apartment, apartment_id)
+        data = build_apartment_event_data(apartment) if apartment else {"id": apartment_id}
+        await db.delete(ua)
+        await db.flush()
+        return {"entity": None, "event": "apartment_request.removed", "payload": data}
+
     await db.delete(ua)
     await db.commit()
     logger.info("Удалена связь: пользователь %s → квартира %s", user_id, apartment_id)
+    return None

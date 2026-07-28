@@ -4528,6 +4528,66 @@
         "title": "ResidentApartmentOut",
         "type": "object"
       },
+      "ResidentAttachApartment": {
+        "additionalProperties": false,
+        "properties": {
+          "apartment_id": {
+            "title": "Apartment Id",
+            "type": "integer"
+          },
+          "is_owner": {
+            "default": false,
+            "title": "Is Owner",
+            "type": "boolean"
+          },
+          "is_primary": {
+            "default": false,
+            "title": "Is Primary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "apartment_id"
+        ],
+        "title": "ResidentAttachApartment",
+        "type": "object"
+      },
+      "ResidentBlockIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ResidentBlockIn",
+        "type": "object"
+      },
+      "ResidentCommentIn": {
+        "additionalProperties": false,
+        "description": "Необязательный комментарий менеджера (approve аккаунта / привязки).",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "title": "ResidentCommentIn",
+        "type": "object"
+      },
       "ResidentDetailOut": {
         "properties": {
           "apartments": {
@@ -4976,6 +5036,22 @@
         "title": "ResidentOut",
         "type": "object"
       },
+      "ResidentRejectIn": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Comment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "comment"
+        ],
+        "title": "ResidentRejectIn",
+        "type": "object"
+      },
       "ResidentSearchResult": {
         "properties": {
           "address": {
@@ -5079,6 +5155,36 @@
           "verification_rejected"
         ],
         "title": "ResidentStatsOut",
+        "type": "object"
+      },
+      "ResidentUpdateBindingIn": {
+        "additionalProperties": false,
+        "description": "None = «поле не прислали» (не менять), а не «сбросить».",
+        "properties": {
+          "is_owner": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Owner"
+          },
+          "is_primary": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Primary"
+          }
+        },
+        "title": "ResidentUpdateBindingIn",
         "type": "object"
       },
       "ResidentVerificationOut": {
@@ -12565,6 +12671,463 @@
           }
         ],
         "summary": "Get Resident",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/apartments": {
+      "post": {
+        "operationId": "attach_apartment_api_v2_residents__resident_id__apartments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentAttachApartment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentApartmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attach Apartment",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/apartments/{ua_id}": {
+      "delete": {
+        "operationId": "remove_binding_api_v2_residents__resident_id__apartments__ua_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ua_id",
+            "required": true,
+            "schema": {
+              "title": "Ua Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Binding",
+        "tags": [
+          "residents"
+        ]
+      },
+      "patch": {
+        "operationId": "update_binding_api_v2_residents__resident_id__apartments__ua_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ua_id",
+            "required": true,
+            "schema": {
+              "title": "Ua Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentUpdateBindingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentApartmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Binding",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/apartments/{ua_id}/approve": {
+      "post": {
+        "operationId": "approve_binding_api_v2_residents__resident_id__apartments__ua_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ua_id",
+            "required": true,
+            "schema": {
+              "title": "Ua Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentCommentIn",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentApartmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Binding",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/apartments/{ua_id}/reject": {
+      "post": {
+        "operationId": "reject_binding_api_v2_residents__resident_id__apartments__ua_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ua_id",
+            "required": true,
+            "schema": {
+              "title": "Ua Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentRejectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentApartmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Binding",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/approve": {
+      "post": {
+        "operationId": "approve_account_api_v2_residents__resident_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentCommentIn",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Account",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/block": {
+      "post": {
+        "operationId": "block_account_api_v2_residents__resident_id__block_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentBlockIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Block Account",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/unblock": {
+      "post": {
+        "operationId": "unblock_account_api_v2_residents__resident_id__unblock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unblock Account",
         "tags": [
           "residents"
         ]

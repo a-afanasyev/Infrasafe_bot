@@ -8346,5 +8346,14 @@
       "validation_error": "⚠️ Saqlab bo'lmadi: {error}\n\nSS:DD-SS:DD formatida qayta urinib ko'ring.",
       "success": "✅ Oyna yangilandi: {window_start}–{window_end}"
     }
+  },
+  "web_notifications": {
+    "apartment_attached": "Menejer sizni xonadonga biriktirdi: {address}. Endi shu manzil bo‘yicha ariza yuborishingiz mumkin.",
+    "binding_approved": "Xonadonga arizangiz tasdiqlandi: {address}.",
+    "binding_rejected": "Xonadonga arizangiz rad etildi: {address}.\nSabab: {comment}",
+    "binding_removed": "Menejer sizni xonadondan uzdi: {address}. Agar bu xato bo‘lsa — boshqaruv kompaniyasiga murojaat qiling.",
+    "documents_requested": "Boshqaruv kompaniyasi shaxsingizni tasdiqlash uchun hujjat so‘radi.\nKerak: {documents}\nIzoh: {comment}\nBotni oching va hujjatlarni yuboring.",
+    "verification_approved": "Shaxsingiz tasdiqlandi. Xizmatlarga ruxsat ochildi.",
+    "verification_rejected": "Shaxsni tekshirish rad etildi.\nSabab: {notes}"
   }
 }
