@@ -76,7 +76,8 @@
     "accessEquipment": "Оборудование",
     "materials": "Склад",
     "resourceAccounting": "Учёт ресурсов",
-    "workReports": "Отчёты о работах"
+    "workReports": "Отчёты о работах",
+    "residents": "Жители"
   },
   "resourceAccounting": {
     "unavailable": "Раздел учёта ресурсов временно недоступен. Попробуйте позже или обратитесь к администратору.",
@@ -1089,6 +1090,70 @@
     "noApartmentsFound": "Квартиры не найдены",
     "noApartmentsFoundDesc": "Добавьте квартиры вручную или используйте автозаполнение",
     "description": "Описание"
+  },
+  "residents": {
+    "title": "Жители",
+    "searchPlaceholder": "ФИО или телефон…",
+    "statsTotal": "Всего жителей",
+    "statsPending": "Ожидают одобрения",
+    "statsVerificationRequested": "Запрошены документы",
+    "statsBlocked": "Заблокированы",
+    "filterStatus": "Статус",
+    "filterVerification": "Верификация",
+    "allYards": "Все дворы",
+    "allBuildings": "Все дома",
+    "allApartments": "Все квартиры",
+    "viewTile": "Плитками",
+    "viewTable": "Таблицей",
+    "next": "Дальше",
+    "noName": "Без имени",
+    "noAddress": "Адрес не привязан",
+    "notFound": "Жители не найдены",
+    "notFoundDesc": "Измените фильтры или строку поиска",
+    "headerResident": "Житель",
+    "headerAddress": "Основной адрес",
+    "headerApartments": "Квартир",
+    "headerVerification": "Верификация",
+    "headerStatus": "Статус",
+    "apartmentsCount_one": "{{count}} квартира",
+    "apartmentsCount_few": "{{count}} квартиры",
+    "apartmentsCount_many": "{{count}} квартир",
+    "aptShort": "кв.",
+    "primary": "Основная",
+    "owner": "Владелец",
+    "tenant": "Житель",
+    "requestedAt": "Заявка от {{date}}",
+    "reviewedAt": "рассмотрена {{date}}",
+    "sectionApartments": "Квартиры",
+    "sectionDocuments": "Документы",
+    "sectionVerification": "Верификация",
+    "noApartments": "Квартиры не привязаны",
+    "noDocuments": "Документы не загружены",
+    "noVerification": "Записей о верификации нет",
+    "verificationRecordStatus": "Статус записи",
+    "accountStatus": {
+      "pending": "Ожидает",
+      "approved": "Одобрен",
+      "blocked": "Заблокирован"
+    },
+    "verification": {
+      "pending": "Не проверен",
+      "requested": "Запрошены документы",
+      "verified": "Подтверждён",
+      "rejected": "Отклонён"
+    },
+    "bindingStatus": {
+      "pending": "На модерации",
+      "approved": "Подтверждена",
+      "rejected": "Отклонена"
+    },
+    "documentType": {
+      "passport": "Паспорт",
+      "property_deed": "Документ о собственности",
+      "rental_agreement": "Договор аренды",
+      "utility_bill": "Счёт за коммунальные услуги",
+      "other": "Другое"
+    }
   },
   "addressModals": {
     "addYard": "Добавить двор",

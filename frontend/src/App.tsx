@@ -24,6 +24,10 @@ const EmployeeDetailPage = lazy(() => import('./pages/EmployeeDetailPage'))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const AddressesPage = lazy(() => import('./pages/AddressesPage'))
+// Администрирование жителей: список/карточка. Пункт меню виден только
+// manager (allowedRoles в NAV_ENTRIES) — API гейтит require_roles("manager").
+const ResidentsPage = lazy(() => import('./pages/ResidentsPage'))
+const ResidentDetailPage = lazy(() => import('./pages/ResidentDetailPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -121,6 +125,8 @@ export default function App() {
                 <Route path="employees/:id" element={<PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary>} />
                 <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
+                <Route path="residents" element={<PageErrorBoundary><ResidentsPage /></PageErrorBoundary>} />
+                <Route path="residents/:id" element={<PageErrorBoundary><ResidentDetailPage /></PageErrorBoundary>} />
                 <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
                 {/* Менеджерская очередь модерации визуальных отчётов «до/после».
                     Гард — общий admin/manager группы /dashboard (как board-editor);

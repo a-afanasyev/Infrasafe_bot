@@ -1,7 +1,9 @@
 // src/types/api.ts
 // Centralised API response types — single source of truth
 
-export type VerificationStatus = 'verified' | 'rejected' | 'pending'
+// 'requested' — менеджер запросил документы; ось верификации жителя
+// (users.verification_status), общая с сотрудниками.
+export type VerificationStatus = 'verified' | 'rejected' | 'pending' | 'requested'
 export type ShiftStatus = 'active' | 'completed' | 'cancelled' | 'planned' | 'paused'
 export type ShiftType = 'regular' | 'emergency' | 'overtime' | 'maintenance'
 export type AnalyticsPeriod = '7d' | '30d' | '90d'
@@ -191,7 +193,9 @@ export interface ApartmentBrief {
   residents_count: number
 }
 
-export interface ResidentBrief {
+/** Житель В КАРТОЧКЕ КВАРТИРЫ (адресный раздел) — не путать с ResidentListItem
+ *  раздела «Жители»: там строка списка людей, здесь строка жильцов квартиры. */
+export interface ApartmentResidentBrief {
   id: number
   user_id: number
   user_name: string | null
@@ -217,7 +221,7 @@ export interface ApartmentDetail {
   description: string | null
   is_active: boolean
   created_at: string | null
-  residents: ResidentBrief[]
+  residents: ApartmentResidentBrief[]
 }
 
 export interface ModerationItem {
@@ -244,6 +248,103 @@ export interface AddressStats {
   apartments_active: number
   residents_approved: number
   residents_pending: number
+}
+
+// ── Раздел «Жители» (/api/v2/residents) ──────────────────────────────
+
+export interface ResidentListItem {
+  id: number
+  telegram_id: number
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  /** Ось аккаунта: pending | approved | blocked. */
+  status: string
+  /** Ось верификации — независима от статуса аккаунта. */
+  verification_status: VerificationStatus
+  language: string | null
+  created_at: string | null
+  /** Привязки approved+pending; rejected не считается принадлежностью. */
+  apartments_count: number
+  /** «Двор · дом · кв. N» основной квартиры или null. */
+  primary_address: string | null
+}
+
+export interface ResidentListResponse {
+  items: ResidentListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ResidentStats {
+  total: number
+  pending: number
+  approved: number
+  blocked: number
+  verification_pending: number
+  verification_requested: number
+  verified: number
+  verification_rejected: number
+}
+
+export interface ResidentApartment {
+  /** id связи user_apartments, НЕ квартиры. */
+  id: number
+  apartment_id: number
+  apartment_number: string
+  building_id: number
+  building_address: string | null
+  yard_id: number
+  yard_name: string | null
+  status: string
+  is_owner: boolean
+  is_primary: boolean
+  requested_at: string | null
+  reviewed_at: string | null
+  admin_comment: string | null
+}
+
+export interface ResidentDocument {
+  id: number
+  document_type: string
+  file_name: string | null
+  file_size: number | null
+  verification_status: string | null
+  created_at: string | null
+}
+
+export interface ResidentVerification {
+  id: number
+  status: string | null
+  requested_info: unknown
+  requested_at: string | null
+  requested_by: number | null
+  admin_notes: string | null
+  verified_by: number | null
+  verified_at: string | null
+  created_at: string | null
+}
+
+export interface ResidentProfile {
+  id: number
+  telegram_id: number
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  status: string
+  verification_status: VerificationStatus
+  verification_notes: string | null
+  verification_date: string | null
+  language: string | null
+  created_at: string | null
+  /** Все роли: блокировка общая на все, поэтому мультиролевым её прячем. */
+  roles: string[]
+  apartments: ResidentApartment[]
+  documents: ResidentDocument[]
+  latest_verification: ResidentVerification | null
 }
 
 export interface BulkCreateResult {
