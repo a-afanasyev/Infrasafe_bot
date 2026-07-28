@@ -124,15 +124,32 @@ describe('ResidentsPage', () => {
     const user = userEvent.setup()
     render(<ResidentsPage />)
 
-    await user.click(screen.getByRole('button', { name: 'Дальше' }))
+    await user.click(screen.getByRole('button', { name: 'Далее' }))
     expect(lastCall()[2]).toEqual({ limit: 25, offset: 25 })
 
     await user.click(screen.getByRole('button', { name: 'Заблокирован' }))
     expect(lastCall()[2]).toEqual({ limit: 25, offset: 0 })
   })
 
+  it('страница, уехавшая за конец списка, предлагает вернуться в начало', async () => {
+    // Polling 30с может сократить total, пока менеджер стоит на дальней
+    // странице: пустая выдача при offset > 0 — не «ничего не найдено».
+    listQuery.data = { items: [makeResident()], total: 60, limit: 25, offset: 0 }
+    const user = userEvent.setup()
+    const { rerender } = render(<ResidentsPage />)
+    await user.click(screen.getByRole('button', { name: 'Далее' }))
+
+    // Список сократился фоновым перезапросом — вторая страница опустела.
+    listQuery.data = { items: [], total: 5, limit: 25, offset: 25 }
+    rerender(<ResidentsPage />)
+
+    expect(screen.getByText(/Страница за пределами списка/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'В начало списка' }))
+    expect(lastCall()[2]).toEqual({ limit: 25, offset: 0 })
+  })
+
   it('пагинация не показывается, когда всё влезло на страницу', () => {
     render(<ResidentsPage />)
-    expect(screen.queryByRole('button', { name: 'Дальше' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Далее' })).not.toBeInTheDocument()
   })
 })

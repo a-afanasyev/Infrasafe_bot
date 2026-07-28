@@ -1105,7 +1105,6 @@
     "allApartments": "Все квартиры",
     "viewTile": "Плитками",
     "viewTable": "Таблицей",
-    "next": "Дальше",
     "noName": "Без имени",
     "noAddress": "Адрес не привязан",
     "notFound": "Жители не найдены",
@@ -1153,7 +1152,10 @@
       "rental_agreement": "Договор аренды",
       "utility_bill": "Счёт за коммунальные услуги",
       "other": "Другое"
-    }
+    },
+    "pageOutOfRange": "Страница за пределами списка",
+    "pageOutOfRangeDesc": "Список стал короче, пока вы смотрели дальние страницы",
+    "toFirstPage": "В начало списка"
   },
   "addressModals": {
     "addYard": "Добавить двор",

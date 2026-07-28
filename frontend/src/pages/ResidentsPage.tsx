@@ -237,7 +237,19 @@ export default function ResidentsPage() {
       ) : viewMode === 'table' ? (
         <ResidentTable residents={items} />
       ) : items.length === 0 ? (
-        <EmptyState icon="👥" title={t('residents.notFound')} subtitle={t('residents.notFoundDesc')} />
+        // offset > 0 при пустой выдаче = страница уехала за конец списка
+        // (polling сократил total, пока менеджер стоял на дальней странице).
+        // Показываем не «ничего не найдено», а способ вернуться.
+        <EmptyState
+          icon="👥"
+          title={offset > 0 ? t('residents.pageOutOfRange') : t('residents.notFound')}
+          subtitle={offset > 0 ? t('residents.pageOutOfRangeDesc') : t('residents.notFoundDesc')}
+          action={offset > 0 ? (
+            <Button variant="outline" size="sm" onClick={() => setOffset(0)}>
+              {t('residents.toFirstPage')}
+            </Button>
+          ) : undefined}
+        />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
           {items.map(r => <ResidentCard key={r.id} resident={r} />)}
@@ -264,7 +276,7 @@ export default function ResidentsPage() {
             disabled={offset + PAGE_SIZE >= total}
             onClick={() => setOffset(offset + PAGE_SIZE)}
           >
-            {t('residents.next')}
+            {t('common.next')}
           </Button>
         </div>
       )}

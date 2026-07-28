@@ -1095,7 +1095,6 @@
     "allApartments": "Barcha xonadonlar",
     "viewTile": "Kartochkalar",
     "viewTable": "Jadval",
-    "next": "Keyingi",
     "noName": "Ismsiz",
     "noAddress": "Manzil biriktirilmagan",
     "notFound": "Aholi topilmadi",
@@ -1142,7 +1141,10 @@
       "rental_agreement": "Ijara shartnomasi",
       "utility_bill": "Kommunal to‘lov cheki",
       "other": "Boshqa"
-    }
+    },
+    "pageOutOfRange": "Sahifa ro‘yxat chegarasidan tashqarida",
+    "pageOutOfRangeDesc": "Siz uzoq sahifalarni ko‘rib turganingizda ro‘yxat qisqardi",
+    "toFirstPage": "Ro‘yxat boshiga"
   },
   "addressModals": {
     "addYard": "Hovli qo'shish",
