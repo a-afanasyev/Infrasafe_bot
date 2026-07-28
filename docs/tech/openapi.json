@@ -4422,6 +4422,470 @@
         "title": "RequestStatsOut",
         "type": "object"
       },
+      "ResidentApartmentOut": {
+        "description": "Привязка жителя к квартире вместе с адресной цепочкой (двор · дом · кв).",
+        "properties": {
+          "admin_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Comment"
+          },
+          "apartment_id": {
+            "title": "Apartment Id",
+            "type": "integer"
+          },
+          "apartment_number": {
+            "title": "Apartment Number",
+            "type": "string"
+          },
+          "building_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Address"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_owner": {
+            "title": "Is Owner",
+            "type": "boolean"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "yard_id": {
+            "title": "Yard Id",
+            "type": "integer"
+          },
+          "yard_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Name"
+          }
+        },
+        "required": [
+          "id",
+          "apartment_id",
+          "apartment_number",
+          "building_id",
+          "yard_id",
+          "status",
+          "is_owner",
+          "is_primary"
+        ],
+        "title": "ResidentApartmentOut",
+        "type": "object"
+      },
+      "ResidentDetailOut": {
+        "properties": {
+          "apartments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResidentApartmentOut"
+            },
+            "title": "Apartments",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "documents": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResidentDocumentOut"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "latest_verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResidentVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "roles": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "telegram_id": {
+            "title": "Telegram Id",
+            "type": "integer"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "verification_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Date"
+          },
+          "verification_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Notes"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "telegram_id",
+          "status",
+          "verification_status"
+        ],
+        "title": "ResidentDetailOut",
+        "type": "object"
+      },
+      "ResidentDocumentOut": {
+        "description": "Метаданные документа.\n\n`file_id` СОЗНАТЕЛЬНО отсутствует: это токен доступа к файлу в Telegram —\nлюбой, кто его получил, скачает файл в обход нашей авторизации. Отдача\nсамого файла — через прокси-эндпоинт (PR-5).",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "verification_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Status"
+          }
+        },
+        "required": [
+          "id",
+          "document_type"
+        ],
+        "title": "ResidentDocumentOut",
+        "type": "object"
+      },
+      "ResidentListItemOut": {
+        "properties": {
+          "apartments_count": {
+            "default": 0,
+            "title": "Apartments Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "primary_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Address"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "telegram_id": {
+            "title": "Telegram Id",
+            "type": "integer"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "telegram_id",
+          "status",
+          "verification_status"
+        ],
+        "title": "ResidentListItemOut",
+        "type": "object"
+      },
+      "ResidentListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResidentListItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ResidentListOut",
+        "type": "object"
+      },
       "ResidentOut": {
         "properties": {
           "id": {
@@ -4566,6 +5030,157 @@
           "telegram_id"
         ],
         "title": "ResidentSearchResult",
+        "type": "object"
+      },
+      "ResidentStatsOut": {
+        "description": "Две пересекающиеся оси: статус аккаунта и статус верификации.",
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "integer"
+          },
+          "blocked": {
+            "title": "Blocked",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "verification_pending": {
+            "title": "Verification Pending",
+            "type": "integer"
+          },
+          "verification_rejected": {
+            "title": "Verification Rejected",
+            "type": "integer"
+          },
+          "verification_requested": {
+            "title": "Verification Requested",
+            "type": "integer"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "pending",
+          "approved",
+          "blocked",
+          "verification_pending",
+          "verification_requested",
+          "verified",
+          "verification_rejected"
+        ],
+        "title": "ResidentStatsOut",
+        "type": "object"
+      },
+      "ResidentVerificationOut": {
+        "properties": {
+          "admin_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Notes"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
+          "requested_info": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Info"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "ResidentVerificationOut",
         "type": "object"
       },
       "RespondTransferBody": {
@@ -11716,6 +12331,242 @@
         "summary": "Remind Applicant",
         "tags": [
           "requests"
+        ]
+      }
+    },
+    "/api/v2/residents": {
+      "get": {
+        "operationId": "list_residents_api_v2_residents_get",
+        "parameters": [
+          {
+            "description": "pending | approved | blocked",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending | approved | blocked",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "pending | requested | verified | rejected",
+            "in": "query",
+            "name": "verification_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending | requested | verified | rejected",
+              "title": "Verification Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "yard_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Yard Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "building_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Building Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "apartment_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Apartment Id"
+            }
+          },
+          {
+            "description": "ФИО или телефон",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ФИО или телефон",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Residents",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/stats": {
+      "get": {
+        "operationId": "get_stats_api_v2_residents_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentStatsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Stats",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}": {
+      "get": {
+        "operationId": "get_resident_api_v2_residents__resident_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResidentDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Resident",
+        "tags": [
+          "residents"
         ]
       }
     },
