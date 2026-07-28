@@ -41,6 +41,10 @@ _ROUTING: dict[str, tuple[str | None, object]] = {
     "apartment_request.created": (None, publish_apartment_event),
     "apartment_request.approved": (None, publish_apartment_event),
     "apartment_request.rejected": (None, publish_apartment_event),
+    # Отвязка квартиры менеджером из раздела «Жители». Бот-путь удаления связи
+    # событий не эмитит (parity с legacy) — событие нужно веб-пути, чтобы
+    # дашборды увидели ИСЧЕЗНОВЕНИЕ привязки, а не только её появление.
+    "apartment_request.removed": (None, publish_apartment_event),
 }
 
 

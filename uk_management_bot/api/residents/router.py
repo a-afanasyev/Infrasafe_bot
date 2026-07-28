@@ -4,7 +4,7 @@
 мутации и верификация приедут отдельными модулями. Порядок include важен: в
 residents.py статический /stats объявлен до динамического /{resident_id}.
 """
-from uk_management_bot.api.residents import residents
+from uk_management_bot.api.residents import moderation, residents
 
 # Базой агрегатора служит роутер чтений, а не пустой APIRouter(): у списка путь
 # "" (корень раздела), а FastAPI запрещает include маршрута с пустым путём в
@@ -12,3 +12,4 @@ from uk_management_bot.api.residents import residents
 # "/" у списка — дала бы 307-редирект на каждый GET /api/v2/residents через
 # edge. Модули мутаций/верификации включаются поверх этого роутера.
 router = residents.router
+router.include_router(moderation.router)

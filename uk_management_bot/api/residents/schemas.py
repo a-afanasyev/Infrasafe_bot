@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ResidentApartmentOut(BaseModel):
@@ -106,3 +106,41 @@ class ResidentDetailOut(BaseModel):
     apartments: list[ResidentApartmentOut] = []
     documents: list[ResidentDocumentOut] = []
     latest_verification: Optional[ResidentVerificationOut] = None
+
+
+# ── Входные схемы мутаций (PR-3) ─────────────────────────────────────
+#
+# `extra="forbid"` на КАЖДОЙ: гейт tests/api/test_input_schemas_forbid_extra.py
+# фиксирует урок — незнакомый ключ во входном теле почти всегда опечатка или
+# клиент новее бэкенда, и тихий дроп маскирует и то, и другое.
+
+class ResidentCommentIn(BaseModel):
+    """Необязательный комментарий менеджера (approve аккаунта / привязки)."""
+    model_config = {"extra": "forbid"}
+    comment: Optional[str] = Field(None, max_length=1000)
+
+
+class ResidentBlockIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    reason: str = Field(..., min_length=3, max_length=1000)
+
+
+class ResidentRejectIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    comment: str = Field(..., min_length=3, max_length=1000)
+
+
+class ResidentAttachApartment(BaseModel):
+    model_config = {"extra": "forbid"}
+    apartment_id: int
+    is_owner: bool = False
+    # Игнорируется в пользу инварианта, когда approved-привязка первая: она
+    # становится основной независимо от запроса (Т6).
+    is_primary: bool = False
+
+
+class ResidentUpdateBindingIn(BaseModel):
+    """None = «поле не прислали» (не менять), а не «сбросить»."""
+    model_config = {"extra": "forbid"}
+    is_owner: Optional[bool] = None
+    is_primary: Optional[bool] = None
