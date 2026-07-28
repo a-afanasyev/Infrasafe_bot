@@ -165,6 +165,7 @@ async def _lock_resident(db: AsyncSession, resident_id: int) -> None:
 
 async def _ensure_single_primary(
     db: AsyncSession, resident_id: int, *, keep_ua_id: int | None,
+    exclude_ua_id: int | None = None,
 ) -> None:
     """Инвариант: не более одной primary; при наличии approved — ровно одна.
 
@@ -173,6 +174,13 @@ async def _ensure_single_primary(
 
     `keep_ua_id` — привязка, которая обязана стать primary (None = выбрать
     самую старую approved).
+
+    `exclude_ua_id` — привязка, которой основной становиться ЗАПРЕЩЕНО.
+    Нужна ровно на одном пути: менеджер снимает признак основной. Без неё
+    «самой старой approved» оказывалась та же самая привязка, у которой
+    признак только что сняли, и запрос молча возвращал состояние как было —
+    с ответом 200. Найдено прод-проверкой на profk: снятие признака у первой
+    (самой старой) квартиры не давало никакого эффекта.
     """
     approved = list((await db.execute(
         select(UserApartment)
@@ -183,8 +191,9 @@ async def _ensure_single_primary(
         .order_by(UserApartment.requested_at.asc(), UserApartment.id.asc())
         .execution_options(populate_existing=True)
     )).scalars().all())
+    candidates = [ua for ua in approved if ua.id != exclude_ua_id]
 
-    if not approved:
+    if not candidates:
         # approved-привязок не осталось — снимаем флаг со всех прочих, чтобы
         # pending/rejected не унесли с собой висячую primary.
         for ua in await _all_bindings(db, resident_id):
@@ -193,9 +202,9 @@ async def _ensure_single_primary(
 
     winner = None
     if keep_ua_id is not None:
-        winner = next((ua for ua in approved if ua.id == keep_ua_id), None)
+        winner = next((ua for ua in candidates if ua.id == keep_ua_id), None)
     if winner is None:
-        winner = next((ua for ua in approved if ua.is_primary), approved[0])
+        winner = next((ua for ua in candidates if ua.is_primary), candidates[0])
 
     for ua in await _all_bindings(db, resident_id):
         ua.is_primary = (ua.id == winner.id)
@@ -440,7 +449,10 @@ async def update_binding(
             )
         ua.is_primary = False
         await db.flush()
-        await _ensure_single_primary(db, resident_id, keep_ua_id=None)
+        # exclude: иначе «самой старой approved» окажется она же, и снятие
+        # признака не даст никакого эффекта при ответе 200.
+        await _ensure_single_primary(db, resident_id, keep_ua_id=None,
+                                     exclude_ua_id=ua_id)
     else:
         await db.flush()
 

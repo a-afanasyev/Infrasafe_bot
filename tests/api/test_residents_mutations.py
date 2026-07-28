@@ -329,6 +329,26 @@ class TestPrimaryInvariant:
         assert r.status_code == 200
         assert await _primaries(db_session, resident.id) == [old.id]
 
+    async def test_dropping_primary_from_the_oldest_promotes_the_next(
+        self, client: AsyncClient, db_session: AsyncSession, address
+    ):
+        """Снятие признака у САМОЙ СТАРОЙ обязано отдать его следующей.
+
+        Найдено прод-проверкой: «самой старой approved» оказывалась та же
+        привязка, у которой признак только что сняли, и запрос возвращал 200,
+        не изменив ничего. Тест `test_dropping_primary_promotes_the_oldest`
+        этого не ловил — там основной была НЕ самая старая.
+        """
+        resident = await _resident(db_session, 4510, status="approved")
+        oldest = await _bind(db_session, resident.id, address[0].id, is_primary=True)
+        newer = await _bind(db_session, resident.id, address[1].id)
+
+        r = await client.patch(f"{BASE}/{resident.id}/apartments/{oldest.id}",
+                               json={"is_primary": False})
+        assert r.status_code == 200
+        assert r.json()["is_primary"] is False
+        assert await _primaries(db_session, resident.id) == [newer.id]
+
     async def test_removing_primary_promotes_survivor(
         self, client: AsyncClient, db_session: AsyncSession, address
     ):
