@@ -25,6 +25,9 @@ vi.mock('../hooks/useResidents', () => {
     useRejectBinding: noop,
     useUpdateBinding: noop,
     useRemoveBinding: noop,
+    useRequestDocuments: noop,
+    useApproveVerification: noop,
+    useRejectVerification: noop,
   }
 })
 

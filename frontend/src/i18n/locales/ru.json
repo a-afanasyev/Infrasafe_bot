@@ -1203,8 +1203,28 @@
       "bindingUpdated": "Привязка обновлена",
       "bindingUpdateFailed": "Не удалось обновить привязку",
       "bindingRemoved": "Квартира отвязана",
-      "bindingRemoveFailed": "Не удалось отвязать квартиру"
-    }
+      "bindingRemoveFailed": "Не удалось отвязать квартиру",
+      "documentsRequested": "Документы запрошены",
+      "documentsRequestFailed": "Не удалось запросить документы",
+      "verified": "Личность подтверждена",
+      "verifyFailed": "Не удалось подтвердить личность",
+      "verificationRejected": "Верификация отклонена",
+      "verificationRejectFailed": "Не удалось отклонить верификацию"
+    },
+    "requestDocuments": "Запросить документы",
+    "requestDocumentsTitle": "Запросить документы у жителя",
+    "requestComment": "Что именно нужно и зачем (минимум 3 символа)",
+    "requestSubmit": "Запросить",
+    "verifyResident": "Верифицировать",
+    "verifyConfirm": "Подтвердить личность жителя?",
+    "verifyConfirmDesc": "Все квартиры на модерации будут одобрены автоматически. Записи о документах исчезнут из карточки; копии файлов могут сохраниться в Telegram и в Media Service, если их очистка не пройдёт.",
+    "rejectVerification": "Отклонить верификацию",
+    "rejectVerificationTitle": "Отклонить верификацию",
+    "rejectVerificationReason": "Причина отказа (минимум 3 символа)",
+    "documentOpen": "Открыть",
+    "documentLoading": "Загрузка…",
+    "documentClose": "Свернуть",
+    "documentLoadFailed": "Не удалось загрузить документ"
   },
   "addressModals": {
     "addYard": "Добавить двор",

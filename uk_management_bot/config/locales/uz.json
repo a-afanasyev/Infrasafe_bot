@@ -8354,6 +8354,13 @@
     "binding_removed": "Menejer sizni xonadondan uzdi: {address}. Agar bu xato bo‘lsa — boshqaruv kompaniyasiga murojaat qiling.",
     "documents_requested": "Boshqaruv kompaniyasi shaxsingizni tasdiqlash uchun hujjat so‘radi.\nKerak: {documents}\nIzoh: {comment}\nBotni oching va hujjatlarni yuboring.",
     "verification_approved": "Shaxsingiz tasdiqlandi. Xizmatlarga ruxsat ochildi.",
-    "verification_rejected": "Shaxsni tekshirish rad etildi.\nSabab: {notes}"
+    "verification_rejected": "Shaxsni tekshirish rad etildi.\nSabab: {notes}",
+    "document_types": {
+      "passport": "pasport",
+      "property_deed": "mulk hujjati",
+      "rental_agreement": "ijara shartnomasi",
+      "utility_bill": "kommunal to‘lov cheki",
+      "other": "boshqa"
+    }
   }
 }

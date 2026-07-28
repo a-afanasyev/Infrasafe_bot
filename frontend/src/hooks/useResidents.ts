@@ -169,3 +169,25 @@ export function useRemoveBinding(id: number) {
     { successKey: 'residents.toast.bindingRemoved', errorKey: 'residents.toast.bindingRemoveFailed', residentId: id },
   )
 }
+
+export function useRequestDocuments(id: number) {
+  return useResidentMutation<{ document_types: string[]; comment: string }>(
+    body => apiClient.post(`/api/v2/residents/${id}/verification/request-documents`, body)
+      .then(r => r.data),
+    { successKey: 'residents.toast.documentsRequested', errorKey: 'residents.toast.documentsRequestFailed', residentId: id },
+  )
+}
+
+export function useApproveVerification(id: number) {
+  return useResidentMutation<{ notes?: string }>(
+    body => apiClient.post(`/api/v2/residents/${id}/verification/approve`, body).then(r => r.data),
+    { successKey: 'residents.toast.verified', errorKey: 'residents.toast.verifyFailed', residentId: id },
+  )
+}
+
+export function useRejectVerification(id: number) {
+  return useResidentMutation<{ notes: string }>(
+    body => apiClient.post(`/api/v2/residents/${id}/verification/reject`, body).then(r => r.data),
+    { successKey: 'residents.toast.verificationRejected', errorKey: 'residents.toast.verificationRejectFailed', residentId: id },
+  )
+}

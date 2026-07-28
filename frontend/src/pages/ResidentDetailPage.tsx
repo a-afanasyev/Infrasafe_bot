@@ -5,6 +5,8 @@ import { useResident } from '../hooks/useResidents'
 import ResidentApartmentsList from '../components/residents/ResidentApartmentsList'
 import ResidentAccountActions from '../components/residents/ResidentAccountActions'
 import AttachApartmentModal from '../components/residents/AttachApartmentModal'
+import ResidentDocuments from '../components/residents/ResidentDocuments'
+import ResidentVerificationActions from '../components/residents/ResidentVerificationActions'
 import { ResidentAccountBadge, ResidentVerificationBadge } from '../components/residents/ResidentStatusBadge'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
@@ -111,35 +113,11 @@ export default function ResidentDetailPage() {
       )}
 
       <Section title={t('residents.sectionDocuments')}>
-        {resident.documents.length === 0 ? (
-          <div className="text-[13px] text-text-muted">{t('residents.noDocuments')}</div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {resident.documents.map(d => (
-              <div
-                key={d.id}
-                className="border border-border-default rounded-sm p-3 flex items-center gap-3 flex-wrap"
-              >
-                <span className="text-[13px] text-text-primary">
-                  {t(`residents.documentType.${d.document_type}`, d.document_type)}
-                </span>
-                {d.file_name && (
-                  <span className="text-[11px] text-text-muted font-[family-name:var(--font-mono)]">
-                    {d.file_name}
-                  </span>
-                )}
-                {d.created_at && (
-                  <span className="text-[11px] text-text-muted ml-auto">
-                    {fmtDate(d.created_at, { dateStyle: 'short' })}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <ResidentDocuments residentId={resident.id} documents={resident.documents} />
       </Section>
 
       <Section title={t('residents.sectionVerification')}>
+        <ResidentVerificationActions resident={resident} />
         {resident.latest_verification ? (
           <div className="flex flex-col gap-1.5 text-[13px] text-text-secondary">
             <div>
