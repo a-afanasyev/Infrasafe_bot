@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/topbar'
 import { useResidents, useResidentStats } from '../hooks/useResidents'
@@ -85,15 +85,38 @@ export default function ResidentsPage() {
   const { data: buildings = [] } = useAllBuildings(yardId)
   const { data: apartments = [] } = useAllApartments(yardId, buildingId)
 
+  // Поле поиска НЕконтролируемое (defaultValue + debounce), и узел мемоизирован
+  // БЕЗ зависимости от `search` — иначе набранный символ стирается.
+  //
+  // Почему: топбар получает узел не напрямую, а через состояние контекста,
+  // которое обновляется в useEffect — то есть ВТОРЫМ коммитом. У контролируемого
+  // поля React в фазе обработки события сверяет DOM-значение с последним
+  // отрендеренным `value` (всё ещё старым) и откатывает DOM. Замерено на живом
+  // profk: после `input` значение в DOM = "", и только через тик появляется
+  // набранный символ — при обычной скорости печати символы теряются
+  // («админ» → «амн»). Дефект общий для всех страниц с поиском в топбаре
+  // (воспроизведён на «Сотрудниках»), здесь лечится локально.
+  //
+  // Debounce 300мс заодно убирает запрос на каждое нажатие.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(searchTimer.current), [])
+
   const actionsNode = useMemo(() => (
     <Input
       type="text"
       placeholder={t('residents.searchPlaceholder')}
-      value={search}
-      onChange={e => { setSearch(e.target.value); setOffset(0) }}
+      defaultValue=""
+      onChange={e => {
+        const value = e.target.value
+        clearTimeout(searchTimer.current)
+        searchTimer.current = setTimeout(() => {
+          setSearch(value)
+          setOffset(0)
+        }, 300)
+      }}
       className="w-[220px]"
     />
-  ), [search, t])
+  ), [t])
 
   useEffect(() => {
     setActions(actionsNode)
