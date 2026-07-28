@@ -1,4 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import i18n from '../i18n'
+import { safeErrorMessage } from '@/utils/errorMessage'
 import { apiClient } from '../api/client'
 import type {
   ResidentListResponse,
@@ -61,4 +64,101 @@ export function useResident(id: number | null) {
     enabled: id !== null,
     refetchInterval: POLL_MS,
   })
+}
+
+// ── Мутации (PR-4) ───────────────────────────────────────────────────
+//
+// Инвалидируются ПЯТЬ ключей, а не только карточка: список и счётчики
+// раздела меняются от любого решения, очередь модерации `['moderation']` и
+// плитка адресов `['address-stats']` живут в useAddresses и показывают те же
+// заявки с другой стороны. Пропустишь один — менеджер увидит расхождение
+// между экранами и не поймёт, какому верить.
+function useResidentMutation<TArgs>(
+  request: (args: TArgs) => Promise<unknown>,
+  { successKey, errorKey, residentId }: {
+    successKey: string
+    errorKey: string
+    residentId: number
+  },
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: request,
+    onSuccess: () => {
+      toast.success(i18n.t(successKey))
+      for (const key of [
+        ['residents'], ['resident', residentId], ['residents-stats'],
+        ['moderation'], ['address-stats'],
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+    onError: (error: unknown) => {
+      console.error(errorKey, error)
+      toast.error(i18n.t(errorKey), {
+        description: safeErrorMessage(error, i18n.t('common.error')),
+      })
+    },
+  })
+}
+
+export function useApproveResident(id: number) {
+  return useResidentMutation<{ comment?: string }>(
+    body => apiClient.post(`/api/v2/residents/${id}/approve`, body).then(r => r.data),
+    { successKey: 'residents.toast.approved', errorKey: 'residents.toast.approveFailed', residentId: id },
+  )
+}
+
+export function useBlockResident(id: number) {
+  return useResidentMutation<{ reason: string }>(
+    body => apiClient.post(`/api/v2/residents/${id}/block`, body).then(r => r.data),
+    { successKey: 'residents.toast.blocked', errorKey: 'residents.toast.blockFailed', residentId: id },
+  )
+}
+
+export function useUnblockResident(id: number) {
+  return useResidentMutation<void>(
+    () => apiClient.post(`/api/v2/residents/${id}/unblock`).then(r => r.data),
+    { successKey: 'residents.toast.unblocked', errorKey: 'residents.toast.unblockFailed', residentId: id },
+  )
+}
+
+export function useAttachApartment(id: number) {
+  return useResidentMutation<{ apartment_id: number; is_owner: boolean; is_primary: boolean }>(
+    body => apiClient.post(`/api/v2/residents/${id}/apartments`, body).then(r => r.data),
+    { successKey: 'residents.toast.attached', errorKey: 'residents.toast.attachFailed', residentId: id },
+  )
+}
+
+export function useApproveBinding(id: number) {
+  return useResidentMutation<{ uaId: number; comment?: string }>(
+    ({ uaId, comment }) =>
+      apiClient.post(`/api/v2/residents/${id}/apartments/${uaId}/approve`, { comment })
+        .then(r => r.data),
+    { successKey: 'residents.toast.bindingApproved', errorKey: 'residents.toast.bindingApproveFailed', residentId: id },
+  )
+}
+
+export function useRejectBinding(id: number) {
+  return useResidentMutation<{ uaId: number; comment: string }>(
+    ({ uaId, comment }) =>
+      apiClient.post(`/api/v2/residents/${id}/apartments/${uaId}/reject`, { comment })
+        .then(r => r.data),
+    { successKey: 'residents.toast.bindingRejected', errorKey: 'residents.toast.bindingRejectFailed', residentId: id },
+  )
+}
+
+export function useUpdateBinding(id: number) {
+  return useResidentMutation<{ uaId: number; is_owner?: boolean; is_primary?: boolean }>(
+    ({ uaId, ...body }) =>
+      apiClient.patch(`/api/v2/residents/${id}/apartments/${uaId}`, body).then(r => r.data),
+    { successKey: 'residents.toast.bindingUpdated', errorKey: 'residents.toast.bindingUpdateFailed', residentId: id },
+  )
+}
+
+export function useRemoveBinding(id: number) {
+  return useResidentMutation<number>(
+    uaId => apiClient.delete(`/api/v2/residents/${id}/apartments/${uaId}`).then(r => r.data),
+    { successKey: 'residents.toast.bindingRemoved', errorKey: 'residents.toast.bindingRemoveFailed', residentId: id },
+  )
 }

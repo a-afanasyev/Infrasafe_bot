@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useResident } from '../hooks/useResidents'
 import ResidentApartmentsList from '../components/residents/ResidentApartmentsList'
+import ResidentAccountActions from '../components/residents/ResidentAccountActions'
+import AttachApartmentModal from '../components/residents/AttachApartmentModal'
 import { ResidentAccountBadge, ResidentVerificationBadge } from '../components/residents/ResidentStatusBadge'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
@@ -23,6 +26,7 @@ export default function ResidentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: resident, isLoading, isError } = useResident(id ? Number(id) : null)
+  const [attachOpen, setAttachOpen] = useState(false)
 
   const name = resident
     ? [resident.first_name, resident.last_name].filter(Boolean).join(' ') || t('residents.noName')
@@ -88,9 +92,23 @@ export default function ResidentDetailPage() {
         </div>
       </div>
 
+      <ResidentAccountActions resident={resident} />
+
       <Section title={t('residents.sectionApartments')}>
-        <ResidentApartmentsList apartments={resident.apartments} />
+        <div className="flex justify-end">
+          <Button size="sm" onClick={() => setAttachOpen(true)}>
+            {t('residents.attachApartment')}
+          </Button>
+        </div>
+        <ResidentApartmentsList residentId={resident.id} apartments={resident.apartments} />
       </Section>
+
+      {attachOpen && (
+        <AttachApartmentModal
+          residentId={resident.id}
+          onClose={() => setAttachOpen(false)}
+        />
+      )}
 
       <Section title={t('residents.sectionDocuments')}>
         {resident.documents.length === 0 ? (

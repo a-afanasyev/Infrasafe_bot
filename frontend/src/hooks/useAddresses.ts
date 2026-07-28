@@ -114,6 +114,10 @@ export function usePendingModeration() {
     queryKey: ['moderation'],
     queryFn: () => apiClient.get('/api/v2/addresses/moderation').then(r => r.data),
     staleTime: 30_000,
+    // Ту же очередь разбирают из раздела «Жители» и из бота, поэтому она
+    // обязана обновляться сама: иначе менеджер видит заявку, которую коллега
+    // уже обработал, жмёт «Подтвердить» и получает 409 без объяснения.
+    refetchInterval: 30_000,
   })
 }
 
