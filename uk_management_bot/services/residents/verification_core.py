@@ -27,7 +27,6 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import (
     UserApartment, UserApartmentStatus,
