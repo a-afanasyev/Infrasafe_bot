@@ -1,8 +1,10 @@
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import i18n from '../i18n'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import { apiClient } from '../api/client'
+import { useWebSocket } from './useWebSocket'
 import type {
   ResidentListResponse,
   ResidentProfile,
@@ -190,4 +192,29 @@ export function useRejectVerification(id: number) {
     body => apiClient.post(`/api/v2/residents/${id}/verification/reject`, body).then(r => r.data),
     { successKey: 'residents.toast.verificationRejected', errorKey: 'residents.toast.verificationRejectFailed', residentId: id },
   )
+}
+
+/** Ускоритель поверх polling'а, а НЕ замена ему.
+ *
+ *  Канал `apartments:updates` несёт только события привязок
+ *  (`apartment_request.*`). Статусы аккаунта и верификации событий не имеют
+ *  вообще, а бот-путь верификации меняет привязки без публикации — поэтому
+ *  30-секундный `refetchInterval` в useResidents/useResident остаётся
+ *  основным механизмом свежести. WS лишь сокращает задержку там, где событие
+ *  всё-таки есть: коллега подтвердил заявку — карточка обновилась сразу, а не
+ *  через полминуты.
+ */
+export function useResidentsWebSocket() {
+  const queryClient = useQueryClient()
+  const onEvent = useCallback((event: { type: string; data: unknown }) => {
+    if (typeof event.type !== 'string' || !event.type.startsWith('apartment_request.')) return
+    for (const key of [
+      ['residents'], ['resident'], ['residents-stats'],
+      ['moderation'], ['address-stats'],
+      ['apartment-detail'], ['apartments'], ['all-apartments'],
+    ]) {
+      queryClient.invalidateQueries({ queryKey: key })
+    }
+  }, [queryClient])
+  useWebSocket('apartments', onEvent)
 }

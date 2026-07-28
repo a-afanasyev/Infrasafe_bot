@@ -24,6 +24,7 @@ vi.mock('../hooks/useResidents', () => ({
     return listQuery
   },
   useResidentStats: () => statsQuery,
+  useResidentsWebSocket: () => undefined,
 }))
 
 // Адресный каскад — чужой домен; тут важно лишь, что опции появляются.

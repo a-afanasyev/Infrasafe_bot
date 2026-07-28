@@ -40,6 +40,7 @@ vi.mock('../hooks/useResidents', () => ({
     return listQuery
   },
   useResidentStats: () => statsQuery,
+  useResidentsWebSocket: () => undefined,
 }))
 
 vi.mock('../hooks/useAddresses', () => ({

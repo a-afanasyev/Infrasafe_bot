@@ -38,7 +38,7 @@ const WS_STATE_CONNECTING = 0
 const WS_STATE_OPEN = 1
 
 export function useWebSocket(
-  endpoint: 'kanban' | 'shifts' | 'buildings',
+  endpoint: 'kanban' | 'shifts' | 'buildings' | 'apartments',
   onMessage: (event: { type: string; data: unknown }) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null)

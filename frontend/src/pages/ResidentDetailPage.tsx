@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { useResident } from '../hooks/useResidents'
+import { useResident, useResidentsWebSocket } from '../hooks/useResidents'
 import ResidentApartmentsList from '../components/residents/ResidentApartmentsList'
 import ResidentAccountActions from '../components/residents/ResidentAccountActions'
 import AttachApartmentModal from '../components/residents/AttachApartmentModal'
@@ -29,6 +29,7 @@ export default function ResidentDetailPage() {
   const navigate = useNavigate()
   const { data: resident, isLoading, isError } = useResident(id ? Number(id) : null)
   const [attachOpen, setAttachOpen] = useState(false)
+  useResidentsWebSocket()
 
   const name = resident
     ? [resident.first_name, resident.last_name].filter(Boolean).join(' ') || t('residents.noName')

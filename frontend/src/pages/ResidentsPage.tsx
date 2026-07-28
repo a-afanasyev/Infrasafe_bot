@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/topbar'
-import { useResidents, useResidentStats } from '../hooks/useResidents'
+import { useResidents, useResidentStats, useResidentsWebSocket } from '../hooks/useResidents'
 import type { ResidentFilters } from '../hooks/useResidents'
 import { useYards, useAllBuildings, useAllApartments } from '../hooks/useAddresses'
 import ResidentCard from '../components/residents/ResidentCard'
@@ -20,6 +20,7 @@ export default function ResidentsPage() {
   const { t } = useTranslation()
   usePageTitle(t('nav.residents'))
   const { setActions, clearActions } = useTopbar()
+  useResidentsWebSocket()
 
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [verificationFilter, setVerificationFilter] = useState<string>('all')

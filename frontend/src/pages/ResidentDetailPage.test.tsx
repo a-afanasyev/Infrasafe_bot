@@ -28,6 +28,7 @@ vi.mock('../hooks/useResidents', () => {
     useRequestDocuments: noop,
     useApproveVerification: noop,
     useRejectVerification: noop,
+    useResidentsWebSocket: () => undefined,
   }
 })
 

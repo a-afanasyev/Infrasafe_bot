@@ -53,6 +53,7 @@ from uk_management_bot.api.auth.service import verify_access_token
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.redis_pubsub import (
     subscribe_to_requests, subscribe_to_shifts, subscribe_to_buildings,
+    subscribe_to_apartments,
 )
 
 logger = logging.getLogger(__name__)
@@ -401,3 +402,15 @@ async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
 @router.websocket("/buildings")
 async def buildings_ws(websocket: WebSocket, token: str = Query(default=None)):
     await _serve_ws(websocket, token, subscribe_to_buildings, "buildings")
+
+
+@router.websocket("/apartments")
+async def apartments_ws(websocket: WebSocket, token: str = Query(default=None)):
+    """Канал `apartments:updates` — события привязок жителей к квартирам.
+
+    Канал публиковался и раньше (`apartment_request.*`), но подписчика со
+    стороны дашборда не было. Раздел «Жители» ускоряется этим каналом, НЕ
+    полагаясь на него: статусы аккаунта и верификации событий не имеют вовсе,
+    поэтому polling там остаётся основным механизмом, а WS — ускорителем.
+    """
+    await _serve_ws(websocket, token, subscribe_to_apartments, "apartments")
