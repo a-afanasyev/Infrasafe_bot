@@ -21,7 +21,7 @@
 
 import re
 
-from sqlalchemy import and_, case, exists, func, or_, select
+from sqlalchemy import and_, case, collate, exists, func, or_, select
 
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
@@ -51,6 +51,43 @@ def _escape_like(value: str) -> str:
     домена ради двух строк — худшая связность, чем повтор.
     """
     return re.sub(r'([%_\\])', r'\\\1', value)
+
+
+# Коллация ICU для регистронезависимого поиска (см. `_ci_contains`).
+# `und` — language-agnostic корень CLDR; отдельная локаль не нужна, нам нужно
+# только Unicode-совместимое сворачивание регистра, а не порядок сортировки.
+_ICU_COLLATION = "und-x-icu"
+
+
+def _is_postgres(db) -> bool:
+    bind = getattr(db, "bind", None)
+    return getattr(getattr(bind, "dialect", None), "name", "") == "postgresql"
+
+
+def _ci_contains(column, pattern: str, *, is_postgres: bool):
+    """Регистронезависимое вхождение подстроки, честное для кириллицы.
+
+    ⚠ Прод-БД создана в локали `C` (`lc_ctype=C`), а в ней `lower()` и `ILIKE`
+    сворачивают регистр ТОЛЬКО для ASCII: `lower('АДМИН')` возвращает `'АДМИН'`,
+    и `'Администратор' ILIKE '%админ%'` даёт false. Проверено на живом profk —
+    латиница искалась, русские имена нет, а система русскоязычная.
+
+    Чинится без миграции и без расширений: ICU-коллация (`und-x-icu` есть в
+    postgres:15 из коробки) заставляет `lower()` использовать юникодный
+    case-mapping. Пересоздавать кластер в UTF-8-локали было бы правильнее
+    системно, но это отдельная операция с даунтаймом — здесь нужен корректный
+    поиск, а не смена локали кластера.
+
+    На sqlite (тестовый харнесс) ICU-коллации нет и не нужна: там `ILIKE`
+    транслируется в `lower() LIKE lower()` силами Python-слоя SQLAlchemy.
+
+    `pattern` уже экранирован (`_escape_like`); нижний регистр наводится ТОЛЬКО
+    на PG-ветке — на sqlite `lower()` тоже ASCII-only, и предварительно
+    опущенный шаблон перестал бы находить кириллицу вообще.
+    """
+    if is_postgres:
+        return func.lower(collate(column, _ICU_COLLATION)).like(pattern.lower(), escape="\\")
+    return column.ilike(pattern, escape="\\")
 
 
 def _resident_scope():
@@ -88,6 +125,7 @@ def _apply_list_filters(
     building_id: int | None,
     apartment_id: int | None,
     q: str | None,
+    is_postgres: bool,
 ):
     """Общие фильтры списка и его COUNT — один источник, чтобы total не разъехался."""
     query = query.where(*_resident_scope())
@@ -105,11 +143,11 @@ def _apply_list_filters(
         query = query.where(_belonging_exists(Building.yard_id == yard_id))
 
     if q:
-        term = f"%{_escape_like(q)}%"
+        pattern = f"%{_escape_like(q)}%"
         query = query.where(or_(
-            User.first_name.ilike(term, escape="\\"),
-            User.last_name.ilike(term, escape="\\"),
-            User.phone.ilike(term, escape="\\"),
+            _ci_contains(User.first_name, pattern, is_postgres=is_postgres),
+            _ci_contains(User.last_name, pattern, is_postgres=is_postgres),
+            _ci_contains(User.phone, pattern, is_postgres=is_postgres),
         ))
     return query
 
@@ -135,16 +173,19 @@ async def list_residents(
     Адресные фильтры взаимоисключающи по уровню детализации: задан
     `apartment_id` — двор и дом уже не сужают, они лишь родители этой квартиры.
     """
+    is_postgres = _is_postgres(db)
     page_query = _apply_list_filters(
         select(User),
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id, q=q,
+        is_postgres=is_postgres,
     ).order_by(User.created_at.desc(), User.id.desc()).limit(limit).offset(offset)
 
     count_query = _apply_list_filters(
         select(func.count(User.id)),
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id, q=q,
+        is_postgres=is_postgres,
     )
 
     users = list((await db.execute(page_query)).scalars().all())
