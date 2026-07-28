@@ -98,6 +98,7 @@ export default function ResidentApartmentsList({ residentId, apartments }: Props
                   value={rejectComment}
                   onChange={e => setRejectComment(e.target.value)}
                   placeholder={t('residents.rejectReason')}
+                  aria-label={t('residents.rejectReason')}
                   autoFocus
                 />
                 <div className="flex items-center gap-2.5">

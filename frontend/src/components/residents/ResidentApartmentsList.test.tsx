@@ -58,7 +58,7 @@ describe('ResidentApartmentsList', () => {
     const field = screen.getByPlaceholderText(/Причина отказа/)
     await user.type(field, ' ab ')
 
-    const submit = screen.getByRole('button', { name: 'Отклонить' })
+    const submit = screen.getByRole('button', { name: 'Подтвердить отказ' })
     expect(submit).toBeDisabled()
 
     await user.clear(field)

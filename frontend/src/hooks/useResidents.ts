@@ -68,11 +68,17 @@ export function useResident(id: number | null) {
 
 // ── Мутации (PR-4) ───────────────────────────────────────────────────
 //
-// Инвалидируются ПЯТЬ ключей, а не только карточка: список и счётчики
-// раздела меняются от любого решения, очередь модерации `['moderation']` и
-// плитка адресов `['address-stats']` живут в useAddresses и показывают те же
-// заявки с другой стороны. Пропустишь один — менеджер увидит расхождение
-// между экранами и не поймёт, какому верить.
+// Инвалидируется ВЕСЬ набор кэшей, где те же данные видны с другой стороны:
+//
+//   ['residents'] / ['resident', id] / ['residents-stats'] — сам раздел;
+//   ['moderation'] / ['address-stats'] — очередь заявок и плитка «Адресов»;
+//   ['apartment-detail'] / ['apartments'] / ['all-apartments'] — карточка
+//       квартиры показывает СПИСОК ЖИЛЬЦОВ, а таблицы квартир — их КОЛИЧЕСТВО;
+//       и то и другое меняется от привязки и отвязки.
+//
+// Пропустишь один — менеджер увидит расхождение между экранами и не поймёт,
+// какому верить. Ключи адресных кэшей параметризованы (id дома, фильтры),
+// поэтому инвалидируются по префиксу — точный id знать неоткуда и не нужно.
 function useResidentMutation<TArgs>(
   request: (args: TArgs) => Promise<unknown>,
   { successKey, errorKey, residentId }: {
@@ -89,6 +95,7 @@ function useResidentMutation<TArgs>(
       for (const key of [
         ['residents'], ['resident', residentId], ['residents-stats'],
         ['moderation'], ['address-stats'],
+        ['apartment-detail'], ['apartments'], ['all-apartments'],
       ]) {
         queryClient.invalidateQueries({ queryKey: key })
       }

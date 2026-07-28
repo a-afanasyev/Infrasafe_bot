@@ -1172,7 +1172,7 @@
     "approveBinding": "Tasdiqlash",
     "rejectBinding": "Rad etish",
     "rejectReason": "Rad etish sababi (kamida 3 belgi)",
-    "rejectSubmit": "Rad etish",
+    "rejectSubmit": "Rad etishni tasdiqlash",
     "detach": "Uzish",
     "detachConfirm": "Xonadonni uzasizmi?",
     "detachConfirmDesc": "{{address}} bilan bog‘lanish o‘chiriladi. Yashovchi xabar oladi.",

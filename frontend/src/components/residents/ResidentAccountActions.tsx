@@ -48,7 +48,9 @@ export default function ResidentAccountActions({ resident }: Props) {
           </Button>
         )}
 
-        {canBlock && !isBlocked && (
+        {/* Триггер и форма взаимоисключающи: иначе повторный клик по кнопке
+            затёр бы уже введённую причину. */}
+        {canBlock && !isBlocked && !blockOpen && (
           <Button variant="destructive" size="sm" disabled={busy}
                   onClick={() => { setReason(''); setBlockOpen(true) }}>
             {t('residents.blockAccount')}
@@ -75,6 +77,7 @@ export default function ResidentAccountActions({ resident }: Props) {
             value={reason}
             onChange={e => setReason(e.target.value)}
             placeholder={t('residents.blockReason')}
+            aria-label={t('residents.blockReason')}
             autoFocus
           />
           <div className="flex items-center gap-2.5">

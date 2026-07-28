@@ -1183,7 +1183,7 @@
     "approveBinding": "Подтвердить",
     "rejectBinding": "Отклонить",
     "rejectReason": "Причина отказа (минимум 3 символа)",
-    "rejectSubmit": "Отклонить",
+    "rejectSubmit": "Подтвердить отказ",
     "detach": "Отвязать",
     "detachConfirm": "Отвязать квартиру?",
     "detachConfirmDesc": "Связь с {{address}} будет удалена. Житель получит уведомление.",
