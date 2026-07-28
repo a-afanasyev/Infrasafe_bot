@@ -5052,6 +5052,32 @@
         "title": "ResidentRejectIn",
         "type": "object"
       },
+      "ResidentRequestDocumentsIn": {
+        "additionalProperties": false,
+        "description": "Запрос документов у жителя.\n\n`document_types` — значения `DocumentType`; проверка допустимости и\nдедупликация в сервис-слое, чтобы список типов оставался одним источником.",
+        "properties": {
+          "comment": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Comment",
+            "type": "string"
+          },
+          "document_types": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Document Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document_types",
+          "comment"
+        ],
+        "title": "ResidentRequestDocumentsIn",
+        "type": "object"
+      },
       "ResidentSearchResult": {
         "properties": {
           "address": {
@@ -5187,6 +5213,26 @@
         "title": "ResidentUpdateBindingIn",
         "type": "object"
       },
+      "ResidentVerificationNotesIn": {
+        "additionalProperties": false,
+        "description": "Необязательная заметка при подтверждении личности.",
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "ResidentVerificationNotesIn",
+        "type": "object"
+      },
       "ResidentVerificationOut": {
         "properties": {
           "admin_notes": {
@@ -5287,6 +5333,23 @@
           "id"
         ],
         "title": "ResidentVerificationOut",
+        "type": "object"
+      },
+      "ResidentVerificationRejectIn": {
+        "additionalProperties": false,
+        "description": "Причина отказа обязательна — житель её увидит.",
+        "properties": {
+          "notes": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notes"
+        ],
+        "title": "ResidentVerificationRejectIn",
         "type": "object"
       },
       "RespondTransferBody": {
@@ -13088,6 +13151,112 @@
         ]
       }
     },
+    "/api/v2/residents/{resident_id}/documents": {
+      "get": {
+        "description": "Метаданные документов. `file_id` наружу не уходит — см. схему.",
+        "operationId": "list_documents_api_v2_residents__resident_id__documents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResidentDocumentOut"
+                  },
+                  "title": "Response List Documents Api V2 Residents  Resident Id  Documents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Documents",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/documents/{doc_id}/file": {
+      "get": {
+        "operationId": "get_document_file_api_v2_residents__resident_id__documents__doc_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "doc_id",
+            "required": true,
+            "schema": {
+              "title": "Doc Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Document File",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
     "/api/v2/residents/{resident_id}/unblock": {
       "post": {
         "operationId": "unblock_account_api_v2_residents__resident_id__unblock_post",
@@ -13128,6 +13297,171 @@
           }
         ],
         "summary": "Unblock Account",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/verification/approve": {
+      "post": {
+        "operationId": "approve_verification_api_v2_residents__resident_id__verification_approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentVerificationNotesIn",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Verification",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/verification/reject": {
+      "post": {
+        "operationId": "reject_verification_api_v2_residents__resident_id__verification_reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentVerificationRejectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Verification",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/verification/request-documents": {
+      "post": {
+        "operationId": "request_documents_api_v2_residents__resident_id__verification_request_documents_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResidentRequestDocumentsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Documents",
         "tags": [
           "residents"
         ]

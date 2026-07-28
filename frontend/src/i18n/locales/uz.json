@@ -1192,8 +1192,28 @@
       "bindingUpdated": "Biriktirish yangilandi",
       "bindingUpdateFailed": "Biriktirishni yangilab bo‘lmadi",
       "bindingRemoved": "Xonadon uzildi",
-      "bindingRemoveFailed": "Xonadonni uzib bo‘lmadi"
-    }
+      "bindingRemoveFailed": "Xonadonni uzib bo‘lmadi",
+      "documentsRequested": "Hujjatlar so‘raldi",
+      "documentsRequestFailed": "Hujjat so‘rab bo‘lmadi",
+      "verified": "Shaxs tasdiqlandi",
+      "verifyFailed": "Shaxsni tasdiqlab bo‘lmadi",
+      "verificationRejected": "Tekshiruv rad etildi",
+      "verificationRejectFailed": "Tekshiruvni rad etib bo‘lmadi"
+    },
+    "requestDocuments": "Hujjat so‘rash",
+    "requestDocumentsTitle": "Yashovchidan hujjat so‘rash",
+    "requestComment": "Aynan nima kerak va nima uchun (kamida 3 belgi)",
+    "requestSubmit": "So‘rash",
+    "verifyResident": "Tasdiqlash",
+    "verifyConfirm": "Yashovchi shaxsi tasdiqlansinmi?",
+    "verifyConfirmDesc": "Moderatsiyadagi barcha xonadonlar avtomatik tasdiqlanadi. Hujjat yozuvlari kartochkadan yo‘qoladi; tozalash amalga oshmasa, fayl nusxalari Telegram va Media Service’da qolishi mumkin.",
+    "rejectVerification": "Tekshiruvni rad etish",
+    "rejectVerificationTitle": "Tekshiruvni rad etish",
+    "rejectVerificationReason": "Rad etish sababi (kamida 3 belgi)",
+    "documentOpen": "Ochish",
+    "documentLoading": "Yuklanmoqda…",
+    "documentClose": "Yopish",
+    "documentLoadFailed": "Hujjatni yuklab bo‘lmadi"
   },
   "addressModals": {
     "addYard": "Hovli qo'shish",

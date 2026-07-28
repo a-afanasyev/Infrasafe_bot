@@ -96,3 +96,28 @@ async def notify_binding_removed(resident: User, address: str) -> None:
     await _safe_send(resident, get_text(
         "web_notifications.binding_removed", language=lang, address=address,
     ))
+
+
+async def notify_documents_requested(
+    resident: User, *, document_types: list[str], comment: str,
+) -> None:
+    lang = _lang(resident)
+    from uk_management_bot.services.residents.verification_core import (
+        format_requested_documents,
+    )
+    await _safe_send(resident, get_text(
+        "web_notifications.documents_requested", language=lang,
+        documents=format_requested_documents(document_types, lang), comment=comment,
+    ))
+
+
+async def notify_verification_approved(resident: User) -> None:
+    await _safe_send(resident, get_text(
+        "web_notifications.verification_approved", language=_lang(resident),
+    ))
+
+
+async def notify_verification_rejected(resident: User, notes: str) -> None:
+    await _safe_send(resident, get_text(
+        "web_notifications.verification_rejected", language=_lang(resident), notes=notes,
+    ))

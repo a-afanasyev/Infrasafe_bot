@@ -144,3 +144,28 @@ class ResidentUpdateBindingIn(BaseModel):
     model_config = {"extra": "forbid"}
     is_owner: Optional[bool] = None
     is_primary: Optional[bool] = None
+
+
+# ── Верификация и документы (PR-5) ───────────────────────────────────
+
+class ResidentRequestDocumentsIn(BaseModel):
+    """Запрос документов у жителя.
+
+    `document_types` — значения `DocumentType`; проверка допустимости и
+    дедупликация в сервис-слое, чтобы список типов оставался одним источником.
+    """
+    model_config = {"extra": "forbid"}
+    document_types: list[str] = Field(..., min_length=1)
+    comment: str = Field(..., min_length=3, max_length=1000)
+
+
+class ResidentVerificationNotesIn(BaseModel):
+    """Необязательная заметка при подтверждении личности."""
+    model_config = {"extra": "forbid"}
+    notes: Optional[str] = Field(None, max_length=1000)
+
+
+class ResidentVerificationRejectIn(BaseModel):
+    """Причина отказа обязательна — житель её увидит."""
+    model_config = {"extra": "forbid"}
+    notes: str = Field(..., min_length=3, max_length=1000)
