@@ -88,6 +88,10 @@ const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
+  // Жители: список/карточка/модерация привязок. allowedRoles=['manager'] —
+  // API раздела гейтит require_roles('manager'), и вести admin-без-manager
+  // на гарантированный 403 незачем.
+  { to: '/dashboard/residents', labelKey: 'nav.residents', Icon: Users, allowedRoles: ['manager'] },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
   // Модерация визуальных отчётов «до/после». DARK за VITE_WORK_REPORTS_ENABLED:
   // пункт появляется только когда фича включена билд-аргом.

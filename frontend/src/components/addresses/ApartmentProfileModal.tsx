@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useApartmentDetail } from '../../hooks/useAddresses'
-import type { ResidentBrief } from '../../types/api'
+import type { ApartmentResidentBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -55,7 +55,7 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
     )
   }
 
-  const residents: ResidentBrief[] = apartment.residents ?? []
+  const residents: ApartmentResidentBrief[] = apartment.residents ?? []
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>

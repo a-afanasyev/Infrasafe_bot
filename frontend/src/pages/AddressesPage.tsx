@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useTopbar } from '../contexts/topbar'
 import {
@@ -50,6 +51,7 @@ export default function AddressesPage() {
   const { t } = useTranslation()
   usePageTitle(t('nav.addresses'))
   const { setActions, clearActions } = useTopbar()
+  const navigate = useNavigate()
 
   // State
   const [view, setView] = useState<View>('directory')
@@ -188,7 +190,10 @@ export default function AddressesPage() {
   const onStatsYards = () => { setView('directory'); goToYards() }
   const onStatsBuildings = () => { setView('directory'); setLevel('all-buildings'); setFilterYardId(null); setSelectedYard(null); setSelectedBuilding(null) }
   const onStatsApartments = () => { setView('directory'); setLevel('all-apartments'); setFilterYardId(null); setFilterBuildingId(null); setSelectedYard(null); setSelectedBuilding(null) }
-  const onStatsResidents = () => { setView('moderation') }
+  // Плитка «Жителей» ведёт в свой раздел (список/карточки/верификация).
+  // Вкладка «Модерация» здесь остаётся: она про очередь заявок на привязку,
+  // а не про администрирование людей.
+  const onStatsResidents = () => { navigate('/dashboard/residents') }
 
   // Loading state
   const isLoading =

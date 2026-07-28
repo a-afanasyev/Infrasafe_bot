@@ -76,7 +76,8 @@
     "accessEquipment": "Jihozlar",
     "materials": "Ombor",
     "resourceAccounting": "Resurs hisobi",
-    "workReports": "Ishlar hisobotlari"
+    "workReports": "Ishlar hisobotlari",
+    "residents": "Aholi"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -1079,6 +1080,71 @@
     "noApartmentsFound": "Kvartiralar topilmadi",
     "noApartmentsFoundDesc": "Kvartiralarni qo'lda qo'shing yoki avtoto'ldirishni ishlating",
     "description": "Tavsif"
+  },
+  "residents": {
+    "title": "Aholi",
+    "searchPlaceholder": "F.I.Sh yoki telefon…",
+    "statsTotal": "Jami aholi",
+    "statsPending": "Tasdiqlash kutilmoqda",
+    "statsVerificationRequested": "Hujjatlar so‘ralgan",
+    "statsBlocked": "Bloklangan",
+    "filterStatus": "Holat",
+    "filterVerification": "Tekshiruv",
+    "allYards": "Barcha hovlilar",
+    "allBuildings": "Barcha uylar",
+    "allApartments": "Barcha xonadonlar",
+    "viewTile": "Kartochkalar",
+    "viewTable": "Jadval",
+    "noName": "Ismsiz",
+    "noAddress": "Manzil biriktirilmagan",
+    "notFound": "Aholi topilmadi",
+    "notFoundDesc": "Filtrlarni yoki qidiruvni o‘zgartiring",
+    "headerResident": "Yashovchi",
+    "headerAddress": "Asosiy manzil",
+    "headerApartments": "Xonadonlar",
+    "headerVerification": "Tekshiruv",
+    "headerStatus": "Holat",
+    "apartmentsCount_one": "{{count}} xonadon",
+    "apartmentsCount_other": "{{count}} xonadon",
+    "aptShort": "x.",
+    "primary": "Asosiy",
+    "owner": "Egasi",
+    "tenant": "Yashovchi",
+    "requestedAt": "Ariza {{date}}",
+    "reviewedAt": "ko‘rib chiqilgan {{date}}",
+    "sectionApartments": "Xonadonlar",
+    "sectionDocuments": "Hujjatlar",
+    "sectionVerification": "Tekshiruv",
+    "noApartments": "Xonadon biriktirilmagan",
+    "noDocuments": "Hujjatlar yuklanmagan",
+    "noVerification": "Tekshiruv yozuvlari yo‘q",
+    "verificationRecordStatus": "Yozuv holati",
+    "accountStatus": {
+      "pending": "Kutilmoqda",
+      "approved": "Tasdiqlangan",
+      "blocked": "Bloklangan"
+    },
+    "verification": {
+      "pending": "Tekshirilmagan",
+      "requested": "Hujjatlar so‘ralgan",
+      "verified": "Tasdiqlangan",
+      "rejected": "Rad etilgan"
+    },
+    "bindingStatus": {
+      "pending": "Moderatsiyada",
+      "approved": "Tasdiqlangan",
+      "rejected": "Rad etilgan"
+    },
+    "documentType": {
+      "passport": "Pasport",
+      "property_deed": "Mulk hujjati",
+      "rental_agreement": "Ijara shartnomasi",
+      "utility_bill": "Kommunal to‘lov cheki",
+      "other": "Boshqa"
+    },
+    "pageOutOfRange": "Sahifa ro‘yxat chegarasidan tashqarida",
+    "pageOutOfRangeDesc": "Siz uzoq sahifalarni ko‘rib turganingizda ro‘yxat qisqardi",
+    "toFirstPage": "Ro‘yxat boshiga"
   },
   "addressModals": {
     "addYard": "Hovli qo'shish",
