@@ -8,10 +8,11 @@
 """
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents import notify
 from uk_management_bot.api.residents.schemas import (
     ResidentRequestDocumentsIn,
@@ -26,6 +27,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _manager_only = require_roles("manager")
+
+#: Строже прочих мутаций: КАЖДЫЙ вызов отправляет жителю сообщение в Telegram,
+#: то есть сессией менеджера можно завалить чужой чат.
+_NOTIFY_LIMIT = "20/minute"
 
 
 async def _cleanup_media(resident: User, deleted_ids: list[int]) -> None:
@@ -61,7 +66,9 @@ async def _cleanup_media(resident: User, deleted_ids: list[int]) -> None:
 
 
 @router.post("/{resident_id}/verification/request-documents")
+@limiter.limit(_NOTIFY_LIMIT)
 async def request_documents(
+    request: Request,
     resident_id: int,
     body: ResidentRequestDocumentsIn,
     db: AsyncSession = Depends(get_db),
@@ -78,7 +85,9 @@ async def request_documents(
 
 
 @router.post("/{resident_id}/verification/approve")
+@limiter.limit(_NOTIFY_LIMIT)
 async def approve_verification(
+    request: Request,
     resident_id: int,
     body: ResidentVerificationNotesIn = ResidentVerificationNotesIn(),
     db: AsyncSession = Depends(get_db),
@@ -97,7 +106,9 @@ async def approve_verification(
 
 
 @router.post("/{resident_id}/verification/reject")
+@limiter.limit(_NOTIFY_LIMIT)
 async def reject_verification(
+    request: Request,
     resident_id: int,
     body: ResidentVerificationRejectIn,
     db: AsyncSession = Depends(get_db),

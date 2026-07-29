@@ -24,10 +24,11 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import ResidentDocumentOut
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
@@ -50,6 +51,12 @@ _TIMEOUT = 30
 #: Что раздел готов ОТДАВАТЬ. Отдельно от `sniff_media_mime` — см. модульный
 #: докстринг; там политика загрузки заявок, здесь политика выдачи документов.
 _INLINE_TYPES = frozenset({"image/jpeg", "image/png"})
+
+#: Метаданные — обычное чтение. Сам файл строже: маршрут ходит во внешний
+#: Telegram и держит до 20 МБ в памяти на запрос, поэтому цена вызова здесь
+#: несопоставима с остальными чтениями раздела.
+_READ_LIMIT = "60/minute"
+_FILE_LIMIT = "30/minute"
 
 
 def _sniff_document_mime(data: bytes) -> str | None:
@@ -77,7 +84,9 @@ async def _require_document(db: AsyncSession, resident_id: int, doc_id: int):
 
 
 @router.get("/{resident_id}/documents", response_model=list[ResidentDocumentOut])
+@limiter.limit(_READ_LIMIT)
 async def list_documents(
+    request: Request,
     resident_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
@@ -106,7 +115,9 @@ async def list_documents(
 
 
 @router.get("/{resident_id}/documents/{doc_id}/file")
+@limiter.limit(_FILE_LIMIT)
 async def get_document_file(
+    request: Request,
     resident_id: int,
     doc_id: int,
     db: AsyncSession = Depends(get_db),
