@@ -111,13 +111,19 @@ def _ensure_pure_applicant(resident: User) -> None:
     `users.status` общий на ВСЕ роли: заблокировав жителя, который ещё и
     исполнитель, мы отнимем у него рабочий доступ. Такие аккаунты блокируются
     из раздела «Сотрудники», где у операции свой guard и свой контекст.
+
+    Тот же guard стоит и на одобрении: «Сотрудники» активируют через
+    `activate_employee`, который кроме `status` поднимает `active_role` до
+    стафф-роли, — здешний путь сделал бы только половину. Поэтому текст ошибки
+    нейтрален к операции: он общий для approve, block и unblock.
     """
     roles = set(parse_roles_safe(resident.roles))
     staff = roles - PURE_APPLICANT_ROLES
     if staff:
         raise ResidentConflict(
             "У пользователя есть роли персонала "
-            f"({', '.join(sorted(staff))}) — блокируйте его из раздела «Сотрудники»",
+            f"({', '.join(sorted(staff))}) — управляйте его аккаунтом "
+            "из раздела «Сотрудники»",
             code="has_staff_roles",
         )
 
