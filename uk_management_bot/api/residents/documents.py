@@ -33,6 +33,7 @@ from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.residents import queries
 from uk_management_bot.services.residents.exceptions import ResidentNotFound
+from uk_management_bot.utils.http_errors import describe_http_error
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ async def get_document_file(
         raise
     except Exception as e:  # noqa: BLE001 — сеть/Telegram
         logger.warning("Не удалось получить документ %s жителя %s: %s",
-                       doc_id, resident_id, e)
+                       doc_id, resident_id, describe_http_error(e))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Telegram недоступен",

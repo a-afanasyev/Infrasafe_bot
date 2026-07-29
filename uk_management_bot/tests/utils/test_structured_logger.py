@@ -166,6 +166,97 @@ class TestSecurityFilter:
             record = self._make_record(msg)
             assert f.filter(record) is True
 
+
+# ---------------------------------------------------------------------------
+# SecurityFilter: токен бота в URL Telegram
+# ---------------------------------------------------------------------------
+
+#: Реалистичная форма токена: <id>:<секрет>. Значение синтетическое.
+_FAKE_BOT_TOKEN = "7712345678:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
+_FAKE_BOT_SECRET = _FAKE_BOT_TOKEN.split(":", 1)[1]
+
+
+class TestBotTokenRedaction:
+    """Токен бота не должен попадать в логи ни в одной форме.
+
+    Утечка возможна не через наш f-string, а через ТЕКСТ ИСКЛЮЧЕНИЯ: httpx
+    после `raise_for_status()` кладёт в сообщение полный URL запроса, а URL
+    Bot API содержит токен целиком:
+
+        Server error '500 …' for url 'https://api.telegram.org/bot<ТОКЕН>/getFile?…'
+
+    Проверено на живом API-контейнере profk. Прежние паттерны фильтра эту
+    форму НЕ ловили: `(Bot\\s+)\\d+:…` требует пробела после «Bot», а в URL
+    его нет. Фильтр — защита в глубину; сами call-site'ы тоже не логируют
+    сырое исключение (см. tests/api/test_no_bot_token_in_logs.py).
+    """
+
+    def _make_record(self, msg: str) -> logging.LogRecord:
+        return logging.LogRecord(
+            name="sec", level=logging.WARNING, pathname="", lineno=0,
+            msg=msg, args=(), exc_info=None,
+        )
+
+    def test_token_in_telegram_url_is_redacted(self):
+        from uk_management_bot.utils.structured_logger import SecurityFilter
+        f = SecurityFilter()
+        record = self._make_record(
+            f"Server error '500' for url "
+            f"'https://api.telegram.org/bot{_FAKE_BOT_TOKEN}/getFile?file_id=X'"
+        )
+        f.filter(record)
+        assert _FAKE_BOT_SECRET not in record.msg
+        assert _FAKE_BOT_TOKEN not in record.msg
+
+    def test_redaction_leaves_no_part_of_the_token(self):
+        """Половина токена — тоже утечка.
+
+        Общий `_redact_match` режет по первому `=`/`:` и оставил бы
+        `/bot7712345678: [REDACTED]`, то есть id бота открытым. Здесь нужна
+        замена целиком.
+        """
+        from uk_management_bot.utils.structured_logger import SecurityFilter
+        f = SecurityFilter()
+        record = self._make_record(
+            f"https://api.telegram.org/bot{_FAKE_BOT_TOKEN}/sendMessage"
+        )
+        f.filter(record)
+        assert "7712345678" not in record.msg
+        assert "[REDACTED]" in record.msg
+
+    def test_file_download_url_is_redacted(self):
+        """Вторая форма URL Bot API — скачивание файла (`/file/bot<токен>/…`)."""
+        from uk_management_bot.utils.structured_logger import SecurityFilter
+        f = SecurityFilter()
+        record = self._make_record(
+            f"ReadTimeout for url "
+            f"'https://api.telegram.org/file/bot{_FAKE_BOT_TOKEN}/documents/file_1.jpg'"
+        )
+        f.filter(record)
+        assert _FAKE_BOT_SECRET not in record.msg
+
+    def test_surrounding_text_survives(self):
+        """Редактируется значение, а не всё сообщение: контекст диагностики
+        обязан остаться, иначе фильтр лечит утечку ценой отладки."""
+        from uk_management_bot.utils.structured_logger import SecurityFilter
+        f = SecurityFilter()
+        record = self._make_record(
+            f"getFile failed: url https://api.telegram.org/bot{_FAKE_BOT_TOKEN}/getFile "
+            f"status=429"
+        )
+        f.filter(record)
+        assert "getFile failed" in record.msg
+        assert "status=429" in record.msg
+        assert _FAKE_BOT_SECRET not in record.msg
+
+    def test_ordinary_url_untouched(self):
+        """Обычные URL фильтр не портит."""
+        from uk_management_bot.utils.structured_logger import SecurityFilter
+        f = SecurityFilter()
+        record = self._make_record("GET https://profk.uz/uk/api/v2/residents?limit=25")
+        f.filter(record)
+        assert record.msg == "GET https://profk.uz/uk/api/v2/residents?limit=25"
+
     def test_sensitive_patterns_case_insensitive(self):
         from uk_management_bot.utils.structured_logger import SecurityFilter
         f = SecurityFilter()

@@ -65,10 +65,25 @@ class SecurityFilter(logging.Filter):
         re.compile(r'(Bot\s+)\d+:[A-Za-z0-9_-]+', re.IGNORECASE),
     ]
 
+    #: Паттерны, у которых вырезается совпадение ЦЕЛИКОМ, а не «значение после
+    #: разделителя». Токен бота в URL Bot API (`/bot<id>:<секрет>/method`)
+    #: селективным `_redact_match` вычистить нельзя: тот режет по первому `:`
+    #: и оставил бы `/bot7712345678: [REDACTED]`, то есть половину токена.
+    #:
+    #: Форма URL, а не `Bot <токен>`: httpx после `raise_for_status()` кладёт в
+    #: ТЕКСТ ИСКЛЮЧЕНИЯ полный URL запроса, и любой `logger.warning(..., e)`
+    #: рядом с Bot API писал бы токен в лог. Покрыты оба хоста Bot API —
+    #: `api.telegram.org/bot…` и `api.telegram.org/file/bot…`.
+    REDACT_WHOLE_PATTERNS = [
+        (re.compile(r'/bot\d+:[A-Za-z0-9_-]{20,}'), '/bot[REDACTED]'),
+    ]
+
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
         for pattern in self.REDACT_PATTERNS:
             msg = pattern.sub(lambda m: self._redact_match(m), msg)
+        for pattern, replacement in self.REDACT_WHOLE_PATTERNS:
+            msg = pattern.sub(replacement, msg)
         record.msg = msg
         record.args = ()
         return True
