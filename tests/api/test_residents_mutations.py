@@ -195,6 +195,18 @@ class TestBlockGuard:
         assert r.status_code == 409
         assert "Сотрудники" in r.json()["detail"]
 
+    async def test_guard_message_is_operation_neutral(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Guard общий для approve/block/unblock, значит и текст обязан подходить
+        всем трём. Найдено прод-проверкой: на кнопке «Одобрить» пользователь
+        получал «блокируйте его из раздела Сотрудники» — бессмыслица."""
+        resident = await _resident(db_session, 4207, roles='["applicant", "manager"]',
+                                   status="pending")
+        detail = (await client.post(f"{BASE}/{resident.id}/approve", json={})).json()["detail"]
+        assert "Сотрудники" in detail
+        assert "блокируйте" not in detail.lower()
+
     async def test_approve_guard_precedes_status_check(
         self, client: AsyncClient, db_session: AsyncSession
     ):
