@@ -19,9 +19,7 @@
 жителя, у которого в карточке к этому двору «0 квартир».
 """
 
-import re
-
-from sqlalchemy import and_, case, collate, exists, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
@@ -33,6 +31,13 @@ from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification,
 )
 from uk_management_bot.database.models.yard import Yard
+# Поиск по кириллице на проде работает только через эти хелперы — локаль
+# кластера `C` ломает голый ILIKE (см. докстринг `utils/sql_search`).
+from uk_management_bot.utils.sql_search import (
+    ci_contains as _ci_contains,
+    escape_like as _escape_like,
+    is_postgres as _is_postgres,
+)
 
 RESIDENT_ROLE = "applicant"
 
@@ -41,53 +46,6 @@ BELONGING_STATUSES = (
     UserApartmentStatus.APPROVED.value,
     UserApartmentStatus.PENDING.value,
 )
-
-
-def _escape_like(value: str) -> str:
-    """Экранирует LIKE-мета-символы % _ \\ — иначе `q=%` матчит всё.
-
-    Локальная копия хелпера из `api/shifts/service.py:55` (там же он живёт и в
-    `services/material_service.py`): импортировать приватную функцию чужого
-    домена ради двух строк — худшая связность, чем повтор.
-    """
-    return re.sub(r'([%_\\])', r'\\\1', value)
-
-
-# Коллация ICU для регистронезависимого поиска (см. `_ci_contains`).
-# `und` — language-agnostic корень CLDR; отдельная локаль не нужна, нам нужно
-# только Unicode-совместимое сворачивание регистра, а не порядок сортировки.
-_ICU_COLLATION = "und-x-icu"
-
-
-def _is_postgres(db) -> bool:
-    bind = getattr(db, "bind", None)
-    return getattr(getattr(bind, "dialect", None), "name", "") == "postgresql"
-
-
-def _ci_contains(column, pattern: str, *, is_postgres: bool):
-    """Регистронезависимое вхождение подстроки, честное для кириллицы.
-
-    ⚠ Прод-БД создана в локали `C` (`lc_ctype=C`), а в ней `lower()` и `ILIKE`
-    сворачивают регистр ТОЛЬКО для ASCII: `lower('АДМИН')` возвращает `'АДМИН'`,
-    и `'Администратор' ILIKE '%админ%'` даёт false. Проверено на живом profk —
-    латиница искалась, русские имена нет, а система русскоязычная.
-
-    Чинится без миграции и без расширений: ICU-коллация (`und-x-icu` есть в
-    postgres:15 из коробки) заставляет `lower()` использовать юникодный
-    case-mapping. Пересоздавать кластер в UTF-8-локали было бы правильнее
-    системно, но это отдельная операция с даунтаймом — здесь нужен корректный
-    поиск, а не смена локали кластера.
-
-    На sqlite (тестовый харнесс) ICU-коллации нет и не нужна: там `ILIKE`
-    транслируется в `lower() LIKE lower()` силами Python-слоя SQLAlchemy.
-
-    `pattern` уже экранирован (`_escape_like`); нижний регистр наводится ТОЛЬКО
-    на PG-ветке — на sqlite `lower()` тоже ASCII-only, и предварительно
-    опущенный шаблон перестал бы находить кириллицу вообще.
-    """
-    if is_postgres:
-        return func.lower(collate(column, _ICU_COLLATION)).like(pattern.lower(), escape="\\")
-    return column.ilike(pattern, escape="\\")
 
 
 def _resident_scope():

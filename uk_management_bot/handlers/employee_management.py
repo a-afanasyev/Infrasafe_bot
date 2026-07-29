@@ -1090,16 +1090,17 @@ async def handle_employee_search_query(message: Message, state: FSMContext, db: 
         return
 
     try:
-        from sqlalchemy import or_
-        pattern = f"%{raw_query}%"
+        from uk_management_bot.utils.sql_search import (
+            ci_contains_any, escape_like, is_postgres,
+        )
+        pattern = f"%{escape_like(raw_query)}%"
         employees = (
             db.query(User)
             .filter(
-                or_(
-                    User.first_name.ilike(pattern),
-                    User.last_name.ilike(pattern),
-                    User.username.ilike(pattern),
-                    User.phone.ilike(pattern),
+                ci_contains_any(
+                    (User.first_name, User.last_name, User.username, User.phone),
+                    pattern,
+                    is_postgres=is_postgres(db),
                 )
             )
             .limit(20)

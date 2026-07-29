@@ -27,6 +27,7 @@ from uk_management_bot.database.models.user_apartment import (
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.utils.sql_search import ci_contains_any, is_postgres
 from uk_management_bot.services.addresses.exceptions import (
     AddressNotFound, AddressConflict,
 )
@@ -265,9 +266,10 @@ async def search_apartments(
         .where(
             and_(
                 Apartment.is_active == True,  # noqa: E712
-                or_(
-                    Apartment.apartment_number.ilike(search_term),
-                    Building.address.ilike(search_term),
+                ci_contains_any(
+                    (Apartment.apartment_number, Building.address),
+                    search_term,
+                    is_postgres=is_postgres(db),
                 ),
             )
         )
