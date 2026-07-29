@@ -22,7 +22,7 @@ import { SPEC_COLORS, getSpecDisplay } from '../utils/employeeUtils'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import TopbarSearch from '../components/shared/TopbarSearch'
 import { cn } from '@/lib/utils'
 
 export default function EmployeesPage() {
@@ -96,20 +96,21 @@ export default function EmployeesPage() {
   const pending = pendingStaff.length
   const verified = employees.filter(e => e.verification_status === 'verified').length
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; deps=[search] сохранены во избежание пересоздания узла topbar-действий
+  // Поле поиска — НЕконтролируемое (TopbarSearch), и узел мемоизирован БЕЗ
+  // зависимости от `search`: контролируемое поле в топбаре теряет символы
+  // («админ» → «амн»), потому что узел приезжает сюда вторым коммитом —
+  // см. докстринг TopbarSearch и `docs/bugs-2026-07-28.md`, BUG-2.
   const actionsNode = useMemo(() => (
     <div className="flex items-center gap-2">
-      <Input
-        type="text"
+      <TopbarSearch
         placeholder={t('employees.searchPlaceholder')}
-        value={search}
-        onChange={e => setSearch(e.target.value)}
+        onSearch={setSearch}
         className="w-[200px]"
       />
       <Button variant="outline" size="sm">{t('employees.export')}</Button>
       <Button size="sm" onClick={() => setAddModalOpen(true)}>{t('employees.add')}</Button>
     </div>
-  ), [search])
+  ), [t])
 
   useEffect(() => {
     setActions(actionsNode)

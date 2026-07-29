@@ -38,7 +38,7 @@ import AddressBreadcrumb from '../components/addresses/AddressBreadcrumb'
 import AddressModals, { type ConfirmState } from '../components/addresses/AddressModals'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import TopbarSearch from '../components/shared/TopbarSearch'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -159,14 +159,14 @@ export default function AddressesPage() {
     return name.toLowerCase().includes(searchQuery.toLowerCase())
   }, [searchQuery])
 
-  // Topbar actions
+  // Topbar actions. Поле поиска — НЕконтролируемое (TopbarSearch), и `searchQuery`
+  // НЕ в deps: контролируемое поле в топбаре теряет символы, потому что узел
+  // приезжает сюда вторым коммитом — см. докстринг TopbarSearch.
   const actionsNode = useMemo(() => (
     <div className="flex items-center gap-2">
-      <Input
-        type="text"
+      <TopbarSearch
         placeholder={t('common.search')}
-        value={searchQuery}
-        onChange={e => setSearchQuery(e.target.value)}
+        onSearch={setSearchQuery}
         className="w-[200px]"
       />
       {level === 'apartments' ? (
@@ -179,7 +179,7 @@ export default function AddressesPage() {
         </Button>
       )}
     </div>
-  ), [searchQuery, level, t])
+  ), [level, t])
 
   useEffect(() => {
     setActions(actionsNode)
