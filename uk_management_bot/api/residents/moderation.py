@@ -8,10 +8,11 @@
 `notify.py`. Адрес для текста уведомления берётся из карточки жителя уже после
 операции: так в сообщении гарантированно тот адрес, который житель увидит.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents import notify
 from uk_management_bot.api.residents.schemas import (
     ResidentApartmentOut,
@@ -27,6 +28,11 @@ from uk_management_bot.services.residents import core, queries
 router = APIRouter()
 
 _manager_only = require_roles("manager")
+
+#: Мутации раздела. Конвенция проекта — лимит на маршруте (общего
+#: `default_limits` нет). ⚠ auth-зависимости идут ДО лимитера: это защита не
+#: от неаутентифицированного флуда, а от злоупотребления сессией менеджера.
+_WRITE_LIMIT = "30/minute"
 
 
 def _format_address(yard_name: str | None, building_address: str | None, number: str) -> str:
@@ -65,7 +71,9 @@ async def _address_of(db: AsyncSession, resident_id: int, ua_id: int) -> str:
 # ───────────────────────── аккаунт ─────────────────────────
 
 @router.post("/{resident_id}/approve")
+@limiter.limit(_WRITE_LIMIT)
 async def approve_account(
+    request: Request,
     resident_id: int,
     body: ResidentCommentIn = ResidentCommentIn(),
     db: AsyncSession = Depends(get_db),
@@ -79,7 +87,9 @@ async def approve_account(
 
 
 @router.post("/{resident_id}/block")
+@limiter.limit(_WRITE_LIMIT)
 async def block_account(
+    request: Request,
     resident_id: int,
     body: ResidentBlockIn,
     db: AsyncSession = Depends(get_db),
@@ -94,7 +104,9 @@ async def block_account(
 
 
 @router.post("/{resident_id}/unblock")
+@limiter.limit(_WRITE_LIMIT)
 async def unblock_account(
+    request: Request,
     resident_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
@@ -106,7 +118,9 @@ async def unblock_account(
 # ───────────────────────── привязки ─────────────────────────
 
 @router.post("/{resident_id}/apartments", response_model=ResidentApartmentOut, status_code=201)
+@limiter.limit(_WRITE_LIMIT)
 async def attach_apartment(
+    request: Request,
     resident_id: int,
     body: ResidentAttachApartment,
     db: AsyncSession = Depends(get_db),
@@ -126,7 +140,9 @@ async def attach_apartment(
 
 
 @router.post("/{resident_id}/apartments/{ua_id}/approve", response_model=ResidentApartmentOut)
+@limiter.limit(_WRITE_LIMIT)
 async def approve_binding(
+    request: Request,
     resident_id: int,
     ua_id: int,
     body: ResidentCommentIn = ResidentCommentIn(),
@@ -146,7 +162,9 @@ async def approve_binding(
 
 
 @router.post("/{resident_id}/apartments/{ua_id}/reject", response_model=ResidentApartmentOut)
+@limiter.limit(_WRITE_LIMIT)
 async def reject_binding(
+    request: Request,
     resident_id: int,
     ua_id: int,
     body: ResidentRejectIn,
@@ -168,7 +186,9 @@ async def reject_binding(
 
 
 @router.patch("/{resident_id}/apartments/{ua_id}", response_model=ResidentApartmentOut)
+@limiter.limit(_WRITE_LIMIT)
 async def update_binding(
+    request: Request,
     resident_id: int,
     ua_id: int,
     body: ResidentUpdateBindingIn,
@@ -183,7 +203,9 @@ async def update_binding(
 
 
 @router.delete("/{resident_id}/apartments/{ua_id}", status_code=204)
+@limiter.limit(_WRITE_LIMIT)
 async def remove_binding(
+    request: Request,
     resident_id: int,
     ua_id: int,
     db: AsyncSession = Depends(get_db),

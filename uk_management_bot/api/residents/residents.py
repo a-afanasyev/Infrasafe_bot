@@ -7,10 +7,11 @@ RBAC — `manager`, как во всём домене адресов/смен.
 """
 from enum import Enum
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import (
     ResidentApartmentOut,
     ResidentDetailOut,
@@ -29,6 +30,12 @@ router = APIRouter()
 
 _manager_only = require_roles("manager")
 
+#: Лимиты раздела. Конвенция проекта — объявлять на маршруте: общего
+#: `default_limits` у лимитера нет, и без декоратора маршрут не ограничен вовсе.
+#: ⚠ auth-зависимости выполняются ДО лимитера, поэтому это защита не от
+#: неаутентифицированного флуда, а от злоупотребления сессией менеджера.
+READ_LIMIT = "60/minute"
+
 
 def _enum_value(value) -> str | None:
     """Enum-колонки моделей отдают питоновский Enum — наружу нужен его value."""
@@ -45,7 +52,9 @@ def _format_address(yard_name: str | None, building_address: str | None, number:
 
 
 @router.get("", response_model=ResidentListOut)
+@limiter.limit(READ_LIMIT)
 async def list_residents(
+    request: Request,
     status: str | None = Query(None, description="pending | approved | blocked"),
     verification_status: str | None = Query(None, description="pending | requested | verified | rejected"),
     yard_id: int | None = Query(None),
@@ -90,7 +99,9 @@ async def list_residents(
 # ВАЖНО: /stats объявлен ДО /{resident_id} — иначе динамический маршрут
 # перехватил бы «stats» и отдал 422 на несовпадение int.
 @router.get("/stats", response_model=ResidentStatsOut)
+@limiter.limit(READ_LIMIT)
 async def get_stats(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ):
@@ -98,7 +109,9 @@ async def get_stats(
 
 
 @router.get("/{resident_id}", response_model=ResidentDetailOut)
+@limiter.limit(READ_LIMIT)
 async def get_resident(
+    request: Request,
     resident_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
