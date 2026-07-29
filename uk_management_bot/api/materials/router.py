@@ -39,6 +39,7 @@ from uk_management_bot.api.materials.schemas import (
 from uk_management_bot.database.models.material import Material
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.csv_escape import escape_csv_cell
+from uk_management_bot.utils.sql_search import ci_contains, is_postgres
 from uk_management_bot.services import material_service
 from uk_management_bot.services.material_service import (
     MaterialConflictError,
@@ -94,7 +95,11 @@ async def list_materials(
 ):
     query = select(Material)
     if q:
-        query = query.where(Material.name.ilike(f"%{_escape_like(q)}%", escape="\\"))
+        query = query.where(
+            ci_contains(
+                Material.name, f"%{_escape_like(q)}%", is_postgres=is_postgres(db),
+            )
+        )
     if is_active is not None:
         query = query.where(Material.is_active.is_(is_active))
     rows = (

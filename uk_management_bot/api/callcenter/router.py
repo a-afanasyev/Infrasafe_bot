@@ -13,13 +13,13 @@ from uk_management_bot.services.request_address import (
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.utils.sql_search import (
+    ci_contains_any,
+    escape_like as _escape_like,
+    is_postgres,
+)
 
 router = APIRouter()
-
-
-def _escape_like(s: str) -> str:
-    """Escape LIKE wildcards in user input."""
-    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 @router.get("/search-resident", response_model=list[ResidentSearchResult])
@@ -55,11 +55,11 @@ async def search_resident(
                 User.roles.like('%"applicant"%'),
                 legacy_role_filter("applicant"),
             ),
-            or_(
-                User.phone.ilike(pattern),
-                User.first_name.ilike(pattern),
-                User.last_name.ilike(pattern),
-            )
+            ci_contains_any(
+                (User.phone, User.first_name, User.last_name),
+                pattern,
+                is_postgres=is_postgres(db),
+            ),
         ).limit(10)
     )
     rows = result.all()

@@ -12,7 +12,6 @@ AST-гейт `tests/api/test_shifts_router_inventory.py` фиксирует от
 прямого ORM в роутере на нуле.
 """
 
-import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -28,6 +27,11 @@ from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles_safe
 from uk_management_bot.utils.specializations import has_required_specs
+from uk_management_bot.utils.sql_search import (
+    ci_contains_any,
+    escape_like as _escape_like,
+    is_postgres,
+)
 from uk_management_bot.api.dependencies import _parse_user_roles
 
 # Роли, считающиеся «сотрудником» (в отличие от жителя-applicant). Используются
@@ -50,11 +54,6 @@ REASSIGN_MOVE_STATUSES = {"В работе", "Закуп", "Уточнение"}
 # до cutover кодировалась как «Исполнено», поэтому добавлена рядом с ним для
 # сохранения прежней классификации (наружу проецируется как «Исполнено»).
 ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Возвращена"}
-
-
-def _escape_like(value: str) -> str:
-    """Escape SQL LIKE wildcards % _ \\ to prevent injection."""
-    return re.sub(r'([%_\\])', r'\\\1', value)
 
 
 # ---------------------------------------------------------------------------
@@ -92,10 +91,10 @@ async def list_employees(
     if search:
         search_term = f"%{_escape_like(search)}%"
         query = query.where(
-            or_(
-                User.first_name.ilike(search_term),
-                User.last_name.ilike(search_term),
-                User.phone.ilike(search_term),
+            ci_contains_any(
+                (User.first_name, User.last_name, User.phone),
+                search_term,
+                is_postgres=is_postgres(db),
             )
         )
     if verification_status:

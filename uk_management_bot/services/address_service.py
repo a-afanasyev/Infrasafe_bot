@@ -9,7 +9,7 @@ Read-методы по-прежнему работают на переданно
 """
 import logging
 from typing import Optional, List, Dict, Any, Tuple, Union
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
@@ -20,6 +20,7 @@ from uk_management_bot.database.models.user_apartment import UserApartmentStatus
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.addresses import core as _core
 from uk_management_bot.services.addresses.exceptions import AddressError
+from uk_management_bot.utils.sql_search import ci_contains_any, escape_like, is_postgres
 
 logger = logging.getLogger(__name__)
 
@@ -391,9 +392,10 @@ class AddressService:
         query = select(Apartment).join(Building)
 
         # Поиск по номеру квартиры или адресу здания
-        search_filter = or_(
-            Apartment.apartment_number.ilike(f"%{query_text}%"),
-            Building.address.ilike(f"%{query_text}%")
+        search_filter = ci_contains_any(
+            (Apartment.apartment_number, Building.address),
+            f"%{escape_like(query_text)}%",
+            is_postgres=is_postgres(session),
         )
 
         query = query.where(search_filter)

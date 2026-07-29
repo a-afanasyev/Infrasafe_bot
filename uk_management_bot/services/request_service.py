@@ -7,6 +7,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_primary_role
 from uk_management_bot.utils.validators import validate_description
+from uk_management_bot.utils.sql_search import ci_contains, escape_like, is_postgres
 from uk_management_bot.utils.constants import (
     REQUEST_URGENCIES,
     URGENCY_DEFAULT,
@@ -418,7 +419,13 @@ class RequestService:
                 query = query.filter(Request.status == status)
 
             if address_search:
-                query = query.filter(Request.address.ilike(f"%{address_search}%"))
+                query = query.filter(
+                    ci_contains(
+                        Request.address,
+                        f"%{escape_like(address_search)}%",
+                        is_postgres=is_postgres(self.db),
+                    )
+                )
 
             requests = query.order_by(desc(Request.created_at)).offset(offset).limit(limit).all()
 

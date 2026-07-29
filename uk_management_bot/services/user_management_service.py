@@ -17,6 +17,7 @@ from sqlalchemy import or_, and_
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles_safe
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.sql_search import ci_contains_any, escape_like, is_postgres
 
 logger = logging.getLogger(__name__)
 
@@ -376,12 +377,12 @@ class UserManagementService:
             
             # Поиск по тексту (имя, фамилия, username)
             if query and query.strip():
-                search_term = f"%{query.strip()}%"
+                search_term = f"%{escape_like(query.strip())}%"
                 db_query = db_query.filter(
-                    or_(
-                        User.first_name.ilike(search_term),
-                        User.last_name.ilike(search_term),
-                        User.username.ilike(search_term)
+                    ci_contains_any(
+                        (User.first_name, User.last_name, User.username),
+                        search_term,
+                        is_postgres=is_postgres(self.db),
                     )
                 )
             
@@ -442,7 +443,7 @@ class UserManagementService:
         multi-role applicant+executor — попадают.
         """
         try:
-            pattern = f"%{(query or '').strip()}%"
+            pattern = f"%{escape_like((query or '').strip())}%"
             return (
                 self.db.query(User)
                 .filter(
@@ -454,11 +455,11 @@ class UserManagementService:
                                 legacy_role_filter('applicant'),
                             ),
                         ),
-                        or_(
-                            User.first_name.ilike(pattern),
-                            User.last_name.ilike(pattern),
-                            User.username.ilike(pattern),
-                            User.phone.ilike(pattern),
+                        ci_contains_any(
+                            (User.first_name, User.last_name,
+                             User.username, User.phone),
+                            pattern,
+                            is_postgres=is_postgres(self.db),
                         ),
                     )
                 )
@@ -751,11 +752,10 @@ class UserManagementService:
 
             # Поиск по имени, фамилии, username или телефону
             search_query = base_query.filter(
-                or_(
-                    User.first_name.ilike(f'%{query}%'),
-                    User.last_name.ilike(f'%{query}%'),
-                    User.username.ilike(f'%{query}%'),
-                    User.phone.ilike(f'%{query}%')
+                ci_contains_any(
+                    (User.first_name, User.last_name, User.username, User.phone),
+                    f'%{escape_like(query)}%',
+                    is_postgres=is_postgres(self.db),
                 )
             )
             

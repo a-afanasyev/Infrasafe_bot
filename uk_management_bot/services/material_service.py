@@ -35,6 +35,14 @@ from uk_management_bot.database.models.material import (
     MaterialReceipt,
 )
 from uk_management_bot.database.models.request import Request
+# `_escape_like` реэкспортируется (его импортирует api/materials/router.py);
+# поиск по названию материала обязан идти через `ci_contains` — см. докстринг
+# `utils/sql_search` про локаль `C` на проде.
+from uk_management_bot.utils.sql_search import (  # noqa: F401
+    ci_contains,
+    escape_like as _escape_like,
+    is_postgres,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -752,7 +760,11 @@ async def get_stock(db: AsyncSession, *, q: Optional[str] = None,
         .order_by(Material.name)
     )
     if q:
-        query = query.where(Material.name.ilike(f"%{_escape_like(q)}%", escape="\\"))
+        query = query.where(
+            ci_contains(
+                Material.name, f"%{_escape_like(q)}%", is_postgres=is_postgres(db),
+            )
+        )
     rows = (await db.execute(query)).all()
     result = []
     for r in rows:
@@ -938,11 +950,6 @@ async def get_procurement(db: AsyncSession) -> dict:
 # ===========================================================================
 # SQL-хелперы
 # ===========================================================================
-
-def _escape_like(value: str) -> str:
-    """Экранировать спецсимволы LIKE (паттерн api/shifts/service.py)."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
 
 def sa_literal(value: str):
     from sqlalchemy import literal
