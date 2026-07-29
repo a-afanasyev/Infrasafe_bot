@@ -178,6 +178,48 @@ class TestBlockGuard:
                                    status="blocked")
         assert (await client.post(f"{BASE}/{resident.id}/unblock")).status_code == 409
 
+    async def test_approve_also_guarded(self, client: AsyncClient, db_session: AsyncSession):
+        """Одобрение аккаунта — тоже операция над стаффом, и тоже не отсюда.
+
+        Раздел «Сотрудники» активирует через `activate_employee`, который кроме
+        `status` поднимает `active_role` до стафф-роли и подтягивает
+        `verification_status`. Здешний `approve_account` делает только первое,
+        поэтому приглашённый через бота сотрудник (после `/join` он остаётся
+        `applicant` + стафф-роль в статусе `pending`, то есть попадает в список
+        жителей) получал бы аккаунт без меню в боте — ровно тот дефект, ради
+        которого `activate_employee` и написан.
+        """
+        resident = await _resident(db_session, 4204, roles='["applicant", "manager"]',
+                                   status="pending")
+        r = await client.post(f"{BASE}/{resident.id}/approve", json={})
+        assert r.status_code == 409
+        assert "Сотрудники" in r.json()["detail"]
+
+    async def test_approve_guard_precedes_status_check(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Стафф получает «идите в Сотрудники» в любом статусе, а не «уже одобрен».
+
+        Порядок важен: guard стоит до проверки статуса, иначе менеджер видел бы
+        сообщение о статусе и не понимал, что раздел вообще не его.
+        """
+        resident = await _resident(db_session, 4205, roles='["applicant", "executor"]',
+                                   status="approved")
+        r = await client.post(f"{BASE}/{resident.id}/approve", json={})
+        assert r.status_code == 409
+        assert "Сотрудники" in r.json()["detail"]
+
+    async def test_pure_applicant_approve_unaffected(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Чистый житель одобряется как прежде — guard не задел основной путь."""
+        resident = await _resident(db_session, 4206,
+                                   roles='["applicant", "resource_meter_entry"]',
+                                   status="pending")
+        r = await client.post(f"{BASE}/{resident.id}/approve", json={})
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "approved"
+
 
 # ═══════════════════════ Т3: ownership вложенных ресурсов ═══════════════════════
 

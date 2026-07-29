@@ -46,6 +46,24 @@ describe('ResidentAccountActions', () => {
     expect(screen.queryByRole('button', { name: 'Одобрить аккаунт' })).not.toBeInTheDocument()
   })
 
+  it('одобрение СКРЫТО у мультиролевого — активация стаффа не отсюда', () => {
+    // «Сотрудники» активируют через activate_employee: тот кроме status
+    // поднимает active_role до стафф-роли. Одобрение отсюда сделало бы только
+    // половину, и приглашённый сотрудник остался бы без меню в боте. Бэкенд
+    // отвечает 409, поэтому кнопке тут не место.
+    render(<ResidentAccountActions
+      resident={profile({ status: 'pending', roles: ['applicant', 'manager'] })} />)
+
+    expect(screen.queryByRole('button', { name: 'Одобрить аккаунт' })).not.toBeInTheDocument()
+    expect(screen.getByText(/роли персонала/)).toBeInTheDocument()
+  })
+
+  it('капабилити контролёра показаний одобрению не мешает', () => {
+    render(<ResidentAccountActions
+      resident={profile({ status: 'pending', roles: ['applicant', 'resource_meter_entry'] })} />)
+    expect(screen.getByRole('button', { name: 'Одобрить аккаунт' })).toBeInTheDocument()
+  })
+
   it('блокировка СКРЫТА у мультиролевого и объяснена текстом', () => {
     // users.status общий на все роли: блокировка жителя-исполнителя отняла бы
     // рабочий доступ, поэтому бэкенд отвечает 409. Показывать кнопку, которая

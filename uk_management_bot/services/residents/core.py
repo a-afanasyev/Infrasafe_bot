@@ -224,8 +224,20 @@ async def _all_bindings(db: AsyncSession, resident_id: int) -> list[UserApartmen
 async def approve_account(
     db: AsyncSession, *, resident_id: int, actor_id: int, comment: str | None = None,
 ) -> User:
-    """`pending → approved`. Повторный approve и approve заблокированного — 409 (Т13)."""
+    """`pending → approved`. Повторный approve и approve заблокированного — 409 (Т13).
+
+    Стафф отсюда не одобряется (Т2). «Сотрудники» активируют через
+    `shifts_service.activate_employee`, который кроме `status` поднимает
+    `active_role` до стафф-роли и подтягивает `verification_status`; здешний
+    путь делает только первое. Приглашённый через бота сотрудник после `/join`
+    остаётся `applicant` + стафф-роль в статусе `pending`, то есть попадает в
+    список жителей, — и одобрение отсюда оставило бы его без меню в боте, ровно
+    как описано в докстринге `activate_employee`.
+    """
     resident = await _lock_and_require_resident(db, resident_id)
+    # До проверки статуса: иначе стафф видел бы «уже одобрен» и не понимал, что
+    # раздел вообще не его.
+    _ensure_pure_applicant(resident)
     if resident.status == "approved":
         raise ResidentConflict("Аккаунт уже одобрен", code="already_approved")
     if resident.status != "pending":
