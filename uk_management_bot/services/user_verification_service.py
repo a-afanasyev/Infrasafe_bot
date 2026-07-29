@@ -145,10 +145,23 @@ class UserVerificationService:
                 # Продолжаем выполнение, так как верификация уже одобрена
 
             # Удаляем документы пользователя из Media Service (канал ARCHIVE)
-            from uk_management_bot.utils.media_helpers import delete_user_documents_from_media_service
+            from uk_management_bot.utils.media_helpers import (
+                MediaCleanupResult, delete_user_documents_from_media_service,
+            )
             try:
-                await delete_user_documents_from_media_service(user.telegram_id)
-                logger.info(f"Документы пользователя {user.telegram_id} удалены из Media Service")
+                cleanup = await delete_user_documents_from_media_service(user.telegram_id)
+                # Раньше здесь стояло безусловное «документы удалены» — утверждение,
+                # неверное всякий раз, когда Media Service был недоступен.
+                if cleanup is MediaCleanupResult.DELETED:
+                    logger.info(f"Документы пользователя {user.telegram_id} удалены из Media Service")
+                elif cleanup is MediaCleanupResult.NOTHING_TO_DELETE:
+                    logger.info(f"Документов пользователя {user.telegram_id} в Media Service не было")
+                else:
+                    logger.warning(
+                        "Зачистка документов пользователя %s в Media Service НЕ состоялась (%s) — "
+                        "файлы остались; повторить по этому telegram_id",
+                        user.telegram_id, cleanup.value,
+                    )
             except Exception as e:
                 logger.error(f"Ошибка удаления документов из Media Service для пользователя {user.telegram_id}: {e}")
                 # Продолжаем выполнение, так как верификация уже одобрена

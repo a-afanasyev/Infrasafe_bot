@@ -2,6 +2,7 @@
 Утилиты для работы с медиа-файлами через Media Service
 """
 import logging
+from enum import Enum
 from typing import Optional, List
 from io import BytesIO
 from aiogram import Bot
@@ -215,23 +216,52 @@ async def upload_document_to_media_service(
         return None
 
 
+class MediaCleanupResult(str, Enum):
+    """Исход зачистки документов пользователя в Media Service.
+
+    ⚠ Раньше функция возвращала `bool` и отдавала **True** в том числе когда
+    сервис недоступен («считаем успешным»). Вызывающий не мог отличить
+    «удалено» от «не пытались», а цена этой лжи высокая: строки `UserDocument`
+    к моменту вызова уже удалены одной транзакцией, то есть сканы паспортов
+    остаются в Media Service и в Telegram, но исчезают из карточки — и ни
+    следа в логах. Находка аудита 2026-07-29.
+
+    Истинность (`bool`) сохранена совместимой с прежним `if await …`, но
+    трактуется честно: истинны только исходы, после которых чистить нечего.
+    """
+
+    DELETED = "deleted"
+    NOTHING_TO_DELETE = "nothing_to_delete"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
+    FAILED = "failed"
+
+    def __bool__(self) -> bool:
+        return self in (MediaCleanupResult.DELETED, MediaCleanupResult.NOTHING_TO_DELETE)
+
+
 async def delete_user_documents_from_media_service(
     user_telegram_id: int
-) -> bool:
-    """
-    Удаляет все документы пользователя из Media Service (из канала ARCHIVE)
+) -> MediaCleanupResult:
+    """Удаляет все документы пользователя из Media Service (канал ARCHIVE).
 
     Args:
         user_telegram_id: Telegram ID пользователя
 
     Returns:
-        True если успешно удалены или нет файлов для удаления
+        `MediaCleanupResult` — исход, а не «успех». Вызывающий обязан
+        различать их: `telegram_id` и есть ручка для повторного запуска
+        зачистки, если она не состоялась.
     """
     try:
         media_client = get_media_client()
         if not media_client:
-            logger.warning("Media Service недоступен, пропускаем удаление документов")
-            return True  # Считаем успешным, так как сервис недоступен
+            logger.warning(
+                "Media Service недоступен — документы пользователя %s НЕ удалены; "
+                "повторить зачистку по этому telegram_id",
+                user_telegram_id,
+            )
+            return MediaCleanupResult.UNAVAILABLE
 
         # Формируем request_number для документов пользователя
         request_number = f"USER_{user_telegram_id}"
@@ -245,7 +275,7 @@ async def delete_user_documents_from_media_service(
 
             if not user_files:
                 logger.info(f"Нет документов для удаления у пользователя {user_telegram_id}")
-                return True
+                return MediaCleanupResult.NOTHING_TO_DELETE
 
             # Удаляем каждый файл
             deleted_count = 0
@@ -259,13 +289,25 @@ async def delete_user_documents_from_media_service(
                     else:
                         logger.warning(f"Не удалось удалить документ {media_id} пользователя {user_telegram_id}")
 
-            logger.info(f"Удалено {deleted_count} из {len(user_files)} документов пользователя {user_telegram_id} из Media Service")
-            return True
+            if deleted_count == len(user_files):
+                logger.info(
+                    "Удалены все %s документов пользователя %s из Media Service",
+                    deleted_count, user_telegram_id,
+                )
+                return MediaCleanupResult.DELETED
+            # Частичная зачистка — тоже не успех: прежний код возвращал True и
+            # здесь, скрывая оставшиеся файлы.
+            logger.warning(
+                "Удалено %s из %s документов пользователя %s — остальные остались "
+                "в Media Service; повторить зачистку по этому telegram_id",
+                deleted_count, len(user_files), user_telegram_id,
+            )
+            return MediaCleanupResult.PARTIAL
 
         except Exception as e:
             logger.error(f"Ошибка получения файлов пользователя {user_telegram_id}: {e}")
-            return False
+            return MediaCleanupResult.FAILED
 
     except Exception as e:
         logger.error(f"Ошибка удаления документов пользователя {user_telegram_id} из Media Service: {e}")
-        return False
+        return MediaCleanupResult.FAILED

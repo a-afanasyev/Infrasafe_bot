@@ -267,42 +267,82 @@ class TestUploadDocumentToMediaService:
 # ---------------------------------------------------------------------------
 
 class TestDeleteUserDocumentsFromMediaService:
-    @pytest.mark.asyncio
-    async def test_returns_true_when_no_media_client(self):
-        with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=None):
-            from uk_management_bot.utils.media_helpers import delete_user_documents_from_media_service
-            result = await delete_user_documents_from_media_service(user_telegram_id=42)
-        assert result is True
+    """Хелпер обязан РАЗЛИЧАТЬ «удалили» и «не смогли».
+
+    Прежний контракт возвращал `True` в том числе когда Media Service вообще
+    недоступен, — вызывающий не мог отличить успех от несостоявшейся зачистки.
+    Цена лжи высокая: строки `UserDocument` к этому моменту уже удалены одной
+    транзакцией, то есть сканы паспортов остаются в Media Service и Telegram,
+    а из карточки исчезают. Находка аудита 2026-07-29.
+    """
 
     @pytest.mark.asyncio
-    async def test_returns_true_when_no_files(self):
+    async def test_unavailable_service_is_not_success(self):
+        from uk_management_bot.utils.media_helpers import (
+            MediaCleanupResult, delete_user_documents_from_media_service,
+        )
+        with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=None):
+            result = await delete_user_documents_from_media_service(user_telegram_id=42)
+        assert result is MediaCleanupResult.UNAVAILABLE
+        assert result is not MediaCleanupResult.DELETED
+
+    @pytest.mark.asyncio
+    async def test_no_files_is_nothing_to_delete(self):
+        from uk_management_bot.utils.media_helpers import (
+            MediaCleanupResult, delete_user_documents_from_media_service,
+        )
         client = _make_media_client()
         client.get_request_media = AsyncMock(return_value=[])
         with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-            from uk_management_bot.utils.media_helpers import delete_user_documents_from_media_service
             result = await delete_user_documents_from_media_service(user_telegram_id=43)
-        assert result is True
+        assert result is MediaCleanupResult.NOTHING_TO_DELETE
 
     @pytest.mark.asyncio
-    async def test_deletes_each_file_and_returns_true(self):
+    async def test_all_files_deleted(self):
+        from uk_management_bot.utils.media_helpers import (
+            MediaCleanupResult, delete_user_documents_from_media_service,
+        )
         client = _make_media_client()
         client.get_request_media = AsyncMock(return_value=[
-            {"id": "f1"},
-            {"id": "f2"},
-            {"id": "f3"},
+            {"id": "f1"}, {"id": "f2"}, {"id": "f3"},
         ])
         client.delete_media = AsyncMock(return_value=True)
         with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-            from uk_management_bot.utils.media_helpers import delete_user_documents_from_media_service
             result = await delete_user_documents_from_media_service(user_telegram_id=44)
-        assert result is True
+        assert result is MediaCleanupResult.DELETED
         assert client.delete_media.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_returns_false_on_get_media_exception(self):
+    async def test_partial_deletion_is_not_success(self):
+        """Часть файлов не удалилась — прежний код всё равно возвращал True."""
+        from uk_management_bot.utils.media_helpers import (
+            MediaCleanupResult, delete_user_documents_from_media_service,
+        )
+        client = _make_media_client()
+        client.get_request_media = AsyncMock(return_value=[{"id": "f1"}, {"id": "f2"}])
+        client.delete_media = AsyncMock(side_effect=[True, False])
+        with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
+            result = await delete_user_documents_from_media_service(user_telegram_id=46)
+        assert result is MediaCleanupResult.PARTIAL
+
+    @pytest.mark.asyncio
+    async def test_failure_on_get_media_exception(self):
+        from uk_management_bot.utils.media_helpers import (
+            MediaCleanupResult, delete_user_documents_from_media_service,
+        )
         client = _make_media_client()
         client.get_request_media = AsyncMock(side_effect=Exception("network error"))
         with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-            from uk_management_bot.utils.media_helpers import delete_user_documents_from_media_service
             result = await delete_user_documents_from_media_service(user_telegram_id=45)
-        assert result is False
+        assert result is MediaCleanupResult.FAILED
+
+    @pytest.mark.asyncio
+    async def test_result_is_truthy_only_when_cleanup_happened(self):
+        """Совместимость с `if await …` у сторонних вызывающих: истинны только
+        те исходы, при которых чистить больше нечего."""
+        from uk_management_bot.utils.media_helpers import MediaCleanupResult
+        assert bool(MediaCleanupResult.DELETED) is True
+        assert bool(MediaCleanupResult.NOTHING_TO_DELETE) is True
+        assert bool(MediaCleanupResult.UNAVAILABLE) is False
+        assert bool(MediaCleanupResult.PARTIAL) is False
+        assert bool(MediaCleanupResult.FAILED) is False

@@ -14,7 +14,7 @@ interface Props {
   resident: ResidentProfile
 }
 
-/** Роли, при которых блокировка отсюда запрещена бэкендом (Т2).
+/** Роли, при которых операции с аккаунтом отсюда запрещены бэкендом (Т2).
  *  `resource_meter_entry` — капабилити жителя, а не рабочая роль. */
 const RESIDENT_ONLY_ROLES = new Set(['applicant', 'resource_meter_entry'])
 
@@ -29,9 +29,17 @@ export default function ResidentAccountActions({ resident }: Props) {
   const unblock = useUnblockResident(resident.id)
 
   const staffRoles = resident.roles.filter(r => !RESIDENT_ONLY_ROLES.has(r))
-  // Блокировка общая на ВСЕ роли (users.status), поэтому для мультиролевых её
-  // прячем совсем, а не показываем кнопку, которая гарантированно даст 409.
-  const canBlock = staffRoles.length === 0
+  // Все операции над аккаунтом мультиролевого прячем совсем, а не показываем
+  // кнопку, которая гарантированно даст 409.
+  //
+  // Блокировка — потому что users.status общий на ВСЕ роли и отнял бы рабочий
+  // доступ. Одобрение — потому что «Сотрудники» активируют через
+  // activate_employee, который кроме status поднимает active_role до
+  // стафф-роли; здешний путь сделал бы только половину, и приглашённый через
+  // бота сотрудник остался бы без меню в боте.
+  const isPureResident = staffRoles.length === 0
+  const canApprove = isPureResident
+  const canBlock = isPureResident
   const isBlocked = resident.status === 'blocked'
   const busy = approve.isPending || block.isPending || unblock.isPending
 
@@ -42,7 +50,7 @@ export default function ResidentAccountActions({ resident }: Props) {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {resident.status === 'pending' && (
+        {canApprove && resident.status === 'pending' && (
           <Button size="sm" disabled={busy} onClick={() => approve.mutate({})}>
             {t('residents.approveAccount')}
           </Button>
@@ -65,7 +73,7 @@ export default function ResidentAccountActions({ resident }: Props) {
         )}
       </div>
 
-      {!canBlock && (
+      {!isPureResident && (
         <p className="text-[11px] text-text-muted m-0">
           {t('residents.blockHiddenForStaff', { roles: staffRoles.join(', ') })}
         </p>

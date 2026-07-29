@@ -36,32 +36,48 @@ _NOTIFY_LIMIT = "20/minute"
 async def _cleanup_media(resident: User, deleted_ids: list[int]) -> None:
     """Best-effort зачистка файлов документов в Media Service.
 
-    ⚠ Осознанная деградация. Хелпер `media_helpers` считает недоступный Media
-    Service УСПЕХОМ (возвращает True), поэтому отличить «удалено» от «сервис
-    лежал» по его результату нельзя. Если удаление не состоялось, файлы
-    остаются в Media Service и в Telegram, тогда как записи в нашей БД уже
-    удалены — то есть из карточки они исчезли, а физически могли остаться.
-    Именно так и написано в предупреждении на кнопке верификации, чтобы
-    менеджер не считал это гарантированным стиранием.
+    ⚠ Осознанная деградация: недоступный внешний сервис не имеет права
+    откатывать уже зафиксированное решение менеджера. Но «не роняем» ≠ «молчим»:
+    записи в нашей БД к этому моменту уже удалены, то есть из карточки
+    документы исчезли, а физически могли остаться — и это обязано быть видно
+    в логах. Раньше хелпер возвращал True в том числе на недоступный сервис,
+    поэтому такой случай не оставлял вообще никакого следа.
 
-    В лог пишется количество и id ЗАПИСЕЙ, но НЕ Telegram `file_id`: file_id —
-    это готовый токен скачивания файла, и логи не то место, где его хранить.
+    `telegram_id` в предупреждении не случайно: это и есть ручка, по которой
+    зачистку можно повторить вручную.
+
+    В лог пишутся количество и id ЗАПИСЕЙ, но НЕ Telegram `file_id`: file_id —
+    готовый токен скачивания файла, и логи не то место, где его хранить.
     """
     if not deleted_ids:
         return
     try:
         from uk_management_bot.utils.media_helpers import (
-            delete_user_documents_from_media_service,
+            MediaCleanupResult, delete_user_documents_from_media_service,
         )
-        await delete_user_documents_from_media_service(resident.telegram_id)
-        logger.info("Запрошено удаление %s документов жителя %s из Media Service",
-                    len(deleted_ids), resident.id)
+        result = await delete_user_documents_from_media_service(resident.telegram_id)
     except Exception as e:  # noqa: BLE001 — не роняем уже зафиксированное решение
         logger.warning(
             "Не удалось удалить документы жителя %s из Media Service "
             "(записей: %s, id: %s): %s — файлы могли остаться в Media Service "
             "и Telegram",
             resident.id, len(deleted_ids), deleted_ids, e,
+        )
+        return
+
+    if result is MediaCleanupResult.DELETED:
+        logger.info("Удалены документы жителя %s из Media Service (записей: %s)",
+                    resident.id, len(deleted_ids))
+    elif result is MediaCleanupResult.NOTHING_TO_DELETE:
+        logger.info("В Media Service документов жителя %s не было (записей в БД: %s)",
+                    resident.id, len(deleted_ids))
+    else:
+        logger.warning(
+            "Зачистка документов жителя %s в Media Service НЕ состоялась (%s); "
+            "записей удалено из БД: %s (id: %s). Файлы остались в Media Service "
+            "и Telegram — повторить по telegram_id %s",
+            resident.id, result.value, len(deleted_ids), deleted_ids,
+            resident.telegram_id,
         )
 
 

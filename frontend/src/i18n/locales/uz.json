@@ -1151,7 +1151,7 @@
     "unblockAccount": "Blokdan chiqarish",
     "blockReason": "Bloklash sababi (kamida 3 belgi)",
     "blockSubmit": "Bloklashni tasdiqlash",
-    "blockHiddenForStaff": "Bloklash mavjud emas: foydalanuvchida xodim rollari bor ({{roles}}). Uni «Xodimlar» bo‘limida bloklang — holat barcha rollar uchun umumiy.",
+    "blockHiddenForStaff": "Hisob bilan amallar mavjud emas: foydalanuvchida xodim rollari bor ({{roles}}). Uni «Xodimlar» bo‘limida tasdiqlang va bloklang — holat barcha rollar uchun umumiy, va u yerdagi faollashtirish ish rolini ham ko‘taradi.",
     "unblockConfirm": "Yashovchini blokdan chiqarasizmi?",
     "unblockConfirmDesc": "Hisob yana «Tasdiqlangan» holatini va botga ruxsatni oladi.",
     "attachApartment": "Xonadon biriktirish",
