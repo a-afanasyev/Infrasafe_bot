@@ -21,6 +21,7 @@ from uk_management_bot.api.shifts.schemas import (
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
+from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,8 @@ async def _resolve_bot_username() -> Optional[str]:
             resp.raise_for_status()
             username = (resp.json().get("result") or {}).get("username")
     except Exception as exc:  # network/auth issues — never crash the request
-        logger.error(f"getMe() failed while resolving bot username for invite link: {exc}")
+        logger.error("getMe() failed while resolving bot username for invite link: %s",
+                     describe_http_error(exc))
         return None
 
     if username:
