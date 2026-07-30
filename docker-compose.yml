@@ -463,12 +463,51 @@ services:
       timeout: 5s
       retries: 10
 
+  # AUD6-P1-2: one-shot провижининг least-privilege роли resource_app —
+  # аналог provision-roles основной БД (PR-7). Идемпотентен (повтор = ротация
+  # пароля). Запуск: docker compose run --rm resource-provision-roles
+  resource-provision-roles:
+    image: postgres:16-alpine
+    profiles: ["tools"]
+    depends_on:
+      resource-postgres:
+        condition: service_healthy
+    environment:
+      - PGPASSWORD=${RESOURCE_POSTGRES_PASSWORD:?RESOURCE_POSTGRES_PASSWORD is required — set it in Doppler (project uk-management)}
+      - RESOURCE_APP_PASSWORD=${RESOURCE_APP_PASSWORD:?RESOURCE_APP_PASSWORD is required — set it in Doppler (project uk-management)}
+      - RESOURCE_POSTGRES_USER=${RESOURCE_POSTGRES_USER:-resource}
+      - RESOURCE_POSTGRES_DB=${RESOURCE_POSTGRES_DB:-resource_accounting}
+    volumes:
+      - ./resource-accounting/backend/scripts/provision_resource_roles.sql:/provision_resource_roles.sql:ro
+    entrypoint: ["/bin/sh", "-c",
+      "psql -h resource-postgres -U \"$$RESOURCE_POSTGRES_USER\" -d \"$$RESOURCE_POSTGRES_DB\" -v ON_ERROR_STOP=1 -v app_password=\"$$RESOURCE_APP_PASSWORD\" -f /provision_resource_roles.sql"]
+    networks:
+      - uk-network
+
+  # AUD6-P1-2: one-shot alembic+seed под ролью-ВЛАДЕЛЬЦЕМ — аналог migrate
+  # основной БД (PR-7). Из entrypoint-api.sh миграции убраны: runtime-роль
+  # resource_app DDL не имеет. Запуск: docker compose run --rm resource-migrate
+  resource-migrate:
+    build: ./resource-accounting/backend
+    profiles: ["tools"]
+    entrypoint: ["/bin/sh", "-c", "alembic upgrade head && python -m app.seed"]
+    environment:
+      - RESOURCE_DATABASE_URL=postgresql+psycopg2://${RESOURCE_POSTGRES_USER:-resource}:${RESOURCE_POSTGRES_PASSWORD:?RESOURCE_POSTGRES_PASSWORD is required — set it in Doppler (project uk-management)}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
+    depends_on:
+      resource-postgres:
+        condition: service_healthy
+    networks:
+      - uk-network
+
   resource-api:
     build: ./resource-accounting/backend
     container_name: uk-resource-api
     restart: unless-stopped
     environment:
-      - RESOURCE_DATABASE_URL=postgresql+psycopg2://${RESOURCE_POSTGRES_USER:-resource}:${RESOURCE_POSTGRES_PASSWORD}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
+      # AUD6-P1-2: runtime ходит под least-privilege ролью resource_app (DML без
+      # DDL), а НЕ под владельцем/мигратором resource. Роль создаёт one-shot
+      # resource-provision-roles; схему двигает one-shot resource-migrate.
+      - RESOURCE_DATABASE_URL=postgresql+psycopg2://resource_app:${RESOURCE_APP_PASSWORD:?RESOURCE_APP_PASSWORD is required — set it in Doppler (project uk-management)}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
       - RESOURCE_ENVIRONMENT=production
       - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET:?RESOURCE_SESSION_SECRET is required — set it in Doppler (project uk-management)}
       - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:?RESOURCE_SERVICE_TOKEN is required (shared with UK backend) — set it in Doppler (project uk-management)}
@@ -500,7 +539,10 @@ services:
     command: ["python", "-m", "app.worker"]
     entrypoint: []
     environment:
-      - RESOURCE_DATABASE_URL=postgresql+psycopg2://${RESOURCE_POSTGRES_USER:-resource}:${RESOURCE_POSTGRES_PASSWORD}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
+      # AUD6-P1-2: runtime ходит под least-privilege ролью resource_app (DML без
+      # DDL), а НЕ под владельцем/мигратором resource. Роль создаёт one-shot
+      # resource-provision-roles; схему двигает one-shot resource-migrate.
+      - RESOURCE_DATABASE_URL=postgresql+psycopg2://resource_app:${RESOURCE_APP_PASSWORD:?RESOURCE_APP_PASSWORD is required — set it in Doppler (project uk-management)}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
       - RESOURCE_ENVIRONMENT=production
       # ARCH-106: resource-worker раньше не имел :?-гарда на эти два — тихая пустая
       # подстановка вместо явной ошибки при отсутствующем секрете (см. план, категория A).

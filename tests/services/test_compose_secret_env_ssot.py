@@ -49,8 +49,17 @@ EXPECTED = {
         "MEDIA_API_KEY",
     ),
     "migrate": CORE_REQUIRED,
-    "resource-api": ("RESOURCE_SESSION_SECRET", "RESOURCE_SERVICE_TOKEN"),
-    "resource-worker": ("RESOURCE_SESSION_SECRET", "RESOURCE_SERVICE_TOKEN"),
+    # AUD6-P1-2: runtime — под least-privilege ролью resource_app (пароль
+    # встроен в RESOURCE_DATABASE_URL с инлайн-:?); владельческий пароль
+    # остаётся только у one-shot'ов provision/migrate.
+    "resource-api": (
+        "RESOURCE_SESSION_SECRET", "RESOURCE_SERVICE_TOKEN", "RESOURCE_APP_PASSWORD",
+    ),
+    "resource-worker": (
+        "RESOURCE_SESSION_SECRET", "RESOURCE_SERVICE_TOKEN", "RESOURCE_APP_PASSWORD",
+    ),
+    "resource-migrate": ("RESOURCE_POSTGRES_PASSWORD",),
+    "resource-provision-roles": ("RESOURCE_POSTGRES_PASSWORD", "RESOURCE_APP_PASSWORD"),
 }
 
 # Phase 2: media-service объявлен в profk-файле и в media-overlay — набор одинаковый.
