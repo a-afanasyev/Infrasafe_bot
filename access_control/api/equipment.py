@@ -636,19 +636,6 @@ def list_controllers(
     )
 
 
-@router.get("/controllers/{controller_id}", response_model=ControllerRow)
-def get_controller(
-    controller_id: int = Path(...),
-    db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
-):
-    try:
-        controller = svc.get_controller(db, controller_id)
-    except svc.NotFound as exc:
-        _raise_404(exc)
-    return _controller_row(controller)
-
-
 @router.post(
     "/controllers", response_model=ControllerCreatedRow,
     status_code=status.HTTP_201_CREATED,

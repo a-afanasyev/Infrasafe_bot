@@ -238,48 +238,6 @@ class MediaStorageService:
             logger.info(f"Found {len(media_files)} media files for request {request_number}")
             return media_files
 
-    async def get_media_by_tags(
-        self,
-        tags: List[str],
-        operator: str = "AND",
-        limit: int = 100
-    ) -> List[MediaFile]:
-        """
-        Поиск медиа-файлов по тегам
-        """
-        with get_db_context() as db:
-            from sqlalchemy import and_, or_
-
-            if operator.upper() == "AND":
-                # Все теги должны присутствовать
-                conditions = []
-                for tag in tags:
-                    conditions.append(MediaFile.tags.contains([tag]))
-                query = db.query(MediaFile).filter(and_(*conditions))
-            else:
-                # Любой из тегов
-                conditions = []
-                for tag in tags:
-                    conditions.append(MediaFile.tags.contains([tag]))
-                query = db.query(MediaFile).filter(or_(*conditions))
-
-            media_files = query.filter(MediaFile.status == "active").limit(limit).all()
-            logger.info(f"Found {len(media_files)} media files for tags {tags}")
-            return media_files
-
-    async def get_media_file_url(self, media_file: MediaFile) -> Optional[str]:
-        """
-        Генерирует URL для доступа к файлу
-        """
-        try:
-            file_url = await self.telegram.get_file_url(media_file.telegram_file_id)
-            logger.info(f"Generated URL for media file {media_file.id}")
-            return file_url
-
-        except Exception as e:
-            logger.error(f"Failed to generate URL for media file {media_file.id}: {e}")
-            return None
-
     async def update_media_tags(
         self,
         media_file_id: int,

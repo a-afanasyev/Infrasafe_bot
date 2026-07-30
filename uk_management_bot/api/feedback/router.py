@@ -311,32 +311,6 @@ async def update_feedback(
     return _detail(fb, author)
 
 
-@router.get("/{fid}/media")
-async def feedback_media_list(
-    fid: int,
-    user: User = Depends(require_roles("manager")),
-    db: AsyncSession = Depends(get_db),
-):
-    """Метаданные вложений по сохранённым media_id (источник истины — fb.media_files)."""
-    fb = await _get_feedback_or_404(db, fid)
-    out = []
-    headers = _media_headers()
-    async with httpx.AsyncClient(timeout=10) as client:
-        for mid in (fb.media_files or []):
-            try:
-                resp = await client.get(f"{_media_base()}/api/v1/media/{mid}", headers=headers)
-                if resp.status_code == 200:
-                    m = resp.json()
-                    out.append({
-                        "id": m.get("id"),
-                        "file_type": m.get("file_type"),
-                        "mime_type": m.get("mime_type"),
-                    })
-            except Exception as e:
-                logger.warning("feedback %s media meta %s failed: %s", fid, mid, e)
-    return out
-
-
 @router.get("/{fid}/media/{media_id}/file")
 async def feedback_media_file(
     fid: int,

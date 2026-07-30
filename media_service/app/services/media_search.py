@@ -310,65 +310,6 @@ class MediaSearchService:
             logger.info(f"Generated timeline for request {request_number}: {len(timeline)} files")
             return timeline
 
-    async def search_by_date_range(
-        self,
-        date_from: datetime,
-        date_to: datetime,
-        group_by: str = "day",  # day, week, month
-        categories: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """
-        Поиск медиа-файлов по диапазону дат с группировкой
-        """
-        with get_db_context() as db:
-            query = db.query(MediaFile).filter(
-                MediaFile.uploaded_at >= date_from,
-                MediaFile.uploaded_at <= date_to,
-                MediaFile.status == "active"
-            )
-
-            if categories:
-                query = query.filter(MediaFile.category.in_(categories))
-
-            # Группировка по периодам
-            if group_by == "day":
-                date_func = func.date(MediaFile.uploaded_at)
-            elif group_by == "week":
-                date_func = func.date_trunc('week', MediaFile.uploaded_at)
-            elif group_by == "month":
-                date_func = func.date_trunc('month', MediaFile.uploaded_at)
-            else:
-                date_func = func.date(MediaFile.uploaded_at)
-
-            grouped_data = query.with_entities(
-                date_func.label('period'),
-                func.count(MediaFile.id).label('count'),
-                func.sum(MediaFile.file_size).label('total_size')
-            ).group_by(date_func).order_by(date_func).all()
-
-            result = {
-                "date_range": {
-                    "from": date_from.isoformat(),
-                    "to": date_to.isoformat()
-                },
-                "group_by": group_by,
-                "categories": categories,
-                "data": [
-                    {
-                        "period": item.period.isoformat() if hasattr(item.period, 'isoformat') else str(item.period),
-                        "count": item.count,
-                        "size_bytes": int(item.total_size or 0),
-                        "size_mb": round((item.total_size or 0) / (1024 * 1024), 2)
-                    }
-                    for item in grouped_data
-                ],
-                "total_files": sum(item.count for item in grouped_data),
-                "total_size_mb": round(sum(item.total_size or 0 for item in grouped_data) / (1024 * 1024), 2)
-            }
-
-            logger.info(f"Date range search completed: {result['total_files']} files found")
-            return result
-
     async def get_unused_tags(self, min_usage: int = 1) -> List[Dict[str, Any]]:
         """
         Возвращает неиспользуемые или малоиспользуемые теги

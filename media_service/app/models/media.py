@@ -6,7 +6,6 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, BigInteger, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
-from datetime import datetime, timezone
 from typing import List
 
 Base = declarative_base()
@@ -171,66 +170,3 @@ class MediaChannel(Base):
         """Возвращает максимальный размер файла в MB"""
         return self.max_file_size / (1024 * 1024)
 
-
-class MediaUploadSession(Base):
-    """Сессии загрузки медиа для отслеживания прогресса"""
-
-    __tablename__ = "media_upload_sessions"
-
-    id = Column(Integer, primary_key=True)
-    session_id = Column(String(100), nullable=False, unique=True, index=True)
-
-    # === UPLOAD INFO ===
-    total_files = Column(Integer, nullable=False, default=1)
-    uploaded_files = Column(Integer, nullable=False, default=0)
-    failed_files = Column(Integer, nullable=False, default=0)
-
-    # === METADATA ===
-    request_number = Column(String(20), nullable=True, index=True)
-    category = Column(String(50), nullable=False)
-    uploaded_by_user_id = Column(Integer, nullable=False)
-
-    # === STATUS ===
-    status = Column(String(20), default="pending")  # pending, uploading, completed, failed
-    error_message = Column(Text, nullable=True)
-
-    # === TIMESTAMPS ===
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-
-    def __repr__(self):
-        return f"<MediaUploadSession(id='{self.session_id}', status='{self.status}')>"
-
-    @property
-    def is_completed(self) -> bool:
-        """Проверяет, завершена ли загрузка"""
-        return self.status == "completed"
-
-    @property
-    def progress_percentage(self) -> float:
-        """Возвращает процент выполнения"""
-        if self.total_files == 0:
-            return 0
-        return (self.uploaded_files / self.total_files) * 100
-
-    def mark_file_uploaded(self):
-        """Отмечает один файл как загруженный"""
-        self.uploaded_files += 1
-        if self.uploaded_files >= self.total_files:
-            self.status = "completed"
-            self.completed_at = datetime.now(timezone.utc)
-
-    def mark_file_failed(self, error: str = None):
-        """Отмечает один файл как неудачный"""
-        self.failed_files += 1
-        if error:
-            self.error_message = error
-
-        # Если все файлы обработаны (успешно или с ошибками)
-        if (self.uploaded_files + self.failed_files) >= self.total_files:
-            if self.uploaded_files > 0:
-                self.status = "completed"
-            else:
-                self.status = "failed"
-            self.completed_at = datetime.now(timezone.utc)

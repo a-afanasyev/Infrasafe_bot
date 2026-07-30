@@ -43,10 +43,6 @@ class PasswordLogin(BaseModel):
     password: str
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
 class SetPasswordRequest(BaseModel):
     password: str
     confirm_password: str

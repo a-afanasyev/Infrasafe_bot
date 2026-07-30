@@ -27,7 +27,6 @@ from uk_management_bot.database.models.user_apartment import (
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.utils.sql_search import ci_contains_any, is_postgres
 from uk_management_bot.services.addresses.exceptions import (
     AddressNotFound, AddressConflict,
 )
@@ -248,39 +247,6 @@ async def list_all_apartments(
     rows = result.all()
 
     apt_ids = [a.id for a, _, _ in rows]
-    residents_map = await _residents_count_map(db, apt_ids)
-    return [(a, addr, yard) for a, addr, yard in rows], residents_map
-
-
-async def search_apartments(
-    db, *, search_term: str
-) -> tuple[list[tuple[Apartment, str, str]], dict[int, int]]:
-    """Return ([(apartment, building_address, yard_name)], residents_map).
-
-    `search_term` is the already-escaped LIKE pattern (e.g. '%term%').
-    """
-    query = (
-        select(Apartment, Building.address, Yard.name)
-        .join(Building, Apartment.building_id == Building.id)
-        .join(Yard, Building.yard_id == Yard.id)
-        .where(
-            and_(
-                Apartment.is_active == True,  # noqa: E712
-                ci_contains_any(
-                    (Apartment.apartment_number, Building.address),
-                    search_term,
-                    is_postgres=is_postgres(db),
-                ),
-            )
-        )
-        .order_by(Building.address, Apartment.apartment_number)
-        .limit(50)
-    )
-
-    result = await db.execute(query)
-    rows = result.all()
-
-    apt_ids = [row[0].id for row in rows]
     residents_map = await _residents_count_map(db, apt_ids)
     return [(a, addr, yard) for a, addr, yard in rows], residents_map
 

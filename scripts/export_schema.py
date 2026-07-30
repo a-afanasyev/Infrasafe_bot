@@ -158,10 +158,7 @@ def compare_with_existing_docs():
     # Проверяем критические таблицы
     critical_tables = {
         'access_rights': 'AccessRights model',
-        'quarterly_plans': 'QuarterlyPlan model',
-        'quarterly_shift_schedules': 'QuarterlyShiftSchedule model',
         'shift_schedules': 'ShiftSchedule model',
-        'planning_conflicts': 'PlanningConflict model'
     }
 
     print("🔍 Critical tables check:")

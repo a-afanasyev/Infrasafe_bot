@@ -15,9 +15,9 @@ from app.services import MediaStorageService, MediaSearchService
 from app.services import preview_cache
 from app.schemas import (
     MediaUpdateTagsRequest,
-    MediaArchiveRequest, MediaDateRangeRequest, MediaFileResponse,
+    MediaArchiveRequest, MediaFileResponse,
     MediaSearchResponse, MediaStatisticsResponse, MediaTimelineResponse,
-    MediaDateRangeResponse, MediaUploadResponse, MediaFileUrlResponse,
+    MediaUploadResponse, MediaFileUrlResponse,
     MediaTagResponse, MediaCategoryEnum, MediaStatusEnum, MediaTelegramLookupResponse, PreviewWarmRequest
 )
 from app.core.config import settings, TelegramChannels, FileCategories
@@ -883,34 +883,6 @@ async def get_request_timeline(
     except Exception as e:
         logger.error(f"Failed to get timeline for request {request_number}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения временной линии")
-
-
-
-@router.post("/search/date-range", response_model=MediaDateRangeResponse)
-async def search_by_date_range(
-    request: MediaDateRangeRequest,
-    search_service: MediaSearchService = Depends(get_search_service)
-):
-    """
-    Поиск медиа-файлов по диапазону дат с группировкой
-    """
-    try:
-        categories_list = None
-        if request.categories:
-            categories_list = [cat.value for cat in request.categories]
-
-        result = await search_service.search_by_date_range(
-            date_from=request.date_from,
-            date_to=request.date_to,
-            group_by=request.group_by,
-            categories=categories_list
-        )
-
-        return MediaDateRangeResponse(**result)
-
-    except Exception as e:
-        logger.error(f"Failed to search by date range: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка поиска по дате")
 
 
 @router.get("/{media_id}/similar", response_model=List[MediaFileResponse])

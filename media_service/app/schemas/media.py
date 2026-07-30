@@ -91,13 +91,6 @@ class PreviewWarmRequest(StrictSchema):
                                  description="ID медиа, для которых нужно построить превью")
 
 
-class MediaDateRangeRequest(StrictSchema):
-    date_from: datetime = Field(..., description="Дата начала")
-    date_to: datetime = Field(..., description="Дата окончания")
-    group_by: str = Field(default="day", pattern="^(day|week|month)$", description="Группировка")
-    categories: Optional[List[MediaCategoryEnum]] = Field(None, description="Фильтр по категориям")
-
-
 # Response schemas
 class MediaTagResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -208,15 +201,6 @@ class MediaTimelineResponse(BaseModel):
     request_number: str
     timeline: List[MediaTimelineItem]
     total_files: int
-
-
-class MediaDateRangeResponse(BaseModel):
-    date_range: Dict[str, str]
-    group_by: str
-    categories: Optional[List[str]] = None
-    data: List[Dict[str, Any]]
-    total_files: int
-    total_size_mb: float
 
 
 class MediaUploadResponse(BaseModel):

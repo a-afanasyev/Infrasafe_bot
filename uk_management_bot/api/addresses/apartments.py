@@ -4,12 +4,11 @@ Thin HTTP layer: auth-deps, request parsing, response mapping, HTTPException.
 All data-access is in services/addresses/core.py (mutations) and
 services/addresses/queries.py (reads + hard purge).
 
-ROUTE ORDERING (safety-critical): the GET routes /apartments/all and
-/apartments/search MUST be registered BEFORE the dynamic GET
-/apartments/{apartment_id}, otherwise the dynamic route shadows them.
-FastAPI matches in declaration order — keep these routes in THIS order.
+ROUTE ORDERING (safety-critical): the GET route /apartments/all MUST be
+registered BEFORE the dynamic GET /apartments/{apartment_id}, otherwise the
+dynamic route shadows it. FastAPI matches in declaration order — keep these
+routes in THIS order.
 """
-import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -160,29 +159,6 @@ async def list_all_apartments(
     rows, residents_map = await queries.list_all_apartments(
         db, yard_id=yard_id, building_id=building_id, include_inactive=include_inactive
     )
-    return [
-        ApartmentOut(
-            **apartment_dict(apt),
-            building_address=bld_address,
-            yard_name=yard_name,
-            residents_count=residents_map.get(apt.id, 0),
-        )
-        for apt, bld_address, yard_name in rows
-    ]
-
-
-# NOTE: /apartments/search MUST be registered before /apartments/{apartment_id}
-# because FastAPI matches routes in declaration order.
-@router.get("/apartments/search", response_model=list[ApartmentOut])
-async def search_apartments(
-    q: str = Query(..., min_length=1),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
-):
-    escaped_q = re.sub(r'([%_\\])', r'\\\1', q)
-    search_term = f"%{escaped_q}%"
-
-    rows, residents_map = await queries.search_apartments(db, search_term=search_term)
     return [
         ApartmentOut(
             **apartment_dict(apt),

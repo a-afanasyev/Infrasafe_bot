@@ -208,39 +208,6 @@ class Settings:
     # flips their gate second.
     INFRASAFE_INVENTORY_TOKEN = os.getenv("INFRASAFE_INVENTORY_TOKEN", "")
 
-    # Request Categories
-    # DEPRECATED (FS-04): источник истины категорий — канон EN-ключи в
-    # keyboards.requests.CANONICAL_CATEGORY_KEYS (+ resolve_category_key /
-    # get_category_display). Этот список больше не используется для валидации
-    # (валидатор перешёл на канон-ключи); оставлен как EN-ключи на случай
-    # legacy-чтения, чтобы не вернуть RU-лейбл в данные.
-    REQUEST_CATEGORIES = [
-        "electricity",
-        "plumbing",
-        "heating",
-        "ventilation",
-        "elevator",
-        "cleaning",
-        "landscaping",
-        "security",
-        "internet",
-        "other",
-    ]
-    
-    # Request Statuses
-    # Синхронизировано с constants.py (16.10.2025)
-    # Удален неиспользуемый статус "Принята" (16.10.2025)
-    REQUEST_STATUSES = [
-        "Новая",          # Создана заявителем
-        "В работе",       # Назначена исполнителю и в процессе выполнения
-        "Закуп",          # Требуется закупка материалов
-        "Уточнение",      # Требуется уточнение деталей
-        "Выполнена",      # Выполнена исполнителем, ожидает проверки менеджером
-        "Исполнено",      # Проверена менеджером, отправлена заявителю (или возвращена на доработку)
-        "Принято",        # Принята заявителем (финальный статус)
-        "Отменена"        # Отменена
-    ]
-    
     # User Roles
     # Включает канонические роли модуля контроля доступа (access_control, ТЗ §3.2):
     # system_admin, security_operator. Синхронно с utils/constants.USER_ROLES и

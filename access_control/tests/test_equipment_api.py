@@ -297,14 +297,7 @@ def test_controller_create_returns_plaintext_key_once_and_hash_in_db(pg_db) -> N
     ).scalar()
     assert stored == hash_api_key(api_key)
 
-    # GET не отдаёт ни api_key, ни api_key_hash (только безопасные поля).
-    got = c.get(f"/api/v1/access/admin/controllers/{cid}")
-    assert got.status_code == 200, got.text
-    item = got.json()
-    assert "api_key" not in item
-    assert "api_key_hash" not in item
-
-    # В списке тоже нет секрета.
+    # В списке нет секрета (GET-детали контроллера удалён как мёртвый, AUD6).
     page = c.get("/api/v1/access/admin/controllers").json()
     for it in page["items"]:
         assert "api_key" not in it and "api_key_hash" not in it

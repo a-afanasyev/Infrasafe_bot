@@ -131,41 +131,6 @@ async def list_employees(
     return list(users), active_shifts
 
 
-async def create_employee(
-    db: AsyncSession,
-    *,
-    first_name: str,
-    last_name: str,
-    phone: str,
-    role: str,
-    specializations: Optional[list[str]],
-    status: str,
-) -> User:
-    """Create an employee row directly from the web dashboard."""
-    import time as _time
-    import json as _json
-
-    # Generate a negative placeholder telegram_id (real Telegram IDs are always positive)
-    placeholder_tid = -abs(int(_time.time() * 1000))
-
-    roles_list = [role]
-    user = User(
-        telegram_id=placeholder_tid,
-        first_name=first_name,
-        last_name=last_name,
-        phone=phone,
-        roles=_json.dumps(roles_list),
-        active_role=role,
-        specialization=_json.dumps(specializations) if specializations else None,
-        status=status,
-        verification_status="verified" if status == "approved" else "pending",
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
-
-
 async def get_user(db: AsyncSession, user_id: int) -> Optional[User]:
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
