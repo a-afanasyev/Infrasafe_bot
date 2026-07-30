@@ -678,8 +678,14 @@ async def update_request(
         # `notify` раньше здесь молча выбрасывался: движок его выпускал, а
         # исполнял только бот и только внутри своего хендлера — поэтому переход,
         # сделанный из дашборда, никого не уведомлял (прод-жалоба про уточнение).
-        # Диспетчер сам решает, о чём молчать, и не бросает.
-        await dispatch_notify_intents(db, request_number, outcome.post_commit_intents)
+        # Диспетчер сам решает, о чём молчать, и не бросает. Текст уточнения
+        # (AUD6-P1-6): дашборд кладёт его в `notes` — с ним CLARIFY_REQUEST
+        # уходит богатым шаблоном (вопрос менеджера доезжает до жителя), без
+        # него — генерическим; диспетчер применяет его только к clarify.
+        await dispatch_notify_intents(
+            db, request_number, outcome.post_commit_intents,
+            clarification_text=updates.get("notes"),
+        )
 
         # Свежая карточка из живой сессии (run_command коммитнул в своей сессии и
         # закрыл её; READ COMMITTED → новый SELECT видит коммит).

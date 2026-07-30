@@ -24,7 +24,12 @@ from uk_management_bot.keyboards.admin import (
 )
 from uk_management_bot.states.request_acceptance import ApplicantAcceptanceStates
 from uk_management_bot.database.session import session_scope
-from uk_management_bot.services.notification_service import async_notify_request_status_changed
+# AUD6-P1-6: адресные уведомления — матрицей интентов (общей с API-путём),
+# канальная лента — отдельным хелпером.
+from uk_management_bot.services.workflow_notifications import (
+    dispatch_notify_intents_sync,
+    notify_channel_status_changed,
+)
 from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
     can_accept,
@@ -406,12 +411,13 @@ async def save_rating(callback: CallbackQuery, db: Session = None, language: str
                 return
 
             # Best-effort post-commit (PR0 Р7): уведомление + правка сообщения.
+            # APPLICANT_ACCEPT в адресной матрице осознанно отсутствует (житель
+            # принял сам); канал по-прежнему видит смену статуса.
             request = db.query(Request).filter(Request.request_number == request_number).first()
-            try:
-                bot = callback.bot
-                await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+            await dispatch_notify_intents_sync(
+                db, request_number, outcome.post_commit_intents, bot=callback.bot)
+            await notify_channel_status_changed(
+                callback.bot, request, outcome.old_status, outcome.public_status)
 
             # Формируем текст с звёздами
             stars = "⭐" * rating_value
@@ -601,12 +607,13 @@ async def process_return_request(telegram_id: int, state: FSMContext, db: Sessio
             # Best-effort post-commit (PR0 Р7): перечитываем заявку свежей.
             request = db.query(Request).filter(Request.request_number == request_number).first()
 
-            # Уведомление через сервис (отправит исполнителю и в канал)
-            try:
-                bot = message_obj.bot
-                await async_notify_request_status_changed(bot, db, request, outcome.old_status, "Исполнено (возвращена)")
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+            # APPLICANT_RETURN: исполнителю — по матрице интентов («возвращена
+            # в работу», AUD6-P1-6 — тот же текст, что при возврате менеджером);
+            # каналу — прежняя кастомная подпись.
+            await dispatch_notify_intents_sync(
+                db, request_number, outcome.post_commit_intents, bot=message_obj.bot)
+            await notify_channel_status_changed(
+                message_obj.bot, request, outcome.old_status, "Исполнено (возвращена)")
 
             # Дополнительно уведомляем менеджеров напрямую с деталями
             try:

@@ -361,12 +361,14 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
             # иначе повторный query вернёт устаревший объект (не свежий).
             service.expire_all()
             request = service.get_request_by_number(request_number)
-            from uk_management_bot.services.notification_service import async_notify_request_status_changed
-            try:
-                bot = message.bot
-                await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления: {e}")
+            # AUD6-P1-6: адресно — матрицей интентов (общей с API), в канал — хелпером.
+            from uk_management_bot.services.workflow_notifications import (
+                dispatch_notify_intents_sync, notify_channel_status_changed,
+            )
+            await dispatch_notify_intents_sync(
+                db_session, request_number, outcome.post_commit_intents, bot=message.bot)
+            await notify_channel_status_changed(
+                message.bot, request, outcome.old_status, outcome.public_status)
 
         await message.answer(
             get_text("requests.purchase_comment_saved", language=lang).format(request_number=request_number),
@@ -565,11 +567,14 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
             # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
             service.expire_all()
             request = service.get_request_by_number(request_number)
-            from uk_management_bot.services.notification_service import async_notify_request_status_changed
-            try:
-                await async_notify_request_status_changed(callback.bot, db_session, request, outcome.old_status, outcome.public_status)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления: {e}")
+            # AUD6-P1-6: адресно — матрицей интентов (общей с API), в канал — хелпером.
+            from uk_management_bot.services.workflow_notifications import (
+                dispatch_notify_intents_sync, notify_channel_status_changed,
+            )
+            await dispatch_notify_intents_sync(
+                db_session, request_number, outcome.post_commit_intents, bot=callback.bot)
+            await notify_channel_status_changed(
+                callback.bot, request, outcome.old_status, outcome.public_status)
 
             # Формируем сообщение с результатом
             message_text = get_text("requests.request_completed_title", language=lang).format(request_number=request_number)
@@ -619,12 +624,14 @@ async def executor_return_to_work(callback: CallbackQuery):
             # middleware-сессии (run_command коммитит в отдельной) → query вернёт свежий объект.
             service.expire_all()
             request = service.get_request_by_number(request_number)
-            from uk_management_bot.services.notification_service import async_notify_request_status_changed
-            try:
-                bot = callback.bot
-                await async_notify_request_status_changed(bot, db_session, request, outcome.old_status, outcome.public_status)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления: {e}")
+            # AUD6-P1-6: адресно — матрицей интентов (общей с API), в канал — хелпером.
+            from uk_management_bot.services.workflow_notifications import (
+                dispatch_notify_intents_sync, notify_channel_status_changed,
+            )
+            await dispatch_notify_intents_sync(
+                db_session, request_number, outcome.post_commit_intents, bot=callback.bot)
+            await notify_channel_status_changed(
+                callback.bot, request, outcome.old_status, outcome.public_status)
 
             await callback.message.edit_text(
                 get_text("requests.request_returned_to_work", language=lang).format(request_number=request_number),

@@ -9,8 +9,6 @@ from uk_management_bot.services.notification_service import (
     build_shift_ended_message,
     build_document_request_message,
     build_multiple_documents_request_message,
-    _build_request_status_message_user,
-    _build_request_status_message_executor,
     _build_request_status_message_channel,
     build_action_denied_message,
     notify_status_changed,
@@ -207,35 +205,14 @@ class TestBuildMultipleDocumentsRequestMessage:
 
 
 # ---------------------------------------------------------------------------
-# _build_request_status_message_*
+# _build_request_status_message_channel
+# AUD6-P1-6: user/executor-билдеры удалены вместе с легаси
+# async_notify_request_status_changed — адресные тексты теперь строит матрица
+# интентов (workflow_notifications, тесты в tests/api). Канальный билдер жив:
+# его использует notify_channel_status_changed.
 # ---------------------------------------------------------------------------
 
 class TestBuildRequestStatusMessages:
-    def test_user_message_contains_request_number(self):
-        req = _make_request(request_number="260402-001")
-        msg = _build_request_status_message_user(req, "Новая", "В работе")
-        assert "260402-001" in msg
-        assert "Новая" in msg
-        assert "В работе" in msg
-
-    def test_user_message_truncates_long_address(self):
-        long_addr = "A" * 100
-        req = _make_request(address=long_addr)
-        msg = _build_request_status_message_user(req, "Новая", "В работе")
-        assert "…" in msg
-
-    def test_user_message_no_truncation_for_short_address(self):
-        req = _make_request(address="Short address")
-        msg = _build_request_status_message_user(req, "Новая", "В работе")
-        assert "…" not in msg
-
-    def test_executor_message_contains_request_number(self):
-        req = _make_request(request_number="260402-002")
-        msg = _build_request_status_message_executor(req, "В работе", "Выполнена")
-        assert "260402-002" in msg
-        assert "В работе" in msg
-        assert "Выполнена" in msg
-
     def test_channel_message_contains_request_number(self):
         req = _make_request(request_number="260402-003")
         msg = _build_request_status_message_channel(req, "Новая", "Отменена")
@@ -805,86 +782,11 @@ class TestNotificationService:
 
 
 # ---------------------------------------------------------------------------
-# async_notify_request_status_changed
+# async_notify_request_status_changed — УДАЛЁН (AUD6-P1-6): адресную часть
+# исполняет матрица интентов (tests/api/test_workflow_notifications.py, включая
+# sync/async-паритет), канальную — workflow_notifications.
+# notify_channel_status_changed (тесты там же).
 # ---------------------------------------------------------------------------
-
-class TestAsyncNotifyRequestStatusChanged:
-    @pytest.mark.asyncio
-    async def test_notifies_applicant_and_channel(self):
-        from uk_management_bot.services.notification_service import (
-            async_notify_request_status_changed,
-        )
-
-        bot = AsyncMock()
-        db = MagicMock()
-
-        applicant = _make_user(telegram_id=111)
-        req = _make_request(user_id=1, executor_id=None)
-
-        db.query.return_value.filter.return_value.first.return_value = applicant
-
-        with (
-            patch(
-                "uk_management_bot.services.notification_service.send_to_user",
-                new_callable=AsyncMock,
-            ) as mock_user,
-            patch(
-                "uk_management_bot.services.notification_service.send_to_channel",
-                new_callable=AsyncMock,
-            ) as mock_channel,
-        ):
-            await async_notify_request_status_changed(bot, db, req, "Новая", "В работе")
-
-        mock_user.assert_called_once()
-        mock_channel.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_notifies_executor_when_assigned(self):
-        from uk_management_bot.services.notification_service import (
-            async_notify_request_status_changed,
-        )
-
-        bot = AsyncMock()
-        db = MagicMock()
-
-        applicant = _make_user(telegram_id=111, user_id=1)
-        executor = _make_user(telegram_id=222, user_id=2)
-        req = _make_request(user_id=1, executor_id=2)
-
-        db.query.return_value.filter.return_value.first.side_effect = [applicant, executor]
-
-        with (
-            patch(
-                "uk_management_bot.services.notification_service.send_to_user",
-                new_callable=AsyncMock,
-            ) as mock_user,
-            patch(
-                "uk_management_bot.services.notification_service.send_to_channel",
-                new_callable=AsyncMock,
-            ),
-        ):
-            await async_notify_request_status_changed(bot, db, req, "В работе", "Выполнена")
-
-        # Two user notifications (applicant + executor)
-        assert mock_user.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_does_not_raise_on_db_exception(self):
-        from uk_management_bot.services.notification_service import (
-            async_notify_request_status_changed,
-        )
-
-        bot = AsyncMock()
-        db = MagicMock()
-        db.query.side_effect = Exception("DB fail")
-
-        req = _make_request()
-
-        with patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
-            new_callable=AsyncMock,
-        ):
-            await async_notify_request_status_changed(bot, db, req, "Новая", "В работе")
 
 
 # ---------------------------------------------------------------------------
