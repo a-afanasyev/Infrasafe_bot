@@ -247,3 +247,47 @@ describe('useWebSocket — восстановление по online / visibility
     expect(FakeWebSocket.instances).toHaveLength(1)
   })
 })
+
+// AUD6-P2-13: cleanup закрывает сокет и таймер, но промис refreshSession()
+// он отменить не может — до guard'а resolve после размонтирования создавал
+// новый сокет, который уже никто не закрывал (утечка соединения + подписка
+// Redis на стороне сервера до exp).
+describe('useWebSocket — unmount во время refresh', () => {
+  it('resolve зависшего refresh после unmount не создаёт новый сокет', async () => {
+    let resolveRefresh!: () => void
+    vi.mocked(refreshSession).mockImplementationOnce(
+      () => new Promise<void>((res) => { resolveRefresh = res }),
+    )
+    const { unmount } = renderHook(() => useWebSocket('kanban', () => {}))
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    await closeWith(4001) // refresh завис в полёте
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    unmount()
+    await act(async () => {
+      resolveRefresh()
+      await Promise.resolve()
+    })
+
+    expect(FakeWebSocket.instances).toHaveLength(1) // нового сокета нет
+  })
+
+  it('без unmount тот же зависший refresh ПОСЛЕ resolve переподключается (контроль)', async () => {
+    let resolveRefresh!: () => void
+    vi.mocked(refreshSession).mockImplementationOnce(
+      () => new Promise<void>((res) => { resolveRefresh = res }),
+    )
+    renderHook(() => useWebSocket('kanban', () => {}))
+
+    await closeWith(4001)
+    expect(FakeWebSocket.instances).toHaveLength(1) // ещё ждём refresh
+
+    await act(async () => {
+      resolveRefresh()
+      await Promise.resolve()
+    })
+
+    expect(FakeWebSocket.instances).toHaveLength(2) // guard не задушил живой путь
+  })
+})
