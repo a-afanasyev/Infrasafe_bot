@@ -1,6 +1,6 @@
 # UK Management System
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-07-31_
 
 Система управления заявками жилого комплекса: жители подают заявки, исполнители выполняют, менеджеры контролируют. Три роли — **applicant**, **executor**, **manager** (+ **inspector**/обходчик); два языка — **RU** и **UZ**.
 
@@ -12,11 +12,14 @@
 uk_management_bot/        — бот: handlers, services, middlewares, keyboards, states, utils, config/locales
 uk_management_bot/api/    — FastAPI backend (REST + WebSocket); образ из Dockerfile.api → uk-management-api
 frontend/                 — React SPA: дашборд (/dashboard) + TWA Mini App (/twa); Vite, TanStack Query, Zustand, i18next
-media_service/            — отдельный сервис хранения/раздачи медиа
+media_service/            — отдельный сервис хранения/раздачи медиа (БД uk_media, preview-cache)
+resource-accounting/      — отдельный сервис «Учёт ресурсов» (backend/: FastAPI + worker, своя БД)
 alembic/                  — миграции PostgreSQL (применяются сервисом `migrate`, не в api)
-access_control/           — материалы по ролям и доступу
+access_control/           — отдельный сервис контроля доступа (ANPR/пропуска); образ Dockerfile.access → uk-access-api
 docs/                     — документация; docs/audit/ — бэклог и планы закрытия
-docker-compose.yml        — dev-окружение (app, api, frontend, postgres, redis)
+docker-compose.yml        — основной compose (app, api, access-api, frontend, postgres, redis,
+                            resource-postgres/api/worker + one-shot'ы provision-roles, migrate,
+                            resource-provision-roles, resource-migrate); медиа — overlay docker-compose.media.yml
 ```
 
 ## Архитектура
@@ -26,6 +29,9 @@ docker-compose.yml        — dev-окружение (app, api, frontend, postgr
 | Бот | `uk-management-bot` (`app`) | — | aiogram 3, `python -m uk_management_bot.main` |
 | API | `uk-management-api` (`api`) | `127.0.0.1:8085 → 8080` | FastAPI REST + WebSocket; на старте — read-only preflight схемы |
 | Миграции | `uk-migrate` (`migrate`, профиль `tools`) | — | `alembic upgrade head` под ролью-владельцем схемы (PR-7) |
+| Контроль доступа | `uk-access-api` (`access-api`) | `127.0.0.1:8087 → 8080` | FastAPI, ANPR/пропуска; образ `Dockerfile.access` |
+| Медиа | `uk-media-service` (`media-service`, overlay) | `127.0.0.1:8009 → 8000` | Хранение/раздача медиа; БД `uk_media` |
+| Учёт ресурсов | `uk-resource-api` / `uk-resource-worker` / `uk-resource-postgres` | `127.0.0.1:8100 → 8100` | Отдельный сервис из `resource-accounting/backend/`, своя БД (PostgreSQL 16) |
 | Фронт | `uk-frontend` (`frontend`) | `127.0.0.1:3002 → 80` | React SPA (дашборд + TWA) |
 | БД | `uk-postgres` | `127.0.0.1:5432` | PostgreSQL 15 |
 | Кэш | `uk-redis` | `127.0.0.1:6379` | Redis 7 (rate-limit, throttle, кэш) |
