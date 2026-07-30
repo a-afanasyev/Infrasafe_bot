@@ -10,12 +10,21 @@ class Base(DeclarativeBase):
     pass
 
 
+def _engine_kwargs(settings) -> dict:
+    if settings.database_url.startswith("sqlite"):
+        return {"connect_args": {"check_same_thread": False}}
+    # AUD6-P2-06: размер пула — под thread-пул starlette (~40 sync-хендлеров),
+    # дефолтные 5+10 исчерпываются раньше потоков → QueuePool timeout.
+    return {
+        "pool_pre_ping": True,
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_max_overflow,
+    }
+
+
 def _make_engine():
     settings = get_settings()
-    kwargs: dict = {"pool_pre_ping": True}
-    if settings.database_url.startswith("sqlite"):
-        kwargs = {"connect_args": {"check_same_thread": False}}
-    return create_engine(settings.database_url, **kwargs)
+    return create_engine(settings.database_url, **_engine_kwargs(settings))
 
 
 engine = _make_engine()
