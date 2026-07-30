@@ -46,6 +46,11 @@ export function useWebSocket(
   const attemptsRef = useRef(0)
   const lastExpiredRefreshAt = useRef(0)
   const openedRef = useRef(false)
+  // AUD6-P2-13: cleanup закрывает сокет и снимает таймер, но промис
+  // refreshSession().then(connect) он отменить не может — без этого флага
+  // resolve ПОСЛЕ размонтирования создавал бы новый сокет, который уже никто
+  // не закроет (эталон — closedByCaller в useAccessSecurityFeed).
+  const closedByCaller = useRef(false)
   const onMessageRef = useRef(onMessage)
   onMessageRef.current = onMessage
 
@@ -75,8 +80,10 @@ export function useWebSocket(
       }
       lastExpiredRefreshAt.current = now
       // Провал refresh уже редиректит на /login внутри refreshSession.
-      // eslint-disable-next-line react-hooks/immutability -- намеренная рекурсивная ссылка на connect для reconnect (стабильна: connect мемоизирован по endpoint)
-      refreshSession().then(connect).catch(() => {})
+      refreshSession().then(() => {
+        // eslint-disable-next-line react-hooks/immutability -- намеренная рекурсивная ссылка на connect для reconnect (стабильна: connect мемоизирован по endpoint)
+        if (!closedByCaller.current) connect()
+      }).catch(() => {})
       return true
     }
 
@@ -104,8 +111,10 @@ export function useWebSocket(
   }, [endpoint])
 
   useEffect(() => {
+    closedByCaller.current = false
     connect()
     return () => {
+      closedByCaller.current = true
       wsRef.current?.close()
       clearTimeout(reconnectTimer.current)
     }
