@@ -211,9 +211,9 @@ def validate_period(
 ):
     """Summary of problems that block confirmation."""
     period = get_period_or_404(db, user, month)
-    meters_count = db.execute(
+    active_ids = set(db.execute(
         select(Meter.id).where(Meter.tenant_id == user.tenant_id, Meter.status == "active")
-    ).scalars().all()
+    ).scalars())
     readings = db.execute(
         select(Reading).where(Reading.reporting_period_id == period.id)
     ).scalars().all()
@@ -226,17 +226,22 @@ def validate_period(
             warnings_without_comment.append(str(r.meter_id))
         if r.status == "error":
             errors.append({"meter_id": str(r.meter_id), "message": r.validation_message})
-    missing_input = len(meters_count) - len(readings)
+    # AUD6-P2-09: показания архивированных счётчиков остаются в периоде, но из
+    # множества активных исчезают — разность длин уводила not_entered в минус,
+    # а завышенный entered при can_submit==0 делал период неподтверждаемым.
+    # Считаем строго по пересечению множеств id.
+    entered_active = {r.meter_id for r in readings if r.meter_id in active_ids}
+    not_entered = len(active_ids - entered_active)
     return {
         "data": {
             "period": PeriodOut.model_validate(period).model_dump(mode="json"),
-            "active_meters": len(meters_count),
-            "entered": len(readings),
-            "not_entered": missing_input,
+            "active_meters": len(active_ids),
+            "entered": len(entered_active),
+            "not_entered": not_entered,
             "by_status": by_status,
             "warnings_without_comment": warnings_without_comment,
             "errors": errors,
-            "can_submit": not errors and not warnings_without_comment and missing_input == 0,
+            "can_submit": not errors and not warnings_without_comment and not_entered == 0,
         }
     }
 

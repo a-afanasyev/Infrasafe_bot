@@ -179,6 +179,32 @@ def test_validate_endpoint(admin):
     assert body["can_submit"] is False
 
 
+def test_validate_counts_ignore_archived_meter_readings(admin):
+    """AUD6-P2-09: показание архивированного счётчика остаётся в периоде, но из
+    множества активных исчезает — разность длин уводила not_entered в минус, и
+    период с полностью введёнными активными счётчиками нельзя было подтвердить
+    никогда (can_submit требует ровно 0)."""
+    obj = make_object(admin, "Объект-архив")
+    live = make_meter(admin, "ARC-1", obj["id"])
+    dead = make_meter(admin, "ARC-2", obj["id"])
+    make_period(admin, "2034-01")
+    put_reading(admin, live["id"], "2034-01", value="10", read_at="2034-01-20")
+    put_reading(admin, dead["id"], "2034-01", value="20", read_at="2034-01-20")
+
+    # Утверждения относительные (до/после архивации): сьют делит одну БД, и
+    # active_meters видит счётчики всего тенанта из соседних тестов.
+    before = admin.post("/v1/periods/2034-01/validate").json()["data"]
+    assert admin.post(f"/v1/meters/{dead['id']}/archive").status_code == 200
+    after = admin.post("/v1/periods/2034-01/validate").json()["data"]
+
+    assert after["active_meters"] == before["active_meters"] - 1
+    # Старый код оставлял показание архивного в entered (осталось бы == before)
+    assert after["entered"] == before["entered"] - 1
+    # ...и вычитал его из not_entered (стало бы before - 1, вплоть до минуса)
+    assert after["not_entered"] == before["not_entered"]
+    assert after["not_entered"] >= 0
+
+
 def test_period_rbac(viewer):
     assert viewer.post("/v1/periods", json={"month": "2030-01"}).status_code == 403
     assert viewer.post("/v1/periods/2027-06/move-to-review").status_code == 403

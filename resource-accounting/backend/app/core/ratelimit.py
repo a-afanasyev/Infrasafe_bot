@@ -6,11 +6,11 @@ so the test suite and local dev are not throttled; enable in production.
 """
 
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.config import get_settings
+from app.core.ratelimit_key import client_ip_key
 
-limiter = Limiter(key_func=get_remote_address, enabled=get_settings().rate_limit_enabled)
+limiter = Limiter(key_func=client_ip_key, enabled=get_settings().rate_limit_enabled)
 
 # Per-endpoint limits (strings so slowapi parses them lazily)
 AUTH_LIMIT = "10/minute"

@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     # Rate limiting (SEC-04). Disabled in development to keep the test suite fast.
     rate_limit_enabled: bool = False
 
+    # AUD6-P2-17: за edge-nginx TCP-peer один на всех — бакет считается по
+    # X-Real-IP, но заголовку верим только когда peer входит в этот allowlist
+    # (IP/CIDR через запятую). Пусто = заголовок принимается как есть
+    # (инвариант прода: edge перезаписывает его, host-порт наружу не открыт).
+    rate_limit_trusted_proxies: str = ""
+
+    # AUD6-P2-06: все хендлеры — sync `def`, starlette гоняет их в thread-пуле
+    # (~40 потоков); дефолтный пул SQLAlchemy (5+10) исчерпывается раньше
+    # потоков и даёт QueuePool timeout под нагрузкой.
+    db_pool_size: int = 15
+    db_max_overflow: int = 25
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
