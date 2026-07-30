@@ -110,18 +110,48 @@ def get(media_id: int, request_number: Optional[str]) -> Optional[bytes]:
 async def put(media_id: int, request_number: Optional[str], preview: bytes) -> None:
     """Записать превью и при необходимости вытеснить давние заявки."""
     bucket, path = _paths(media_id, request_number)
+
+    def _write() -> bool:
+        try:
+            os.makedirs(bucket, exist_ok=True)
+            # Пишем через временный файл: параллельный читатель не должен
+            # увидеть полузаписанный JPEG.
+            tmp = f"{path}.{os.getpid()}.tmp"
+            with open(tmp, "wb") as f:
+                f.write(preview)
+            os.replace(tmp, path)
+            return True
+        except OSError as e:
+            logger.warning("Не удалось записать превью %s: %s", path, e)
+            return False
+
+    # AUD6-P2-03: файловый I/O — в worker-потоке, не на event loop'е.
+    if await asyncio.to_thread(_write):
+        await _evict_if_needed()
+
+
+def _evict_sync(limit: int) -> None:
+    """Сканирование каталога и rmtree — блокирующее, зовётся из to_thread."""
     try:
-        os.makedirs(bucket, exist_ok=True)
-        # Пишем через временный файл: параллельный читатель не должен увидеть
-        # полузаписанный JPEG.
-        tmp = f"{path}.{os.getpid()}.tmp"
-        with open(tmp, "wb") as f:
-            f.write(preview)
-        os.replace(tmp, path)
-    except OSError as e:
-        logger.warning("Не удалось записать превью %s: %s", path, e)
+        entries = [
+            (os.path.getmtime(p), p)
+            for p in (
+                os.path.join(settings.preview_cache_dir, name)
+                for name in os.listdir(settings.preview_cache_dir)
+            )
+            if os.path.isdir(p)
+        ]
+    except OSError:
         return
-    await _evict_if_needed()
+    if len(entries) <= limit:
+        return
+    entries.sort()  # по возрастанию mtime — сначала самые давние
+    for _, path in entries[: len(entries) - limit]:
+        shutil.rmtree(path, ignore_errors=True)
+    logger.info(
+        "Кэш превью: вытеснено %d заявок (лимит %d)",
+        len(entries) - limit, limit,
+    )
 
 
 async def _evict_if_needed() -> None:
@@ -129,26 +159,9 @@ async def _evict_if_needed() -> None:
     if limit <= 0:
         return
     async with _evict_lock:
-        try:
-            entries = [
-                (os.path.getmtime(p), p)
-                for p in (
-                    os.path.join(settings.preview_cache_dir, name)
-                    for name in os.listdir(settings.preview_cache_dir)
-                )
-                if os.path.isdir(p)
-            ]
-        except OSError:
-            return
-        if len(entries) <= limit:
-            return
-        entries.sort()  # по возрастанию mtime — сначала самые давние
-        for _, path in entries[: len(entries) - limit]:
-            shutil.rmtree(path, ignore_errors=True)
-        logger.info(
-            "Кэш превью: вытеснено %d заявок (лимит %d)",
-            len(entries) - limit, limit,
-        )
+        # AUD6-P2-03: listdir/getmtime/rmtree — в worker-потоке; лок остаётся
+        # asyncio-уровневым (один процесс, см. семафор выше).
+        await asyncio.to_thread(_evict_sync, limit)
 
 
 def stats() -> dict:
