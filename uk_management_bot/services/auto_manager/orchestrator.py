@@ -48,8 +48,10 @@ SYSTEM_DISPATCH_ASSIGN (executor или group) для residual.
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -63,7 +65,10 @@ from uk_management_bot.database.session import SessionLocal
 from uk_management_bot.keyboards.requests import get_category_display, resolve_category_key
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.services.auto_manager.config import is_window_active, load_config_sync
-from uk_management_bot.services.auto_manager.rule_engine import select_executor
+from uk_management_bot.services.auto_manager.rule_engine import (
+    build_duty_snapshot,
+    select_executor,
+)
 from uk_management_bot.services.workflow_runner import (
     RequestNotFound,
     WorkflowError,
@@ -102,6 +107,35 @@ _WRAP_BATCH_MULTIPLIER = 5
 
 _AUTO_MANAGER_PRINCIPAL = PrincipalRef(
     kind="system", user_id=None, source="auto_manager", system_actor="auto_manager")
+
+
+# ── AUD6-P2-01: план тика ────────────────────────────────────────────────────
+# Вся работа с БД собирается в примитивы ВНУТРИ db-фазы (worker-поток, сессия
+# закрывается до единого await) — рассылка и realtime идут после, по снимкам.
+# ORM-объекты через границу потока/сессии не проносятся намеренно: detached-
+# инстансы с lazy-полями — ровно тот класс ошибок, от которого уходим.
+
+@dataclass
+class _ExecutorNotifyJob:
+    telegram_id: int
+    language: str
+    request_number: str
+    category: str
+    address: str
+
+
+@dataclass
+class _ManagerNotifyJob:
+    recipients: list[tuple[int, str]]  # (telegram_id, language)
+    request_number: str
+    specialization: str
+
+
+@dataclass
+class _TickPlan:
+    kanban_refreshes: list[str] = field(default_factory=list)
+    executor_notifies: list[_ExecutorNotifyJob] = field(default_factory=list)
+    manager_notifies: list[_ManagerNotifyJob] = field(default_factory=list)
 
 
 def _now_utc() -> datetime:
@@ -146,6 +180,8 @@ class AutoManagerOrchestrator:
         self._retry_after: dict[str, datetime] = {}
         # request_number -> когда последний раз уведомили менеджеров (dedup TTL).
         self._notified: dict[str, datetime] = {}
+        # Кэш получателей-менеджеров на ОДИН тик (сбрасывается в _db_phase).
+        self._managers_cache: Optional[list[tuple[int, str]]] = None
 
     def _get_bot(self):
         if self._bot is not None:
@@ -159,11 +195,28 @@ class AutoManagerOrchestrator:
 
     async def run_once(self) -> None:
         now = _now_utc()
+        # AUD6-P2-01: раньше весь тик — sync-SQLAlchemy ПРЯМО на event loop'е
+        # бота (job каждые 2 мин), а сессия жила и через await bot.send_message
+        # (flood-wait Telegram = минуты idle-in-transaction). Теперь вся работа
+        # с БД — в worker-потоке одной sync-фазой, сессия закрывается до
+        # единого await; рассылка и realtime идут после, по примитивам плана.
+        plan = await asyncio.to_thread(self._db_phase, now)
+        if plan is None:
+            return
+        for request_number in plan.kanban_refreshes:
+            await self._publish_kanban_refresh(request_number)
+        for job in plan.executor_notifies:
+            await self._send_executor_notify(job)
+        for job in plan.manager_notifies:
+            await self._send_manager_notify(job)
+
+    def _db_phase(self, now: datetime) -> Optional[_TickPlan]:
+        """Sync-фаза тика: конфиг, очереди, назначения. Никаких await внутри."""
         db = SessionLocal()
         try:
             cfg = load_config_sync(db)
             if not cfg["enabled"] or not is_window_active(cfg, now):
-                return
+                return None
 
             self._prune_expired(now)
 
@@ -172,15 +225,25 @@ class AutoManagerOrchestrator:
                 _residual_queue_filter()).first() is not None
 
             if has_residual:
-                residual_slots = min(limit, max(1, limit // 4))
+                # AUD6-P3-22: резерв residual — потолок, а не вытеснение main:
+                # при limit=1 прежняя формула отдавала единственный слот
+                # residual-очереди, и main не обрабатывалась вообще.
+                residual_slots = min(max(1, limit // 4), max(0, limit - 1))
             else:
                 residual_slots = 0
             main_slots = limit - residual_slots
 
+            plan = _TickPlan()
+            # AUD6-P2-14: срез дежурства (кандидаты, активные смены, нагрузка)
+            # собирается ТРЕМЯ запросами один раз на тик — не на каждую заявку.
+            snapshot = build_duty_snapshot(db, now)
+            self._managers_cache = None
+
             if main_slots > 0:
-                await self._process_queue(db, now, "main", main_slots)
+                self._process_queue(db, now, "main", main_slots, snapshot, plan)
             if residual_slots > 0:
-                await self._process_queue(db, now, "residual", residual_slots)
+                self._process_queue(db, now, "residual", residual_slots, snapshot, plan)
+            return plan
         finally:
             db.close()
 
@@ -208,7 +271,8 @@ class AutoManagerOrchestrator:
     # Per-queue processing: keyset forward scan + wrap-around
     # ------------------------------------------------------------------ #
 
-    async def _process_queue(self, db: Session, now: datetime, queue: str, slots: int) -> None:
+    def _process_queue(self, db: Session, now: datetime, queue: str, slots: int,
+                       snapshot, plan: _TickPlan) -> None:
         filt = _main_queue_filter() if queue == "main" else _residual_queue_filter()
         cursor = self._get_cursor(queue)
 
@@ -267,7 +331,7 @@ class AutoManagerOrchestrator:
                 extra_taken += 1
 
         for req in taken:
-            await self._process_item(db, req, queue, now)
+            self._process_item(db, req, queue, now, snapshot, plan)
 
         if taken:
             last = taken[-1]
@@ -309,19 +373,39 @@ class AutoManagerOrchestrator:
             logger.debug("[AUTO_MANAGER] realtime publish %s пропущен: %s",
                          request_number, e)
 
-    async def _process_item(self, db: Session, req: Request, queue: str, now: datetime) -> None:
+    def _process_item(self, db: Session, req: Request, queue: str, now: datetime,
+                      snapshot, plan: _TickPlan) -> None:
         if queue == "main":
-            await self._process_main_item(db, req, now)
+            self._process_main_item(db, req, now, snapshot, plan)
         else:
-            await self._process_residual_item(db, req, now)
+            self._process_residual_item(db, req, now, snapshot, plan)
 
-    async def _process_main_item(self, db: Session, req: Request, now: datetime) -> None:
+    @staticmethod
+    def _queue_executor_notify(plan: _TickPlan, candidate: User, req: Request) -> None:
+        """Снимок-примитивы для рассылки после закрытия сессии (AUD6-P2-01)."""
+        plan.executor_notifies.append(_ExecutorNotifyJob(
+            telegram_id=candidate.telegram_id,
+            language=candidate.language or "ru",
+            request_number=req.request_number,
+            category=req.category,
+            address=req.address or "",
+        ))
+
+    @staticmethod
+    def _bump_load(snapshot, executor_id: int) -> None:
+        """Внутритиковый учёт назначений (AUD6-P2-14): срез нагрузки снят один
+        раз на тик, поэтому успешное назначение инкрементирует его вручную —
+        иначе пачка однотипных заявок в одном тике ушла бы одному исполнителю."""
+        snapshot.load_by_user[executor_id] = snapshot.load_by_user.get(executor_id, 0) + 1
+
+    def _process_main_item(self, db: Session, req: Request, now: datetime,
+                           snapshot, plan: _TickPlan) -> None:
         specialization = req.assigned_group
-        candidate = select_executor(db, specialization, now)
+        candidate = select_executor(db, specialization, now, snapshot=snapshot)
 
         if candidate is None:
             self._retry_after[req.request_number] = now + _RETRY_COOLDOWN
-            await self._notify_managers_no_duty(db, req, specialization, now)
+            self._queue_manager_notify(db, req, specialization, now, plan)
             return
 
         command = ActionCommand(
@@ -340,12 +424,14 @@ class AutoManagerOrchestrator:
                          req.request_number, e)
             return
 
-        await self._publish_kanban_refresh(req.request_number)
-        await self._notify_executor(candidate, req)
+        self._bump_load(snapshot, candidate.id)
+        plan.kanban_refreshes.append(req.request_number)
+        self._queue_executor_notify(plan, candidate, req)
 
-    async def _process_residual_item(self, db: Session, req: Request, now: datetime) -> None:
+    def _process_residual_item(self, db: Session, req: Request, now: datetime,
+                               snapshot, plan: _TickPlan) -> None:
         specialization = get_specialization_for_category(req.category)
-        candidate = select_executor(db, specialization, now)
+        candidate = select_executor(db, specialization, now, snapshot=snapshot)
 
         if candidate is not None:
             command = ActionCommand(
@@ -360,8 +446,9 @@ class AutoManagerOrchestrator:
                 logger.debug("[AUTO_MANAGER] SYSTEM_DISPATCH_ASSIGN(executor) %s пропущен: %s",
                              req.request_number, e)
                 return
-            await self._publish_kanban_refresh(req.request_number)
-            await self._notify_executor(candidate, req)
+            self._bump_load(snapshot, candidate.id)
+            plan.kanban_refreshes.append(req.request_number)
+            self._queue_executor_notify(plan, candidate, req)
             return
 
         # Нет дежурного — резидуальный group-dispatch (тот же канонический
@@ -381,61 +468,77 @@ class AutoManagerOrchestrator:
                          req.request_number, e)
         else:
             # Новая→В работе — genuine public status change, Kanban stale otherwise.
-            await self._publish_kanban_refresh(req.request_number)
+            plan.kanban_refreshes.append(req.request_number)
 
         self._retry_after[req.request_number] = now + _RETRY_COOLDOWN
-        await self._notify_managers_no_duty(db, req, specialization, now)
+        self._queue_manager_notify(db, req, specialization, now, plan)
 
     # ------------------------------------------------------------------ #
     # Notifications (best-effort, mirror handlers/admin/shared.py)
     # ------------------------------------------------------------------ #
 
-    async def _notify_executor(self, candidate: User, req: Request) -> None:
-        try:
-            bot = self._get_bot()
-            lang = candidate.language or "ru"
-            # req.address — свободный пользовательский текст; экранируем перед
-            # интерполяцией в parse_mode="HTML" (тот же html.escape-паттерн,
-            # что services/feedback_service.py/notification_service.py) — иначе
-            # `<`/`>`/`&` в адресе могли бы сломать отправку сообщения Telegram.
-            text = get_text("auto_manager.assigned_notification", language=lang).format(
-                request_number=req.request_number,
-                category=get_category_display(resolve_category_key(req.category), language=lang),
-                address=html.escape(req.address or ""),
-            )
-            await bot.send_message(chat_id=candidate.telegram_id, text=text, parse_mode="HTML")
-        except Exception as e:  # best-effort — не валим tick из-за уведомления
-            logger.warning("[AUTO_MANAGER] уведомление исполнителю %s (заявка %s) не отправлено: %s",
-                          candidate.id, req.request_number, e)
-
-    async def _notify_managers_no_duty(self, db: Session, req: Request,
-                                       specialization: str, now: datetime) -> None:
+    def _queue_manager_notify(self, db: Session, req: Request, specialization: str,
+                              now: datetime, plan: _TickPlan) -> None:
+        """Db-фаза: dedup TTL + получатели-примитивы; отправка — после тика."""
         last_notified = self._notified.get(req.request_number)
         if last_notified is not None and now - last_notified < _NOTIFY_TTL:
             return
 
-        svc = AdminHandlerService(db)
-        managers = [u for u in svc.list_approved_users() if ROLE_MANAGER in get_user_roles(u)]
+        # AUD6-P2-14: список менеджеров — один раз на тик, а не на каждую
+        # «нет дежурного»-заявку (list_approved_users — полная выборка).
+        if self._managers_cache is None:
+            svc = AdminHandlerService(db)
+            self._managers_cache = [
+                (u.telegram_id, u.language or "ru")
+                for u in svc.list_approved_users()
+                if ROLE_MANAGER in get_user_roles(u) and u.telegram_id
+            ]
 
+        plan.manager_notifies.append(_ManagerNotifyJob(
+            recipients=list(self._managers_cache),
+            request_number=req.request_number,
+            specialization=specialization,
+        ))
+        # Once per request (not per manager) — см. docstring класса. Метка
+        # ставится в db-фазе: рассылка best-effort, а дедуп обязан сработать
+        # и при частично упавшей отправке.
+        self._notified[req.request_number] = now
+
+    async def _send_executor_notify(self, job: _ExecutorNotifyJob) -> None:
+        try:
+            bot = self._get_bot()
+            lang = job.language
+            # job.address — свободный пользовательский текст; экранируем перед
+            # интерполяцией в parse_mode="HTML" (тот же html.escape-паттерн,
+            # что services/feedback_service.py/notification_service.py) — иначе
+            # `<`/`>`/`&` в адресе могли бы сломать отправку сообщения Telegram.
+            text = get_text("auto_manager.assigned_notification", language=lang).format(
+                request_number=job.request_number,
+                category=get_category_display(resolve_category_key(job.category), language=lang),
+                address=html.escape(job.address),
+            )
+            await bot.send_message(chat_id=job.telegram_id, text=text, parse_mode="HTML")
+        except Exception as e:  # best-effort — не валим tick из-за уведомления
+            logger.warning("[AUTO_MANAGER] уведомление исполнителю tg=%s (заявка %s) не отправлено: %s",
+                          job.telegram_id, job.request_number, e)
+
+    async def _send_manager_notify(self, job: _ManagerNotifyJob) -> None:
         bot = self._get_bot()
-        for manager in managers:
+        for telegram_id, language in job.recipients:
             try:
                 # Язык получателя, не жёстко "ru" — у каждого менеджера свой
                 # User.language (UZ-переводы уже добавлены в locale-файлы).
-                text = get_text("auto_manager.no_duty_executor", language=manager.language or "ru").format(
-                    request_number=req.request_number, specialization=specialization,
+                text = get_text("auto_manager.no_duty_executor", language=language).format(
+                    request_number=job.request_number, specialization=job.specialization,
                 )
                 # Цикл по получателям: без per-call предела медленный Telegram
                 # растягивает tick на N × session-таймаут (AUD3-09).
                 await bot.send_message(
-                    chat_id=manager.telegram_id,
+                    chat_id=telegram_id,
                     text=text,
                     parse_mode="HTML",
                     request_timeout=SEND_TIMEOUT,
                 )
             except Exception as e:  # best-effort per-recipient
-                logger.warning("[AUTO_MANAGER] уведомление менеджеру %s (заявка %s) не отправлено: %s",
-                              manager.id, req.request_number, e)
-
-        # Once per request (not per manager) — см. docstring класса.
-        self._notified[req.request_number] = now
+                logger.warning("[AUTO_MANAGER] уведомление менеджеру tg=%s (заявка %s) не отправлено: %s",
+                              telegram_id, job.request_number, e)
