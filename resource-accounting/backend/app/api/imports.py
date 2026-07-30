@@ -1,16 +1,15 @@
 """Import endpoints: preview (upload) and commit (ТЗ §5.5)."""
 
-import base64
-import binascii
-import hashlib
 import json
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from itsdangerous import BadSignature, URLSafeSerializer
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.periods import get_period_or_404
+from app.config import get_settings
 from app.core.audit import write_audit
 from app.core.deps import OPERATOR_ROLES, require_roles
 from app.core.deps import correlation_id as _cid
@@ -22,6 +21,14 @@ from app.services.imports import build_preview, commit_rows, parse_file
 from app.services.readings import EDITABLE_PERIOD_STATUSES
 
 router = APIRouter(prefix="/imports/readings", tags=["imports"])
+
+
+def _commit_serializer() -> URLSafeSerializer:
+    # AUD6-P2-16(в): раньше токен был base64(sha256(payload)[:12] + payload) —
+    # контрольная сумма, которую клиент пересчитывал сам, подменив payload
+    # (прав не повышало — валидация серверная, — но давало неограниченный
+    # N+1-усилитель). Подпись session_secret'ом закрывает подмену.
+    return URLSafeSerializer(get_settings().session_secret, salt="import-commit-token")
 
 
 @router.post("/preview", response_model=dict)
@@ -44,11 +51,9 @@ async def preview_import(
         raise bad_request("Файл пуст")
     rows = build_preview(db, user.tenant_id, month, raw_rows)
     payload = [asdict(r) for r in rows]
-    # Token binds commit to this exact previewed content
-    token_source = json.dumps(payload, default=str, sort_keys=True).encode()
-    token = base64.b64encode(
-        hashlib.sha256(token_source).digest()[:12] + token_source
-    ).decode()
+    # Token binds commit to this exact previewed content (подписан, см.
+    # _commit_serializer; Decimal/date нормализуются в строки заранее).
+    token = _commit_serializer().dumps(json.loads(json.dumps(payload, default=str)))
     return {
         "data": {
             "month": month,
@@ -68,6 +73,7 @@ class CommitIn(BaseModel):
 
 
 @router.post("/commit", response_model=dict)
+@limiter.limit(HEAVY_LIMIT)  # AUD6-P2-16(б): у preview лимит был, у commit — нет
 def commit_import(
     payload: CommitIn,
     request: Request,
@@ -79,12 +85,8 @@ def commit_import(
         raise bad_request(f"Период {payload.month} в статусе {period.status}: импорт невозможен")
 
     try:
-        decoded = base64.b64decode(payload.commit_token.encode())
-        digest, token_source = decoded[:12], decoded[12:]
-        if hashlib.sha256(token_source).digest()[:12] != digest:
-            raise ValueError
-        previewed = json.loads(token_source)
-    except (ValueError, binascii.Error, json.JSONDecodeError):
+        previewed = _commit_serializer().loads(payload.commit_token)
+    except BadSignature:
         raise bad_request("Недействительный commit_token: повторите предпросмотр")
 
     # SEC-03: re-derive rows server-side from the user-supplied input ONLY; never

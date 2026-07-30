@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
 from app.models import Export, ExportRow, Meter, Reading, ReportingPeriod
-from app.services.readings import get_previous_accepted
+from app.services.readings import get_previous_accepted_bulk
 
 BASE_COLUMNS = [
     ("period", "Период"),
@@ -48,9 +48,13 @@ def build_rows(db: Session, tenant_id, period: ReportingPeriod, filters: dict) -
     if filters.get("object_id"):
         stmt = stmt.where(Meter.primary_object_id == uuid.UUID(filters["object_id"]))
 
+    pairs = db.execute(stmt).all()
+    # AUD6-P2-15 (та же семья): previous — одним оконным запросом на весь акт.
+    previous = get_previous_accepted_bulk(db, [m.id for _, m in pairs], period.month)
+
     rows = []
-    for reading, meter in db.execute(stmt).all():
-        prev = get_previous_accepted(db, meter.id, period.month)
+    for reading, meter in pairs:
+        prev = previous.get(meter.id)
         consumers = ", ".join(
             link.object.name for link in meter.consumer_links if link.object
         )
