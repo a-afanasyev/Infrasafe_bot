@@ -61,6 +61,11 @@ test: ## Быстрая петля: оба набора в ЖИВОМ конте
 test-ci: ## Канон: прогон, эквивалентный CI-джобе backend-tests (свежая сборка + одноразовые pg/redis)
 	@bash scripts/test-ci-local.sh
 
+# Отдельная цель, НЕ шаг test-ci: тот — эталон 1-в-1 с джобой backend-tests,
+# примешивать туда чужую джобу значило бы размыть эталон (AUD6-P1-1).
+test-resource: ## Тесты resource-accounting (sqlite, как CI-джоба resource-tests без drift-гейта)
+	@cd resource-accounting/backend && python3 -m pytest -q
+
 test-frontend: ## Запустить vitest
 	@cd frontend && npm test
 

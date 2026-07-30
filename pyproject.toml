@@ -52,8 +52,11 @@ target-version = "py311"
 # media_service их было 39, остальные 127 живут в `scripts`, который остаётся
 # отложенным (AUD5-PRAC-11: правки там трогают одноразовые ops-скрипты, и это
 # отдельный разговор).
+# resource-accounting снят из exclude 2026-07-30 (AUD6-P1-1): живой прод-сервис
+# не может быть вне линта; у него свой [tool.ruff] в backend/pyproject.toml —
+# nested-конфиг перекрывает корневой (E/F/I, line-length 120).
 # force-exclude makes these apply even when paths are passed explicitly (CI / pre-commit).
-extend-exclude = ["docs", "resource-accounting"]
+extend-exclude = ["docs"]
 force-exclude = true
 
 [tool.ruff.lint]
