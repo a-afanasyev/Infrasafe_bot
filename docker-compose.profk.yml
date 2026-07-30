@@ -321,6 +321,11 @@ services:
       - api
     networks:
       - uk-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # Медиа-сервис: хранит фото/видео заявок в приватных Telegram-каналах через
   # ВЫДЕЛЕННЫЙ бот (media_service/.env: TELEGRAM_BOT_TOKEN + CHANNEL_* — числовые
@@ -523,6 +528,15 @@ services:
         condition: service_healthy
     networks:
       - uk-internal
+    healthcheck:
+      # У воркера нет HTTP: итерация цикла (раз в 300с) касается heartbeat-файла
+      # ТОЛЬКО при успехе (app/worker.py) — несвежий файл (>16 мин ≈ 3 интервала,
+      # одна упавшая итерация прощается) = unhealthy.
+      test: ["CMD-SHELL", "find /tmp/resource-worker-heartbeat -mmin -16 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres_data:

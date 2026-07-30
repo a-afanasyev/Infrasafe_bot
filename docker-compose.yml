@@ -440,6 +440,11 @@ services:
       - api
     networks:
       - uk-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # Сервис «Учёт ресурсов» (resource-api) — внесён в монорепо UK (был отдельный
   # стек ~/uk-resource). Своя БД resource-postgres (postgres:16, свой том). edge
@@ -557,6 +562,15 @@ services:
         condition: service_healthy
     networks:
       - uk-network
+    healthcheck:
+      # У воркера нет HTTP: итерация цикла (раз в 300с) касается heartbeat-файла
+      # ТОЛЬКО при успехе (app/worker.py) — несвежий файл (>16 мин ≈ 3 интервала,
+      # одна упавшая итерация прощается) = unhealthy.
+      test: ["CMD-SHELL", "find /tmp/resource-worker-heartbeat -mmin -16 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 # Определяем тома для хранения данных
 volumes:
