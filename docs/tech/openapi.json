@@ -15291,15 +15291,18 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "pending",
-                    "needs_media",
-                    "publishing",
-                    "published",
-                    "needs_review",
-                    "rejected"
-                  ],
-                  "type": "string"
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "needs_media",
+                      "publishing",
+                      "published",
+                      "needs_review",
+                      "rejected"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"

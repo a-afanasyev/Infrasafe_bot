@@ -1,15 +1,15 @@
 # UK Management — справочник REST/WS API
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-07-31_
 
-**Приложение:** FastAPI `UK Management API` v2.0.0 (`uk_management_bot/api/main.py:64`), контейнер `uk-management-api`.
+**Приложение:** FastAPI `UK Management API` v2.0.0 (`uk_management_bot/api/main.py`), контейнер `uk-management-api`.
 **Префиксы:** `/api/v2/*` (REST), `/ws/v2/*` (WebSocket); часть служебных путей смонтирована по абсолютным путям.
-**Источник истины:** роутеры `uk_management_bot/api/**/router.py` + `api/main.py` + `api/dependencies.py`.
-**Дата:** 2026-07-06.
+**Источник истины:** роутеры `uk_management_bot/api/**/router.py` + `api/main.py` + `api/dependencies.py`; машинно-точный контракт — снапшот [`openapi.json`](openapi.json).
+**Дата:** 2026-07-31.
 
-> В прод interactive-docs выключены (`docs_url/redoc_url/openapi_url = None` при `DEBUG=False`, `main.py:58`) — публичная схема увеличивает поверхность для скрейпа.
-> Взамен схема лежит в репозитории: [`openapi.json`](openapi.json) (AUD5-PRAC-8, 2026-07-26). Генерируется `python3 scripts/dump_openapi.py`, сверяется CI-шагом `OpenAPI snapshot gate` — изменение публичного контракта обязано быть видно в диффе PR, а не обнаруживаться потребителем в проде.
-> Всего насчитано **~120 эндпоинтов** (включая WebSocket, health/metrics, media-proxy) в **18 подключаемых роутерах** (`main.py:120`).
+> В прод interactive-docs выключены (`docs_url/redoc_url/openapi_url = None` при `DEBUG=False`) — публичная схема увеличивает поверхность для скрейпа.
+> Взамен схема лежит в репозитории: [`openapi.json`](openapi.json) (AUD5-PRAC-8). Генерируется `python3 scripts/dump_openapi.py`, сверяется CI-шагом `OpenAPI snapshot gate` — изменение публичного контракта обязано быть видно в диффе PR, а не обнаруживаться потребителем в проде.
+> Объём: **156 REST-операций на 132 путях** (по `openapi.json`) + 3 WebSocket, в **23 подключаемых роутерах** (`main.py:134-157`). Отдельный сервис access-api подключает ещё 14 своих роутеров (`access_control/app/main.py:114-127`) — они не входят в это приложение (§6).
 
 ---
 
@@ -188,6 +188,9 @@
 |-------|------|------|-----------|
 | GET | `/board` | публичный, 120/min | Анонимная витрина (агрегаты, кэш 30с) |
 
+Под тем же префиксом смонтирован публичный роутер визуальных отчётов
+(`work_reports/public_router.py`) — см. §2.16.
+
 ### 2.13. Webhooks (входящие) — `/api/v2/webhooks` (`webhooks/router.py`)
 
 | Метод | Путь | Auth | Назначение |
@@ -215,6 +218,62 @@
 | GET | `/api/v2/media/request/{request_number}` | `get_current_user` | Список медиа заявки |
 | GET | `/api/v2/media/{media_id}/file` | `get_current_user` | Файл медиа |
 
+### 2.16. Work-reports — визуальные отчёты «до/после» (`work_reports/`)
+
+Весь модуль за фиче-флагом `WORK_REPORTS_ENABLED` (менеджерский роутер при
+выключенном флаге — единый 404, не палит наличие фичи). Доменная логика — в
+`services/work_report_service.py` (сага публикации с media-service).
+
+Менеджерская часть — `/api/v2/work-reports` (`work_reports/router.py`), все
+эндпоинты `require_approved_roles("manager")`:
+
+| Метод | Путь | Назначение |
+|-------|------|-----------|
+| GET | `` | Список отчётов (повторяемый фильтр `?status=`, пагинация) |
+| POST | `` | Создать отчёт вручную |
+| POST | `/sync` | Синхронизировать черновики из завершённых заявок, 30/min |
+| POST | `/autofill-pending` | Автозаполнить медиа во всех pending-черновиках |
+| PUT | `/settings` | Настройки модуля (в board_config) |
+| POST | `/reconcile` | Сверка publication-lock'ов с media-service (self-healing саги) |
+| POST | `/{report_id}/autofill` | Автозаполнить медиа отчёта |
+| PATCH | `/{report_id}` | Правка черновика (медиа, адрес, дата) |
+| POST | `/{report_id}/publish` | Опубликовать (сага: лок медиа в media-service → публикация) |
+| POST | `/{report_id}/unpublish` | Снять с публикации |
+| POST | `/{report_id}/reject` | Отклонить |
+| POST | `/{report_id}/reopen` | Вернуть в черновики |
+
+Публичная часть — `/api/v2/public/work-reports` (`work_reports/public_router.py`),
+**без аутентификации** (privacy-гарды в схеме: без номера заявки, текста и user id):
+
+| Метод | Путь | Rate-limit | Назначение |
+|-------|------|-----------|-----------|
+| GET | `/work-reports` | 120/min | Лента (кэш 30с; флаг off → пустой список, не 404) |
+| GET | `/work-reports/{report_id}` | 120/min | Один опубликованный отчёт |
+| GET | `/work-reports/{report_id}/media/{media_id}` | 300/min | Превью/файл медиа (через preview-cache media-service; флаг off → 404) |
+
+### 2.17. Residents — `/api/v2/residents` (`residents/`)
+
+Модуль «Жители» дашборда, все 16 эндпоинтов — `require_roles("manager")`.
+Пакет-агрегатор (`residents/router.py` собирает под-роутеры): списки/карточка
+(`residents.py`: ``, `/stats`, `/{resident_id}`), модерация и квартиры
+(`moderation.py`: approve/block/unblock, CRUD привязок квартир), документы
+(`documents.py`), верификация (`verification.py`: request-documents/approve/reject).
+
+### 2.18. Auto-manager — `/api/v2/auto-manager-config` (`auto_manager/router.py`)
+
+GET/PUT конфигурации автоназначения, `require_roles("manager", "admin")`.
+
+### 2.19. Resource-accounting — `/api/v2/resource-accounting` (`resource_accounting/router.py`)
+
+S2s-минтинг одноразовых launch-tickets для сервиса «Учёт ресурсов»
+(`resource-accounting/backend/`, отдельный сервис в монорепо; сервисный токен
+`X-Service-Token` живёт только на бэкенде):
+
+| Метод | Путь | Auth | Назначение |
+|-------|------|------|-----------|
+| POST | `/ticket` | `require_roles(manager, system_admin, admin)`, 30/min | Тикет для встраиваемого раздела дашборда |
+| POST | `/twa-ticket` | Telegram initData, 30/min | Тикет контролёру (роль `resource_meter_entry`) из Mini App |
+
 ---
 
 ## 3. RBAC-матрица (группа эндпоинтов → роль → статус)
@@ -238,6 +297,12 @@
 | Feedback POST | любая (аутентиф.) | любой | `get_current_user` |
 | Feedback чтение/ответ | `manager` | любой | `require_roles` |
 | Board config PUT | `manager` | любой | `require_roles` |
+| Work-reports (менеджерские) | `manager` | **approved** | `require_approved_roles` |
+| Public work-reports | — (публичный) | — | rate-limit + фиче-флаг |
+| Residents (всё) | `manager` | любой | `require_roles` |
+| Auto-manager config | `manager` \| `admin` | любой | `require_roles` |
+| Resource `/ticket` | `manager` \| `system_admin` \| `admin` | любой | `require_roles` |
+| Resource `/twa-ticket` | — (TWA initData + роль `resource_meter_entry`) | — | initData bot-token'ом |
 | Registration | — (TWA initData) | — | rate-limit guard |
 | Webhooks | — (HMAC) | — | подпись InfraSafe |
 | WebSocket `/ws/v2/*` | `manager` | любой | JWT в payload |
