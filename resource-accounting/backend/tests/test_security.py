@@ -91,13 +91,17 @@ def _forge_token(rows: list[dict]) -> str:
 def test_forged_commit_token_is_rederived_server_side(admin):
     obj = make_object(admin, "SEC03-объект")
     make_meter(admin, "SEC03-REAL", obj["id"])
-    make_period(admin, "2030-01")
+    # Период УНИКАЛЬНЫЙ для этого теста: сьют делит одну session-scoped БД, и
+    # ассерт «во всём периоде пусто» ниже честен только пока никакой другой
+    # тест не пишет показания в тот же месяц (на "2030-01" сюда протекало
+    # показание из test_exports_analytics — падало только в полном прогоне).
+    make_period(admin, "2035-01")
 
     # Attacker forges a row: unknown meter_number, errors=[] (claims valid), bogus meter_id.
     forged = [{
         "line": 2,
         "meter_number": "SEC03-GHOST",
-        "period": "2030-01",
+        "period": "2035-01",
         "reading_value": "999",
         "read_at": "",
         "note": "",
@@ -109,11 +113,11 @@ def test_forged_commit_token_is_rederived_server_side(admin):
         "errors": [],
     }]
     resp = admin.post("/v1/imports/readings/commit", json={
-        "month": "2030-01", "commit_token": _forge_token(forged),
+        "month": "2035-01", "commit_token": _forge_token(forged),
     })
     assert resp.status_code == 200, resp.text
     # Server re-derived from meter_number "SEC03-GHOST" (not registered) → nothing written.
     assert resp.json()["data"]["saved"] == 0
 
-    ws = admin.get("/v1/periods/2030-01/worksheet").json()["data"]
+    ws = admin.get("/v1/periods/2035-01/worksheet").json()["data"]
     assert all(r["reading"] is None for r in ws["rows"])

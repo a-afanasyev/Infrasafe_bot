@@ -5,9 +5,9 @@ Revises:
 Create Date: 2026-07-11 20:06:19.247157
 
 """
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = '001'
 down_revision = None
@@ -129,7 +129,8 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_audit_entity', 'audit_log', ['tenant_id', 'entity_type', 'entity_id', 'created_at'], unique=False)
+    op.create_index('ix_audit_entity', 'audit_log',
+                    ['tenant_id', 'entity_type', 'entity_id', 'created_at'], unique=False)
     op.create_table('exports',
     sa.Column('tenant_id', sa.Uuid(), nullable=False),
     sa.Column('reporting_period_id', sa.Uuid(), nullable=False),
@@ -213,8 +214,11 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_meters_primary_object', 'meters', ['tenant_id', 'primary_object_id', 'resource_type'], unique=False)
-    op.create_index('uq_meters_active_number', 'meters', ['tenant_id', 'meter_number_normalized'], unique=True, sqlite_where=sa.text("status = 'active'"), postgresql_where=sa.text("status = 'active'"))
+    op.create_index('ix_meters_primary_object', 'meters',
+                    ['tenant_id', 'primary_object_id', 'resource_type'], unique=False)
+    op.create_index('uq_meters_active_number', 'meters', ['tenant_id', 'meter_number_normalized'],
+                    unique=True, sqlite_where=sa.text("status = 'active'"),
+                    postgresql_where=sa.text("status = 'active'"))
     op.create_table('object_tags',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('object_id', sa.Uuid(), nullable=False),
@@ -302,7 +306,9 @@ def downgrade() -> None:
     op.drop_index('ix_meter_object_links_object', table_name='meter_object_links')
     op.drop_table('meter_object_links')
     op.drop_table('object_tags')
-    op.drop_index('uq_meters_active_number', table_name='meters', sqlite_where=sa.text("status = 'active'"), postgresql_where=sa.text("status = 'active'"))
+    op.drop_index('uq_meters_active_number', table_name='meters',
+                  sqlite_where=sa.text("status = 'active'"),
+                  postgresql_where=sa.text("status = 'active'"))
     op.drop_index('ix_meters_primary_object', table_name='meters')
     op.drop_table('meters')
     op.drop_table('export_rows')

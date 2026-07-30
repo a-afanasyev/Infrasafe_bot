@@ -90,7 +90,7 @@ jobs:
           python3 ci/mypy_ratchet.py < mypy.log
 
   bandit:
-    name: bandit (SAST, uk_management_bot + access_control)
+    name: bandit (SAST, bot + access + media + resource)
     runs-on: ubuntu-latest
     # AUD3-02: baseline (2026-07-15, Step 0) — 0 High/High до фикса B324
     # (MD5 без usedforsecurity=False в handlers/auth.py:165, исправлено в этом
@@ -113,9 +113,12 @@ jobs:
       # (например api/test_dependencies.py, database/test_init_admin.py,
       # middlewares/test_auth.py) — */tests/* сам по себе их не ловит,
       # */test_*.py нужен отдельно. access_control/tests/ покрывается */tests/*.
+      # AUD6-P2-21: media_service и resource-accounting добавлены 2026-07-30 —
+      # оба живые прод-сервисы, bandit их не видел (перечисление каталогов
+      # здесь и в advisory-шаге ниже обязано совпадать).
       - name: Bandit — High confidence + High severity (blocking)
         run: |
-          bandit -r uk_management_bot access_control \
+          bandit -r uk_management_bot access_control media_service resource-accounting \
             -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*' \
             -iii -lll
 
@@ -129,7 +132,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          bandit -r uk_management_bot access_control \
+          bandit -r uk_management_bot access_control media_service resource-accounting \
             -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*'
 
   npm-audit:
@@ -233,6 +236,74 @@ jobs:
       # «проходит» всегда (см. комментарий там же).
       - name: Run tests
         run: pytest -q
+
+  resource-tests:
+    name: resource-tests (pytest + drift-gate)
+    runs-on: ubuntu-latest
+    # AUD6-P1-1: resource-accounting — живой прод-сервис на ОБОИХ хостах
+    # (3 контейнера, своя БД, своя alembic-история), до этой джобы не
+    # покрывался ни одним гейтом — точный рецидив AUD5-PRAC-2, закрытого для
+    # media_service тремя днями раньше. Python 3.12 — как в его Dockerfile
+    # (остальные джобы на 3.11 — у них и образы на 3.11).
+    defaults:
+      run:
+        working-directory: resource-accounting/backend
+    services:
+      # Нужен ТОЛЬКО шагу drift-gate ниже: юнит-тесты сервиса идут на sqlite.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: resource_accounting
+          POSTGRES_USER: resource
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - "55432:5432"
+        options: >-
+          --health-cmd "pg_isready -U resource -d resource_accounting"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: resource-accounting/backend/pyproject.toml
+
+      # Зависимости в pyproject (requirements.txt у сервиса нет) — ставим
+      # проект с dev-экстрами, как это делает его Dockerfile (`pip install .`).
+      - name: Install service with dev extras
+        run: pip install .[dev]
+
+      # ЛОВУШКА: tests/conftest.py задаёт sqlite через os.environ.setdefault
+      # ("RESOURCE_DATABASE_URL", ...). Задай мы postgres-URL на уровне ДЖОБЫ —
+      # setdefault не сработал бы и юниты молча уехали бы в postgres. Поэтому
+      # postgres-URL живёт ТОЛЬКО в step-env шага drift-gate.
+      - name: Run tests (sqlite via conftest)
+        run: pytest -q
+
+      # AUD6-P1-7: тесты поднимают схему Base.metadata.create_all'ом, а прод
+      # стартует `alembic upgrade head` (entrypoint-api.sh) — расхождение
+      # «модели ≠ миграция» до этого шага не ловило ничто. postgres:16 — как
+      # resource-postgres в docker-compose. Единственная нужная переменная:
+      # у всех полей Settings есть дефолты, alembic/env.py читает только URL.
+      - name: Drift-gate — alembic upgrade + check (postgres 16)
+        env:
+          RESOURCE_DATABASE_URL: "postgresql+psycopg2://resource:ci-only@localhost:55432/resource_accounting"
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+
+      # CVE-гейт: requirements.txt нет — аудитим установленное окружение
+      # целиком. Без --strict: сам пакет resource-accounting-api не публикуется
+      # на PyPI, и «could not be audited» для него — ожидаемый warning, не отказ.
+      - name: Install pip-audit
+        run: pip install pip-audit==2.9.0
+
+      - name: Audit installed dependencies
+        run: pip-audit
 
   backend-tests:
     name: backend-tests (pytest)
@@ -420,12 +491,12 @@ jobs:
           python -m alembic upgrade head
           python -m alembic check
 
-      # Набор access_control. Покрытие — информативное (--cov-report=term-missing),
-      # без жёсткого порога (--cov-fail-under не задан), чтобы не блокировать на
-      # этапе пилота. Падение гейта окружения здесь означает, что прогон ушёл не
-      # на postgres.
+      # Набор access_control. AUD6-P2-24: floor 90 при факте 91.9% на main
+      # (2026-07-29) — та же ratchet-конвенция, что у core/handlers: ПОДНИМАТЬ
+      # по мере роста, не опускать. Падение гейта окружения здесь означает,
+      # что прогон ушёл не на postgres.
       - name: Run access_control suite (postgres)
-        run: pytest access_control/tests -q --cov=access_control --cov-report=term-missing
+        run: pytest access_control/tests -q --cov=access_control --cov-report=term-missing --cov-fail-under=90
 
   b0-least-privilege:
     name: b0-least-privilege (restricted migrator)
@@ -1042,6 +1113,31 @@ jobs:
           load: false
           cache-from: type=gha,scope=media
           cache-to: "type=gha,mode=max,scope=media"
+
+      # AUD6-P1-1: resource-api — четвёртый живой прод-сервис со своим образом
+      # (build: ./resource-accounting/backend в обоих compose).
+      - name: Build resource image
+        uses: docker/build-push-action@v7
+        with:
+          context: resource-accounting/backend
+          file: resource-accounting/backend/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=resource
+          cache-to: "type=gha,mode=max,scope=resource"
+
+      # AUD6-P2-20: `npm run build` в джобе frontend ≠ `docker build` — поломка
+      # frontend/Dockerfile или frontend/nginx.conf (его трогали по PENT-F08)
+      # доезжала бы до прода незамеченной.
+      - name: Build frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=frontend
+          cache-to: "type=gha,mode=max,scope=frontend"
 
   frontend:
     name: frontend (build + lint + test)

@@ -31,6 +31,11 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# `tests/` — namespace-пакет без __init__.py, а конфтест импортируется как
+# `from tests.conftest import ...` — для этого корень сервиса обязан быть на
+# sys.path. `python -m pytest` добавляет cwd молча, ГОЛЫЙ `pytest` (CI) — нет:
+# без этой строки джоба падала ModuleNotFoundError: No module named 'tests'.
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.11"
