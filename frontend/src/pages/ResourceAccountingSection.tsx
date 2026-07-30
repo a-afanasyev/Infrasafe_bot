@@ -46,14 +46,19 @@ const ensureSession = (): Promise<void> => {
   return inflightSession
 }
 
-// Конфигурируем api модуля ДО первого запроса (ensureSession дергает
-// /v1/auth/me ещё до монтирования Provider — без baseUrl он ушёл бы не туда).
-configureResourceApi({
-  baseUrl: RESOURCE_BASE_URL,
-  onUnauthorized: () => {
-    void ensureSession()
-  },
-})
+// Конфигурация api модуля — на МОНТИРОВАНИИ раздела, не на импорте модуля
+// (AUD6-P2-19): оба хоста одного SPA (этот раздел и TWA-экран контролёра)
+// попадают в один бандл, и module-level вызов оставлял конфиг «кто
+// импортировался последним» — с разными onUnauthorized (mint по UK-JWT против
+// mint по initData). Вызов ДО ensureSession обязателен: тот дергает
+// /v1/auth/me ещё до монтирования Provider — без baseUrl ушёл бы не туда.
+const configureApi = () =>
+  configureResourceApi({
+    baseUrl: RESOURCE_BASE_URL,
+    onUnauthorized: () => {
+      void ensureSession()
+    },
+  })
 
 /**
  * Под-навигация раздела (перенесена из standalone-обёртки ресурса, которую по
@@ -104,6 +109,7 @@ export default function ResourceAccountingSection() {
 
   useEffect(() => {
     let cancelled = false
+    configureApi()
     ensureSession()
       .then(() => !cancelled && setStatus('ready'))
       .catch(() => !cancelled && setStatus('error'))
