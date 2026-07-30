@@ -43,13 +43,16 @@ const ensureSession = (): Promise<void> => {
   return inflightSession
 }
 
-// Конфигурируем api модуля ДО первого запроса.
-configureResourceApi({
-  baseUrl: RESOURCE_BASE_URL,
-  onUnauthorized: () => {
-    void ensureSession()
-  },
-})
+// Конфигурация api модуля — на МОНТИРОВАНИИ экрана, не на импорте модуля
+// (AUD6-P2-19, зеркально ResourceAccountingSection): module-level вызов в двух
+// хостах одного бандла оставлял «кто импортировался последним».
+const configureApi = () =>
+  configureResourceApi({
+    baseUrl: RESOURCE_BASE_URL,
+    onUnauthorized: () => {
+      void ensureSession()
+    },
+  })
 
 export default function MeterEntryScreen() {
   const { t } = useTranslation()
@@ -60,6 +63,7 @@ export default function MeterEntryScreen() {
   useEffect(() => {
     if (!hasInitData) return
     let cancelled = false
+    configureApi()
     ensureSession()
       .then(() => !cancelled && setStatus('ready'))
       .catch(() => !cancelled && setStatus('error'))

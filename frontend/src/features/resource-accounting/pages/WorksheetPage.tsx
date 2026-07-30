@@ -13,13 +13,9 @@ import { Empty, ErrorState, Loading } from '../components/DataState';
 import { PeriodStatusBadge, ReadingStatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import { formatMonth, formatNumber } from '../utils/format';
+import { type DraftRow, pruneSubmittedDrafts } from '../utils/drafts';
 import { canEnterReadings, canReview } from '../auth/roles';
 import { useResourceAuth } from '../auth/ResourceAuthContext';
-
-interface DraftRow {
-  value: string;
-  comment: string;
-}
 
 function useDebounced<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -115,8 +111,10 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
           })),
         },
       }),
-    onSuccess: () => {
-      setDrafts({});
+    onSuccess: (_result, submitted) => {
+      // AUD6-P2-10: setDrafts({}) стирал и правки, введённые пока запрос летел
+      // (items захвачены в момент клика) — чистим только ушедшие в этот запрос.
+      setDrafts((prev) => pruneSubmittedDrafts(prev, submitted));
       invalidate();
     },
     onError: (e: Error) => setActionError(e.message),
