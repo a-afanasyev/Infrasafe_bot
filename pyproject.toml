@@ -80,8 +80,4 @@ ignore = ["E203", "E501"]
 # глобом по `scripts/*`: новый скрипт со сползшими импортами должен ловиться
 # гейтом, а не молча наследовать послабление.
 "scripts/apply_verification_migration.py" = ["E402"]
-"scripts/check_and_fix_db.py" = ["E402"]
-"scripts/diagnose_auth_issues.py" = ["E402"]
 "scripts/export_schema.py" = ["E402"]
-"scripts/fix_user_permissions.py" = ["E402"]
-"scripts/test_phase1_tools.py" = ["E402"]
