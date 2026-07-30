@@ -68,6 +68,8 @@ doppler run --project uk-management --config profk -- docker compose -f docker-c
 
 `migrate`-шаг ОБЯЗАТЕЛЕН перед каждым `up` — иначе preflight уронит контейнер `exit 1` при малейшем schema drift. `--no-deps` — обязателен на каждой команде: без него Compose вправе (пере)создать `postgres`/`redis`/`resource-postgres` (stateful, не в routine-деплое). `redis`/`resource-postgres` в этот routine НЕ входят никогда — их ротация отдельная координированная процедура. ⚠️ После очистки `.env` ЛЮБАЯ compose-команда на прод-хосте без `doppler run --` падает на `:?`-интерполяции — это желаемый fail-fast, не чинить возвратом секретов в `.env`.
 
+⚠️ **`migrate` без пересборки ВСЕХ ТРЁХ runtime-образов (`api`, `access-api`, `app`) = отложенная петля рестартов.** В каждый образ на сборке зашит `EXPECTED_ALEMBIC_HEAD`; read-only preflight сравнивает его со схемой БД строго. Прогнали `migrate`, пересобрали не всех — не пересобранный сервис переживёт текущий `up` (контейнер не пересоздавался), но упадёт в вечный restart-loop при СЛЕДУЮЩЕМ up/ребуте хоста, когда его старый образ встретит новую схему. Ровно так access-api на 105 крутился в петле двое суток (24–26.07.2026: migrate до 006 прогнали, access-api остался с зашитой 005). Поэтому `build api access-api app migrate` — всегда все четыре, даже если «менялся только бот».
+
 ### Последний шаг раскатки — annotated-тег (AUD3-38 / AUD5-PRAC-3, с 2026-07-27)
 
 После успешной раскатки и прод-проверки — локально, из чекаута:
@@ -86,14 +88,29 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 
 ### resource-api / resource-worker — отдельный осознанный шаг (не в общей пачке)
 
-Обновлять только когда менялся их код/конфиг, отдельной командой после core-сервисов:
+**AUD6-P1-2 (с 2026-07-30): у resource-БД своя пара «владелец/раннтайм»** — зеркало PR-7 основной БД. `resource` (POSTGRES_USER, суперпользователь инстанса) — только миграции+seed через one-shot `resource-migrate`; сервисы ходят под `resource_app` (DML без DDL, пароль `RESOURCE_APP_PASSWORD` из Doppler). Из `entrypoint-api.sh` миграции убраны — старый «alembic на каждом старте api» больше не существует.
+
+**Первая раскатка на хост (однократно, ДО up новых образов):**
+
+```bash
+# 1) завести RESOURCE_APP_PASSWORD в Doppler (оба конфига) — владелец, значения в чат не выводить
+# 2) создать роль (идемпотентно; повтор = ротация пароля):
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose [-f docker-compose.profk.yml] run --rm resource-provision-roles
+```
+
+**Рутинный деплой (порядок обязателен — migrate ДО up, как у core):**
 
 ```bash
 doppler run --project uk-management --config <profk|infrasafe> -- \
-  docker compose [-f docker-compose.profk.yml] build resource-api resource-worker
+  docker compose [-f docker-compose.profk.yml] build resource-api resource-worker resource-migrate
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose [-f docker-compose.profk.yml] run --rm resource-migrate
 doppler run --project uk-management --config <profk|infrasafe> -- \
   docker compose [-f docker-compose.profk.yml] up -d --no-deps --wait --wait-timeout 120 resource-api resource-worker
 ```
+
+Проверка least-privilege после раскатки: `CREATE TABLE` под `resource_app` в psql обязан дать `permission denied for schema public`; новые таблицы будущих миграций до-грантов не требуют (default privileges от роли `resource`).
 
 `--no-deps` здесь критичен вдвойне: `resource-postgres` — stateful, Postgres игнорирует новый `POSTGRES_PASSWORD` при существующем volume, поэтому расхождение Doppler ↔ реальный пароль БД тихо ломает клиентов. Если `RESOURCE_*`-значения в Doppler менялись — перед `up` сверить равенство с работающим контейнером (printenv-паттерн, наружу только OK/FAIL):
 

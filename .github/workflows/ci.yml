@@ -296,6 +296,46 @@ jobs:
           python -m alembic upgrade head
           python -m alembic check
 
+      # AUD6-P1-2: least-privilege гейт. Исполняется ТОТ САМЫЙ
+      # provision_resource_roles.sql, что идёт на прод (SSOT, а не копия), затем
+      # поведенческая проба под resource_app: CREATE TABLE обязан упасть, DML —
+      # пройти. Схема к этому моменту уже поднята шагом drift-gate выше.
+      - name: Least-privilege gate — provision resource_app + behavioral probe
+        env:
+          PGPASSWORD: ci-only
+        run: |
+          sudo apt-get install -y -q postgresql-client >/dev/null
+          psql -h localhost -p 55432 -U resource -d resource_accounting \
+            -v ON_ERROR_STOP=1 -v app_password='ci-app-only' \
+            -f scripts/provision_resource_roles.sql
+          python - <<'EOF'
+          import psycopg2
+          conn = psycopg2.connect(
+              host="localhost", port=55432, dbname="resource_accounting",
+              user="resource_app", password="ci-app-only",
+          )
+          conn.autocommit = False
+          cur = conn.cursor()
+          # DML работает (и откатывается — проба не мусорит).
+          cur.execute("SELECT count(*) FROM tenants")
+          cur.execute(
+              "INSERT INTO tenants (id, code, name, created_at, updated_at) "
+              "VALUES (gen_random_uuid(), 'ci-probe', 'CI Probe', now(), now())"
+          )
+          conn.rollback()
+          # DDL обязан быть запрещён.
+          try:
+              cur.execute("CREATE TABLE lp_gate_probe (id int)")
+          except psycopg2.errors.InsufficientPrivilege:
+              conn.rollback()
+              print("least-privilege gate OK: DML разрешён, CREATE запрещён")
+          else:
+              raise SystemExit(
+                  "least-privilege VIOLATION: resource_app смог CREATE TABLE"
+              )
+          conn.close()
+          EOF
+
       # CVE-гейт: requirements.txt нет — аудитим установленное окружение
       # целиком. Без --strict: сам пакет resource-accounting-api не публикуется
       # на PyPI, и «could not be audited» для него — ожидаемый warning, не отказ.
