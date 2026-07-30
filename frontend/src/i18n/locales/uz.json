@@ -2052,7 +2052,8 @@
       "moderation": "Moderatsiyada",
       "published": "Nashr etilgan",
       "needsReview": "E'tibor talab qiladi",
-      "rejected": "Rad etilgan"
+      "rejected": "Rad etilgan",
+      "showMore": "Yana ko'rsatish ({{count}})"
     },
     "status": {
       "pending": "Kutilmoqda",

@@ -2063,7 +2063,8 @@
       "moderation": "На модерации",
       "published": "Опубликованные",
       "needsReview": "Требует внимания",
-      "rejected": "Отклонённые"
+      "rejected": "Отклонённые",
+      "showMore": "Показать ещё ({{count}})"
     },
     "status": {
       "pending": "Ожидает",

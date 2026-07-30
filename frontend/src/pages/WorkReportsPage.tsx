@@ -49,6 +49,27 @@ const DEFAULT_SETTINGS: WorkReportsCfg = {
   title: { ru: '', uz: '' },
 }
 
+const GROUP_PAGE_SIZE = 50
+
+/** Группа отчётов одного статуса (AUD6-P2-08): свой запрос, серверный total,
+ * дозагрузка увеличением limit. Клиентский фильтр по статусу — защита от
+ * рассинхрона: сервер уже отфильтровал, повторная проверка бесплатна. */
+function useReportGroup(statuses: string[]) {
+  const [limit, setLimit] = useState(GROUP_PAGE_SIZE)
+  const query = useWorkReports({ status: statuses, limit })
+  const items = (query.data?.items ?? []).filter((r) => statuses.includes(r.status))
+  const total = query.data?.total ?? items.length
+  return {
+    query,
+    items,
+    total,
+    hasMore: total > items.length,
+    showMore: () => setLimit((l) => l + GROUP_PAGE_SIZE),
+  }
+}
+
+type ReportGroup = ReturnType<typeof useReportGroup>
+
 export default function WorkReportsPage() {
   const { t } = useTranslation()
   usePageTitle(t('workReports.title'))
@@ -72,8 +93,19 @@ export default function WorkReportsPage() {
     [rawSettings],
   )
 
-  const { data: listData, isLoading: listLoading, isError: listError } = useWorkReports()
-  const reports = listData?.items ?? []
+  // AUD6-P2-08: каждая группа — свой запрос со status-фильтром и серверным
+  // total. Раньше страница брала один срез limit=50 (order by created_at desc)
+  // и резала его на группы клиентом: при >50 отчётов старые needs_review
+  // (жалоба жителя — требует действия) и rejected молча исчезали, а счётчики
+  // групп врали. 'publishing' остаётся в группе модерации: транзиентный
+  // in-flight статус без собственных действий.
+  const moderationGroup = useReportGroup(['pending', 'needs_media', 'publishing'])
+  const publishedGroup = useReportGroup(['published'])
+  const needsReviewGroup = useReportGroup(['needs_review'])
+  const rejectedGroup = useReportGroup(['rejected'])
+  const groups = [moderationGroup, publishedGroup, needsReviewGroup, rejectedGroup]
+  const listLoading = groups.some((g) => g.query.isLoading)
+  const listError = groups.some((g) => g.query.isError)
 
   const syncReports = useSyncWorkReports()
   const createReport = useCreateWorkReport()
@@ -140,16 +172,20 @@ export default function WorkReportsPage() {
     }
   }
 
-  // 'publishing' folds into the moderation group rather than getting its own
-  // section: it's a transient in-flight state that should barely ever be
-  // observed and has no actions of its own (WorkReportRow renders it as a
-  // plain "публикуется…" label, no buttons).
-  const moderationGroup = reports.filter(
-    (r) => r.status === 'pending' || r.status === 'needs_media' || r.status === 'publishing',
-  )
-  const publishedGroup = reports.filter((r) => r.status === 'published')
-  const needsReviewGroup = reports.filter((r) => r.status === 'needs_review')
-  const rejectedGroup = reports.filter((r) => r.status === 'rejected')
+  function renderShowMore(group: ReportGroup) {
+    if (!group.hasMore) return null
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="self-start"
+        disabled={group.query.isFetching}
+        onClick={group.showMore}
+      >
+        {t('workReports.groups.showMore', { count: group.total - group.items.length })}
+      </Button>
+    )
+  }
 
   function renderRow(report: WorkReport) {
     return (
@@ -326,17 +362,21 @@ export default function WorkReportsPage() {
         <p className="text-[13px] text-red px-1">{t('common.error')}</p>
       ) : (
         <>
-          <GroupSection title={t('workReports.groups.moderation')} count={moderationGroup.length}>
-            {moderationGroup.map(renderRow)}
+          <GroupSection title={t('workReports.groups.moderation')} count={moderationGroup.total}>
+            {moderationGroup.items.map(renderRow)}
+            {renderShowMore(moderationGroup)}
           </GroupSection>
-          <GroupSection title={t('workReports.groups.published')} count={publishedGroup.length}>
-            {publishedGroup.map(renderRow)}
+          <GroupSection title={t('workReports.groups.published')} count={publishedGroup.total}>
+            {publishedGroup.items.map(renderRow)}
+            {renderShowMore(publishedGroup)}
           </GroupSection>
-          <GroupSection title={t('workReports.groups.needsReview')} count={needsReviewGroup.length}>
-            {needsReviewGroup.map(renderRow)}
+          <GroupSection title={t('workReports.groups.needsReview')} count={needsReviewGroup.total}>
+            {needsReviewGroup.items.map(renderRow)}
+            {renderShowMore(needsReviewGroup)}
           </GroupSection>
-          <GroupSection title={t('workReports.groups.rejected')} count={rejectedGroup.length}>
-            {rejectedGroup.map(renderRow)}
+          <GroupSection title={t('workReports.groups.rejected')} count={rejectedGroup.total}>
+            {rejectedGroup.items.map(renderRow)}
+            {renderShowMore(rejectedGroup)}
           </GroupSection>
         </>
       )}

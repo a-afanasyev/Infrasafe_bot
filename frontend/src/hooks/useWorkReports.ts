@@ -31,11 +31,26 @@ const STALE_MS = 15_000
 // ── READ ────────────────────────────────────────────────────────────
 
 export function useWorkReports(
-  params: { status?: string; limit?: number; offset?: number } = {},
+  params: { status?: string | string[]; limit?: number; offset?: number } = {},
 ) {
   return useQuery<WorkReportListOut>({
     queryKey: ['work-reports', params],
-    queryFn: () => apiClient.get(BASE, { params }).then((r) => r.data),
+    queryFn: () => {
+      // AUD6-P2-08: статус может быть списком; бэкенд ждёт повторяемый ключ
+      // (?status=a&status=b), а дефолтная axios-сериализация массивов даёт
+      // несовместимый `status[]=` — собираем строку сами.
+      const search = new URLSearchParams()
+      const statuses = Array.isArray(params.status)
+        ? params.status
+        : params.status
+          ? [params.status]
+          : []
+      for (const s of statuses) search.append('status', s)
+      if (params.limit !== undefined) search.set('limit', String(params.limit))
+      if (params.offset !== undefined) search.set('offset', String(params.offset))
+      const qs = search.toString()
+      return apiClient.get(qs ? `${BASE}?${qs}` : BASE).then((r) => r.data)
+    },
     staleTime: STALE_MS,
   })
 }

@@ -162,13 +162,16 @@ async def _resolve_manual_address(
 async def list_work_reports(
     # Literal, а не свободная строка: опечатка в фильтре должна давать 422, а не
     # тихо пустой список, который читается как «отчётов нет».
-    status: Optional[ReportStatus] = Query(None),
+    # AUD6-P2-08: параметр повторяемый (?status=a&status=b) — очередь модерации
+    # объединяет pending/needs_media/publishing одним запросом; одиночное
+    # значение работает как раньше.
+    status: Optional[list[ReportStatus]] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ) -> WorkReportListOut:
-    filters = [WorkReport.status == status] if status is not None else []
+    filters = [WorkReport.status.in_(status)] if status else []
 
     total = (
         await db.execute(select(func.count()).select_from(WorkReport).where(*filters))
