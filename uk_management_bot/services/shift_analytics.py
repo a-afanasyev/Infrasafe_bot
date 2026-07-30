@@ -11,8 +11,7 @@ from sqlalchemy import and_
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_COMPLETED, REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_NEW,
-    SHIFT_STATUS_COMPLETED, SHIFT_STATUS_ACTIVE
+    REQUEST_STATUS_COMPLETED, SHIFT_STATUS_COMPLETED
 )
 
 logger = logging.getLogger(__name__)
@@ -314,114 +313,6 @@ class ShiftAnalytics:
             logger.error(f"Error analyzing daily patterns: {e}")
             return {"error": str(e)}
     
-    # =================== СИСТЕМА KPI И ПОКАЗАТЕЛЕЙ ===================
-    
-    async def calculate_system_kpis(self, period_days: int = 30) -> Dict[str, Any]:
-        """
-        Расчет ключевых показателей эффективности системы
-        
-        Args:
-            period_days: Период для расчета KPI
-            
-        Returns:
-            Комплексные KPI системы смен
-        """
-        try:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=period_days)
-            
-            # Получаем данные за период
-            shifts = self.db.query(Shift).filter(
-                and_(
-                    Shift.start_time >= start_date,
-                    Shift.start_time <= end_date
-                )
-            ).all()
-            
-            requests = self.db.query(Request).filter(
-                and_(
-                    Request.created_at >= start_date,
-                    Request.created_at <= end_date
-                )
-            ).all()
-            
-            # Основные KPI
-            total_requests = len(requests)
-            completed_requests = len([r for r in requests if r.status == REQUEST_STATUS_COMPLETED])
-            in_progress_requests = len([r for r in requests if r.status == REQUEST_STATUS_IN_PROGRESS])
-            
-            total_shifts = len(shifts)
-            completed_shifts = len([s for s in shifts if s.status == SHIFT_STATUS_COMPLETED])
-            active_shifts = len([s for s in shifts if s.status == SHIFT_STATUS_ACTIVE])
-            
-            # Временные KPI
-            avg_response_time = sum(
-                (r.updated_at - r.created_at).total_seconds() / 60 
-                for r in requests if r.updated_at and r.status != REQUEST_STATUS_NEW
-            ) / max(len([r for r in requests if r.updated_at and r.status != REQUEST_STATUS_NEW]), 1)
-            
-            # Эффективность
-            request_completion_rate = (completed_requests / max(total_requests, 1)) * 100
-            shift_completion_rate = (completed_shifts / max(total_shifts, 1)) * 100
-            
-            # Загрузка системы
-            avg_daily_requests = total_requests / max(period_days, 1)
-            avg_shift_utilization = sum(
-                (s.current_request_count or 0) / max(s.max_requests or 1, 1)
-                for s in shifts
-            ) / max(len(shifts), 1) * 100
-            
-            # Качественные показатели
-            quality_scores = [s.quality_rating for s in shifts if s.quality_rating and s.quality_rating > 0]
-            avg_quality_rating = sum(quality_scores) / max(len(quality_scores), 1)
-            
-            efficiency_scores = [s.efficiency_score for s in shifts if s.efficiency_score and s.efficiency_score > 0]
-            avg_efficiency_score = sum(efficiency_scores) / max(len(efficiency_scores), 1)
-            
-            # Расчет общего KPI системы (0-100)
-            system_kpi = (
-                request_completion_rate * 0.25 +    # 25% - завершенные заявки
-                shift_completion_rate * 0.20 +      # 20% - завершенные смены
-                avg_quality_rating * 15 +           # 15% - качество (из 5 в 75)
-                avg_efficiency_score * 0.15 +       # 15% - эффективность
-                max(0, 25 - (avg_response_time / 60) * 5)  # 25% - время отклика
-            )
-            
-            return {
-                "period": {
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "days": period_days
-                },
-                "primary_kpis": {
-                    "system_kpi_score": round(system_kpi, 1),
-                    "request_completion_rate": round(request_completion_rate, 1),
-                    "shift_completion_rate": round(shift_completion_rate, 1),
-                    "avg_response_time_hours": round(avg_response_time / 60, 1),
-                    "avg_quality_rating": round(avg_quality_rating, 1),
-                    "avg_efficiency_score": round(avg_efficiency_score, 1)
-                },
-                "volume_metrics": {
-                    "total_requests": total_requests,
-                    "completed_requests": completed_requests,
-                    "in_progress_requests": in_progress_requests,
-                    "avg_daily_requests": round(avg_daily_requests, 1),
-                    "total_shifts": total_shifts,
-                    "active_shifts": active_shifts
-                },
-                "utilization_metrics": {
-                    "avg_shift_utilization": round(avg_shift_utilization, 1),
-                    "peak_load_capacity": await self._calculate_peak_capacity(shifts),
-                    "resource_efficiency": await self._calculate_resource_efficiency(shifts)
-                },
-                "benchmarks": self._get_industry_benchmarks(),
-                "trends": await self._analyze_kpi_trends(period_days)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error calculating system KPIs: {e}")
-            return {"error": str(e)}
-    
     # =================== ПРИВАТНЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===================
     
     def _get_efficiency_recommendations(
@@ -549,44 +440,3 @@ class ShiftAnalytics:
         insights.append(f"⏰ Наибольшая активность в {peak_period[0]} часы - оптимизировать расписание смен")
         
         return insights
-    
-    async def _calculate_peak_capacity(self, shifts: List[Shift]) -> float:
-        """Расчет пиковой пропускной способности"""
-        if not shifts:
-            return 0.0
-        
-        max_concurrent_requests = max(s.current_request_count or 0 for s in shifts)
-        avg_max_requests = sum(s.max_requests or 0 for s in shifts) / len(shifts)
-        
-        return round((max_concurrent_requests / max(avg_max_requests, 1)) * 100, 1)
-    
-    async def _calculate_resource_efficiency(self, shifts: List[Shift]) -> float:
-        """Расчет эффективности использования ресурсов"""
-        if not shifts:
-            return 0.0
-        
-        total_capacity = sum(s.max_requests or 0 for s in shifts)
-        total_utilized = sum(s.current_request_count or 0 for s in shifts)
-        
-        return round((total_utilized / max(total_capacity, 1)) * 100, 1)
-    
-    def _get_industry_benchmarks(self) -> Dict[str, float]:
-        """Получение отраслевых бенчмарков для сравнения"""
-        return {
-            "excellent_completion_rate": 95.0,
-            "good_completion_rate": 85.0,
-            "acceptable_completion_rate": 70.0,
-            "target_response_time_hours": 2.0,
-            "target_quality_rating": 4.5,
-            "optimal_utilization_rate": 80.0
-        }
-    
-    async def _analyze_kpi_trends(self, period_days: int) -> Dict[str, str]:
-        """Анализ трендов KPI за период"""
-        # Здесь можно реализовать сравнение с предыдущими периодами
-        return {
-            "completion_rate": "stable",
-            "response_time": "improving", 
-            "quality_rating": "stable",
-            "utilization": "increasing"
-        }

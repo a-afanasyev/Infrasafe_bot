@@ -33,7 +33,6 @@ from uk_management_bot.api.shifts.schemas import (
     ActiveRequestsCount,
     CreateInviteRequest,
     CreateInviteResponse,
-    CreateEmployeeRequest,
 )
 
 
@@ -680,55 +679,6 @@ class TestCreateInviteResponse:
             expires_at=datetime.now(),
         )
         assert resp.token == "abc123"
-
-
-# ═══════════════════════ CreateEmployeeRequest ═══════════════════════
-
-
-class TestCreateEmployeeRequest:
-
-    def test_valid_minimal(self):
-        body = CreateEmployeeRequest(
-            first_name="Ivan", last_name="Petrov",
-            phone="+998901234567", role="executor",
-        )
-        assert body.status == "approved"
-        assert body.specializations == []
-
-    def test_manager_role(self):
-        body = CreateEmployeeRequest(
-            first_name="Anna", last_name="Ivanova",
-            phone="+998901234567", role="manager",
-        )
-        assert body.role == "manager"
-
-    def test_pending_status_accepted(self):
-        body = CreateEmployeeRequest(
-            first_name="Ivan", last_name="Petrov",
-            phone="+998901234567", role="executor", status="pending",
-        )
-        assert body.status == "pending"
-
-    def test_invalid_role_raises(self):
-        with pytest.raises(ValidationError):
-            CreateEmployeeRequest(
-                first_name="Ivan", last_name="Petrov",
-                phone="+998901234567", role="applicant",
-            )
-
-    def test_short_first_name_raises(self):
-        with pytest.raises(ValidationError):
-            CreateEmployeeRequest(
-                first_name="", last_name="Petrov",
-                phone="+998901234567", role="executor",
-            )
-
-    def test_short_phone_raises(self):
-        with pytest.raises(ValidationError):
-            CreateEmployeeRequest(
-                first_name="Ivan", last_name="Petrov",
-                phone="123", role="executor",
-            )
 
 
 # ═══════════════════════ ActiveRequestsCount ═══════════════════════

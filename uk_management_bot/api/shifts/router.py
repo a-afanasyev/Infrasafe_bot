@@ -15,7 +15,7 @@ from uk_management_bot.api.shifts.schemas import (
     CreateFromTemplateBody, HandleTransferBody,
     TemplateBrief, CreateTemplateBody, UpdateTemplateBody,
     DeleteEmployeeRequest, ActiveRequestsCount,
-    CreateInviteRequest, CreateInviteResponse, CreateEmployeeRequest,
+    CreateInviteRequest, CreateInviteResponse,
     MeterEntryToggleRequest,
 )
 from uk_management_bot.database.models.shift import Shift
@@ -175,26 +175,6 @@ async def list_pending_staff(
         u.__dict__['active_shift_id'] = None
         briefs.append(EmployeeBrief.model_validate(u))
     return briefs
-
-
-@router.post("/employees", response_model=EmployeeBrief, status_code=201)
-async def create_employee(
-    body: CreateEmployeeRequest,
-    db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
-):
-    """Create an employee directly from the web dashboard."""
-    user = await service.create_employee(
-        db,
-        first_name=body.first_name,
-        last_name=body.last_name,
-        phone=body.phone,
-        role=body.role,
-        specializations=body.specializations,
-        status=body.status,
-    )
-    user.__dict__['active_shift_id'] = None
-    return EmployeeBrief.model_validate(user)
 
 
 @router.post("/employees/invite", response_model=CreateInviteResponse, status_code=201)

@@ -200,11 +200,6 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
     try:
         from uk_management_bot.handlers.user_management import open_user_management
         await open_user_management(message, db, roles, active_role, user)
-    except ImportError as e:
-        logger.error(f"Ошибка импорта open_user_management: {e}")
-        await message.answer(
-            get_text("errors.unknown_error", language=lang)
-        )
     except Exception as e:
         logger.error(f"Ошибка в open_user_management: {e}")
         await message.answer(

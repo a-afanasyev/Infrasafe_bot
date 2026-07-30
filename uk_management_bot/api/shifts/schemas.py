@@ -286,15 +286,6 @@ class CreateInviteResponse(BaseModel):
     expires_at: datetime
 
 
-class CreateEmployeeRequest(BaseModel):
-    first_name: str = Field(min_length=1)
-    last_name: str = Field(min_length=1)
-    phone: str = Field(min_length=10)
-    role: Literal["executor", "manager"]
-    specializations: list[str] = []
-    status: Literal["approved", "pending"] = "approved"
-
-
 class MeterEntryToggleRequest(BaseModel):
     """Выдать/снять роль-капабилити контролёра показаний (resource_meter_entry)."""
     enabled: bool

@@ -7,7 +7,6 @@ from uk_management_bot.api.auth.schemas import (
     TelegramWidgetLogin,
     TWALogin,
     PasswordLogin,
-    RefreshRequest,
     SetPasswordRequest,
 )
 
@@ -113,20 +112,6 @@ class TestPasswordLogin:
     def test_missing_password_raises(self):
         with pytest.raises(ValidationError):
             PasswordLogin(email="admin@example.com")
-
-
-# ═══════════════════════ RefreshRequest ═══════════════════════
-
-
-class TestRefreshRequest:
-
-    def test_valid(self):
-        req = RefreshRequest(refresh_token="tok_abc")
-        assert req.refresh_token == "tok_abc"
-
-    def test_missing_token_raises(self):
-        with pytest.raises(ValidationError):
-            RefreshRequest()
 
 
 # ═══════════════════════ SetPasswordRequest ═══════════════════════

@@ -2,7 +2,7 @@
 Unit tests for api/auth/schemas.py
 
 Tests Pydantic validation for TokenResponse, TelegramWidgetLogin, TWALogin,
-PasswordLogin, RefreshRequest, SetPasswordRequest.
+PasswordLogin, SetPasswordRequest.
 """
 import pytest
 
@@ -11,7 +11,6 @@ from uk_management_bot.api.auth.schemas import (
     TelegramWidgetLogin,
     TWALogin,
     PasswordLogin,
-    RefreshRequest,
     SetPasswordRequest,
 )
 
@@ -147,20 +146,6 @@ class TestPasswordLogin:
     def test_both_required(self):
         with pytest.raises(Exception):
             PasswordLogin()
-
-
-# ---------------------------------------------------------------------------
-# RefreshRequest
-# ---------------------------------------------------------------------------
-
-class TestRefreshRequest:
-    def test_valid(self):
-        req = RefreshRequest(refresh_token="my.refresh.token")
-        assert req.refresh_token == "my.refresh.token"
-
-    def test_missing_refresh_token_raises(self):
-        with pytest.raises(Exception):
-            RefreshRequest()
 
 
 # ---------------------------------------------------------------------------

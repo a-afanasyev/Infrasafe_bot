@@ -601,49 +601,6 @@ class TestBulkCreate:
         assert r.status_code == 404
 
 
-# ═══════════════════════ Search ═══════════════════════
-
-
-class TestSearch:
-
-    async def test_search_by_apartment_number(self, client: AsyncClient):
-        yard = await _create_yard(client, "Search Yard")
-        bld = await _create_building(client, yard["id"], "Проспект Ленина 15")
-        await _create_apartment(client, bld["id"], "42")
-        await _create_apartment(client, bld["id"], "43")
-        await _create_apartment(client, bld["id"], "100")
-
-        r = await client.get(f"{BASE}/apartments/search?q=42")
-        assert r.status_code == 200
-        results = r.json()
-        numbers = [a["apartment_number"] for a in results]
-        assert "42" in numbers
-
-    async def test_search_by_building_address(self, client: AsyncClient):
-        yard = await _create_yard(client, "Search Addr Yard")
-        bld = await _create_building(client, yard["id"], "Проспект Мира 20")
-        await _create_apartment(client, bld["id"], "1")
-
-        r = await client.get(f"{BASE}/apartments/search?q=Мира")
-        assert r.status_code == 200
-        assert len(r.json()) >= 1
-        assert r.json()[0]["building_address"] == "Проспект Мира 20"
-
-    async def test_search_no_results(self, client: AsyncClient):
-        r = await client.get(f"{BASE}/apartments/search?q=nonexistent_xyz")
-        assert r.status_code == 200
-        assert r.json() == []
-
-    async def test_search_escapes_like_chars(self, client: AsyncClient):
-        yard = await _create_yard(client, "Like Yard")
-        bld = await _create_building(client, yard["id"], "100% Test Address")
-        await _create_apartment(client, bld["id"], "1")
-
-        # Search with % — should be escaped, not treated as wildcard
-        r = await client.get(f"{BASE}/apartments/search?q=100%25")
-        assert r.status_code == 200
-
-
 # ═══════════════════════ Moderation ═══════════════════════
 
 
