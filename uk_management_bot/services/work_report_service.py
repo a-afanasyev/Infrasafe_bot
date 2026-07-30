@@ -36,6 +36,7 @@
 
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -315,31 +316,36 @@ def _filter_and_cap(items: list[dict]) -> list[int]:
     return [item["id"] for item in eligible[:MAX_MEDIA_PER_SIDE]]
 
 
-async def autofill_media(db: AsyncSession, media_client: Any, report: WorkReport) -> WorkReport:
-    """Подтянуть текущие метаданные из media-service по `report.request_number`,
-    отфильтровать подходящие фото, разложить по before/after, обновить поля
-    отчёта НА МЕСТЕ (мутирует и возвращает переданный объект — commit НЕ
-    делает, транзакционные границы — на вызывающем: у единичного и batch-
-    автозаполнения из будущих API-эндпоинтов они разные).
+async def fetch_media_selection(
+    media_client: Any, request_number: str
+) -> tuple[list[int], list[int]]:
+    """СЕТЕВАЯ половина автозаполнения: два GET в media-service + фильтрация.
 
-    Не доверяет никакому предыдущему состоянию `report` — всегда перечитывает
-    из media-service. Молчаливая фильтрация здесь осознанна: это автоматический
-    подбор из всего доступного, а не явный выбор человека (контраст —
-    `validate_media_ids` ниже, который на тех же условиях REJECTS).
-
-    Перещёлкивает status pending<->needs_media по факту непустоты обеих
-    сторон; любой другой статус (publishing/published/needs_review/rejected)
-    не трогает.
+    AUD6-P1-3: выделена из `autofill_media`, чтобы батч-вызыватели могли
+    сходить в сеть ДО взятия row-лока — сеть и запись одной функцией
+    вынуждали держать транзакцию с локами через HTTP-таймауты (30 с × 3
+    ретрая на вызов). БД не трогает вовсе.
     """
     before_raw = await media_client.get_request_media(
-        report.request_number, category="request_photo", limit=_AUTOFILL_FETCH_LIMIT
+        request_number, category="request_photo", limit=_AUTOFILL_FETCH_LIMIT
     )
     after_raw = await media_client.get_request_media(
-        report.request_number, category="completion_photo", limit=_AUTOFILL_FETCH_LIMIT
+        request_number, category="completion_photo", limit=_AUTOFILL_FETCH_LIMIT
     )
+    return _filter_and_cap(before_raw), _filter_and_cap(after_raw)
 
-    report.before_media_ids = _filter_and_cap(before_raw)
-    report.after_media_ids = _filter_and_cap(after_raw)
+
+def apply_media_selection(
+    report: WorkReport, before_ids: list[int], after_ids: list[int]
+) -> WorkReport:
+    """ПИШУЩАЯ половина автозаполнения: мутация полей отчёта, без сети и
+    без commit (транзакционные границы — на вызывающем).
+
+    Перещёлкивает status pending<->needs_media по факту непустоты результата;
+    любой другой статус (publishing/published/needs_review/rejected) не трогает.
+    """
+    report.before_media_ids = before_ids
+    report.after_media_ids = after_ids
     report.media_synced_at = datetime.now(timezone.utc)
 
     # Обязателен ТОЛЬКО результат (решение владельца 2026-07-25): «до» часто
@@ -354,6 +360,27 @@ async def autofill_media(db: AsyncSession, media_client: Any, report: WorkReport
         report.status = "pending"
 
     return report
+
+
+async def autofill_media(db: AsyncSession, media_client: Any, report: WorkReport) -> WorkReport:
+    """Подтянуть текущие метаданные из media-service по `report.request_number`,
+    отфильтровать подходящие фото, разложить по before/after, обновить поля
+    отчёта НА МЕСТЕ (мутирует и возвращает переданный объект — commit НЕ
+    делает, транзакционные границы — на вызывающем).
+
+    Композиция `fetch_media_selection` (сеть) + `apply_media_selection`
+    (запись): единичным вызовам удобна одной функцией, батчи используют
+    половины напрямую, чтобы не держать сеть под локом (AUD6-P1-3).
+
+    Не доверяет никакому предыдущему состоянию `report` — всегда перечитывает
+    из media-service. Молчаливая фильтрация здесь осознанна: это автоматический
+    подбор из всего доступного, а не явный выбор человека (контраст —
+    `validate_media_ids` ниже, который на тех же условиях REJECTS).
+    """
+    before_ids, after_ids = await fetch_media_selection(
+        media_client, report.request_number
+    )
+    return apply_media_selection(report, before_ids, after_ids)
 
 
 async def validate_media_ids(
@@ -498,12 +525,20 @@ async def publish_report(
        last gate before content goes public.
     3. Re-check the public address is still safe (defense in depth — should
        already hold from creation time).
-    4. Require both media sides be non-empty.
-    5. Re-validate every media id against CURRENT media-service metadata.
-    6. Flip to ``publishing`` and commit — NOT publicly visible yet (a public
+    4. Require the result media side be non-empty.
+    5. Flip to ``publishing`` and commit — NOT publicly visible yet (a public
        feed filters strictly on ``status == "published"``), but this makes
-       the report ineligible for a second concurrent publish attempt once
-       this transaction's lock is released.
+       the report ineligible for a second concurrent publish attempt AND
+       freezes its media composition (PATCH/autofill only touch
+       ``pending``/``needs_media``). The row lock is released here — held
+       only across cheap local checks, never across the network.
+    6. Re-validate every media id against CURRENT media-service metadata —
+       WITHOUT the row lock (AUD6-P1-3: this is up to two HTTP calls of
+       30 s × 3 retries each; holding row locks and a pool connection in an
+       open transaction across that was the exact class that already caused
+       the media-service pool-exhaustion incident). The transient status is
+       protection enough. On failure, compensate: revert to ``pending``,
+       raise 422.
     7. Acquire a publication lock per media id, SEQUENTIALLY, committing
        ``locked_media_ids`` after EVERY successful acquire so the on-disk
        state always matches what's actually locked in media-service even if
@@ -513,7 +548,7 @@ async def publish_report(
     9. Flip to ``published``, stamp moderation fields, write an audit log,
        commit.
 
-    A crash between steps 6 and 9 leaves the report stuck in ``publishing``
+    A crash between steps 5 and 9 leaves the report stuck in ``publishing``
     (correctly invisible publicly) with ``locked_media_ids`` accurately
     reflecting what's locked — that's what ``reconcile_publication_locks``
     is for.
@@ -548,16 +583,26 @@ async def publish_report(
             f"work report {report_id} is missing result media", 422
         )
 
+    report.status = "publishing"
+    report.state_changed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    # Шаг 6: сеть — УЖЕ без row-лока (см. docstring). Состав медиа заморожен
+    # статусом `publishing`, так что валидируем ровно те id, что опубликуем.
+    # Компенсация на ЛЮБОЙ сбой, включая транспортный: до этого шага не взят
+    # ни один publication-lock, значит откат в `pending` всегда безопасен, и
+    # парковать отчёт в `publishing` до reconcile здесь незачем.
     try:
         await validate_media_ids(
             media_client, report.request_number, report.before_media_ids, report.after_media_ids
         )
-    except MediaValidationError as e:
-        raise WorkReportPublishError(str(e), 422) from e
-
-    report.status = "publishing"
-    report.state_changed_at = datetime.now(timezone.utc)
-    await db.commit()
+    except Exception as e:
+        report.status = "pending"
+        report.state_changed_at = datetime.now(timezone.utc)
+        await db.commit()
+        if isinstance(e, MediaValidationError):
+            raise WorkReportPublishError(str(e), 422) from e
+        raise
 
     all_media_ids = list(report.before_media_ids) + list(report.after_media_ids)
     acquired: list[int] = []
@@ -707,6 +752,10 @@ async def warm_recent_previews(
 
 
 _AUTOPUBLISH_BATCH_LIMIT = 20
+# AUD6-P1-3: потолок времени на пакет автопубликации. При деградировавшем
+# media-service каждый отчёт может стоить до ~90 с сетевых таймаутов — без
+# потолка пакет из 20 растягивался на десятки минут внутри /sync и тика.
+_AUTOPUBLISH_TIME_BUDGET_SECONDS = 60.0
 
 
 async def autopublish_ready_drafts(
@@ -763,6 +812,12 @@ async def autopublish_ready_drafts(
         WorkReport.category_key.in_(allowed_categories) if allowed_categories else None
     )
 
+    # AUD6-P1-3: БЕЗ with_for_update — раньше пакет держал FOR UPDATE сразу на
+    # 20 строках через все сетевые вызовы автозаполнения (до минут при
+    # недоступном media), блокируя параллельный /sync менеджера на тех же
+    # строках. Теперь сеть идёт до лока, а запись — короткой per-report
+    # транзакцией с перепроверкой статуса (строка могла уехать, пока ходили
+    # в сеть).
     stmt = select(WorkReport).where(pending_clause)
     if category_clause is not None:
         stmt = stmt.where(category_clause)
@@ -770,7 +825,6 @@ async def autopublish_ready_drafts(
         (await db.execute(
             stmt.order_by(WorkReport.created_at)
             .limit(_AUTOPUBLISH_BATCH_LIMIT)
-            .with_for_update()
         )).scalars().all()
     )
 
@@ -785,37 +839,69 @@ async def autopublish_ready_drafts(
             )
         ).scalar_one()
 
+    # AUD6-P1-3: общий бюджет времени пакета. При деградировавшем media каждый
+    # отчёт может стоить до ~90 с сетевых таймаутов — без потолка пакет из 20
+    # растягивался на десятки минут; частичный результат честнее зависшего
+    # /sync (недоделанные отчёты подберёт следующий тик/синк).
+    deadline = time.monotonic() + _AUTOPUBLISH_TIME_BUDGET_SECONDS
+
     ready_ids: list[int] = []
     left = 0
     failed = 0
     for report in candidates:
-        # autofill_media ходит в media-service, а его клиент бросает на любой
-        # не-2xx (`raise_for_status`) и на транспортных сбоях. Без этого
-        # перехвата один сбойный запрос ронял весь POST /sync пятисоткой —
-        # вместе с синком и ревокацией, которые к media-service отношения не
-        # имеют, — и страница очереди у менеджера просто перестала бы грузиться.
+        if time.monotonic() > deadline:
+            logger.warning(
+                "autopublish: бюджет времени пакета исчерпан на автозаполнении — "
+                "обработано %d из %d кандидатов",
+                len(ready_ids) + left + failed, len(candidates),
+            )
+            break
+        # fetch ходит в media-service, а его клиент бросает на любой не-2xx
+        # (`raise_for_status`) и на транспортных сбоях. Без этого перехвата
+        # один сбойный запрос ронял весь POST /sync пятисоткой — вместе с
+        # синком и ревокацией, которые к media-service отношения не имеют.
         try:
-            await autofill_media(db, media_client, report)
+            before_ids, after_ids = await fetch_media_selection(
+                media_client, report.request_number
+            )
         except Exception as e:
             failed += 1
             logger.warning(
                 "autopublish: автозаполнение отчёта %s не удалось: %s", report.id, e
             )
             continue
+        # Короткая пишущая транзакция: лок + перепроверка статуса + запись.
+        # Пока ходили в сеть, строку мог забрать publish/PATCH — перепроверяем
+        # pending_clause под локом и молча пропускаем уехавшие.
+        row = (
+            await db.execute(
+                select(WorkReport)
+                .where(WorkReport.id == report.id, pending_clause)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            await db.commit()  # снять пустую транзакцию от select
+            continue
+        apply_media_selection(row, before_ids, after_ids)
         # Тот же критерий готовности, что в publish_report: нужен результат,
         # «до» опционально.
-        if report.after_media_ids:
+        ready = bool(row.after_media_ids)
+        await db.commit()
+        if ready:
             ready_ids.append(report.id)
         else:
             left += 1
-    # Коммитим автозаполнение ДО публикации: publish_report берёт собственный
-    # `FOR UPDATE` на строку, а держать наш лок в этот момент — взаимная
-    # блокировка.
-    await db.commit()
 
     published = 0
     for report_id in ready_ids:
-        # Широкий except по той же причине, что и у autofill выше: publish_report
+        if time.monotonic() > deadline:
+            logger.warning(
+                "autopublish: бюджет времени пакета исчерпан на публикации — "
+                "опубликовано %d из %d готовых", published, len(ready_ids),
+            )
+            break
+        # Широкий except по той же причине, что и у fetch выше: publish_report
         # берёт publication-lock через media-service, и его недоступность не
         # должна срывать остальной пакет и весь /sync.
         try:
