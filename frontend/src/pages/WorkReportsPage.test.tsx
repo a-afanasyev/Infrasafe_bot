@@ -288,3 +288,40 @@ describe('WorkReportsPage', () => {
     await screen.findByText('Ни одна категория не отмечена — в ленту попадают все.')
   })
 })
+
+describe('пагинация групп (AUD6-P2-08)', () => {
+  it('запрашивает группы по статусам и дозагружает по «Показать ещё»', async () => {
+    const published = Array.from({ length: 60 }, (_, i) =>
+      makeReport({ id: 100 + i, status: 'published', request_number: `260720-${String(i).padStart(3, '0')}` }),
+    )
+    server.use(
+      mockBoardConfig(),
+      http.get('*/api/v2/work-reports', ({ request }) => {
+        const url = new URL(request.url)
+        const statuses = url.searchParams.getAll('status')
+        const limit = Number(url.searchParams.get('limit') ?? 50)
+        const matched = published.filter((r) => statuses.includes(r.status))
+        return HttpResponse.json({
+          items: matched.slice(0, limit),
+          total: matched.length,
+          limit,
+          offset: 0,
+        })
+      }),
+    )
+    render(<WorkReportsPage />)
+
+    // Заголовок группы показывает СЕРВЕРНЫЙ total (60), не длину среза (50) —
+    // раньше при >50 отчётов счётчики групп врали.
+    expect(await screen.findByText('Опубликованные')).toBeInTheDocument()
+    expect(screen.getByText('60')).toBeInTheDocument()
+
+    const showMore = screen.getByRole('button', { name: /Показать ещё \(10\)/ })
+    await userEvent.click(showMore)
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Показать ещё/ })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText('260720-059')).toBeInTheDocument()
+  })
+})

@@ -253,6 +253,22 @@ async def test_list_filters_by_status(client: AsyncClient, db_session, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_list_filters_by_multiple_statuses(client: AsyncClient, db_session, monkeypatch):
+    """AUD6-P2-08: очередь модерации на фронте объединяет pending/needs_media/
+    publishing одним запросом — параметр повторяемый (?status=a&status=b)."""
+    _enable(monkeypatch)
+    await _mk_report(db_session, "260725-221", status="pending")
+    await _mk_report(db_session, "260725-222", status="needs_media")
+    await _mk_report(db_session, "260725-223", status="published")
+
+    resp = await client.get(BASE, params=[("status", "pending"), ("status", "needs_media")])
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    assert {i["request_number"] for i in body["items"]} == {"260725-221", "260725-222"}
+
+
+@pytest.mark.asyncio
 async def test_list_pagination(client: AsyncClient, db_session, monkeypatch):
     _enable(monkeypatch)
     for i in range(5):
