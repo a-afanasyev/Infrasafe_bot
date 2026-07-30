@@ -81,7 +81,85 @@
   },
   "resourceAccounting": {
     "unavailable": "Раздел учёта ресурсов временно недоступен. Попробуйте позже или обратитесь к администратору.",
-    "openViaBot": "Откройте этот экран через бота, чтобы авторизоваться."
+    "openViaBot": "Откройте этот экран через бота, чтобы авторизоваться.",
+    "nav": {
+      "summary": "Сводка",
+      "entry": "Ввод показаний",
+      "worksheet": "Ведомость",
+      "meters": "Счётчики",
+      "objects": "Объекты",
+      "exports": "Акты сверки",
+      "providers": "Поставщики",
+      "audit": "Журнал"
+    },
+    "resourceTypes": {
+      "electricity": "Электроэнергия",
+      "cold_water": "Холодная вода"
+    },
+    "status": {
+      "reading": {
+        "ok": "ОК",
+        "warning": "Предупреждение",
+        "error": "Ошибка",
+        "missing": "Нет данных",
+        "notEntered": "Не введено"
+      },
+      "period": {
+        "open": "Открыт",
+        "review": "На проверке",
+        "submitted": "Передан",
+        "closed": "Закрыт"
+      },
+      "active": "Активен",
+      "archived": "Архив"
+    },
+    "state": {
+      "loading": "Загрузка…",
+      "error": "Ошибка: {{message}}",
+      "unknownError": "Неизвестная ошибка",
+      "retry": "Повторить",
+      "empty": "Нет данных"
+    },
+    "worksheet": {
+      "title": "Ввод показаний",
+      "period": "Период",
+      "noOpenPeriod": "— нет открытого периода —",
+      "createPeriod": "Создать период",
+      "resource": "Ресурс",
+      "object": "Объект",
+      "all": "Все",
+      "searchPlaceholder": "Поиск по номеру…",
+      "saveAll": "Сохранить всё ({{n}})",
+      "saving": "Сохранение…",
+      "periodStatus": "Статус периода:",
+      "validationSummary": "введено {{entered}} из {{active}}, не введено {{notEntered}},",
+      "validationWarnings": "предупр. {{n}}",
+      "validationErrors": "ошибок {{n}}",
+      "validationNoComment": ", без комментария {{n}}",
+      "toReview": "На проверку",
+      "returnToWork": "Вернуть в работу",
+      "submit": "Передать",
+      "submitBlocked": "Есть ошибки или незаполненные показания",
+      "closePeriod": "Закрыть период",
+      "emptyNoOpenPeriod": "Нет открытого периода. Обратитесь к менеджеру.",
+      "emptyNoPeriods": "Периоды ещё не созданы",
+      "emptyNotFound": "Ничего не найдено",
+      "emptyNoMeters": "В ведомости нет счётчиков",
+      "colNumber": "Номер",
+      "colMeter": "Счётчик",
+      "colObject": "Объект",
+      "colConsumers": "Потребители",
+      "colPrevious": "Предыдущее",
+      "colCurrent": "Текущее",
+      "colConsumption": "Расход",
+      "colStatus": "Статус",
+      "colComment": "Комментарий",
+      "readingAria": "Показание {{number}}",
+      "commentAria": "Комментарий {{number}}",
+      "month": "Месяц",
+      "cancel": "Отмена",
+      "create": "Создать"
+    }
   },
   "accessControl": {
     "title": "Контроль доступа",

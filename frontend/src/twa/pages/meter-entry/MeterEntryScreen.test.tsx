@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { testI18n } from '@/test/test-utils'
 
 // initData и twaClient.post — управляемые извне (vi.hoisted, т.к. vi.mock хойстится).
 const { initDataRef, postSpy } = vi.hoisted(() => ({
@@ -13,10 +15,18 @@ vi.mock('@/utils/isTWA', () => ({
   isTWA: () => !!initDataRef.current,
 }))
 vi.mock('../../twaClient', () => ({ twaClient: { post: postSpy } }))
-// i18n — passthrough ключей (модуль-ресурса рендерит заголовки хардкодом, не i18n).
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
 
 import MeterEntryScreen from './MeterEntryScreen'
+
+// AUD6-P2-53: модуль-ресурса теперь на i18n — рендерим с реальным testI18n (ru).
+const renderScreen = () =>
+  render(
+    <I18nextProvider i18n={testI18n}>
+      <MemoryRouter initialEntries={['/twa/meter-entry']}>
+        <MeterEntryScreen />
+      </MemoryRouter>
+    </I18nextProvider>,
+  )
 
 const resp = (status: number, payload: unknown) =>
   Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(payload) } as Response)
@@ -30,12 +40,10 @@ afterEach(() => {
 describe('MeterEntryScreen', () => {
   it('без initData → просит открыть через бота (не зовёт mint)', () => {
     initDataRef.current = ''
-    render(
-      <MemoryRouter initialEntries={['/twa/meter-entry']}>
-        <MeterEntryScreen />
-      </MemoryRouter>,
-    )
-    expect(screen.getByText('resourceAccounting.openViaBot')).toBeInTheDocument()
+    renderScreen()
+    expect(
+      screen.getByText('Откройте этот экран через бота, чтобы авторизоваться.'),
+    ).toBeInTheDocument()
     expect(postSpy).not.toHaveBeenCalled()
   })
 
@@ -49,11 +57,7 @@ describe('MeterEntryScreen', () => {
         return resp(200, { data: [] })
       }),
     )
-    render(
-      <MemoryRouter initialEntries={['/twa/meter-entry']}>
-        <MeterEntryScreen />
-      </MemoryRouter>,
-    )
+    renderScreen()
     expect(await screen.findByRole('heading', { name: 'Ввод показаний' })).toBeInTheDocument()
   })
 
@@ -74,11 +78,7 @@ describe('MeterEntryScreen', () => {
     )
     postSpy.mockResolvedValue({ data: { ticket: 'T', expires_in: 60 } })
 
-    render(
-      <MemoryRouter initialEntries={['/twa/meter-entry']}>
-        <MeterEntryScreen />
-      </MemoryRouter>,
-    )
+    renderScreen()
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith('/api/v2/resource-accounting/twa-ticket', {
