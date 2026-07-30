@@ -228,7 +228,10 @@ def _mk_rate_callback(request_number, telegram_id, rating=5):
     return cb
 
 
-NOTIFY = "uk_management_bot.handlers.request_acceptance.async_notify_request_status_changed"
+# AUD6-P1-6: легаси-нотификатор заменён парой «матрица интентов + канал»;
+# для guard-тестов достаточно заглушить обе точки выхода в Telegram.
+NOTIFY = "uk_management_bot.handlers.request_acceptance.dispatch_notify_intents_sync"
+NOTIFY_CHANNEL = "uk_management_bot.handlers.request_acceptance.notify_channel_status_changed"
 
 
 class TestAcceptGuard:
@@ -240,7 +243,7 @@ class TestAcceptGuard:
         req = _mk_request(db, "260610-201", REQUEST_STATUS_EXECUTED,
                           manager_confirmed=True)
         cb = _mk_rate_callback(req.request_number, OWNER_TG)
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await save_rating(cb, db=db)
 
         db.refresh(req)
@@ -255,7 +258,7 @@ class TestAcceptGuard:
         req = _mk_request(db, "260610-202", REQUEST_STATUS_COMPLETED,
                           is_returned=True)
         cb = _mk_rate_callback(req.request_number, OWNER_TG)
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await save_rating(cb, db=db)
 
         db.refresh(req)
@@ -271,7 +274,7 @@ class TestAcceptGuard:
 
         req = _mk_request(db, "260610-203", "В работе")
         cb = _mk_rate_callback(req.request_number, OWNER_TG)
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await save_rating(cb, db=db)
 
         db.refresh(req)
@@ -284,7 +287,7 @@ class TestAcceptGuard:
 
         req = _mk_request(db, "260610-204", REQUEST_STATUS_COMPLETED)
         cb = _mk_rate_callback(req.request_number, STRANGER_TG)
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await save_rating(cb, db=db)
 
         db.refresh(req)
@@ -298,7 +301,7 @@ class TestAcceptGuard:
 
         req = _mk_request(db, "260610-205", REQUEST_STATUS_COMPLETED)
         cb = _mk_rate_callback(req.request_number, NEIGHBOR_TG)
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await save_rating(cb, db=db)
 
         db.refresh(req)
@@ -331,7 +334,7 @@ class TestReturnGuard:
         message_obj = MagicMock()
         message_obj.answer = AsyncMock()
         message_obj.bot = MagicMock()
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(OWNER_TG, _mk_state(req.request_number),
                                          db=db, message_obj=message_obj)
 
@@ -351,7 +354,7 @@ class TestReturnGuard:
         db.commit()
         message_obj = MagicMock()
         message_obj.answer = AsyncMock()
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(OWNER_TG, _mk_state(req.request_number),
                                          db=db, message_obj=message_obj)
 
@@ -368,7 +371,7 @@ class TestReturnGuard:
         req = _mk_request(db, "260610-303", REQUEST_STATUS_COMPLETED)
         message_obj = MagicMock()
         message_obj.answer = AsyncMock()
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(NEIGHBOR_TG, _mk_state(req.request_number),
                                          db=db, message_obj=message_obj)
 
@@ -384,7 +387,7 @@ class TestReturnGuard:
         req = _mk_request(db, "260610-304", REQUEST_STATUS_COMPLETED)
         message_obj = MagicMock()
         message_obj.answer = AsyncMock()
-        with patch(NOTIFY, new=AsyncMock()):
+        with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(STRANGER_TG, _mk_state(req.request_number),
                                          db=db, message_obj=message_obj)
 

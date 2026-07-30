@@ -193,3 +193,150 @@ async def test_address_with_apartment_is_fine_here(db_session, sent):
 
     _, text = sent[0]
     assert "кв. 54" in text
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUD6 (P1-6 + P2-07): бот исполняет ту же матрицу; подстановки экранируются
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+async def test_address_with_html_chars_is_escaped(db_session, sent):
+    """A6-P2-07: адрес с `&`/`<` раньше давал Telegram 400 «can't parse
+    entities» (боты в parse_mode=HTML) — уведомление молча терялось. Ровно
+    жалоба, ради которой модуль писался."""
+    applicant = User(telegram_id=900001, roles='["applicant"]', active_role="applicant",
+                     status="approved", language="ru", first_name="Житель")
+    db_session.add(applicant)
+    await db_session.flush()
+    db_session.add(Request(
+        request_number="260725-001", user_id=applicant.id, category="elevator",
+        status="Уточнение", description="демо", urgency="low", is_returned=False,
+        manager_confirmed=False, address='дом <5> & корпус "Б"',
+        created_at=datetime.now(timezone.utc),
+    ))
+    await db_session.commit()
+
+    delivered = await wn.dispatch_notify_intents(
+        db_session, "260725-001", [_intent(Action.CLARIFY_REQUEST)])
+
+    assert delivered == 1
+    _, text = sent[0]
+    assert "&lt;5&gt;" in text and "&amp;" in text
+    assert "<5>" not in text
+
+
+@pytest.mark.asyncio
+async def test_applicant_return_notifies_executor(db_session, sent):
+    """AUD6-P1-6: возврат ЖИТЕЛЕМ из приёмки — исполнитель обязан узнать, что
+    работу переделывать (симметрия с MANAGER_RETURN_TO_WORK). До матричной
+    записи API/TWA-путь не уведомлял никого."""
+    await _seed(db_session)
+
+    delivered = await wn.dispatch_notify_intents(
+        db_session, "260725-001", [_intent(Action.APPLICANT_RETURN)])
+
+    assert delivered == 1
+    telegram_id, text = sent[0]
+    assert telegram_id == 900002              # исполнитель, не житель
+    assert "возвращена" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_clarify_with_text_uses_rich_template_and_escapes(db_session, sent):
+    """Вопрос менеджера доезжает до жителя (богатый шаблон), и он экранирован."""
+    await _seed(db_session)
+
+    await wn.dispatch_notify_intents(
+        db_session, "260725-001", [_intent(Action.CLARIFY_REQUEST)],
+        clarification_text="Какой <этаж> и & подъезд?")
+
+    _, text = sent[0]
+    assert "Какой &lt;этаж&gt; и &amp; подъезд?" in text
+    assert "/reply_260725-001" in text        # команда ответа из богатого шаблона
+
+
+@pytest.mark.asyncio
+async def test_clarify_text_applies_only_to_clarify(db_session, sent):
+    """clarification_text не протекает в чужие действия той же пачки интентов."""
+    await _seed(db_session)
+
+    await wn.dispatch_notify_intents(
+        db_session, "260725-001", [_intent(Action.CANCEL)],
+        clarification_text="не должен появиться")
+
+    _, text = sent[0]
+    assert "не должен появиться" not in text
+    assert "отменена" in text.lower()
+
+
+# ── Паритет sync-диспетчера с async (бот-путь = API-путь) ───────────────────
+import pytest_asyncio  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession as _AS  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+
+from uk_management_bot.database.session import Base  # noqa: E402
+
+
+@pytest.fixture
+def parity_db(tmp_path):
+    """Файловая sqlite: её видят и sync-движок (бот), и async-движок (API)."""
+    return tmp_path / "notify-parity.sqlite3"
+
+
+@pytest.fixture
+def parity_sync_factory(parity_db):
+    engine = create_engine(f"sqlite:///{parity_db}")
+    Base.metadata.create_all(engine)
+    yield sessionmaker(bind=engine, expire_on_commit=False)
+    engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def parity_async_factory(parity_db, parity_sync_factory):
+    engine = create_async_engine(f"sqlite+aiosqlite:///{parity_db}")
+    yield async_sessionmaker(engine, class_=_AS, expire_on_commit=False)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_sync_and_async_dispatchers_are_identical(
+    parity_sync_factory, parity_async_factory, sent
+):
+    """Суть AUD6-P1-6: один переход из бота и из дашборда обязан дать ОДНИХ
+    получателей и ОДИН текст. Обе реализации гоняются по одной БД и одной
+    пачке интентов; сравниваются фактические отправки."""
+    with parity_sync_factory() as db:
+        applicant = User(telegram_id=900001, roles='["applicant"]',
+                         active_role="applicant", status="approved",
+                         language="ru", first_name="Житель")
+        executor = User(telegram_id=900002, roles='["executor"]',
+                        active_role="executor", status="approved",
+                        language="uz", first_name="Исполнитель")
+        db.add_all([applicant, executor])
+        db.flush()
+        db.add(Request(
+            request_number="260725-001", user_id=applicant.id, category="elevator",
+            status="В работе", description="демо", urgency="low",
+            is_returned=False, manager_confirmed=False,
+            address="Yangi Olmazor, 14V & <кв. 54>", executor_id=executor.id,
+            created_at=datetime.now(timezone.utc),
+        ))
+        db.commit()
+
+    intents = [_intent(Action.MANAGER_ASSIGN), _intent(Action.MANAGER_RETURN_TO_WORK)]
+
+    async with parity_async_factory() as adb:
+        delivered_async = await wn.dispatch_notify_intents(adb, "260725-001", intents)
+    async_calls = sorted(sent)
+    sent.clear()
+
+    with parity_sync_factory() as sdb:
+        delivered_sync = await wn.dispatch_notify_intents_sync(
+            sdb, "260725-001", intents)
+    sync_calls = sorted(sent)
+
+    assert delivered_async == delivered_sync == 4  # 2 действия × (житель+исполнитель)
+    assert async_calls == sync_calls, "бот и API разослали разное — SSOT сломан"

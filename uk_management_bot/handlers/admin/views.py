@@ -4,7 +4,12 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardBut
 from sqlalchemy.orm import Session
 
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
-from uk_management_bot.services.notification_service import async_notify_request_status_changed
+# AUD6-P1-6: адресные уведомления — той же матрицей интентов, что API-путь
+# (одни получатели, один текст); канальная лента — отдельным хелпером.
+from uk_management_bot.services.workflow_notifications import (
+    dispatch_notify_intents_sync,
+    notify_channel_status_changed,
+)
 from uk_management_bot.utils.workflow_predicates import (
     is_awaiting_applicant,
     is_awaiting_manager,
@@ -363,12 +368,11 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
         # run_command работал в своей сессии → перечитываем заявку свежей.
         request = AdminHandlerService(db).get_request_by_number(request_number)
 
-        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
-        try:
-            bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+        # Адресно — по матрице интентов (не бросает); в канал — хелпером.
+        await dispatch_notify_intents_sync(
+            db, request_number, outcome.post_commit_intents, bot=callback.bot)
+        await notify_channel_status_changed(
+            callback.bot, request, outcome.old_status, outcome.public_status)
 
         # Дополнительное уведомление заявителю с инструкцией
         applicant = request.user if request else None
@@ -440,12 +444,11 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
         # Best-effort post-commit (PR0 Р7): уведомления + правка сообщения.
         request = AdminHandlerService(db).get_request_by_number(request_number)
 
-        # Уведомление через сервис (отправит заявителю, исполнителю и в канал)
-        try:
-            bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+        # Адресно — по матрице интентов (не бросает); в канал — хелпером.
+        await dispatch_notify_intents_sync(
+            db, request_number, outcome.post_commit_intents, bot=callback.bot)
+        await notify_channel_status_changed(
+            callback.bot, request, outcome.old_status, outcome.public_status)
 
         # Дополнительное уведомление заявителю: возврат рассмотрен, заявка принята
         applicant = request.user if request else None
@@ -511,11 +514,11 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
 
         # Best-effort post-commit (PR0 Р7): уведомление + правка сообщения.
         request = AdminHandlerService(db).get_request_by_number(request_number)
-        try:
-            bot = callback.bot
-            await async_notify_request_status_changed(bot, db, request, outcome.old_status, outcome.public_status)
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления через сервис: {e}")
+        # Адресно — по матрице интентов (не бросает); в канал — хелпером.
+        await dispatch_notify_intents_sync(
+            db, request_number, outcome.post_commit_intents, bot=callback.bot)
+        await notify_channel_status_changed(
+            callback.bot, request, outcome.old_status, outcome.public_status)
 
         await callback.message.edit_text(
             get_text("admin.handlers.request_returned_to_work", language=lang).format(request_number=request_number)

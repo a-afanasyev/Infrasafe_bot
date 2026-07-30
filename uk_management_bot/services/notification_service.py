@@ -648,67 +648,18 @@ class NotificationService:
 
 
 # ====== Request status notifications (3.4) ======
-def _build_request_status_message_user(request: Request, old_status: str, new_status: str) -> str:
-    return (
-        f"📌 Статус вашей заявки #{request.request_number} изменён: {old_status} → {new_status}\n"
-        f"Категория: {request.category}\n"
-        f"Адрес: {request.address[:60]}{'…' if len(request.address) > 60 else ''}"
-    )
-
-
-def _build_request_status_message_executor(request: Request, old_status: str, new_status: str) -> str:
-    return (
-        f"📌 Статус заявки #{request.request_number} изменён: {old_status} → {new_status}\n"
-        f"Категория: {request.category} — назначена вам"
-    )
-
-
+# AUD6-P1-6: легаси `async_notify_request_status_changed` (заявителю,
+# исполнителю и в канал одним вызовом, нелокализованным текстом) удалён —
+# на одни и те же переходы он слал других получателей с другим текстом, чем
+# API-путь. Адресную часть исполняет матрица интентов
+# (`workflow_notifications.dispatch_notify_intents{,_sync}`), канальную —
+# `workflow_notifications.notify_channel_status_changed`, который использует
+# билдер ниже.
 def _build_request_status_message_channel(request: Request, old_status: str, new_status: str) -> str:
     return (
         f"🔔 Заявка #{request.request_number}: {old_status} → {new_status}\n"
         f"Категория: {request.category}"
     )
-
-
-async def async_notify_request_status_changed(
-    bot,
-    db: Session,
-    request: Request,
-    old_status: str,
-    new_status: str,
-) -> None:
-    try:
-        # Пользователь-заявитель
-        try:
-            from uk_management_bot.database.models.user import User as UserModel
-            applicant = db.query(UserModel).filter(UserModel.id == request.user_id).first()
-            if applicant and applicant.telegram_id:
-                await send_to_user(
-                    bot,
-                    applicant.telegram_id,
-                    _build_request_status_message_user(request, old_status, new_status),
-                )
-        except Exception as e:
-            logger.warning(f"Не удалось уведомить заявителя по заявке #{request.request_number}: {e}")
-
-        # Исполнитель (если назначен)
-        try:
-            if request.executor_id:
-                from uk_management_bot.database.models.user import User as UserModel
-                executor = db.query(UserModel).filter(UserModel.id == request.executor_id).first()
-                if executor and executor.telegram_id:
-                    await send_to_user(
-                        bot,
-                        executor.telegram_id,
-                        _build_request_status_message_executor(request, old_status, new_status),
-                    )
-        except Exception as e:
-            logger.warning(f"Не удалось уведомить исполнителя по заявке #{request.request_number}: {e}")
-
-        # Канал (если настроен)
-        await send_to_channel(bot, _build_request_status_message_channel(request, old_status, new_status))
-    except Exception as e:
-        logger.warning(f"Ошибка async уведомления о смене статуса заявки #{request.request_number}: {e}")
 
 
 # ====== 6.8 Role switch and action denied notifications ======

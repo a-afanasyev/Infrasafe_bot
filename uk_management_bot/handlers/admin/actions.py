@@ -479,7 +479,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
             from uk_management_bot.services.workflow_runner import (
                 run_command_sync, RequestNotFound)
             try:
-                run_command_sync(
+                outcome = run_command_sync(
                     SessionLocal, request_number,
                     PrincipalRef(kind="user", user_id=(user.id if user else None),
                                  source="telegram"),
@@ -504,36 +504,45 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
                 return
             # run_command коммитит в отдельной сессии — сбрасываем кэш middleware
             svc.expire_all()
+            # AUD6-P1-6: канон-переход уведомляет матрицей интентов — той же,
+            # что API-путь (текст вопроса едет в clarification_text, шаблон
+            # общий). Прежняя inline-отправка отсюда снята: вместе с разбором
+            # интентов она давала бы жителю два сообщения (см. docstring
+            # workflow_notifications).
+            from uk_management_bot.services.workflow_notifications import (
+                dispatch_notify_intents_sync,
+            )
+            await dispatch_notify_intents_sync(
+                db, request.request_number, outcome.post_commit_intents,
+                bot=message.bot, clarification_text=clarification_text,
+            )
         else:
             # вне канон-перехода: дописываем только примечание, статус не меняем
             svc.append_clarification_note(
                 request, new_note, datetime.now(timezone.utc)
             )
+            # Интентов здесь НЕТ (перехода не было) — единственный путь донести
+            # вопрос до жителя остаётся ручным. html.escape обязателен: бот в
+            # parse_mode=HTML, адрес/вопрос — свободный текст (A6-P2-07).
+            try:
+                import html as _html
+
+                from uk_management_bot.services.notification_service import send_to_user
+
+                user_obj = svc.get_user_by_id(request.user_id)
+                if user_obj and user_obj.telegram_id:
+                    notification_text = get_text("admin.handlers.notify_user_clarification", language=lang).format(
+                        request_number=request.request_number,
+                        category=get_category_display(resolve_category_key(request.category), language=lang),
+                        address=_html.escape(request.address or ""),
+                        clarification_text=_html.escape(clarification_text)
+                    )
+                    await send_to_user(message.bot, user_obj.telegram_id, notification_text)
+                logger.info(f"Уведомление об уточнении отправлено пользователю {request.user_id}")
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления об уточнении: {e}")
 
 
-        # Отправляем уведомление заявителю
-        try:
-            from uk_management_bot.services.notification_service import send_to_user
-
-            # Получаем telegram_id пользователя
-            user_obj = svc.get_user_by_id(request.user_id)
-            if user_obj and user_obj.telegram_id:
-                notification_text = get_text("admin.handlers.notify_user_clarification", language=lang).format(
-                    request_number=request.request_number,
-                    category=get_category_display(resolve_category_key(request.category), language=lang),
-                    address=request.address,
-                    clarification_text=clarification_text
-                )
-                
-                # Получаем bot из состояния
-                bot = message.bot
-                await send_to_user(bot, user_obj.telegram_id, notification_text)
-            
-            logger.info(f"Уведомление об уточнении отправлено пользователю {request.user_id}")
-            
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об уточнении: {e}")
-        
         # Подтверждаем менеджеру
         await message.answer(
             get_text("admin.handlers.clarification_sent", language=lang).format(
