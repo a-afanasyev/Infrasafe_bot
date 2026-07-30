@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testI18n } from '../../test/test-utils';
 import { ResourceAccountingProvider } from './ResourceAccountingProvider';
 import { ResourceAccountingRoutes } from './ResourceAccountingRoutes';
 
@@ -27,18 +29,20 @@ describe('ResourceAccounting module mount', () => {
   it('монтируется с host-auth и рендерит роут /meters', async () => {
     mockFetch();
     render(
-      <MemoryRouter initialEntries={['/meters']}>
-        <ResourceAccountingProvider
-          config={{
-            baseUrl: '',
-            onUnauthorized: () => {},
-            basePath: '',
-            auth: { role: 'resource_admin', displayName: 'Хост-пользователь' },
-          }}
-        >
-          <ResourceAccountingRoutes />
-        </ResourceAccountingProvider>
-      </MemoryRouter>,
+      <I18nextProvider i18n={testI18n}>
+        <MemoryRouter initialEntries={['/meters']}>
+          <ResourceAccountingProvider
+            config={{
+              baseUrl: '',
+              onUnauthorized: () => {},
+              basePath: '',
+              auth: { role: 'resource_admin', displayName: 'Хост-пользователь' },
+            }}
+          >
+            <ResourceAccountingRoutes />
+          </ResourceAccountingProvider>
+        </MemoryRouter>
+      </I18nextProvider>,
     );
     // host-auth задан → без self-bootstrap /v1/auth/me; страница «Счётчики» рендерится
     expect(await screen.findByRole('heading', { name: 'Счётчики' })).toBeInTheDocument();
@@ -47,17 +51,19 @@ describe('ResourceAccounting module mount', () => {
   it('роль контролёра → единственный роут ввода показаний', async () => {
     mockFetch();
     render(
-      <MemoryRouter initialEntries={['/anything']}>
-        <ResourceAccountingProvider
-          config={{
-            baseUrl: '',
-            onUnauthorized: () => {},
-            auth: { role: 'resource_meter_entry', displayName: 'Контролёр' },
-          }}
-        >
-          <ResourceAccountingRoutes />
-        </ResourceAccountingProvider>
-      </MemoryRouter>,
+      <I18nextProvider i18n={testI18n}>
+        <MemoryRouter initialEntries={['/anything']}>
+          <ResourceAccountingProvider
+            config={{
+              baseUrl: '',
+              onUnauthorized: () => {},
+              auth: { role: 'resource_meter_entry', displayName: 'Контролёр' },
+            }}
+          >
+            <ResourceAccountingRoutes />
+          </ResourceAccountingProvider>
+        </MemoryRouter>
+      </I18nextProvider>,
     );
     expect(await screen.findByRole('heading', { name: 'Ввод показаний' })).toBeInTheDocument();
   });

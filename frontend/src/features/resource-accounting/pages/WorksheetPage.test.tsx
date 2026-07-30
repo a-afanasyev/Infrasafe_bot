@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testI18n } from '../../../test/test-utils';
 import type { Role } from '../api/types';
 import { ResourceAuthProvider } from '../auth/ResourceAuthContext';
 import { WorksheetPage } from './WorksheetPage';
@@ -73,13 +75,15 @@ function renderPage(opts: { role?: string; entryMode?: boolean } = {}) {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <ResourceAuthProvider
-          value={{ role: (opts.role ?? 'resource_admin') as Role, displayName: 'Тест' }}
-        >
-          <WorksheetPage entryMode={opts.entryMode} />
-        </ResourceAuthProvider>
-      </MemoryRouter>
+      <I18nextProvider i18n={testI18n}>
+        <MemoryRouter>
+          <ResourceAuthProvider
+            value={{ role: (opts.role ?? 'resource_admin') as Role, displayName: 'Тест' }}
+          >
+            <WorksheetPage entryMode={opts.entryMode} />
+          </ResourceAuthProvider>
+        </MemoryRouter>
+      </I18nextProvider>
     </QueryClientProvider>,
   );
 }
