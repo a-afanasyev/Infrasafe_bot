@@ -48,6 +48,7 @@ from sqlalchemy.orm import selectinload
 
 from uk_management_bot.api.board_config.service import load_board_config
 from uk_management_bot.config.settings import settings
+from uk_management_bot.constants.work_reports import LOCK_HOLDING_STATUSES
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.building import Building
@@ -126,7 +127,8 @@ _VALIDATE_FETCH_LIMIT = 200
 # (unpublish → reopen → publish). Если бы `needs_review` тут не значился,
 # `reconcile_publication_locks` счёл бы его локи осиротевшими и снял их, оставив
 # `locked_media_ids` лгать о реальном состоянии media-service.
-_LOCK_HOLDING_STATUSES = ("published", "publishing", "needs_review")
+# AUD6-P2-57: значение — из канона constants/work_reports.py.
+_LOCK_HOLDING_STATUSES = LOCK_HOLDING_STATUSES
 
 
 # ===========================================================================

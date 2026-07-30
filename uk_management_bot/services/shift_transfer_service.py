@@ -18,7 +18,7 @@ pending→assigned→accepted/rejected/cancelled/completed/expired).
 `from/to_executor_id` — ВСЕГДА внутренний `users.id` (никогда telegram_id).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import List, Optional, Dict, Any
 import json
 import logging
@@ -33,6 +33,9 @@ from uk_management_bot.database.models.shift_transfer import ShiftTransfer as Sh
 from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.utils.specializations import has_required_specs
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +46,6 @@ ACTIVE_REQUEST_STATUSES = ["В работе", "Закуп", "Уточнение"
 _BLOCKING_TRANSFER_STATUSES = ["pending", "assigned", "accepted"]
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _has_role(user: User, role: str) -> bool:

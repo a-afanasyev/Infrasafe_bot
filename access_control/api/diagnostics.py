@@ -17,7 +17,6 @@ PD (§11): синтетический номер по умолчанию (``DIAG
 """
 from __future__ import annotations
 
-import datetime as dt
 import logging
 import uuid
 from typing import Literal
@@ -37,6 +36,9 @@ from access_control.services.ingestion import (
 from access_control.services.management import write_audit
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-diagnostics"])
 
@@ -56,8 +58,6 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 class TestEventRequest(BaseModel):

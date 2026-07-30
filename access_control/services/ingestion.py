@@ -72,6 +72,9 @@ from access_control.services.resident_notify import (
     KIND_DISPUTED_ENTRY,
     publish_resident_notification,
 )
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 DEFAULT_DEDUP_WINDOW_SECONDS = 10
 DEFAULT_COMMAND_TTL_SECONDS = 120
@@ -142,8 +145,6 @@ class IngestResult:
     replayed: bool
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 @dataclass(frozen=True)
