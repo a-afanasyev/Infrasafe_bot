@@ -25,7 +25,6 @@ export default mergeConfig(
         exclude: [
           'src/twa/**',
           'src/pages/twa/**',
-          'src/hooks/useTWAAuth.ts',
           'src/components/ui/**',
           'src/types/**',
           'src/main.tsx',

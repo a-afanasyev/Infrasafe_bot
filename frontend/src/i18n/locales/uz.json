@@ -753,23 +753,10 @@
     "system_admin": "Tizim administratori",
     "security_operator": "Xavfsizlik operatori"
   },
-  "approvalStatus": {
-    "approved": "Tasdiqlangan",
-    "pending": "Tasdiqlash kutilmoqda"
-  },
   "verificationStatus": {
     "verified": "Tasdiqlangan",
     "pending": "Kutilmoqda",
     "blocked": "Bloklangan",
-    "rejected": "Rad etilgan"
-  },
-  "analyticsStatus": {
-    "new": "Yangilar",
-    "pending": "Kutilmoqda",
-    "in_progress": "Jarayonda",
-    "assigned": "Tayinlangan",
-    "completed": "Yakunlangan",
-    "cancelled": "Bekor qilingan",
     "rejected": "Rad etilgan"
   },
   "analyticsEvent": {

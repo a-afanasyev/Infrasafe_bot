@@ -17,9 +17,6 @@ export const CATEGORIES = [
   'other',
 ] as const
 
-/** Request categories including "repair" (used on ResidentBoardPage) */
-export const CATEGORIES_WITH_REPAIR = [...CATEGORIES, 'repair'] as const
-
 /** Urgency levels — canonical keys, synced with backend (TASK 17) */
 export const URGENCIES = [
   'low',

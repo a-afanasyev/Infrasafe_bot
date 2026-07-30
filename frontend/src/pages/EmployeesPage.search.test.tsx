@@ -27,7 +27,6 @@ vi.mock('../hooks/useEmployees', () => ({
   usePendingStaff: () => ({ data: [] }),
   useApproveEmployee: () => ({ mutate: vi.fn() }),
   useToggleMeterEntry: () => ({ mutate: vi.fn() }),
-  useRejectEmployee: () => ({ mutate: vi.fn() }),
   useBlockEmployee: () => ({ mutate: vi.fn() }),
   useUnblockEmployee: () => ({ mutate: vi.fn() }),
   useActiveRequestsCount: () => ({ data: 0 }),

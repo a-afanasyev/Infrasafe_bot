@@ -18,16 +18,6 @@ export function useTemplates() {
   })
 }
 
-export function useTemplate(id: number | null) {
-  return useQuery<TemplateBrief>({
-    queryKey: ['shift-template', id],
-    queryFn: () =>
-      apiClient.get(`/api/v2/shifts/templates/${id}`).then(r => r.data),
-    enabled: id !== null,
-    staleTime: 60_000,
-  })
-}
-
 export function useCreateTemplate() {
   const queryClient = useQueryClient()
   return useMutation({
