@@ -170,42 +170,30 @@ async def _send_to_recipients(
     return sent
 
 
-async def _load_recipients(
-    db: AsyncSession, request_number: str, roles: Iterable[str]
-) -> tuple[Optional[Request], list[User]]:
-    """Заявка + пользователи-получатели (только с telegram_id)."""
-    request = (
+async def _load_request(db: AsyncSession, request_number: str) -> Optional[Request]:
+    return (
         await db.execute(
             select(Request).where(Request.request_number == request_number)
         )
     ).scalar_one_or_none()
-    if request is None:
-        return None, []
-    wanted_ids = _wanted_user_ids(request, roles)
+
+
+async def _load_users(db: AsyncSession, wanted_ids: set[int]) -> list[User]:
+    """Получатели с telegram_id (без него слать некуда)."""
     if not wanted_ids:
-        return request, []
+        return []
     users = (
         await db.execute(select(User).where(User.id.in_(wanted_ids)))
     ).scalars().all()
-    return request, [u for u in users if u.telegram_id]
+    return [u for u in users if u.telegram_id]
 
 
-def _load_recipients_sync(
-    db: Session, request_number: str, roles: Iterable[str]
-) -> tuple[Optional[Request], list[User]]:
-    """Sync-зеркало `_load_recipients` для бот-пути (сессии бота синхронные)."""
-    request = (
-        db.execute(select(Request).where(Request.request_number == request_number))
-    ).scalar_one_or_none()
-    if request is None:
-        return None, []
-    wanted_ids = _wanted_user_ids(request, roles)
+def _load_users_sync(db: Session, wanted_ids: set[int]) -> list[User]:
+    """Sync-зеркало `_load_users` для бот-пути (сессии бота синхронные)."""
     if not wanted_ids:
-        return request, []
-    users = (
-        db.execute(select(User).where(User.id.in_(wanted_ids)))
-    ).scalars().all()
-    return request, [u for u in users if u.telegram_id]
+        return []
+    users = db.execute(select(User).where(User.id.in_(wanted_ids))).scalars().all()
+    return [u for u in users if u.telegram_id]
 
 
 async def dispatch_notify_intents(
@@ -220,11 +208,18 @@ async def dispatch_notify_intents(
     """
     from uk_management_bot.services.notification_service import _get_shared_bot
 
+    plan = _plan(intents)
+    if not plan:
+        return 0
+    # AUD6-P2-02: заявка грузится один раз на весь набор интентов, не на каждый.
+    request = await _load_request(db, request_number)
+    if request is None:
+        return 0
     sent = 0
-    for action, roles, text_key in _plan(intents):
+    for action, roles, text_key in plan:
         try:
-            request, recipients = await _load_recipients(db, request_number, roles)
-            if request is None or not recipients:
+            recipients = await _load_users(db, _wanted_user_ids(request, roles))
+            if not recipients:
                 continue
             sent += await _send_to_recipients(
                 _get_shared_bot(), request, recipients, action, text_key,
@@ -238,6 +233,35 @@ async def dispatch_notify_intents(
                 action.value, request_number, e,
             )
     return sent
+
+
+async def dispatch_notify_intents_detached(
+    request_number: str,
+    intents: Iterable,
+    clarification_text: Optional[str] = None,
+) -> int:
+    """Вариант для fastapi `BackgroundTasks` (AUD6-P2-02).
+
+    Открывает СВОЮ короткую сессию: request-scoped к моменту исполнения фоновой
+    задачи уже закрыта — а её удержание на время Telegram-отправок (таймауты в
+    десятки секунд idle-in-transaction при 30/мин на ручку) и было дефектом.
+    Контракт «не бросает» наследуется от dispatch_notify_intents.
+    """
+    from uk_management_bot.database.session import AsyncSessionLocal
+
+    if AsyncSessionLocal is None:
+        # SQLite dev-режим/тест-стенды без async-движка (session.py держит
+        # AsyncSessionLocal = None) — рассылка честно пропускается, как и весь
+        # async-путь в этой конфигурации.
+        logger.warning(
+            "notify для %s пропущен: AsyncSessionLocal недоступен (sqlite dev)",
+            request_number,
+        )
+        return 0
+    async with AsyncSessionLocal() as session:
+        return await dispatch_notify_intents(
+            session, request_number, intents, clarification_text=clarification_text
+        )
 
 
 async def dispatch_notify_intents_sync(
@@ -254,11 +278,19 @@ async def dispatch_notify_intents_sync(
     """
     from uk_management_bot.services.notification_service import _get_shared_bot
 
+    plan = _plan(intents)
+    if not plan:
+        return 0
+    request = (
+        db.execute(select(Request).where(Request.request_number == request_number))
+    ).scalar_one_or_none()
+    if request is None:
+        return 0
     sent = 0
-    for action, roles, text_key in _plan(intents):
+    for action, roles, text_key in plan:
         try:
-            request, recipients = _load_recipients_sync(db, request_number, roles)
-            if request is None or not recipients:
+            recipients = _load_users_sync(db, _wanted_user_ids(request, roles))
+            if not recipients:
                 continue
             sent += await _send_to_recipients(
                 bot or _get_shared_bot(), request, recipients, action, text_key,

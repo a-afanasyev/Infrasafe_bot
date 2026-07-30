@@ -369,3 +369,21 @@ async def test_clarify_rich_escapes_legacy_category_fallback(db_session, sent):
     _, text = sent[0]
     assert "&lt;Прочее &amp; разное&gt;" in text
     assert "<Прочее" not in text
+
+
+@pytest.mark.asyncio
+async def test_detached_dispatch_opens_own_session(
+    db_session, db_session_factory, sent, monkeypatch
+):
+    """AUD6-P2-02: BackgroundTasks-вариант работает на СВОЕЙ короткой сессии —
+    request-scoped к моменту исполнения фоновой задачи уже закрыта."""
+    await _seed(db_session)
+    monkeypatch.setattr(
+        "uk_management_bot.database.session.AsyncSessionLocal", db_session_factory)
+
+    delivered = await wn.dispatch_notify_intents_detached(
+        "260725-001", [_intent(Action.CLARIFY_REQUEST)])
+
+    assert delivered == 1
+    telegram_id, _ = sent[0]
+    assert telegram_id == 900001  # житель

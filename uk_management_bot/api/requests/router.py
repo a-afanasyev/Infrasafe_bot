@@ -1,6 +1,8 @@
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import (
+    APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, Request,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -30,7 +32,9 @@ from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.request_number_service import RequestNumberService
-from uk_management_bot.services.workflow_notifications import dispatch_notify_intents
+from uk_management_bot.services.workflow_notifications import (
+    dispatch_notify_intents_detached,
+)
 from uk_management_bot.services.workflow_runner import (
     run_command_async,
     RequestNotFound,
@@ -588,6 +592,7 @@ async def update_request(
     request: Request,
     request_number: str,
     body: UpdateRequestBody,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager", "applicant", "executor")),
 ):
@@ -682,9 +687,14 @@ async def update_request(
         # (AUD6-P1-6): дашборд кладёт его в `notes` — с ним CLARIFY_REQUEST
         # уходит богатым шаблоном (вопрос менеджера доезжает до жителя), без
         # него — генерическим; диспетчер применяет его только к clarify.
-        await dispatch_notify_intents(
-            db, request_number, outcome.post_commit_intents,
-            clarification_text=updates.get("notes"),
+        # AUD6-P2-02: отправка — в BackgroundTasks (образец —
+        # api/shifts/executor_router.py): inline она держала request-scoped
+        # сессию idle-in-transaction на всё время Telegram-таймаутов; detached-
+        # вариант открывает собственную короткую сессию уже после ответа.
+        background.add_task(
+            dispatch_notify_intents_detached,
+            request_number, outcome.post_commit_intents,
+            updates.get("notes"),
         )
 
         # Свежая карточка из живой сессии (run_command коммитнул в своей сессии и
