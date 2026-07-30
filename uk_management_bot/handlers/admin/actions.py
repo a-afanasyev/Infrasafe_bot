@@ -531,9 +531,12 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
 
                 user_obj = svc.get_user_by_id(request.user_id)
                 if user_obj and user_obj.telegram_id:
+                    # escape и на category: fallback get_category_display для
+                    # неизвестного ключа отдаёт сырое значение из БД (см.
+                    # workflow_notifications._render_text — та же точка).
                     notification_text = get_text("admin.handlers.notify_user_clarification", language=lang).format(
                         request_number=request.request_number,
-                        category=get_category_display(resolve_category_key(request.category), language=lang),
+                        category=_html.escape(get_category_display(resolve_category_key(request.category), language=lang)),
                         address=_html.escape(request.address or ""),
                         clarification_text=_html.escape(clarification_text)
                     )

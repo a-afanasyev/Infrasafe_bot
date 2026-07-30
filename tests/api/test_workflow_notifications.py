@@ -340,3 +340,32 @@ async def test_sync_and_async_dispatchers_are_identical(
 
     assert delivered_async == delivered_sync == 4  # 2 действия × (житель+исполнитель)
     assert async_calls == sync_calls, "бот и API разослали разное — SSOT сломан"
+
+
+@pytest.mark.asyncio
+async def test_clarify_rich_escapes_legacy_category_fallback(db_session, sent):
+    """Security-review PR #305 (borderline → закрыто): подпись категории обычно
+    словарная, но fallback get_category_display для НЕИЗВЕСТНОГО ключа отдаёт
+    сырое значение из БД — у legacy-заявки категория с '<'/'&' роняла бы
+    отправку Telegram-400 и уведомление молча терялось."""
+    applicant = User(telegram_id=900001, roles='["applicant"]', active_role="applicant",
+                     status="approved", language="ru", first_name="Житель")
+    db_session.add(applicant)
+    await db_session.flush()
+    db_session.add(Request(
+        request_number="260725-001", user_id=applicant.id,
+        category="<Прочее & разное>",  # legacy-значение вне канон-словаря
+        status="Уточнение", description="демо", urgency="low", is_returned=False,
+        manager_confirmed=False, address="Yangi Olmazor, 14V",
+        created_at=datetime.now(timezone.utc),
+    ))
+    await db_session.commit()
+
+    delivered = await wn.dispatch_notify_intents(
+        db_session, "260725-001", [_intent(Action.CLARIFY_REQUEST)],
+        clarification_text="какой подъезд?")
+
+    assert delivered == 1
+    _, text = sent[0]
+    assert "&lt;Прочее &amp; разное&gt;" in text
+    assert "<Прочее" not in text

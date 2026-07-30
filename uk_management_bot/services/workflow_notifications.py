@@ -112,8 +112,11 @@ def _render_text(
 ) -> str:
     """Текст для получателя. Пользовательские подстановки — через html.escape."""
     if action is Action.CLARIFY_REQUEST and clarification_text:
-        # Локализованная подпись категории — наш собственный словарь, не
-        # пользовательский ввод; экранировать нечего.
+        # Подпись категории — обычно наша словарная (безопасная), но fallback
+        # get_category_display для НЕИЗВЕСТНОГО ключа возвращает сырое значение
+        # из БД как есть (security-review PR #305, borderline): у legacy-заявки
+        # категория с '<'/'&' роняла бы отправку Telegram-400. escape нейтрален
+        # для словарных подписей и закрывает fallback.
         from uk_management_bot.keyboards.requests import (
             get_category_display, resolve_category_key,
         )
@@ -121,9 +124,9 @@ def _render_text(
             _CLARIFY_RICH_KEY,
             language=language,
             request_number=request.request_number,
-            category=get_category_display(
+            category=html.escape(get_category_display(
                 resolve_category_key(request.category), language=language
-            ),
+            )),
             address=html.escape(request.address or ""),
             clarification_text=html.escape(clarification_text),
         )
