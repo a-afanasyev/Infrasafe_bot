@@ -1,12 +1,11 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
 from uk_management_bot.database.session import Base
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 
-def _utcnow() -> datetime:
-    """Aware-UTC сейчас (REG-02/AUD3-11): фича теперь живая, timestamptz-колонки."""
-    return datetime.now(timezone.utc)
 
 
 class ShiftTransfer(Base):

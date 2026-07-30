@@ -37,6 +37,9 @@ from access_control.repositories import (
     manual_openings_repo,
 )
 from access_control.services.locks import barrier_advisory_lock
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +52,6 @@ GUEST_CODE_COMMAND_TTL_SECONDS = 120
 _CODE_SECRET_ENV = "ACCESS_CODE_SECRET"
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def _code_secret() -> bytes:

@@ -46,6 +46,9 @@ from access_control.services.resident_notify import (
     KIND_VEHICLE_REQUEST_RESOLVED,
     publish_resident_notification,
 )
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 # Направления правила доступа в пилоте — только entry (§10.3, §14.2 п.3).
 PILOT_ALLOWED_DIRECTIONS = ["entry"]
@@ -88,8 +91,6 @@ class ReviewOutcome:
     replayed: bool
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 # --------------------------- аудит ---------------------------

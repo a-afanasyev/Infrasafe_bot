@@ -15,6 +15,9 @@ from sqlalchemy.orm import Session
 
 from access_control.domain.commands import BarrierCommand
 from access_control.domain.enums import CommandStatus, CommandType
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 
 @dataclass(frozen=True)
@@ -26,8 +29,6 @@ class CommandRow:
     expires_at: dt.datetime | None
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def command_for_decision(db: Session, decision_id: int) -> BarrierCommand | None:
