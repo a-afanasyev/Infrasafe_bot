@@ -7,6 +7,7 @@ WS-панель охраны и health/latency-метрики (§10.2). Swagger 
 явный ``ACCESS_ENABLE_DOCS`` — высший приоритет, иначе гейтится ``DEBUG``.
 """
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
@@ -44,18 +45,49 @@ def _docs_enabled() -> bool:
     return bool(settings.DEBUG)
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """AUD6-P1-5: единственный штатный исполнитель retention-обязательств.
+
+    ``expire_due_reviews`` (тик §9.5) и ``purge_expired_photos`` (30-дневный
+    retention фото, §11) до этого lifespan'а не вызывались НИОТКУДА — зелёный
+    сьют маскировал невыполняемое обязательство по персданным. Детали и
+    выключатель ``ACCESS_WORKERS_ENABLED`` — в ``services/retention_worker``.
+
+    TestClient без ``with`` lifespan не исполняет — существующие тесты
+    приложения фоновой активности не получают.
+    """
+    from access_control.services.retention_worker import (
+        start_retention_workers,
+        stop_retention_workers,
+        workers_enabled,
+    )
+
+    tasks: list = []
+    stop = None
+    if workers_enabled():
+        tasks, stop = start_retention_workers()
+    try:
+        yield
+    finally:
+        if stop is not None:
+            await stop_retention_workers(tasks, stop)
+
+
 def create_app() -> FastAPI:
     """Собрать и вернуть FastAPI-приложение сервиса ``uk-access-api``.
 
     Returns:
         FastAPI: приложение со всеми пилотными роутерами §13 + health/latency
-        метриками §10.2. Swagger гейтится ``ACCESS_ENABLE_DOCS``/``DEBUG``
-        (fail-closed: в проде по умолчанию выключен).
+        метриками §10.2 и retention-воркерами в lifespan (AUD6-P1-5). Swagger
+        гейтится ``ACCESS_ENABLE_DOCS``/``DEBUG`` (fail-closed: в проде по
+        умолчанию выключен).
     """
     docs_on = _docs_enabled()
     app = FastAPI(
         title="UK Access API",
         version=__version__,
+        lifespan=_lifespan,
         # None отключает соответствующий роут (прод-гейт §14.2 п.18).
         docs_url="/docs" if docs_on else None,
         redoc_url="/redoc" if docs_on else None,
