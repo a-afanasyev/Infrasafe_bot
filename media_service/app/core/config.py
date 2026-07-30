@@ -4,21 +4,17 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
-from typing import List, Optional
+from typing import List
 
 
 class Settings(BaseSettings):
     """Настройки приложения"""
 
     # === APPLICATION ===
-    app_name: str = "MediaService"
-    app_version: str = "1.0.0"
+    # AUD6-P2-46: app_name/app_version/api_host/api_port/api_prefix удалены —
+    # значения в коде захардкожены (uvicorn поднимается из Dockerfile, префикс
+    # прошит в роутерах), поля были фантомными ручками с нулём читателей.
     debug: bool = False
-
-    # === API ===
-    api_host: str = "0.0.0.0"
-    api_port: int = 8080
-    api_prefix: str = "/api/v1"
 
     # === DATABASE ===
     # ARCH-106 Phase 2 (AC «no hardcoded defaults for secrets»): дефолта нет — URI
@@ -29,8 +25,6 @@ class Settings(BaseSettings):
 
     # === TELEGRAM ===
     telegram_bot_token: str
-    telegram_api_id: Optional[int] = None
-    telegram_api_hash: Optional[str] = None
 
     # === CHANNELS ===
     # SEC-065: channel IDs are deployment config, not source constants. Default
@@ -50,7 +44,6 @@ class Settings(BaseSettings):
     # === SECURITY ===
     # SEC-066: empty default + fail-fast (below) when empty/dev-string in prod.
     secret_key: str = Field(default="", validation_alias="SECRET_KEY")
-    access_token_expire_minutes: int = 30
     api_keys: str = Field(default="", validation_alias="MEDIA_API_KEYS")
     allowed_origins: str = Field(default="", description="Comma-separated allowed origins. Required in production.")
 
@@ -66,18 +59,10 @@ class Settings(BaseSettings):
     max_files_per_request: int = 10
     allowed_file_types: List[str] = ["image/jpeg", "image/png", "image/gif", "video/mp4", "video/mov"]
 
-    # === REDIS ===
-    redis_url: str = "redis://localhost:6379"
-    redis_cache_ttl: int = 3600  # 1 hour
-
-    # === MONITORING ===
-    enable_metrics: bool = True
-    log_level: str = "INFO"
-
-    # === FEATURES ===
-    enable_auto_tagging: bool = True
-    enable_thumbnails: bool = True
-    enable_compression: bool = False
+    # AUD6-P2-46: удалены фантомные секции REDIS (redis в сервисе не
+    # используется вовсе), MONITORING (log_level задан и в env, но не читался
+    # никем) и FEATURES (три флага без единой строчки реализации) — 11 полей,
+    # ноль читателей по git grep.
 
     # === PREVIEW CACHE / TELEGRAM CONCURRENCY ===
     # Публичная витрина «до/после» запрашивает десятки изображений за одну
@@ -95,10 +80,10 @@ class Settings(BaseSettings):
     # очередь из них выедает пул соединений и воркеры.
     telegram_download_concurrency: int = 4
 
-    # === TESTING ===
-    test_mode: bool = False  # Режим тестирования без Telegram
-
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+    # extra="ignore" обязателен с удалением полей (AUD6-P2-46): на прод-хостах
+    # media_service/.env всё ещё содержит LOG_LEVEL и прочие снятые ключи —
+    # без ignore pydantic-settings роняет старт на extra_forbidden.
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 
 # Глобальный экземпляр настроек
