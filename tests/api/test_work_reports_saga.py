@@ -1166,3 +1166,27 @@ async def test_failed_chunk_is_counted_not_hidden(db_session):
     result = await warm_recent_previews(db_session, WarmSilentlyFails())
 
     assert result == {"warmed": 0, "already_cached": 0, "failed": 2}
+
+
+@pytest.mark.asyncio
+async def test_publish_compensates_on_transport_failure_during_validate(db_session):
+    """AUD6-P1-3: валидация теперь идёт ПОСЛЕ флипа в publishing (сеть — без
+    row-лока). Любой сбой шага, включая транспортный, обязан откатить отчёт в
+    pending: ни один publication-lock ещё не взят, и парковать отчёт в
+    publishing до reconcile незачем. Исходное исключение — наружу как есть."""
+    db_session.add(_mk_request("260725-390"))
+    report = _mk_report("260725-390", before_media_ids=[1], after_media_ids=[2])
+    db_session.add(report)
+    await db_session.commit()
+    await db_session.refresh(report)
+
+    class TransportDownClient(FakeMediaClient):
+        async def get_request_media(self, request_number, category=None, limit=50):
+            raise RuntimeError("media-service unreachable")
+
+    with pytest.raises(RuntimeError, match="unreachable"):
+        await publish_report(db_session, TransportDownClient(), report.id, MODERATOR_ID)
+
+    await db_session.refresh(report)
+    assert report.status == "pending", "транспортный сбой не должен парковать в publishing"
+    assert report.locked_media_ids == []

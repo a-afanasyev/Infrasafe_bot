@@ -327,30 +327,57 @@ async def autofill_pending(
     if media_client is None:
         raise HTTPException(status_code=503, detail="media service not configured")
 
-    # `with_for_update()` + фильтр по статусу — та же защита, что в PATCH ниже:
-    # сага публикации блокирует строку отчёта, и пакетное автозаполнение обязано
-    # играть по тем же правилам, иначе перезапишет состав медиа у отчёта, который
-    # параллельно публикуется (см. комментарий в patch_work_report).
-    rows = (
+    # AUD6-P1-3: раньше здесь брался `with_for_update()` сразу на 20 строк, и
+    # транзакция с локами держалась через до 40 сетевых вызовов в media-service
+    # (таймаут 30 с × 3 ретрая каждый) — параллельный /sync блокировался на тех
+    # же строках на минуты. Теперь: кандидаты выбираются БЕЗ лока, сеть идёт до
+    # лока (fetch_media_selection), запись — короткой per-report транзакцией с
+    # перепроверкой статуса под локом. Защита от гонки с сагой публикации
+    # сохранена той же перепроверкой: publishing в _MEDIA_EDITABLE_STATUSES не
+    # входит, уехавшая строка молча пропускается (см. patch_work_report).
+    candidates = (
         (
             await db.execute(
-                select(WorkReport)
+                select(WorkReport.id, WorkReport.request_number)
                 .where(
                     WorkReport.media_synced_at.is_(None),
                     WorkReport.status.in_(_MEDIA_EDITABLE_STATUSES),
                 )
                 .order_by(WorkReport.created_at)
                 .limit(20)
-                .with_for_update()
             )
         )
-        .scalars()
         .all()
     )
-    for report in rows:
-        await work_report_service.autofill_media(db, media_client, report)
-    await db.commit()
-    return {"processed": len(rows)}
+    processed = 0
+    for report_id, request_number in candidates:
+        try:
+            before_ids, after_ids = await work_report_service.fetch_media_selection(
+                media_client, request_number
+            )
+        except Exception as e:
+            # Один сбойный запрос не должен ронять весь батч 500-кой.
+            logger.warning(
+                "autofill-pending: отчёт %s не автозаполнен: %s", report_id, e
+            )
+            continue
+        row = (
+            await db.execute(
+                select(WorkReport)
+                .where(
+                    WorkReport.id == report_id,
+                    WorkReport.status.in_(_MEDIA_EDITABLE_STATUSES),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            await db.commit()
+            continue
+        work_report_service.apply_media_selection(row, before_ids, after_ids)
+        await db.commit()
+        processed += 1
+    return {"processed": processed}
 
 
 # ── PUT /settings ─────────────────────────────────────────────────────────

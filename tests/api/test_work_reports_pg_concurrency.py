@@ -46,6 +46,7 @@ from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.session import Base
 from uk_management_bot.services.work_report_service import (
     WorkReportPublishError,
+    autopublish_ready_drafts,
     publish_report,
     sync_pending_drafts,
 )
@@ -348,3 +349,85 @@ async def test_concurrent_patch_and_publish_keep_frozen_media_consistent(
             isinstance(r, WorkReportPublishError) and r.status_code == 409
             for r in results
         ), results
+
+
+# ===========================================================================
+# (г) AUD6-P1-3: батч автопубликации в сети НЕ блокирует параллельный publish
+# ===========================================================================
+
+
+class GatedFetchMediaClient(FakeMediaClient):
+    """`get_request_media` замирает до `gate` — моделирует деградировавший
+    media-service ровно в сетевой фазе автозаполнения батча."""
+
+    def __init__(self):
+        super().__init__()
+        self.gate = asyncio.Event()
+        self.fetch_started = asyncio.Event()
+
+    async def get_request_media(self, request_number, category=None, limit=50):
+        self.fetch_started.set()
+        await self.gate.wait()
+        return await super().get_request_media(request_number, category, limit)
+
+
+@pytest.mark.asyncio
+async def test_autopublish_stuck_in_network_does_not_block_publish(pg_factory):
+    """Регрессия AUD6-P1-3: раньше `autopublish_ready_drafts` брал FOR UPDATE
+    сразу на всех кандидатах и держал транзакцию через сетевые вызовы — у
+    менеджера, жмущего «Опубликовать» в этот момент, запрос вставал в очередь
+    за всем пакетом (до минут при недоступном media). Теперь кандидаты
+    выбираются без лока, сеть идёт до лока: ручной publish обязан пройти,
+    пока батч висит в media-service."""
+    await _seed_request(pg_factory)
+    report_id = await _mk_report(pg_factory, before=[1], after=[10])
+
+    # Конфиг с включённой автопубликацией — иначе батч выйдет сразу.
+    async with pg_factory() as db:
+        data = dict(DEFAULT_BOARD_CONFIG)
+        data["work_reports"] = {**data["work_reports"], "autopublish": True}
+        db.add(BoardConfig(id=1, data=data, updated_by=None))
+        await db.commit()
+
+    slow = GatedFetchMediaClient()
+
+    async def _batch():
+        async with pg_factory() as db:
+            return await autopublish_ready_drafts(db, slow, triggered_by=None)
+
+    batch_task = asyncio.create_task(_batch())
+
+    # Батч «в сети». Ручная публикация того же отчёта обязана пройти, не
+    # дожидаясь его: под старым кодом этот wait_for падал TimeoutError —
+    # строка отчёта была под батчевым FOR UPDATE.
+    async def _manual_publish():
+        async with pg_factory() as db:
+            return await publish_report(
+                db, FakeMediaClient(), report_id, moderator_id=None
+            )
+
+    try:
+        await asyncio.wait_for(slow.fetch_started.wait(), timeout=5)
+        published = await asyncio.wait_for(_manual_publish(), timeout=5)
+        assert published.status == "published"
+    finally:
+        # gate — в finally: иначе на регрессировавшем коде (publish завис под
+        # батчевым локом) батч вечно ждал бы сеть, teardown вечно ждал бы батч,
+        # и вместо красного теста CI съедал бы таймаут всей джобы. Проверено
+        # прогоном против старого кода: с finally тест падает за секунды.
+        slow.gate.set()
+
+    # Per-report перепроверка батча под локом обязана увидеть, что строка уже
+    # не pending, и молча пропустить её — не перезаписав состав опубликованного
+    # отчёта и не уронив пакет.
+    result = await asyncio.wait_for(batch_task, timeout=10)
+    assert result["enabled"] is True
+    assert result["published"] == 0
+    assert result["failed"] == 0
+
+    async with pg_factory() as db:
+        row = (await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id)
+        )).scalar_one()
+    assert row.status == "published"
+    assert row.locked_media_ids == [1, 10], "батч не должен трогать опубликованный состав"
