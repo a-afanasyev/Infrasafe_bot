@@ -30,6 +30,7 @@ from uk_management_bot.api.board_config.schemas import WorkReportsCfg
 from uk_management_bot.api.board_config.service import load_board_config, merge_and_save_board_config
 from uk_management_bot.api.dependencies import get_db, require_approved_roles
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.work_reports import coordination
 from uk_management_bot.api.work_reports.schemas import (
     WorkReportCreateIn,
     WorkReportListOut,
@@ -224,9 +225,16 @@ async def sync_work_reports(
     reconcile_result = None
     reconcile_error = None
     now = datetime.now(timezone.utc)
-    if media_client is not None and (
+    # AUD6-P2-05: троттл межворкерный (Redis SET NX EX) — при --workers 2
+    # процессный давал ДВА reconcile за окно, расширяя гонку AUD6-P2-04.
+    # Redis недоступен (None) → прежний процессный троттл как деградация.
+    slot = await coordination.try_acquire_reconcile_slot(
+        int(_RECONCILE_THROTTLE.total_seconds())
+    )
+    should_reconcile = slot if slot is not None else (
         _last_reconcile_at is None or now - _last_reconcile_at >= _RECONCILE_THROTTLE
-    ):
+    )
+    if media_client is not None and should_reconcile:
         # Сверка — фоновая maintenance-операция, ехавшая прицепом к /sync, и она
         # НЕ должна ронять ответ: синк, автопубликация и отзыв выше уже
         # закоммичены, а `list_publication_locks` намеренно бросает при ошибке
@@ -569,11 +577,15 @@ async def unpublish_work_report(
     if media_client is None:
         raise HTTPException(status_code=503, detail="media service not configured")
     try:
-        return await work_report_service.unpublish_report(
+        report = await work_report_service.unpublish_report(
             db, media_client, report_id, user.id, reason=body.reason
         )
     except WorkReportPublishError as e:
         raise _publish_error_to_http(e)
+    # AUD6-P2-05: отзыв обязан пропасть из ПУБЛИЧНОЙ ленты всех воркеров сразу,
+    # а не только того, где сработал (кэш соседей жил бы ещё до 30с TTL).
+    await coordination.bump_cache_epoch()
+    return report
 
 
 @router.post("/{report_id}/reject", response_model=WorkReportOut)
@@ -584,9 +596,12 @@ async def reject_work_report(
     user: User = Depends(_manager_only),
 ) -> WorkReport:
     try:
-        return await work_report_service.reject_report(db, report_id, user.id, body.reason)
+        report = await work_report_service.reject_report(db, report_id, user.id, body.reason)
     except WorkReportPublishError as e:
         raise _publish_error_to_http(e)
+    # Reject опубликованного — та же публичная видимость, что и unpublish.
+    await coordination.bump_cache_epoch()
+    return report
 
 
 @router.post("/{report_id}/reopen", response_model=WorkReportOut)

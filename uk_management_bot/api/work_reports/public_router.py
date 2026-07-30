@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.work_reports import coordination
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.work_report import WorkReport
 from uk_management_bot.services.work_report_service import revoke_stale_publications
@@ -79,16 +80,23 @@ def _empty_feed(limit: int, offset: int) -> PublicWorkReportsOut:
 # Keyed by (limit, offset) — unlike api/public/router.py's single-slot
 # _board_cache (fine for a parameterless endpoint), this endpoint's payload
 # varies by query params, so a single slot would serve the wrong page.
+# AUD6-P2-05: значение хранит и ЭПОХУ (coordination.cache_epoch) — при
+# uvicorn --workers 2 ревокация в одном воркере иначе не трогала кэш другого,
+# и отозванный отчёт жил в публичной ленте до троттл+TTL. Запись валидна,
+# только если её эпоха совпадает с текущей; при недоступном Redis эпоха None —
+# честная деградация к прежнему поведению (потолок троттл+TTL, не «ровно
+# троттл», как утверждал старый комментарий).
 _FEED_CACHE_TTL_SECONDS = 30
 _FEED_CACHE_MAX_ENTRIES = 32
-_work_reports_feed_cache: dict[tuple[int, int], tuple[PublicWorkReportsOut, float]] = {}
+_work_reports_feed_cache: dict[
+    tuple[int, int], tuple[PublicWorkReportsOut, float, Optional[int]]
+] = {}
 
 # revoke_stale_publications is real DB write work (it commits); riding it
 # on every public GET would be wasteful and racy under load, so it only
-# runs at most once per _REVOKE_THROTTLE_SECONDS, per worker. This is also the
-# feed's worst-case staleness for a report that stopped being eligible — the
-# cache does NOT add to it, because a revocation that changed anything clears
-# the cache (see the handler).
+# runs at most once per _REVOKE_THROTTLE_SECONDS, per worker (запуск дважды —
+# по разу на воркер — идемпотентен и безвреден; межворкерная инвалидация КЭША
+# идёт через эпоху, см. выше).
 _REVOKE_THROTTLE_SECONDS = 60
 _last_revoke_check_at: Optional[float] = None
 
@@ -113,17 +121,19 @@ async def get_public_work_reports(
 
     cache_key = (limit, offset)
     now = time.monotonic()
+    epoch = await coordination.cache_epoch()
 
     # Ревокация проверяется ДО чтения кэша, а не после. Иначе окна складывались
     # бы: попадание в кэш возвращало бы ответ, ни разу не дав ревокации
     # выполниться, и отозванный отчёт жил бы в ленте до 60с троттла ПЛЮС до 30с
-    # TTL. В этом порядке потолок ровно один — троттл, потому что сработавшая
-    # ревокация тут же сбрасывает кэш и текущий запрос пересобирает ответ.
+    # TTL. Сработавшая ревокация сбрасывает локальный кэш и (AUD6-P2-05)
+    # инкрементирует эпоху — кэш ДРУГИХ воркеров инвалидируется тоже.
     if _last_revoke_check_at is None or (now - _last_revoke_check_at) > _REVOKE_THROTTLE_SECONDS:
         try:
             revoked = await revoke_stale_publications(db)
             if revoked:
                 _work_reports_feed_cache.clear()
+                epoch = await coordination.bump_cache_epoch() or epoch
         except Exception as e:
             # Broad on purpose — this is best-effort background maintenance
             # riding along on a public GET; a bug in it must never break the
@@ -136,7 +146,7 @@ async def get_public_work_reports(
         _last_revoke_check_at = now
 
     cached = _work_reports_feed_cache.get(cache_key)
-    if cached is not None and cached[1] > now:
+    if cached is not None and cached[1] > now and (epoch is None or cached[2] == epoch):
         return cached[0]
 
     try:
@@ -186,7 +196,7 @@ async def get_public_work_reports(
         # Not an LRU — over-engineering for this size/TTL.
         evict_key = next(iter(_work_reports_feed_cache))
         del _work_reports_feed_cache[evict_key]
-    _work_reports_feed_cache[cache_key] = (result, now + _FEED_CACHE_TTL_SECONDS)
+    _work_reports_feed_cache[cache_key] = (result, now + _FEED_CACHE_TTL_SECONDS, epoch)
 
     return result
 
