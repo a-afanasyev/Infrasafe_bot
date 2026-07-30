@@ -341,15 +341,23 @@ class TestCreateAuditLog:
         self.svc = _build_service(self.db)
 
     def test_adds_audit_log(self):
-        # _create_audit_log may fail internally (e.g. bad keyword arg) and catch the error
-        # Just ensure it does not raise
+        # AUD6-P2-26: тест был без единого assert («если конструктор упал —
+        # add не вызван, это ожидаемо») — зелёный и когда аудит пишется, и
+        # когда не пишется вовсе. Ровно этот класс молчания уже стрелял
+        # (CODE-09: битый kwarg гасился except'ом, аудит НЕ писался).
         self.svc._create_audit_log("260412-001", 10, "Test action")
-        # If AuditLog constructor fails, add is never called — that's expected behavior
+
+        assert self.db.add.called
+        audit_log = self.db.add.call_args[0][0]
+        assert audit_log.user_id == 10
+        assert "260412-001" in audit_log.details
+        assert "Test action" in audit_log.details
 
     def test_handles_exception(self):
         self.db.add.side_effect = Exception("DB error")
-        # Should not raise
+        # Не бросает — и до исключения честно ДОШЁЛ до add (AUD6-P2-26).
         self.svc._create_audit_log("260412-001", 10, "Test action")
+        assert self.db.add.called
 
 
 # ===== _notify_comment_added =====
@@ -381,5 +389,6 @@ class TestNotifyCommentAdded:
         req = _FakeRequest(user_id=10, executor_id=20)
         comment = _FakeComment(user_id=20)
         self.svc.notification_service.send_notification.side_effect = Exception("fail")
-        # Should not raise
+        # Не бросает — и до исключения честно ДОШЁЛ до отправки (AUD6-P2-26).
         self.svc._notify_comment_added(req, comment)
+        assert self.svc.notification_service.send_notification.called
