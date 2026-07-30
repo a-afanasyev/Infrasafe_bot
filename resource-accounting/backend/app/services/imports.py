@@ -16,7 +16,11 @@ from app.core.errors import bad_request
 from app.models import Meter, ReportingPeriod, normalize_meter_number
 from app.models.readings import MISSING_REASONS
 from app.schemas.readings import ReadingIn
-from app.services.readings import compute_consumption, get_previous_accepted, upsert_reading
+from app.services.readings import (
+    compute_consumption,
+    get_previous_accepted_bulk,
+    upsert_reading,
+)
 
 REQUIRED_COLUMNS = ("meter_number", "period", "reading_value")
 OPTIONAL_COLUMNS = ("read_at", "note")
@@ -97,6 +101,31 @@ def _parse_date(value: str) -> date | None:
 def build_preview(db: Session, tenant_id, month: str, raw_rows: list[dict]) -> list[ImportRow]:
     seen_numbers: set[str] = set()
     result: list[ImportRow] = []
+
+    # AUD6-P2-16(а): счётчики и предыдущие показания — двумя батчами на весь
+    # файл, а не парой запросов на строку (файл до 5 МБ = тысячи строк, и
+    # build_preview выполняется дважды — на preview и на commit).
+    wanted_numbers = {
+        normalize_meter_number(raw.get("meter_number", ""))
+        for raw in raw_rows
+        if raw.get("meter_number")
+    }
+    meters_by_number: dict[str, Meter] = {}
+    if wanted_numbers:
+        meters_by_number = {
+            m.meter_number_normalized: m
+            for m in db.execute(
+                select(Meter).where(
+                    Meter.tenant_id == tenant_id,
+                    Meter.meter_number_normalized.in_(wanted_numbers),
+                    Meter.status == "active",
+                )
+            ).scalars()
+        }
+    previous_by_meter = get_previous_accepted_bulk(
+        db, [m.id for m in meters_by_number.values()], month
+    )
+
     for idx, raw in enumerate(raw_rows, start=2):  # line 1 is the header
         row = ImportRow(
             line=idx,
@@ -121,13 +150,7 @@ def build_preview(db: Session, tenant_id, month: str, raw_rows: list[dict]) -> l
             row.errors.append("Дубликат номера в файле")
         seen_numbers.add(normalized)
 
-        meter = db.execute(
-            select(Meter).where(
-                Meter.tenant_id == tenant_id,
-                Meter.meter_number_normalized == normalized,
-                Meter.status == "active",
-            )
-        ).scalar_one_or_none()
+        meter = meters_by_number.get(normalized)
         if meter is None:
             row.errors.append("Счётчик с таким номером не зарегистрирован; сначала создайте его в реестре")
         else:
@@ -154,7 +177,7 @@ def build_preview(db: Session, tenant_id, month: str, raw_rows: list[dict]) -> l
                 row.errors.append(f"Не удалось разобрать дату «{row.read_at}»")
 
         if meter is not None and row.parsed_value is not None:
-            prev = get_previous_accepted(db, meter.id, month)
+            prev = previous_by_meter.get(meter.id)
             row.previous_value = prev.value if prev else None
             if row.previous_value is not None and row.parsed_value < row.previous_value:
                 row.errors.append(

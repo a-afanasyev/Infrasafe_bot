@@ -34,7 +34,11 @@ from app.schemas.readings import (
     WorksheetOut,
     WorksheetRow,
 )
-from app.services.readings import apply_correction, get_previous_accepted, upsert_reading
+from app.services.readings import (
+    apply_correction,
+    get_previous_accepted_bulk,
+    upsert_reading,
+)
 
 router = APIRouter(tags=["periods"])
 
@@ -128,9 +132,13 @@ def worksheet(
         ).scalars().all()
     }
 
+    # AUD6-P2-15: предыдущее принятое показание — одним оконным запросом на всю
+    # ведомость, а не запросом на каждый счётчик (N+1 на главной странице роли).
+    previous = get_previous_accepted_bulk(db, [m.id for m in meters], month)
+
     rows = []
     for meter in meters:
-        prev = get_previous_accepted(db, meter.id, month)
+        prev = previous.get(meter.id)
         reading = readings.get(meter.id)
         rows.append(
             WorksheetRow(

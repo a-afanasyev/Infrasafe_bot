@@ -1,10 +1,11 @@
 """Consumption calculation and reading validation (ТЗ §5.4)."""
 
 import uuid
+from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,6 +44,39 @@ def get_previous_accepted(db: Session, meter_id: uuid.UUID, month: str) -> Readi
         .limit(1)
     )
     return db.execute(stmt).scalar_one_or_none()
+
+
+def get_previous_accepted_bulk(
+    db: Session, meter_ids: Sequence[uuid.UUID], month: str
+) -> dict[uuid.UUID, Reading]:
+    """Батч-вариант get_previous_accepted (AUD6-P2-15/16).
+
+    Один оконный запрос (`row_number()` по каждому счётчику) вместо запроса на
+    счётчик: ведомость и импорт делали N таких обращений на рендер/файл.
+    Семантика фильтров идентична одиночной версии (COR-02: базой служат только
+    ok/warning-показания).
+    """
+    if not meter_ids:
+        return {}
+    rn = (
+        func.row_number()
+        .over(partition_by=Reading.meter_id, order_by=ReportingPeriod.month.desc())
+        .label("rn")
+    )
+    ranked = (
+        select(Reading.id.label("reading_id"), rn)
+        .join(ReportingPeriod, Reading.reporting_period_id == ReportingPeriod.id)
+        .where(
+            Reading.meter_id.in_(list(meter_ids)),
+            Reading.value.is_not(None),
+            Reading.status.in_(("ok", "warning")),
+            ReportingPeriod.month < month,
+        )
+        .subquery()
+    )
+    latest_ids = select(ranked.c.reading_id).where(ranked.c.rn == 1)
+    readings = db.execute(select(Reading).where(Reading.id.in_(latest_ids))).scalars().all()
+    return {r.meter_id: r for r in readings}
 
 
 def compute_consumption(

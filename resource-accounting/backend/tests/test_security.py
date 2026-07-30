@@ -84,8 +84,16 @@ def test_security_headers_present(client):
 
 # --- SEC-03: forged commit_token cannot bypass validation / write foreign meters ---
 def _forge_token(rows: list[dict]) -> str:
+    """Токен старой схемы (base64(sha256[:12]+payload)) — атакующий собирал такой сам."""
     source = json.dumps(rows, default=str, sort_keys=True).encode()
     return base64.b64encode(hashlib.sha256(source).digest()[:12] + source).decode()
+
+
+def _sign_token(rows: list[dict]) -> str:
+    """Валидно подписанный токен с произвольным содержимым (реплей/протухший preview)."""
+    from app.api.imports import _commit_serializer
+
+    return _commit_serializer().dumps(json.loads(json.dumps(rows, default=str)))
 
 
 def test_forged_commit_token_is_rederived_server_side(admin):
@@ -112,11 +120,19 @@ def test_forged_commit_token_is_rederived_server_side(admin):
         "consumption": "999",
         "errors": [],
     }]
+    # (а) AUD6-P2-16(в): токен старой checksum-схемы клиент собирал сам —
+    # теперь он отбивается на подписи, не доходя до разбора.
     resp = admin.post("/v1/imports/readings/commit", json={
         "month": "2035-01", "commit_token": _forge_token(forged),
     })
+    assert resp.status_code == 400
+
+    # (б) SEC-03 в силе и для ВАЛИДНО подписанного токена (реплей протухшего
+    # preview): сервер пере-выводит строки сам — фантомный счётчик не пишется.
+    resp = admin.post("/v1/imports/readings/commit", json={
+        "month": "2035-01", "commit_token": _sign_token(forged),
+    })
     assert resp.status_code == 200, resp.text
-    # Server re-derived from meter_number "SEC03-GHOST" (not registered) → nothing written.
     assert resp.json()["data"]["saved"] == 0
 
     ws = admin.get("/v1/periods/2035-01/worksheet").json()["data"]
