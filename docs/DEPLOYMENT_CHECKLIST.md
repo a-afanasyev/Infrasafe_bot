@@ -33,7 +33,7 @@
 - [ ] All tests pass: `docker exec uk-management-bot pytest`
 - [ ] Frontend build clean: `cd frontend && npm run build`
 - [ ] No secrets in code: `git grep -i "password\|token\|secret" -- "*.py" "*.ts" "*.yml" | grep -v template | grep -v test`
-- [ ] `.env` on server has all vars from `.env.production.template`
+- [ ] Секреты приложения — в Doppler (`doppler run --project uk-management --config <profk|infrasafe>`), не в `.env`; полнота гарантируется `:?`-гвардами compose и SSOT-гейтом (`tests/services/test_compose_secret_env_ssot.py`). Шаблон `.env.production.template` удалён (AUD6-P2-42) — канон: `.env.example` + `.claude/skills/uk-deploy/SKILL.md`
 - [ ] `DEBUG=false` in `.env`
 - [ ] `JWT_SECRET` != `INVITE_SECRET`
 - [ ] `ADMIN_PASSWORD` >= 12 chars
